@@ -1,6 +1,7 @@
 package co.electriccoin.zcash.global
 
 import android.content.Context
+import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.WalletCoordinator
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.provider.IsExchangeRateEnabledStorageProvider
@@ -11,7 +12,8 @@ internal operator fun WalletCoordinator.Companion.invoke(
     context: Context,
     persistableWalletProvider: PersistableWalletProvider,
     isTorEnabledStorageProvider: IsTorEnabledStorageProvider,
-    isExchangeRateEnabledStorageProvider: IsExchangeRateEnabledStorageProvider
+    isExchangeRateEnabledStorageProvider: IsExchangeRateEnabledStorageProvider,
+    orchardMigrationSdk: OrchardMigrationSdk,
 ): WalletCoordinator =
     WalletCoordinator(
         context = context,
@@ -19,5 +21,6 @@ internal operator fun WalletCoordinator.Companion.invoke(
         accountName = context.getString(R.string.accounts_zashi),
         keySource = "zashi",
         isTorEnabled = isTorEnabledStorageProvider.observe(),
-        isExchangeRateEnabled = isExchangeRateEnabledStorageProvider.observe()
+        isExchangeRateEnabled = isExchangeRateEnabledStorageProvider.observe(),
+        isSyncBlocked = orchardMigrationSdk.isSyncBlocked(),
     )

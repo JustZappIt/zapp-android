@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
+import cash.z.ecc.android.sdk.TransferResult
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.NavigationRouter
@@ -25,6 +26,7 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.work.MigrationScheduler
 import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import java.math.BigDecimal
@@ -43,16 +45,21 @@ class MigrationProgressVM(
 ) : ViewModel() {
 
     private val sendLce = mutableLce<Unit>()
+    private val sendNowFailure = MutableStateFlow<TransferResult?>(null)
 
     val state: StateFlow<LceState<MigrationProgressState>> =
-        combine(migrationPlanRepository.observe(), exchangeRateRepository.state) { plan, rate ->
-            plan?.let { createState(it, rate) }
+        combine(migrationPlanRepository.observe(), exchangeRateRepository.state, sendNowFailure) { plan, rate, failure ->
+            plan?.let { createState(it, rate, failure) }
         }.withLce(sendLce, errorStateMapper::mapToState)
             .stateIn(this)
 
     fun navigateBack() = navigationRouter.back()
 
-    private fun createState(plan: MigrationPlan, exchangeRateState: ExchangeRateState): MigrationProgressState {
+    private fun createState(
+        plan: MigrationPlan,
+        exchangeRateState: ExchangeRateState,
+        failure: TransferResult?,
+    ): MigrationProgressState {
         val now = Clock.System.now()
         val next = plan.nextPending
         val hasOverdue = next != null && next.scheduledAt <= now
@@ -91,7 +98,21 @@ class MigrationProgressVM(
             onReschedule = if (hasOverdue) ::onReschedule else null,
             onSimulateTransfer = if (BuildConfig.DEBUG && !plan.isComplete) ::onSimulateTransfer else null,
             onDone = if (plan.isComplete) ::onDone else null,
+            sendNowFailureSheet = failure?.let {
+                MigrationSendNowFailureState(
+                    message = sendNowFailureMessage(it),
+                    onRetry = { sendNowFailure.value = null; onSendNow() },
+                    onDismiss = { sendNowFailure.value = null },
+                )
+            },
         )
+    }
+
+    private fun sendNowFailureMessage(result: TransferResult): String = when (result) {
+        is TransferResult.NetworkError -> "Couldn't reach the network. Check your connection and try again."
+        TransferResult.InvalidNote -> "This transfer's note was already spent elsewhere. Reschedule to plan a new one."
+        TransferResult.Expired -> "This transfer's anchor expired. Reschedule to plan a new one."
+        is TransferResult.Success -> error("sendNowFailureMessage called with a Success result")
     }
 
     private fun fiatAmount(zatoshi: Zatoshi, exchangeRateState: ExchangeRateState): StringResource? {
@@ -109,11 +130,24 @@ class MigrationProgressVM(
     private fun onBack() = sendLce.guardLoading { navigationRouter.back() }
 
     private fun onSendNow() = sendLce.execute {
-        sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = false))
+        // Privacy buffer bookkeeping (keeping sync paused post-broadcast) is entirely SDK-owned
+        // — the SDK notices this transfer was overdue and sets it internally. This VM only
+        // reacts to success (navigate away) or failure (surface a retry sheet).
+        when (val result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = false))) {
+            is TransferResult.Success -> navigationRouter.back()
+            null -> Unit
+            else -> sendNowFailure.value = result
+        }
     }
 
-    private fun onReschedule() = sendLce.guardLoading {
-        MigrationScheduler(context).schedule(30.seconds)
+    private fun onReschedule() = sendLce.execute {
+        // rescheduleOverdueTransfer() persists the new schedule itself (SDK-owned) — sync
+        // unblocking follows automatically via isSyncBlocked() once the plan changes. The VM
+        // still owns WorkManager scheduling for the new time, same as everywhere else.
+        val proposal = sdk.rescheduleOverdueTransfer()
+        val delay = (proposal.nextExecutableAfterHeight - Clock.System.now().epochSeconds).coerceAtLeast(0L)
+        MigrationScheduler(context).schedule(delay.seconds)
+        navigationRouter.back()
     }
 
     private fun onDone() = navigationRouter.backToRoot()

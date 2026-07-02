@@ -6,6 +6,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
+import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import co.electriccoin.zcash.ui.common.compose.LocalActivity
 import co.electriccoin.zcash.ui.common.provider.ApplicationStateProvider
 import co.electriccoin.zcash.ui.common.viewmodel.SecretState
@@ -17,6 +18,8 @@ import co.electriccoin.zcash.ui.design.animation.ScreenAnimation.popEnterTransit
 import co.electriccoin.zcash.ui.design.animation.ScreenAnimation.popExitTransition
 import co.electriccoin.zcash.ui.design.util.LocalNavController
 import co.electriccoin.zcash.ui.screen.flexa.FlexaViewModel
+import co.electriccoin.zcash.ui.screen.home.HomeArgs
+import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import co.electriccoin.zcash.ui.screen.warning.viewmodel.StorageCheckViewModel
 import kotlinx.serialization.Serializable
 import org.koin.androidx.compose.koinViewModel
@@ -32,6 +35,7 @@ fun RootNavGraph(
     val flexaViewModel = koinViewModel<FlexaViewModel>()
     val navigationRouter = koinInject<NavigationRouter>()
     val applicationStateProvider = koinInject<ApplicationStateProvider>()
+    val orchardMigrationSdk = koinInject<OrchardMigrationSdk>()
     val navController = LocalNavController.current
     val activity = LocalActivity.current
     val navigator: Navigator =
@@ -90,6 +94,13 @@ fun RootNavGraph(
                 popUpTo(OnboardingGraph) {
                     inclusive = true
                 }
+            }
+            // Same pattern as MainActivity.handleMigrationIntent — Home always lands on the
+            // back stack first, then we redirect on top of it if a migration transfer is
+            // overdue. isSyncBlocked() (fed into the synchronizer directly) already stopped
+            // sync regardless of whether this redirect lands — this is routing only.
+            if (orchardMigrationSdk.hasOverdueTransfers()) {
+                navigationRouter.replaceAll(HomeArgs, MigrationProgressArgs)
             }
         } else if (
             secretState == SecretState.NONE &&

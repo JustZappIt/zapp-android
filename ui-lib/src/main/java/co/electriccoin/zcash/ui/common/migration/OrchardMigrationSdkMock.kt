@@ -12,13 +12,26 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
+import co.electriccoin.zcash.ui.common.provider.MigrationSyncResumeAtStorageProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepository
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runBlocking
 import kotlin.random.Random
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
+import kotlin.time.toJavaInstant
+import kotlin.time.toKotlinInstant
 
 /**
  * Mock implementation of [OrchardMigrationSdk] for the PoC branch.
@@ -31,6 +44,7 @@ import kotlin.time.Duration.Companion.milliseconds
 class OrchardMigrationSdkMock(
     private val mockBalanceRepository: MockOrchardBalanceRepository,
     private val repository: MigrationPlanRepository,
+    private val syncResumeAtStorageProvider: MigrationSyncResumeAtStorageProvider,
 ) : OrchardMigrationSdk {
 
     // ── State ────────────────────────────────────────────────────────────────
@@ -140,14 +154,32 @@ class OrchardMigrationSdkMock(
     override suspend fun executeNextPendingTransfer(options: NetworkPrivacyOptions): TransferResult? {
         val plan = repository.load() ?: return null
         val next = plan.nextPending ?: return null
+        // Captured before broadcasting: only an overdue transfer being sent out-of-band (the
+        // "send now" resume path) needs the post-broadcast privacy buffer — a transfer executed
+        // on its normal schedule was never blocking sync in the first place.
+        val wasOverdue = next.scheduledAt <= Clock.System.now()
 
         Twig.debug { "OrchardMigrationSdkMock: mock-sending transfer ${next.index + 1}/${plan.totalCount} (tor=${options.useTor})" }
         delay(200)
 
         repository.updateTransfer(next.index, MigrationTransferStatus.SENT)
         mockBalanceRepository.decrease(next.amountZatoshi)
+        if (wasOverdue) {
+            syncResumeAtStorageProvider.store((Clock.System.now() + privacySyncBufferDuration()).toJavaInstant())
+        }
         return TransferResult.Success("mock_tx_${System.currentTimeMillis()}")
     }
+
+    override fun isSyncBlocked(): Flow<Boolean> =
+        combine(repository.observe(), syncResumeAtStorageProvider.observe(), tickerFlow(SYNC_BLOCK_TICK)) {
+            plan, resumeAt, _ ->
+            val overdue = plan?.let { !it.isComplete && it.nextPending?.scheduledAt?.let { at -> at <= Clock.System.now() } == true } ?: false
+            val bufferActive = resumeAt != null && resumeAt.toKotlinInstant() > Clock.System.now()
+            overdue || bufferActive
+        }.distinctUntilChanged()
+
+    override fun privacySyncBufferDuration(): Duration =
+        if (BuildConfig.DEBUG) DEBUG_PRIVACY_SYNC_BUFFER else PROD_PRIVACY_SYNC_BUFFER
 
     // ── On-launch reconciliation ─────────────────────────────────────────────
 
@@ -156,6 +188,21 @@ class OrchardMigrationSdkMock(
         if (plan.isComplete) return false
         val next = plan.nextPending ?: return false
         return next.scheduledAt <= Clock.System.now()
+    }
+
+    override suspend fun rescheduleOverdueTransfer(): TransferProposal {
+        val plan = repository.load() ?: error("OrchardMigrationSdkMock: no migration plan to reschedule")
+        val next = plan.nextPending ?: error("OrchardMigrationSdkMock: no pending transfer to reschedule")
+        val intervalSeconds = if (BuildConfig.DEBUG) DEBUG_INTERVAL_SECONDS else PROD_INTERVAL_SECONDS
+        val newScheduledAt = Clock.System.now().epochSeconds + intervalSeconds
+        repository.rescheduleTransfer(next.index, newScheduledAt)
+        return TransferProposal(
+            id = "transfer_${next.index}",
+            amountZatoshi = next.amountZatoshi,
+            anchorHeight = newScheduledAt,
+            nextExecutableAfterHeight = newScheduledAt,
+            expiryHeight = newScheduledAt + intervalSeconds,
+        )
     }
 
     override fun hasInvalidTransfers(): Boolean = false
@@ -171,6 +218,15 @@ class OrchardMigrationSdkMock(
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    // Time passing alone can flip "overdue"/"buffer elapsed" even with no data change, so
+    // isSyncBlocked() needs to re-evaluate periodically, not just when the plan/timestamp change.
+    private fun tickerFlow(interval: Duration): Flow<Unit> = flow {
+        while (currentCoroutineContext().isActive) {
+            emit(Unit)
+            delay(interval)
+        }
+    }
 
     private suspend fun orchardBalance(): Long = mockBalanceRepository.get()
 
@@ -200,5 +256,11 @@ class OrchardMigrationSdkMock(
         private const val PROD_INTERVAL_SECONDS = 6 * 3600L
         private const val IMMEDIATE_EXPIRY_WINDOW_SECONDS = 3600L
         private val NOTE_SPLIT_BROADCAST_DELAY = 500.milliseconds
+
+        // Post-broadcast privacy buffer for the "send now" resume path — compressed in debug so
+        // the auto-resume is actually observable during manual testing.
+        private val DEBUG_PRIVACY_SYNC_BUFFER = 30.seconds
+        private val PROD_PRIVACY_SYNC_BUFFER = 10.minutes
+        private val SYNC_BLOCK_TICK = 15.seconds
     }
 }

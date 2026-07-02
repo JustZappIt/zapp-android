@@ -13,6 +13,7 @@ data class MigrationProgressState(
     val onReschedule: (() -> Unit)? = null,
     val onSimulateTransfer: (() -> Unit)? = null,
     val onDone: (() -> Unit)? = null,
+    val sendNowFailureSheet: MigrationSendNowFailureState? = null,
 )
 
 data class MigrationProgressTransferState(
@@ -22,4 +23,10 @@ data class MigrationProgressTransferState(
     val isOverdue: Boolean,
     val isSent: Boolean,
     val fiatAmount: StringResource? = null,
+)
+
+data class MigrationSendNowFailureState(
+    val message: String,
+    val onRetry: () -> Unit,
+    val onDismiss: () -> Unit,
 )

@@ -76,6 +76,7 @@ class MainActivity : FragmentActivity() {
     val configurationOverrideFlow = MutableStateFlow<ConfigurationOverride?>(null)
 
     private val navigationRouter: NavigationRouter by inject()
+    private val orchardMigrationSdk: cash.z.ecc.android.sdk.OrchardMigrationSdk by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -117,7 +118,21 @@ class MainActivity : FragmentActivity() {
     override fun onStart() {
         Twig.debug { "Activity state: Start" }
         authenticationViewModel.runAuthenticationRequiredCheck()
+        checkMigrationRecoveryOnStart()
         super.onStart()
+    }
+
+    // RootNavGraph's secretState-driven redirect only re-fires when secretState changes
+    // identity, so it won't catch "a transfer became overdue while backgrounded, already
+    // unlocked." onStart() fires on every foreground transition and catches that case —
+    // isSyncBlocked() has already stopped sync regardless, this is routing only.
+    private fun checkMigrationRecoveryOnStart() {
+        if (orchardMigrationSdk.hasOverdueTransfers()) {
+            navigationRouter.replaceAll(
+                co.electriccoin.zcash.ui.screen.home.HomeArgs,
+                co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs,
+            )
+        }
     }
 
     override fun onStop() {
