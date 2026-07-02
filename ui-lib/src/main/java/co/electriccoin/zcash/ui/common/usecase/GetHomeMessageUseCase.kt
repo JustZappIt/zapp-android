@@ -1,5 +1,7 @@
 package co.electriccoin.zcash.ui.common.usecase
 
+import cash.z.ecc.android.sdk.MigrationState
+import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.Synchronizer
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
@@ -10,6 +12,7 @@ import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.model.WalletRestoringState
 import co.electriccoin.zcash.ui.common.model.WalletSnapshot
 import co.electriccoin.zcash.ui.common.provider.CrashReportingStorageProvider
+import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
 import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.HomeMessageCacheRepository
@@ -44,6 +47,8 @@ class GetHomeMessageUseCase(
     private val cache: HomeMessageCacheRepository,
     private val isTorEnabledStorageProvider: IsTorEnabledStorageProvider,
     private val migrationPlanRepository: MigrationPlanRepository,
+    private val migrationSdk: OrchardMigrationSdk,
+    private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
 ) {
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     fun observe(): Flow<HomeMessageData?> =
@@ -90,12 +95,22 @@ class GetHomeMessageUseCase(
     private fun observeMigrationMessage(): Flow<HomeMessageData.Migration?> =
         accountDataSource.selectedAccount.flatMapLatest { account ->
             if (account == null) return@flatMapLatest flowOf(null)
-            migrationPlanRepository.observe().map { plan ->
-                when {
-                    plan != null && !plan.isComplete -> HomeMessageData.Migration(plan)
-                    co.electriccoin.zcash.ui.BuildConfig.DEBUG && plan != null -> HomeMessageData.Migration(plan)
-                    (co.electriccoin.zcash.ui.BuildConfig.DEBUG || account.spendableShieldedBalance.value > 0L) && plan == null -> HomeMessageData.Migration(null)
-                    else -> null
+            combine(
+                migrationPlanRepository.observe(),
+                hasSeenMigrationCompleteStorageProvider.observe(),
+            ) { plan, hasSeenComplete ->
+                when (migrationSdk.getMigrationState()) {
+                    is MigrationState.InProgress -> HomeMessageData.Migration(plan)
+                    MigrationState.Complete ->
+                        // Stays visible until the user actually engages with it — marked seen in
+                        // HomeVM.onMigrationMessageClick(), not just for having been displayed.
+                        if (hasSeenComplete) null else HomeMessageData.Migration(plan, isComplete = true)
+                    else ->
+                        if ((co.electriccoin.zcash.ui.BuildConfig.DEBUG || account.spendableShieldedBalance.value > 0L) && plan == null) {
+                            HomeMessageData.Migration(null)
+                        } else {
+                            null
+                        }
                 }
             }
         }
