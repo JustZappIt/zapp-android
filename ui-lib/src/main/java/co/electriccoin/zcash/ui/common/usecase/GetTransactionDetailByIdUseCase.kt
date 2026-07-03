@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.common.usecase
 
+import cash.z.ecc.android.sdk.model.WalletAddress
 import co.electriccoin.zcash.ui.common.repository.AddressBookRepository
 import co.electriccoin.zcash.ui.common.repository.EnhancedABContact
 import co.electriccoin.zcash.ui.common.repository.MetadataRepository
@@ -67,7 +68,7 @@ class GetTransactionDetailByIdUseCase(
             val contactFlow =
                 transactionFlow
                     .flatMapLatest {
-                        val address = it.recipient?.address
+                        val address = it.recipient
                         if (address == null) {
                             flowOf(null)
                         } else {
@@ -87,7 +88,7 @@ class GetTransactionDetailByIdUseCase(
                                     flowOf(null)
                                 } else {
                                     transactionFlow
-                                        .map { it.recipient?.address }
+                                        .map { it.recipient }
                                         .distinctUntilChanged()
                                         .flatMapLatest { depositAddress ->
                                             if (depositAddress == null) {
@@ -139,10 +140,9 @@ data class DetailedTransactionData(
     val contact: EnhancedABContact?,
     val metadata: TransactionMetadata,
     val swap: SwapQuoteStatusData?,
-    val reloadHandle: ReloadHandle
-) {
-    val recipient = transaction.recipient
-}
+    val reloadHandle: ReloadHandle,
+    val recipient: WalletAddress?
+)
 
 interface ReloadHandle {
     fun requestReload()
