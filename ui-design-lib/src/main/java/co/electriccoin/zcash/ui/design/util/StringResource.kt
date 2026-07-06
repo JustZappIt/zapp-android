@@ -85,7 +85,8 @@ sealed interface StringResource {
 
     data class ByDynamicNumber(
         val number: Number,
-        val includeGroupingSeparator: Boolean
+        val includeGroupingSeparator: Boolean,
+        val exact: Boolean = false
     ) : StringResource
 
     data class ByFiatDisplayName(
@@ -186,8 +187,11 @@ fun stringResByNumber(
     StringResource.ByNumber(number, minDecimals, maxDecimals, includeGroupingSeparator)
 
 @Stable
-fun stringResByDynamicNumber(number: Number, includeGroupingSeparator: Boolean = true): StringResource =
-    StringResource.ByDynamicNumber(number, includeGroupingSeparator)
+fun stringResByDynamicNumber(
+    number: Number,
+    includeGroupingSeparator: Boolean = true,
+    exact: Boolean = false
+): StringResource = StringResource.ByDynamicNumber(number, includeGroupingSeparator, exact)
 
 @Stable
 fun stringResByFiatDisplayName(fiatCurrency: FiatCurrency): StringResource =
@@ -323,7 +327,7 @@ private fun StringResource.ByDynamicCurrencyNumber.convertDynamicCurrencyNumber(
 }
 
 private fun StringResource.ByDynamicNumber.convertDynamicNumber(context: StringContext): String =
-    convertDynamicNumberToString(number, includeGroupingSeparator, context.locale)
+    convertDynamicNumberToString(number, includeGroupingSeparator, context.locale, exact)
 
 private fun StringResource.ByFiatDisplayName.convertFiatDisplayName(context: StringContext): String =
     Currency.getInstance(fiatCurrency.code).getDisplayName(context.locale)
@@ -331,10 +335,11 @@ private fun StringResource.ByFiatDisplayName.convertFiatDisplayName(context: Str
 private fun convertDynamicNumberToString(
     number: Number,
     includeGroupingSeparator: Boolean,
-    locale: Locale
+    locale: Locale,
+    exact: Boolean = false
 ): String {
     val bigDecimalAmount = number.toBigDecimal().stripTrailingZeros()
-    val dynamicAmount = bigDecimalAmount.stripFractionsDynamically()
+    val dynamicAmount = if (exact) bigDecimalAmount else bigDecimalAmount.stripFractionsDynamically()
     val maxDecimals = if (bigDecimalAmount.scale() > 0) bigDecimalAmount.scale() else 0
     val formatter =
         currencyFormatter(
@@ -423,11 +428,6 @@ enum class TickerLocation { BEFORE, AFTER, HIDDEN }
 
 @Suppress("ReturnCount", "MagicNumber")
 private fun BigDecimal.stripFractionsDynamically(): BigDecimal {
-    // MOB-1435 experimental test build: tolerance-based simplification disabled entirely so that
-    // displayed and requested amounts always show full precision. Not for merging/release.
-    return this.stripTrailingZeros()
-
-    /*
     val tolerance = BigDecimal(".005")
     val minDecimals = 2
     val maxDecimals = 8
@@ -449,7 +449,6 @@ private fun BigDecimal.stripFractionsDynamically(): BigDecimal {
     }
 
     return original.setScale(maxDecimals, RoundingMode.HALF_EVEN)
-    */
 }
 
 enum class Ellipsize {

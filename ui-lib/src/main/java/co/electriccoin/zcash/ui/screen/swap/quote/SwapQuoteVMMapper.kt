@@ -146,7 +146,7 @@ internal class SwapQuoteVMMapper {
                     is DynamicSwapAsset -> asset.chainIcon
                     is ZecSwapAsset -> asset.getQuoteChainIcon(isShielded = true)
                 },
-            amount = stringResByDynamicNumber(quote.amountInFormatted),
+            amount = stringResByDynamicNumber(quote.amountInFormatted, exact = true),
             fiatAmount = stringResByDynamicCurrencyNumber(quote.amountInUsd, FiatCurrency.USD.symbol),
             token = stringRes(quote.originAsset.tokenTicker),
             chain = quote.originAsset.chainName
@@ -163,6 +163,7 @@ internal class SwapQuoteVMMapper {
             amount =
                 stringResByDynamicNumber(
                     quote.amountOutFormatted.setScale(quote.destinationAsset.decimals, RoundingMode.DOWN),
+                    exact = true
                 ),
             fiatAmount = stringResByDynamicCurrencyNumber(quote.amountOutUsd, FiatCurrency.USD.symbol),
             token = stringRes(quote.destinationAsset.tokenTicker),
