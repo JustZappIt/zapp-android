@@ -423,6 +423,11 @@ enum class TickerLocation { BEFORE, AFTER, HIDDEN }
 
 @Suppress("ReturnCount", "MagicNumber")
 private fun BigDecimal.stripFractionsDynamically(): BigDecimal {
+    // MOB-1435 experimental test build: tolerance-based simplification disabled entirely so that
+    // displayed and requested amounts always show full precision. Not for merging/release.
+    return this.stripTrailingZeros()
+
+    /*
     val tolerance = BigDecimal(".005")
     val minDecimals = 2
     val maxDecimals = 8
@@ -444,6 +449,7 @@ private fun BigDecimal.stripFractionsDynamically(): BigDecimal {
     }
 
     return original.setScale(maxDecimals, RoundingMode.HALF_EVEN)
+    */
 }
 
 enum class Ellipsize {
