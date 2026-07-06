@@ -9,6 +9,10 @@ data class MigrationPlan(
     val createdAtEpochSeconds: Long,
     val transfers: List<MigrationTransfer>,
     val mode: MigrationMode = MigrationMode.AUTOMATIC,
+    val useTor: Boolean = false,
+    // Meaningful only for MigrationMode.AUTOMATIC plans — IMMEDIATE never goes through the
+    // Battery screen that determines this, and always sends synchronously in the foreground.
+    val deliveryMode: MigrationDeliveryMode = MigrationDeliveryMode.SCHEDULED,
 ) {
     val createdAt: Instant get() = Instant.fromEpochSeconds(createdAtEpochSeconds)
     val nextPending: MigrationTransfer? get() = transfers.firstOrNull { it.status == MigrationTransferStatus.PENDING }

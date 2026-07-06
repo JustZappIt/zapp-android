@@ -34,7 +34,6 @@ import co.electriccoin.zcash.ui.design.component.BlankBgScaffold
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ZashiButton
 import co.electriccoin.zcash.ui.design.component.ZashiButtonDefaults
-import co.electriccoin.zcash.ui.design.component.ZashiModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.ZashiSmallTopAppBar
 import co.electriccoin.zcash.ui.design.component.ZashiTopAppBarCloseNavigation
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
@@ -45,6 +44,7 @@ import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.scaffoldPadding
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.screen.migration.component.MigrationFailureBottomSheet
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -130,49 +130,10 @@ fun MigrationProgressView(state: MigrationProgressState) {
                 }
             }
 
-            state.onSimulateTransfer?.let { simulate ->
-                Spacer(Modifier.height(16.dp))
-                ZashiButton(
-                    state = ButtonState(
-                        text = stringRes("[DEBUG] Simulate Next Transfer"),
-                        onClick = simulate,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                    defaultPrimaryColors = ZashiButtonDefaults.secondaryColors(),
-                )
-            }
         }
     }
 
-    state.sendNowFailureSheet?.let { failure ->
-        ZashiModalBottomSheet(onDismissRequest = failure.onDismiss) {
-            Column(modifier = Modifier.padding(24.dp)) {
-                Text(
-                    text = "Couldn't Send",
-                    style = ZashiTypography.header6,
-                    fontWeight = FontWeight.SemiBold,
-                    color = ZashiColors.Text.textPrimary,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = failure.message,
-                    style = ZashiTypography.textSm,
-                    color = ZashiColors.Text.textTertiary,
-                )
-                Spacer(Modifier.height(24.dp))
-                ZashiButton(
-                    state = ButtonState(text = stringRes("Retry"), onClick = failure.onRetry),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(8.dp))
-                ZashiButton(
-                    state = ButtonState(text = stringRes("Dismiss"), onClick = failure.onDismiss),
-                    modifier = Modifier.fillMaxWidth(),
-                    defaultPrimaryColors = ZashiButtonDefaults.secondaryColors(),
-                )
-            }
-        }
-    }
+    MigrationFailureBottomSheet(state.sendNowFailureSheet)
 }
 
 @Composable

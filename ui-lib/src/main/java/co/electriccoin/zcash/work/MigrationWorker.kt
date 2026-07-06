@@ -34,7 +34,9 @@ class MigrationWorker(
             return Result.success()
         }
 
-        return when (val result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = false))) {
+        val plan = migrationPlanRepository.load()
+        val next = plan?.nextPending
+        return when (val result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = plan?.useTor ?: false))) {
             null -> {
                 Twig.debug { "MigrationWorker: no pending transfer." }
                 Result.success()
@@ -55,12 +57,21 @@ class MigrationWorker(
             }
             is TransferResult.NetworkError -> {
                 Twig.debug { "MigrationWorker: network error, retryable=${result.retryable}" }
-                if (result.retryable) Result.retry() else Result.failure()
+                if (result.retryable) {
+                    Result.retry()
+                } else {
+                    // Nothing else re-arms a future attempt for a non-retryable failure — the
+                    // user must open the app and act, same as a missed/stalled window.
+                    if (next != null) migrationNotifier.notifyManualConfirmationRequired(next.index + 1, plan.totalCount)
+                    Result.failure()
+                }
             }
             TransferResult.InvalidNote,
             TransferResult.Expired -> {
-                // State is now RequiresAttention — on-launch reconciliation will surface the prompt.
+                // State is now RequiresAttention — on-launch reconciliation will surface the
+                // prompt, but the user still needs telling since nothing else runs meanwhile.
                 Twig.debug { "MigrationWorker: transfer invalid or expired — user action required on next open." }
+                migrationNotifier.notifyMigrationPlanInvalid()
                 Result.success()
             }
         }

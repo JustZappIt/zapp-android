@@ -47,6 +47,7 @@ import co.electriccoin.zcash.ui.screen.common.LceRenderer
 import co.electriccoin.zcash.ui.screen.common.WalletHeaderBadgeChrome
 import co.electriccoin.zcash.ui.screen.common.WalletHeaderIcons
 import co.electriccoin.zcash.ui.screen.common.WalletHeaderIconsState
+import co.electriccoin.zcash.ui.screen.migration.component.MigrationFailureBottomSheet
 import kotlinx.serialization.Serializable
 import org.koin.androidx.compose.koinViewModel
 
@@ -70,6 +71,7 @@ fun MigrationNoteSplitView(state: MigrationNoteSplitState) {
         NoteSplitPhase.IN_PROGRESS -> InProgressView(state)
         NoteSplitPhase.COMPLETE -> SuccessView(state)
     }
+    MigrationFailureBottomSheet(state.failureSheet)
 }
 
 @Composable

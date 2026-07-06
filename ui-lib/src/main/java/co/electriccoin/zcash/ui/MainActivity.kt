@@ -76,7 +76,7 @@ class MainActivity : FragmentActivity() {
     val configurationOverrideFlow = MutableStateFlow<ConfigurationOverride?>(null)
 
     private val navigationRouter: NavigationRouter by inject()
-    private val orchardMigrationSdk: cash.z.ecc.android.sdk.OrchardMigrationSdk by inject()
+    private val checkMigrationRecovery: co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -127,12 +127,7 @@ class MainActivity : FragmentActivity() {
     // unlocked." onStart() fires on every foreground transition and catches that case —
     // isSyncBlocked() has already stopped sync regardless, this is routing only.
     private fun checkMigrationRecoveryOnStart() {
-        if (orchardMigrationSdk.hasOverdueTransfers()) {
-            navigationRouter.replaceAll(
-                co.electriccoin.zcash.ui.screen.home.HomeArgs,
-                co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs,
-            )
-        }
+        lifecycleScope.launch { checkMigrationRecovery() }
     }
 
     override fun onStop() {

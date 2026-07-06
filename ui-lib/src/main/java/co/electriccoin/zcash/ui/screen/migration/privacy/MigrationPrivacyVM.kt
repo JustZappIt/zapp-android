@@ -34,7 +34,14 @@ class MigrationPrivacyVM(
         }.withLce(lce, errorStateMapper::mapToState)
             .stateIn(this)
 
-    private fun onConfirm() = navigationRouter.forward(MigrationReviewArgs(args.mode))
+    private fun onConfirm() =
+        navigationRouter.forward(
+            MigrationReviewArgs(
+                mode = args.mode,
+                useTor = useTor.value,
+                backgroundAvailable = args.backgroundAvailable,
+            )
+        )
 
     private fun onBack() = navigationRouter.back()
 }

@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.screen.migration.notesplit
 
+import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.design.util.StringResource
 
 enum class NoteSplitPhase { EXPLAINER, IN_PROGRESS, COMPLETE }
@@ -13,4 +14,6 @@ data class MigrationNoteSplitState(
     val onCopyTransactionId: () -> Unit,
     val onContinue: () -> Unit,
     val onBack: () -> Unit,
+    // Rendered as a bottom sheet over IN_PROGRESS — spec's "Failure (bottom sheet over progress)".
+    val failureSheet: MigrationTransferFailureState? = null,
 )

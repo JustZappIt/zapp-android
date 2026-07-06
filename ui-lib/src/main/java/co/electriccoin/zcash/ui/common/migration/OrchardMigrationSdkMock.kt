@@ -18,6 +18,7 @@ import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepository
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
@@ -46,6 +47,9 @@ class OrchardMigrationSdkMock(
     private val repository: MigrationPlanRepository,
     private val syncResumeAtStorageProvider: MigrationSyncResumeAtStorageProvider,
 ) : OrchardMigrationSdk {
+
+    // Debug-only simulated RequiresAttention(InvalidTransfer) — see simulateInvalidTransfer().
+    private val simulatedInvalidTransfers = MutableStateFlow(false)
 
     // ── State ────────────────────────────────────────────────────────────────
 
@@ -171,11 +175,12 @@ class OrchardMigrationSdkMock(
     }
 
     override fun isSyncBlocked(): Flow<Boolean> =
-        combine(repository.observe(), syncResumeAtStorageProvider.observe(), tickerFlow(SYNC_BLOCK_TICK)) {
-            plan, resumeAt, _ ->
+        combine(
+            repository.observe(), syncResumeAtStorageProvider.observe(), simulatedInvalidTransfers, tickerFlow(SYNC_BLOCK_TICK)
+        ) { plan, resumeAt, invalid, _ ->
             val overdue = plan?.let { !it.isComplete && it.nextPending?.scheduledAt?.let { at -> at <= Clock.System.now() } == true } ?: false
             val bufferActive = resumeAt != null && resumeAt.toKotlinInstant() > Clock.System.now()
-            overdue || bufferActive
+            overdue || bufferActive || invalid
         }.distinctUntilChanged()
 
     override fun privacySyncBufferDuration(): Duration =
@@ -205,11 +210,21 @@ class OrchardMigrationSdkMock(
         )
     }
 
-    override fun hasInvalidTransfers(): Boolean = false
+    override fun hasInvalidTransfers(): Boolean = simulatedInvalidTransfers.value
 
     // ── Invalidity recovery ──────────────────────────────────────────────────
 
-    override suspend fun restartCurrentMigrationStep(): MigrationSchedule = proposeMigrationTransfers()
+    override suspend fun restartCurrentMigrationStep(): MigrationSchedule {
+        simulatedInvalidTransfers.value = false
+        return proposeMigrationTransfers()
+    }
+
+    // Debug-only QA hook (see MigrationProgressVM.onSimulateInvalidTransfer) — the real SDK
+    // will surface RequiresAttention(InvalidTransfer) on its own once it exists; this mock has
+    // no organic way to reach that state otherwise.
+    fun simulateInvalidTransfer() {
+        simulatedInvalidTransfers.value = true
+    }
 
     // ── Lifecycle ────────────────────────────────────────────────────────────
 

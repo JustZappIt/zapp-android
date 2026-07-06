@@ -63,6 +63,19 @@ class MigrationNotifier(private val context: Context) {
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_PROGRESS, notification)
     }
 
+    fun notifyMigrationPlanInvalid() {
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_alert_circle)
+            .setContentTitle("Ironwood Migration")
+            .setContentText("Migration plan needs update. Open Zodl to review the details.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(mainActivityIntent())
+            .setAutoCancel(true)
+            .build()
+
+        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_PROGRESS, notification)
+    }
+
     fun notifyMigrationComplete() {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alert_circle)

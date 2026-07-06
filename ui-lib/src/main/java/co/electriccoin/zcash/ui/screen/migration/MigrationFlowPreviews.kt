@@ -34,6 +34,7 @@ import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewTransferS
 import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewView
 import co.electriccoin.zcash.ui.screen.migration.scheduled.MigrationScheduledState
 import co.electriccoin.zcash.ui.screen.migration.scheduled.MigrationScheduledView
+import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingState
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingView
 import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupState
 import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupView
@@ -73,7 +74,7 @@ private fun ImmediateFlowPreview() = ZcashTheme {
         FlowStep("1 · Setup") { MigrationSetupView(previewSetupState(MigrationMode.IMMEDIATE)) }
         FlowStep("2 · Tor Privacy") { MigrationPrivacyView(previewPrivacyState(MigrationMode.IMMEDIATE)) }
         FlowStep("3 · Review") { MigrationReviewView(previewReviewStateImmediate()) }
-        FlowStep("4 · Sending") { MigrationSendingView() }
+        FlowStep("4 · Sending") { MigrationSendingView(MigrationSendingState(failureSheet = null)) }
         FlowStep("5 · Success") { MigrationSuccessView(previewSuccessState()) }
     }
 }

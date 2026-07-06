@@ -25,19 +25,21 @@ import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
 import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.orDark
 import co.electriccoin.zcash.ui.screen.common.LceRenderer
+import co.electriccoin.zcash.ui.screen.migration.component.MigrationFailureBottomSheet
 import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.LottieConstants
 import com.airbnb.lottie.compose.animateLottieCompositionAsState
 import com.airbnb.lottie.compose.rememberLottieComposition
 import org.koin.androidx.compose.koinViewModel
+import org.koin.core.parameter.parametersOf
 
 @Composable
-fun MigrationSendingScreen() {
-    val vm = koinViewModel<MigrationSendingVM>()
+fun MigrationSendingScreen(args: MigrationSendingArgs) {
+    val vm = koinViewModel<MigrationSendingVM> { parametersOf(args) }
     val state by vm.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { vm.send() }
-    LceRenderer(state) { MigrationSendingView() }
+    LceRenderer(state) { MigrationSendingView(it) }
 }
 
 // Figma node 2618:6858 ("Sending") — reuses the same "sending" Lottie composition the standard
@@ -45,7 +47,7 @@ fun MigrationSendingScreen() {
 // frame has no bottom CTA (empty CTA slot) since there's nothing actionable yet while sending —
 // this mirrors TransactionProgressVM.createSendingState(), which likewise leaves all buttons null.
 @Composable
-fun MigrationSendingView() {
+fun MigrationSendingView(state: MigrationSendingState) {
     BlankBgScaffold { padding ->
         Column(
             modifier = Modifier
@@ -72,6 +74,7 @@ fun MigrationSendingView() {
             )
         }
     }
+    MigrationFailureBottomSheet(state.failureSheet)
 }
 
 @Composable
@@ -89,4 +92,4 @@ private fun SendingAnimation() {
 
 @PreviewScreens
 @Composable
-private fun Preview() = ZcashTheme { MigrationSendingView() }
+private fun Preview() = ZcashTheme { MigrationSendingView(MigrationSendingState(failureSheet = null)) }

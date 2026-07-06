@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.screen.migration.progress
 
+import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.design.util.StringResource
 
 data class MigrationProgressState(
@@ -11,9 +12,8 @@ data class MigrationProgressState(
     val onBack: () -> Unit,
     val onSendNow: (() -> Unit)? = null,
     val onReschedule: (() -> Unit)? = null,
-    val onSimulateTransfer: (() -> Unit)? = null,
     val onDone: (() -> Unit)? = null,
-    val sendNowFailureSheet: MigrationSendNowFailureState? = null,
+    val sendNowFailureSheet: MigrationTransferFailureState? = null,
 )
 
 data class MigrationProgressTransferState(
@@ -23,10 +23,4 @@ data class MigrationProgressTransferState(
     val isOverdue: Boolean,
     val isSent: Boolean,
     val fiatAmount: StringResource? = null,
-)
-
-data class MigrationSendNowFailureState(
-    val message: String,
-    val onRetry: () -> Unit,
-    val onDismiss: () -> Unit,
 )

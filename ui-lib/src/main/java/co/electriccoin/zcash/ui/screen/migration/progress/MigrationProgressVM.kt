@@ -6,11 +6,13 @@ import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferResult
 import cash.z.ecc.android.sdk.model.Zatoshi
-import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
+import co.electriccoin.zcash.ui.common.model.migration.MigrationDeliveryMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
+import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
+import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
@@ -32,6 +34,7 @@ import kotlinx.coroutines.flow.combine
 import java.math.BigDecimal
 import java.math.MathContext
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -96,23 +99,15 @@ class MigrationProgressVM(
             // all; it only appears on B8 (Resume Migration) when a transfer is actually overdue.
             onSendNow = if (hasOverdue) ::onSendNow else null,
             onReschedule = if (hasOverdue) ::onReschedule else null,
-            onSimulateTransfer = if (BuildConfig.DEBUG && !plan.isComplete) ::onSimulateTransfer else null,
             onDone = if (plan.isComplete) ::onDone else null,
             sendNowFailureSheet = failure?.let {
-                MigrationSendNowFailureState(
-                    message = sendNowFailureMessage(it),
+                MigrationTransferFailureState(
+                    message = migrationFailureMessage(it),
                     onRetry = { sendNowFailure.value = null; onSendNow() },
                     onDismiss = { sendNowFailure.value = null },
                 )
             },
         )
-    }
-
-    private fun sendNowFailureMessage(result: TransferResult): String = when (result) {
-        is TransferResult.NetworkError -> "Couldn't reach the network. Check your connection and try again."
-        TransferResult.InvalidNote -> "This transfer's note was already spent elsewhere. Reschedule to plan a new one."
-        TransferResult.Expired -> "This transfer's anchor expired. Reschedule to plan a new one."
-        is TransferResult.Success -> error("sendNowFailureMessage called with a Success result")
     }
 
     private fun fiatAmount(zatoshi: Zatoshi, exchangeRateState: ExchangeRateState): StringResource? {
@@ -130,32 +125,56 @@ class MigrationProgressVM(
     private fun onBack() = sendLce.guardLoading { navigationRouter.back() }
 
     private fun onSendNow() = sendLce.execute {
+        val plan = migrationPlanRepository.load() ?: return@execute
         // Privacy buffer bookkeeping (keeping sync paused post-broadcast) is entirely SDK-owned
         // — the SDK notices this transfer was overdue and sets it internally. This VM only
-        // reacts to success (navigate away) or failure (surface a retry sheet).
-        when (val result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = false))) {
-            is TransferResult.Success -> navigationRouter.back()
+        // reacts to success (re-arm the next window and navigate away) or failure (retry sheet).
+        when (val result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = plan.useTor))) {
+            is TransferResult.Success -> {
+                scheduleNextWindowIfAny(plan.deliveryMode)
+                navigationRouter.back()
+            }
             null -> Unit
             else -> sendNowFailure.value = result
         }
     }
 
     private fun onReschedule() = sendLce.execute {
+        val plan = migrationPlanRepository.load()
         // rescheduleOverdueTransfer() persists the new schedule itself (SDK-owned) — sync
         // unblocking follows automatically via isSyncBlocked() once the plan changes. The VM
-        // still owns WorkManager scheduling for the new time, same as everywhere else.
+        // still owns WorkManager scheduling for the new time, same as everywhere else. A MANUAL
+        // plan must only ever get a notify-only job here, never a real send worker — otherwise
+        // manual mode silently degrades into background auto-send after any reschedule.
         val proposal = sdk.rescheduleOverdueTransfer()
-        val delay = (proposal.nextExecutableAfterHeight - Clock.System.now().epochSeconds).coerceAtLeast(0L)
-        MigrationScheduler(context).schedule(delay.seconds)
+        val delay = delayUntil(proposal.nextExecutableAfterHeight)
+        if (plan?.deliveryMode == MigrationDeliveryMode.MANUAL) {
+            MigrationScheduler(context).scheduleNotifyOnly(delay)
+        } else {
+            MigrationScheduler(context).schedule(delay)
+        }
         navigationRouter.back()
     }
 
     private fun onDone() = navigationRouter.backToRoot()
 
-    private fun onSimulateTransfer() = sendLce.execute {
-        sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = false))
-        val updated = migrationPlanRepository.load() ?: return@execute
-        if (updated.nextPending != null) MigrationScheduler(context).schedule(5.seconds)
+    // A SCHEDULED plan re-arms the real send worker for the next window; a MANUAL plan only ever
+    // gets a notify-only job — the user must open the app and confirm each subsequent transfer.
+    // Plain suspend helper (not sendLce.execute) — always called from inside an existing
+    // sendLce.execute block, so it must not open a second one.
+    private suspend fun scheduleNextWindowIfAny(deliveryMode: MigrationDeliveryMode) {
+        val next = migrationPlanRepository.load()?.nextPending ?: return
+        val delay = delayUntil(next.scheduledAtEpochSeconds)
+        if (deliveryMode == MigrationDeliveryMode.MANUAL) {
+            MigrationScheduler(context).scheduleNotifyOnly(delay)
+        } else {
+            MigrationScheduler(context).schedule(delay)
+        }
+    }
+
+    private fun delayUntil(epochSeconds: Long): Duration {
+        val remaining = epochSeconds - Clock.System.now().epochSeconds
+        return if (remaining <= 0) 0.seconds else remaining.seconds
     }
 
     private fun transferLabel(t: MigrationTransfer, now: Instant): StringResource =
@@ -182,7 +201,6 @@ class MigrationProgressVM(
                     }
                 }
             }
-            MigrationTransferStatus.FAILED -> stringRes("Failed")
         }
 
     private fun overdueHours(t: MigrationTransfer, now: Instant) =

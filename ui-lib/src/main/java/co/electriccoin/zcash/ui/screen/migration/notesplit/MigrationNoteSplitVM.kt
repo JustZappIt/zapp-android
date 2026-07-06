@@ -10,6 +10,8 @@ import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.groupLce
 import co.electriccoin.zcash.ui.common.model.guardLoading
+import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
+import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
@@ -47,6 +49,7 @@ class MigrationNoteSplitVM(
     // Known as soon as submitNoteSplit() broadcasts — matches the real SDK, where the txId exists
     // once the transaction is broadcast (state SplitPendingConfirmation), before it's confirmed.
     private val transactionId = MutableStateFlow<String?>(null)
+    private val failure = MutableStateFlow<TransferResult?>(null)
     private val isKeystoneAccount = getSelectedWalletAccount.observe().map { it is KeystoneAccount }
 
     init {
@@ -62,8 +65,8 @@ class MigrationNoteSplitVM(
     }
 
     val state: StateFlow<LceState<MigrationNoteSplitState>> =
-        combine(phase, checkLce.state, transactionId, isKeystoneAccount) { p, checkState, txId, isKeystone ->
-            checkState.success?.let { proposal -> createState(p, proposal, txId, isKeystone) }
+        combine(phase, checkLce.state, transactionId, isKeystoneAccount, failure) { p, checkState, txId, isKeystone, f ->
+            checkState.success?.let { proposal -> createState(p, proposal, txId, isKeystone, f) }
         }.withLce(groupLce(checkLce, splitLce), errorStateMapper::mapToState)
             .stateIn(this)
 
@@ -72,6 +75,7 @@ class MigrationNoteSplitVM(
         proposal: NoteSplitProposal,
         txId: String?,
         isKeystone: Boolean,
+        failureResult: TransferResult?,
     ) = MigrationNoteSplitState(
         phase = currentPhase,
         isKeystone = isKeystone,
@@ -81,6 +85,13 @@ class MigrationNoteSplitVM(
         onCopyTransactionId = { txId?.let(copyToClipboard::invoke) },
         onContinue = { onContinue(currentPhase, proposal) },
         onBack = ::onBack,
+        failureSheet = failureResult?.let {
+            MigrationTransferFailureState(
+                message = migrationFailureMessage(it),
+                onRetry = { failure.value = null; startSplit(proposal) },
+                onDismiss = { failure.value = null; navigationRouter.back() },
+            )
+        },
     )
 
     private fun onContinue(currentPhase: NoteSplitPhase, proposal: NoteSplitProposal) = when (currentPhase) {
@@ -91,12 +102,16 @@ class MigrationNoteSplitVM(
 
     private fun startSplit(proposal: NoteSplitProposal) = splitLce.execute {
         phase.value = NoteSplitPhase.IN_PROGRESS
-        val result = sdk.submitNoteSplit(proposal)
-        transactionId.value = (result as? TransferResult.Success)?.txId
-        // Simulated wait for on-chain confirmation (~1 block) — long enough for the IN_PROGRESS
-        // screen, now showing the real txId, to actually be visible/testable.
-        delay(CONFIRMATION_WAIT)
-        phase.value = NoteSplitPhase.COMPLETE
+        when (val result = sdk.submitNoteSplit(proposal)) {
+            is TransferResult.Success -> {
+                transactionId.value = result.txId
+                // Simulated wait for on-chain confirmation (~1 block) — long enough for the
+                // IN_PROGRESS screen, now showing the real txId, to actually be visible/testable.
+                delay(CONFIRMATION_WAIT)
+                phase.value = NoteSplitPhase.COMPLETE
+            }
+            else -> failure.value = result
+        }
     }
 
     private fun onBack() = checkLce.guardLoading { navigationRouter.back() }

@@ -29,14 +29,16 @@ class MigrationBatteryVM(
         ).withLce(lce, errorStateMapper::mapToState)
             .stateIn(this)
 
-    private fun onAllow() = navigationRouter.forward(MigrationNotificationArgs)
+    private fun onAllow() = navigationRouter.forward(MigrationNotificationArgs(backgroundAvailable = true))
 
-    private fun onSkip() = navigationRouter.forward(MigrationNotificationArgs)
+    // Explicit decline — background delivery is unavailable for this migration, so the plan
+    // built downstream (MigrationReviewVM.toMigrationPlan) must fall back to MANUAL delivery.
+    private fun onSkip() = navigationRouter.forward(MigrationNotificationArgs(backgroundAvailable = false))
 
     // Used when this screen skips itself without ever being shown (permission already granted) —
     // replace instead of forward so it doesn't linger in the back stack and bounce the user
     // straight back here when they press back from a later screen.
-    private fun onAutoSkip() = navigationRouter.replace(MigrationNotificationArgs)
+    private fun onAutoSkip() = navigationRouter.replace(MigrationNotificationArgs(backgroundAvailable = true))
 
     private fun onBack() = navigationRouter.back()
 }

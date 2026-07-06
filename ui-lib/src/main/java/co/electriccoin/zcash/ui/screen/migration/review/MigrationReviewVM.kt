@@ -2,19 +2,24 @@ package co.electriccoin.zcash.ui.screen.migration.review
 
 import androidx.lifecycle.ViewModel
 import cash.z.ecc.android.sdk.MigrationSchedule
+import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferProposal
+import cash.z.ecc.android.sdk.TransferResult
 import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.guardLoading
+import co.electriccoin.zcash.ui.common.model.migration.MigrationDeliveryMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
+import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
+import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
@@ -29,6 +34,7 @@ import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.screen.migration.scheduled.MigrationScheduledArgs
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
 import co.electriccoin.zcash.work.MigrationScheduler
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -53,6 +59,7 @@ class MigrationReviewVM(
     private val proposeLce = mutableLce<MigrationSchedule>()
     private val confirmLce = mutableLce<Unit>()
     private val isKeystoneAccount = getSelectedWalletAccount.observe().map { it is KeystoneAccount }
+    private val failure = MutableStateFlow<TransferResult?>(null)
 
     init {
         proposeLce.execute {
@@ -64,8 +71,8 @@ class MigrationReviewVM(
     }
 
     val state: StateFlow<LceState<MigrationReviewState>> =
-        combine(proposeLce.state, exchangeRateRepository.state, isKeystoneAccount) { lce, rate, isKeystone ->
-            lce.success?.let { sched -> createState(sched, confirmLce.state.value.loading, rate, isKeystone) }
+        combine(proposeLce.state, exchangeRateRepository.state, isKeystoneAccount, failure) { lce, rate, isKeystone, f ->
+            lce.success?.let { sched -> createState(sched, confirmLce.state.value.loading, rate, isKeystone, f) }
         }.withLce(proposeLce, errorStateMapper::mapToState)
             .stateIn(this)
 
@@ -74,6 +81,7 @@ class MigrationReviewVM(
         isConfirming: Boolean,
         exchangeRateState: ExchangeRateState,
         isKeystone: Boolean,
+        failureResult: TransferResult?,
     ): MigrationReviewState {
         val total = sched.transfers.sumOf { it.amountZatoshi }
         val firstAt = sched.transfers.minOfOrNull { it.nextExecutableAfterHeight } ?: 0L
@@ -99,6 +107,13 @@ class MigrationReviewVM(
             isConfirming = isConfirming,
             onConfirm = { proposeLce.guardLoading { onConfirm(sched) } },
             onBack = ::onBack,
+            failureSheet = failureResult?.let {
+                MigrationTransferFailureState(
+                    message = migrationFailureMessage(it),
+                    onRetry = { failure.value = null; proposeLce.guardLoading { onConfirm(sched) } },
+                    onDismiss = { failure.value = null },
+                )
+            },
         )
     }
 
@@ -117,24 +132,53 @@ class MigrationReviewVM(
     private fun onConfirm(sched: MigrationSchedule) =
         confirmLce.execute {
             sdk.signAndStoreMigrationSchedule(sched)
-            migrationPlanRepository.save(sched.toMigrationPlan(args.mode))
             when (args.mode) {
                 // Immediate mode broadcasts synchronously in the foreground on the Sending
                 // screen — no WorkManager job needed (and scheduling one here would race it).
-                MigrationMode.IMMEDIATE -> navigationRouter.forward(MigrationSendingArgs)
-                MigrationMode.AUTOMATIC -> {
-                    migrationScheduler.schedule(delayUntilFirstTransfer(sched))
-                    navigationRouter.forward(MigrationScheduledArgs)
+                MigrationMode.IMMEDIATE -> {
+                    migrationPlanRepository.save(sched.toMigrationPlan(args.mode, args.useTor, MigrationDeliveryMode.SCHEDULED))
+                    navigationRouter.forward(MigrationSendingArgs(useTor = args.useTor))
                 }
+                MigrationMode.AUTOMATIC -> confirmAutomatic(sched)
             }
         }
+
+    private suspend fun confirmAutomatic(sched: MigrationSchedule) {
+        // Background delivery unavailable (Battery screen declined) — fall back to MANUAL:
+        // send transfer #1 immediately in the foreground now, then only ever notify (never
+        // silently auto-send) for subsequent transfers.
+        val deliveryMode = if (args.backgroundAvailable) MigrationDeliveryMode.SCHEDULED else MigrationDeliveryMode.MANUAL
+        migrationPlanRepository.save(sched.toMigrationPlan(args.mode, args.useTor, deliveryMode))
+
+        if (deliveryMode == MigrationDeliveryMode.MANUAL) {
+            // Reset before sending (not after) — if the process dies mid-send, the persisted
+            // plan must already read as overdue on relaunch, not just after a full interval.
+            migrationPlanRepository.rescheduleTransfer(0, Clock.System.now().epochSeconds)
+            when (val result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = args.useTor))) {
+                is TransferResult.Success -> {
+                    val next = migrationPlanRepository.load()?.nextPending
+                    if (next != null) migrationScheduler.scheduleNotifyOnly(delayUntil(next.scheduledAtEpochSeconds))
+                    navigationRouter.forward(MigrationScheduledArgs)
+                }
+                null -> navigationRouter.forward(MigrationScheduledArgs)
+                else -> failure.value = result
+            }
+        } else {
+            migrationScheduler.schedule(delayUntilFirstTransfer(sched))
+            navigationRouter.forward(MigrationScheduledArgs)
+        }
+    }
 
     // The first transfer is never "ready now" (same anchor/proposal round trip as any other
     // transfer, per proposeMigrationTransfers()) — the very first WorkManager job must wait for
     // it just like every job scheduled after it, not fire immediately.
     private fun delayUntilFirstTransfer(sched: MigrationSchedule): Duration {
         val firstAt = sched.transfers.minOfOrNull { it.nextExecutableAfterHeight } ?: return 0.seconds
-        val remaining = firstAt - Clock.System.now().epochSeconds
+        return delayUntil(firstAt)
+    }
+
+    private fun delayUntil(epochSeconds: Long): Duration {
+        val remaining = epochSeconds - Clock.System.now().epochSeconds
         return if (remaining <= 0) 0.seconds else remaining.seconds
     }
 
@@ -151,20 +195,25 @@ class MigrationReviewVM(
         }
     }
 
-    private fun MigrationSchedule.toMigrationPlan(mode: MigrationMode) =
-        MigrationPlan(
-            id = UUID.randomUUID().toString(),
-            createdAtEpochSeconds = Clock.System.now().epochSeconds,
-            transfers = transfers.mapIndexed { i, t ->
-                MigrationTransfer(
-                    index = i,
-                    amountZatoshi = t.amountZatoshi,
-                    scheduledAtEpochSeconds = t.nextExecutableAfterHeight,
-                    status = MigrationTransferStatus.PENDING,
-                )
-            },
-            mode = mode,
-        )
+    private fun MigrationSchedule.toMigrationPlan(
+        mode: MigrationMode,
+        useTor: Boolean,
+        deliveryMode: MigrationDeliveryMode,
+    ) = MigrationPlan(
+        id = UUID.randomUUID().toString(),
+        createdAtEpochSeconds = Clock.System.now().epochSeconds,
+        transfers = transfers.mapIndexed { i, t ->
+            MigrationTransfer(
+                index = i,
+                amountZatoshi = t.amountZatoshi,
+                scheduledAtEpochSeconds = t.nextExecutableAfterHeight,
+                status = MigrationTransferStatus.PENDING,
+            )
+        },
+        mode = mode,
+        useTor = useTor,
+        deliveryMode = deliveryMode,
+    )
 
     companion object {
         // Mock-only placeholder network fee (zatoshi) for the IMMEDIATE Review screen's Details

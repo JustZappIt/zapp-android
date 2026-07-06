@@ -377,9 +377,9 @@ fun NavGraphBuilder.walletNavGraph(
         composable<MigrationNoteSplitArgs> { MigrationNoteSplitScreen() }
         composable<MigrationReviewArgs> { MigrationReviewScreen(it.toRoute()) }
         composable<MigrationBatteryArgs> { MigrationBatteryScreen() }
-        composable<MigrationNotificationArgs> { MigrationNotificationScreen() }
+        composable<MigrationNotificationArgs> { MigrationNotificationScreen(it.toRoute()) }
         composable<MigrationPrivacyArgs> { MigrationPrivacyScreen(it.toRoute()) }
-        composable<MigrationSendingArgs> { MigrationSendingScreen() }
+        composable<MigrationSendingArgs> { MigrationSendingScreen(it.toRoute()) }
         composable<MigrationSuccessArgs> { MigrationSuccessScreen(it.toRoute()) }
         composable<MigrationScheduledArgs> { MigrationScheduledScreen() }
         composable<MigrationProgressArgs> { MigrationProgressScreen() }
