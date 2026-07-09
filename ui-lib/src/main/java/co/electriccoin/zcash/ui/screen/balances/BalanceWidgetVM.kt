@@ -44,7 +44,7 @@ class BalanceWidgetVM(
     @Suppress("CyclomaticComplexMethod")
     private fun createState(account: WalletAccount?, exchangeRate: ExchangeRateState) =
         BalanceWidgetState(
-            totalBalance = account?.totalBalance ?: Zatoshi(0),
+            totalBalance = account?.totalBalance,
             exchangeRate = if (args.isExchangeRateButtonEnabled) exchangeRate else null,
             button =
                 when {
