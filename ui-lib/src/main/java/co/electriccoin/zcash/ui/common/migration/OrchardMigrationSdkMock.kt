@@ -103,7 +103,9 @@ class OrchardMigrationSdkMock(
 
     // ── Migration proposal ───────────────────────────────────────────────────
 
-    override suspend fun proposeMigrationTransfers(): MigrationSchedule {
+    override suspend fun proposeMigrationTransfers(includeResidual: Boolean): MigrationSchedule {
+        // Mock does not simulate the residual-note concept — the real bridge's ~0.001-1 ZEC
+        // leftover doesn't have a mocked equivalent here, so this flag is currently a no-op.
         val total = orchardBalance()
         val amounts = splitEvenly(total, count = TRANSFER_COUNT)
         val intervalSeconds = if (BuildConfig.DEBUG) DEBUG_INTERVAL_SECONDS else PROD_INTERVAL_SECONDS
@@ -214,9 +216,9 @@ class OrchardMigrationSdkMock(
 
     // ── Invalidity recovery ──────────────────────────────────────────────────
 
-    override suspend fun restartCurrentMigrationStep(): MigrationSchedule {
+    override suspend fun restartCurrentMigrationStep(includeResidual: Boolean): MigrationSchedule {
         simulatedInvalidTransfers.value = false
-        return proposeMigrationTransfers()
+        return proposeMigrationTransfers(includeResidual)
     }
 
     // Debug-only QA hook (see MigrationProgressVM.onSimulateInvalidTransfer) — the real SDK
@@ -224,12 +226,6 @@ class OrchardMigrationSdkMock(
     // no organic way to reach that state otherwise.
     fun simulateInvalidTransfer() {
         simulatedInvalidTransfers.value = true
-    }
-
-    // ── Lifecycle ────────────────────────────────────────────────────────────
-
-    override fun initializePostUpgrade() {
-        Twig.debug { "OrchardMigrationSdkMock: initializePostUpgrade (no-op in mock)" }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
