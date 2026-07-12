@@ -32,6 +32,7 @@ class BlockchainProviderImpl(
                     "bsc" -> stringRes("Binance Smart Chain")
                     "btc" -> stringRes("Bitcoin")
                     "cardano" -> stringRes("Cardano")
+                    "dash" -> stringRes("Dash")
                     "doge" -> stringRes("Doge")
                     "eth" -> stringRes("Ethereum")
                     "gnosis" -> stringRes("Gnosis")

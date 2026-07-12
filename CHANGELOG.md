@@ -6,6 +6,9 @@ and this application adheres to [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Added:
+- Bitcoin Cash (BCH) and Dash (DASH) are now available as Swap/Pay assets.
+
 ## [3.7.2 (2009)] - 2026-07-11
 
 ### Changed:

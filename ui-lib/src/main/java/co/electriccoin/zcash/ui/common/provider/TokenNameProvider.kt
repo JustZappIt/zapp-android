@@ -8,9 +8,12 @@ interface TokenNameProvider {
 }
 
 class TokenNameProviderImpl : TokenNameProvider {
+    @Suppress("CyclomaticComplexMethod")
     override fun getName(ticker: String): StringResource =
         when (ticker.lowercase()) {
             "cbbtc", "wbtc", "xbtc", "btc" -> stringRes("Bitcoin")
+            "bch" -> stringRes("Bitcoin Cash")
+            "dash" -> stringRes("Dash")
             "weth", "eth" -> stringRes("Ethereum")
             "near" -> stringRes("Near")
             "sol" -> stringRes("Solana")

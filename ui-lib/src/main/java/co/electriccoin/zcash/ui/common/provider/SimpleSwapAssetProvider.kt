@@ -37,6 +37,8 @@ class SimpleSwapAssetProviderImpl(
             "BTC" to "near",
             "DAI" to "eth",
             "LTC" to "ltc",
+            "BCH" to "bch",
+            "DASH" to "dash",
             "TRX" to "tron",
             "USDT" to "near",
             "BNB" to "bsc",
