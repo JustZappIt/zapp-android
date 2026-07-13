@@ -18,6 +18,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -25,7 +27,6 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -36,6 +37,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 
 interface TransactionRepository {
     val transactions: Flow<List<Transaction>?>
@@ -47,6 +49,8 @@ interface TransactionRepository {
     fun observeTransactionsByMemo(memo: String): Flow<List<TransactionId>?>
 
     suspend fun getTransactions(): List<Transaction>
+
+    suspend fun resolveWalletAddress(address: String): WalletAddress?
 }
 
 class TransactionRepositoryImpl(
@@ -54,6 +58,13 @@ class TransactionRepositoryImpl(
     private val synchronizerProvider: SynchronizerProvider,
 ) : TransactionRepository {
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
+    /**
+     * Outputs/recipients are only immutable once a transaction is fully enhanced (raw != null), so only enhanced txs
+     * are cached; unenhanced txs are re-fetched via the batched queries on every emission — that re-fetch is what
+     * picks up post-enhancement data.
+     */
+    private val enhancedTxCache = ConcurrentHashMap<String, TxDetails>()
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override val transactions: Flow<List<Transaction>?> =
@@ -95,9 +106,50 @@ class TransactionRepositoryImpl(
                                     .conflate()
                                     .map { transactions ->
                                         val now = Instant.now()
+
+                                        // Refresh via batched queries whenever any tx is not yet cached,
+                                        // which includes every unenhanced tx since those are never stored.
+                                        val needsRefresh =
+                                            transactions.any { transaction ->
+                                                enhancedTxCache[transaction.txId.txIdString()] == null
+                                            }
+                                        val freshDetails =
+                                            if (needsRefresh) {
+                                                coroutineScope {
+                                                    val outputsDeferred =
+                                                        async { synchronizer.getTransactionOutputs() }
+                                                    val recipientsDeferred = async { synchronizer.getRecipients() }
+                                                    val batchedOutputs = outputsDeferred.await()
+                                                    val batchedRecipients = recipientsDeferred.await()
+                                                    transactions.associate { transaction ->
+                                                        val details =
+                                                            TxDetails(
+                                                                outputs =
+                                                                    batchedOutputs[transaction.txId].orEmpty(),
+                                                                recipient =
+                                                                    batchedRecipients[transaction.txId]
+                                                                        ?.firstOrNull()
+                                                                        ?.addressValue
+                                                            )
+                                                        val key = transaction.txId.txIdString()
+                                                        if (transaction.raw != null) {
+                                                            enhancedTxCache[key] = details
+                                                        }
+                                                        key to details
+                                                    }
+                                                }
+                                            } else {
+                                                emptyMap()
+                                            }
+
                                         transactions
                                             .map { transaction ->
-                                                createTransaction(transaction, synchronizer)
+                                                val key = transaction.txId.txIdString()
+                                                val details =
+                                                    freshDetails[key]
+                                                        ?: enhancedTxCache[key]
+                                                        ?: TxDetails(outputs = emptyList(), recipient = null)
+                                                createTransaction(transaction, details)
                                             }.sortedByDescending { transaction ->
                                                 transaction.timestamp ?: now
                                             }
@@ -111,14 +163,14 @@ class TransactionRepositoryImpl(
                 initialValue = null
             )
 
-    private suspend fun createTransaction(transaction: TransactionOverview, synchronizer: Synchronizer): Transaction =
+    private fun createTransaction(transaction: TransactionOverview, details: TxDetails): Transaction =
         when (transaction.transactionState) {
             Expired -> {
                 when {
                     transaction.isShielding -> {
                         ShieldTransaction.Failed(
                             timestamp = createTimestamp(transaction),
-                            transactionOutputs = synchronizer.getTransactionOutputs(transaction),
+                            transactionOutputs = details.outputs,
                             amount = transaction.totalSpent,
                             id = transaction.txId,
                             memoCount = transaction.memoCount,
@@ -131,20 +183,20 @@ class TransactionRepositoryImpl(
                     transaction.isSentTransaction -> {
                         SendTransaction.Failed(
                             timestamp = createTimestamp(transaction),
-                            transactionOutputs = synchronizer.getTransactionOutputs(transaction),
+                            transactionOutputs = details.outputs,
                             amount = transaction.netValue,
                             id = transaction.txId,
                             memoCount = transaction.memoCount,
                             fee = transaction.feePaid,
                             overview = transaction,
-                            recipient = getRecipient(transaction)
+                            recipient = details.recipient
                         )
                     }
 
                     else -> {
                         ReceiveTransaction.Failed(
                             timestamp = createTimestamp(transaction),
-                            transactionOutputs = synchronizer.getTransactionOutputs(transaction),
+                            transactionOutputs = details.outputs,
                             amount = transaction.netValue,
                             id = transaction.txId,
                             memoCount = transaction.memoCount,
@@ -160,7 +212,7 @@ class TransactionRepositoryImpl(
                     transaction.isShielding -> {
                         ShieldTransaction.Success(
                             timestamp = createTimestamp(transaction),
-                            transactionOutputs = synchronizer.getTransactionOutputs(transaction),
+                            transactionOutputs = details.outputs,
                             amount = transaction.totalSpent,
                             id = transaction.txId,
                             memoCount = transaction.memoCount,
@@ -173,20 +225,20 @@ class TransactionRepositoryImpl(
                     transaction.isSentTransaction -> {
                         SendTransaction.Success(
                             timestamp = createTimestamp(transaction),
-                            transactionOutputs = synchronizer.getTransactionOutputs(transaction),
+                            transactionOutputs = details.outputs,
                             amount = transaction.netValue,
                             id = transaction.txId,
                             memoCount = transaction.memoCount,
                             fee = transaction.feePaid,
                             overview = transaction,
-                            recipient = getRecipient(transaction)
+                            recipient = details.recipient
                         )
                     }
 
                     else -> {
                         ReceiveTransaction.Success(
                             timestamp = createTimestamp(transaction),
-                            transactionOutputs = synchronizer.getTransactionOutputs(transaction),
+                            transactionOutputs = details.outputs,
                             amount = transaction.netValue,
                             id = transaction.txId,
                             memoCount = transaction.memoCount,
@@ -202,7 +254,7 @@ class TransactionRepositoryImpl(
                     transaction.isShielding -> {
                         ShieldTransaction.Pending(
                             timestamp = createTimestamp(transaction),
-                            transactionOutputs = synchronizer.getTransactionOutputs(transaction),
+                            transactionOutputs = details.outputs,
                             amount = transaction.totalSpent,
                             id = transaction.txId,
                             memoCount = transaction.memoCount,
@@ -215,20 +267,20 @@ class TransactionRepositoryImpl(
                     transaction.isSentTransaction -> {
                         SendTransaction.Pending(
                             timestamp = createTimestamp(transaction),
-                            transactionOutputs = synchronizer.getTransactionOutputs(transaction),
+                            transactionOutputs = details.outputs,
                             amount = transaction.netValue,
                             id = transaction.txId,
                             memoCount = transaction.memoCount,
                             fee = transaction.feePaid,
                             overview = transaction,
-                            recipient = getRecipient(transaction)
+                            recipient = details.recipient
                         )
                     }
 
                     else -> {
                         ReceiveTransaction.Pending(
                             timestamp = createTimestamp(transaction),
-                            transactionOutputs = synchronizer.getTransactionOutputs(transaction),
+                            transactionOutputs = details.outputs,
                             amount = transaction.netValue,
                             id = transaction.txId,
                             memoCount = transaction.memoCount,
@@ -275,22 +327,14 @@ class TransactionRepositoryImpl(
 
     override suspend fun getTransactions(): List<Transaction> = transactions.filterNotNull().first()
 
-    private suspend fun getRecipient(overview: TransactionOverview): WalletAddress? {
-        val address =
-            synchronizerProvider
-                .getSynchronizer()
-                .getRecipients(overview)
-                .firstOrNull()
-                ?.addressValue ?: return null
-
-        return when (synchronizerProvider.getSynchronizer().validateAddress(address)) {
+    override suspend fun resolveWalletAddress(address: String): WalletAddress? =
+        when (synchronizerProvider.getSynchronizer().validateAddress(address)) {
             AddressType.Shielded -> WalletAddress.Sapling.new(address)
             AddressType.Tex -> WalletAddress.Tex.new(address)
             AddressType.Transparent -> WalletAddress.Transparent.new(address)
             AddressType.Unified -> WalletAddress.Unified.new(address)
             else -> null
         }
-    }
 }
 
 sealed interface Transaction {
@@ -301,7 +345,7 @@ sealed interface Transaction {
     val transactionOutputs: List<TransactionOutput>
     val overview: TransactionOverview
     val fee: Zatoshi?
-    val recipient: WalletAddress?
+    val recipient: String?
 }
 
 sealed interface SendTransaction : Transaction {
@@ -313,7 +357,7 @@ sealed interface SendTransaction : Transaction {
         override val fee: Zatoshi?,
         override val transactionOutputs: List<TransactionOutput>,
         override val overview: TransactionOverview,
-        override val recipient: WalletAddress?,
+        override val recipient: String?,
     ) : SendTransaction
 
     data class Pending(
@@ -324,7 +368,7 @@ sealed interface SendTransaction : Transaction {
         override val fee: Zatoshi?,
         override val transactionOutputs: List<TransactionOutput>,
         override val overview: TransactionOverview,
-        override val recipient: WalletAddress?,
+        override val recipient: String?,
     ) : SendTransaction
 
     data class Failed(
@@ -335,7 +379,7 @@ sealed interface SendTransaction : Transaction {
         override val fee: Zatoshi?,
         override val transactionOutputs: List<TransactionOutput>,
         override val overview: TransactionOverview,
-        override val recipient: WalletAddress?,
+        override val recipient: String?,
     ) : SendTransaction
 }
 
@@ -350,7 +394,7 @@ sealed interface ReceiveTransaction : Transaction {
         override val memoCount: Int,
         override val transactionOutputs: List<TransactionOutput>,
         override val overview: TransactionOverview,
-        override val recipient: WalletAddress?,
+        override val recipient: String?,
     ) : ReceiveTransaction
 
     data class Pending(
@@ -360,7 +404,7 @@ sealed interface ReceiveTransaction : Transaction {
         override val memoCount: Int,
         override val transactionOutputs: List<TransactionOutput>,
         override val overview: TransactionOverview,
-        override val recipient: WalletAddress?,
+        override val recipient: String?,
     ) : ReceiveTransaction
 
     data class Failed(
@@ -370,7 +414,7 @@ sealed interface ReceiveTransaction : Transaction {
         override val memoCount: Int,
         override val transactionOutputs: List<TransactionOutput>,
         override val overview: TransactionOverview,
-        override val recipient: WalletAddress?,
+        override val recipient: String?,
     ) : ReceiveTransaction
 }
 
@@ -383,7 +427,7 @@ sealed interface ShieldTransaction : Transaction {
         override val fee: Zatoshi?,
         override val transactionOutputs: List<TransactionOutput>,
         override val overview: TransactionOverview,
-        override val recipient: WalletAddress?,
+        override val recipient: String?,
     ) : ShieldTransaction
 
     data class Pending(
@@ -394,7 +438,7 @@ sealed interface ShieldTransaction : Transaction {
         override val fee: Zatoshi?,
         override val transactionOutputs: List<TransactionOutput>,
         override val overview: TransactionOverview,
-        override val recipient: WalletAddress?,
+        override val recipient: String?,
     ) : ShieldTransaction
 
     data class Failed(
@@ -405,9 +449,14 @@ sealed interface ShieldTransaction : Transaction {
         override val transactionOutputs: List<TransactionOutput>,
         override val fee: Zatoshi?,
         override val overview: TransactionOverview,
-        override val recipient: WalletAddress?,
+        override val recipient: String?,
     ) : ShieldTransaction
 }
 
 val Transaction.isPending: Boolean
     get() = this is SendTransaction.Pending || this is ShieldTransaction.Pending || this is ReceiveTransaction.Pending
+
+private data class TxDetails(
+    val outputs: List<TransactionOutput>,
+    val recipient: String?,
+)

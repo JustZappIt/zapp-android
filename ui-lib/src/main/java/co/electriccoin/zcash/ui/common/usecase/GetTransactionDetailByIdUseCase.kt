@@ -6,13 +6,13 @@ import co.electriccoin.zcash.ui.common.repository.MetadataRepository
 import co.electriccoin.zcash.ui.common.repository.Transaction
 import co.electriccoin.zcash.ui.common.repository.TransactionMetadata
 import co.electriccoin.zcash.ui.common.repository.TransactionRepository
+import co.electriccoin.zcash.ui.design.util.combine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.filterNotNull
@@ -100,20 +100,28 @@ class GetTransactionDetailByIdUseCase(
                             }.distinctUntilChanged()
                     }
 
+            val recipientFlow =
+                transactionFlow
+                    .map { it.recipient }
+                    .distinctUntilChanged()
+                    .mapLatest { address -> address?.let { transactionRepository.resolveWalletAddress(it) } }
+
             combine(
                 transactionFlow,
                 memosFlow,
                 metadataFlow,
                 contactFlow,
-                swapFlow
-            ) { transaction, memos, metadata, contact, swap ->
+                swapFlow,
+                recipientFlow
+            ) { transaction, memos, metadata, contact, swap, recipient ->
                 DetailedTransactionData(
                     transaction = transaction,
                     memos = memos,
                     contact = contact,
                     metadata = metadata,
                     swap = swap,
-                    reloadHandle = reloadHandle
+                    recipient = recipient,
+                    reloadHandle = reloadHandle,
                 )
             }.collect {
                 send(it)

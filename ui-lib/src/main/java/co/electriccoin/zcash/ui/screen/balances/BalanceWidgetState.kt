@@ -13,24 +13,24 @@ data class BalanceWidgetState(
     val exchangeRate: ExchangeRateState?,
 ) {
     companion object {
-        val loadingPreview
-            get() = BalanceWidgetState(
+        val loadingPreview =
+            BalanceWidgetState(
                 totalBalance = null,
                 exchangeRate = null,
                 button = null,
                 showDust = true
             )
 
-        val emptyPreview
-            get() = BalanceWidgetState(
+        val emptyPreview =
+            BalanceWidgetState(
                 totalBalance = Zatoshi(0),
                 exchangeRate = ObserveFiatCurrencyResultFixture.new(),
                 button = null,
                 showDust = true
             )
 
-        val completePreview
-            get() = BalanceWidgetState(
+        val completePreview =
+            BalanceWidgetState(
                 totalBalance = Zatoshi(1234567891234567L),
                 button =
                     BalanceButtonState(
