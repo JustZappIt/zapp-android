@@ -4,9 +4,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,13 +17,11 @@ import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.design.component.BlankSurface
-import co.electriccoin.zcash.ui.design.component.ShimmerRectangle
+import co.electriccoin.zcash.ui.design.component.ShimmerTextPlaceholder
 import co.electriccoin.zcash.ui.design.component.Spacer
 import co.electriccoin.zcash.ui.design.component.StyledBalance
 import co.electriccoin.zcash.ui.design.component.StyledBalanceDefaults
-import co.electriccoin.zcash.ui.design.component.heightDp
-import co.electriccoin.zcash.ui.design.component.measureTextStyle
-import co.electriccoin.zcash.ui.design.component.widthDp
+import co.electriccoin.zcash.ui.design.component.rememberZashiShimmer
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.theme.balances.LocalBalancesAvailable
@@ -34,6 +29,7 @@ import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
 import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.screen.balances.BalanceTag.BALANCE_VIEWS
 import co.electriccoin.zcash.ui.screen.exchangerate.widget.StyledExchangeBalance
+import com.valentinilk.shimmer.shimmer
 
 @Composable
 fun BalanceWidget(state: BalanceWidgetState, modifier: Modifier = Modifier) {
@@ -83,21 +79,11 @@ fun BalanceWidgetHeader(
         Spacer(6.dp)
 
         if (zatoshi == null) {
-            with(
-                measureTextStyle(
-                    text = "0.000",
-                    style = ZashiTypography.header2.copy(fontWeight = FontWeight.SemiBold),
-                )
-            ) {
-                ShimmerRectangle(
-                    modifier =
-                        Modifier
-                            .width(size.widthDp)
-                            .height(size.heightDp)
-                            .padding(1.dp),
-                    color = ZashiColors.Surfaces.bgTertiary,
-                )
-            }
+            ShimmerTextPlaceholder(
+                sampleText = "0.000",
+                style = ZashiTypography.header2.copy(fontWeight = FontWeight.SemiBold),
+                modifier = Modifier.shimmer(rememberZashiShimmer()),
+            )
         } else {
             StyledBalance(
                 showDust = showDust,
@@ -120,10 +106,6 @@ private fun LoadingPreview() = Preview(BalanceWidgetState.loadingPreview)
 @PreviewScreens
 @Composable
 private fun CompletePreview() = Preview(BalanceWidgetState.completePreview)
-
-@PreviewScreens
-@Composable
-private fun BalanceWidgetPreview() = Preview(BalanceWidgetState.completePreview)
 
 @Composable
 private fun Preview(state: BalanceWidgetState) {

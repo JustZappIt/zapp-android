@@ -106,7 +106,7 @@ private fun ExchangeAvailableRateLabelInternal(
     isHideBalance: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val isEnabled = !state.isLoading && state.isRefreshEnabled
+    val isEnabled = !state.isLoading && state.isRefreshEnabled && zatoshi != null
 
     ExchangeRateButton(
         modifier = modifier,

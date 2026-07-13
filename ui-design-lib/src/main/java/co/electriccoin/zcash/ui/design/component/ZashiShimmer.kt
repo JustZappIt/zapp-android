@@ -4,6 +4,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
@@ -15,7 +16,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -88,6 +91,11 @@ fun ShimmerRectangle(
     )
 }
 
+/**
+ * Self-wrapping is caller-controlled: used for grouped multi-element shimmer sweeps, where one Modifier.shimmer(...)
+ * is applied over several ShimmerableText/ShimmerableImage children (e.g. AccountSwitch in
+ * ZashiTopAppBarWithAccountSelection.kt, ZashiSwapQuoteAmount's Layout).
+ */
 @Composable
 fun ShimmerableText(
     text: String?,
@@ -100,21 +108,11 @@ fun ShimmerableText(
     textAlign: TextAlign = TextAlign.Start,
 ) {
     if (text == null) {
-        with(
-            measureTextStyle(
-                text = shimmerText,
-                style = style.copy(fontWeight = fontWeight ?: style.fontWeight),
-            )
-        ) {
-            ShimmerRectangle(
-                modifier =
-                    Modifier
-                        .width(size.widthDp)
-                        .height(size.heightDp)
-                        .padding(1.dp),
-                color = ZashiColors.Surfaces.bgTertiary,
-            )
-        }
+        ShimmerTextPlaceholder(
+            sampleText = shimmerText,
+            style = style.copy(fontWeight = fontWeight ?: style.fontWeight),
+            modifier = modifier,
+        )
     } else {
         ZashiAutoSizeText(
             modifier = modifier,
@@ -124,6 +122,45 @@ fun ShimmerableText(
             color = color,
             maxLines = maxLines,
             textAlign = textAlign
+        )
+    }
+}
+
+@Composable
+fun ShimmerTextPlaceholder(
+    sampleText: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    color: Color = ZashiColors.Surfaces.bgTertiary,
+) {
+    with(measureTextStyle(text = sampleText, style = style)) {
+        ShimmerRectangle(
+            modifier = modifier.width(size.widthDp).height(size.heightDp).padding(1.dp),
+            color = color,
+        )
+    }
+}
+
+@Composable
+fun ShimmerableImage(
+    painter: Painter?,
+    modifier: Modifier = Modifier,
+    contentDescription: String? = null,
+    colorFilter: ColorFilter? = null,
+    shimmerShape: Shape = CircleShape,
+) {
+    if (painter == null) {
+        ShimmerRectangle(
+            modifier = modifier,
+            color = ZashiColors.Surfaces.bgSecondary,
+            shape = shimmerShape,
+        )
+    } else {
+        Image(
+            modifier = modifier,
+            painter = painter,
+            contentDescription = contentDescription,
+            colorFilter = colorFilter,
         )
     }
 }
