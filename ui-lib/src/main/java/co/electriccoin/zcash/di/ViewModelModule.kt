@@ -36,6 +36,7 @@ import co.electriccoin.zcash.ui.screen.flexa.FlexaViewModel
 import co.electriccoin.zcash.ui.screen.home.HomeVM
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressVM
 import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupVM
+import co.electriccoin.zcash.ui.screen.migration.howitworks.MigrationHowItWorksVM
 import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewVM
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingVM
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessVM
@@ -223,6 +224,7 @@ val viewModelModule =
         viewModelOf(::KeystoneHeightVM)
         viewModelOf(::KeepOpenVM)
         viewModelOf(::MigrationSetupVM)
+        viewModelOf(::MigrationHowItWorksVM)
         viewModelOf(::MigrationProgressVM)
         viewModelOf(::MigrationReviewVM)
         viewModelOf(::MigrationSendingVM)

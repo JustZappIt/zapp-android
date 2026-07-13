@@ -19,6 +19,7 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.screen.ExternalUrl
+import co.electriccoin.zcash.ui.screen.migration.howitworks.MigrationHowItWorksArgs
 import co.electriccoin.zcash.ui.screen.migration.notesplit.MigrationNoteSplitArgs
 import co.electriccoin.zcash.ui.screen.migration.privacy.MigrationPrivacyArgs
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -82,12 +83,12 @@ class MigrationSetupVM(
         )
     }
 
-    // TODO: placeholder URL until the real "Find out more" migration explainer page exists.
-    private fun onFindOutMore() = navigationRouter.forward(ExternalUrl("https://zodl.com/orchard-migration"))
+    private fun onFindOutMore() =
+        navigationRouter.forward(ExternalUrl("https://support.zodl.com/article/42-moving-your-funds-to-ironwood"))
 
     private fun onConfirm() = when (selectedMode.value) {
         MigrationMode.IMMEDIATE -> navigationRouter.forward(MigrationPrivacyArgs(MigrationMode.IMMEDIATE))
-        MigrationMode.AUTOMATIC -> navigationRouter.forward(MigrationNoteSplitArgs)
+        MigrationMode.AUTOMATIC -> navigationRouter.forward(MigrationHowItWorksArgs)
     }
 
     private fun onBack() = navigationRouter.back()

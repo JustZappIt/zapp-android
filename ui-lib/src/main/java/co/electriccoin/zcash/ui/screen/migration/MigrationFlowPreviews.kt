@@ -22,6 +22,8 @@ import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.migration.battery.MigrationBatteryState
 import co.electriccoin.zcash.ui.screen.migration.battery.MigrationBatteryView
+import co.electriccoin.zcash.ui.screen.migration.howitworks.MigrationHowItWorksState
+import co.electriccoin.zcash.ui.screen.migration.howitworks.MigrationHowItWorksView
 import co.electriccoin.zcash.ui.screen.migration.notesplit.MigrationNoteSplitState
 import co.electriccoin.zcash.ui.screen.migration.notesplit.MigrationNoteSplitView
 import co.electriccoin.zcash.ui.screen.migration.notesplit.NoteSplitPhase
@@ -55,12 +57,13 @@ private fun PrivacyFlowPreview() = ZcashTheme {
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         FlowStep("1 · Setup") { MigrationSetupView(previewSetupState(MigrationMode.AUTOMATIC)) }
-        FlowStep("2 · Note Split") { MigrationNoteSplitView(previewNoteSplitState()) }
-        FlowStep("3 · Battery") { MigrationBatteryView(previewBatteryState()) }
-        FlowStep("4 · Notification") { MigrationNotificationView(previewNotificationState()) }
-        FlowStep("5 · Tor Privacy") { MigrationPrivacyView(previewPrivacyState(MigrationMode.AUTOMATIC)) }
-        FlowStep("6 · Review") { MigrationReviewView(previewReviewStateAutomatic()) }
-        FlowStep("7 · Scheduled") { MigrationScheduledView(previewScheduledState()) }
+        FlowStep("2 · How It Works") { MigrationHowItWorksView(previewHowItWorksState()) }
+        FlowStep("3 · Note Split") { MigrationNoteSplitView(previewNoteSplitState()) }
+        FlowStep("4 · Battery") { MigrationBatteryView(previewBatteryState()) }
+        FlowStep("5 · Notification") { MigrationNotificationView(previewNotificationState()) }
+        FlowStep("6 · Tor Privacy") { MigrationPrivacyView(previewPrivacyState(MigrationMode.AUTOMATIC)) }
+        FlowStep("7 · Review") { MigrationReviewView(previewReviewStateAutomatic()) }
+        FlowStep("8 · Scheduled") { MigrationScheduledView(previewScheduledState()) }
     }
 }
 
@@ -110,6 +113,11 @@ private fun previewSetupState(mode: MigrationMode) = MigrationSetupState(
     onModeChange = {},
     onFindOutMore = {},
     onConfirm = {},
+    onBack = {},
+)
+
+private fun previewHowItWorksState() = MigrationHowItWorksState(
+    onContinue = {},
     onBack = {},
 )
 

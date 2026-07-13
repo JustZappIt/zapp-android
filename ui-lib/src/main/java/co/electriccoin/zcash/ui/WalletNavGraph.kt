@@ -214,6 +214,8 @@ import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressScreen
 import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupArgs
 import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupScreen
+import co.electriccoin.zcash.ui.screen.migration.howitworks.MigrationHowItWorksArgs
+import co.electriccoin.zcash.ui.screen.migration.howitworks.MigrationHowItWorksScreen
 import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewArgs
 import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewScreen
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
@@ -374,6 +376,7 @@ fun NavGraphBuilder.walletNavGraph(
         composable<VoteTallyingArgs> { VoteTallyingScreen(it.toRoute()) }
         composable<VoteResultsArgs> { VoteResultsScreen(it.toRoute()) }
         composable<MigrationSetupArgs> { MigrationSetupScreen() }
+        composable<MigrationHowItWorksArgs> { MigrationHowItWorksScreen() }
         composable<MigrationNoteSplitArgs> { MigrationNoteSplitScreen() }
         composable<MigrationReviewArgs> { MigrationReviewScreen(it.toRoute()) }
         composable<MigrationBatteryArgs> { MigrationBatteryScreen() }
