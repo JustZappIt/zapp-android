@@ -115,10 +115,11 @@ fun MigrationCompleteView(state: MigrationCompleteState) {
                     SummaryRow(label = "Transfers", value = state.transfersProgress.getValue())
                     SummaryRow(label = "Duration", value = state.duration.getValue())
                 }
-                state.remainingDust?.let { dust ->
-                    Spacer(Modifier.height(20.dp))
-                    DustDisclaimer(dustAmount = dust.getValue())
-                }
+            }
+            state.remainingDust?.let { dust ->
+                Spacer(Modifier.height(20.dp))
+                DustDisclaimer(dustAmount = dust.getValue())
+                Spacer(Modifier.height(20.dp))
             }
             ZashiButton(
                 state = ButtonState(text = stringRes("Got it"), onClick = state.onDone),

@@ -59,22 +59,30 @@ import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransfe
  * state into one Row per flow. Reuse this to spot-check the whole flow at once instead of
  * clicking through each screen's individual preview.
  */
-@Preview(name = "Migration – AUTOMATIC (Privacy) flow", widthDp = 3000, heightDp = 950, showBackground = true, backgroundColor = 0xFFDDDDDDL)
+@Preview(name = "Migration – AUTOMATIC (Privacy) flow", widthDp = 3000, heightDp = 2000, showBackground = true,
+    backgroundColor = 0xFFDDDDDDL)
 @Composable
 private fun PrivacyFlowPreview() = ZcashTheme {
-    Row(
-        modifier = Modifier.padding(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        FlowStep("1 · Setup") { MigrationSetupView(previewSetupState(MigrationMode.AUTOMATIC)) }
-        FlowStep("2 · How It Works") { MigrationHowItWorksView(previewHowItWorksState()) }
-        FlowStep("3 · Battery") { MigrationBatteryView(previewBatteryState()) }
-        FlowStep("4 · Notification") { MigrationNotificationView(previewNotificationState()) }
-        FlowStep("5 · Tor Privacy") { MigrationPrivacyView(previewPrivacyState(MigrationMode.AUTOMATIC)) }
-        FlowStep("6 · Confirm Transfer Plan") { MigrationReviewView(previewReviewStateAutomatic()) }
-        FlowStep("7 · Scheduled") { MigrationScheduledView(previewScheduledState()) }
-        FlowStep("7b · Keystone branch: Sign QR") { SignKeystoneTransactionView(previewKeystoneSignState()) }
-        FlowStep("8 · Migration Complete") { MigrationCompleteView(previewCompleteStateWithDust()) }
+    Column {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            FlowStep("1 · Setup") { MigrationSetupView(previewSetupState(MigrationMode.AUTOMATIC)) }
+            FlowStep("2 · How It Works") { MigrationHowItWorksView(previewHowItWorksState()) }
+            FlowStep("3 · Battery") { MigrationBatteryView(previewBatteryState()) }
+            FlowStep("4 · Notification") { MigrationNotificationView(previewNotificationState()) }
+            FlowStep("5 · Tor Privacy") { MigrationPrivacyView(previewPrivacyState(MigrationMode.AUTOMATIC)) }
+            FlowStep("6 · Confirm Transfer Plan") { MigrationReviewView(previewReviewStateAutomatic()) }
+            FlowStep("7 · Scheduled") { MigrationScheduledView(previewScheduledState()) }
+        }
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            FlowStep("7b · Keystone branch: Sign QR") { SignKeystoneTransactionView(previewKeystoneSignState()) }
+            FlowStep("8 · Migration Complete") { MigrationCompleteView(previewCompleteStateWithDust()) }
+        }
     }
 }
 
