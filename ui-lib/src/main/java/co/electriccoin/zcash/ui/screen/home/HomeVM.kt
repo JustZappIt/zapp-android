@@ -2,9 +2,12 @@ package co.electriccoin.zcash.ui.screen.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.model.migration.MigrationDeliveryMode
+import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.model.voting.VotingRound
 import co.electriccoin.zcash.ui.common.model.voting.VotingSession
 import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
@@ -38,6 +41,7 @@ import co.electriccoin.zcash.ui.screen.home.migration.MigrationBannerPhase
 import co.electriccoin.zcash.ui.screen.home.migration.MigrationMessageState
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupArgs
+import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupDetail
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupMessageState
 import co.electriccoin.zcash.ui.screen.home.currency.EnableCurrencyConversionMessageState
@@ -99,6 +103,7 @@ class HomeVM(
     private val votingShareTrackingScheduler: VotingShareTrackingScheduler,
     private val checkMigrationRecovery: CheckMigrationRecoveryUseCase,
     private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
+    private val migrationSdk: OrchardMigrationSdk,
 ) : ViewModel() {
     private var hasSyncErrorBeenShown = false
     private var hasRestoreSuccessBeenShown = false
@@ -404,8 +409,8 @@ class HomeVM(
                     phase = phase,
                     progressLabel = subtitle,
                     progressPercent = percent.toFloat(),
-                    onClick = { onMigrationMessageClick(hasActivePlan = plan != null, isComplete = data.isComplete) },
-                    onButtonClick = { onMigrationMessageClick(hasActivePlan = plan != null, isComplete = data.isComplete) },
+                    onClick = { onMigrationMessageClick(plan = plan, isComplete = data.isComplete) },
+                    onButtonClick = { onMigrationMessageClick(plan = plan, isComplete = data.isComplete) },
                 )
             }
 
@@ -414,11 +419,15 @@ class HomeVM(
             }
         }
 
-    private fun onMigrationMessageClick(hasActivePlan: Boolean, isComplete: Boolean) = viewModelScope.launch {
+    private fun onMigrationMessageClick(plan: MigrationPlan?, isComplete: Boolean) = viewModelScope.launch {
         if (isComplete) {
             hasSeenMigrationCompleteStorageProvider.store(true)
         }
-        if (hasActivePlan) {
+        // A MANUAL plan's routine "your turn to confirm" case gets the lean single-transfer
+        // screen — matches CheckMigrationRecoveryUseCase's app-launch routing for the same case.
+        if (plan?.deliveryMode == MigrationDeliveryMode.MANUAL && migrationSdk.hasOverdueTransfers()) {
+            navigationRouter.forward(MigrationTransferReviewArgs)
+        } else if (plan != null) {
             navigationRouter.forward(MigrationProgressArgs)
         } else {
             navigationRouter.forward(MigrationSetupArgs)

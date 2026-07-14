@@ -3,6 +3,8 @@ package co.electriccoin.zcash.di
 import co.electriccoin.zcash.ui.common.mapper.SwapSupportMapper
 import co.electriccoin.zcash.ui.common.usecase.ApplyTransactionFiltersUseCase
 import co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase
+import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
+import co.electriccoin.zcash.ui.common.usecase.ScheduleNextMigrationWindowUseCase
 import co.electriccoin.zcash.ui.common.usecase.ApplyTransactionFulltextFiltersUseCase
 import co.electriccoin.zcash.ui.common.usecase.AuthorizeVotingSubmissionUseCase
 import co.electriccoin.zcash.ui.common.usecase.CancelProposalFlowUseCase
@@ -316,4 +318,6 @@ val useCaseModule =
         factoryOf(::GetAutomaticEndpointUseCase)
         factoryOf(::IsServerAutomaticUseCase)
         factoryOf(::CheckMigrationRecoveryUseCase)
+        factoryOf(::FinalizeMigrationScheduleUseCase)
+        factoryOf(::ScheduleNextMigrationWindowUseCase)
     }

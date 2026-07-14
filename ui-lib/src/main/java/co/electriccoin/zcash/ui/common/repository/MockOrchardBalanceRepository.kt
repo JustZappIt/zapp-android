@@ -19,6 +19,8 @@ interface MockOrchardBalanceRepository {
 
     suspend fun get(): Long
 
+    suspend fun set(amountZatoshi: Long)
+
     suspend fun decrease(amountZatoshi: Long)
 
     suspend fun reset()
@@ -41,6 +43,10 @@ class MockOrchardBalanceRepositoryImpl(
 
     override suspend fun get(): Long = encryptedPreferenceProvider().getString(key).toBalance()
 
+    override suspend fun set(amountZatoshi: Long) {
+        encryptedPreferenceProvider().putString(key, amountZatoshi.coerceAtLeast(0L).toString())
+    }
+
     override suspend fun decrease(amountZatoshi: Long) {
         val updated = (get() - amountZatoshi).coerceAtLeast(0L)
         encryptedPreferenceProvider().putString(key, updated.toString())
@@ -53,6 +59,7 @@ class MockOrchardBalanceRepositoryImpl(
     private fun String?.toBalance(): Long = this?.toLongOrNull() ?: DEFAULT_BALANCE_ZATOSHI
 
     companion object {
-        const val DEFAULT_BALANCE_ZATOSHI = 1_000_000_000L
+        // 123.23 ZEC
+        const val DEFAULT_BALANCE_ZATOSHI = 12_323_000_000L
     }
 }

@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runBlocking
+import kotlin.math.ln
+import kotlin.math.roundToLong
 import kotlin.random.Random
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -85,9 +87,14 @@ class OrchardMigrationSdkMock(
 
     override suspend fun prepareNoteSplit(): NoteSplitProposal {
         val total = orchardBalance()
+        // Mirrors Rust's converge_denomination_plan, minus the fixed-point convergence loop (this
+        // path is currently unreachable from the UI — the standalone Note Split screen was
+        // removed once split+schedule+presign merged into one Confirm Transfer Plan step — so a
+        // flat fee estimate is an adequate approximation rather than a real convergence).
+        val plan = planDenominations(total, prepFeeZatoshi = NOTE_SPLIT_PREP_FEE_ZATOSHI)
         return NoteSplitProposal(
-            outputNotes = splitEvenly(total, count = 4),
-            fee = 1_000L,
+            outputNotes = plan.migrationOutputs,
+            fee = NOTE_SPLIT_PREP_FEE_ZATOSHI,
         )
     }
 
@@ -104,29 +111,49 @@ class OrchardMigrationSdkMock(
     // ── Migration proposal ───────────────────────────────────────────────────
 
     override suspend fun proposeMigrationTransfers(includeResidual: Boolean): MigrationSchedule {
-        // Mock does not simulate the residual-note concept — the real bridge's ~0.001-1 ZEC
-        // leftover doesn't have a mocked equivalent here, so this flag is currently a no-op.
         val total = orchardBalance()
-        val amounts = splitEvenly(total, count = TRANSFER_COUNT)
-        val intervalSeconds = if (BuildConfig.DEBUG) DEBUG_INTERVAL_SECONDS else PROD_INTERVAL_SECONDS
+        // No fee reservation here (unlike prepareNoteSplit): by the time this runs, the spendable
+        // balance is expected to already consist of the split's self-funding notes, each already
+        // carrying its own transfer-fee buffer — decomposing with a zero prep-fee reproduces those
+        // exact notes back as crossing values.
+        val plan = planDenominations(total, prepFeeZatoshi = 0L)
+        val crossingValues = plan.crossingValues.toMutableList()
+        if (includeResidual) {
+            plan.orchardChange
+                ?.takeIf { it >= RESIDUAL_MIGRATION_MIN_ZATOSHI }
+                ?.let { residual ->
+                    // The residual has no fee pre-reserved by the denomination plan — net out the
+                    // transfer-fee buffer so the scheduled crossing value is what actually lands
+                    // in Ironwood (mirrors Rust's propose_migration_transfers).
+                    crossingValues += residual - TRANSFER_FEE_BUFFER_ZATOSHI
+                }
+        }
+
+        val targetCadenceSeconds = if (BuildConfig.DEBUG) DEBUG_TARGET_CADENCE_SECONDS else PROD_TARGET_CADENCE_SECONDS
+        val maxCadenceSeconds = if (BuildConfig.DEBUG) DEBUG_MAX_CADENCE_SECONDS else PROD_MAX_CADENCE_SECONDS
         val nowSeconds = Clock.System.now().epochSeconds
 
-        val transfers = amounts.mapIndexed { i, amount ->
+        // Even the first transfer can't execute right now — broadcasting takes a real
+        // anchor/proposal round trip. Every later transfer's gap is independently sampled from an
+        // exponential distribution around targetCadenceSeconds (mirrors Rust's
+        // sample_cadence_blocks / build_schedule), not a fixed offset, so gaps aren't a
+        // predictable uniform pattern.
+        var next = nowSeconds + targetCadenceSeconds
+        val transfers = crossingValues.mapIndexed { i, amount ->
+            if (i > 0) next += sampleCadenceSeconds(targetCadenceSeconds, maxCadenceSeconds)
             TransferProposal(
                 id = "transfer_$i",
                 amountZatoshi = amount,
-                // Nearest interval boundary (mock proxy for 288-block anchor bucket)
-                anchorHeight = (nowSeconds / intervalSeconds) * intervalSeconds,
-                // Even the first transfer can't execute right now — broadcasting takes a real
-                // anchor/proposal round trip. Each transfer is one interval after the previous,
-                // starting one interval from now (e.g. t1=2min, t2=4min, t3=6min in debug).
-                nextExecutableAfterHeight = nowSeconds + ((i + 1) * intervalSeconds),
-                expiryHeight = nowSeconds + ((i + 2) * intervalSeconds),
+                anchorHeight = nowSeconds,
+                nextExecutableAfterHeight = next,
+                expiryHeight = next + targetCadenceSeconds,
             )
         }
+        val firstAt = transfers.minOfOrNull { it.nextExecutableAfterHeight } ?: nowSeconds
+        val lastAt = transfers.maxOfOrNull { it.nextExecutableAfterHeight } ?: nowSeconds
         return MigrationSchedule(
             transfers = transfers,
-            estimatedDurationHours = ((TRANSFER_COUNT - 1) * intervalSeconds / 3600L).toInt(),
+            estimatedDurationHours = ceilDiv(lastAt - firstAt, 3600L).toInt(),
         )
     }
 
@@ -200,7 +227,7 @@ class OrchardMigrationSdkMock(
     override suspend fun rescheduleOverdueTransfer(): TransferProposal {
         val plan = repository.load() ?: error("OrchardMigrationSdkMock: no migration plan to reschedule")
         val next = plan.nextPending ?: error("OrchardMigrationSdkMock: no pending transfer to reschedule")
-        val intervalSeconds = if (BuildConfig.DEBUG) DEBUG_INTERVAL_SECONDS else PROD_INTERVAL_SECONDS
+        val intervalSeconds = if (BuildConfig.DEBUG) DEBUG_TARGET_CADENCE_SECONDS else PROD_TARGET_CADENCE_SECONDS
         val newScheduledAt = Clock.System.now().epochSeconds + intervalSeconds
         repository.rescheduleTransfer(next.index, newScheduledAt)
         return TransferProposal(
@@ -212,7 +239,17 @@ class OrchardMigrationSdkMock(
         )
     }
 
-    override fun hasInvalidTransfers(): Boolean = simulatedInvalidTransfers.value
+    // Real detection condition per the interface doc: "spent note or expired anchor." The
+    // expired-anchor half is organically derivable client-side (compare against now); the
+    // spent-note half needs real chain state we don't have in a mock, so it stays a debug-only
+    // simulated flag (see simulateInvalidTransfer()).
+    override fun hasInvalidTransfers(): Boolean {
+        if (simulatedInvalidTransfers.value) return true
+        val plan = runCatching { runBlocking { repository.load() } }.getOrNull() ?: return false
+        if (plan.isComplete) return false
+        val next = plan.nextPending ?: return false
+        return next.expiryAt <= Clock.System.now()
+    }
 
     // ── Invalidity recovery ──────────────────────────────────────────────────
 
@@ -241,30 +278,67 @@ class OrchardMigrationSdkMock(
 
     private suspend fun orchardBalance(): Long = mockBalanceRepository.get()
 
-    private fun splitEvenly(total: Long, count: Int): List<Long> {
-        if (total <= 0L || count <= 0) return List(count) { 0L }
-        val base = total / count
-        val remainder = total % count
-        val amounts = MutableList(count) { i -> if (i < remainder) base + 1L else base }
-        // Small jitter (±5% of base) so amounts look organic in the UI
-        val jitter = (base * 0.05).toLong().coerceAtLeast(1L)
-        for (i in 0 until count - 1) {
-            val shift = Random.nextLong(-jitter, jitter)
-            amounts[i] += shift
-            amounts[i + 1] -= shift
+    // Ported from zcash_pool_migration's plan_denominations (denominations.rs): deterministic
+    // greedy power-of-ten decomposition into self-funding notes (each worth crossingValue +
+    // TRANSFER_FEE_BUFFER_ZATOSHI), capped at MIGRATION_MAX_PREPARED_NOTES_PER_RUN. Whatever can't
+    // form a whole note is returned as orchardChange (dust or a genuine opt-in residual) — never
+    // folded into the fee.
+    private data class DenominationPlan(
+        val migrationOutputs: List<Long>,
+        val crossingValues: List<Long>,
+        val orchardChange: Long?,
+    )
+
+    private fun planDenominations(totalInputZatoshi: Long, prepFeeZatoshi: Long): DenominationPlan {
+        if (totalInputZatoshi <= prepFeeZatoshi) return DenominationPlan(emptyList(), emptyList(), null)
+        var budget = totalInputZatoshi - prepFeeZatoshi
+
+        val migrationOutputs = mutableListOf<Long>()
+        val crossingValues = mutableListOf<Long>()
+        while (budget >= ZATOSHIS_PER_ZEC + TRANSFER_FEE_BUFFER_ZATOSHI &&
+            migrationOutputs.size < MIGRATION_MAX_PREPARED_NOTES_PER_RUN
+        ) {
+            // Largest power-of-ten ZEC denomination `d` with `d * 10 + buffer <= budget`.
+            var d = ZATOSHIS_PER_ZEC
+            while (d * 10 + TRANSFER_FEE_BUFFER_ZATOSHI <= budget) d *= 10
+            val note = d + TRANSFER_FEE_BUFFER_ZATOSHI
+            migrationOutputs += note
+            crossingValues += d
+            budget -= note
         }
-        return amounts
+        return DenominationPlan(migrationOutputs, crossingValues, budget.takeIf { it > 0L })
     }
 
-    companion object {
-        private const val TRANSFER_COUNT = 3
+    // Ported from zcash_pool_migration's sample_cadence_blocks (scheduling.rs): inverse-transform
+    // sampling from an exponential distribution with the given mean, clamped to [1, maxSeconds] so
+    // gaps between a wallet's own transfers aren't a predictable uniform pattern, and never land
+    // two transfers on the same second.
+    private fun sampleCadenceSeconds(targetSeconds: Long, maxSeconds: Long): Long {
+        val u = Random.nextDouble()
+        val sample = (-ln(1.0 - u) * targetSeconds).roundToLong()
+        return sample.coerceIn(1L, maxSeconds)
+    }
 
-        // Compressed stand-in for the real ~6h anchor-bucket cadence — long enough to actually
-        // observe WorkManager executing transfers one at a time in the background (rather than
-        // the whole plan finishing before you can navigate to check on it), short enough to not
-        // require sitting around for hours during manual testing.
-        private const val DEBUG_INTERVAL_SECONDS = 120L
-        private const val PROD_INTERVAL_SECONDS = 6 * 3600L
+    private fun ceilDiv(numerator: Long, denominator: Long): Long =
+        if (numerator <= 0L) 0L else (numerator + denominator - 1) / denominator
+
+    companion object {
+        // Denomination-planning constants, matching zcash_pool_migration's denominations.rs exactly.
+        private const val ZATOSHIS_PER_ZEC = 100_000_000L
+        private const val MIGRATION_MAX_PREPARED_NOTES_PER_RUN = 64
+        private const val TRANSFER_FEE_BUFFER_ZATOSHI = 20_000L
+        private const val RESIDUAL_MIGRATION_MIN_ZATOSHI = 100_000L
+        private const val NOTE_SPLIT_PREP_FEE_ZATOSHI = 10_000L
+
+        // Compressed stand-in for the real ~6h target / ~24h max cadence (TARGET_CADENCE_BLOCKS /
+        // MAX_CADENCE_BLOCKS in scheduling.rs, same 4x ratio) — long enough to actually observe
+        // WorkManager executing transfers one at a time in the background (rather than the whole
+        // plan finishing before you can navigate to check on it), short enough to not require
+        // sitting around for hours during manual testing.
+        private const val DEBUG_TARGET_CADENCE_SECONDS = 120L
+        private const val DEBUG_MAX_CADENCE_SECONDS = 4 * DEBUG_TARGET_CADENCE_SECONDS
+        private const val PROD_TARGET_CADENCE_SECONDS = 6 * 3600L
+        private const val PROD_MAX_CADENCE_SECONDS = 4 * PROD_TARGET_CADENCE_SECONDS
         private const val IMMEDIATE_EXPIRY_WINDOW_SECONDS = 3600L
         private val NOTE_SPLIT_BROADCAST_DELAY = 500.milliseconds
 

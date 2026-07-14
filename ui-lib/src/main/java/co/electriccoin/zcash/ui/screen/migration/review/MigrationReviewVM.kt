@@ -2,7 +2,6 @@ package co.electriccoin.zcash.ui.screen.migration.review
 
 import androidx.lifecycle.ViewModel
 import cash.z.ecc.android.sdk.MigrationSchedule
-import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferProposal
 import cash.z.ecc.android.sdk.TransferResult
@@ -25,15 +24,16 @@ import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
+import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
+import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
-import co.electriccoin.zcash.ui.screen.migration.scheduled.MigrationScheduledArgs
+import co.electriccoin.zcash.ui.screen.migration.keystonesign.MigrationKeystoneSignArgs
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
-import co.electriccoin.zcash.work.MigrationScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -42,15 +42,14 @@ import java.math.BigDecimal
 import java.math.MathContext
 import java.util.UUID
 import kotlin.time.Clock
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 
 class MigrationReviewVM(
     private val args: MigrationReviewArgs,
     private val sdk: OrchardMigrationSdk,
     private val migrationPlanRepository: MigrationPlanRepository,
+    private val pendingMigrationScheduleRepository: PendingMigrationScheduleRepository,
+    private val finalizeMigrationSchedule: FinalizeMigrationScheduleUseCase,
     private val navigationRouter: NavigationRouter,
-    private val migrationScheduler: MigrationScheduler,
     private val exchangeRateRepository: ExchangeRateRepository,
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
     private val errorStateMapper: ErrorMapperUseCase,
@@ -131,11 +130,11 @@ class MigrationReviewVM(
 
     private fun onConfirm(sched: MigrationSchedule) =
         confirmLce.execute {
-            sdk.signAndStoreMigrationSchedule(sched)
             when (args.mode) {
                 // Immediate mode broadcasts synchronously in the foreground on the Sending
                 // screen — no WorkManager job needed (and scheduling one here would race it).
                 MigrationMode.IMMEDIATE -> {
+                    sdk.signAndStoreMigrationSchedule(sched)
                     migrationPlanRepository.save(sched.toMigrationPlan(args.mode, args.useTor, MigrationDeliveryMode.SCHEDULED))
                     navigationRouter.forward(MigrationSendingArgs(useTor = args.useTor))
                 }
@@ -144,42 +143,19 @@ class MigrationReviewVM(
         }
 
     private suspend fun confirmAutomatic(sched: MigrationSchedule) {
-        // Background delivery unavailable (Battery screen declined) — fall back to MANUAL:
-        // send transfer #1 immediately in the foreground now, then only ever notify (never
-        // silently auto-send) for subsequent transfers.
-        val deliveryMode = if (args.backgroundAvailable) MigrationDeliveryMode.SCHEDULED else MigrationDeliveryMode.MANUAL
-        migrationPlanRepository.save(sched.toMigrationPlan(args.mode, args.useTor, deliveryMode))
-
-        if (deliveryMode == MigrationDeliveryMode.MANUAL) {
-            // Reset before sending (not after) — if the process dies mid-send, the persisted
-            // plan must already read as overdue on relaunch, not just after a full interval.
-            migrationPlanRepository.rescheduleTransfer(0, Clock.System.now().epochSeconds)
-            when (val result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = args.useTor))) {
-                is TransferResult.Success -> {
-                    val next = migrationPlanRepository.load()?.nextPending
-                    if (next != null) migrationScheduler.scheduleNotifyOnly(delayUntil(next.scheduledAtEpochSeconds))
-                    navigationRouter.forward(MigrationScheduledArgs)
-                }
-                null -> navigationRouter.forward(MigrationScheduledArgs)
-                else -> failure.value = result
-            }
-        } else {
-            migrationScheduler.schedule(delayUntilFirstTransfer(sched))
-            navigationRouter.forward(MigrationScheduledArgs)
+        if (getSelectedWalletAccount() is KeystoneAccount) {
+            // Keystone can't sign in-process — hand the unsigned schedule off to the QR
+            // sign/scan detour; FinalizeMigrationScheduleUseCase runs after a successful scan
+            // instead (MigrationKeystoneScanVM), not here.
+            pendingMigrationScheduleRepository.set(sched)
+            navigationRouter.forward(
+                MigrationKeystoneSignArgs(mode = args.mode, useTor = args.useTor, backgroundAvailable = args.backgroundAvailable)
+            )
+            return
         }
-    }
-
-    // The first transfer is never "ready now" (same anchor/proposal round trip as any other
-    // transfer, per proposeMigrationTransfers()) — the very first WorkManager job must wait for
-    // it just like every job scheduled after it, not fire immediately.
-    private fun delayUntilFirstTransfer(sched: MigrationSchedule): Duration {
-        val firstAt = sched.transfers.minOfOrNull { it.nextExecutableAfterHeight } ?: return 0.seconds
-        return delayUntil(firstAt)
-    }
-
-    private fun delayUntil(epochSeconds: Long): Duration {
-        val remaining = epochSeconds - Clock.System.now().epochSeconds
-        return if (remaining <= 0) 0.seconds else remaining.seconds
+        sdk.signAndStoreMigrationSchedule(sched)
+        val result = finalizeMigrationSchedule(sched, args.mode, args.useTor, args.backgroundAvailable)
+        if (result != null) failure.value = result
     }
 
     private fun onBack() = proposeLce.guardLoading { navigationRouter.back() }

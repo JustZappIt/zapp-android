@@ -2,17 +2,13 @@ package co.electriccoin.zcash.ui.screen.migration.progress
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
-import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
-import cash.z.ecc.android.sdk.TransferResult
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.migration.MigrationDeliveryMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
-import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
-import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
@@ -26,9 +22,9 @@ import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.common.model.guardLoading
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
+import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
 import co.electriccoin.zcash.work.MigrationScheduler
 import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import java.math.BigDecimal
@@ -48,11 +44,10 @@ class MigrationProgressVM(
 ) : ViewModel() {
 
     private val sendLce = mutableLce<Unit>()
-    private val sendNowFailure = MutableStateFlow<TransferResult?>(null)
 
     val state: StateFlow<LceState<MigrationProgressState>> =
-        combine(migrationPlanRepository.observe(), exchangeRateRepository.state, sendNowFailure) { plan, rate, failure ->
-            plan?.let { createState(it, rate, failure) }
+        combine(migrationPlanRepository.observe(), exchangeRateRepository.state) { plan, rate ->
+            plan?.let { createState(it, rate) }
         }.withLce(sendLce, errorStateMapper::mapToState)
             .stateIn(this)
 
@@ -61,7 +56,6 @@ class MigrationProgressVM(
     private fun createState(
         plan: MigrationPlan,
         exchangeRateState: ExchangeRateState,
-        failure: TransferResult?,
     ): MigrationProgressState {
         val now = Clock.System.now()
         val next = plan.nextPending
@@ -97,16 +91,9 @@ class MigrationProgressVM(
             onBack = ::onBack,
             // Figma B4 (Updated Migration Plan — normal in-progress) has no Send Now button at
             // all; it only appears on B8 (Resume Migration) when a transfer is actually overdue.
-            onSendNow = if (hasOverdue) ::onSendNow else null,
+            onSendNow = if (hasOverdue) { { onSendNow(plan) } } else null,
             onReschedule = if (hasOverdue) ::onReschedule else null,
             onDone = if (plan.isComplete) ::onDone else null,
-            sendNowFailureSheet = failure?.let {
-                MigrationTransferFailureState(
-                    message = migrationFailureMessage(it),
-                    onRetry = { sendNowFailure.value = null; onSendNow() },
-                    onDismiss = { sendNowFailure.value = null },
-                )
-            },
         )
     }
 
@@ -124,20 +111,11 @@ class MigrationProgressVM(
 
     private fun onBack() = sendLce.guardLoading { navigationRouter.back() }
 
-    private fun onSendNow() = sendLce.execute {
-        val plan = migrationPlanRepository.load() ?: return@execute
-        // Privacy buffer bookkeeping (keeping sync paused post-broadcast) is entirely SDK-owned
-        // — the SDK notices this transfer was overdue and sets it internally. This VM only
-        // reacts to success (re-arm the next window and navigate away) or failure (retry sheet).
-        when (val result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = plan.useTor))) {
-            is TransferResult.Success -> {
-                scheduleNextWindowIfAny(plan.deliveryMode)
-                navigationRouter.back()
-            }
-            null -> Unit
-            else -> sendNowFailure.value = result
-        }
-    }
+    // Privacy buffer bookkeeping (keeping sync paused post-broadcast) is entirely SDK-owned — the
+    // SDK notices this transfer was overdue and sets it internally. The actual broadcast, its
+    // failure/retry sheet, and re-arming the next window all live on the Sending screen now
+    // (see MigrationSendingVM), reused instead of duplicated here.
+    private fun onSendNow(plan: MigrationPlan) = navigationRouter.forward(MigrationSendingArgs(useTor = plan.useTor))
 
     private fun onReschedule() = sendLce.execute {
         val plan = migrationPlanRepository.load()
@@ -157,20 +135,6 @@ class MigrationProgressVM(
     }
 
     private fun onDone() = navigationRouter.backToRoot()
-
-    // A SCHEDULED plan re-arms the real send worker for the next window; a MANUAL plan only ever
-    // gets a notify-only job — the user must open the app and confirm each subsequent transfer.
-    // Plain suspend helper (not sendLce.execute) — always called from inside an existing
-    // sendLce.execute block, so it must not open a second one.
-    private suspend fun scheduleNextWindowIfAny(deliveryMode: MigrationDeliveryMode) {
-        val next = migrationPlanRepository.load()?.nextPending ?: return
-        val delay = delayUntil(next.scheduledAtEpochSeconds)
-        if (deliveryMode == MigrationDeliveryMode.MANUAL) {
-            MigrationScheduler(context).scheduleNotifyOnly(delay)
-        } else {
-            MigrationScheduler(context).schedule(delay)
-        }
-    }
 
     private fun delayUntil(epochSeconds: Long): Duration {
         val remaining = epochSeconds - Clock.System.now().epochSeconds

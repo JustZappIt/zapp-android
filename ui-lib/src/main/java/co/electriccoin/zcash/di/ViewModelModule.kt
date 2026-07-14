@@ -11,6 +11,7 @@ import co.electriccoin.zcash.ui.screen.addressbook.SelectABRecipientVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.AdvancedSettingsVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.DebugVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBVM
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceVM
 import co.electriccoin.zcash.ui.screen.balances.BalanceWidgetVM
 import co.electriccoin.zcash.ui.screen.balances.spendable.SpendableBalanceVM
 import co.electriccoin.zcash.ui.screen.chooseserver.ChooseServerVM
@@ -35,13 +36,16 @@ import co.electriccoin.zcash.ui.screen.feedback.FeedbackVM
 import co.electriccoin.zcash.ui.screen.flexa.FlexaViewModel
 import co.electriccoin.zcash.ui.screen.home.HomeVM
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressVM
+import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewVM
 import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupVM
 import co.electriccoin.zcash.ui.screen.migration.howitworks.MigrationHowItWorksVM
 import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewVM
+import co.electriccoin.zcash.ui.screen.migration.keystonesign.MigrationKeystoneSignVM
+import co.electriccoin.zcash.ui.screen.migration.keystonescan.MigrationKeystoneScanVM
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingVM
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessVM
 import co.electriccoin.zcash.ui.screen.migration.scheduled.MigrationScheduledVM
-import co.electriccoin.zcash.ui.screen.migration.notesplit.MigrationNoteSplitVM
+import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteVM
 import co.electriccoin.zcash.ui.screen.migration.battery.MigrationBatteryVM
 import co.electriccoin.zcash.ui.screen.migration.notification.MigrationNotificationVM
 import co.electriccoin.zcash.ui.screen.migration.privacy.MigrationPrivacyVM
@@ -202,6 +206,7 @@ val viewModelModule =
         viewModelOf(::EphemeralLockVM)
         viewModelOf(::DebugVM)
         viewModelOf(::DebugDBVM)
+        viewModelOf(::DebugOrchardBalanceVM)
         viewModelOf(::TEXUnsupportedVM)
         viewModelOf(::InsufficientFundsVM)
         viewModelOf(::RestoreTorVM)
@@ -226,11 +231,14 @@ val viewModelModule =
         viewModelOf(::MigrationSetupVM)
         viewModelOf(::MigrationHowItWorksVM)
         viewModelOf(::MigrationProgressVM)
+        viewModelOf(::MigrationTransferReviewVM)
         viewModelOf(::MigrationReviewVM)
+        viewModelOf(::MigrationKeystoneSignVM)
+        viewModelOf(::MigrationKeystoneScanVM)
         viewModelOf(::MigrationSendingVM)
         viewModelOf(::MigrationSuccessVM)
         viewModelOf(::MigrationScheduledVM)
-        viewModelOf(::MigrationNoteSplitVM)
+        viewModelOf(::MigrationCompleteVM)
         viewModelOf(::MigrationBatteryVM)
         viewModelOf(::MigrationNotificationVM)
         viewModelOf(::MigrationPrivacyVM)

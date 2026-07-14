@@ -7,7 +7,7 @@ import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
-import co.electriccoin.zcash.ui.screen.migration.notesplit.MigrationNoteSplitArgs
+import co.electriccoin.zcash.ui.screen.migration.battery.MigrationBatteryArgs
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 
@@ -27,7 +27,7 @@ class MigrationHowItWorksVM(
         ).withLce(lce, errorStateMapper::mapToState)
             .stateIn(this)
 
-    private fun onContinue() = navigationRouter.forward(MigrationNoteSplitArgs)
+    private fun onContinue() = navigationRouter.forward(MigrationBatteryArgs)
 
     private fun onBack() = navigationRouter.back()
 }

@@ -20,7 +20,6 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.screen.ExternalUrl
 import co.electriccoin.zcash.ui.screen.migration.howitworks.MigrationHowItWorksArgs
-import co.electriccoin.zcash.ui.screen.migration.notesplit.MigrationNoteSplitArgs
 import co.electriccoin.zcash.ui.screen.migration.privacy.MigrationPrivacyArgs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

@@ -44,7 +44,6 @@ import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.scaffoldPadding
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.screen.migration.component.MigrationFailureBottomSheet
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -132,8 +131,6 @@ fun MigrationProgressView(state: MigrationProgressState) {
 
         }
     }
-
-    MigrationFailureBottomSheet(state.sendNowFailureSheet)
 }
 
 @Composable

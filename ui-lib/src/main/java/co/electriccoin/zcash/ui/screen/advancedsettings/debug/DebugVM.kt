@@ -11,6 +11,7 @@ import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.design.component.listitem.ListItemState
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBArgs
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.text.DebugTextArgs
 import co.electriccoin.zcash.ui.screen.hotfix.ephemeral.EphemeralHotfixArgs
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +58,10 @@ class DebugVM(
                         ListItemState(
                             title = stringRes("Current Shield Addresses"),
                             onClick = ::onCurrentShieldAddressesClick
+                        ),
+                        ListItemState(
+                            title = stringRes("Set Mock Orchard Balance (Migration)"),
+                            onClick = ::onSetMockOrchardBalanceClick
                         )
                     )
             )
@@ -112,4 +117,6 @@ class DebugVM(
     private fun onDiscoverFundsClick() = navigationRouter.forward(EphemeralHotfixArgs(null))
 
     private fun onQueryDatabaseClick() = navigationRouter.forward(DebugDBArgs)
+
+    private fun onSetMockOrchardBalanceClick() = navigationRouter.forward(DebugOrchardBalanceArgs)
 }

@@ -22,6 +22,8 @@ import co.electriccoin.zcash.ui.screen.advancedsettings.debug.DebugArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.DebugScreen
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBScreen
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceArgs
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceScreen
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.text.DebugTextArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.text.DebugTextScreen
 import co.electriccoin.zcash.ui.screen.balances.spendable.SpendableBalanceArgs
@@ -212,20 +214,26 @@ import co.electriccoin.zcash.ui.screen.voting.scankeystone.ScanKeystoneVotingPCZ
 import co.electriccoin.zcash.ui.screen.voting.scankeystone.WrapScanKeystoneVotingPCZTRequest
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressScreen
+import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs
+import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewScreen
 import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupArgs
 import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupScreen
 import co.electriccoin.zcash.ui.screen.migration.howitworks.MigrationHowItWorksArgs
 import co.electriccoin.zcash.ui.screen.migration.howitworks.MigrationHowItWorksScreen
 import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewArgs
 import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewScreen
+import co.electriccoin.zcash.ui.screen.migration.keystonesign.MigrationKeystoneSignArgs
+import co.electriccoin.zcash.ui.screen.migration.keystonesign.MigrationKeystoneSignScreen
+import co.electriccoin.zcash.ui.screen.migration.keystonescan.MigrationKeystoneScanArgs
+import co.electriccoin.zcash.ui.screen.migration.keystonescan.MigrationKeystoneScanScreen
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingScreen
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessScreen
 import co.electriccoin.zcash.ui.screen.migration.scheduled.MigrationScheduledArgs
 import co.electriccoin.zcash.ui.screen.migration.scheduled.MigrationScheduledScreen
-import co.electriccoin.zcash.ui.screen.migration.notesplit.MigrationNoteSplitArgs
-import co.electriccoin.zcash.ui.screen.migration.notesplit.MigrationNoteSplitScreen
+import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteArgs
+import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteScreen
 import co.electriccoin.zcash.ui.screen.migration.battery.MigrationBatteryArgs
 import co.electriccoin.zcash.ui.screen.migration.battery.MigrationBatteryScreen
 import co.electriccoin.zcash.ui.screen.migration.notification.MigrationNotificationArgs
@@ -360,6 +368,7 @@ fun NavGraphBuilder.walletNavGraph(
         dialogComposable<EphemeralLockArgs> { EphemeralLockScreen() }
         composable<DebugArgs> { DebugScreen() }
         composable<DebugDBArgs> { DebugDBScreen() }
+        composable<DebugOrchardBalanceArgs> { DebugOrchardBalanceScreen() }
         dialogComposable<DebugTextArgs> { DebugTextScreen(it.toRoute()) }
         composable<ResyncConfirmArgs> { ResyncConfirmScreen() }
         composable<ResyncDateArgs> { ResyncDateScreen(it.toRoute()) }
@@ -377,15 +386,18 @@ fun NavGraphBuilder.walletNavGraph(
         composable<VoteResultsArgs> { VoteResultsScreen(it.toRoute()) }
         composable<MigrationSetupArgs> { MigrationSetupScreen() }
         composable<MigrationHowItWorksArgs> { MigrationHowItWorksScreen() }
-        composable<MigrationNoteSplitArgs> { MigrationNoteSplitScreen() }
         composable<MigrationReviewArgs> { MigrationReviewScreen(it.toRoute()) }
+        composable<MigrationKeystoneSignArgs> { MigrationKeystoneSignScreen(it.toRoute()) }
+        composable<MigrationKeystoneScanArgs> { MigrationKeystoneScanScreen(it.toRoute()) }
         composable<MigrationBatteryArgs> { MigrationBatteryScreen() }
         composable<MigrationNotificationArgs> { MigrationNotificationScreen(it.toRoute()) }
         composable<MigrationPrivacyArgs> { MigrationPrivacyScreen(it.toRoute()) }
         composable<MigrationSendingArgs> { MigrationSendingScreen(it.toRoute()) }
         composable<MigrationSuccessArgs> { MigrationSuccessScreen(it.toRoute()) }
         composable<MigrationScheduledArgs> { MigrationScheduledScreen() }
+        composable<MigrationCompleteArgs> { MigrationCompleteScreen() }
         composable<MigrationProgressArgs> { MigrationProgressScreen() }
+        composable<MigrationTransferReviewArgs> { MigrationTransferReviewScreen() }
         composable<MigrationTransferInvalidArgs> { MigrationTransferInvalidScreen() }
     }
 }

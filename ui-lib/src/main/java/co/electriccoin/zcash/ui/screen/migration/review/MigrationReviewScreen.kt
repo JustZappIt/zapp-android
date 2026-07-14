@@ -120,7 +120,7 @@ private fun ColumnScope.ImmediateReviewContent(state: MigrationReviewState) {
 }
 
 @Composable
-private fun ImmediateDetailsCard(amount: StringResource, fee: StringResource?) {
+internal fun ImmediateDetailsCard(amount: StringResource, fee: StringResource?) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -138,7 +138,7 @@ private fun ImmediateDetailsCard(amount: StringResource, fee: StringResource?) {
 }
 
 @Composable
-private fun ImmediateDetailsRow(label: String, value: String) {
+internal fun ImmediateDetailsRow(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()

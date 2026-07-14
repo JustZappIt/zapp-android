@@ -12,6 +12,7 @@ import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
+import co.electriccoin.zcash.ui.common.usecase.ScheduleNextMigrationWindowUseCase
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.combine
 class MigrationSendingVM(
     private val args: MigrationSendingArgs,
     private val sdk: OrchardMigrationSdk,
+    private val scheduleNextMigrationWindow: ScheduleNextMigrationWindowUseCase,
     private val navigationRouter: NavigationRouter,
     private val errorStateMapper: ErrorMapperUseCase,
 ) : ViewModel() {
@@ -43,7 +45,12 @@ class MigrationSendingVM(
 
     fun send() = sendLce.execute {
         when (val result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = args.useTor))) {
-            is TransferResult.Success -> navigationRouter.forward(MigrationSuccessArgs(result.txId))
+            is TransferResult.Success -> {
+                // No-ops for IMMEDIATE mode's single-transfer plan (no nextPending); re-arms the
+                // next window for a resumed/manually-confirmed transfer in a multi-transfer plan.
+                scheduleNextMigrationWindow()
+                navigationRouter.forward(MigrationSuccessArgs(result.txId))
+            }
             null -> Unit
             else -> failure.value = result
         }
