@@ -129,6 +129,17 @@ dependencyResolutionManagement {
                 }
             }
         }
+        // Interim Slipstream channel — mirror of the iOS "binary off a releases channel" model.
+        // Guarded with isRepoRestrictionEnabled like the blocks above so it can serve nothing but
+        // com.zodl.slipstream. Confirm the final URL at first publish; see
+        // docs/slipstream/INTEGRATION.md.
+        maven("https://raw.githubusercontent.com/zodl-inc/slipstream-android-releases/main/maven") {
+            if (isRepoRestrictionEnabled) {
+                content {
+                    includeGroup("com.zodl.slipstream")
+                }
+            }
+        }
         maven("https://jitpack.io")
     }
 
@@ -180,6 +191,7 @@ dependencyResolutionManagement {
             val tinkVersion = extra["TINK_VERSION"].toString()
             val zcashBip39Version = extra["ZCASH_BIP39_VERSION"].toString()
             val zcashSdkVersion = extra["ZCASH_SDK_VERSION"].toString()
+            val slipstreamAndroidVersion = extra["SLIPSTREAM_ANDROID_VERSION"].toString()
             val zip321Version = extra["ZIP_321_VERSION"].toString()
             val zxingVersion = extra["ZXING_VERSION"].toString()
             val zxingCppVersion = extra["ZXING_CPP_VERSION"].toString()
@@ -248,6 +260,7 @@ dependencyResolutionManagement {
             library("zcash-sdk", "cash.z.ecc.android:zcash-android-sdk:$zcashSdkVersion")
             library("zcash-sdk-backend", "cash.z.ecc.android:zcash-android-backend:$zcashSdkVersion")
             library("zcash-sdk-incubator", "cash.z.ecc.android:zcash-android-sdk-incubator:$zcashSdkVersion")
+            library("slipstream-android", "com.zodl.slipstream:slipstream-android:$slipstreamAndroidVersion")
             library("zcash-bip39", "cash.z.ecc.android:kotlin-bip39:$zcashBip39Version")
             library("zip321", "org.zecdev:zip321:$zip321Version")
             library("zxing", "com.google.zxing:core:$zxingVersion")

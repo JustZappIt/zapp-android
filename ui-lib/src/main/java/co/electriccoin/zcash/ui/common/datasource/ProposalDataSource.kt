@@ -275,10 +275,10 @@ class ProposalDataSourceImpl(
     @Suppress("CyclomaticComplexMethod", "TooGenericExceptionCaught")
     private suspend fun submitTransactionInternal(
         logTag: String,
-        block: suspend (SdkSynchronizer) -> List<CreatedTransaction>
+        block: suspend (Synchronizer) -> List<CreatedTransaction>
     ): SubmitResult =
         withContext(Dispatchers.IO) {
-            val synchronizer = synchronizerProvider.getSynchronizer() as SdkSynchronizer
+            val synchronizer = synchronizerProvider.getSynchronizer()
             val transactions = block(synchronizer)
 
             if (transactions.isEmpty()) {
@@ -305,14 +305,23 @@ class ProposalDataSourceImpl(
             Twig.debug { "Internal transaction submit results: $submitResults" }
 
             val result = submitResults.toSubmitResult()
-            synchronizer.refreshTransactions()
-            synchronizer.refreshAllBalances()
+            // The SDK synchronizer needs an explicit post-broadcast UI-freshness poke; the
+            // Slipstream adapter re-queries transactions and balances internally after its own
+            // submit, so the host must not poke it (doing so would double-work its poll loop).
+            when (synchronizer) {
+                is SdkSynchronizer -> {
+                    synchronizer.refreshTransactions()
+                    synchronizer.refreshAllBalances()
+                }
+
+                else -> Unit
+            }
             Twig.debug { "Transaction submit result: $result" }
             result
         }
 
     private suspend fun submitCreatedTransactions(
-        synchronizer: SdkSynchronizer,
+        synchronizer: Synchronizer,
         transactions: List<CreatedTransaction>,
         endpoints: List<LightWalletEndpoint>,
         logTag: String

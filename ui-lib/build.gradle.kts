@@ -196,6 +196,7 @@ dependencies {
     api(libs.zcash.sdk)
     implementation(libs.zcash.sdk.backend)
     implementation(libs.zcash.sdk.incubator)
+    implementation(libs.slipstream.android)
     implementation(libs.zcash.bip39)
     implementation(libs.tink)
     implementation(libs.zxing)

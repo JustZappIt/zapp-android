@@ -26,6 +26,11 @@ interface ConfigurationRepository {
      */
     val isFlexaAvailable: StateFlow<Boolean?>
 
+    /**
+     * Returns true if the Slipstream sync engine is selected, false otherwise & null if loading.
+     */
+    val isSlipstreamAvailable: StateFlow<Boolean?>
+
     suspend fun isFlexaAvailable(): Boolean
 }
 
@@ -53,6 +58,16 @@ class ConfigurationRepositoryImpl(
                     ConfigurationEntries.IS_FLEXA_AVAILABLE.getValue(it) &&
                     BuildConfig.ZCASH_FLEXA_KEY.isNotEmpty()
             }.stateIn(
+                scope = scope,
+                started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
+                initialValue = null
+            )
+
+    override val isSlipstreamAvailable: StateFlow<Boolean?> =
+        configurationFlow
+            .filterNotNull()
+            .map { ConfigurationEntries.IS_SLIPSTREAM_AVAILABLE.getValue(it) }
+            .stateIn(
                 scope = scope,
                 started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
                 initialValue = null
