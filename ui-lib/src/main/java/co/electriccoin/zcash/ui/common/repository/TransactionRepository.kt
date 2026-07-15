@@ -12,7 +12,7 @@ import cash.z.ecc.android.sdk.model.TransactionState.Pending
 import cash.z.ecc.android.sdk.model.WalletAddress
 import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.android.sdk.type.AddressType
-import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
+import co.electriccoin.zcash.ui.common.provider.SelectedAccountUUIDProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,7 +54,7 @@ interface TransactionRepository {
 }
 
 class TransactionRepositoryImpl(
-    accountDataSource: AccountDataSource,
+    selectedAccountUUIDProvider: SelectedAccountUUIDProvider,
     private val synchronizerProvider: SynchronizerProvider,
 ) : TransactionRepository {
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -68,9 +68,8 @@ class TransactionRepositoryImpl(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override val transactions: Flow<List<Transaction>?> =
-        accountDataSource
-            .selectedAccount
-            .map { it?.sdkAccount?.accountUuid }
+        selectedAccountUUIDProvider
+            .uuid
             .distinctUntilChanged()
             .flatMapLatest { uuid ->
                 if (uuid == null) {

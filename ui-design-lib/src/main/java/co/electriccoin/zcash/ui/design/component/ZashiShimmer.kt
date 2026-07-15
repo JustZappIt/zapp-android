@@ -8,21 +8,23 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
 import co.electriccoin.zcash.ui.design.theme.dimensions.ZashiDimensions
@@ -126,6 +128,12 @@ fun ShimmerableText(
     }
 }
 
+/**
+ * Placeholder bar sized from [sampleText] measured in [style]. The layout box keeps the full
+ * line-box size (honoring [TextStyle.lineHeight]) so content does not shift when the real text
+ * loads; the painted bar uses the font's natural height (measured with lineHeight removed,
+ * clamped to the line box) centered vertically, approximating the visible glyph extent.
+ */
 @Composable
 fun ShimmerTextPlaceholder(
     sampleText: String,
@@ -133,9 +141,22 @@ fun ShimmerTextPlaceholder(
     modifier: Modifier = Modifier,
     color: Color = ZashiColors.Surfaces.bgTertiary,
 ) {
-    with(measureTextStyle(text = sampleText, style = style)) {
+    val lineBox = measureTextStyle(text = sampleText, style = style).size
+    val naturalBox =
+        measureTextStyle(
+            text = sampleText,
+            style = style.copy(lineHeight = TextUnit.Unspecified)
+        ).size
+    val barHeight = minOf(naturalBox.height, lineBox.height)
+    Box(
+        modifier = modifier.width(lineBox.widthDp).height(lineBox.heightDp),
+        contentAlignment = Alignment.Center,
+    ) {
         ShimmerRectangle(
-            modifier = modifier.width(size.widthDp).height(size.heightDp).padding(1.dp),
+            modifier =
+                Modifier
+                    .width(lineBox.widthDp)
+                    .height(with(LocalDensity.current) { barHeight.toDp() }),
             color = color,
         )
     }
