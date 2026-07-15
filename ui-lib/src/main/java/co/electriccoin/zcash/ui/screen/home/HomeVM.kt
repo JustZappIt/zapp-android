@@ -39,6 +39,7 @@ import co.electriccoin.zcash.ui.screen.exchangerate.optin.ExchangeRateOptInArgs
 import co.electriccoin.zcash.ui.screen.home.backup.SeedBackupInfo
 import co.electriccoin.zcash.ui.screen.home.migration.MigrationBannerPhase
 import co.electriccoin.zcash.ui.screen.home.migration.MigrationMessageState
+import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteArgs
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupArgs
 import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs
@@ -420,17 +421,20 @@ class HomeVM(
         }
 
     private fun onMigrationMessageClick(plan: MigrationPlan?, isComplete: Boolean) = viewModelScope.launch {
-        if (isComplete) {
-            hasSeenMigrationCompleteStorageProvider.store(true)
-        }
-        // A MANUAL plan's routine "your turn to confirm" case gets the lean single-transfer
-        // screen — matches CheckMigrationRecoveryUseCase's app-launch routing for the same case.
-        if (plan?.deliveryMode == MigrationDeliveryMode.MANUAL && migrationSdk.hasOverdueTransfers()) {
-            navigationRouter.forward(MigrationTransferReviewArgs)
-        } else if (plan != null) {
-            navigationRouter.forward(MigrationProgressArgs)
-        } else {
-            navigationRouter.forward(MigrationSetupArgs)
+        when {
+            // Tapping the widget is itself the acknowledgment — same screen as the one-time
+            // app-launch popup (CheckMigrationRecoveryUseCase), not the transfer list.
+            isComplete -> {
+                hasSeenMigrationCompleteStorageProvider.store(true)
+                navigationRouter.forward(MigrationCompleteArgs)
+            }
+            // A MANUAL plan's routine "your turn to confirm" case gets the lean single-transfer
+            // screen — matches CheckMigrationRecoveryUseCase's app-launch routing for the same case.
+            plan?.deliveryMode == MigrationDeliveryMode.MANUAL && migrationSdk.hasOverdueTransfers() -> {
+                navigationRouter.forward(MigrationTransferReviewArgs)
+            }
+            plan != null -> navigationRouter.forward(MigrationProgressArgs)
+            else -> navigationRouter.forward(MigrationSetupArgs)
         }
     }
 
