@@ -121,8 +121,8 @@ fun MigrationHowItWorksView(state: MigrationHowItWorksState) {
                 )
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    text = "Choosing this option may require ‘dust’ be left in the Orchard pool – a " +
-                        "small amount 0.0005 ZEC or less that won’t be transferred.",
+                    text = "Choosing this option may require a small amount (less than 0.01 ZEC) to be " +
+                        "left in the Orchard pool, and which won’t be transferred.",
                     style = ZashiTypography.textXs,
                     color = ZashiColors.Text.textTertiary,
                 )
