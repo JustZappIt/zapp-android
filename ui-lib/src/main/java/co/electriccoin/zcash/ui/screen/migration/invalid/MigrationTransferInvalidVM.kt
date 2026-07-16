@@ -1,7 +1,6 @@
 package co.electriccoin.zcash.ui.screen.migration.invalid
 
 import androidx.lifecycle.ViewModel
-import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.groupLce
@@ -10,6 +9,7 @@ import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewArgs
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 
 class MigrationTransferInvalidVM(
-    private val sdk: OrchardMigrationSdk,
+    private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val migrationPlanRepository: MigrationPlanRepository,
     private val navigationRouter: NavigationRouter,
     private val errorStateMapper: ErrorMapperUseCase,
@@ -27,7 +27,7 @@ class MigrationTransferInvalidVM(
     private val restartLce = mutableLce<Unit>()
 
     init {
-        loadLce.execute { sdk.hasInvalidTransfers() }
+        loadLce.execute { getOrchardMigrationSdk()?.hasInvalidTransfers() ?: false }
     }
 
     val state: StateFlow<LceState<MigrationTransferInvalidState>> =
@@ -49,6 +49,7 @@ class MigrationTransferInvalidVM(
             .stateIn(this)
 
     private fun onContinue() = restartLce.execute {
+        val sdk = getOrchardMigrationSdk() ?: error("MigrationTransferInvalidVM: no wallet available to restart")
         sdk.restartCurrentMigrationStep()
         navigationRouter.replace(MigrationReviewArgs(MigrationMode.AUTOMATIC))
     }

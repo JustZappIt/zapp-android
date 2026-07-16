@@ -2,7 +2,6 @@ package co.electriccoin.zcash.ui.screen.migration.review
 
 import androidx.lifecycle.ViewModel
 import cash.z.ecc.android.sdk.MigrationSchedule
-import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferProposal
 import cash.z.ecc.android.sdk.TransferResult
 import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
@@ -20,6 +19,7 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
 import co.electriccoin.zcash.ui.common.model.mutableLce
+import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
@@ -27,6 +27,7 @@ import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -45,7 +46,7 @@ import kotlin.time.Clock
 
 class MigrationReviewVM(
     private val args: MigrationReviewArgs,
-    private val sdk: OrchardMigrationSdk,
+    private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val migrationPlanRepository: MigrationPlanRepository,
     private val pendingMigrationScheduleRepository: PendingMigrationScheduleRepository,
     private val finalizeMigrationSchedule: FinalizeMigrationScheduleUseCase,
@@ -53,6 +54,7 @@ class MigrationReviewVM(
     private val exchangeRateRepository: ExchangeRateRepository,
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
     private val errorStateMapper: ErrorMapperUseCase,
+    private val zashiSpendingKeyDataSource: ZashiSpendingKeyDataSource,
 ) : ViewModel() {
 
     private val proposeLce = mutableLce<MigrationSchedule>()
@@ -62,6 +64,7 @@ class MigrationReviewVM(
 
     init {
         proposeLce.execute {
+            val sdk = getOrchardMigrationSdk() ?: error("MigrationReviewVM: no wallet available to propose")
             when (args.mode) {
                 MigrationMode.IMMEDIATE -> sdk.proposeImmediateMigration()
                 MigrationMode.AUTOMATIC -> sdk.proposeMigrationTransfers()
@@ -133,8 +136,16 @@ class MigrationReviewVM(
             when (args.mode) {
                 // Immediate mode broadcasts synchronously in the foreground on the Sending
                 // screen — no WorkManager job needed (and scheduling one here would race it).
+                //
+                // Unlike confirmAutomatic(), this path doesn't branch on KeystoneAccount — a
+                // pre-existing gap, not introduced here. Signing always uses the Zashi account's
+                // own key until immediate mode gets the same Keystone detour.
                 MigrationMode.IMMEDIATE -> {
-                    sdk.signAndStoreMigrationSchedule(sched)
+                    val sdk = getOrchardMigrationSdk() ?: error("MigrationReviewVM: no wallet available to sign")
+                    sdk.signAndStoreMigrationSchedule(
+                        sched,
+                        zashiSpendingKeyDataSource.getZashiSpendingKey(),
+                    )
                     migrationPlanRepository.save(sched.toMigrationPlan(args.mode, args.useTor, MigrationDeliveryMode.SCHEDULED))
                     navigationRouter.forward(MigrationSendingArgs(useTor = args.useTor))
                 }
@@ -153,7 +164,8 @@ class MigrationReviewVM(
             )
             return
         }
-        sdk.signAndStoreMigrationSchedule(sched)
+        val sdk = getOrchardMigrationSdk() ?: error("MigrationReviewVM: no wallet available to sign")
+        sdk.signAndStoreMigrationSchedule(sched, zashiSpendingKeyDataSource.getZashiSpendingKey())
         val result = finalizeMigrationSchedule(sched, args.mode, args.useTor, args.backgroundAvailable)
         if (result != null) failure.value = result
     }

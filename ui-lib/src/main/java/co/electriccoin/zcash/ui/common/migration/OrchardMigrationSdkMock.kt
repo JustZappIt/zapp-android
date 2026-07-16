@@ -8,6 +8,7 @@ import cash.z.ecc.android.sdk.NoteSplitProposal
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferProposal
 import cash.z.ecc.android.sdk.TransferResult
+import cash.z.ecc.android.sdk.model.UnifiedSpendingKey
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
@@ -23,7 +24,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.runBlocking
 import kotlin.math.ln
 import kotlin.math.roundToLong
 import kotlin.random.Random
@@ -37,12 +37,13 @@ import kotlin.time.toJavaInstant
 import kotlin.time.toKotlinInstant
 
 /**
- * Mock implementation of [OrchardMigrationSdk] for the PoC branch.
+ * Mock implementation of [OrchardMigrationSdk], kept for reference/testing but no longer bound in
+ * Koin — [co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase] resolves the real
+ * Rust-bridge implementation ([cash.z.ecc.android.sdk.OrchardMigrationSdk.new]) instead.
  *
  * State is persisted via [MigrationPlanRepository] so WorkManager Workers survive process death.
  * The Orchard balance itself is faked via [MockOrchardBalanceRepository] (independent of the real
  * wallet balance) so it can actually be depleted as mocked transfers execute.
- * Replace with the real Rust-bridge implementation once the SDK is ready.
  */
 class OrchardMigrationSdkMock(
     private val mockBalanceRepository: MockOrchardBalanceRepository,
@@ -55,8 +56,8 @@ class OrchardMigrationSdkMock(
 
     // ── State ────────────────────────────────────────────────────────────────
 
-    override fun getMigrationState(): MigrationState {
-        val plan = runCatching { runBlocking { repository.load() } }.getOrNull()
+    override suspend fun getMigrationState(): MigrationState {
+        val plan = runCatching { repository.load() }.getOrNull()
         return when {
             plan == null -> MigrationState.NotStarted
             plan.isComplete -> MigrationState.Complete
@@ -64,8 +65,8 @@ class OrchardMigrationSdkMock(
         }
     }
 
-    override fun getMigrationProgress(): MigrationProgress? {
-        val plan = runCatching { runBlocking { repository.load() } }.getOrNull() ?: return null
+    override suspend fun getMigrationProgress(): MigrationProgress? {
+        val plan = runCatching { repository.load() }.getOrNull() ?: return null
         return buildProgress(plan)
     }
 
@@ -83,7 +84,7 @@ class OrchardMigrationSdkMock(
 
     // ── Note splitting ───────────────────────────────────────────────────────
 
-    override fun isNoteSplitNeeded(): Boolean = true
+    override suspend fun isNoteSplitNeeded(): Boolean = true
 
     override suspend fun prepareNoteSplit(): NoteSplitProposal {
         val total = orchardBalance()
@@ -98,7 +99,7 @@ class OrchardMigrationSdkMock(
         )
     }
 
-    override suspend fun submitNoteSplit(proposal: NoteSplitProposal): TransferResult {
+    override suspend fun submitNoteSplit(proposal: NoteSplitProposal, usk: UnifiedSpendingKey): TransferResult {
         Twig.debug { "OrchardMigrationSdkMock: mock note split submitted" }
         // Broadcast itself is fast — the txId is known right away, matching the real SDK (state
         // transitions to SplitPendingConfirmation once broadcast, not once confirmed). The app-level
@@ -176,13 +177,13 @@ class OrchardMigrationSdkMock(
 
     // signAndStoreMigrationSchedule: SDK perspective (signing). Persistence is handled
     // separately by MigrationSetupVM via MigrationPlanRepository.
-    override suspend fun signAndStoreMigrationSchedule(schedule: MigrationSchedule) {
+    override suspend fun signAndStoreMigrationSchedule(schedule: MigrationSchedule, usk: UnifiedSpendingKey) {
         Twig.debug { "OrchardMigrationSdkMock: schedule signed (${schedule.transfers.size} transfers)" }
     }
 
     // ── Background execution ─────────────────────────────────────────────────
 
-    override fun isSyncRequiredBeforeNextTransfer(): Boolean = false
+    override suspend fun isSyncRequiredBeforeNextTransfer(): Boolean = false
 
     override suspend fun executeNextPendingTransfer(options: NetworkPrivacyOptions): TransferResult? {
         val plan = repository.load() ?: return null
@@ -217,8 +218,8 @@ class OrchardMigrationSdkMock(
 
     // ── On-launch reconciliation ─────────────────────────────────────────────
 
-    override fun hasOverdueTransfers(): Boolean {
-        val plan = runCatching { runBlocking { repository.load() } }.getOrNull() ?: return false
+    override suspend fun hasOverdueTransfers(): Boolean {
+        val plan = runCatching { repository.load() }.getOrNull() ?: return false
         if (plan.isComplete) return false
         val next = plan.nextPending ?: return false
         return next.scheduledAt <= Clock.System.now()
@@ -243,9 +244,9 @@ class OrchardMigrationSdkMock(
     // expired-anchor half is organically derivable client-side (compare against now); the
     // spent-note half needs real chain state we don't have in a mock, so it stays a debug-only
     // simulated flag (see simulateInvalidTransfer()).
-    override fun hasInvalidTransfers(): Boolean {
+    override suspend fun hasInvalidTransfers(): Boolean {
         if (simulatedInvalidTransfers.value) return true
-        val plan = runCatching { runBlocking { repository.load() } }.getOrNull() ?: return false
+        val plan = runCatching { repository.load() }.getOrNull() ?: return false
         if (plan.isComplete) return false
         val next = plan.nextPending ?: return false
         return next.expiryAt <= Clock.System.now()

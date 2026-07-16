@@ -2,7 +2,6 @@ package co.electriccoin.zcash.ui.screen.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
@@ -21,6 +20,7 @@ import co.electriccoin.zcash.ui.common.repository.VotingSessionStore
 import co.electriccoin.zcash.ui.common.repository.toVotingAccountScopeId
 import co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetHomeMessageUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.IsRestoreSuccessDialogVisibleUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToNearPayUseCase
@@ -104,7 +104,7 @@ class HomeVM(
     private val votingShareTrackingScheduler: VotingShareTrackingScheduler,
     private val checkMigrationRecovery: CheckMigrationRecoveryUseCase,
     private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
-    private val migrationSdk: OrchardMigrationSdk,
+    private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
 ) : ViewModel() {
     private var hasSyncErrorBeenShown = false
     private var hasRestoreSuccessBeenShown = false
@@ -430,7 +430,7 @@ class HomeVM(
             }
             // A MANUAL plan's routine "your turn to confirm" case gets the lean single-transfer
             // screen — matches CheckMigrationRecoveryUseCase's app-launch routing for the same case.
-            plan?.deliveryMode == MigrationDeliveryMode.MANUAL && migrationSdk.hasOverdueTransfers() -> {
+            plan?.deliveryMode == MigrationDeliveryMode.MANUAL && getOrchardMigrationSdk()?.hasOverdueTransfers() == true -> {
                 navigationRouter.forward(MigrationTransferReviewArgs)
             }
             plan != null -> navigationRouter.forward(MigrationProgressArgs)

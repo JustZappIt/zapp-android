@@ -2,12 +2,13 @@ package co.electriccoin.zcash.ui.screen.migration.keystonescan
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.scan.ScanValidationState
 import co.electriccoin.zcash.ui.screen.scankeystone.model.ScanKeystoneState
@@ -17,10 +18,11 @@ import kotlinx.coroutines.launch
 
 class MigrationKeystoneScanVM(
     private val args: MigrationKeystoneScanArgs,
-    private val sdk: OrchardMigrationSdk,
+    private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val pendingSchedule: PendingMigrationScheduleRepository,
     private val finalizeMigrationSchedule: FinalizeMigrationScheduleUseCase,
     private val navigationRouter: NavigationRouter,
+    private val zashiSpendingKeyDataSource: ZashiSpendingKeyDataSource,
 ) : ViewModel() {
 
     val validationState = MutableStateFlow(ScanValidationState.NONE)
@@ -49,7 +51,12 @@ class MigrationKeystoneScanVM(
                 navigationRouter.back()
                 return@launch
             }
-            sdk.signAndStoreMigrationSchedule(sched)
+            // TODO: this is a mock-era stand-in — Keystone accounts have no software spending
+            // key at all, so this derives the wrong (Zashi) account's key. Replace with the real
+            // external-signer path (create_unsigned_transfer_pczts/store_signed_schedule_pczts)
+            // once that's wired; see MigrationSdk.kt's Keystone-related implementation notes.
+            val sdk = getOrchardMigrationSdk() ?: error("MigrationKeystoneScanVM: no wallet available to sign")
+            sdk.signAndStoreMigrationSchedule(sched, zashiSpendingKeyDataSource.getZashiSpendingKey())
             val failure = finalizeMigrationSchedule(sched, args.mode, args.useTor, args.backgroundAvailable)
             isProcessing = false
             if (failure != null) {

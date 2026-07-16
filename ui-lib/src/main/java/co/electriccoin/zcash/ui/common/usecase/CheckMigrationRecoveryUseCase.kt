@@ -1,7 +1,6 @@
 package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.MigrationState
-import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.migration.MigrationDeliveryMode
@@ -36,12 +35,15 @@ import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransfe
  * into the synchronizer.
  */
 class CheckMigrationRecoveryUseCase(
-    private val sdk: OrchardMigrationSdk,
+    private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val migrationPlanRepository: MigrationPlanRepository,
     private val navigationRouter: NavigationRouter,
     private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
 ) {
     suspend operator fun invoke() {
+        // No wallet yet (e.g. a fresh install before onboarding) — this runs on every
+        // MainActivity launch regardless, so treat "no SDK available" as "nothing to recover".
+        val sdk = getOrchardMigrationSdk() ?: return
         if (sdk.hasInvalidTransfers()) {
             Twig.debug { "MigrationRecovery: invalid transfer detected — redirecting to Transfer Invalid." }
             navigationRouter.replaceAll(HomeArgs, MigrationTransferInvalidArgs)
@@ -56,8 +58,8 @@ class CheckMigrationRecoveryUseCase(
             }
         } else if (sdk.getMigrationState() == MigrationState.Complete && !hasSeenMigrationCompleteStorageProvider.get()) {
             // A fresh install / a wallet that never needed to migrate never reaches
-            // MigrationState.Complete — that requires a MigrationPlan to have existed and finished
-            // (see OrchardMigrationSdkMock.getMigrationState()), so this can never fire for them.
+            // MigrationState.Complete — that requires a MigrationPlan to have existed and finished,
+            // so this can never fire for them.
             Twig.debug { "MigrationRecovery: migration just completed — showing one-time celebration." }
             navigationRouter.replaceAll(HomeArgs, MigrationCompleteArgs)
         }

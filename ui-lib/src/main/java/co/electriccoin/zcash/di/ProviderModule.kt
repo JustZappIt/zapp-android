@@ -69,11 +69,7 @@ import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeCountStorage
 import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeCountStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeTimestampStorageProvider
 import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeTimestampStorageProviderImpl
-import cash.z.ecc.android.sdk.OrchardMigrationSdk
-import co.electriccoin.zcash.ui.common.migration.OrchardMigrationSdkMock
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
-import co.electriccoin.zcash.ui.common.provider.MigrationSyncResumeAtStorageProvider
-import co.electriccoin.zcash.ui.common.provider.MigrationSyncResumeAtStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.WalletRestoringStateProvider
 import co.electriccoin.zcash.ui.common.provider.WalletRestoringStateProviderImpl
 import co.electriccoin.zcash.work.MigrationScheduler
@@ -110,8 +106,6 @@ val providerModule =
             HasSeenHowToVoteKeystoneStorageProvider::class
         singleOf(::HasSeenMigrationCompleteStorageProviderImpl) bind
             HasSeenMigrationCompleteStorageProvider::class
-        singleOf(::MigrationSyncResumeAtStorageProviderImpl) bind
-            MigrationSyncResumeAtStorageProvider::class
         singleOf(::IsTorEnabledStorageProviderImpl) bind IsTorEnabledStorageProvider::class
         singleOf(::BlockchainProviderImpl) bind BlockchainProvider::class
         singleOf(::TokenIconProviderImpl) bind TokenIconProvider::class
@@ -130,6 +124,5 @@ val providerModule =
         singleOf(::KtorVotingApiProvider) bind VotingApiProvider::class
         singleOf(::VotingShareTrackingScheduler)
         singleOf(::MigrationNotifier)
-        singleOf(::OrchardMigrationSdkMock) bind OrchardMigrationSdk::class
         factoryOf(::MigrationScheduler)
     }

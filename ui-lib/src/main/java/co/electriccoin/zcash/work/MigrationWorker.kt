@@ -5,12 +5,12 @@ import androidx.annotation.Keep
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import cash.z.ecc.android.sdk.NetworkPrivacyOptions
-import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferResult
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
+import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import kotlin.time.Clock
@@ -23,11 +23,15 @@ class MigrationWorker(
     workerParameters: WorkerParameters,
 ) : CoroutineWorker(context, workerParameters), KoinComponent {
 
-    private val sdk: OrchardMigrationSdk by inject()
+    private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase by inject()
     private val migrationPlanRepository: MigrationPlanRepository by inject()
     private val migrationNotifier: MigrationNotifier by inject()
 
     override suspend fun doWork(): Result {
+        val sdk = getOrchardMigrationSdk() ?: run {
+            Twig.debug { "MigrationWorker: no wallet available — skipping." }
+            return Result.success()
+        }
         if (sdk.isSyncRequiredBeforeNextTransfer()) {
             // Sync and broadcast must be decoupled — skip this window, reconcile on next launch.
             Twig.debug { "MigrationWorker: sync required before next transfer — skipping." }

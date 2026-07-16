@@ -8,11 +8,11 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 
 /**
- * Mock Orchard balance backing [co.electriccoin.zcash.ui.common.migration.OrchardMigrationSdkMock].
+ * Debug-only override for the Orchard balance shown/used in migration UI testing.
  *
  * Persisted independently of the real wallet balance so migration transfers can actually
  * deplete it as they execute, letting the whole plan → execute → balance-drops cycle be
- * exercised end to end before the real Rust-bridge SDK is ready.
+ * exercised end to end without needing a real large Orchard balance on a test device.
  */
 interface MockOrchardBalanceRepository {
     fun observe(): Flow<Long>

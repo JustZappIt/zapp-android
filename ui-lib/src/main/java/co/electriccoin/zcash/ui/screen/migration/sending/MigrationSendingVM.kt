@@ -2,7 +2,6 @@ package co.electriccoin.zcash.ui.screen.migration.sending
 
 import androidx.lifecycle.ViewModel
 import cash.z.ecc.android.sdk.NetworkPrivacyOptions
-import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferResult
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
@@ -14,6 +13,7 @@ import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.ScheduleNextMigrationWindowUseCase
 import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteArgs
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.combine
 
 class MigrationSendingVM(
     private val args: MigrationSendingArgs,
-    private val sdk: OrchardMigrationSdk,
+    private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val migrationPlanRepository: MigrationPlanRepository,
     private val scheduleNextMigrationWindow: ScheduleNextMigrationWindowUseCase,
     private val navigationRouter: NavigationRouter,
@@ -48,7 +48,10 @@ class MigrationSendingVM(
             .stateIn(this)
 
     fun send() = sendLce.execute {
-        when (val result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = args.useTor))) {
+        when (
+            val result =
+                getOrchardMigrationSdk()?.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = args.useTor))
+        ) {
             is TransferResult.Success -> {
                 // No-ops for IMMEDIATE mode's single-transfer plan (no nextPending); re-arms the
                 // next window for a resumed/manually-confirmed transfer in a multi-transfer plan.

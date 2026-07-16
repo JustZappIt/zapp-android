@@ -11,8 +11,8 @@ import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
-import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -29,8 +29,8 @@ import java.math.BigDecimal
 import java.math.MathContext
 
 class MigrationSetupVM(
-    private val mockBalanceRepository: MockOrchardBalanceRepository,
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
+    private val getOrchardBalance: GetOrchardBalanceUseCase,
     private val exchangeRateRepository: ExchangeRateRepository,
     private val navigationRouter: NavigationRouter,
     private val errorStateMapper: ErrorMapperUseCase,
@@ -42,7 +42,7 @@ class MigrationSetupVM(
 
     init {
         accountLce.execute {
-            Zatoshi(mockBalanceRepository.get())
+            getOrchardBalance()
         }
     }
 

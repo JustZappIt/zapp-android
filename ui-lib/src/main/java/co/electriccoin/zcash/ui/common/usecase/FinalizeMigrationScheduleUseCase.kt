@@ -2,7 +2,6 @@ package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.MigrationSchedule
 import cash.z.ecc.android.sdk.NetworkPrivacyOptions
-import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferResult
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.migration.MigrationDeliveryMode
@@ -28,7 +27,7 @@ import kotlin.time.Duration.Companion.seconds
  * otherwise so the caller can surface its own failure sheet and retry by calling this again.
  */
 class FinalizeMigrationScheduleUseCase(
-    private val sdk: OrchardMigrationSdk,
+    private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val migrationPlanRepository: MigrationPlanRepository,
     private val migrationScheduler: MigrationScheduler,
     private val scheduleNextMigrationWindow: ScheduleNextMigrationWindowUseCase,
@@ -50,7 +49,10 @@ class FinalizeMigrationScheduleUseCase(
             // Reset before sending (not after) — if the process dies mid-send, the persisted
             // plan must already read as overdue on relaunch, not just after a full interval.
             migrationPlanRepository.rescheduleTransfer(0, Clock.System.now().epochSeconds)
-            return when (val result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor))) {
+            return when (
+                val result =
+                    getOrchardMigrationSdk()?.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor))
+            ) {
                 is TransferResult.Success -> {
                     scheduleNextMigrationWindow()
                     navigationRouter.forward(MigrationScheduledArgs)

@@ -2,7 +2,6 @@ package co.electriccoin.zcash.ui.screen.migration.progress
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
-import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
@@ -15,6 +14,7 @@ import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -35,7 +35,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 class MigrationProgressVM(
-    private val sdk: OrchardMigrationSdk,
+    private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val migrationPlanRepository: MigrationPlanRepository,
     private val navigationRouter: NavigationRouter,
     private val exchangeRateRepository: ExchangeRateRepository,
@@ -124,6 +124,7 @@ class MigrationProgressVM(
         // still owns WorkManager scheduling for the new time, same as everywhere else. A MANUAL
         // plan must only ever get a notify-only job here, never a real send worker — otherwise
         // manual mode silently degrades into background auto-send after any reschedule.
+        val sdk = getOrchardMigrationSdk() ?: error("MigrationProgressVM: no wallet available to reschedule")
         val proposal = sdk.rescheduleOverdueTransfer()
         val delay = delayUntil(proposal.nextExecutableAfterHeight)
         if (plan?.deliveryMode == MigrationDeliveryMode.MANUAL) {

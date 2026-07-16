@@ -11,8 +11,8 @@ import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
-import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 
 class MigrationCompleteVM(
     private val migrationPlanRepository: MigrationPlanRepository,
-    private val mockBalanceRepository: MockOrchardBalanceRepository,
+    private val getOrchardBalance: GetOrchardBalanceUseCase,
     private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
     private val navigationRouter: NavigationRouter,
     private val errorStateMapper: ErrorMapperUseCase,
@@ -35,10 +35,10 @@ class MigrationCompleteVM(
             val totalCount = plan?.totalCount ?: 0
             val firstAt = plan?.transfers?.minOfOrNull { it.scheduledAtEpochSeconds } ?: 0L
             val lastAt = plan?.transfers?.maxOfOrNull { it.scheduledAtEpochSeconds } ?: 0L
-            // Whatever's still in the mock Orchard balance once every transfer has sent is the
+            // Whatever's still in the real Orchard balance once every transfer has sent is the
             // dust/residual left behind (below the migratable threshold, or an un-migrated
             // opt-in residual — either way, it's what's actually still sitting in Orchard).
-            val dustZatoshi = mockBalanceRepository.get()
+            val dustZatoshi = getOrchardBalance().value
 
             MigrationCompleteState(
                 totalTransferred = stringRes(Zatoshi(totalTransferred)),

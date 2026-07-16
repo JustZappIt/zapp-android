@@ -1,7 +1,6 @@
 package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.MigrationState
-import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.Synchronizer
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
@@ -47,7 +46,8 @@ class GetHomeMessageUseCase(
     private val cache: HomeMessageCacheRepository,
     private val isTorEnabledStorageProvider: IsTorEnabledStorageProvider,
     private val migrationPlanRepository: MigrationPlanRepository,
-    private val migrationSdk: OrchardMigrationSdk,
+    private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
+    private val getOrchardBalance: GetOrchardBalanceUseCase,
     private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
 ) {
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
@@ -99,14 +99,17 @@ class GetHomeMessageUseCase(
                 migrationPlanRepository.observe(),
                 hasSeenMigrationCompleteStorageProvider.observe(),
             ) { plan, hasSeenComplete ->
-                when (migrationSdk.getMigrationState()) {
+                when (getOrchardMigrationSdk()?.getMigrationState()) {
                     is MigrationState.InProgress -> HomeMessageData.Migration(plan)
                     MigrationState.Complete ->
                         // Stays visible until the user actually engages with it — marked seen in
                         // HomeVM.onMigrationMessageClick(), not just for having been displayed.
                         if (hasSeenComplete) null else HomeMessageData.Migration(plan, isComplete = true)
                     else ->
-                        if ((co.electriccoin.zcash.ui.BuildConfig.DEBUG || account.spendableShieldedBalance.value > 0L) && plan == null) {
+                        // Real Orchard-only balance (not the combined Sapling+Orchard
+                        // spendableShieldedBalance — this must never fire for a wallet whose
+                        // Orchard balance is 0, even with real Sapling funds).
+                        if (getOrchardBalance().value > 0L && plan == null) {
                             HomeMessageData.Migration(null)
                         } else {
                             null
