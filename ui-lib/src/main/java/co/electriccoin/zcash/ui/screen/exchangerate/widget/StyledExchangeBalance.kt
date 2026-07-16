@@ -115,9 +115,10 @@ private fun ExchangeAvailableRateLabelInternal(
         textColor = textColor,
     ) {
         ShimmerableText(
-            text = zatoshi?.let {
-                createExchangeRateText(state, hiddenBalancePlaceholder, it, isHideBalance)
-            },
+            text =
+                zatoshi?.let {
+                    createExchangeRateText(state, hiddenBalancePlaceholder, it, isHideBalance)
+                },
             shimmerText = "0.00",
             style = style,
             maxLines = 1,
