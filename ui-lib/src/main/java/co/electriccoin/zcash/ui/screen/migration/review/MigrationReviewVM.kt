@@ -73,8 +73,10 @@ class MigrationReviewVM(
     }
 
     val state: StateFlow<LceState<MigrationReviewState>> =
-        combine(proposeLce.state, exchangeRateRepository.state, isKeystoneAccount, failure) { lce, rate, isKeystone, f ->
-            lce.success?.let { sched -> createState(sched, confirmLce.state.value.loading, rate, isKeystone, f) }
+        combine(
+            proposeLce.state, exchangeRateRepository.state, isKeystoneAccount, failure, confirmLce.state
+        ) { lce, rate, isKeystone, f, confirmState ->
+            lce.success?.let { sched -> createState(sched, confirmState.loading, rate, isKeystone, f) }
         }.withLce(proposeLce, errorStateMapper::mapToState)
             .stateIn(this)
 

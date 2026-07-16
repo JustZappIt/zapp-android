@@ -114,7 +114,12 @@ private fun ColumnScope.ImmediateReviewContent(state: MigrationReviewState) {
     ImmediateDetailsCard(amount = state.totalAmount, fee = state.fee)
     Spacer(Modifier.weight(1f))
     ZashiButton(
-        state = ButtonState(text = stringRes("Confirm"), onClick = state.onConfirm),
+        state = ButtonState(
+            text = stringRes("Confirm"),
+            isEnabled = !state.isConfirming,
+            isLoading = state.isConfirming,
+            onClick = state.onConfirm,
+        ),
         modifier = Modifier.fillMaxWidth(),
     )
 }
@@ -188,7 +193,12 @@ private fun ColumnScope.PrivacyReviewContent(state: MigrationReviewState) {
     }
     Spacer(Modifier.weight(1f))
     ZashiButton(
-        state = ButtonState(text = stringRes("Confirm"), onClick = state.onConfirm),
+        state = ButtonState(
+            text = stringRes("Confirm"),
+            isEnabled = !state.isConfirming,
+            isLoading = state.isConfirming,
+            onClick = state.onConfirm,
+        ),
         modifier = Modifier.fillMaxWidth(),
     )
 }
