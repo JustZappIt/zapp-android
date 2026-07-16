@@ -58,9 +58,10 @@ fun ZashiTopAppBarWithAccountSelection(
                 }
                 ZashiIconButton(
                     state.moreButton,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .testTag(ZashiTopAppBarWithAccountSelectionTag.MORE)
+                    modifier =
+                        Modifier
+                            .size(40.dp)
+                            .testTag(ZashiTopAppBarWithAccountSelectionTag.MORE)
                 )
                 Spacer(Modifier.width(20.dp))
             },
@@ -112,13 +113,14 @@ private fun AccountSwitch(state: AccountSwitchState?) {
         ShimmerableText(
             text = text,
             shimmerText = stringResource(co.electriccoin.zcash.ui.R.string.accounts_zashi),
-            style = TextStyle(
-                fontSize = 24.sp,
-                lineHeight = 24.sp,
-                fontWeight = FontWeight.W600,
-                color = ZashiColors.Text.textPrimary,
-                textAlign = TextAlign.Center,
-            ),
+            style =
+                TextStyle(
+                    fontSize = 24.sp,
+                    lineHeight = 24.sp,
+                    fontWeight = FontWeight.W600,
+                    color = ZashiColors.Text.textPrimary,
+                    textAlign = TextAlign.Center,
+                ),
         )
         if (onAccountTypeClick != null) {
             Spacer(Modifier.width(8.dp))
