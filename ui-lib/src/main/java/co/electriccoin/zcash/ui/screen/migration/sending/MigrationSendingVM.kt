@@ -11,6 +11,7 @@ import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
+import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
@@ -22,12 +23,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 
 class MigrationSendingVM(
-    private val args: MigrationSendingArgs,
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val migrationPlanRepository: MigrationPlanRepository,
     private val scheduleNextMigrationWindow: ScheduleNextMigrationWindowUseCase,
     private val navigationRouter: NavigationRouter,
     private val errorStateMapper: ErrorMapperUseCase,
+    private val isTorEnabledStorageProvider: IsTorEnabledStorageProvider,
 ) : ViewModel() {
 
     private val sendLce = mutableLce<Unit>()
@@ -48,9 +49,10 @@ class MigrationSendingVM(
             .stateIn(this)
 
     fun send() = sendLce.execute {
+        val useTor = isTorEnabledStorageProvider.get() == true
         when (
             val result =
-                getOrchardMigrationSdk()?.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = args.useTor))
+                getOrchardMigrationSdk()?.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor))
         ) {
             is TransferResult.Success -> {
                 // No-ops for IMMEDIATE mode's single-transfer plan (no nextPending); re-arms the

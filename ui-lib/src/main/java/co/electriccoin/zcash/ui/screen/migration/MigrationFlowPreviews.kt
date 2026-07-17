@@ -26,8 +26,6 @@ import co.electriccoin.zcash.ui.screen.migration.howitworks.MigrationHowItWorksS
 import co.electriccoin.zcash.ui.screen.migration.howitworks.MigrationHowItWorksView
 import co.electriccoin.zcash.ui.screen.migration.notification.MigrationNotificationState
 import co.electriccoin.zcash.ui.screen.migration.notification.MigrationNotificationView
-import co.electriccoin.zcash.ui.screen.migration.privacy.MigrationPrivacyState
-import co.electriccoin.zcash.ui.screen.migration.privacy.MigrationPrivacyView
 import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewState
 import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewTransferState
 import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewView
@@ -72,7 +70,6 @@ private fun PrivacyFlowPreview() = ZcashTheme {
             FlowStep("2 · How It Works") { MigrationHowItWorksView(previewHowItWorksState()) }
             FlowStep("3 · Battery") { MigrationBatteryView(previewBatteryState()) }
             FlowStep("4 · Notification") { MigrationNotificationView(previewNotificationState()) }
-            FlowStep("5 · Tor Privacy") { MigrationPrivacyView(previewPrivacyState(MigrationMode.AUTOMATIC)) }
             FlowStep("6 · Confirm Transfer Plan") { MigrationReviewView(previewReviewStateAutomatic()) }
             FlowStep("7 · Scheduled") { MigrationScheduledView(previewScheduledState()) }
         }
@@ -133,7 +130,6 @@ private fun ImmediateFlowPreview() = ZcashTheme {
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         FlowStep("1 · Setup") { MigrationSetupView(previewSetupState(MigrationMode.IMMEDIATE)) }
-        FlowStep("2 · Tor Privacy") { MigrationPrivacyView(previewPrivacyState(MigrationMode.IMMEDIATE)) }
         FlowStep("3 · Review") { MigrationReviewView(previewReviewStateImmediate()) }
         FlowStep("4 · Sending") { MigrationSendingView(MigrationSendingState(failureSheet = null)) }
         FlowStep("5 · Success") { MigrationSuccessView(previewSuccessState()) }
@@ -190,15 +186,6 @@ private fun previewNotificationState() = MigrationNotificationState(
     onAllow = {},
     onSkip = {},
     onAutoSkip = {},
-    onBack = {},
-)
-
-private fun previewPrivacyState(mode: MigrationMode) = MigrationPrivacyState(
-    mode = mode,
-    useTor = mode == MigrationMode.AUTOMATIC,
-    onTorToggle = {},
-    onConfirm = {},
-    onSkip = {},
     onBack = {},
 )
 

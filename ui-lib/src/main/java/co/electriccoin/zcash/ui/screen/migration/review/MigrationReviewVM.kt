@@ -146,8 +146,8 @@ class MigrationReviewVM(
                         sched,
                         zashiSpendingKeyDataSource.getZashiSpendingKey(),
                     )
-                    migrationPlanRepository.save(sched.toMigrationPlan(args.mode, args.useTor, MigrationDeliveryMode.SCHEDULED))
-                    navigationRouter.forward(MigrationSendingArgs(useTor = args.useTor))
+                    migrationPlanRepository.save(sched.toMigrationPlan(args.mode, MigrationDeliveryMode.SCHEDULED))
+                    navigationRouter.forward(MigrationSendingArgs)
                 }
                 MigrationMode.AUTOMATIC -> confirmAutomatic(sched)
             }
@@ -160,13 +160,13 @@ class MigrationReviewVM(
             // instead (MigrationKeystoneScanVM), not here.
             pendingMigrationScheduleRepository.set(sched)
             navigationRouter.forward(
-                MigrationKeystoneSignArgs(mode = args.mode, useTor = args.useTor, backgroundAvailable = args.backgroundAvailable)
+                MigrationKeystoneSignArgs(mode = args.mode, backgroundAvailable = args.backgroundAvailable)
             )
             return
         }
         val sdk = getOrchardMigrationSdk() ?: error("MigrationReviewVM: no wallet available to sign")
         sdk.signAndStoreMigrationSchedule(sched, zashiSpendingKeyDataSource.getZashiSpendingKey())
-        val result = finalizeMigrationSchedule(sched, args.mode, args.useTor, args.backgroundAvailable)
+        val result = finalizeMigrationSchedule(sched, args.mode, args.backgroundAvailable)
         if (result != null) failure.value = result
     }
 
@@ -185,7 +185,6 @@ class MigrationReviewVM(
 
     private fun MigrationSchedule.toMigrationPlan(
         mode: MigrationMode,
-        useTor: Boolean,
         deliveryMode: MigrationDeliveryMode,
     ) = MigrationPlan(
         id = UUID.randomUUID().toString(),
@@ -199,7 +198,6 @@ class MigrationReviewVM(
             )
         },
         mode = mode,
-        useTor = useTor,
         deliveryMode = deliveryMode,
     )
 

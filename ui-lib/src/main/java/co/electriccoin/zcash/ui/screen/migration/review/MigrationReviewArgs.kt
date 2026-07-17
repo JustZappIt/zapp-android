@@ -6,6 +6,5 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class MigrationReviewArgs(
     val mode: MigrationMode,
-    val useTor: Boolean = false,
     val backgroundAvailable: Boolean = true,
 )

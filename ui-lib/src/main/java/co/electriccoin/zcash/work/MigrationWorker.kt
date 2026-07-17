@@ -8,6 +8,7 @@ import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.TransferResult
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
+import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
@@ -26,6 +27,7 @@ class MigrationWorker(
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase by inject()
     private val migrationPlanRepository: MigrationPlanRepository by inject()
     private val migrationNotifier: MigrationNotifier by inject()
+    private val isTorEnabledStorageProvider: IsTorEnabledStorageProvider by inject()
 
     override suspend fun doWork(): Result {
         val sdk = getOrchardMigrationSdk() ?: run {
@@ -40,7 +42,8 @@ class MigrationWorker(
 
         val plan = migrationPlanRepository.load()
         val next = plan?.nextPending
-        return when (val result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = plan?.useTor ?: false))) {
+        val useTor = isTorEnabledStorageProvider.get() == true
+        return when (val result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor))) {
             null -> {
                 Twig.debug { "MigrationWorker: no pending transfer." }
                 Result.success()

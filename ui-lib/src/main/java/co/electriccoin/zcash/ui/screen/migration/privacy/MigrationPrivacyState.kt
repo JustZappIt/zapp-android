@@ -1,12 +1,10 @@
 package co.electriccoin.zcash.ui.screen.migration.privacy
 
-import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
+import co.electriccoin.zcash.ui.design.component.CheckboxState
+import co.electriccoin.zcash.ui.design.component.ModalBottomSheetState
 
 data class MigrationPrivacyState(
-    val mode: MigrationMode,
-    val useTor: Boolean,
-    val onTorToggle: (Boolean) -> Unit,
+    val checkbox: CheckboxState,
     val onConfirm: () -> Unit,
-    val onSkip: () -> Unit,
-    val onBack: () -> Unit,
-)
+    override val onBack: () -> Unit,
+) : ModalBottomSheetState

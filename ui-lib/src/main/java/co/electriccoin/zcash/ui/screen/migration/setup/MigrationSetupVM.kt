@@ -1,6 +1,7 @@
 package co.electriccoin.zcash.ui.screen.migration.setup
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
@@ -12,6 +13,7 @@ import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetMigrationPrivacyOrReviewDestinationUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
@@ -20,11 +22,11 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.screen.ExternalUrl
 import co.electriccoin.zcash.ui.screen.migration.howitworks.MigrationHowItWorksArgs
-import co.electriccoin.zcash.ui.screen.migration.privacy.MigrationPrivacyArgs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.math.MathContext
 
@@ -34,6 +36,7 @@ class MigrationSetupVM(
     private val exchangeRateRepository: ExchangeRateRepository,
     private val navigationRouter: NavigationRouter,
     private val errorStateMapper: ErrorMapperUseCase,
+    private val getMigrationPrivacyOrReviewDestination: GetMigrationPrivacyOrReviewDestinationUseCase,
 ) : ViewModel() {
 
     private val accountLce = mutableLce<Zatoshi>()
@@ -86,7 +89,11 @@ class MigrationSetupVM(
         navigationRouter.forward(ExternalUrl("https://support.zodl.com/article/42-moving-your-funds-to-ironwood"))
 
     private fun onConfirm() = when (selectedMode.value) {
-        MigrationMode.IMMEDIATE -> navigationRouter.forward(MigrationPrivacyArgs(MigrationMode.IMMEDIATE))
+        MigrationMode.IMMEDIATE -> viewModelScope.launch {
+            navigationRouter.forward(
+                getMigrationPrivacyOrReviewDestination(mode = MigrationMode.IMMEDIATE, backgroundAvailable = true)
+            )
+        }
         MigrationMode.AUTOMATIC -> navigationRouter.forward(MigrationHowItWorksArgs)
     }
 

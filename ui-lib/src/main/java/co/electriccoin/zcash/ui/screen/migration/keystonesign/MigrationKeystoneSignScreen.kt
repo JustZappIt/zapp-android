@@ -13,7 +13,6 @@ import org.koin.core.parameter.parametersOf
 @Serializable
 data class MigrationKeystoneSignArgs(
     val mode: MigrationMode,
-    val useTor: Boolean,
     val backgroundAvailable: Boolean,
 )
 

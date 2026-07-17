@@ -40,7 +40,7 @@ class MigrationTransferReviewVM(
                 ),
                 amount = stringRes(Zatoshi(next.amountZatoshi)),
                 fee = stringRes(Zatoshi(TRANSFER_FEE_ESTIMATE_ZATOSHI)),
-                onConfirm = { navigationRouter.forward(MigrationSendingArgs(useTor = plan.useTor)) },
+                onConfirm = { navigationRouter.forward(MigrationSendingArgs) },
                 onBack = ::onBack,
             )
         }.withLce(loadLce, errorStateMapper::mapToState)

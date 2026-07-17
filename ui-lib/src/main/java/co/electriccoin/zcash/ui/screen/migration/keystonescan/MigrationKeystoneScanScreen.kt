@@ -21,7 +21,6 @@ import org.koin.core.parameter.parametersOf
 @Serializable
 data class MigrationKeystoneScanArgs(
     val mode: MigrationMode,
-    val useTor: Boolean,
     val backgroundAvailable: Boolean,
 )
 

@@ -57,7 +57,7 @@ class MigrationKeystoneScanVM(
             // once that's wired; see MigrationSdk.kt's Keystone-related implementation notes.
             val sdk = getOrchardMigrationSdk() ?: error("MigrationKeystoneScanVM: no wallet available to sign")
             sdk.signAndStoreMigrationSchedule(sched, zashiSpendingKeyDataSource.getZashiSpendingKey())
-            val failure = finalizeMigrationSchedule(sched, args.mode, args.useTor, args.backgroundAvailable)
+            val failure = finalizeMigrationSchedule(sched, args.mode, args.backgroundAvailable)
             isProcessing = false
             if (failure != null) {
                 failureSheet.update {

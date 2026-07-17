@@ -59,7 +59,7 @@ class MigrationKeystoneSignVM(
             )
 
     private fun onGetSignature() = navigationRouter.forward(
-        MigrationKeystoneScanArgs(mode = args.mode, useTor = args.useTor, backgroundAvailable = args.backgroundAvailable)
+        MigrationKeystoneScanArgs(mode = args.mode, backgroundAvailable = args.backgroundAvailable)
     )
 
     private fun onReject() {

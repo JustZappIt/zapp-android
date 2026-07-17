@@ -115,7 +115,7 @@ class MigrationProgressVM(
     // SDK notices this transfer was overdue and sets it internally. The actual broadcast, its
     // failure/retry sheet, and re-arming the next window all live on the Sending screen now
     // (see MigrationSendingVM), reused instead of duplicated here.
-    private fun onSendNow(plan: MigrationPlan) = navigationRouter.forward(MigrationSendingArgs(useTor = plan.useTor))
+    private fun onSendNow(plan: MigrationPlan) = navigationRouter.forward(MigrationSendingArgs)
 
     private fun onReschedule() = sendLce.execute {
         val plan = migrationPlanRepository.load()

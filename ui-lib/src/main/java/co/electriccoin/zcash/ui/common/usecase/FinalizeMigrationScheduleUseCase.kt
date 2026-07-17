@@ -9,6 +9,7 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
+import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.screen.migration.scheduled.MigrationScheduledArgs
 import co.electriccoin.zcash.work.MigrationScheduler
@@ -32,23 +33,24 @@ class FinalizeMigrationScheduleUseCase(
     private val migrationScheduler: MigrationScheduler,
     private val scheduleNextMigrationWindow: ScheduleNextMigrationWindowUseCase,
     private val navigationRouter: NavigationRouter,
+    private val isTorEnabledStorageProvider: IsTorEnabledStorageProvider,
 ) {
     suspend operator fun invoke(
         sched: MigrationSchedule,
         mode: MigrationMode,
-        useTor: Boolean,
         backgroundAvailable: Boolean,
     ): TransferResult? {
         // Background delivery unavailable (Battery screen declined) — fall back to MANUAL:
         // send transfer #1 immediately in the foreground now, then only ever notify (never
         // silently auto-send) for subsequent transfers.
         val deliveryMode = if (backgroundAvailable) MigrationDeliveryMode.SCHEDULED else MigrationDeliveryMode.MANUAL
-        migrationPlanRepository.save(sched.toMigrationPlan(mode, useTor, deliveryMode))
+        migrationPlanRepository.save(sched.toMigrationPlan(mode, deliveryMode))
 
         if (deliveryMode == MigrationDeliveryMode.MANUAL) {
             // Reset before sending (not after) — if the process dies mid-send, the persisted
             // plan must already read as overdue on relaunch, not just after a full interval.
             migrationPlanRepository.rescheduleTransfer(0, Clock.System.now().epochSeconds)
+            val useTor = isTorEnabledStorageProvider.get() == true
             return when (
                 val result =
                     getOrchardMigrationSdk()?.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor))
@@ -86,7 +88,6 @@ class FinalizeMigrationScheduleUseCase(
 
     private fun MigrationSchedule.toMigrationPlan(
         mode: MigrationMode,
-        useTor: Boolean,
         deliveryMode: MigrationDeliveryMode,
     ) = MigrationPlan(
         id = UUID.randomUUID().toString(),
@@ -101,7 +102,6 @@ class FinalizeMigrationScheduleUseCase(
             )
         },
         mode = mode,
-        useTor = useTor,
         deliveryMode = deliveryMode,
     )
 }
