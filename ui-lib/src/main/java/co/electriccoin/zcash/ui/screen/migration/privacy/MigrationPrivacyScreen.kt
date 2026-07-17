@@ -49,7 +49,7 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
 @Serializable
-data class MigrationPrivacyArgs(val mode: MigrationMode, val backgroundAvailable: Boolean = true)
+data class MigrationPrivacyArgs(val mode: MigrationMode)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
