@@ -18,6 +18,7 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureS
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
+import co.electriccoin.zcash.ui.common.model.groupLce
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.stateIn
@@ -77,7 +78,7 @@ class MigrationReviewVM(
             proposeLce.state, exchangeRateRepository.state, isKeystoneAccount, failure, confirmLce.state
         ) { lce, rate, isKeystone, f, confirmState ->
             lce.success?.let { sched -> createState(sched, confirmState.loading, rate, isKeystone, f) }
-        }.withLce(proposeLce, errorStateMapper::mapToState)
+        }.withLce(groupLce(proposeLce, confirmLce), errorStateMapper::mapToState)
             .stateIn(this)
 
     private fun createState(
