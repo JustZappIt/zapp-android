@@ -1,6 +1,5 @@
 package co.electriccoin.zcash.ui.common.datasource
 
-import cash.z.ecc.android.sdk.SdkSynchronizer
 import cash.z.ecc.android.sdk.Synchronizer
 import cash.z.ecc.android.sdk.exception.PcztException
 import cash.z.ecc.android.sdk.exception.TransactionEncoderException
@@ -275,10 +274,10 @@ class ProposalDataSourceImpl(
     @Suppress("CyclomaticComplexMethod", "TooGenericExceptionCaught")
     private suspend fun submitTransactionInternal(
         logTag: String,
-        block: suspend (SdkSynchronizer) -> List<CreatedTransaction>
+        block: suspend (Synchronizer) -> List<CreatedTransaction>
     ): SubmitResult =
         withContext(Dispatchers.IO) {
-            val synchronizer = synchronizerProvider.getSynchronizer() as SdkSynchronizer
+            val synchronizer = synchronizerProvider.getSynchronizer()
             val transactions = block(synchronizer)
 
             if (transactions.isEmpty()) {
@@ -305,14 +304,12 @@ class ProposalDataSourceImpl(
             Twig.debug { "Internal transaction submit results: $submitResults" }
 
             val result = submitResults.toSubmitResult()
-            synchronizer.refreshTransactions()
-            synchronizer.refreshAllBalances()
             Twig.debug { "Transaction submit result: $result" }
             result
         }
 
     private suspend fun submitCreatedTransactions(
-        synchronizer: SdkSynchronizer,
+        synchronizer: Synchronizer,
         transactions: List<CreatedTransaction>,
         endpoints: List<LightWalletEndpoint>,
         logTag: String

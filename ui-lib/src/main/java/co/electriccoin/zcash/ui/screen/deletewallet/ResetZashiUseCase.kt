@@ -1,6 +1,6 @@
 package co.electriccoin.zcash.ui.screen.deletewallet
 
-import cash.z.ecc.android.sdk.SdkSynchronizer
+import cash.z.ecc.android.sdk.CloseableSynchronizer
 import cash.z.ecc.android.sdk.WalletCoordinator
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
 import co.electriccoin.zcash.preference.StandardPreferenceProvider
@@ -59,7 +59,7 @@ class ResetZashiUseCase(
     }
 
     private suspend fun closeSynchronizer() {
-        (synchronizerProvider.getSynchronizer() as SdkSynchronizer).closeQuietly()
+        (synchronizerProvider.getSynchronizer() as CloseableSynchronizer).closeQuietly()
     }
 
     private fun deleteLocalFiles(keepFiles: Boolean) {
