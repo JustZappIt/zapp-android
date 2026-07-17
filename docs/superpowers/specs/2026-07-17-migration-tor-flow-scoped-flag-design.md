@@ -11,15 +11,14 @@ Milan) established this was the wrong shape: Tor for migration should not flip t
 app-wide Tor setting — it should be scoped to migration broadcasts only, default-on, with an
 explicit warning if the user opts out (IP→balance linkage risk). Separately, Andrea updated the
 actual Figma designs (`#wallet-team`, 2026-07-16 19:10) to remove the Tor sheet entirely from the
-AUTOMATIC ("Migrate with privacy") flow — Tor is always used there, communicated only via updated
-"How This Works" copy — while keeping a sheet (with opt-out) in the IMMEDIATE flow only. See
-[[project_tor_migration_design_conflict]] for the full history.
+AUTOMATIC ("Migrate with privacy") flow, keeping it only in the IMMEDIATE flow — **this was
+subsequently revised again**: both flows show the sheet, per this spec's uniform mechanic below.
+See [[project_tor_migration_design_conflict]] for the full history.
 
 This spec documents a further adjustment discussed today: a simpler, uniform flag-based mechanic
-that doesn't yet distinguish AUTOMATIC vs. IMMEDIATE the way Andrea's Figma update does. **This is
-flagged explicitly as an open question below, not silently resolved** — before implementing,
-confirm with Andrea/Milan whether this uniform mechanic is meant to replace her AUTOMATIC-flow
-"no sheet at all" decision, or whether it should only apply to the IMMEDIATE flow.
+that applies identically to both AUTOMATIC and IMMEDIATE — both flows use the same
+skip-if-global-on / show-with-default-true sheet described below (confirmed 2026-07-17, resolving
+the AUTOMATIC-vs-IMMEDIATE discrepancy this spec originally flagged as open).
 
 ## Design
 
@@ -85,16 +84,9 @@ sheet's own default and the skip-branch's implicit `useTor = true`).
 
 ## Open questions
 
-1. **Reconcile with Andrea's Figma update.** Her 2026-07-16 19:10 message removes the Tor sheet
-   entirely from the AUTOMATIC flow (Tor always on, no UI, communicated via "How This Works" copy
-   only) and keeps a sheet only in the IMMEDIATE flow. This spec's uniform flag mechanic (§3-4)
-   does not make that distinction — it applies the same skip/show/default-true logic to both entry
-   points. Confirm which is the actual target design before implementing: does AUTOMATIC still get
-   *some* sheet (per this spec, only skipped when global happens to already be on) or *never* a
-   sheet (per Andrea's Figma, unconditionally)?
-2. **IP-correlation disclaimer copy** (ZIP 318 app-gap #2, [[project_zip318_app_gaps]]) — still not
+1. **IP-correlation disclaimer copy** (ZIP 318 app-gap #2, [[project_zip318_app_gaps]]) — still not
    implemented anywhere. Does it belong in this sheet, in "How This Works," or both?
-3. Does this affect the sync→send correlation disclosure gap (ZIP 318 app-gap #1) already queued
+2. Does this affect the sync→send correlation disclosure gap (ZIP 318 app-gap #1) already queued
    for `2026-07-16-migration-manual-scheduling-unification-design.md`? Likely independent (that gap
    is about the *background/overdue-transfer* Send Now flow, not the initial Tor choice), but worth
    a final check once both specs move to implementation.
