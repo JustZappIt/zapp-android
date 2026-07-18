@@ -6,15 +6,12 @@ import cash.z.ecc.android.sdk.TransferResult
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.migration.MigrationDeliveryMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
-import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
-import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
-import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
+import co.electriccoin.zcash.ui.common.model.migration.toMigrationPlan
 import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.screen.migration.scheduled.MigrationScheduledArgs
 import co.electriccoin.zcash.work.MigrationScheduler
-import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -86,24 +83,4 @@ class FinalizeMigrationScheduleUseCase(
         val remaining = estimatedSecondsBetweenHeights(first.anchorHeight, first.nextExecutableAfterHeight)
         return if (remaining <= 0) 0.seconds else remaining.seconds
     }
-
-    private fun MigrationSchedule.toMigrationPlan(
-        mode: MigrationMode,
-        deliveryMode: MigrationDeliveryMode,
-    ) = MigrationPlan(
-        id = UUID.randomUUID().toString(),
-        createdAtEpochSeconds = Clock.System.now().epochSeconds,
-        transfers = transfers.mapIndexed { i, t ->
-            val now = Clock.System.now().epochSeconds
-            MigrationTransfer(
-                index = i,
-                amountZatoshi = t.amountZatoshi,
-                scheduledAtEpochSeconds = now + estimatedSecondsBetweenHeights(t.anchorHeight, t.nextExecutableAfterHeight),
-                status = MigrationTransferStatus.PENDING,
-                expiryAtEpochSeconds = now + estimatedSecondsBetweenHeights(t.anchorHeight, t.expiryHeight),
-            )
-        },
-        mode = mode,
-        deliveryMode = deliveryMode,
-    )
 }

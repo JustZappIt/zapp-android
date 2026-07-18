@@ -12,13 +12,11 @@ import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.guardLoading
 import co.electriccoin.zcash.ui.common.model.migration.MigrationDeliveryMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
-import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
-import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
-import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
 import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
+import co.electriccoin.zcash.ui.common.model.migration.toMigrationPlan
 import co.electriccoin.zcash.ui.common.model.groupLce
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
@@ -43,8 +41,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import java.math.BigDecimal
 import java.math.MathContext
-import java.util.UUID
-import kotlin.time.Clock
 
 class MigrationReviewVM(
     private val args: MigrationReviewArgs,
@@ -201,26 +197,6 @@ class MigrationReviewVM(
             else -> stringRes("~${secondsUntil / 3600} hours")
         }
     }
-
-    private fun MigrationSchedule.toMigrationPlan(
-        mode: MigrationMode,
-        deliveryMode: MigrationDeliveryMode,
-    ) = MigrationPlan(
-        id = UUID.randomUUID().toString(),
-        createdAtEpochSeconds = Clock.System.now().epochSeconds,
-        transfers = transfers.mapIndexed { i, t ->
-            MigrationTransfer(
-                index = i,
-                amountZatoshi = t.amountZatoshi,
-                scheduledAtEpochSeconds =
-                    Clock.System.now().epochSeconds +
-                        estimatedSecondsBetweenHeights(t.anchorHeight, t.nextExecutableAfterHeight),
-                status = MigrationTransferStatus.PENDING,
-            )
-        },
-        mode = mode,
-        deliveryMode = deliveryMode,
-    )
 
     companion object {
         // Mock-only placeholder network fee (zatoshi) for the IMMEDIATE Review screen's Details
