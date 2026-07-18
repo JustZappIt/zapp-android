@@ -168,6 +168,21 @@ class MigrationReviewVM(
             return
         }
         val sdk = getOrchardMigrationSdk() ?: error("MigrationReviewVM: no wallet available to sign")
+        // Note-split is the first step of this confirm action (design spec §7) — a schedule with
+        // more than one denomination proposed against raw, unsplit notes exhausts the wallet's
+        // balance on the first transfer, leaving every subsequent transfer InsufficientFunds. Per
+        // spec §3 the split is a fully shielded self-send and needs no sync-decoupling delay, so
+        // proceeding straight to signAndStoreMigrationSchedule below is safe. Under the crate's
+        // sign-now/prove-later pipeline that call now signs successfully immediately even though
+        // the split's own output isn't mined/witnessed yet.
+        if (sdk.isNoteSplitNeeded()) {
+            val proposal = sdk.prepareNoteSplit()
+            val splitResult = sdk.submitNoteSplit(proposal, zashiSpendingKeyDataSource.getZashiSpendingKey())
+            if (splitResult !is TransferResult.Success) {
+                failure.value = splitResult
+                return
+            }
+        }
         sdk.signAndStoreMigrationSchedule(sched, zashiSpendingKeyDataSource.getZashiSpendingKey())
         val result = finalizeMigrationSchedule(sched, args.mode, args.backgroundAvailable)
         if (result != null) failure.value = result
