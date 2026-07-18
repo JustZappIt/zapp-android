@@ -185,6 +185,8 @@ class OrchardMigrationSdkMock(
 
     override suspend fun isSyncRequiredBeforeNextTransfer(): Boolean = false
 
+    override suspend fun finalizeReadyTransfers(): Int = 0
+
     override suspend fun executeNextPendingTransfer(options: NetworkPrivacyOptions): TransferResult? {
         val plan = repository.load() ?: return null
         val next = plan.nextPending ?: return null

@@ -34,6 +34,15 @@ class MigrationWorker(
             Twig.debug { "MigrationWorker: no wallet available — skipping." }
             return Result.success()
         }
+        // Completes any transfer that was pre-signed with a placeholder witness (sign-now/
+        // prove-later pipeline) whose funding note has since become witnessed, so it can be
+        // picked up by executeNextPendingTransfer() below in this same run. Cheap and safe to call
+        // on every run — a no-op when nothing is awaiting a proof yet.
+        val finalizedCount = sdk.finalizeReadyTransfers()
+        if (finalizedCount > 0) {
+            Twig.debug { "MigrationWorker: finalized $finalizedCount transfer(s) awaiting proof." }
+        }
+
         if (sdk.isSyncRequiredBeforeNextTransfer()) {
             // Sync and broadcast must be decoupled — skip this window, reconcile on next launch.
             Twig.debug { "MigrationWorker: sync required before next transfer — skipping." }
