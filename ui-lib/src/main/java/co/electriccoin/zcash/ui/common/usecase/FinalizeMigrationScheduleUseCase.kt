@@ -3,6 +3,7 @@ package co.electriccoin.zcash.ui.common.usecase
 import cash.z.ecc.android.sdk.MigrationSchedule
 import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.TransferResult
+import cash.z.ecc.android.sdk.ext.ZcashSdk
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.migration.MigrationDeliveryMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
@@ -14,6 +15,7 @@ import co.electriccoin.zcash.ui.screen.migration.scheduled.MigrationScheduledArg
 import co.electriccoin.zcash.work.MigrationScheduler
 import kotlin.time.Clock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -59,6 +61,14 @@ class FinalizeMigrationScheduleUseCase(
                     null
                 }
                 null -> {
+                    // Transfer #0 wasn't ready to send yet — most commonly its funding note (a
+                    // not-yet-mined note-split output) isn't witnessed at the freshly-computed
+                    // anchor yet, an ordinary transient state, not a failure. Nothing else
+                    // re-arms a future check for MANUAL mode's very first transfer, so without
+                    // this the plan would silently stall with no worker and no notification ever
+                    // scheduled. scheduleNotifyOnly (not schedule) — MANUAL mode must still only
+                    // ever notify, never silently auto-send, once it does become ready.
+                    migrationScheduler.scheduleNotifyOnly(ZcashSdk.BLOCK_INTERVAL_MILLIS.milliseconds)
                     navigationRouter.forward(MigrationScheduledArgs)
                     null
                 }
