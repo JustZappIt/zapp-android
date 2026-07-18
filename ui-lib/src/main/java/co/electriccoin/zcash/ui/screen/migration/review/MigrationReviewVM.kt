@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import cash.z.ecc.android.sdk.MigrationSchedule
 import cash.z.ecc.android.sdk.TransferProposal
 import cash.z.ecc.android.sdk.TransferResult
+import cash.z.ecc.android.sdk.ext.ZcashSdk
 import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
@@ -89,12 +90,16 @@ class MigrationReviewVM(
         failureResult: TransferResult?,
     ): MigrationReviewState {
         val total = sched.transfers.sumOf { it.amountZatoshi }
-        val firstAt = sched.transfers.minOfOrNull { it.nextExecutableAfterHeight } ?: 0L
-        val lastAt = sched.transfers.maxOfOrNull { it.nextExecutableAfterHeight } ?: 0L
+        // Block-height span between the first and last transfer, converted to an estimated
+        // wall-clock duration via the network's average block time — these are heights, not
+        // epoch seconds (see estimatedSecondsFromAnchor's comment).
+        val firstAtHeight = sched.transfers.minOfOrNull { it.nextExecutableAfterHeight } ?: 0L
+        val lastAtHeight = sched.transfers.maxOfOrNull { it.nextExecutableAfterHeight } ?: 0L
+        val spanSeconds = (lastAtHeight - firstAtHeight) * (ZcashSdk.BLOCK_INTERVAL_MILLIS / 1000)
         return MigrationReviewState(
             mode = args.mode,
             totalAmount = stringRes(Zatoshi(total)),
-            estimatedDuration = stringRes(formatMigrationDuration(lastAt - firstAt)),
+            estimatedDuration = stringRes(formatMigrationDuration(spanSeconds)),
             transfers = sched.transfers.mapIndexed { i, t ->
                 MigrationReviewTransferState(
                     index = i + 1,
@@ -192,8 +197,7 @@ class MigrationReviewVM(
 
     private fun scheduledLabel(t: TransferProposal, mode: MigrationMode): StringResource {
         if (mode == MigrationMode.IMMEDIATE) return stringRes("Send immediately")
-        val nowSeconds = Clock.System.now().epochSeconds
-        val secondsUntil = t.nextExecutableAfterHeight - nowSeconds
+        val secondsUntil = t.estimatedSecondsFromAnchor(t.nextExecutableAfterHeight)
         return when {
             secondsUntil <= 0 -> stringRes("Ready now")
             secondsUntil < 3600 -> stringRes("~${(secondsUntil / 60).coerceAtLeast(1)} min")
@@ -211,13 +215,22 @@ class MigrationReviewVM(
             MigrationTransfer(
                 index = i,
                 amountZatoshi = t.amountZatoshi,
-                scheduledAtEpochSeconds = t.nextExecutableAfterHeight,
+                scheduledAtEpochSeconds =
+                    Clock.System.now().epochSeconds + t.estimatedSecondsFromAnchor(t.nextExecutableAfterHeight),
                 status = MigrationTransferStatus.PENDING,
             )
         },
         mode = mode,
         deliveryMode = deliveryMode,
     )
+
+    // nextExecutableAfterHeight (like anchorHeight/expiryHeight) is a block height, not a
+    // timestamp — estimate the wall-clock delta from anchorHeight (≈ the current tip when this
+    // proposal was built) using the network's average block time, rather than conflating a block
+    // height with epoch seconds directly (that previously produced a bogus ~56-year-old "overdue"
+    // duration once the value was stored as scheduledAtEpochSeconds and later compared to now).
+    private fun TransferProposal.estimatedSecondsFromAnchor(targetHeight: Long): Long =
+        (targetHeight - anchorHeight) * (ZcashSdk.BLOCK_INTERVAL_MILLIS / 1000)
 
     companion object {
         // Mock-only placeholder network fee (zatoshi) for the IMMEDIATE Review screen's Details

@@ -2,6 +2,8 @@ package co.electriccoin.zcash.ui.screen.migration.progress
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
+import cash.z.ecc.android.sdk.TransferProposal
+import cash.z.ecc.android.sdk.ext.ZcashSdk
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
@@ -126,7 +128,7 @@ class MigrationProgressVM(
         // manual mode silently degrades into background auto-send after any reschedule.
         val sdk = getOrchardMigrationSdk() ?: error("MigrationProgressVM: no wallet available to reschedule")
         val proposal = sdk.rescheduleOverdueTransfer()
-        val delay = delayUntil(proposal.nextExecutableAfterHeight)
+        val delay = delayUntil(proposal)
         if (plan?.deliveryMode == MigrationDeliveryMode.MANUAL) {
             MigrationScheduler(context).scheduleNotifyOnly(delay)
         } else {
@@ -137,8 +139,13 @@ class MigrationProgressVM(
 
     private fun onDone() = navigationRouter.backToRoot()
 
-    private fun delayUntil(epochSeconds: Long): Duration {
-        val remaining = epochSeconds - Clock.System.now().epochSeconds
+    // nextExecutableAfterHeight/anchorHeight are block heights, not timestamps — estimate the
+    // wall-clock delay from the block-height span via the network's average block time, rather
+    // than treating a height as epoch seconds directly (see MigrationReviewVM's
+    // estimatedSecondsFromAnchor for the same fix and its rationale).
+    private fun delayUntil(proposal: TransferProposal): Duration {
+        val remaining =
+            (proposal.nextExecutableAfterHeight - proposal.anchorHeight) * (ZcashSdk.BLOCK_INTERVAL_MILLIS / 1000)
         return if (remaining <= 0) 0.seconds else remaining.seconds
     }
 
