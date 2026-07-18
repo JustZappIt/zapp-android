@@ -7,6 +7,7 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.migration.MigrationDeliveryMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
+import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
 import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
@@ -76,13 +77,13 @@ class FinalizeMigrationScheduleUseCase(
     // The first transfer is never "ready now" (same anchor/proposal round trip as any other
     // transfer, per proposeMigrationTransfers()) — the very first WorkManager job must wait for
     // it just like every job scheduled after it, not fire immediately.
+    //
+    // nextExecutableAfterHeight/anchorHeight/expiryHeight are block heights, not timestamps — see
+    // estimatedSecondsBetweenHeights for why they must never be used directly as (or against)
+    // epoch seconds (this previously made every transfer look ~56 years overdue on a live device).
     private fun delayUntilFirstTransfer(sched: MigrationSchedule): Duration {
-        val firstAt = sched.transfers.minOfOrNull { it.nextExecutableAfterHeight } ?: return 0.seconds
-        return delayUntil(firstAt)
-    }
-
-    private fun delayUntil(epochSeconds: Long): Duration {
-        val remaining = epochSeconds - Clock.System.now().epochSeconds
+        val first = sched.transfers.minByOrNull { it.nextExecutableAfterHeight } ?: return 0.seconds
+        val remaining = estimatedSecondsBetweenHeights(first.anchorHeight, first.nextExecutableAfterHeight)
         return if (remaining <= 0) 0.seconds else remaining.seconds
     }
 
@@ -93,12 +94,13 @@ class FinalizeMigrationScheduleUseCase(
         id = UUID.randomUUID().toString(),
         createdAtEpochSeconds = Clock.System.now().epochSeconds,
         transfers = transfers.mapIndexed { i, t ->
+            val now = Clock.System.now().epochSeconds
             MigrationTransfer(
                 index = i,
                 amountZatoshi = t.amountZatoshi,
-                scheduledAtEpochSeconds = t.nextExecutableAfterHeight,
+                scheduledAtEpochSeconds = now + estimatedSecondsBetweenHeights(t.anchorHeight, t.nextExecutableAfterHeight),
                 status = MigrationTransferStatus.PENDING,
-                expiryAtEpochSeconds = t.expiryHeight,
+                expiryAtEpochSeconds = now + estimatedSecondsBetweenHeights(t.anchorHeight, t.expiryHeight),
             )
         },
         mode = mode,
