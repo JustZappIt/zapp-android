@@ -12,9 +12,6 @@ data class MigrationPlan(
     val createdAtEpochSeconds: Long,
     val transfers: List<MigrationTransfer>,
     val mode: MigrationMode = MigrationMode.AUTOMATIC,
-    // Meaningful only for MigrationMode.AUTOMATIC plans — IMMEDIATE never goes through the
-    // Battery screen that determines this, and always sends synchronously in the foreground.
-    val deliveryMode: MigrationDeliveryMode = MigrationDeliveryMode.SCHEDULED,
 ) {
     val createdAt: Instant get() = Instant.fromEpochSeconds(createdAtEpochSeconds)
     val nextPending: MigrationTransfer? get() = transfers.firstOrNull { it.status == MigrationTransferStatus.PENDING }
@@ -33,10 +30,7 @@ data class MigrationPlan(
  * duplication shape that let the anchorHeight/epoch-seconds bug survive one fix in an unfixed
  * sibling copy.
  */
-fun MigrationSchedule.toMigrationPlan(
-    mode: MigrationMode,
-    deliveryMode: MigrationDeliveryMode,
-): MigrationPlan {
+fun MigrationSchedule.toMigrationPlan(mode: MigrationMode): MigrationPlan {
     val now = Clock.System.now().epochSeconds
     return MigrationPlan(
         id = UUID.randomUUID().toString(),
@@ -51,6 +45,5 @@ fun MigrationSchedule.toMigrationPlan(
             )
         },
         mode = mode,
-        deliveryMode = deliveryMode,
     )
 }

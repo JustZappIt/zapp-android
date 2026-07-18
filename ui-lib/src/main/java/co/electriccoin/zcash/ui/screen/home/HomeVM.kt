@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.common.model.migration.MigrationDeliveryMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.model.voting.VotingRound
 import co.electriccoin.zcash.ui.common.model.voting.VotingSession
@@ -20,7 +19,6 @@ import co.electriccoin.zcash.ui.common.repository.VotingSessionStore
 import co.electriccoin.zcash.ui.common.repository.toVotingAccountScopeId
 import co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetHomeMessageUseCase
-import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.IsRestoreSuccessDialogVisibleUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToNearPayUseCase
@@ -42,7 +40,6 @@ import co.electriccoin.zcash.ui.screen.home.migration.MigrationMessageState
 import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteArgs
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupArgs
-import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupDetail
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupMessageState
 import co.electriccoin.zcash.ui.screen.home.currency.EnableCurrencyConversionMessageState
@@ -104,7 +101,6 @@ class HomeVM(
     private val votingShareTrackingScheduler: VotingShareTrackingScheduler,
     private val checkMigrationRecovery: CheckMigrationRecoveryUseCase,
     private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
-    private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
 ) : ViewModel() {
     private var hasSyncErrorBeenShown = false
     private var hasRestoreSuccessBeenShown = false
@@ -427,11 +423,6 @@ class HomeVM(
             isComplete -> {
                 hasSeenMigrationCompleteStorageProvider.store(true)
                 navigationRouter.forward(MigrationCompleteArgs)
-            }
-            // A MANUAL plan's routine "your turn to confirm" case gets the lean single-transfer
-            // screen — matches CheckMigrationRecoveryUseCase's app-launch routing for the same case.
-            plan?.deliveryMode == MigrationDeliveryMode.MANUAL && getOrchardMigrationSdk()?.hasOverdueTransfers() == true -> {
-                navigationRouter.forward(MigrationTransferReviewArgs)
             }
             plan != null -> navigationRouter.forward(MigrationProgressArgs)
             else -> navigationRouter.forward(MigrationSetupArgs)

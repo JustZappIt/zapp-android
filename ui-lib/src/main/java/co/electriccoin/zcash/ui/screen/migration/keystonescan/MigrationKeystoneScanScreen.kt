@@ -10,7 +10,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
-import co.electriccoin.zcash.ui.screen.migration.component.MigrationFailureBottomSheet
 import co.electriccoin.zcash.ui.screen.scankeystone.view.ScanKeystoneView
 import co.electriccoin.zcash.ui.util.SettingsUtil
 import kotlinx.coroutines.launch
@@ -21,7 +20,6 @@ import org.koin.core.parameter.parametersOf
 @Serializable
 data class MigrationKeystoneScanArgs(
     val mode: MigrationMode,
-    val backgroundAvailable: Boolean,
 )
 
 @Composable
@@ -32,7 +30,6 @@ fun MigrationKeystoneScanScreen(args: MigrationKeystoneScanArgs) {
     val snackbarHostState = remember { SnackbarHostState() }
     val validationState by vm.validationState.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
-    val failureSheet by vm.failureSheet.collectAsStateWithLifecycle()
 
     BackHandler { vm.onBack() }
 
@@ -55,5 +52,4 @@ fun MigrationKeystoneScanScreen(args: MigrationKeystoneScanArgs) {
         validationResult = validationState,
         state = state,
     )
-    MigrationFailureBottomSheet(failureSheet)
 }

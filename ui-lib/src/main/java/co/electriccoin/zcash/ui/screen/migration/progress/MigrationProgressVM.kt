@@ -6,7 +6,6 @@ import cash.z.ecc.android.sdk.TransferProposal
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
-import co.electriccoin.zcash.ui.common.model.migration.MigrationDeliveryMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
 import co.electriccoin.zcash.ui.common.model.mutableLce
@@ -120,20 +119,15 @@ class MigrationProgressVM(
     private fun onSendNow(plan: MigrationPlan) = navigationRouter.forward(MigrationSendingArgs)
 
     private fun onReschedule() = sendLce.execute {
-        val plan = migrationPlanRepository.load()
         // rescheduleOverdueTransfer() persists the new schedule itself (SDK-owned) — sync
         // unblocking follows automatically via isSyncBlocked() once the plan changes. The VM
-        // still owns WorkManager scheduling for the new time, same as everywhere else. A MANUAL
-        // plan must only ever get a notify-only job here, never a real send worker — otherwise
-        // manual mode silently degrades into background auto-send after any reschedule.
+        // still owns WorkManager scheduling for the new time, same as everywhere else. Background
+        // delivery is scheduled unconditionally — see MigrationScheduler/
+        // FinalizeMigrationScheduleUseCase for why this no longer depends on a delivery-mode flag.
         val sdk = getOrchardMigrationSdk() ?: error("MigrationProgressVM: no wallet available to reschedule")
         val proposal = sdk.rescheduleOverdueTransfer()
         val delay = delayUntil(proposal)
-        if (plan?.deliveryMode == MigrationDeliveryMode.MANUAL) {
-            MigrationScheduler(context).scheduleNotifyOnly(delay)
-        } else {
-            MigrationScheduler(context).schedule(delay)
-        }
+        MigrationScheduler(context).schedule(delay)
         navigationRouter.back()
     }
 

@@ -58,9 +58,7 @@ class MigrationKeystoneSignVM(
                 initialValue = null,
             )
 
-    private fun onGetSignature() = navigationRouter.forward(
-        MigrationKeystoneScanArgs(mode = args.mode, backgroundAvailable = args.backgroundAvailable)
-    )
+    private fun onGetSignature() = navigationRouter.forward(MigrationKeystoneScanArgs(mode = args.mode))
 
     private fun onReject() {
         pendingSchedule.clear()

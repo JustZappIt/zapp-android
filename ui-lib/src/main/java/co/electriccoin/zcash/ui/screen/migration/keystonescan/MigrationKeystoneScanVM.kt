@@ -4,8 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
-import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
-import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
@@ -13,7 +11,6 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.scan.ScanValidationState
 import co.electriccoin.zcash.ui.screen.scankeystone.model.ScanKeystoneState
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class MigrationKeystoneScanVM(
@@ -33,8 +30,6 @@ class MigrationKeystoneScanVM(
             message = stringRes("Scan the QR code shown on your Keystone device after signing."),
         )
     )
-
-    val failureSheet = MutableStateFlow<MigrationTransferFailureState?>(null)
 
     private var isProcessing = false
 
@@ -57,19 +52,9 @@ class MigrationKeystoneScanVM(
             // once that's wired; see MigrationSdk.kt's Keystone-related implementation notes.
             val sdk = getOrchardMigrationSdk() ?: error("MigrationKeystoneScanVM: no wallet available to sign")
             sdk.signAndStoreMigrationSchedule(sched, zashiSpendingKeyDataSource.getZashiSpendingKey())
-            val failure = finalizeMigrationSchedule(sched, args.mode, args.backgroundAvailable)
+            finalizeMigrationSchedule(sched, args.mode)
             isProcessing = false
-            if (failure != null) {
-                failureSheet.update {
-                    MigrationTransferFailureState(
-                        message = migrationFailureMessage(failure),
-                        onRetry = { failureSheet.value = null; onScanned(result) },
-                        onDismiss = { failureSheet.value = null },
-                    )
-                }
-            } else {
-                pendingSchedule.clear()
-            }
+            pendingSchedule.clear()
         }
     }
 

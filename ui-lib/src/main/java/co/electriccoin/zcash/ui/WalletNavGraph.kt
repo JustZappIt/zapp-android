@@ -390,7 +390,7 @@ fun NavGraphBuilder.walletNavGraph(
         composable<MigrationKeystoneSignArgs> { MigrationKeystoneSignScreen(it.toRoute()) }
         composable<MigrationKeystoneScanArgs> { MigrationKeystoneScanScreen(it.toRoute()) }
         composable<MigrationBatteryArgs> { MigrationBatteryScreen() }
-        composable<MigrationNotificationArgs> { MigrationNotificationScreen(it.toRoute()) }
+        composable<MigrationNotificationArgs> { MigrationNotificationScreen() }
         dialogComposable<MigrationPrivacyArgs> { MigrationPrivacyScreen(it.toRoute()) }
         composable<MigrationSendingArgs> { MigrationSendingScreen() }
         composable<MigrationSuccessArgs> { MigrationSuccessScreen(it.toRoute()) }

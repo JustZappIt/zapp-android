@@ -10,7 +10,6 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.guardLoading
-import co.electriccoin.zcash.ui.common.model.migration.MigrationDeliveryMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
@@ -147,7 +146,7 @@ class MigrationReviewVM(
                         sched,
                         zashiSpendingKeyDataSource.getZashiSpendingKey(),
                     )
-                    migrationPlanRepository.save(sched.toMigrationPlan(args.mode, MigrationDeliveryMode.SCHEDULED))
+                    migrationPlanRepository.save(sched.toMigrationPlan(args.mode))
                     navigationRouter.forward(MigrationSendingArgs)
                 }
                 MigrationMode.AUTOMATIC -> confirmAutomatic(sched)
@@ -160,9 +159,7 @@ class MigrationReviewVM(
             // sign/scan detour; FinalizeMigrationScheduleUseCase runs after a successful scan
             // instead (MigrationKeystoneScanVM), not here.
             pendingMigrationScheduleRepository.set(sched)
-            navigationRouter.forward(
-                MigrationKeystoneSignArgs(mode = args.mode, backgroundAvailable = args.backgroundAvailable)
-            )
+            navigationRouter.forward(MigrationKeystoneSignArgs(mode = args.mode))
             return
         }
         val sdk = getOrchardMigrationSdk() ?: error("MigrationReviewVM: no wallet available to sign")
@@ -182,8 +179,7 @@ class MigrationReviewVM(
             }
         }
         sdk.signAndStoreMigrationSchedule(sched, zashiSpendingKeyDataSource.getZashiSpendingKey())
-        val result = finalizeMigrationSchedule(sched, args.mode, args.backgroundAvailable)
-        if (result != null) failure.value = result
+        finalizeMigrationSchedule(sched, args.mode)
     }
 
     private fun onBack() = proposeLce.guardLoading { navigationRouter.back() }

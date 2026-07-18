@@ -13,7 +13,6 @@ import org.koin.core.parameter.parametersOf
 @Serializable
 data class MigrationKeystoneSignArgs(
     val mode: MigrationMode,
-    val backgroundAvailable: Boolean,
 )
 
 @Composable
