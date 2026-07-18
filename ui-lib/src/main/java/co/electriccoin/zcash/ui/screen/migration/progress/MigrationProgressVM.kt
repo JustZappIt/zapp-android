@@ -3,7 +3,6 @@ package co.electriccoin.zcash.ui.screen.migration.progress
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import cash.z.ecc.android.sdk.TransferProposal
-import cash.z.ecc.android.sdk.ext.ZcashSdk
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
@@ -23,6 +22,7 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.common.model.guardLoading
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
+import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
 import co.electriccoin.zcash.work.MigrationScheduler
@@ -139,13 +139,8 @@ class MigrationProgressVM(
 
     private fun onDone() = navigationRouter.backToRoot()
 
-    // nextExecutableAfterHeight/anchorHeight are block heights, not timestamps — estimate the
-    // wall-clock delay from the block-height span via the network's average block time, rather
-    // than treating a height as epoch seconds directly (see MigrationReviewVM's
-    // estimatedSecondsFromAnchor for the same fix and its rationale).
     private fun delayUntil(proposal: TransferProposal): Duration {
-        val remaining =
-            (proposal.nextExecutableAfterHeight - proposal.anchorHeight) * (ZcashSdk.BLOCK_INTERVAL_MILLIS / 1000)
+        val remaining = estimatedSecondsBetweenHeights(proposal.anchorHeight, proposal.nextExecutableAfterHeight)
         return if (remaining <= 0) 0.seconds else remaining.seconds
     }
 
