@@ -6,6 +6,7 @@ import cash.z.ecc.android.sdk.internal.jni.VotingProofProgressCallback
 import cash.z.ecc.android.sdk.internal.jni.VotingRustBackend
 import cash.z.ecc.android.sdk.internal.model.voting.JniBundleSetupResult
 import cash.z.ecc.android.sdk.internal.model.voting.JniCommitmentBundleRecord
+import cash.z.ecc.android.sdk.internal.model.voting.JniCommittedVoteRecord
 import cash.z.ecc.android.sdk.internal.model.voting.JniDelegationPirPrecomputeResult
 import cash.z.ecc.android.sdk.internal.model.voting.JniDelegationProofResult
 import cash.z.ecc.android.sdk.internal.model.voting.JniDelegationSubmissionResult
@@ -16,6 +17,7 @@ import cash.z.ecc.android.sdk.internal.model.voting.JniRoundState
 import cash.z.ecc.android.sdk.internal.model.voting.JniShareDelegationRecord
 import cash.z.ecc.android.sdk.internal.model.voting.JniSharePayload
 import cash.z.ecc.android.sdk.internal.model.voting.JniVanWitness
+import cash.z.ecc.android.sdk.internal.model.voting.JniVoteCommitResult
 import cash.z.ecc.android.sdk.internal.model.voting.JniVoteCommitmentResult
 import cash.z.ecc.android.sdk.internal.model.voting.JniVoteRecord
 import cash.z.ecc.android.sdk.internal.model.voting.JniVotingHotkey
@@ -25,6 +27,7 @@ import co.electriccoin.zcash.ui.common.model.voting.RoundPhase
 import co.electriccoin.zcash.ui.common.model.voting.RoundStateInfo
 import co.electriccoin.zcash.ui.common.model.voting.VotingBundleSetupResult
 import co.electriccoin.zcash.ui.common.model.voting.VotingCommitmentBundleRecord
+import co.electriccoin.zcash.ui.common.model.voting.VotingCommittedVoteRecord
 import co.electriccoin.zcash.ui.common.model.voting.VotingDelegationPirPrecomputeResult
 import co.electriccoin.zcash.ui.common.model.voting.VotingDelegationProof
 import co.electriccoin.zcash.ui.common.model.voting.VotingDelegationSubmission
@@ -49,7 +52,8 @@ interface VotingCryptoClient {
 
     suspend fun setWalletId(
         dbHandle: Long,
-        walletId: String
+        walletId: String,
+        networkId: Int
     )
 
     suspend fun initializeRound(
@@ -100,8 +104,7 @@ interface VotingCryptoClient {
 
     suspend fun generateHotkey(
         dbHandle: Long,
-        roundId: String,
-        seed: ByteArray
+        storedSecret: ByteArray
     ): VotingHotkey
 
     suspend fun storeTreeState(
@@ -144,8 +147,7 @@ interface VotingCryptoClient {
         roundId: String,
         bundleIndex: Int,
         fvkBytes: ByteArray,
-        hotkeyRawAddress: ByteArray,
-        networkId: Int,
+        hotkeySeed: ByteArray,
         accountIndex: Int,
         notesJson: String,
         seedFingerprint: ByteArray,
@@ -178,7 +180,6 @@ interface VotingCryptoClient {
         roundId: String,
         bundleIndex: Int,
         pirServerUrl: String,
-        networkId: Int,
         notesJson: String
     ): VotingDelegationPirPrecomputeResult
 
@@ -187,9 +188,12 @@ interface VotingCryptoClient {
         roundId: String,
         bundleIndex: Int,
         pirServerUrl: String,
-        networkId: Int,
         notesJson: String,
-        hotkeyRawAddress: ByteArray,
+        fvkBytes: ByteArray,
+        hotkeySeed: ByteArray,
+        seedFingerprint: ByteArray,
+        accountIndex: Int,
+        roundName: String,
         proofProgress: ((Double) -> Unit)? = null
     ): VotingDelegationProof
 
@@ -197,9 +201,11 @@ interface VotingCryptoClient {
         dbHandle: Long,
         roundId: String,
         bundleIndex: Int,
-        senderSeed: ByteArray,
-        networkId: Int,
-        accountIndex: Int
+        walletDbPath: String,
+        accountUuid: String,
+        hotkeySeed: ByteArray,
+        roundName: String,
+        senderSeed: ByteArray
     ): VotingDelegationSubmission
 
     suspend fun getDelegationSubmissionWithKeystoneSignature(
@@ -245,21 +251,35 @@ interface VotingCryptoClient {
         proposalId: Int
     )
 
-    suspend fun storeCommitmentBundle(
-        dbHandle: Long,
-        roundId: String,
-        bundleIndex: Int,
-        proposalId: Int,
-        bundleJson: String,
-        vcTreePosition: Long
-    )
-
     suspend fun getCommitmentBundle(
         dbHandle: Long,
         roundId: String,
         bundleIndex: Int,
         proposalId: Int
     ): VotingCommitmentBundleRecord?
+
+    /**
+     * Records the confirmed vote-commitment-tree position for an already-committed vote, once
+     * its cast-vote transaction has been mined.
+     */
+    suspend fun recordVcPosition(
+        dbHandle: Long,
+        roundId: String,
+        bundleIndex: Int,
+        proposalId: Int,
+        vcTreePosition: Long
+    )
+
+    /**
+     * Recovers the signed `vote::commit` result for an already-committed vote, together with
+     * its confirmed vote-commitment-tree position recorded by [recordVcPosition].
+     */
+    suspend fun recoverCommittedVote(
+        dbHandle: Long,
+        roundId: String,
+        bundleIndex: Int,
+        proposalId: Int
+    ): VotingCommittedVoteRecord
 
     suspend fun clearRecoveryState(
         dbHandle: Long,
@@ -336,8 +356,6 @@ interface VotingCryptoClient {
         witnessJson: String,
         vanPosition: Int,
         anchorHeight: Int,
-        networkId: Int,
-        accountIndex: Int,
         singleShare: Boolean = false,
         proofProgress: ((Double) -> Unit)? = null
     ): VotingVoteCommitment
@@ -351,18 +369,22 @@ interface VotingCryptoClient {
         singleShareMode: Boolean = false
     ): String
 
-    suspend fun signCastVote(
-        hotkeySeed: ByteArray,
-        networkId: Int,
-        accountIndex: Int,
-        commitmentJson: String
-    ): ByteArray
+    /**
+     * Computes when a delegated helper share should submit, honoring the ceremony's
+     * last-moment buffer window. Sources its own entropy natively; callers must not
+     * reimplement this scheduling in Kotlin. Returns unix seconds; `0` means "submit
+     * immediately".
+     */
+    suspend fun scheduledShareSubmitAt(
+        nowSeconds: Long,
+        ceremonyStartSeconds: Long,
+        voteEndTimeSeconds: Long,
+        singleShare: Boolean
+    ): Long
 
     suspend fun warmProvingCaches()
 
     suspend fun ballotDivisorZatoshi(): Long
-
-    suspend fun decomposeWeight(weight: Long): List<Long>
 
     suspend fun extractOrchardFvkFromUfvk(
         ufvk: String,
@@ -400,14 +422,15 @@ class VotingCryptoClientImpl : VotingCryptoClient {
 
     override suspend fun setWalletId(
         dbHandle: Long,
-        walletId: String
+        walletId: String,
+        networkId: Int
     ) {
         val dbPath =
             checkNotNull(dbPaths[dbHandle]) {
                 "Voting DB handle is not registered: $dbHandle"
             }
         dbs.remove(dbHandle)?.close()
-        dbs[dbHandle] = rustBackend().openVotingDb(dbPath, walletId)
+        dbs[dbHandle] = rustBackend().openVotingDb(dbPath, walletId, networkId)
     }
 
     override suspend fun initializeRound(
@@ -475,9 +498,8 @@ class VotingCryptoClientImpl : VotingCryptoClient {
 
     override suspend fun generateHotkey(
         dbHandle: Long,
-        roundId: String,
-        seed: ByteArray
-    ): VotingHotkey = db(dbHandle).generateHotkey(roundId, seed).toAppModel()
+        storedSecret: ByteArray
+    ): VotingHotkey = db(dbHandle).generateHotkey(storedSecret).toAppModel()
 
     override suspend fun storeTreeState(
         dbHandle: Long,
@@ -533,8 +555,7 @@ class VotingCryptoClientImpl : VotingCryptoClient {
         roundId: String,
         bundleIndex: Int,
         fvkBytes: ByteArray,
-        hotkeyRawAddress: ByteArray,
-        networkId: Int,
+        hotkeySeed: ByteArray,
         accountIndex: Int,
         notesJson: String,
         seedFingerprint: ByteArray,
@@ -545,8 +566,7 @@ class VotingCryptoClientImpl : VotingCryptoClient {
                 roundId,
                 bundleIndex,
                 fvkBytes,
-                hotkeyRawAddress,
-                networkId,
+                hotkeySeed,
                 accountIndex,
                 notesJson.toJniNoteInfos(),
                 seedFingerprint,
@@ -593,11 +613,10 @@ class VotingCryptoClientImpl : VotingCryptoClient {
         roundId: String,
         bundleIndex: Int,
         pirServerUrl: String,
-        networkId: Int,
         notesJson: String
     ): VotingDelegationPirPrecomputeResult =
         db(dbHandle)
-            .precomputeDelegationPir(roundId, bundleIndex, pirServerUrl, networkId, notesJson.toJniNoteInfos())
+            .precomputeDelegationPir(roundId, bundleIndex, pirServerUrl, notesJson.toJniNoteInfos())
             .toAppModel()
 
     override suspend fun buildAndProveDelegation(
@@ -605,9 +624,12 @@ class VotingCryptoClientImpl : VotingCryptoClient {
         roundId: String,
         bundleIndex: Int,
         pirServerUrl: String,
-        networkId: Int,
         notesJson: String,
-        hotkeyRawAddress: ByteArray,
+        fvkBytes: ByteArray,
+        hotkeySeed: ByteArray,
+        seedFingerprint: ByteArray,
+        accountIndex: Int,
+        roundName: String,
         proofProgress: ((Double) -> Unit)?
     ): VotingDelegationProof =
         db(dbHandle)
@@ -615,9 +637,12 @@ class VotingCryptoClientImpl : VotingCryptoClient {
                 roundId,
                 bundleIndex,
                 pirServerUrl,
-                networkId,
                 notesJson.toJniNoteInfos(),
-                hotkeyRawAddress,
+                fvkBytes,
+                hotkeySeed,
+                seedFingerprint,
+                accountIndex,
+                roundName,
                 proofProgress?.asVotingProgressCallback()
             ).toAppModel()
 
@@ -625,11 +650,15 @@ class VotingCryptoClientImpl : VotingCryptoClient {
         dbHandle: Long,
         roundId: String,
         bundleIndex: Int,
-        senderSeed: ByteArray,
-        networkId: Int,
-        accountIndex: Int
+        walletDbPath: String,
+        accountUuid: String,
+        hotkeySeed: ByteArray,
+        roundName: String,
+        senderSeed: ByteArray
     ): VotingDelegationSubmission =
-        db(dbHandle).getDelegationSubmission(roundId, bundleIndex, senderSeed, networkId, accountIndex).toAppModel()
+        db(dbHandle)
+            .getDelegationSubmission(roundId, bundleIndex, walletDbPath, accountUuid, hotkeySeed, roundName, senderSeed)
+            .toAppModel()
 
     override suspend fun getDelegationSubmissionWithKeystoneSignature(
         dbHandle: Long,
@@ -683,21 +712,6 @@ class VotingCryptoClientImpl : VotingCryptoClient {
         proposalId: Int
     ) = db(dbHandle).markVoteSubmitted(roundId, bundleIndex, proposalId)
 
-    override suspend fun storeCommitmentBundle(
-        dbHandle: Long,
-        roundId: String,
-        bundleIndex: Int,
-        proposalId: Int,
-        bundleJson: String,
-        vcTreePosition: Long
-    ) = db(dbHandle).storeCommitmentBundle(
-        roundId,
-        bundleIndex,
-        proposalId,
-        bundleJson.toJniVoteCommitmentResult(fallbackBundleIndex = bundleIndex),
-        vcTreePosition
-    )
-
     override suspend fun getCommitmentBundle(
         dbHandle: Long,
         roundId: String,
@@ -709,6 +723,22 @@ class VotingCryptoClientImpl : VotingCryptoClient {
                 .getCommitmentBundle(roundId, bundleIndex, proposalId)
                 ?.toAppModel()
         }
+
+    override suspend fun recordVcPosition(
+        dbHandle: Long,
+        roundId: String,
+        bundleIndex: Int,
+        proposalId: Int,
+        vcTreePosition: Long
+    ) = db(dbHandle).recordVcPosition(roundId, bundleIndex, proposalId, vcTreePosition)
+
+    override suspend fun recoverCommittedVote(
+        dbHandle: Long,
+        roundId: String,
+        bundleIndex: Int,
+        proposalId: Int
+    ): VotingCommittedVoteRecord =
+        db(dbHandle).recoverCommittedVote(roundId, bundleIndex, proposalId).toAppModel()
 
     override suspend fun clearRecoveryState(
         dbHandle: Long,
@@ -797,8 +827,6 @@ class VotingCryptoClientImpl : VotingCryptoClient {
         witnessJson: String,
         vanPosition: Int,
         anchorHeight: Int,
-        networkId: Int,
-        accountIndex: Int,
         singleShare: Boolean,
         proofProgress: ((Double) -> Unit)?
     ): VotingVoteCommitment =
@@ -811,8 +839,6 @@ class VotingCryptoClientImpl : VotingCryptoClient {
                 choice,
                 numOptions,
                 witnessJson.toJniVanWitness(vanPosition, anchorHeight),
-                networkId,
-                accountIndex,
                 singleShare,
                 proofProgress?.asVotingProgressCallback()
             ).toAppModel()
@@ -835,25 +861,17 @@ class VotingCryptoClientImpl : VotingCryptoClient {
             ).asList()
             .toSharePayloadsJson()
 
-    override suspend fun signCastVote(
-        hotkeySeed: ByteArray,
-        networkId: Int,
-        accountIndex: Int,
-        commitmentJson: String
-    ): ByteArray =
-        rustBackend().signCastVote(
-            hotkeySeed,
-            networkId,
-            accountIndex,
-            commitmentJson.toJniVoteCommitmentResult()
-        )
+    override suspend fun scheduledShareSubmitAt(
+        nowSeconds: Long,
+        ceremonyStartSeconds: Long,
+        voteEndTimeSeconds: Long,
+        singleShare: Boolean
+    ): Long =
+        rustBackend().scheduledShareSubmitAt(nowSeconds, ceremonyStartSeconds, voteEndTimeSeconds, singleShare)
 
     override suspend fun warmProvingCaches() = rustBackend().warmProvingCaches()
 
     override suspend fun ballotDivisorZatoshi(): Long = BALLOT_DIVISOR_ZATOSHI
-
-    override suspend fun decomposeWeight(weight: Long): List<Long> =
-        rustBackend().decomposeWeight(weight).toList()
 
     override suspend fun extractOrchardFvkFromUfvk(
         ufvk: String,
@@ -870,7 +888,7 @@ private fun JniBundleSetupResult.toAppModel() =
 
 private fun JniVotingHotkey.toAppModel() =
     VotingHotkey(
-        publicKey = publicKey.value.copyOf(),
+        rawAddress = rawAddress.copyOf(),
         address = address
     )
 
@@ -937,16 +955,40 @@ private fun JniDelegationSubmissionResult.toAppModel() =
         voteRoundId = voteRoundId
     )
 
-private fun JniVoteCommitmentResult.toAppModel() =
+private fun JniVoteCommitResult.toAppModel() =
     VotingVoteCommitment(
         vanNullifier = vanNullifier.copyOf(),
         voteAuthorityNoteNew = voteAuthorityNoteNew.copyOf(),
         voteCommitment = voteCommitment.copyOf(),
         rVpk = rVpk.copyOf(),
-        alphaV = alphaV.copyOf(),
+        voteAuthSig = voteAuthSig.copyOf(),
         anchorHeight = anchorHeight.toInt(),
         encSharesJson = encShares.toEncryptedSharesJson(),
         rawBundleJson = toStorageJson()
+    )
+
+private fun JniVoteCommitResult.toStorageJson(): String =
+    JSONObject()
+        .put("van_nullifier", vanNullifier.toHexString())
+        .put("vote_authority_note_new", voteAuthorityNoteNew.toHexString())
+        .put("vote_commitment", voteCommitment.toHexString())
+        .put("proposal_id", proposalId)
+        .put("bundle_index", bundleIndex)
+        .put("proof", proof.toHexString())
+        .put("enc_shares", encShares.toEncryptedSharesJsonArray())
+        .put("anchor_height", anchorHeight)
+        .put("vote_round_id", voteRoundId)
+        .put("shares_hash", sharesHash.toHexString())
+        .put("share_comms", shareComms.toHexJsonArray())
+        .put("r_vpk_bytes", rVpk.toHexString())
+        .toString()
+
+private fun JniCommittedVoteRecord.toAppModel() =
+    VotingCommittedVoteRecord(
+        bundleIndex = commit.bundleIndex,
+        proposalId = commit.proposalId,
+        vcTreePosition = vcTreePosition,
+        sharePayloadsJson = commit.sharePayloads.toSharePayloadsJson()
     )
 
 @Suppress("TooGenericExceptionCaught")
