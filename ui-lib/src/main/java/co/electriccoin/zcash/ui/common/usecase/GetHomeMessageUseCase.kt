@@ -180,7 +180,7 @@ class GetHomeMessageUseCase(
                                 syncMessageShownBefore = firstSyncingMessage != null,
                                 someBalance = (account?.spendableShieldedBalance?.value ?: 0) > 0
                             )
-                            ?: migrationMessage
+                            ?: migrationMessage.takeIf { MIGRATION_BANNER_ENABLED }
                             ?: shieldFundsMessage
 
                     if (message is HomeMessageData.Syncing && firstSyncingMessage == null) {
@@ -294,6 +294,8 @@ class GetHomeMessageUseCase(
 }
 
 internal const val SYNCING_BANNER_HIDE_BELOW_BLOCKS = 3456L
+
+internal const val MIGRATION_BANNER_ENABLED = false
 
 @Suppress("MagicNumber")
 internal fun syncingMessageFor(
