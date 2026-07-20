@@ -52,6 +52,13 @@ class KeystoneFirmwareVersionTest {
     }
 
     @Test
+    fun returnsNullWhenArrayEndsExactlyAtKey() {
+        val key = "keystone:fw_version".toByteArray(Charsets.US_ASCII)
+
+        assertNull(key.readKeystoneFwVersion())
+    }
+
+    @Test
     fun returnsNullOnEmptyArray() {
         assertNull(ByteArray(0).readKeystoneFwVersion())
     }
