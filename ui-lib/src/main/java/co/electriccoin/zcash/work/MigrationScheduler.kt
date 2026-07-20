@@ -24,7 +24,7 @@ import kotlin.time.toJavaDuration
  */
 class MigrationScheduler(private val context: Context) {
     fun schedule(delay: Duration) {
-        Twig.debug { "MigrationScheduler: scheduling next migration transfer in $delay" }
+        Twig.debug { "MIGRATION_DIAG MigrationScheduler: scheduling next migration transfer in $delay" }
         WorkManager.getInstance(context).enqueueUniqueWork(
             WORK_ID,
             ExistingWorkPolicy.REPLACE,
