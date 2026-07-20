@@ -26,8 +26,11 @@ import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
 import co.electriccoin.zcash.work.MigrationScheduler
 import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
 import java.math.BigDecimal
 import java.math.MathContext
 import kotlin.time.Clock
@@ -47,20 +50,39 @@ class MigrationProgressVM(
     private val sendLce = mutableLce<Unit>()
 
     val state: StateFlow<LceState<MigrationProgressState>> =
-        combine(migrationPlanRepository.observe(), exchangeRateRepository.state) { plan, rate ->
-            plan?.let { createState(it, rate) }
+        combine(migrationPlanRepository.observe(), exchangeRateRepository.state, reallyOverdueFlow()) { plan, rate, reallyOverdue ->
+            plan?.let { createState(it, rate, reallyOverdue) }
         }.withLce(sendLce, errorStateMapper::mapToState)
             .stateIn(this)
+
+    // plan.nextPending.scheduledAt is a wall-clock estimate computed once, at schedule-persist
+    // time, from the Rust schedule's block-height deltas — it can drift from the actual
+    // height-based due time the SDK enforces (most obviously under a device/emulator wall-clock
+    // jump; see zcash_pool_migration design spec §4.6). Gating Send Now/Reschedule on that
+    // estimate alone let the button appear before the transfer was really due, and clicking it
+    // then crashed (rescheduleOverdueTransfer() found nothing pending, since the SDK's own
+    // height-based check correctly disagreed). Polling the SDK's authoritative
+    // hasOverdueTransfers() — the same check the background sync-block mechanism relies on —
+    // keeps this screen's notion of "overdue" consistent with what the SDK will actually act on.
+    private fun reallyOverdueFlow(): Flow<Boolean> =
+        flow {
+            while (true) {
+                val sdk = getOrchardMigrationSdk()
+                emit(sdk?.hasOverdueTransfers() ?: false)
+                delay(OVERDUE_RECHECK_INTERVAL)
+            }
+        }
 
     fun navigateBack() = navigationRouter.back()
 
     private fun createState(
         plan: MigrationPlan,
         exchangeRateState: ExchangeRateState,
+        reallyOverdue: Boolean,
     ): MigrationProgressState {
         val now = Clock.System.now()
         val next = plan.nextPending
-        val hasOverdue = next != null && next.scheduledAt <= now
+        val hasOverdue = next != null && reallyOverdue
         val isResume = hasOverdue && plan.completedCount > 0
         val overdueH = if (next != null) overdueHours(next, now) else 0L
 
@@ -166,4 +188,8 @@ class MigrationProgressVM(
 
     private fun overdueHours(t: MigrationTransfer, now: Instant) =
         (now - t.scheduledAt).inWholeHours.coerceAtLeast(0)
+
+    companion object {
+        private val OVERDUE_RECHECK_INTERVAL = 15.seconds
+    }
 }
