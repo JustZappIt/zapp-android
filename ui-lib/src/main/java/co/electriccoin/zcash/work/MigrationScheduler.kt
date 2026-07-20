@@ -23,14 +23,8 @@ import kotlin.time.toJavaDuration
  * scheduling margins here.
  */
 class MigrationScheduler(private val context: Context) {
-    // The two queues are mutually exclusive by construction — a plan is either SCHEDULED or
-    // MANUAL, never both — so scheduling one always cancels the other first. Without this, a
-    // plan that switches delivery mode (recreated after recovery, etc.) could leave a stale job
-    // armed under the previous mode's unique work name, since REPLACE only clobbers same-named
-    // work.
     fun schedule(delay: Duration) {
         Twig.debug { "MigrationScheduler: scheduling next migration transfer in $delay" }
-        cancelNotifyOnly()
         WorkManager.getInstance(context).enqueueUniqueWork(
             WORK_ID,
             ExistingWorkPolicy.REPLACE,
@@ -42,35 +36,11 @@ class MigrationScheduler(private val context: Context) {
         WorkManager.getInstance(context).cancelUniqueWork(WORK_ID)
     }
 
-    // Manual-delivery-mode counterpart to schedule() — fires a "ready to send" notification for
-    // the next pending transfer instead of broadcasting it. Uses a distinct unique work name so
-    // it can never collide with (REPLACE-clobber, or be clobbered by) a real send job.
-    fun scheduleNotifyOnly(delay: Duration) {
-        Twig.debug { "MigrationScheduler: scheduling notify-only check in $delay" }
-        cancel()
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            NOTIFY_WORK_ID,
-            ExistingWorkPolicy.REPLACE,
-            newNotifyWorkRequest(delay)
-        )
-    }
-
-    fun cancelNotifyOnly() {
-        WorkManager.getInstance(context).cancelUniqueWork(NOTIFY_WORK_ID)
-    }
-
     companion object {
         const val WORK_ID = "co.electriccoin.zcash.migration_transfer"
-        const val NOTIFY_WORK_ID = "$WORK_ID.notify"
 
         fun newWorkRequest(delay: Duration): OneTimeWorkRequest =
             OneTimeWorkRequestBuilder<MigrationWorker>()
-                .setConstraints(workConstraints())
-                .setInitialDelay(delay.toJavaDuration())
-                .build()
-
-        fun newNotifyWorkRequest(delay: Duration): OneTimeWorkRequest =
-            OneTimeWorkRequestBuilder<MigrationNotifyWorker>()
                 .setConstraints(workConstraints())
                 .setInitialDelay(delay.toJavaDuration())
                 .build()

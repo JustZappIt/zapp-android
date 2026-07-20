@@ -91,7 +91,7 @@ class MigrationSetupVM(
     private fun onConfirm() = when (selectedMode.value) {
         MigrationMode.IMMEDIATE -> viewModelScope.launch {
             navigationRouter.forward(
-                getMigrationPrivacyOrReviewDestination(mode = MigrationMode.IMMEDIATE, backgroundAvailable = true)
+                getMigrationPrivacyOrReviewDestination(mode = MigrationMode.IMMEDIATE)
             )
         }
         MigrationMode.AUTOMATIC -> navigationRouter.forward(MigrationHowItWorksArgs)

@@ -6,6 +6,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.TransferResult
+import cash.z.ecc.android.sdk.ext.ZcashSdk
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
@@ -16,6 +17,7 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import kotlin.time.Clock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 @Keep
@@ -34,6 +36,15 @@ class MigrationWorker(
             Twig.debug { "MigrationWorker: no wallet available — skipping." }
             return Result.success()
         }
+        // Completes any transfer that was pre-signed with a placeholder witness (sign-now/
+        // prove-later pipeline) whose funding note has since become witnessed, so it can be
+        // picked up by executeNextPendingTransfer() below in this same run. Cheap and safe to call
+        // on every run — a no-op when nothing is awaiting a proof yet.
+        val finalizedCount = sdk.finalizeReadyTransfers()
+        if (finalizedCount > 0) {
+            Twig.debug { "MigrationWorker: finalized $finalizedCount transfer(s) awaiting proof." }
+        }
+
         if (sdk.isSyncRequiredBeforeNextTransfer()) {
             // Sync and broadcast must be decoupled — skip this window, reconcile on next launch.
             Twig.debug { "MigrationWorker: sync required before next transfer — skipping." }
@@ -45,7 +56,21 @@ class MigrationWorker(
         val useTor = isTorEnabledStorageProvider.get() == true
         return when (val result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor))) {
             null -> {
-                Twig.debug { "MigrationWorker: no pending transfer." }
+                if (next != null) {
+                    // A transfer is still pending but wasn't ready to broadcast this run — most
+                    // commonly its funding note isn't witnessed at the freshly-computed anchor
+                    // yet (design spec §6's ordinary transient state, not a failure). Unlike the
+                    // TransferResult.Success branch below, nothing else re-arms a future attempt
+                    // for this case, so without rescheduling here the plan would silently stall
+                    // until the user happens to notice an overdue transfer and manually
+                    // reschedules from Migration Progress. One block interval is the finest
+                    // granularity at which the underlying chain state can actually change.
+                    val delay = ZcashSdk.BLOCK_INTERVAL_MILLIS.milliseconds
+                    MigrationScheduler(applicationContext).schedule(delay)
+                    Twig.debug { "MigrationWorker: no pending transfer yet — retrying in $delay." }
+                } else {
+                    Twig.debug { "MigrationWorker: no pending transfer." }
+                }
                 Result.success()
             }
             is TransferResult.Success -> {

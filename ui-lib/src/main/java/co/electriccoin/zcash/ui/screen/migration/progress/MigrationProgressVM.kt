@@ -2,10 +2,10 @@ package co.electriccoin.zcash.ui.screen.migration.progress
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
+import cash.z.ecc.android.sdk.TransferProposal
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
-import co.electriccoin.zcash.ui.common.model.migration.MigrationDeliveryMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
 import co.electriccoin.zcash.ui.common.model.mutableLce
@@ -21,6 +21,7 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.common.model.guardLoading
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
+import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
 import co.electriccoin.zcash.work.MigrationScheduler
@@ -118,27 +119,22 @@ class MigrationProgressVM(
     private fun onSendNow(plan: MigrationPlan) = navigationRouter.forward(MigrationSendingArgs)
 
     private fun onReschedule() = sendLce.execute {
-        val plan = migrationPlanRepository.load()
         // rescheduleOverdueTransfer() persists the new schedule itself (SDK-owned) — sync
         // unblocking follows automatically via isSyncBlocked() once the plan changes. The VM
-        // still owns WorkManager scheduling for the new time, same as everywhere else. A MANUAL
-        // plan must only ever get a notify-only job here, never a real send worker — otherwise
-        // manual mode silently degrades into background auto-send after any reschedule.
+        // still owns WorkManager scheduling for the new time, same as everywhere else. Background
+        // delivery is scheduled unconditionally — see MigrationScheduler/
+        // FinalizeMigrationScheduleUseCase for why this no longer depends on a delivery-mode flag.
         val sdk = getOrchardMigrationSdk() ?: error("MigrationProgressVM: no wallet available to reschedule")
         val proposal = sdk.rescheduleOverdueTransfer()
-        val delay = delayUntil(proposal.nextExecutableAfterHeight)
-        if (plan?.deliveryMode == MigrationDeliveryMode.MANUAL) {
-            MigrationScheduler(context).scheduleNotifyOnly(delay)
-        } else {
-            MigrationScheduler(context).schedule(delay)
-        }
+        val delay = delayUntil(proposal)
+        MigrationScheduler(context).schedule(delay)
         navigationRouter.back()
     }
 
     private fun onDone() = navigationRouter.backToRoot()
 
-    private fun delayUntil(epochSeconds: Long): Duration {
-        val remaining = epochSeconds - Clock.System.now().epochSeconds
+    private fun delayUntil(proposal: TransferProposal): Duration {
+        val remaining = estimatedSecondsBetweenHeights(proposal.anchorHeight, proposal.nextExecutableAfterHeight)
         return if (remaining <= 0) 0.seconds else remaining.seconds
     }
 

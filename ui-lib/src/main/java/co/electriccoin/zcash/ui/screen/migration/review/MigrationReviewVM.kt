@@ -10,14 +10,13 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.guardLoading
-import co.electriccoin.zcash.ui.common.model.migration.MigrationDeliveryMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
-import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
-import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
-import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
+import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
+import co.electriccoin.zcash.ui.common.model.migration.toMigrationPlan
+import co.electriccoin.zcash.ui.common.model.groupLce
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.stateIn
@@ -41,8 +40,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import java.math.BigDecimal
 import java.math.MathContext
-import java.util.UUID
-import kotlin.time.Clock
 
 class MigrationReviewVM(
     private val args: MigrationReviewArgs,
@@ -77,7 +74,7 @@ class MigrationReviewVM(
             proposeLce.state, exchangeRateRepository.state, isKeystoneAccount, failure, confirmLce.state
         ) { lce, rate, isKeystone, f, confirmState ->
             lce.success?.let { sched -> createState(sched, confirmState.loading, rate, isKeystone, f) }
-        }.withLce(proposeLce, errorStateMapper::mapToState)
+        }.withLce(groupLce(proposeLce, confirmLce), errorStateMapper::mapToState)
             .stateIn(this)
 
     private fun createState(
@@ -88,12 +85,13 @@ class MigrationReviewVM(
         failureResult: TransferResult?,
     ): MigrationReviewState {
         val total = sched.transfers.sumOf { it.amountZatoshi }
-        val firstAt = sched.transfers.minOfOrNull { it.nextExecutableAfterHeight } ?: 0L
-        val lastAt = sched.transfers.maxOfOrNull { it.nextExecutableAfterHeight } ?: 0L
+        val firstAtHeight = sched.transfers.minOfOrNull { it.nextExecutableAfterHeight } ?: 0L
+        val lastAtHeight = sched.transfers.maxOfOrNull { it.nextExecutableAfterHeight } ?: 0L
+        val spanSeconds = estimatedSecondsBetweenHeights(firstAtHeight, lastAtHeight)
         return MigrationReviewState(
             mode = args.mode,
             totalAmount = stringRes(Zatoshi(total)),
-            estimatedDuration = stringRes(formatMigrationDuration(lastAt - firstAt)),
+            estimatedDuration = stringRes(formatMigrationDuration(spanSeconds)),
             transfers = sched.transfers.mapIndexed { i, t ->
                 MigrationReviewTransferState(
                     index = i + 1,
@@ -148,7 +146,7 @@ class MigrationReviewVM(
                         sched,
                         zashiSpendingKeyDataSource.getZashiSpendingKey(),
                     )
-                    migrationPlanRepository.save(sched.toMigrationPlan(args.mode, MigrationDeliveryMode.SCHEDULED))
+                    migrationPlanRepository.save(sched.toMigrationPlan(args.mode))
                     navigationRouter.forward(MigrationSendingArgs)
                 }
                 MigrationMode.AUTOMATIC -> confirmAutomatic(sched)
@@ -161,47 +159,40 @@ class MigrationReviewVM(
             // sign/scan detour; FinalizeMigrationScheduleUseCase runs after a successful scan
             // instead (MigrationKeystoneScanVM), not here.
             pendingMigrationScheduleRepository.set(sched)
-            navigationRouter.forward(
-                MigrationKeystoneSignArgs(mode = args.mode, backgroundAvailable = args.backgroundAvailable)
-            )
+            navigationRouter.forward(MigrationKeystoneSignArgs(mode = args.mode))
             return
         }
         val sdk = getOrchardMigrationSdk() ?: error("MigrationReviewVM: no wallet available to sign")
+        // Note-split is the first step of this confirm action (design spec §7) — a schedule with
+        // more than one denomination proposed against raw, unsplit notes exhausts the wallet's
+        // balance on the first transfer, leaving every subsequent transfer InsufficientFunds. Per
+        // spec §3 the split is a fully shielded self-send and needs no sync-decoupling delay, so
+        // proceeding straight to signAndStoreMigrationSchedule below is safe. Under the crate's
+        // sign-now/prove-later pipeline that call now signs successfully immediately even though
+        // the split's own output isn't mined/witnessed yet.
+        if (sdk.isNoteSplitNeeded()) {
+            val proposal = sdk.prepareNoteSplit()
+            val splitResult = sdk.submitNoteSplit(proposal, zashiSpendingKeyDataSource.getZashiSpendingKey())
+            if (splitResult !is TransferResult.Success) {
+                failure.value = splitResult
+                return
+            }
+        }
         sdk.signAndStoreMigrationSchedule(sched, zashiSpendingKeyDataSource.getZashiSpendingKey())
-        val result = finalizeMigrationSchedule(sched, args.mode, args.backgroundAvailable)
-        if (result != null) failure.value = result
+        finalizeMigrationSchedule(sched, args.mode)
     }
 
     private fun onBack() = proposeLce.guardLoading { navigationRouter.back() }
 
     private fun scheduledLabel(t: TransferProposal, mode: MigrationMode): StringResource {
         if (mode == MigrationMode.IMMEDIATE) return stringRes("Send immediately")
-        val nowSeconds = Clock.System.now().epochSeconds
-        val secondsUntil = t.nextExecutableAfterHeight - nowSeconds
+        val secondsUntil = estimatedSecondsBetweenHeights(t.anchorHeight, t.nextExecutableAfterHeight)
         return when {
             secondsUntil <= 0 -> stringRes("Ready now")
             secondsUntil < 3600 -> stringRes("~${(secondsUntil / 60).coerceAtLeast(1)} min")
             else -> stringRes("~${secondsUntil / 3600} hours")
         }
     }
-
-    private fun MigrationSchedule.toMigrationPlan(
-        mode: MigrationMode,
-        deliveryMode: MigrationDeliveryMode,
-    ) = MigrationPlan(
-        id = UUID.randomUUID().toString(),
-        createdAtEpochSeconds = Clock.System.now().epochSeconds,
-        transfers = transfers.mapIndexed { i, t ->
-            MigrationTransfer(
-                index = i,
-                amountZatoshi = t.amountZatoshi,
-                scheduledAtEpochSeconds = t.nextExecutableAfterHeight,
-                status = MigrationTransferStatus.PENDING,
-            )
-        },
-        mode = mode,
-        deliveryMode = deliveryMode,
-    )
 
     companion object {
         // Mock-only placeholder network fee (zatoshi) for the IMMEDIATE Review screen's Details

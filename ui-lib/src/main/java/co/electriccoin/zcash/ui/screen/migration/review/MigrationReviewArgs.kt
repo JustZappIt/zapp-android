@@ -6,5 +6,4 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class MigrationReviewArgs(
     val mode: MigrationMode,
-    val backgroundAvailable: Boolean = true,
 )

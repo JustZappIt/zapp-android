@@ -1,5 +1,7 @@
 package co.electriccoin.zcash.ui.common.migration
 
+import cash.z.ecc.android.sdk.KeystoneBatchDecodeResult
+import cash.z.ecc.android.sdk.KeystoneBatchSignedPczts
 import cash.z.ecc.android.sdk.MigrationProgress
 import cash.z.ecc.android.sdk.MigrationSchedule
 import cash.z.ecc.android.sdk.MigrationState
@@ -181,9 +183,48 @@ class OrchardMigrationSdkMock(
         Twig.debug { "OrchardMigrationSdkMock: schedule signed (${schedule.transfers.size} transfers)" }
     }
 
+    // ── External signer (Keystone hardware wallet) ────────────────────────────
+    // Never wired to a real Keystone flow (this mock isn't bound in Koin) — unsupported stubs
+    // only to satisfy the interface.
+
+    override suspend fun createUnsignedNoteSplitPczt(): ByteArray =
+        error("OrchardMigrationSdkMock: external-signer path is not mocked")
+
+    override suspend fun storeSignedNoteSplitPczt(signedPczt: ByteArray, options: NetworkPrivacyOptions): TransferResult =
+        error("OrchardMigrationSdkMock: external-signer path is not mocked")
+
+    override suspend fun createUnsignedTransferPczts(schedule: MigrationSchedule): List<Pair<String, ByteArray>> =
+        error("OrchardMigrationSdkMock: external-signer path is not mocked")
+
+    override suspend fun storeSignedSchedulePczts(signed: List<Pair<String, ByteArray>>) {
+        error("OrchardMigrationSdkMock: external-signer path is not mocked")
+    }
+
+    override suspend fun buildKeystoneSignBatchQrParts(
+        requestId: ByteArray,
+        splitUnsignedPczt: ByteArray?,
+        transferUnsignedPczts: List<ByteArray>,
+        maxFragmentLen: Int
+    ): List<String> = error("OrchardMigrationSdkMock: external-signer path is not mocked")
+
+    override suspend fun resetKeystoneSignBatchDecoder() {
+        error("OrchardMigrationSdkMock: external-signer path is not mocked")
+    }
+
+    override suspend fun decodeKeystoneSignBatchPart(part: String, expectedRequestId: ByteArray): KeystoneBatchDecodeResult =
+        error("OrchardMigrationSdkMock: external-signer path is not mocked")
+
+    override suspend fun applyKeystoneBatchSignatures(
+        splitUnsignedPczt: ByteArray?,
+        transferUnsignedPczts: List<ByteArray>,
+        batchSignResponse: ByteArray
+    ): KeystoneBatchSignedPczts = error("OrchardMigrationSdkMock: external-signer path is not mocked")
+
     // ── Background execution ─────────────────────────────────────────────────
 
     override suspend fun isSyncRequiredBeforeNextTransfer(): Boolean = false
+
+    override suspend fun finalizeReadyTransfers(): Int = 0
 
     override suspend fun executeNextPendingTransfer(options: NetworkPrivacyOptions): TransferResult? {
         val plan = repository.load() ?: return null

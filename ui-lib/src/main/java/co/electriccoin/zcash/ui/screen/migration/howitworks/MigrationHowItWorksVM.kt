@@ -1,19 +1,23 @@
 package co.electriccoin.zcash.ui.screen.migration.howitworks
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
+import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
-import co.electriccoin.zcash.ui.screen.migration.battery.MigrationBatteryArgs
+import co.electriccoin.zcash.ui.common.usecase.GetMigrationPrivacyOrReviewDestinationUseCase
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 
 class MigrationHowItWorksVM(
     private val navigationRouter: NavigationRouter,
     private val errorStateMapper: ErrorMapperUseCase,
+    private val getMigrationPrivacyOrReviewDestination: GetMigrationPrivacyOrReviewDestinationUseCase,
 ) : ViewModel() {
 
     private val lce = mutableLce<Unit>()
@@ -27,7 +31,9 @@ class MigrationHowItWorksVM(
         ).withLce(lce, errorStateMapper::mapToState)
             .stateIn(this)
 
-    private fun onContinue() = navigationRouter.forward(MigrationBatteryArgs)
+    private fun onContinue() = viewModelScope.launch {
+        navigationRouter.forward(getMigrationPrivacyOrReviewDestination(MigrationMode.AUTOMATIC))
+    }
 
     private fun onBack() = navigationRouter.back()
 }
