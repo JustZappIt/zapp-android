@@ -114,6 +114,8 @@ class MigrationKeystoneScanVM(
                         MigrationTransferFailureState(
                             message = "Your Keystone firmware doesn't support migration yet. " +
                                 "Update your Keystone device, then come back to retry.",
+                            // Nothing to retry without a physical firmware update — both actions
+                            // just dismiss and back out, unlike the network-failure sheet below.
                             onRetry = { failureSheet.value = null; navigationRouter.back() },
                             onDismiss = { failureSheet.value = null; navigationRouter.back() },
                         )

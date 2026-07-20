@@ -91,6 +91,33 @@ class MigrationKeystoneScanVMTest {
             assertNull(pendingPczts.get())
         }
 
+    @Test
+    fun outdatedFirmwareOnLaterRoundSkipsCheckAndProceeds() =
+        runTest {
+            val sdk = fakeSdk(signedFirmwareBytes = "no stamp in these bytes".toByteArray(Charsets.US_ASCII))
+            val pendingSchedule = PendingMigrationScheduleRepositoryImpl().apply { set(schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl().apply {
+                set(
+                    PendingKeystoneMigrationPczts(
+                        requestId = byteArrayOf(1, 2, 3),
+                        splitUnsignedPczt = null,
+                        transferUnsignedPczts = (0 until 36).map { "t$it" to byteArrayOf(it.toByte()) },
+                        roundIndex = 1,
+                        accumulatedTransferSigned = (0 until 35).map { "t$it" to byteArrayOf(it.toByte()) },
+                    )
+                )
+            }
+            val finalize = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true)
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk, pendingSchedule, pendingPczts, finalize, router)
+
+            vm.onScanned("frame")
+            advanceUntilIdle()
+
+            assertNull(vm.failureSheet.value)
+            coVerify(exactly = 1) { finalize(any(), any()) }
+        }
+
     private fun vm(
         sdk: OrchardMigrationSdk,
         pendingSchedule: PendingMigrationScheduleRepositoryImpl,
