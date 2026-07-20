@@ -115,10 +115,14 @@ class OrchardMigrationSdkMock(
 
     override suspend fun proposeMigrationTransfers(includeResidual: Boolean): MigrationSchedule {
         val total = orchardBalance()
-        // No fee reservation here (unlike prepareNoteSplit): by the time this runs, the spendable
-        // balance is expected to already consist of the split's self-funding notes, each already
+        // No fee reservation here (unlike prepareNoteSplit): this is only correct when the
+        // spendable balance already consists of the split's self-funding notes, each already
         // carrying its own transfer-fee buffer — decomposing with a zero prep-fee reproduces those
-        // exact notes back as crossing values.
+        // exact notes back as crossing values. Call this only when no split is needed; whenever a
+        // split is about to run or just ran, use proposeMigrationTransfersFromSplit instead (see
+        // its doc comment / the Rust bridge's propose_migration_transfers_from_split for why: this
+        // and prepareNoteSplit compute independent guesses over the same balance that are not
+        // guaranteed to agree).
         val plan = planDenominations(total, prepFeeZatoshi = 0L)
         val crossingValues = plan.crossingValues.toMutableList()
         if (includeResidual) {
@@ -131,7 +135,17 @@ class OrchardMigrationSdkMock(
                     crossingValues += residual - TRANSFER_FEE_BUFFER_ZATOSHI
                 }
         }
+        return buildMockSchedule(crossingValues)
+    }
 
+    override suspend fun proposeMigrationTransfersFromSplit(splitProposal: NoteSplitProposal): MigrationSchedule {
+        // Crossing values come straight from the split's own output plan — not an independently
+        // recomputed denomination guess (mirrors the Rust bridge exactly).
+        val crossingValues = splitProposal.outputNotes.map { it - TRANSFER_FEE_BUFFER_ZATOSHI }
+        return buildMockSchedule(crossingValues)
+    }
+
+    private fun buildMockSchedule(crossingValues: List<Long>): MigrationSchedule {
         val targetCadenceSeconds = if (BuildConfig.DEBUG) DEBUG_TARGET_CADENCE_SECONDS else PROD_TARGET_CADENCE_SECONDS
         val maxCadenceSeconds = if (BuildConfig.DEBUG) DEBUG_MAX_CADENCE_SECONDS else PROD_MAX_CADENCE_SECONDS
         val nowSeconds = Clock.System.now().epochSeconds
