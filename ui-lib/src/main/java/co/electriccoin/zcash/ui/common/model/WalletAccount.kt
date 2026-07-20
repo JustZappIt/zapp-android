@@ -15,6 +15,11 @@ sealed interface WalletAccount : Comparable<WalletAccount> {
 
     val unified: UnifiedInfo
     val sapling: SaplingInfo?
+
+    // Ironwood shares the same unified address as Orchard (no address of its own — see
+    // GetOrchardBalanceUseCase's own note on `unified` being Orchard-only), so this is a plain
+    // balance, not an address-carrying *Info like sapling/transparent/unified.
+    val ironwoodBalance: WalletBalance
     val transparent: TransparentInfo
     val isSelected: Boolean
     val name: StringResource
@@ -76,6 +81,7 @@ data class ZashiAccount(
     override val sdkAccount: Account,
     override val unified: UnifiedInfo, // TODO [#26]: technical debt, its only ORCHARD, sync with iOS
     override val sapling: SaplingInfo,
+    override val ironwoodBalance: WalletBalance,
     override val transparent: TransparentInfo,
     override val isSelected: Boolean,
 ) : WalletAccount {
@@ -86,21 +92,23 @@ data class ZashiAccount(
         get() = R.drawable.ic_item_zashi
 
     override val totalBalance: Zatoshi
-        get() = unified.balance.total + sapling.balance.total + transparent.balance
+        get() = unified.balance.total + sapling.balance.total + ironwoodBalance.total + transparent.balance
 
     override val totalShieldedBalance: Zatoshi
-        get() = unified.balance.total + sapling.balance.total
+        get() = unified.balance.total + sapling.balance.total + ironwoodBalance.total
 
     override val totalTransparentBalance: Zatoshi
         get() = transparent.balance
 
     override val spendableShieldedBalance: Zatoshi
-        get() = unified.balance.available + sapling.balance.available
+        get() = unified.balance.available + sapling.balance.available + ironwoodBalance.available
 
     override val pendingShieldedBalance: Zatoshi
         get() {
-            val changePendingShieldedBalance = unified.balance.changePending + sapling.balance.changePending
-            val valuePendingShieldedBalance = unified.balance.valuePending + sapling.balance.valuePending
+            val changePendingShieldedBalance =
+                unified.balance.changePending + sapling.balance.changePending + ironwoodBalance.changePending
+            val valuePendingShieldedBalance =
+                unified.balance.valuePending + sapling.balance.valuePending + ironwoodBalance.valuePending
             return changePendingShieldedBalance + valuePendingShieldedBalance
         }
 
@@ -114,6 +122,7 @@ data class ZashiAccount(
 data class KeystoneAccount(
     override val sdkAccount: Account,
     override val unified: UnifiedInfo,
+    override val ironwoodBalance: WalletBalance,
     override val transparent: TransparentInfo,
     override val isSelected: Boolean,
 ) : WalletAccount {
@@ -126,19 +135,21 @@ data class KeystoneAccount(
     override val sapling: SaplingInfo? = null
 
     override val totalBalance: Zatoshi
-        get() = unified.balance.total + transparent.balance
+        get() = unified.balance.total + ironwoodBalance.total + transparent.balance
 
     override val totalShieldedBalance: Zatoshi
-        get() = unified.balance.total
+        get() = unified.balance.total + ironwoodBalance.total
 
     override val totalTransparentBalance: Zatoshi
         get() = transparent.balance
 
     override val spendableShieldedBalance: Zatoshi
-        get() = unified.balance.available
+        get() = unified.balance.available + ironwoodBalance.available
 
     override val pendingShieldedBalance: Zatoshi
-        get() = unified.balance.changePending + unified.balance.valuePending
+        get() =
+            unified.balance.changePending + ironwoodBalance.changePending +
+                unified.balance.valuePending + ironwoodBalance.valuePending
 
     override fun compareTo(other: WalletAccount) =
         when (other) {
