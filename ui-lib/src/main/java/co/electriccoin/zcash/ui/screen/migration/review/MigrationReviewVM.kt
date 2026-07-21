@@ -91,6 +91,7 @@ class MigrationReviewVM(
         return MigrationReviewState(
             mode = args.mode,
             totalAmount = stringRes(Zatoshi(total)),
+            totalFiatAmount = fiatAmount(Zatoshi(total), exchangeRateState),
             estimatedDuration = stringRes(formatMigrationDuration(spanSeconds)),
             transfers = sched.transfers.mapIndexed { i, t ->
                 MigrationReviewTransferState(

@@ -8,6 +8,9 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 data class MigrationReviewState(
     val mode: MigrationMode,
     val totalAmount: StringResource,
+    // Only populated for AUTOMATIC — feeds the "Split Balance" row shown above the transfer
+    // timeline on Confirm Transfer Plan.
+    val totalFiatAmount: StringResource? = null,
     val estimatedDuration: StringResource,
     val transfers: List<MigrationReviewTransferState>,
     val isKeystone: Boolean = false,

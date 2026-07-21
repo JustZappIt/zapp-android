@@ -1,6 +1,7 @@
 package co.electriccoin.zcash.ui.screen.migration.progress
 
 import androidx.activity.compose.BackHandler
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import co.electriccoin.zcash.ui.screen.common.LceRenderer
@@ -40,6 +41,7 @@ import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
 import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
+import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.scaffoldPadding
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -84,11 +86,28 @@ fun MigrationProgressView(state: MigrationProgressState) {
             )
             Spacer(Modifier.height(24.dp))
 
+            TransferProgressTimelineRow(
+                title = "Split Balance",
+                statusLabel = stringRes("Done"),
+                amount = state.totalAmount,
+                fiatAmount = state.totalFiatAmount,
+                icon = R.drawable.ic_migration_coins_swap,
+                isDone = true,
+                isActive = false,
+                isOverdue = false,
+                isLast = state.transfers.isEmpty(),
+            )
             val activeIndex = state.transfers.indexOfFirst { !it.isSent }
             state.transfers.forEachIndexed { i, transfer ->
                 TransferProgressTimelineRow(
-                    transfer = transfer,
+                    title = "Transfer ${transfer.index}",
+                    statusLabel = transfer.statusLabel,
+                    amount = transfer.amount,
+                    fiatAmount = transfer.fiatAmount,
+                    index = transfer.index,
+                    isDone = transfer.isSent,
                     isActive = i == activeIndex,
+                    isOverdue = transfer.isOverdue,
                     isLast = i == state.transfers.lastIndex,
                 )
             }
@@ -133,11 +152,19 @@ fun MigrationProgressView(state: MigrationProgressState) {
     }
 }
 
+@Suppress("LongParameterList")
 @Composable
 private fun TransferProgressTimelineRow(
-    transfer: MigrationProgressTransferState,
+    title: String,
+    statusLabel: StringResource,
+    amount: StringResource,
+    fiatAmount: StringResource?,
+    isDone: Boolean,
     isActive: Boolean,
+    isOverdue: Boolean,
     isLast: Boolean,
+    index: Int = 0,
+    @DrawableRes icon: Int? = null,
 ) {
     Row(
         modifier = Modifier
@@ -153,7 +180,7 @@ private fun TransferProgressTimelineRow(
         ) {
             if (!isLast) {
                 val connectorColor =
-                    if (transfer.isSent) ZashiColors.Utility.SuccessGreen.utilitySuccess500 else ZashiColors.Surfaces.strokePrimary
+                    if (isDone) ZashiColors.Utility.SuccessGreen.utilitySuccess500 else ZashiColors.Surfaces.strokePrimary
                 Box(
                     modifier = Modifier
                         .fillMaxHeight()
@@ -163,13 +190,13 @@ private fun TransferProgressTimelineRow(
                 )
             }
             val bgColor = when {
-                transfer.isSent -> ZashiColors.Utility.SuccessGreen.utilitySuccess500
-                transfer.isOverdue -> ZashiColors.Utility.WarningYellow.utilityOrange500
+                isDone -> ZashiColors.Utility.SuccessGreen.utilitySuccess500
+                isOverdue -> ZashiColors.Utility.WarningYellow.utilityOrange500
                 isActive -> ZashiColors.Btns.Primary.btnPrimaryBg
                 else -> ZashiColors.Surfaces.bgTertiary
             }
             val textColor = when {
-                transfer.isOverdue || isActive -> ZashiColors.Btns.Primary.btnPrimaryFg
+                isOverdue || isActive -> ZashiColors.Btns.Primary.btnPrimaryFg
                 else -> ZashiColors.Utility.Gray.utilityGray400
             }
             Box(
@@ -179,16 +206,21 @@ private fun TransferProgressTimelineRow(
                     .border(2.dp, ZashiColors.Surfaces.bgPrimary, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                if (transfer.isSent) {
-                    Icon(
+                when {
+                    isDone -> Icon(
                         painter = painterResource(R.drawable.ic_migration_check),
                         contentDescription = null,
                         tint = ZashiColors.Btns.Primary.btnPrimaryFg,
                         modifier = Modifier.size(16.dp),
                     )
-                } else {
-                    Text(
-                        text = "${transfer.index}",
+                    icon != null -> Icon(
+                        painter = painterResource(icon),
+                        contentDescription = null,
+                        tint = textColor,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    else -> Text(
+                        text = "$index",
                         style = ZashiTypography.textXs,
                         fontWeight = FontWeight.SemiBold,
                         color = textColor,
@@ -199,25 +231,25 @@ private fun TransferProgressTimelineRow(
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Transfer ${transfer.index}",
+                text = title,
                 style = ZashiTypography.textSm,
                 fontWeight = FontWeight.Medium,
                 color = ZashiColors.Text.textPrimary,
             )
             Text(
-                text = transfer.statusLabel.getValue(),
+                text = statusLabel.getValue(),
                 style = ZashiTypography.textXs,
-                color = if (transfer.isOverdue) ZashiColors.Utility.WarningYellow.utilityOrange500 else ZashiColors.Text.textTertiary,
+                color = if (isOverdue) ZashiColors.Utility.WarningYellow.utilityOrange500 else ZashiColors.Text.textTertiary,
             )
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                text = transfer.amount.getValue(),
+                text = amount.getValue(),
                 style = ZashiTypography.textSm,
                 fontWeight = FontWeight.Medium,
                 color = ZashiColors.Text.textPrimary,
             )
-            transfer.fiatAmount?.let { fiat ->
+            fiatAmount?.let { fiat ->
                 Text(
                     text = fiat.getValue(),
                     style = ZashiTypography.textXs,
@@ -235,6 +267,8 @@ private fun PreviewResume() = ZcashTheme {
         state = MigrationProgressState(
             title = stringRes("Resume Migration"),
             subtitle = stringRes("Transfer 3 of 5 was scheduled 6 hours ago but wasn't sent. Send now or reschedule."),
+            totalAmount = stringRes("10.458 ZEC"),
+            totalFiatAmount = stringRes("$4,053.46"),
             transfers = listOf(
                 MigrationProgressTransferState(1, stringRes("1.348 ZEC"), stringRes("Sent 6h ago"), false, true, stringRes("$521.30")),
                 MigrationProgressTransferState(2, stringRes("1.052 ZEC"), stringRes("Sent 18 min ago"), false, true, stringRes("$406.86")),
@@ -258,6 +292,8 @@ private fun PreviewComplete() = ZcashTheme {
         state = MigrationProgressState(
             title = stringRes("Migration Progress"),
             subtitle = stringRes("Your balance splits into 5 transfers over 24 hours. All transfers complete."),
+            totalAmount = stringRes("10.458 ZEC"),
+            totalFiatAmount = stringRes("$4,053.46"),
             transfers = listOf(
                 MigrationProgressTransferState(1, stringRes("1.348 ZEC"), stringRes("Sent 24h ago"), false, true, stringRes("$521.30")),
                 MigrationProgressTransferState(2, stringRes("1.052 ZEC"), stringRes("Sent 18h ago"), false, true, stringRes("$406.86")),

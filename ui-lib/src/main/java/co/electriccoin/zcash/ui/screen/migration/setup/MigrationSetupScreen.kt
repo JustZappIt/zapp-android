@@ -125,8 +125,7 @@ fun MigrationSetupView(state: MigrationSetupState) {
                 MigrationMode.IMMEDIATE -> {
                     PrivacyDisclaimerCard(
                         title = "Privacy Disclaimer",
-                        body = "Your full balance will be revealed as crossing the pool boundary reveals the " +
-                            "transaction amount. We recommend selecting Migrate with Privacy instead.",
+                        body = "All funds transferred in this transaction will be revealed on-chain.",
                     )
                     Spacer(Modifier.height(20.dp))
                 }
@@ -144,7 +143,7 @@ fun MigrationSetupView(state: MigrationSetupState) {
                         )
                         Spacer(Modifier.width(12.dp))
                         Text(
-                            text = "Pool-crossing transfer amounts are visible on-chain.",
+                            text = "The amount of an individual transfer across pools is revealed on-chain.",
                             style = ZashiTypography.textXs,
                             fontWeight = FontWeight.Medium,
                             color = ZashiColors.Text.textTertiary,

@@ -34,6 +34,18 @@ class MigrationPrivacyVM(
         useTor
             .map { tor ->
                 MigrationPrivacyState(
+                    body = stringRes(
+                        when (args.mode) {
+                            MigrationMode.IMMEDIATE ->
+                                "If Tor is available in your region, we strongly recommend enabling it to " +
+                                    "prevent linking your balance to your IP address. You can also use a " +
+                                    "trusted VPN if Tor is unavailable in your region."
+                            MigrationMode.AUTOMATIC ->
+                                "If Tor is available in your region, we strongly recommend enabling it to " +
+                                    "prevent linking the migration amounts to your IP address. You can also " +
+                                    "use a trusted VPN if Tor is unavailable in your region."
+                        }
+                    ),
                     checkbox = CheckboxState(
                         title = stringRes("Enable Tor Protection"),
                         subtitle = stringRes(

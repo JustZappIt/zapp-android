@@ -21,7 +21,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -193,12 +196,24 @@ private fun ColumnScope.PrivacyReviewContent(state: MigrationReviewState) {
         )
         Spacer(Modifier.height(16.dp))
     }
+    TransferTimelineRow(
+        title = "Split Balance",
+        subtitle = stringRes("Ready now"),
+        amount = state.totalAmount,
+        fiatAmount = state.totalFiatAmount,
+        icon = R.drawable.ic_migration_coins_swap,
+        isFirst = true,
+        isLast = state.transfers.isEmpty(),
+    )
     state.transfers.forEachIndexed { i, transfer ->
         TransferTimelineRow(
-            transfer = transfer,
-            isFirst = i == 0,
+            title = "Transfer ${transfer.index}",
+            subtitle = transfer.scheduledLabel,
+            amount = transfer.amount,
+            fiatAmount = transfer.fiatAmount,
+            index = transfer.index,
+            isFirst = false,
             isLast = i == state.transfers.lastIndex,
-            showTotalCount = false,
         )
     }
     Spacer(Modifier.weight(1f))
@@ -213,12 +228,17 @@ private fun ColumnScope.PrivacyReviewContent(state: MigrationReviewState) {
     )
 }
 
+@Suppress("LongParameterList")
 @Composable
 private fun TransferTimelineRow(
-    transfer: MigrationReviewTransferState,
+    title: String,
+    subtitle: StringResource,
+    amount: StringResource,
+    fiatAmount: StringResource?,
     isFirst: Boolean,
     isLast: Boolean,
-    showTotalCount: Boolean,
+    index: Int = 0,
+    @DrawableRes icon: Int? = null,
 ) {
     Row(
         modifier = Modifier
@@ -279,36 +299,45 @@ private fun TransferTimelineRow(
                     .border(2.dp, ZashiColors.Surfaces.bgPrimary, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = "${transfer.index}",
-                    style = ZashiTypography.textXs,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isFirst) ZashiColors.Btns.Primary.btnPrimaryFg else ZashiColors.Text.textTertiary,
-                )
+                if (icon != null) {
+                    Icon(
+                        painter = painterResource(icon),
+                        contentDescription = null,
+                        tint = if (isFirst) ZashiColors.Btns.Primary.btnPrimaryFg else ZashiColors.Text.textTertiary,
+                        modifier = Modifier.size(14.dp),
+                    )
+                } else {
+                    Text(
+                        text = "$index",
+                        style = ZashiTypography.textXs,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isFirst) ZashiColors.Btns.Primary.btnPrimaryFg else ZashiColors.Text.textTertiary,
+                    )
+                }
             }
         }
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = if (showTotalCount) "Transfer ${transfer.index} of ${transfer.totalCount}" else "Transfer ${transfer.index}",
+                text = title,
                 style = ZashiTypography.textSm,
                 fontWeight = FontWeight.Medium,
                 color = ZashiColors.Text.textPrimary,
             )
             Text(
-                text = transfer.scheduledLabel.getValue(),
+                text = subtitle.getValue(),
                 style = ZashiTypography.textXs,
                 color = ZashiColors.Text.textTertiary,
             )
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                text = transfer.amount.getValue(),
+                text = amount.getValue(),
                 style = ZashiTypography.textSm,
                 fontWeight = FontWeight.Medium,
                 color = ZashiColors.Text.textPrimary,
             )
-            transfer.fiatAmount?.let { fiat ->
+            fiatAmount?.let { fiat ->
                 Text(
                     text = fiat.getValue(),
                     style = ZashiTypography.textXs,

@@ -29,6 +29,7 @@ import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
 import co.electriccoin.zcash.ui.design.theme.dimensions.ZashiDimensions
 import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
+import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
 import kotlinx.serialization.Serializable
 import org.koin.androidx.compose.koinViewModel
@@ -68,16 +69,14 @@ fun MigrationCustomServerTorView(
             )
             Spacer(4.dp)
             Text(
-                text = "The migration transaction can't be broadcast over Tor when you're using a custom " +
-                    "server. If you continue, this transaction will be sent without Tor's IP protection.",
+                text = innerState.body.getValue(),
                 style = ZashiTypography.textSm,
                 color = ZashiColors.Text.textTertiary,
             )
             Spacer(24.dp)
             RiskCard(
                 title = "What are the risks?",
-                body = "Without Tor, your IP address is exposed to the custom server and could be linked " +
-                    "to your full balance.",
+                body = innerState.riskBody.getValue(),
             )
             Spacer(32.dp)
             ZashiButton(
@@ -123,6 +122,14 @@ private fun RiskCard(title: String, body: String) {
 private fun Preview() = ZcashTheme {
     MigrationCustomServerTorView(
         state = MigrationCustomServerTorState(
+            body = stringRes(
+                "Migration transactions can't be broadcast over Tor when you're using a custom " +
+                    "server. If you continue, these transactions will be sent without Tor's IP protection."
+            ),
+            riskBody = stringRes(
+                "Without Tor, your IP address is exposed to the custom server and could be linked " +
+                    "to the migration amounts."
+            ),
             onContinueWithoutTor = {},
             onSwitchServer = {},
             onBack = {},

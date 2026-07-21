@@ -88,9 +88,7 @@ fun MigrationPrivacyView(
             )
             Spacer(4.dp)
             Text(
-                text = "If Tor is available in your region, we recommend enabling it for enhanced privacy " +
-                    "during the migration. This step is completely optional. You can also use a trusted " +
-                    "VPN if Tor is unavailable in your region.",
+                text = innerState.body.getValue(),
                 style = ZashiTypography.textSm,
                 color = ZashiColors.Text.textTertiary,
             )
@@ -182,6 +180,11 @@ private fun TorToggleCard(state: CheckboxState) {
 private fun Preview() = ZcashTheme {
     MigrationPrivacyView(
         state = MigrationPrivacyState(
+            body = stringRes(
+                "If Tor is available in your region, we strongly recommend enabling it to prevent " +
+                    "linking the migration amounts to your IP address. You can also use a trusted VPN " +
+                    "if Tor is unavailable in your region."
+            ),
             checkbox = CheckboxState(
                 title = stringRes("Enable Tor Protection"),
                 subtitle = stringRes(
