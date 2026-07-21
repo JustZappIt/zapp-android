@@ -13,6 +13,10 @@ import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleReposi
 import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.migration.keystonesign.KEYSTONE_BATCH_MAX_ITEMS
+import co.electriccoin.zcash.ui.screen.migration.keystonesign.MigrationKeystoneSignArgs
+import co.electriccoin.zcash.ui.screen.migration.keystonesign.keystoneBatchRoundSlice
+import co.electriccoin.zcash.ui.screen.migration.keystonesign.keystoneBatchTotalRounds
 import co.electriccoin.zcash.ui.screen.scan.ScanValidationState
 import co.electriccoin.zcash.ui.screen.scankeystone.model.ScanKeystoneState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -71,12 +75,51 @@ class MigrationKeystoneScanVM(
                 isProcessing = false
                 return@launch
             }
+
+            // This round's slice only — the scanned response covers exactly what buildBatch()
+            // built for pending.roundIndex, not the whole (possibly multi-round) batch.
+            val slice = keystoneBatchRoundSlice(
+                roundIndex = pending.roundIndex,
+                hasSplit = pending.splitUnsignedPczt != null,
+                transferCount = pending.transferUnsignedPczts.size,
+                maxItems = KEYSTONE_BATCH_MAX_ITEMS,
+            )
+            val transfersForRound = pending.transferUnsignedPczts.slice(slice.transferRange)
+            val splitForRound = if (slice.includeSplit) pending.splitUnsignedPczt else null
+
             val signed = sdk.applyKeystoneBatchSignatures(
-                splitUnsignedPczt = pending.splitUnsignedPczt,
-                transferUnsignedPczts = pending.transferUnsignedPczts.map { it.second },
+                splitUnsignedPczt = splitForRound,
+                transferUnsignedPczts = transfersForRound.map { it.second },
                 batchSignResponse = data,
             )
-            val splitSignedPczt = signed.splitSignedPczt
+            val accumulatedSplitSigned = signed.splitSignedPczt ?: pending.accumulatedSplitSigned
+            val accumulatedTransferSigned = pending.accumulatedTransferSigned +
+                transfersForRound.map { it.first }.zip(signed.transferSignedPczts)
+
+            val totalRounds = keystoneBatchTotalRounds(
+                hasSplit = pending.splitUnsignedPczt != null,
+                transferCount = pending.transferUnsignedPczts.size,
+                maxItems = KEYSTONE_BATCH_MAX_ITEMS,
+            )
+            if (pending.roundIndex + 1 < totalRounds) {
+                // More rounds remain — carry the accumulated signatures forward and hand off to a
+                // fresh sign-screen instance for the next round. replace() keeps the back stack at
+                // a constant depth regardless of how many rounds a large migration needs.
+                pendingKeystonePczts.set(
+                    pending.copy(
+                        roundIndex = pending.roundIndex + 1,
+                        accumulatedSplitSigned = accumulatedSplitSigned,
+                        accumulatedTransferSigned = accumulatedTransferSigned,
+                    )
+                )
+                isProcessing = false
+                navigationRouter.replace(MigrationKeystoneSignArgs(args.mode))
+                return@launch
+            }
+
+            // Last (or only) round — finish using the FULL accumulated signed set, not just this
+            // round's slice.
+            val splitSignedPczt = accumulatedSplitSigned
             if (splitSignedPczt != null) {
                 val useTor = isTorEnabledStorageProvider.get() == true
                 val splitResult = sdk.storeSignedNoteSplitPczt(
@@ -95,8 +138,7 @@ class MigrationKeystoneScanVM(
                     return@launch
                 }
             }
-            val transferIds = pending.transferUnsignedPczts.map { it.first }
-            sdk.storeSignedSchedulePczts(transferIds.zip(signed.transferSignedPczts))
+            sdk.storeSignedSchedulePczts(accumulatedTransferSigned)
             finalizeMigrationSchedule(sched, args.mode)
             isProcessing = false
             pendingSchedule.clear()

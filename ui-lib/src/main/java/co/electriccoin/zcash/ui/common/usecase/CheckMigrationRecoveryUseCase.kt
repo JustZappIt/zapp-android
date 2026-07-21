@@ -40,16 +40,16 @@ class CheckMigrationRecoveryUseCase(
         // MainActivity launch regardless, so treat "no SDK available" as "nothing to recover".
         val sdk = getOrchardMigrationSdk() ?: return
         if (sdk.hasInvalidTransfers()) {
-            Twig.debug { "MigrationRecovery: invalid transfer detected — redirecting to Transfer Invalid." }
+            Twig.debug { "MIGRATION_DIAG MigrationRecovery: invalid transfer detected — redirecting to Transfer Invalid." }
             navigationRouter.replaceAll(HomeArgs, MigrationTransferInvalidArgs)
         } else if (sdk.hasOverdueTransfers()) {
-            Twig.debug { "MigrationRecovery: overdue transfer detected — redirecting to Resume Migration." }
+            Twig.debug { "MIGRATION_DIAG MigrationRecovery: overdue transfer detected — redirecting to Resume Migration." }
             navigationRouter.replaceAll(HomeArgs, MigrationProgressArgs)
         } else if (sdk.getMigrationState() == MigrationState.Complete && !hasSeenMigrationCompleteStorageProvider.get()) {
             // A fresh install / a wallet that never needed to migrate never reaches
             // MigrationState.Complete — that requires a MigrationPlan to have existed and finished,
             // so this can never fire for them.
-            Twig.debug { "MigrationRecovery: migration just completed — showing one-time celebration." }
+            Twig.debug { "MIGRATION_DIAG MigrationRecovery: migration just completed — showing one-time celebration." }
             navigationRouter.replaceAll(HomeArgs, MigrationCompleteArgs)
         }
     }

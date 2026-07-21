@@ -170,16 +170,28 @@ class MigrationReviewVM(
         // proceeding straight to signAndStoreMigrationSchedule below is safe. Under the crate's
         // sign-now/prove-later pipeline that call now signs successfully immediately even though
         // the split's own output isn't mined/witnessed yet.
-        if (sdk.isNoteSplitNeeded()) {
+        //
+        // `sched` was proposed at screen init, before any split — proposeMigrationTransfers()'s
+        // denomination guess and prepareNoteSplit()'s own (independent) guess over the same
+        // balance are not guaranteed to agree. Reusing the stale `sched` here could schedule a
+        // transfer for a denomination the split never actually mints, which then silently falls
+        // back to an unrelated already-existing note — one the split's own "sweep everything"
+        // construction may already be consuming as one of its own inputs (a real double-spend
+        // found live on testnet). Re-deriving the schedule from the split's own realized output
+        // plan makes every crossing value provably match a note this split actually produces.
+        val scheduleToSign = if (sdk.isNoteSplitNeeded()) {
             val proposal = sdk.prepareNoteSplit()
             val splitResult = sdk.submitNoteSplit(proposal, zashiSpendingKeyDataSource.getZashiSpendingKey())
             if (splitResult !is TransferResult.Success) {
                 failure.value = splitResult
                 return
             }
+            sdk.proposeMigrationTransfersFromSplit(proposal)
+        } else {
+            sched
         }
-        sdk.signAndStoreMigrationSchedule(sched, zashiSpendingKeyDataSource.getZashiSpendingKey())
-        finalizeMigrationSchedule(sched, args.mode)
+        sdk.signAndStoreMigrationSchedule(scheduleToSign, zashiSpendingKeyDataSource.getZashiSpendingKey())
+        finalizeMigrationSchedule(scheduleToSign, args.mode)
     }
 
     private fun onBack() = proposeLce.guardLoading { navigationRouter.back() }

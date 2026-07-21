@@ -33,7 +33,7 @@ class MigrationWorker(
 
     override suspend fun doWork(): Result {
         val sdk = getOrchardMigrationSdk() ?: run {
-            Twig.debug { "MigrationWorker: no wallet available — skipping." }
+            Twig.debug { "MIGRATION_DIAG MigrationWorker: no wallet available — skipping." }
             return Result.success()
         }
         // Completes any transfer that was pre-signed with a placeholder witness (sign-now/
@@ -42,12 +42,12 @@ class MigrationWorker(
         // on every run — a no-op when nothing is awaiting a proof yet.
         val finalizedCount = sdk.finalizeReadyTransfers()
         if (finalizedCount > 0) {
-            Twig.debug { "MigrationWorker: finalized $finalizedCount transfer(s) awaiting proof." }
+            Twig.debug { "MIGRATION_DIAG MigrationWorker: finalized $finalizedCount transfer(s) awaiting proof." }
         }
 
         if (sdk.isSyncRequiredBeforeNextTransfer()) {
             // Sync and broadcast must be decoupled — skip this window, reconcile on next launch.
-            Twig.debug { "MigrationWorker: sync required before next transfer — skipping." }
+            Twig.debug { "MIGRATION_DIAG MigrationWorker: sync required before next transfer — skipping." }
             return Result.success()
         }
 
@@ -67,28 +67,28 @@ class MigrationWorker(
                     // granularity at which the underlying chain state can actually change.
                     val delay = ZcashSdk.BLOCK_INTERVAL_MILLIS.milliseconds
                     MigrationScheduler(applicationContext).schedule(delay)
-                    Twig.debug { "MigrationWorker: no pending transfer yet — retrying in $delay." }
+                    Twig.debug { "MIGRATION_DIAG MigrationWorker: no pending transfer yet — retrying in $delay." }
                 } else {
-                    Twig.debug { "MigrationWorker: no pending transfer." }
+                    Twig.debug { "MIGRATION_DIAG MigrationWorker: no pending transfer." }
                 }
                 Result.success()
             }
             is TransferResult.Success -> {
-                Twig.debug { "MigrationWorker: transfer sent — txId=${result.txId}" }
+                Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer sent — txId=${result.txId}" }
                 val updatedPlan = migrationPlanRepository.load()
                 if (updatedPlan?.nextPending != null) {
                     val delay = nextDelay(updatedPlan)
                     MigrationScheduler(applicationContext).schedule(delay)
                     migrationNotifier.notifyTransferComplete(updatedPlan.completedCount, updatedPlan.totalCount)
-                    Twig.debug { "MigrationWorker: next transfer scheduled in $delay" }
+                    Twig.debug { "MIGRATION_DIAG MigrationWorker: next transfer scheduled in $delay" }
                 } else {
                     migrationNotifier.notifyMigrationComplete()
-                    Twig.debug { "MigrationWorker: migration complete!" }
+                    Twig.debug { "MIGRATION_DIAG MigrationWorker: migration complete!" }
                 }
                 Result.success()
             }
             is TransferResult.NetworkError -> {
-                Twig.debug { "MigrationWorker: network error, retryable=${result.retryable}" }
+                Twig.debug { "MIGRATION_DIAG MigrationWorker: network error, retryable=${result.retryable}" }
                 if (result.retryable) {
                     Result.retry()
                 } else {
@@ -102,7 +102,7 @@ class MigrationWorker(
             TransferResult.Expired -> {
                 // State is now RequiresAttention — on-launch reconciliation will surface the
                 // prompt, but the user still needs telling since nothing else runs meanwhile.
-                Twig.debug { "MigrationWorker: transfer invalid or expired — user action required on next open." }
+                Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer invalid or expired — user action required on next open." }
                 migrationNotifier.notifyMigrationPlanInvalid()
                 Result.success()
             }
