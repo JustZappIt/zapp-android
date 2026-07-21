@@ -250,9 +250,12 @@ private fun previewKeystoneSignState() = SignKeystoneTransactionState(
 private fun previewCompleteStateWithDust() = MigrationCompleteState(
     totalTransferred = stringRes("12.458 ZEC"),
     remainingDust = stringRes("0.00031 ZEC"),
+    isDustLocked = false,
     transfersProgress = stringRes("5 of 5 sent"),
     duration = stringRes("~24 hours"),
     onDone = {},
+    onMigrateAnyway = {},
+    onLockBalance = {},
 )
 
 private fun previewTransferReviewState() = MigrationTransferReviewState(
@@ -271,6 +274,7 @@ private fun previewTransferReviewState() = MigrationTransferReviewState(
 private fun previewProgressStateOverdue() = MigrationProgressState(
     title = stringRes("Resume Migration"),
     subtitle = stringRes("Transfer 3 of 5 was scheduled 2h ago but wasn't sent. Send now or reschedule."),
+    totalAmount = stringRes("10.858 ZEC"),
     transfers = listOf(
         MigrationProgressTransferState(1, stringRes("1.348 ZEC"), stringRes("Sent 6h ago"), isOverdue = false, isSent = true),
         MigrationProgressTransferState(2, stringRes("1.052 ZEC"), stringRes("Sent 2h ago"), isOverdue = false, isSent = true),

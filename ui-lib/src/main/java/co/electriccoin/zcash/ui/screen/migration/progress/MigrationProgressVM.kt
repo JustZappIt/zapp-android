@@ -96,9 +96,12 @@ class MigrationProgressVM(
                 "${plan.totalCount - plan.completedCount} remaining transfers."
         }
 
+        val totalZatoshi = plan.transfers.sumOf { it.amountZatoshi }
         return MigrationProgressState(
             title = stringRes(if (isResume) "Resume Migration" else "Migration Progress"),
             subtitle = stringRes(subtitle),
+            totalAmount = stringRes(Zatoshi(totalZatoshi)),
+            totalFiatAmount = fiatAmount(Zatoshi(totalZatoshi), exchangeRateState),
             transfers = plan.transfers.map { t ->
                 MigrationProgressTransferState(
                     index = t.index + 1,

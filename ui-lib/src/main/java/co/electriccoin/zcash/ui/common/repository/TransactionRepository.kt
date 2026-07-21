@@ -184,7 +184,7 @@ class TransactionRepositoryImpl(
                         SendTransaction.Failed(
                             timestamp = createTimestamp(transaction),
                             transactionOutputs = details.outputs,
-                            amount = transaction.netValue,
+                            amount = sentTransactionAmount(transaction),
                             id = transaction.txId,
                             memoCount = transaction.memoCount,
                             fee = transaction.feePaid,
@@ -226,7 +226,7 @@ class TransactionRepositoryImpl(
                         SendTransaction.Success(
                             timestamp = createTimestamp(transaction),
                             transactionOutputs = details.outputs,
-                            amount = transaction.netValue,
+                            amount = sentTransactionAmount(transaction),
                             id = transaction.txId,
                             memoCount = transaction.memoCount,
                             fee = transaction.feePaid,
@@ -268,7 +268,7 @@ class TransactionRepositoryImpl(
                         SendTransaction.Pending(
                             timestamp = createTimestamp(transaction),
                             transactionOutputs = details.outputs,
-                            amount = transaction.netValue,
+                            amount = sentTransactionAmount(transaction),
                             id = transaction.txId,
                             memoCount = transaction.memoCount,
                             fee = transaction.feePaid,
@@ -290,6 +290,21 @@ class TransactionRepositoryImpl(
                     }
                 }
             }
+        }
+
+    /**
+     * For an ordinary external send, [TransactionOverview.netValue] correctly nets out change
+     * returned to this account. For a same-account cross-pool transfer (e.g. a pool migration),
+     * the scanner's change-detection heuristic misclassifies the crossing output as change
+     * ([TransactionOverview.sentNoteCount] and [TransactionOverview.receivedNoteCount] both end up
+     * 0), which collapses [TransactionOverview.netValue] down to just the fee. [totalReceived]
+     * still reflects the real crossing amount in that case.
+     */
+    private fun sentTransactionAmount(transaction: TransactionOverview): Zatoshi =
+        if (transaction.sentNoteCount == 0 && transaction.receivedNoteCount == 0) {
+            transaction.totalReceived
+        } else {
+            transaction.netValue
         }
 
     private fun createTransactionState(minedHeight: BlockHeight?, isSyncing: Boolean): TransactionState? =

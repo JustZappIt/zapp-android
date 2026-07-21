@@ -240,6 +240,12 @@ import co.electriccoin.zcash.ui.screen.migration.notification.MigrationNotificat
 import co.electriccoin.zcash.ui.screen.migration.notification.MigrationNotificationScreen
 import co.electriccoin.zcash.ui.screen.migration.privacy.MigrationPrivacyArgs
 import co.electriccoin.zcash.ui.screen.migration.privacy.MigrationPrivacyScreen
+import co.electriccoin.zcash.ui.screen.migration.customservertor.MigrationCustomServerTorArgs
+import co.electriccoin.zcash.ui.screen.migration.customservertor.MigrationCustomServerTorScreen
+import co.electriccoin.zcash.ui.screen.migration.torfailure.MigrationTorFailureArgs
+import co.electriccoin.zcash.ui.screen.migration.torfailure.MigrationTorFailureScreen
+import co.electriccoin.zcash.ui.screen.migration.lockexplainer.MigrationLockExplainerArgs
+import co.electriccoin.zcash.ui.screen.migration.lockexplainer.MigrationLockExplainerScreen
 import co.electriccoin.zcash.ui.screen.migration.invalid.MigrationTransferInvalidArgs
 import co.electriccoin.zcash.ui.screen.migration.invalid.MigrationTransferInvalidScreen
 import co.electriccoin.zcash.ui.screen.voting.signkeystone.SignKeystoneVotingArgs
@@ -392,6 +398,9 @@ fun NavGraphBuilder.walletNavGraph(
         composable<MigrationBatteryArgs> { MigrationBatteryScreen() }
         composable<MigrationNotificationArgs> { MigrationNotificationScreen() }
         dialogComposable<MigrationPrivacyArgs> { MigrationPrivacyScreen(it.toRoute()) }
+        dialogComposable<MigrationCustomServerTorArgs> { MigrationCustomServerTorScreen(it.toRoute()) }
+        dialogComposable<MigrationTorFailureArgs> { MigrationTorFailureScreen() }
+        dialogComposable<MigrationLockExplainerArgs> { MigrationLockExplainerScreen() }
         composable<MigrationSendingArgs> { MigrationSendingScreen() }
         composable<MigrationSuccessArgs> { MigrationSuccessScreen(it.toRoute()) }
         composable<MigrationScheduledArgs> { MigrationScheduledScreen() }

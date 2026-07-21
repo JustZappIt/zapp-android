@@ -49,6 +49,9 @@ import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteVM
 import co.electriccoin.zcash.ui.screen.migration.battery.MigrationBatteryVM
 import co.electriccoin.zcash.ui.screen.migration.notification.MigrationNotificationVM
 import co.electriccoin.zcash.ui.screen.migration.privacy.MigrationPrivacyVM
+import co.electriccoin.zcash.ui.screen.migration.lockexplainer.MigrationLockExplainerVM
+import co.electriccoin.zcash.ui.screen.migration.customservertor.MigrationCustomServerTorVM
+import co.electriccoin.zcash.ui.screen.migration.torfailure.MigrationTorFailureVM
 import co.electriccoin.zcash.ui.screen.migration.invalid.MigrationTransferInvalidVM
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupDetailViewModel
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupInfoViewModel
@@ -242,5 +245,8 @@ val viewModelModule =
         viewModelOf(::MigrationBatteryVM)
         viewModelOf(::MigrationNotificationVM)
         viewModelOf(::MigrationPrivacyVM)
+        viewModelOf(::MigrationLockExplainerVM)
+        viewModelOf(::MigrationCustomServerTorVM)
+        viewModelOf(::MigrationTorFailureVM)
         viewModelOf(::MigrationTransferInvalidVM)
     }

@@ -75,40 +75,37 @@ fun MigrationHowItWorksView(state: MigrationHowItWorksState) {
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "Moving funds between Zcash pools reveals the amount of each transfer. We split your " +
-                    "balance into smaller transfers, spaced over time, so they’re harder to correlate.",
+                text = "Moving funds between Zcash pools reveals the amount of each transfer. Here's how we " +
+                    "protect your privacy during migration.",
                 style = ZashiTypography.textSm,
                 color = ZashiColors.Text.textTertiary,
             )
             Spacer(Modifier.height(32.dp))
             HowItWorksStep(
                 icon = co.electriccoin.zcash.ui.R.drawable.ic_migration_coins_swap,
-                title = "Split",
-                description = "Your balance is divided into several smaller-sized amounts.",
-            )
-            Spacer(Modifier.height(16.dp))
-            HowItWorksStep(
-                icon = co.electriccoin.zcash.ui.R.drawable.ic_migration_calendar,
-                title = "Schedule",
-                description = "Transfers are spaced out to make them harder to link together.",
+                title = "Split and schedule",
+                description = "Your balance is divided into smaller amounts and spaced out over time, so " +
+                    "they’re harder to link together.",
             )
             Spacer(Modifier.height(16.dp))
             HowItWorksStep(
                 icon = co.electriccoin.zcash.ui.R.drawable.ic_migration_check_square_broken,
-                title = "Pre-sign once",
-                description = "Approve now, with no further prompts.",
-            )
-            Spacer(Modifier.height(16.dp))
-            HowItWorksStep(
-                icon = co.electriccoin.zcash.ui.R.drawable.ic_migration_face_content,
-                title = "Zodl handles the rest",
-                description = "Each transfer goes out in its scheduled window while the app runs in the background.",
+                title = "Approve once",
+                description = "Zodl handles the rest, sending each transfer automatically in its scheduled " +
+                    "window while the app runs in the background.",
             )
             Spacer(Modifier.height(16.dp))
             HowItWorksStep(
                 icon = co.electriccoin.zcash.ui.R.drawable.ic_migration_notif_bell_ringing,
                 title = "If something fails",
                 description = "We’ll notify you so you can complete it manually.",
+            )
+            Spacer(Modifier.height(16.dp))
+            HowItWorksStep(
+                icon = co.electriccoin.zcash.ui.R.drawable.ic_migration_calendar,
+                title = "Large balance",
+                description = "If your wallet holds large balance or many small notes, migration may run " +
+                    "across multiple scheduled rounds.",
             )
             Spacer(Modifier.weight(1f))
             Spacer(Modifier.height(32.dp))

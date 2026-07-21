@@ -314,6 +314,11 @@ class OrchardMigrationSdkMock(
         return proposeMigrationTransfers(includeResidual)
     }
 
+    // ── Dust locking ─────────────────────────────────────────────────────────
+
+    // TODO: no-op stub, mirrors OrchardMigrationSdkImpl — no real unspendable-note tracking yet.
+    override suspend fun lockRemainingOrchardBalance() = Unit
+
     // Debug-only QA hook (see MigrationProgressVM.onSimulateInvalidTransfer) — the real SDK
     // will surface RequiresAttention(InvalidTransfer) on its own once it exists; this mock has
     // no organic way to reach that state otherwise.

@@ -1,12 +1,12 @@
-package co.electriccoin.zcash.ui.screen.migration.privacy
+package co.electriccoin.zcash.ui.screen.migration.customservertor
 
-import co.electriccoin.zcash.ui.design.component.CheckboxState
 import co.electriccoin.zcash.ui.design.component.ModalBottomSheetState
 import co.electriccoin.zcash.ui.design.util.StringResource
 
-data class MigrationPrivacyState(
+data class MigrationCustomServerTorState(
     val body: StringResource,
-    val checkbox: CheckboxState,
-    val onConfirm: () -> Unit,
+    val riskBody: StringResource,
+    val onContinueWithoutTor: () -> Unit,
+    val onSwitchServer: () -> Unit,
     override val onBack: () -> Unit,
 ) : ModalBottomSheetState
