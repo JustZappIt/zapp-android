@@ -47,6 +47,7 @@ import co.electriccoin.zcash.ui.common.usecase.GetORSwapQuoteUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetMigrationPrivacyOrReviewDestinationUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
+import co.electriccoin.zcash.ui.common.usecase.LockOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetPersistableWalletUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetProposalUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetResyncDataFromHeightUseCase
@@ -197,6 +198,7 @@ val useCaseModule =
         factoryOf(::GetPersistableWalletUseCase)
         factoryOf(::GetOrchardMigrationSdkUseCase)
         factoryOf(::GetOrchardBalanceUseCase)
+        factoryOf(::LockOrchardBalanceUseCase)
         factoryOf(::GetMigrationPrivacyOrReviewDestinationUseCase)
         factoryOf(::GetSupportUseCase)
         factoryOf(::GetWalletSeedBytesUseCase)

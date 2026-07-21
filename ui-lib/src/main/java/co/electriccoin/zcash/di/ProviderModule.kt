@@ -16,6 +16,8 @@ import co.electriccoin.zcash.ui.common.provider.HasSeenHowToVoteKeystoneStorageP
 import co.electriccoin.zcash.ui.common.provider.HasSeenHowToVoteKeystoneStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.HasSeenHowToVoteStorageProvider
 import co.electriccoin.zcash.ui.common.provider.HasSeenHowToVoteStorageProviderImpl
+import co.electriccoin.zcash.ui.common.provider.HasLockedOrchardDustStorageProvider
+import co.electriccoin.zcash.ui.common.provider.HasLockedOrchardDustStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
 import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.HttpClientProvider
@@ -106,6 +108,8 @@ val providerModule =
             HasSeenHowToVoteKeystoneStorageProvider::class
         singleOf(::HasSeenMigrationCompleteStorageProviderImpl) bind
             HasSeenMigrationCompleteStorageProvider::class
+        singleOf(::HasLockedOrchardDustStorageProviderImpl) bind
+            HasLockedOrchardDustStorageProvider::class
         singleOf(::IsTorEnabledStorageProviderImpl) bind IsTorEnabledStorageProvider::class
         singleOf(::BlockchainProviderImpl) bind BlockchainProvider::class
         singleOf(::TokenIconProviderImpl) bind TokenIconProvider::class
