@@ -394,13 +394,16 @@ class HomeVM(
                 } else {
                     0
                 }
+                // See MigrationKeystoneRound's kdoc — only ever non-null for a Keystone account's
+                // plan, prefixed onto the in-progress subtitle when present.
+                val roundPrefix = plan?.keystoneRound?.let { "Round ${it.current} of ${it.total} · " }.orEmpty()
                 val (phase, subtitle) = when {
                     data.isComplete -> MigrationBannerPhase.COMPLETE to "Tap to review the details"
                     plan == null -> MigrationBannerPhase.REQUIRED to null
-                    plan.completedCount == 0 -> MigrationBannerPhase.IN_PROGRESS to "First transfer sending…"
+                    plan.completedCount == 0 -> MigrationBannerPhase.IN_PROGRESS to "${roundPrefix}First transfer sending…"
                     else ->
                         MigrationBannerPhase.IN_PROGRESS to
-                            "${plan.completedCount} of ${plan.totalCount} transfers done ~ $percent% complete"
+                            "$roundPrefix${plan.completedCount} of ${plan.totalCount} transfers done ~ $percent% complete"
                 }
                 MigrationMessageState(
                     phase = phase,

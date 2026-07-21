@@ -6,12 +6,24 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 import java.util.UUID
 
+/**
+ * Which numbered pass of Keystone's multi-round batching this plan currently sits on, when it
+ * needs one — Keystone firmware limits how many transfers can be pre-signed and delivered in a
+ * single batch, so a large migration schedule may need to happen across several distinct rounds
+ * of confirm/sign/send instead of the usual single AUTOMATIC pass. Doesn't affect execution
+ * itself, purely informational. `null` for every non-Keystone account (they have no such
+ * hardware limitation).
+ */
+@Serializable
+data class MigrationKeystoneRound(val current: Int, val total: Int)
+
 @Serializable
 data class MigrationPlan(
     val id: String,
     val createdAtEpochSeconds: Long,
     val transfers: List<MigrationTransfer>,
     val mode: MigrationMode = MigrationMode.AUTOMATIC,
+    val keystoneRound: MigrationKeystoneRound? = null,
 ) {
     val createdAt: Instant get() = Instant.fromEpochSeconds(createdAtEpochSeconds)
     val nextPending: MigrationTransfer? get() = transfers.firstOrNull { it.status == MigrationTransferStatus.PENDING }
@@ -45,5 +57,8 @@ fun MigrationSchedule.toMigrationPlan(mode: MigrationMode): MigrationPlan {
             )
         },
         mode = mode,
+        // TODO: MigrationSchedule doesn't expose Keystone round info yet — wire this through
+        // once the SDK does, instead of always null.
+        keystoneRound = null,
     )
 }

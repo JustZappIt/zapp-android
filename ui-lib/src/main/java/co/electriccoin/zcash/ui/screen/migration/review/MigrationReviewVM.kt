@@ -102,6 +102,9 @@ class MigrationReviewVM(
                 )
             },
             isKeystone = isKeystone,
+            // TODO: MigrationSchedule doesn't expose Keystone round info yet — wire this through
+            // once the SDK does, instead of always null.
+            keystoneRound = null,
             // TransferProposal has no fee field (SDK model, out of scope to change here) — mirror
             // the mock fee magnitude OrchardMigrationSdkMock.submitNoteSplit() already uses for a
             // similar placeholder network fee shown in the UI.

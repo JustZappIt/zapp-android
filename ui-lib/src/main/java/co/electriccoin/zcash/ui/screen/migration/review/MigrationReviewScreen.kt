@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.model.migration.MigrationKeystoneRound
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.design.component.BlankBgScaffold
 import co.electriccoin.zcash.ui.design.component.ButtonState
@@ -183,6 +184,15 @@ private fun ColumnScope.PrivacyReviewContent(state: MigrationReviewState) {
         color = ZashiColors.Text.textTertiary,
     )
     Spacer(Modifier.height(24.dp))
+    state.keystoneRound?.let { round ->
+        Text(
+            text = "Round ${round.current} of ${round.total}",
+            style = ZashiTypography.textMd,
+            fontWeight = FontWeight.SemiBold,
+            color = ZashiColors.Text.textPrimary,
+        )
+        Spacer(Modifier.height(16.dp))
+    }
     state.transfers.forEachIndexed { i, transfer ->
         TransferTimelineRow(
             transfer = transfer,
@@ -345,6 +355,29 @@ private fun PreviewPrivacy() = ZcashTheme {
                 MigrationReviewTransferState(4, 5, stringRes("1.897 ZEC"), stringRes("$733.51"), stringRes("~18 hours")),
                 MigrationReviewTransferState(5, 5, stringRes("4.456 ZEC"), stringRes("$1,723.53"), stringRes("~24 hours")),
             ),
+            onConfirm = {},
+            onBack = {},
+        )
+    )
+}
+
+@PreviewScreens
+@Composable
+private fun PreviewPrivacyWithKeystoneRound() = ZcashTheme {
+    MigrationReviewView(
+        state = MigrationReviewState(
+            mode = MigrationMode.AUTOMATIC,
+            totalAmount = stringRes("12.458 ZEC"),
+            estimatedDuration = stringRes("~8 min"),
+            transfers = listOf(
+                MigrationReviewTransferState(1, 5, stringRes("1.348 ZEC"), stringRes("$521.30"), stringRes("~10 mins")),
+                MigrationReviewTransferState(2, 5, stringRes("1.052 ZEC"), stringRes("$406.86"), stringRes("~6 hours")),
+                MigrationReviewTransferState(3, 5, stringRes("2.105 ZEC"), stringRes("$813.74"), stringRes("~12 hours")),
+                MigrationReviewTransferState(4, 5, stringRes("1.897 ZEC"), stringRes("$733.51"), stringRes("~18 hours")),
+                MigrationReviewTransferState(5, 5, stringRes("4.456 ZEC"), stringRes("$1,723.53"), stringRes("~24 hours")),
+            ),
+            isKeystone = true,
+            keystoneRound = MigrationKeystoneRound(current = 1, total = 4),
             onConfirm = {},
             onBack = {},
         )

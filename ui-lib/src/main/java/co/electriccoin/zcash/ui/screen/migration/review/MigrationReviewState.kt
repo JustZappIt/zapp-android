@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.screen.migration.review
 
+import co.electriccoin.zcash.ui.common.model.migration.MigrationKeystoneRound
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -10,6 +11,8 @@ data class MigrationReviewState(
     val estimatedDuration: StringResource,
     val transfers: List<MigrationReviewTransferState>,
     val isKeystone: Boolean = false,
+    // See MigrationKeystoneRound's kdoc — always null until the SDK exposes it.
+    val keystoneRound: MigrationKeystoneRound? = null,
     // Only populated for MigrationMode.IMMEDIATE — the single-transfer flow shows a fee line on
     // its Details card. AUTOMATIC's PrivacyReviewContent doesn't use this field.
     val fee: StringResource? = null,
