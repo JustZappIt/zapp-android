@@ -1,0 +1,111 @@
+package co.electriccoin.zcash.ui.common.usecase
+
+import cash.z.ecc.android.sdk.MigrationProgress
+import cash.z.ecc.android.sdk.MigrationState
+import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
+import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
+import co.electriccoin.zcash.ui.common.repository.HomeMessageData
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+
+class GetHomeMessageUseCaseMigrationTest {
+    private fun plan(id: String = "p1") =
+        MigrationPlan(
+            id = id,
+            createdAtEpochSeconds = 0L,
+            transfers = emptyList(),
+            mode = MigrationMode.AUTOMATIC,
+        )
+
+    @Test
+    fun freshWalletWithNoPlanAndNoBalanceShowsNothing() {
+        val result = migrationMessageFor(
+            sdkState = null,
+            plan = null,
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = 0L,
+        )
+        assertNull(result)
+    }
+
+    @Test
+    fun freshWalletWithBalanceAndNoPlanShowsRequired() {
+        val result = migrationMessageFor(
+            sdkState = null,
+            plan = null,
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = 100_000L,
+        )
+        assertEquals(HomeMessageData.Migration(null), result)
+    }
+
+    @Test
+    fun inProgressShowsInProgressBannerRegardlessOfBalance() {
+        val migrationProgress = MigrationProgress(
+            completedTransfers = 1,
+            totalTransfers = 3,
+            remainingOrchardZatoshi = 500_000L,
+            nextTransferReadyAtHeight = null,
+        )
+        val result = migrationMessageFor(
+            sdkState = MigrationState.InProgress(migrationProgress),
+            plan = plan(),
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = 500_000L,
+        )
+        assertEquals(HomeMessageData.Migration(plan()), result)
+    }
+
+    @Test
+    fun completeWithUnacknowledgedPlanShowsCompleteBanner() {
+        val result = migrationMessageFor(
+            sdkState = MigrationState.Complete,
+            plan = plan(),
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = 200_000L,
+        )
+        assertEquals(HomeMessageData.Migration(plan(), isComplete = true), result)
+    }
+
+    @Test
+    fun completeWithClearedPlanAndResidualBalanceReEvaluatesToRequired() {
+        // Simulates the auto-continuation case: Task 7 clears the plan (without setting
+        // hasSeenComplete) when a round finishes but residual balance still needs another round.
+        // The SDK's own MigrationState is still Complete at this point (it only advances once the
+        // next round is actually committed) — the plan==null check must take priority over it.
+        val result = migrationMessageFor(
+            sdkState = MigrationState.Complete,
+            plan = null,
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = 300_000L,
+        )
+        assertEquals(HomeMessageData.Migration(null), result)
+    }
+
+    @Test
+    fun completeWithClearedPlanAndZeroBalanceShowsNothing() {
+        // Simulates the terminal case: Task 7 clears the plan and leaves hasSeenComplete false only
+        // when there's still balance to migrate — if balance is genuinely zero, the seen flag would
+        // have been set instead (see completeAcknowledgedShowsNothing below), but this pins down
+        // that even an unacknowledged, cleared-plan state shows nothing once balance is zero.
+        val result = migrationMessageFor(
+            sdkState = MigrationState.Complete,
+            plan = null,
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = 0L,
+        )
+        assertNull(result)
+    }
+
+    @Test
+    fun completeAcknowledgedShowsNothing() {
+        val result = migrationMessageFor(
+            sdkState = MigrationState.Complete,
+            plan = plan(),
+            hasSeenComplete = true,
+            orchardBalanceZatoshi = 0L,
+        )
+        assertNull(result)
+    }
+}
