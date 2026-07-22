@@ -10,6 +10,7 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.guardLoading
+import co.electriccoin.zcash.ui.common.model.migration.MigrationKeystoneRound
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
@@ -54,7 +55,9 @@ class MigrationReviewVM(
     private val zashiSpendingKeyDataSource: ZashiSpendingKeyDataSource,
 ) : ViewModel() {
 
-    private val proposeLce = mutableLce<MigrationSchedule>()
+    private data class ReviewProposal(val schedule: MigrationSchedule, val keystoneRunCount: Int?)
+
+    private val proposeLce = mutableLce<ReviewProposal>()
     private val confirmLce = mutableLce<Unit>()
     private val isKeystoneAccount = getSelectedWalletAccount.observe().map { it is KeystoneAccount }
     private val failure = MutableStateFlow<TransferResult?>(null)
@@ -62,10 +65,19 @@ class MigrationReviewVM(
     init {
         proposeLce.execute {
             val sdk = getOrchardMigrationSdk() ?: error("MigrationReviewVM: no wallet available to propose")
-            when (args.mode) {
+            val schedule = when (args.mode) {
                 MigrationMode.IMMEDIATE -> sdk.proposeImmediateMigration()
                 MigrationMode.AUTOMATIC -> sdk.proposeMigrationTransfers()
             }
+            // IMMEDIATE has no Keystone branch at all (a documented pre-existing gap — see
+            // MigrationReviewVM.confirmAutomatic()'s Keystone check below), so round display is
+            // AUTOMATIC-only. Stateless preview, called fresh on every Review entry — never cached.
+            val keystoneRunCount = if (args.mode == MigrationMode.AUTOMATIC && getSelectedWalletAccount() is KeystoneAccount) {
+                sdk.estimateMigrationRunCount()
+            } else {
+                null
+            }
+            ReviewProposal(schedule, keystoneRunCount)
         }
     }
 
@@ -73,17 +85,18 @@ class MigrationReviewVM(
         combine(
             proposeLce.state, exchangeRateRepository.state, isKeystoneAccount, failure, confirmLce.state
         ) { lce, rate, isKeystone, f, confirmState ->
-            lce.success?.let { sched -> createState(sched, confirmState.loading, rate, isKeystone, f) }
+            lce.success?.let { proposal -> createState(proposal, confirmState.loading, rate, isKeystone, f) }
         }.withLce(groupLce(proposeLce, confirmLce), errorStateMapper::mapToState)
             .stateIn(this)
 
     private fun createState(
-        sched: MigrationSchedule,
+        proposal: ReviewProposal,
         isConfirming: Boolean,
         exchangeRateState: ExchangeRateState,
         isKeystone: Boolean,
         failureResult: TransferResult?,
     ): MigrationReviewState {
+        val sched = proposal.schedule
         val total = sched.transfers.sumOf { it.amountZatoshi }
         val firstAtHeight = sched.transfers.minOfOrNull { it.nextExecutableAfterHeight } ?: 0L
         val lastAtHeight = sched.transfers.maxOfOrNull { it.nextExecutableAfterHeight } ?: 0L
@@ -103,9 +116,7 @@ class MigrationReviewVM(
                 )
             },
             isKeystone = isKeystone,
-            // TODO: MigrationSchedule doesn't expose Keystone round info yet — wire this through
-            // once the SDK does, instead of always null.
-            keystoneRound = null,
+            keystoneRound = proposal.keystoneRunCount?.let { MigrationKeystoneRound(current = 1, total = it) },
             // TransferProposal has no fee field (SDK model, out of scope to change here) — mirror
             // the mock fee magnitude OrchardMigrationSdkMock.submitNoteSplit() already uses for a
             // similar placeholder network fee shown in the UI.

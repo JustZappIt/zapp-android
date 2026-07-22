@@ -42,7 +42,7 @@ data class MigrationPlan(
  * duplication shape that let the anchorHeight/epoch-seconds bug survive one fix in an unfixed
  * sibling copy.
  */
-fun MigrationSchedule.toMigrationPlan(mode: MigrationMode): MigrationPlan {
+fun MigrationSchedule.toMigrationPlan(mode: MigrationMode, keystoneRound: MigrationKeystoneRound? = null): MigrationPlan {
     val now = Clock.System.now().epochSeconds
     return MigrationPlan(
         id = UUID.randomUUID().toString(),
@@ -57,8 +57,6 @@ fun MigrationSchedule.toMigrationPlan(mode: MigrationMode): MigrationPlan {
             )
         },
         mode = mode,
-        // TODO: MigrationSchedule doesn't expose Keystone round info yet — wire this through
-        // once the SDK does, instead of always null.
-        keystoneRound = null,
+        keystoneRound = keystoneRound,
     )
 }

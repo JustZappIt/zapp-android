@@ -2,6 +2,8 @@ package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.MigrationSchedule
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.model.KeystoneAccount
+import co.electriccoin.zcash.ui.common.model.migration.MigrationKeystoneRound
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
 import co.electriccoin.zcash.ui.common.model.migration.toMigrationPlan
@@ -29,9 +31,19 @@ class FinalizeMigrationScheduleUseCase(
     private val migrationPlanRepository: MigrationPlanRepository,
     private val migrationScheduler: MigrationScheduler,
     private val navigationRouter: NavigationRouter,
+    private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
+    private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
 ) {
     suspend operator fun invoke(sched: MigrationSchedule, mode: MigrationMode) {
-        migrationPlanRepository.save(sched.toMigrationPlan(mode))
+        // Stateless preview, computed fresh here rather than threaded through from Review — see
+        // MigrationKeystoneRound's kdoc. Never persisted as a running campaign counter: "current" is
+        // always 1 ("this round, from here"), "total" is whatever the estimate says right now.
+        val keystoneRound = if (getSelectedWalletAccount() is KeystoneAccount) {
+            getOrchardMigrationSdk()?.estimateMigrationRunCount()?.let { MigrationKeystoneRound(current = 1, total = it) }
+        } else {
+            null
+        }
+        migrationPlanRepository.save(sched.toMigrationPlan(mode, keystoneRound))
         migrationScheduler.schedule(delayUntilFirstTransfer(sched))
         navigationRouter.forward(MigrationScheduledArgs)
     }
