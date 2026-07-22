@@ -421,12 +421,10 @@ class HomeVM(
 
     private fun onMigrationMessageClick(plan: MigrationPlan?, isComplete: Boolean) = viewModelScope.launch {
         when {
-            // Tapping the widget is itself the acknowledgment — same screen as the one-time
-            // app-launch popup (CheckMigrationRecoveryUseCase), not the transfer list.
-            isComplete -> {
-                hasSeenMigrationCompleteStorageProvider.store(true)
-                navigationRouter.forward(MigrationCompleteArgs)
-            }
+            // Tapping the widget just opens the celebration screen now — MigrationCompleteVM.onDone()
+            // owns the seen-flag decision, since it needs to know whether residual Orchard balance
+            // still requires another Keystone round before deciding whether this is truly "seen".
+            isComplete -> navigationRouter.forward(MigrationCompleteArgs)
             plan != null -> navigationRouter.forward(MigrationProgressArgs)
             else -> navigationRouter.forward(MigrationSetupArgs)
         }

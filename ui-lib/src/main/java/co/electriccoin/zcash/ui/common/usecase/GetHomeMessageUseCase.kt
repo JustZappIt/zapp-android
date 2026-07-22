@@ -99,22 +99,12 @@ class GetHomeMessageUseCase(
                 migrationPlanRepository.observe(),
                 hasSeenMigrationCompleteStorageProvider.observe(),
             ) { plan, hasSeenComplete ->
-                when (getOrchardMigrationSdk()?.getMigrationState()) {
-                    is MigrationState.InProgress -> HomeMessageData.Migration(plan)
-                    MigrationState.Complete ->
-                        // Stays visible until the user actually engages with it — marked seen in
-                        // HomeVM.onMigrationMessageClick(), not just for having been displayed.
-                        if (hasSeenComplete) null else HomeMessageData.Migration(plan, isComplete = true)
-                    else ->
-                        // Real Orchard-only balance (not the combined Sapling+Orchard
-                        // spendableShieldedBalance — this must never fire for a wallet whose
-                        // Orchard balance is 0, even with real Sapling funds).
-                        if (getOrchardBalance().value > 0L && plan == null) {
-                            HomeMessageData.Migration(null)
-                        } else {
-                            null
-                        }
-                }
+                migrationMessageFor(
+                    sdkState = getOrchardMigrationSdk()?.getMigrationState(),
+                    plan = plan,
+                    hasSeenComplete = hasSeenComplete,
+                    orchardBalanceZatoshi = getOrchardBalance().value,
+                )
             }
         }
 
