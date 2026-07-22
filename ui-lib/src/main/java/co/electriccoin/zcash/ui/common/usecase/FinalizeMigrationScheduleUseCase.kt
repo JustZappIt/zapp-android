@@ -39,7 +39,7 @@ class FinalizeMigrationScheduleUseCase(
         // MigrationKeystoneRound's kdoc. Never persisted as a running campaign counter: "current" is
         // always 1 ("this round, from here"), "total" is whatever the estimate says right now.
         val keystoneRound = if (getSelectedWalletAccount() is KeystoneAccount) {
-            getOrchardMigrationSdk()?.estimateMigrationRunCount()?.let { MigrationKeystoneRound(current = 1, total = it) }
+            getOrchardMigrationSdk()?.estimateMigrationRunCount()?.takeIf { it > 1 }?.let { MigrationKeystoneRound(current = 1, total = it) }
         } else {
             null
         }

@@ -7,12 +7,23 @@ import kotlin.time.Instant
 import java.util.UUID
 
 /**
- * Which numbered pass of Keystone's multi-round batching this plan currently sits on, when it
- * needs one — Keystone firmware limits how many transfers can be pre-signed and delivered in a
- * single batch, so a large migration schedule may need to happen across several distinct rounds
- * of confirm/sign/send instead of the usual single AUTOMATIC pass. Doesn't affect execution
- * itself, purely informational. `null` for every non-Keystone account (they have no such
- * hardware limitation).
+ * How many successive migration-engine RUNS the account's current residual balance is estimated
+ * to need, for a Keystone account, per `estimate_migration_runs`/`OrchardMigrationSdk
+ * .estimateMigrationRunCount()`. The engine caps each run at a fixed number of notes it will
+ * migrate (currently 50), so a large enough balance needs several distinct full
+ * propose→confirm→sign→execute cycles instead of a single AUTOMATIC pass — this field is how the
+ * UI communicates that ("Round X of Y").
+ *
+ * This is a different concept from Keystone's *within-round* QR/firmware batch-signing limit
+ * (see `KeystoneBatchChunking.kt`), which chunks a single round's already-proposed transfers into
+ * multiple sign/scan QR exchanges — that mechanism is untouched by this field and invisible to it.
+ *
+ * Only populated when the estimate is genuinely greater than 1 — a single-round migration (the
+ * common case) or a sub-quantum residual balance (estimate of 0) both leave this `null`, exactly
+ * as for any non-Keystone account. Always recomputed fresh from the live estimate at the moment
+ * it's needed (Review screen entry, or right before `FinalizeMigrationScheduleUseCase` persists
+ * the plan) — never a persisted, incrementing campaign counter, which is why `current` is always
+ * literally `1` ("this round, from here") rather than tracking progress across rounds.
  */
 @Serializable
 data class MigrationKeystoneRound(val current: Int, val total: Int)

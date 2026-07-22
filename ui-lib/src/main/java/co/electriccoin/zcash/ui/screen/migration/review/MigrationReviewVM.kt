@@ -116,7 +116,7 @@ class MigrationReviewVM(
                 )
             },
             isKeystone = isKeystone,
-            keystoneRound = proposal.keystoneRunCount?.let { MigrationKeystoneRound(current = 1, total = it) },
+            keystoneRound = proposal.keystoneRunCount?.takeIf { it > 1 }?.let { MigrationKeystoneRound(current = 1, total = it) },
             // TransferProposal has no fee field (SDK model, out of scope to change here) — mirror
             // the mock fee magnitude OrchardMigrationSdkMock.submitNoteSplit() already uses for a
             // similar placeholder network fee shown in the UI.
