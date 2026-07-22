@@ -99,22 +99,12 @@ class GetHomeMessageUseCase(
                 migrationPlanRepository.observe(),
                 hasSeenMigrationCompleteStorageProvider.observe(),
             ) { plan, hasSeenComplete ->
-                when (getOrchardMigrationSdk()?.getMigrationState()) {
-                    is MigrationState.InProgress -> HomeMessageData.Migration(plan)
-                    MigrationState.Complete ->
-                        // Stays visible until the user actually engages with it — marked seen in
-                        // HomeVM.onMigrationMessageClick(), not just for having been displayed.
-                        if (hasSeenComplete) null else HomeMessageData.Migration(plan, isComplete = true)
-                    else ->
-                        // Real Orchard-only balance (not the combined Sapling+Orchard
-                        // spendableShieldedBalance — this must never fire for a wallet whose
-                        // Orchard balance is 0, even with real Sapling funds).
-                        if (getOrchardBalance().value > 0L && plan == null) {
-                            HomeMessageData.Migration(null)
-                        } else {
-                            null
-                        }
-                }
+                migrationMessageFor(
+                    sdkState = getOrchardMigrationSdk()?.getMigrationState(),
+                    plan = plan,
+                    hasSeenComplete = hasSeenComplete,
+                    orchardBalanceZatoshi = getOrchardBalance().value,
+                )
             }
         }
 
@@ -292,6 +282,42 @@ class GetHomeMessageUseCase(
         someBalance: Boolean,
     ): RuntimeMessage? = syncingMessageFor(walletSnapshot, syncMessageShownBefore, someBalance)
 }
+
+/**
+ * The migration home-banner decision, extracted as a pure function so it's directly testable
+ * without mocking the whole reactive [GetHomeMessageUseCase.observeMigrationMessage] pipeline
+ * (mirrors [syncingMessageFor] below).
+ *
+ * [plan] takes priority over [sdkState] for choosing between the Complete banner and a fresh
+ * REQUIRED-equivalent: the SDK's own [MigrationState] stays [MigrationState.Complete] until the
+ * *next* round is actually committed (see the engine's `commit_preparation`/`build_preparation_unsigned`
+ * docs), so it alone cannot distinguish "round just finished, more residual balance needs another
+ * round" from "campaign genuinely done" — both look identical to the SDK. The app-side [plan] can:
+ * `MigrationCompleteVM.onDone()` clears it (without setting [hasSeenComplete]) exactly when more
+ * rounds are needed, so `plan == null` here means "treat this as if nothing has run yet."
+ */
+internal fun migrationMessageFor(
+    sdkState: MigrationState?,
+    plan: co.electriccoin.zcash.ui.common.model.migration.MigrationPlan?,
+    hasSeenComplete: Boolean,
+    orchardBalanceZatoshi: Long,
+): HomeMessageData.Migration? =
+    when {
+        sdkState is MigrationState.InProgress -> HomeMessageData.Migration(plan)
+
+        sdkState == MigrationState.Complete && plan != null && !hasSeenComplete ->
+            // Stays visible until the user actually engages with it — marked seen in
+            // MigrationCompleteVM.onDone(), not just for having been displayed.
+            HomeMessageData.Migration(plan, isComplete = true)
+
+        // Real Orchard-only balance (not the combined Sapling+Orchard spendableShieldedBalance —
+        // this must never fire for a wallet whose Orchard balance is 0, even with real Sapling
+        // funds). Falls through here regardless of what sdkState says once plan is null — covers
+        // both "never migrated" and "a round finished, more residual balance needs another round."
+        orchardBalanceZatoshi > 0L && plan == null -> HomeMessageData.Migration(null)
+
+        else -> null
+    }
 
 internal const val SYNCING_BANNER_HIDE_BELOW_BLOCKS = 3456L
 

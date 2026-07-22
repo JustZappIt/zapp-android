@@ -15,62 +15,24 @@ class KeystoneFirmwareVersionTest {
     }
 
     @Test
-    fun readsStampWhenPresent() {
-        val bytes = pcztBytesWithStamp(major = 3, minor = 0, build = 2)
+    fun convertsThreeByteArray() {
+        val bytes = byteArrayOf(3, 0, 2)
 
-        assertEquals(KeystoneFirmwareVersion(3, 0, 2), bytes.readKeystoneFwVersion())
+        assertEquals(KeystoneFirmwareVersion(3, 0, 2), bytes.toKeystoneFwVersion())
     }
 
     @Test
-    fun readsStampWhenNotAtStartOfArray() {
-        val bytes = byteArrayOf(0x0A, 0x0B, 0x0C) + pcztBytesWithStamp(major = 12, minor = 4, build = 1)
+    fun convertsUnsignedByteValues() {
+        val bytes = byteArrayOf(12, 4, 0xFF.toByte())
 
-        assertEquals(KeystoneFirmwareVersion(12, 4, 1), bytes.readKeystoneFwVersion())
+        assertEquals(KeystoneFirmwareVersion(12, 4, 255), bytes.toKeystoneFwVersion())
     }
 
     @Test
-    fun returnsNullWhenKeyAbsent() {
-        val bytes = "no proprietary fields here".toByteArray(Charsets.US_ASCII)
-
-        assertNull(bytes.readKeystoneFwVersion())
-    }
-
-    @Test
-    fun returnsNullWhenLengthByteIsNotThree() {
-        val key = "keystone:fw_version".toByteArray(Charsets.US_ASCII)
-        val bytes = key + byteArrayOf(0x04, 1, 2, 3, 4)
-
-        assertNull(bytes.readKeystoneFwVersion())
-    }
-
-    @Test
-    fun returnsNullWhenArrayTruncatedRightAfterKey() {
-        val key = "keystone:fw_version".toByteArray(Charsets.US_ASCII)
-        val bytes = key + byteArrayOf(0x03, 1)
-
-        assertNull(bytes.readKeystoneFwVersion())
-    }
-
-    @Test
-    fun returnsNullWhenArrayEndsExactlyAtKey() {
-        val key = "keystone:fw_version".toByteArray(Charsets.US_ASCII)
-
-        assertNull(key.readKeystoneFwVersion())
-    }
-
-    @Test
-    fun returnsNullOnEmptyArray() {
-        assertNull(ByteArray(0).readKeystoneFwVersion())
-    }
-
-    private fun pcztBytesWithStamp(
-        major: Int,
-        minor: Int,
-        build: Int
-    ): ByteArray {
-        val key = "keystone:fw_version".toByteArray(Charsets.US_ASCII)
-        return byteArrayOf(0x01, 0x02) + key + byteArrayOf(0x03, major.toByte(), minor.toByte(), build.toByte()) +
-            byteArrayOf(0x09, 0x08)
+    fun returnsNullWhenNotThreeBytes() {
+        assertNull(ByteArray(0).toKeystoneFwVersion())
+        assertNull(byteArrayOf(1, 2).toKeystoneFwVersion())
+        assertNull(byteArrayOf(1, 2, 3, 4).toKeystoneFwVersion())
     }
 
     @Test

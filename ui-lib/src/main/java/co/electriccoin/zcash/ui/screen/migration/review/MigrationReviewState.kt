@@ -14,7 +14,9 @@ data class MigrationReviewState(
     val estimatedDuration: StringResource,
     val transfers: List<MigrationReviewTransferState>,
     val isKeystone: Boolean = false,
-    // See MigrationKeystoneRound's kdoc — always null until the SDK exposes it.
+    // See MigrationKeystoneRound's kdoc — only non-null for a genuine multi-round Keystone
+    // campaign (estimated run count > 1); null otherwise, including single-round Keystone
+    // migrations and all non-Keystone accounts.
     val keystoneRound: MigrationKeystoneRound? = null,
     // Only populated for MigrationMode.IMMEDIATE — the single-transfer flow shows a fee line on
     // its Details card. AUTOMATIC's PrivacyReviewContent doesn't use this field.

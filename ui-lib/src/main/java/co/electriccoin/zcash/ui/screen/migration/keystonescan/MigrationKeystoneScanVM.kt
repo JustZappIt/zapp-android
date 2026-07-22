@@ -4,12 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.TransferResult
+import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.KeystoneFirmwarePolicy
 import co.electriccoin.zcash.ui.common.model.KeystoneFirmwareVersion
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
-import co.electriccoin.zcash.ui.common.model.readKeystoneFwVersion
+import co.electriccoin.zcash.ui.common.model.toKeystoneFwVersion
 import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPcztsRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
@@ -84,6 +85,32 @@ class MigrationKeystoneScanVM(
                 return@launch
             }
 
+            // Firmware can't change mid-batch (same physical device every round), so checking on
+            // round 0 only is sufficient and avoids making the user scan through every remaining
+            // round only to be blocked at the very end.
+            if (pending.roundIndex == 0) {
+                val detected = decoded.firmwareVersion?.toKeystoneFwVersion()
+                val outcome = KeystoneFirmwarePolicy.evaluate(detected, requiredFirmware)
+                Twig.debug {
+                    "MigrationKeystoneScanVM: detected Keystone firmware " +
+                        "${detected ?: "none"} (required $requiredFirmware) -> $outcome"
+                }
+                if (outcome != KeystoneFirmwarePolicy.Outcome.OK) {
+                    isProcessing = false
+                    failureSheet.update {
+                        MigrationTransferFailureState(
+                            message = "Your Keystone firmware doesn't support migration yet. " +
+                                "Update your Keystone device, then come back to retry.",
+                            // Nothing to retry without a physical firmware update — both actions
+                            // just dismiss and back out, unlike the network-failure sheet below.
+                            onRetry = { failureSheet.value = null; navigationRouter.back() },
+                            onDismiss = { failureSheet.value = null; navigationRouter.back() },
+                        )
+                    }
+                    return@launch
+                }
+            }
+
             // This round's slice only — the scanned response covers exactly what buildBatch()
             // built for pending.roundIndex, not the whole (possibly multi-round) batch.
             val slice = keystoneBatchRoundSlice(
@@ -100,29 +127,6 @@ class MigrationKeystoneScanVM(
                 transferUnsignedPczts = transfersForRound.map { it.second },
                 batchSignResponse = data,
             )
-
-            // Firmware can't change mid-batch (same physical device every round), so checking on
-            // round 0 only is sufficient and avoids making the user scan through every remaining
-            // round only to be blocked at the very end.
-            if (pending.roundIndex == 0) {
-                val firstSignedPczt = signed.splitSignedPczt ?: signed.transferSignedPczts.firstOrNull()
-                val detected = firstSignedPczt?.readKeystoneFwVersion()
-                val outcome = KeystoneFirmwarePolicy.evaluate(detected, requiredFirmware)
-                if (outcome != KeystoneFirmwarePolicy.Outcome.OK) {
-                    isProcessing = false
-                    failureSheet.update {
-                        MigrationTransferFailureState(
-                            message = "Your Keystone firmware doesn't support migration yet. " +
-                                "Update your Keystone device, then come back to retry.",
-                            // Nothing to retry without a physical firmware update — both actions
-                            // just dismiss and back out, unlike the network-failure sheet below.
-                            onRetry = { failureSheet.value = null; navigationRouter.back() },
-                            onDismiss = { failureSheet.value = null; navigationRouter.back() },
-                        )
-                    }
-                    return@launch
-                }
-            }
 
             val accumulatedSplitSigned = signed.splitSignedPczt ?: pending.accumulatedSplitSigned
             val accumulatedTransferSigned = pending.accumulatedTransferSigned +

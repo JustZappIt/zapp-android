@@ -88,6 +88,8 @@ class OrchardMigrationSdkMock(
 
     override suspend fun isNoteSplitNeeded(): Boolean = true
 
+    override suspend fun estimateMigrationRunCount(): Int? = 1
+
     override suspend fun prepareNoteSplit(): NoteSplitProposal {
         val total = orchardBalance()
         // Mirrors Rust's converge_denomination_plan, minus the fixed-point convergence loop (this

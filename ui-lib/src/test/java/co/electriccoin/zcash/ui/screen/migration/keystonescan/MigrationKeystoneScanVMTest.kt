@@ -51,7 +51,7 @@ class MigrationKeystoneScanVMTest {
     @Test
     fun outdatedFirmwareOnFirstRoundBlocksWithoutFinalizing() =
         runTest {
-            val sdk = fakeSdk(signedFirmwareBytes = "no stamp in these bytes".toByteArray(Charsets.US_ASCII))
+            val sdk = fakeSdk(firmwareVersion = byteArrayOf(2, 9, 9))
             val pendingSchedule = PendingMigrationScheduleRepositoryImpl().apply { set(schedule()) }
             val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl().apply { set(pending(roundIndex = 0)) }
             val finalize = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true)
@@ -75,7 +75,7 @@ class MigrationKeystoneScanVMTest {
     @Test
     fun upToDateFirmwareOnFirstRoundProceedsToFinalize() =
         runTest {
-            val sdk = fakeSdk(signedFirmwareBytes = pcztBytesWithStamp(3, 0, 2))
+            val sdk = fakeSdk(firmwareVersion = byteArrayOf(3, 0, 2))
             val pendingSchedule = PendingMigrationScheduleRepositoryImpl().apply { set(schedule()) }
             val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl().apply { set(pending(roundIndex = 0)) }
             val finalize = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true)
@@ -92,9 +92,26 @@ class MigrationKeystoneScanVMTest {
         }
 
     @Test
+    fun missingFirmwareOnFirstRoundBlocksWithoutFinalizing() =
+        runTest {
+            val sdk = fakeSdk(firmwareVersion = null)
+            val pendingSchedule = PendingMigrationScheduleRepositoryImpl().apply { set(schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl().apply { set(pending(roundIndex = 0)) }
+            val finalize = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true)
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk, pendingSchedule, pendingPczts, finalize, router)
+
+            vm.onScanned("frame")
+            advanceUntilIdle()
+
+            assertNotNull(vm.failureSheet.value)
+            coVerify(exactly = 0) { finalize(any(), any()) }
+        }
+
+    @Test
     fun outdatedFirmwareOnLaterRoundSkipsCheckAndProceeds() =
         runTest {
-            val sdk = fakeSdk(signedFirmwareBytes = "no stamp in these bytes".toByteArray(Charsets.US_ASCII))
+            val sdk = fakeSdk(firmwareVersion = byteArrayOf(2, 9, 9))
             val pendingSchedule = PendingMigrationScheduleRepositoryImpl().apply { set(schedule()) }
             val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl().apply {
                 set(
@@ -134,12 +151,17 @@ class MigrationKeystoneScanVMTest {
         navigationRouter = router,
     )
 
-    private fun fakeSdk(signedFirmwareBytes: ByteArray): OrchardMigrationSdk =
+    private fun fakeSdk(firmwareVersion: ByteArray?): OrchardMigrationSdk =
         mockk(relaxed = true) {
             coEvery { decodeKeystoneSignBatchPart(any(), any()) } returns
-                KeystoneBatchDecodeResult(complete = true, progress = 100, data = ByteArray(1))
+                KeystoneBatchDecodeResult(
+                    complete = true,
+                    progress = 100,
+                    data = ByteArray(1),
+                    firmwareVersion = firmwareVersion,
+                )
             coEvery { applyKeystoneBatchSignatures(any(), any(), any()) } returns
-                KeystoneBatchSignedPczts(splitSignedPczt = null, transferSignedPczts = listOf(signedFirmwareBytes))
+                KeystoneBatchSignedPczts(splitSignedPczt = null, transferSignedPczts = listOf(byteArrayOf(0)))
         }
 
     private fun schedule() =
@@ -163,15 +185,6 @@ class MigrationKeystoneScanVMTest {
             transferUnsignedPczts = listOf("t1" to byteArrayOf(9, 9)),
             roundIndex = roundIndex,
         )
-
-    private fun pcztBytesWithStamp(
-        major: Int,
-        minor: Int,
-        build: Int
-    ): ByteArray {
-        val key = "keystone:fw_version".toByteArray(Charsets.US_ASCII)
-        return byteArrayOf(0x01) + key + byteArrayOf(0x03, major.toByte(), minor.toByte(), build.toByte())
-    }
 
     private class FakeNavigationRouter : NavigationRouter {
         var backCount = 0
