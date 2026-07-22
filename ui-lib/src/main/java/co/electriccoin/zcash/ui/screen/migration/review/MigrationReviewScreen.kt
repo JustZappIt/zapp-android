@@ -7,7 +7,6 @@ import co.electriccoin.zcash.ui.screen.common.LceRenderer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +17,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -80,7 +81,6 @@ fun MigrationReviewView(state: MigrationReviewState) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
                 .scaffoldPadding(padding),
         ) {
             when (state.mode) {
@@ -93,39 +93,45 @@ fun MigrationReviewView(state: MigrationReviewState) {
 }
 
 @Composable
-private fun ColumnScope.ImmediateReviewContent(state: MigrationReviewState) {
-    WalletHeaderIcons(
-        state = WalletHeaderIconsState(
-            isKeystone = state.isKeystone,
-            badgeIcon = R.drawable.ic_migration_coins_swap,
+private fun ImmediateReviewContent(state: MigrationReviewState) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+    ) {
+        WalletHeaderIcons(
+            state = WalletHeaderIconsState(
+                isKeystone = state.isKeystone,
+                badgeIcon = R.drawable.ic_migration_coins_swap,
+            )
         )
-    )
-    Spacer(Modifier.height(16.dp))
-    Text(
-        text = "Review Transfer",
-        style = ZashiTypography.header6,
-        fontWeight = FontWeight.SemiBold,
-        color = ZashiColors.Text.textPrimary,
-    )
-    Spacer(Modifier.height(4.dp))
-    Text(
-        text = "Your full Orchard balance will be transferred to Ironwood in a single on-chain transfer. " +
-            "Once confirmed, this transfer cannot be cancelled.",
-        style = ZashiTypography.textSm,
-        color = ZashiColors.Text.textTertiary,
-    )
-    Spacer(Modifier.height(24.dp))
-    ImmediateDetailsCard(amount = state.totalAmount, fee = state.fee)
-    Spacer(Modifier.weight(1f))
-    ZashiButton(
-        state = ButtonState(
-            text = stringRes("Confirm"),
-            isEnabled = !state.isConfirming,
-            isLoading = state.isConfirming,
-            onClick = state.onConfirm,
-        ),
-        modifier = Modifier.fillMaxWidth(),
-    )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = "Review Transfer",
+            style = ZashiTypography.header6,
+            fontWeight = FontWeight.SemiBold,
+            color = ZashiColors.Text.textPrimary,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "Your full Orchard balance will be transferred to Ironwood in a single on-chain transfer. " +
+                "Once confirmed, this transfer cannot be cancelled.",
+            style = ZashiTypography.textSm,
+            color = ZashiColors.Text.textTertiary,
+        )
+        Spacer(Modifier.height(24.dp))
+        ImmediateDetailsCard(amount = state.totalAmount, fee = state.fee)
+        Spacer(Modifier.height(24.dp))
+        ZashiButton(
+            state = ButtonState(
+                text = stringRes("Confirm"),
+                isEnabled = !state.isConfirming,
+                isLoading = state.isConfirming,
+                onClick = state.onConfirm,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 }
 
 @Composable
@@ -170,62 +176,69 @@ internal fun ImmediateDetailsRow(label: String, value: String) {
 }
 
 @Composable
-private fun ColumnScope.PrivacyReviewContent(state: MigrationReviewState) {
-    Text(
-        text = "Confirm Transfer Plan",
-        style = ZashiTypography.header6,
-        fontWeight = FontWeight.SemiBold,
-        color = ZashiColors.Text.textPrimary,
-    )
-    Spacer(Modifier.height(4.dp))
-    Text(
-        text = "Your balance splits into ${state.transfers.size} transfers over " +
-            "${state.estimatedDuration.getValue()}. Approve once and " +
-            "we'll handle the rest — just keep the app running in the background. Amounts are randomized " +
-            "for privacy. If we miss a window, Zodl will prompt you on next open.",
-        style = ZashiTypography.textSm,
-        color = ZashiColors.Text.textTertiary,
-    )
-    Spacer(Modifier.height(24.dp))
-    state.keystoneRound?.let { round ->
+private fun PrivacyReviewContent(state: MigrationReviewState) {
+    Column(modifier = Modifier.fillMaxSize()) {
         Text(
-            text = "Round ${round.current} of ${round.total}",
-            style = ZashiTypography.textMd,
+            text = "Confirm Transfer Plan",
+            style = ZashiTypography.header6,
             fontWeight = FontWeight.SemiBold,
             color = ZashiColors.Text.textPrimary,
         )
-        Spacer(Modifier.height(16.dp))
-    }
-    TransferTimelineRow(
-        title = "Split Balance",
-        subtitle = stringRes("Ready now"),
-        amount = state.totalAmount,
-        fiatAmount = state.totalFiatAmount,
-        icon = R.drawable.ic_migration_coins_swap,
-        isFirst = true,
-        isLast = state.transfers.isEmpty(),
-    )
-    state.transfers.forEachIndexed { i, transfer ->
-        TransferTimelineRow(
-            title = "Transfer ${transfer.index}",
-            subtitle = transfer.scheduledLabel,
-            amount = transfer.amount,
-            fiatAmount = transfer.fiatAmount,
-            index = transfer.index,
-            isFirst = false,
-            isLast = i == state.transfers.lastIndex,
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "Your balance splits into ${state.transfers.size} transfers over " +
+                "${state.estimatedDuration.getValue()}. Approve once and " +
+                "we'll handle the rest — just keep the app running in the background. Amounts are randomized " +
+                "for privacy. If we miss a window, Zodl will prompt you on next open.",
+            style = ZashiTypography.textSm,
+            color = ZashiColors.Text.textTertiary,
+        )
+        Spacer(Modifier.height(24.dp))
+        state.keystoneRound?.let { round ->
+            Text(
+                text = "Round ${round.current} of ${round.total}",
+                style = ZashiTypography.textMd,
+                fontWeight = FontWeight.SemiBold,
+                color = ZashiColors.Text.textPrimary,
+            )
+            Spacer(Modifier.height(16.dp))
+        }
+        // Only this list scrolls when it doesn't fit — header and Confirm button stay pinned.
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            item {
+                TransferTimelineRow(
+                    title = "Split Balance",
+                    subtitle = stringRes("Ready now"),
+                    amount = state.totalAmount,
+                    fiatAmount = state.totalFiatAmount,
+                    icon = R.drawable.ic_migration_coins_swap,
+                    isFirst = true,
+                    isLast = state.transfers.isEmpty(),
+                )
+            }
+            items(state.transfers) { transfer ->
+                TransferTimelineRow(
+                    title = "Transfer ${transfer.index}",
+                    subtitle = transfer.scheduledLabel,
+                    amount = transfer.amount,
+                    fiatAmount = transfer.fiatAmount,
+                    index = transfer.index,
+                    isFirst = false,
+                    isLast = transfer.index == state.transfers.size,
+                )
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+        ZashiButton(
+            state = ButtonState(
+                text = stringRes("Confirm"),
+                isEnabled = !state.isConfirming,
+                isLoading = state.isConfirming,
+                onClick = state.onConfirm,
+            ),
+            modifier = Modifier.fillMaxWidth(),
         )
     }
-    Spacer(Modifier.weight(1f))
-    ZashiButton(
-        state = ButtonState(
-            text = stringRes("Confirm"),
-            isEnabled = !state.isConfirming,
-            isLoading = state.isConfirming,
-            onClick = state.onConfirm,
-        ),
-        modifier = Modifier.fillMaxWidth(),
-    )
 }
 
 @Suppress("LongParameterList")
