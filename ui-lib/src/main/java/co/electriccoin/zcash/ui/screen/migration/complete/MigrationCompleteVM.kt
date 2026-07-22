@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.ui.common.model.mutableLce
@@ -14,6 +15,7 @@ import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageP
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.migration.lockexplainer.MigrationLockExplainerArgs
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +27,7 @@ class MigrationCompleteVM(
     private val getOrchardBalance: GetOrchardBalanceUseCase,
     private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
     private val hasLockedOrchardDustStorageProvider: HasLockedOrchardDustStorageProvider,
+    private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
     private val navigationRouter: NavigationRouter,
     private val errorStateMapper: ErrorMapperUseCase,
 ) : ViewModel() {
@@ -73,11 +76,23 @@ class MigrationCompleteVM(
         )
 
     private fun onDone() {
-        // Marks the *banner's* seen-flag too, not a separate one — a user who's already been
-        // shown (and dismissed) this dedicated celebration screen doesn't also need the home
-        // banner nagging them afterwards; they're the same acknowledgment.
-        viewModelScope.launch { hasSeenMigrationCompleteStorageProvider.store(true) }
-        navigationRouter.backToRoot()
+        viewModelScope.launch {
+            // Keystone-only auto-continuation (hot-wallet multi-run is deferred): if residual
+            // Orchard balance still needs migrating, clear the plan instead of marking "seen" —
+            // GetHomeMessageUseCase's migrationMessageFor() then naturally re-evaluates to REQUIRED
+            // (plan == null) even though the SDK's own MigrationState is still Complete (it only
+            // advances once the next round is actually committed).
+            val moreRoundsNeeded = getSelectedWalletAccount() is KeystoneAccount && getOrchardBalance().value > 0L
+            if (moreRoundsNeeded) {
+                migrationPlanRepository.clear()
+            } else {
+                // Marks the *banner's* seen-flag too, not a separate one — a user who's already
+                // been shown (and dismissed) this dedicated celebration screen doesn't also need
+                // the home banner nagging them afterwards; they're the same acknowledgment.
+                hasSeenMigrationCompleteStorageProvider.store(true)
+            }
+            navigationRouter.backToRoot()
+        }
     }
 
     private fun onLockBalance() = navigationRouter.forward(MigrationLockExplainerArgs)
