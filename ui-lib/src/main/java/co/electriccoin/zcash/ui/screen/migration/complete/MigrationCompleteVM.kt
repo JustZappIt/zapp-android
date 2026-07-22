@@ -77,21 +77,26 @@ class MigrationCompleteVM(
 
     private fun onDone() {
         viewModelScope.launch {
-            // Keystone-only auto-continuation (hot-wallet multi-run is deferred): if residual
-            // Orchard balance still needs migrating, clear the plan instead of marking "seen" —
-            // GetHomeMessageUseCase's migrationMessageFor() then naturally re-evaluates to REQUIRED
-            // (plan == null) even though the SDK's own MigrationState is still Complete (it only
-            // advances once the next round is actually committed).
-            val moreRoundsNeeded = getSelectedWalletAccount() is KeystoneAccount && getOrchardBalance().value > 0L
-            if (moreRoundsNeeded) {
-                migrationPlanRepository.clear()
-            } else {
-                // Marks the *banner's* seen-flag too, not a separate one — a user who's already
-                // been shown (and dismissed) this dedicated celebration screen doesn't also need
-                // the home banner nagging them afterwards; they're the same acknowledgment.
-                hasSeenMigrationCompleteStorageProvider.store(true)
+            try {
+                // Keystone-only auto-continuation (hot-wallet multi-run is deferred): if residual
+                // Orchard balance still needs migrating, clear the plan instead of marking "seen" —
+                // GetHomeMessageUseCase's migrationMessageFor() then naturally re-evaluates to REQUIRED
+                // (plan == null) even though the SDK's own MigrationState is still Complete (it only
+                // advances once the next round is actually committed).
+                val moreRoundsNeeded = getSelectedWalletAccount() is KeystoneAccount && getOrchardBalance().value > 0L
+                if (moreRoundsNeeded) {
+                    migrationPlanRepository.clear()
+                } else {
+                    // Marks the *banner's* seen-flag too, not a separate one — a user who's already
+                    // been shown (and dismissed) this dedicated celebration screen doesn't also need
+                    // the home banner nagging them afterwards; they're the same acknowledgment.
+                    hasSeenMigrationCompleteStorageProvider.store(true)
+                }
+            } finally {
+                // Guaranteed regardless of the above outcome (or an exception partway through it) —
+                // navigation away from this screen must never be silently skipped.
+                navigationRouter.backToRoot()
             }
-            navigationRouter.backToRoot()
         }
     }
 

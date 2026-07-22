@@ -30,6 +30,7 @@ import kotlin.reflect.KClass
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MigrationCompleteVMTest {
@@ -47,11 +48,13 @@ class MigrationCompleteVMTest {
     fun keystoneAccountWithResidualBalanceClearsPlanInsteadOfMarkingSeen() = runTest {
         val plans = mockk<MigrationPlanRepository>(relaxed = true)
         val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
+        val router = FakeNavigationRouter()
         val vm = vm(
             plans = plans,
             seen = seen,
             account = mockk<KeystoneAccount>(relaxed = true),
             orchardBalanceZatoshi = 500_000L,
+            router = router,
         )
 
         vm.state.value // force lazy init to run (StateFlow combine below reads loadLce)
@@ -61,17 +64,20 @@ class MigrationCompleteVMTest {
 
         coVerify(exactly = 1) { plans.clear() }
         coVerify(exactly = 0) { seen.store(true) }
+        assertEquals(1, router.backToRootCount)
     }
 
     @Test
     fun keystoneAccountWithZeroResidualBalanceMarksSeenInsteadOfClearing() = runTest {
         val plans = mockk<MigrationPlanRepository>(relaxed = true)
         val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
+        val router = FakeNavigationRouter()
         val vm = vm(
             plans = plans,
             seen = seen,
             account = mockk<KeystoneAccount>(relaxed = true),
             orchardBalanceZatoshi = 0L,
+            router = router,
         )
 
         advanceUntilIdle()
@@ -80,6 +86,7 @@ class MigrationCompleteVMTest {
 
         coVerify(exactly = 0) { plans.clear() }
         coVerify(exactly = 1) { seen.store(true) }
+        assertEquals(1, router.backToRootCount)
     }
 
     @Test
@@ -88,11 +95,13 @@ class MigrationCompleteVMTest {
         // takes the terminal path regardless of residual balance.
         val plans = mockk<MigrationPlanRepository>(relaxed = true)
         val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
+        val router = FakeNavigationRouter()
         val vm = vm(
             plans = plans,
             seen = seen,
             account = mockk<ZashiAccount>(relaxed = true),
             orchardBalanceZatoshi = 500_000L,
+            router = router,
         )
 
         advanceUntilIdle()
@@ -101,6 +110,7 @@ class MigrationCompleteVMTest {
 
         coVerify(exactly = 0) { plans.clear() }
         coVerify(exactly = 1) { seen.store(true) }
+        assertEquals(1, router.backToRootCount)
     }
 
     private fun invokeOnDone(vm: MigrationCompleteVM) {
@@ -114,6 +124,7 @@ class MigrationCompleteVMTest {
         seen: HasSeenMigrationCompleteStorageProvider,
         account: WalletAccount,
         orchardBalanceZatoshi: Long,
+        router: FakeNavigationRouter,
     ) = MigrationCompleteVM(
         migrationPlanRepository = plans,
         getOrchardBalance = mockk<GetOrchardBalanceUseCase> {
@@ -124,18 +135,24 @@ class MigrationCompleteVMTest {
         getSelectedWalletAccount = mockk<GetSelectedWalletAccountUseCase> {
             coEvery { this@mockk() } returns account
         },
-        navigationRouter = FakeNavigationRouter(),
+        navigationRouter = router,
         errorStateMapper = mockk<ErrorMapperUseCase>(relaxed = true),
     )
 
     private class FakeNavigationRouter : NavigationRouter {
+        var backToRootCount = 0
+
         override fun forward(vararg routes: Any) = Unit
         override fun replace(vararg routes: Any) = Unit
         override fun replaceAll(vararg routes: Any) = Unit
         override fun back() = Unit
         override fun backTo(route: KClass<*>) = Unit
         override fun custom(block: (NavBackStackEntry?) -> NavigationCommand?) = Unit
-        override fun backToRoot() = Unit
+
+        override fun backToRoot() {
+            backToRootCount++
+        }
+
         override fun observePipeline(): Flow<BaseNavigationCommand> = emptyFlow()
     }
 }
