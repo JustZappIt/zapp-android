@@ -1,8 +1,9 @@
 package co.electriccoin.zcash.ui.common.model
 
 /**
- * Keystone hardware-wallet firmware version triple, matching the ordering keystone3-firmware
- * stamps into every signed PCZT's `global.proprietary["keystone:fw_version"]` field.
+ * Keystone hardware-wallet firmware version triple, as reported by the device itself in the
+ * `zcash-batch-sig-result` UR envelope's dedicated firmware-version field (CBOR key 3) — see
+ * `ZcashBatchSigResult::get_firmware_version()` in keystone-sdk-rust's `ur-registry` crate.
  */
 data class KeystoneFirmwareVersion(
     val major: Int,
@@ -16,45 +17,23 @@ data class KeystoneFirmwareVersion(
     }
 }
 
-private val FIRMWARE_VERSION_KEY = "keystone:fw_version".toByteArray(Charsets.US_ASCII)
-private const val FIRMWARE_VERSION_VALUE_LENGTH = 3
-
 /**
- * Scans a signed PCZT's raw bytes for the Keystone firmware version stamp.
+ * Converts the raw `[major, minor, build]` bytes carried directly in the batch-sign-result UR
+ * envelope (`KeystoneBatchDecodeResult.firmwareVersion`) into a [KeystoneFirmwareVersion].
  *
- * PCZT proprietary fields are postcard-encoded `BTreeMap<String, Vec<u8>>` entries: a varint key
- * length, the UTF-8 key bytes, a varint value length, then the value bytes. For the 3-byte
- * firmware version value the length byte is always `0x03`, so this looks for the ASCII key
- * literal directly in the byte stream and reads the 3 bytes immediately following the expected
- * `0x03` length byte. Returns `null` if the key isn't present (legacy firmware that predates the
- * stamping feature) or the bytes that follow don't match the expected shape.
+ * Unlike the legacy single-transaction PCZT-echo response, the compact batch protocol never
+ * echoes signed PCZT bytes back (`BatchSignResponse` is signatures-only), so there is no
+ * `keystone:fw_version` proprietary field to scan for on that path — the envelope's own field is
+ * the only source of the firmware version for migration. Returns `null` if the byte array isn't
+ * exactly 3 bytes (device didn't report a version — pre-migration-support firmware).
  */
-fun ByteArray.readKeystoneFwVersion(): KeystoneFirmwareVersion? {
-    val keyStart = indexOfSubArray(FIRMWARE_VERSION_KEY)
-    if (keyStart < 0) return null
-
-    val lengthIndex = keyStart + FIRMWARE_VERSION_KEY.size
-    if (lengthIndex >= size || this[lengthIndex] != FIRMWARE_VERSION_VALUE_LENGTH.toByte()) return null
-
-    val valueStart = lengthIndex + 1
-    if (valueStart + FIRMWARE_VERSION_VALUE_LENGTH > size) return null
-
+fun ByteArray.toKeystoneFwVersion(): KeystoneFirmwareVersion? {
+    if (size != 3) return null
     return KeystoneFirmwareVersion(
-        major = this[valueStart].toInt() and 0xFF,
-        minor = this[valueStart + 1].toInt() and 0xFF,
-        build = this[valueStart + 2].toInt() and 0xFF,
+        major = this[0].toInt() and 0xFF,
+        minor = this[1].toInt() and 0xFF,
+        build = this[2].toInt() and 0xFF,
     )
-}
-
-private fun ByteArray.indexOfSubArray(needle: ByteArray): Int {
-    if (needle.isEmpty() || needle.size > size) return -1
-    outer@ for (i in 0..(size - needle.size)) {
-        for (j in needle.indices) {
-            if (this[i + j] != needle[j]) continue@outer
-        }
-        return i
-    }
-    return -1
 }
 
 /**
