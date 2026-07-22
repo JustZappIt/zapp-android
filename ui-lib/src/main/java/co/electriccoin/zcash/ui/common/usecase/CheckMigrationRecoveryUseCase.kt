@@ -4,6 +4,7 @@ import cash.z.ecc.android.sdk.MigrationState
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
+import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.screen.home.HomeArgs
 import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteArgs
 import co.electriccoin.zcash.ui.screen.migration.invalid.MigrationTransferInvalidArgs
@@ -20,6 +21,14 @@ import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
  * Complete celebration screen is lowest priority — it's non-actionable, so it never preempts an
  * actual problem needing attention.
  *
+ * The Complete-celebration branch additionally requires a [MigrationPlanRepository] plan to still
+ * exist. `MigrationState.Complete` alone isn't enough: for a Keystone account still mid-campaign,
+ * `MigrationCompleteVM.onDone()` clears the plan (without setting the seen-flag) to let the home
+ * banner naturally re-offer the next round, but the SDK's own [MigrationState] stays `Complete`
+ * until that next round is actually committed. Requiring `migrationPlanRepository.load() != null`
+ * here means this only fires for a genuinely fresh, not-yet-acknowledged completion — not on every
+ * relaunch between Keystone rounds.
+ *
  * An overdue transfer always routes to the fuller Resume Migration screen with Send Now/Reschedule
  * — background delivery is scheduled unconditionally (see `FinalizeMigrationScheduleUseCase`), so
  * "overdue" always means the background worker hasn't broadcast it yet, whether because it hasn't
@@ -34,6 +43,7 @@ class CheckMigrationRecoveryUseCase(
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val navigationRouter: NavigationRouter,
     private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
+    private val migrationPlanRepository: MigrationPlanRepository,
 ) {
     suspend operator fun invoke() {
         // No wallet yet (e.g. a fresh install before onboarding) — this runs on every
@@ -45,7 +55,10 @@ class CheckMigrationRecoveryUseCase(
         } else if (sdk.hasOverdueTransfers()) {
             Twig.debug { "MIGRATION_DIAG MigrationRecovery: overdue transfer detected — redirecting to Resume Migration." }
             navigationRouter.replaceAll(HomeArgs, MigrationProgressArgs)
-        } else if (sdk.getMigrationState() == MigrationState.Complete && !hasSeenMigrationCompleteStorageProvider.get()) {
+        } else if (sdk.getMigrationState() == MigrationState.Complete &&
+            !hasSeenMigrationCompleteStorageProvider.get() &&
+            migrationPlanRepository.load() != null
+        ) {
             // A fresh install / a wallet that never needed to migrate never reaches
             // MigrationState.Complete — that requires a MigrationPlan to have existed and finished,
             // so this can never fire for them.
