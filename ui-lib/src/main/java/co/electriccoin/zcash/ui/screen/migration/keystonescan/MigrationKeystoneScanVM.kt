@@ -10,6 +10,8 @@ import co.electriccoin.zcash.ui.common.model.KeystoneFirmwarePolicy
 import co.electriccoin.zcash.ui.common.model.KeystoneFirmwareVersion
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
+import co.electriccoin.zcash.ui.common.model.mutableLce
+import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.toKeystoneFwVersion
 import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPcztsRepository
@@ -24,6 +26,7 @@ import co.electriccoin.zcash.ui.screen.migration.keystonesign.keystoneBatchTotal
 import co.electriccoin.zcash.ui.screen.scan.ScanValidationState
 import co.electriccoin.zcash.ui.screen.scankeystone.model.ScanKeystoneState
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -48,6 +51,14 @@ class MigrationKeystoneScanVM(
 
     val failureSheet = MutableStateFlow<MigrationTransferFailureState?>(null)
 
+    // Covers only the LAST round's finish (apply signatures, submit the split, store the
+    // schedule, finalize) — the real network/JNI work the QR camera gives no feedback on
+    // otherwise. Deliberately NOT wrapped around per-frame decodeKeystoneSignBatchPart() calls
+    // below (that would flicker loading on every scanned QR chunk) or the fast, local
+    // multi-round carry-forward (no network I/O, matches prior instant-navigate behavior).
+    private val finalizingLce = mutableLce<Unit>()
+    val isFinalizing: StateFlow<Boolean> = finalizingLce.loading.stateIn(this, initialValue = false)
+
     private var isProcessing = false
     private var hasResetDecoder = false
 
@@ -57,7 +68,7 @@ class MigrationKeystoneScanVM(
     private val requiredFirmware = KeystoneFirmwareVersion(major = 3, minor = 0, build = 2)
 
     fun onScanned(result: String) {
-        if (isProcessing) return
+        if (isProcessing || finalizingLce.state.value.loading) return
         isProcessing = true
         viewModelScope.launch {
             val sched = pendingSchedule.get()
@@ -154,31 +165,34 @@ class MigrationKeystoneScanVM(
             }
 
             // Last (or only) round — finish using the FULL accumulated signed set, not just this
-            // round's slice.
-            val splitSignedPczt = accumulatedSplitSigned
-            if (splitSignedPczt != null) {
-                val useTor = isTorEnabledStorageProvider.get() == true
-                val splitResult = sdk.storeSignedNoteSplitPczt(
-                    splitSignedPczt,
-                    NetworkPrivacyOptions(useTor = useTor),
-                )
-                if (splitResult !is TransferResult.Success) {
-                    isProcessing = false
-                    failureSheet.update {
-                        MigrationTransferFailureState(
-                            message = migrationFailureMessage(splitResult),
-                            onRetry = { failureSheet.value = null; onScanned(result) },
-                            onDismiss = { failureSheet.value = null },
-                        )
-                    }
-                    return@launch
-                }
-            }
-            sdk.storeSignedSchedulePczts(accumulatedTransferSigned)
-            finalizeMigrationSchedule(sched, args.mode)
+            // round's slice. This is the real network/JNI work (Tor submit, schedule storage,
+            // finalize) with no other feedback on the QR screen, so it's tracked via
+            // finalizingLce/isFinalizing for the loading overlay.
             isProcessing = false
-            pendingSchedule.clear()
-            pendingKeystonePczts.clear()
+            finalizingLce.execute {
+                val splitSignedPczt = accumulatedSplitSigned
+                if (splitSignedPczt != null) {
+                    val useTor = isTorEnabledStorageProvider.get() == true
+                    val splitResult = sdk.storeSignedNoteSplitPczt(
+                        splitSignedPczt,
+                        NetworkPrivacyOptions(useTor = useTor),
+                    )
+                    if (splitResult !is TransferResult.Success) {
+                        failureSheet.update {
+                            MigrationTransferFailureState(
+                                message = migrationFailureMessage(splitResult),
+                                onRetry = { failureSheet.value = null; onScanned(result) },
+                                onDismiss = { failureSheet.value = null },
+                            )
+                        }
+                        return@execute
+                    }
+                }
+                sdk.storeSignedSchedulePczts(accumulatedTransferSigned)
+                finalizeMigrationSchedule(sched, args.mode)
+                pendingSchedule.clear()
+                pendingKeystonePczts.clear()
+            }
         }
     }
 

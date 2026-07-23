@@ -91,7 +91,10 @@ fun MigrationProgressView(state: MigrationProgressState) {
                 statusLabel = stringRes("Done"),
                 amount = state.totalAmount,
                 fiatAmount = state.totalFiatAmount,
-                icon = R.drawable.ic_migration_coins_swap,
+                // No icon param needed: isDone=true always renders ic_migration_check regardless
+                // (see TransferProgressTimelineRow below) — this row is always Done by the time
+                // this screen exists, so it was already showing the right glyph; the old
+                // ic_migration_coins_swap value here was unused dead code.
                 isDone = true,
                 isActive = false,
                 isOverdue = false,

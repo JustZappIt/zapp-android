@@ -124,7 +124,7 @@ private fun ImmediateReviewContent(state: MigrationReviewState) {
         Spacer(Modifier.height(24.dp))
         ZashiButton(
             state = ButtonState(
-                text = stringRes("Confirm"),
+                text = stringRes(if (state.isConfirming) "Signing..." else "Confirm"),
                 isEnabled = !state.isConfirming,
                 isLoading = state.isConfirming,
                 onClick = state.onConfirm,
@@ -211,7 +211,10 @@ private fun PrivacyReviewContent(state: MigrationReviewState) {
                     subtitle = stringRes("Ready now"),
                     amount = state.totalAmount,
                     fiatAmount = state.totalFiatAmount,
-                    icon = R.drawable.ic_migration_coins_swap,
+                    // Figma PR App Designs Q3'26, node 4207-7450: a checkmark, not the coins-swap
+                    // glyph used for pool-crossing transfers below it — Split Balance is a
+                    // same-device self-send, not a swap.
+                    icon = R.drawable.ic_migration_check,
                     isFirst = true,
                     isLast = state.transfers.isEmpty(),
                 )
@@ -231,7 +234,7 @@ private fun PrivacyReviewContent(state: MigrationReviewState) {
         Spacer(Modifier.height(24.dp))
         ZashiButton(
             state = ButtonState(
-                text = stringRes("Confirm"),
+                text = stringRes(if (state.isConfirming) "Signing..." else "Confirm"),
                 isEnabled = !state.isConfirming,
                 isLoading = state.isConfirming,
                 onClick = state.onConfirm,

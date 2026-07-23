@@ -7,6 +7,7 @@ import cash.z.ecc.android.sdk.TransferResult
 import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.guardLoading
@@ -22,6 +23,10 @@ import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
+import co.electriccoin.zcash.ui.common.repository.BiometricRepository
+import co.electriccoin.zcash.ui.common.repository.BiometricRequest
+import co.electriccoin.zcash.ui.common.repository.BiometricsCancelledException
+import co.electriccoin.zcash.ui.common.repository.BiometricsFailureException
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
@@ -53,6 +58,7 @@ class MigrationReviewVM(
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
     private val errorStateMapper: ErrorMapperUseCase,
     private val zashiSpendingKeyDataSource: ZashiSpendingKeyDataSource,
+    private val biometricRepository: BiometricRepository,
 ) : ViewModel() {
 
     private data class ReviewProposal(val schedule: MigrationSchedule, val keystoneRunCount: Int?)
@@ -98,9 +104,16 @@ class MigrationReviewVM(
     ): MigrationReviewState {
         val sched = proposal.schedule
         val total = sched.transfers.sumOf { it.amountZatoshi }
-        val firstAtHeight = sched.transfers.minOfOrNull { it.nextExecutableAfterHeight } ?: 0L
+        // From the plan's "now" reference (anchorHeight — every transfer shares the same plan-time
+        // tip) to the LAST transfer's height, matching scheduledLabel()'s per-transfer calculation
+        // below and MigrationScheduledVM/MigrationProgressVM's createdAt-to-last-scheduled span —
+        // NOT firstAtHeight-to-lastAtHeight, which omits the wait before the first transfer and
+        // previously made this summary disagree with the per-transfer rows and the other two
+        // migration screens (confirmed live: header claimed a shorter span than the last
+        // transfer's own "due in ~Nh" label showed).
+        val anchorHeight = sched.transfers.minOfOrNull { it.anchorHeight } ?: 0L
         val lastAtHeight = sched.transfers.maxOfOrNull { it.nextExecutableAfterHeight } ?: 0L
-        val spanSeconds = estimatedSecondsBetweenHeights(firstAtHeight, lastAtHeight)
+        val spanSeconds = estimatedSecondsBetweenHeights(anchorHeight, lastAtHeight)
         return MigrationReviewState(
             mode = args.mode,
             totalAmount = stringRes(Zatoshi(total)),
@@ -148,6 +161,22 @@ class MigrationReviewVM(
 
     private fun onConfirm(sched: MigrationSchedule) =
         confirmLce.execute {
+            try {
+                biometricRepository.requestBiometrics(
+                    request =
+                        BiometricRequest(
+                            message =
+                                stringRes(
+                                    R.string.authentication_system_ui_subtitle,
+                                    stringRes(R.string.authentication_use_case_send_funds)
+                                )
+                        )
+                )
+            } catch (_: BiometricsFailureException) {
+                return@execute
+            } catch (_: BiometricsCancelledException) {
+                return@execute
+            }
             when (args.mode) {
                 // Immediate mode broadcasts synchronously in the foreground on the Sending
                 // screen — no WorkManager job needed (and scheduling one here would race it).

@@ -20,7 +20,7 @@ import co.electriccoin.zcash.ui.design.component.ZashiButton
 import co.electriccoin.zcash.ui.design.component.ZashiCircularProgressIndicatorByPercent
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
-import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
+import co.electriccoin.zcash.ui.design.theme.colors.ZashiLightColors
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.home.HomeMessageWrapper
 
@@ -33,12 +33,16 @@ fun MigrationMessage(
     // All migration home messages use a Colors/Utility/Gray/utility-gray-700 -> utility-gray-950
     // linear gradient background, with the Btns/Ghost/btn-ghost-bg token for readable content on
     // top of it — not the shared purple gradient every other home message (Backup, ShieldFunds,
-    // etc.) uses.
+    // etc.) uses. Like that shared purple gradient (which HomeMessageWrapper pins to
+    // ZashiLightColors so the banner branding doesn't flip with the system theme), this must read
+    // from ZashiLightColors rather than the theme-reactive ZashiColors — otherwise in dark mode the
+    // gradient collapses to Shark 200 -> Shark 25 (light gray -> white), which reads as a flat,
+    // barely-there card instead of a visible gradient.
     val bannerBackgroundBrush = Brush.verticalGradient(
-        0f to ZashiColors.Utility.Gray.utilityGray700,
-        1f to ZashiColors.Utility.Gray.utilityGray950,
+        0f to ZashiLightColors.Utility.Gray.utilityGray700,
+        1f to ZashiLightColors.Utility.Gray.utilityGray950,
     )
-    val bannerContentColor = ZashiColors.Btns.Ghost.btnGhostBg
+    val bannerContentColor = ZashiLightColors.Btns.Ghost.btnGhostBg
     HomeMessageWrapper(
         innerModifier = innerModifier,
         contentPadding = contentPadding,
@@ -46,6 +50,10 @@ fun MigrationMessage(
         backgroundBrush = bannerBackgroundBrush,
         contentColor = bannerContentColor,
         subtitleColor = bannerContentColor.copy(alpha = 0.7f),
+        // The progress ring's track must match this banner's gray palette too — otherwise it
+        // inherits HomeMessageWrapper's default purple track, which clashes once migration is
+        // in progress and the ring is actually visible on screen.
+        progressTrackColor = ZashiLightColors.Utility.Gray.utilityGray500,
         start = {
             when (state.phase) {
                 MigrationBannerPhase.IN_PROGRESS -> {
