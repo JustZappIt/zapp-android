@@ -520,6 +520,19 @@ data class ExactOutputSwapTransactionProposal(
     override val quote: SwapQuote,
 ) : SwapTransactionProposal
 
+/**
+ * IMMEDIATE-mode migration send-max on a Keystone account: an ordinary send proposal (see
+ * [cash.z.ecc.android.sdk.OrchardMigrationSdk.proposeImmediateMigration]) sweeping all spendable
+ * Orchard funds into this account's own Ironwood receiver, adopted directly into the Keystone
+ * external-signer pipeline — there is no destination/memo to validate, only an already-built
+ * [proposal]. A software-key (Zashi) account signs and submits this proposal directly/inline
+ * instead (see `MigrationReviewVM`), and never constructs this type.
+ */
+data class MigrationSweepTransactionProposal(
+    val amount: Zatoshi,
+    override val proposal: Proposal,
+) : TransactionProposal
+
 private const val DEFAULT_SHIELDING_THRESHOLD = 100000L
 private const val MULTI_SUBMIT_TAG = "[MultiSubmit]"
 private const val MULTI_SUBMIT_PCZT_TAG = "[MultiSubmit/PCZT]"
