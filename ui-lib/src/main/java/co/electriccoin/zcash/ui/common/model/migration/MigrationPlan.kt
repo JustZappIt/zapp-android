@@ -1,6 +1,7 @@
 package co.electriccoin.zcash.ui.common.model.migration
 
 import cash.z.ecc.android.sdk.MigrationSchedule
+import cash.z.ecc.android.sdk.MigrationTransferStates
 import kotlinx.serialization.Serializable
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -70,5 +71,37 @@ fun MigrationSchedule.toMigrationPlan(mode: MigrationMode, keystoneRound: Migrat
         },
         mode = mode,
         keystoneRound = keystoneRound,
+    )
+}
+
+/**
+ * Overrides [MigrationTransfer.status]/[MigrationTransfer.scheduledAtEpochSeconds] from the SDK's
+ * live, persisted [MigrationTransferStates] — the cached [MigrationPlan] otherwise only reflects
+ * whatever this app-side cache last wrote through (production `rescheduleOverdueTransfer()` and the
+ * debug-only `debugRescheduleTransfers()` both currently forget to update it), so it can silently
+ * fall behind the SDK's actual state without this. amountZatoshi/createdAtEpochSeconds never change
+ * post-commit, so those keep coming from the cache — only the fields the SDK can independently
+ * change are overridden here.
+ *
+ * Correlates by the transfer's real, stable [MigrationTransfer.id] — NOT by [MigrationTransfer.index].
+ * The engine assigns real ids in its own funding-note/crossing order, while [MigrationTransfer.index]
+ * is this transfer's position in the broadcast-height-sorted array the app displays as "Transfer N".
+ * ZIP 318 deliberately shuffles those two orderings apart, so matching by index would silently attach
+ * the wrong transfer's live status/schedule to a displayed position (confirmed live — see
+ * [co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressVM]).
+ */
+fun MigrationPlan.withLiveState(live: MigrationTransferStates?): MigrationPlan {
+    if (live == null) return this
+    val now = Clock.System.now().epochSeconds
+    val byId = live.transfers.associateBy { it.id }
+    return copy(
+        transfers = transfers.map { t ->
+            val liveTransfer = byId[t.id] ?: return@map t
+            t.copy(
+                status = if (liveTransfer.isSent) MigrationTransferStatus.SENT else MigrationTransferStatus.PENDING,
+                scheduledAtEpochSeconds =
+                    now + estimatedSecondsBetweenHeights(live.tipHeight, liveTransfer.scheduledHeight),
+            )
+        }
     )
 }
