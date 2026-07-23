@@ -3,7 +3,6 @@ package co.electriccoin.zcash.ui.screen.migration.battery
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -40,11 +39,13 @@ import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
 import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
+import co.electriccoin.zcash.ui.common.provider.IsBackgroundExecutionAvailableProvider
 import co.electriccoin.zcash.ui.design.util.scaffoldPadding
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.common.LceRenderer
 import kotlinx.serialization.Serializable
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
 
 @Serializable
 data object MigrationBatteryArgs
@@ -54,12 +55,11 @@ fun MigrationBatteryScreen() {
     val vm = koinViewModel<MigrationBatteryVM>()
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val isBackgroundExecutionAvailableProvider = koinInject<IsBackgroundExecutionAvailableProvider>()
     LceRenderer(state) { s ->
         BackHandler { s.onBack() }
 
-        fun isUnrestricted() =
-            context.getSystemService(PowerManager::class.java)
-                ?.isIgnoringBatteryOptimizations(context.packageName) == true
+        fun isUnrestricted() = isBackgroundExecutionAvailableProvider.isAvailable()
 
         val isAlreadyUnrestricted = remember { isUnrestricted() }
         if (isAlreadyUnrestricted) {

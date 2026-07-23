@@ -23,6 +23,7 @@ import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageP
 import co.electriccoin.zcash.ui.common.provider.HttpClientProvider
 import co.electriccoin.zcash.ui.common.provider.HttpClientProviderImpl
 import co.electriccoin.zcash.ui.common.provider.HttpPirSnapshotResolver
+import co.electriccoin.zcash.ui.common.provider.IsBackgroundExecutionAvailableProvider
 import co.electriccoin.zcash.ui.common.provider.IsExchangeRateEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.provider.IsExchangeRateEnabledStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.IsKeepScreenOnDuringRestoreProvider
@@ -129,4 +130,5 @@ val providerModule =
         singleOf(::VotingShareTrackingScheduler)
         singleOf(::MigrationNotifier)
         factoryOf(::MigrationScheduler)
+        factoryOf(::IsBackgroundExecutionAvailableProvider)
     }
