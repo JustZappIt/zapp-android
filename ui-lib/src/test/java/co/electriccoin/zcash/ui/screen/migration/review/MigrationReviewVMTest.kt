@@ -149,15 +149,19 @@ class MigrationReviewVMTest {
     }
 
     @Test
-    fun immediateConfirmFailsImmediatelyForKeystoneAccountWithoutSubmittingOrNavigating() = runTest {
+    fun immediateConfirmOnKeystoneAccountAdoptsIntoKeystoneRepositoryAndNavigatesToSign() = runTest {
         val proposal = mockk<Proposal> {
             coEvery { totalFeeRequired() } returns Zatoshi(1_000L)
         }
         val router = FakeNavigationRouter()
         val proposalDataSource = mockk<ProposalDataSource>(relaxed = true)
+        val keystoneProposalRepository = mockk<co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository>(
+            relaxed = true
+        )
         val vm = vm(
             router = router,
             proposalDataSource = proposalDataSource,
+            keystoneProposalRepository = keystoneProposalRepository,
             getSelectedWalletAccount = mockk {
                 coEvery { this@mockk() } returns mockk<KeystoneAccount>(relaxed = true)
                 every { observe() } returns flowOf(mockk<KeystoneAccount>(relaxed = true))
@@ -168,7 +172,11 @@ class MigrationReviewVMTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { proposalDataSource.submitTransaction(any<Proposal>(), any<UnifiedSpendingKey>()) }
-        assertEquals(emptyList<Any>(), router.forwardedRoutes)
+        coVerify(exactly = 1) { keystoneProposalRepository.setMigrationSweepProposal(proposal, Zatoshi(500_000L)) }
+        assertEquals(
+            listOf<Any>(co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionArgs),
+            router.forwardedRoutes,
+        )
     }
 
     // MigrationReviewVM's IMMEDIATE-mode `onConfirm` callback only becomes reachable through
@@ -178,10 +186,15 @@ class MigrationReviewVMTest {
     // real subscriber is exactly the kind of Flow-timing plumbing this test isn't meant to be
     // about. `MigrationCompleteVMTest.invokeOnDone` establishes the same
     // call-the-private-handler-via-reflection pattern for the identical reason.
-    private fun invokeOnConfirmImmediate(vm: MigrationReviewVM, proposal: Proposal) {
-        val method = MigrationReviewVM::class.java.getDeclaredMethod("onConfirmImmediate", Proposal::class.java)
+    private fun invokeOnConfirmImmediate(vm: MigrationReviewVM, proposal: Proposal, amountZatoshi: Long = 500_000L) {
+        val method =
+            MigrationReviewVM::class.java.getDeclaredMethod(
+                "onConfirmImmediate",
+                Proposal::class.java,
+                Long::class.java,
+            )
         method.isAccessible = true
-        method.invoke(vm, proposal)
+        method.invoke(vm, proposal, amountZatoshi)
     }
 
     private fun vm(
@@ -195,6 +208,8 @@ class MigrationReviewVMTest {
             coEvery { getZashiSpendingKey() } returns mockk<UnifiedSpendingKey>()
         },
         getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase = mockk<GetOrchardMigrationSdkUseCase>(relaxed = true),
+        keystoneProposalRepository: co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository =
+            mockk(relaxed = true),
     ) = MigrationReviewVM(
         args = MigrationReviewArgs(mode = MigrationMode.IMMEDIATE),
         getOrchardMigrationSdk = getOrchardMigrationSdk,
@@ -210,6 +225,7 @@ class MigrationReviewVMTest {
         zashiSpendingKeyDataSource = zashiSpendingKeyDataSource,
         biometricRepository = mockk<BiometricRepository>(relaxed = true),
         proposalDataSource = proposalDataSource,
+        keystoneProposalRepository = keystoneProposalRepository,
     )
 
     private class FakeNavigationRouter : NavigationRouter {

@@ -30,6 +30,7 @@ import co.electriccoin.zcash.ui.common.repository.BiometricRequest
 import co.electriccoin.zcash.ui.common.repository.BiometricsCancelledException
 import co.electriccoin.zcash.ui.common.repository.BiometricsFailureException
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
+import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
@@ -42,6 +43,7 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.screen.migration.keystonesign.MigrationKeystoneSignArgs
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
+import co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionArgs
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -64,6 +66,7 @@ class MigrationReviewVM(
     private val zashiSpendingKeyDataSource: ZashiSpendingKeyDataSource,
     private val biometricRepository: BiometricRepository,
     private val proposalDataSource: ProposalDataSource,
+    private val keystoneProposalRepository: KeystoneProposalRepository,
 ) : ViewModel() {
 
     // proposeImmediateMigration() now returns an ordinary send-max Proposal (bypassing the
@@ -202,7 +205,7 @@ class MigrationReviewVM(
             ),
             fee = stringRes(fee),
             isConfirming = isConfirming,
-            onConfirm = { onConfirmImmediate(proposal.proposal) },
+            onConfirm = { onConfirmImmediate(proposal.proposal, proposal.amountZatoshi) },
             onBack = ::onBack,
             failureSheet = immediateFailureResult?.let {
                 MigrationTransferFailureState(
@@ -214,7 +217,10 @@ class MigrationReviewVM(
                     // "go back", which the shared bottom sheet used to do for such cases) keeps the
                     // sheet from lying about what its button does.
                     onRetry = if (it is SubmitResult.GrpcFailure) {
-                        { immediateFailure.value = null; confirmLce.execute { confirmImmediate(proposal.proposal) } }
+                        {
+                            immediateFailure.value = null
+                            confirmLce.execute { confirmImmediate(proposal.proposal, proposal.amountZatoshi) }
+                        }
                     } else {
                         null
                     },
@@ -306,7 +312,7 @@ class MigrationReviewVM(
         finalizeMigrationSchedule(scheduleToSign, args.mode)
     }
 
-    private fun onConfirmImmediate(proposal: Proposal) =
+    private fun onConfirmImmediate(proposal: Proposal, amountZatoshi: Long) =
         confirmLce.execute {
             try {
                 biometricRepository.requestBiometrics(
@@ -324,16 +330,18 @@ class MigrationReviewVM(
             } catch (_: BiometricsCancelledException) {
                 return@execute
             }
-            confirmImmediate(proposal)
+            confirmImmediate(proposal, amountZatoshi)
         }
 
-    private suspend fun confirmImmediate(proposal: Proposal) {
+    private suspend fun confirmImmediate(proposal: Proposal, amountZatoshi: Long) {
         if (getSelectedWalletAccount() is KeystoneAccount) {
-            // TODO(migration-immediate-keystone-integration): wire to the real Keystone sweep
-            // pipeline once KeystoneProposalRepository.setMigrationSweepProposal() lands (see
-            // sibling worktree wt-keystone-sweep-plumbing) — until then, fail loudly and safely
-            // instead of silently attempting to sign with the wrong (Zashi) key.
-            error("MigrationReviewVM: IMMEDIATE mode for Keystone accounts is not yet wired up")
+            // Keystone can't sign in-process — adopt the already-built send-max proposal into the
+            // app's existing generic external-signer pipeline exactly as an ordinary Keystone send
+            // does (no migration-specific PCZT/QR machinery — one ordinary PCZT, same as any
+            // regular Keystone send).
+            keystoneProposalRepository.setMigrationSweepProposal(proposal, Zatoshi(amountZatoshi))
+            navigationRouter.forward(SignKeystoneTransactionArgs)
+            return
         }
         val usk = zashiSpendingKeyDataSource.getZashiSpendingKey()
         val result = withContext(NonCancellable) {
