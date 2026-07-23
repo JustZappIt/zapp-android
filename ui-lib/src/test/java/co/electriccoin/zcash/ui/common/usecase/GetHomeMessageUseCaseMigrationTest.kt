@@ -2,6 +2,7 @@ package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.MigrationProgress
 import cash.z.ecc.android.sdk.MigrationState
+import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_DUST_THRESHOLD_ZATOSHI
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.repository.HomeMessageData
@@ -35,9 +36,22 @@ class GetHomeMessageUseCaseMigrationTest {
             sdkState = null,
             plan = null,
             hasSeenComplete = false,
-            orchardBalanceZatoshi = 100_000L,
+            orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI + 100_000L,
         )
         assertEquals(HomeMessageData.Migration(null), result)
+    }
+
+    @Test
+    fun freshWalletWithDustBalanceAndNoPlanShowsNothing() {
+        // Entry-banner gating uses the same dust threshold as completion gating (spec §9.9) — a
+        // balance at or below it never needs a migration prompt of its own.
+        val result = migrationMessageFor(
+            sdkState = null,
+            plan = null,
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI,
+        )
+        assertNull(result)
     }
 
     @Test
@@ -63,9 +77,24 @@ class GetHomeMessageUseCaseMigrationTest {
             sdkState = MigrationState.Complete,
             plan = plan(),
             hasSeenComplete = false,
-            orchardBalanceZatoshi = 200_000L,
+            orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI - 1L,
         )
         assertEquals(HomeMessageData.Migration(plan(), isComplete = true), result)
+    }
+
+    @Test
+    fun completeWithUnacknowledgedPlanButResidualAboveThresholdDoesNotShowCompleteBanner() {
+        // Pins the fix for the multi-round Keystone bug: the SDK's own MigrationState reports
+        // Complete as soon as the *current* round's transfers are all mined, even with a large
+        // residual balance well above the dust threshold still needing another round. Showing the
+        // one-time completion banner (and its "Lock balance" option) at that point would be wrong.
+        val result = migrationMessageFor(
+            sdkState = MigrationState.Complete,
+            plan = plan(),
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = 500_000L,
+        )
+        assertNull(result)
     }
 
     @Test

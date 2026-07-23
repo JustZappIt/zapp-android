@@ -1,19 +1,31 @@
 package co.electriccoin.zcash.ui.screen.migration.complete
 
 import androidx.navigation.NavBackStackEntry
+import cash.z.ecc.android.sdk.OrchardMigrationSdk
+import cash.z.ecc.android.sdk.model.Proposal
+import cash.z.ecc.android.sdk.model.UnifiedSpendingKey
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.BaseNavigationCommand
 import co.electriccoin.zcash.ui.NavigationCommand
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.datasource.ProposalDataSource
+import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
+import co.electriccoin.zcash.ui.common.model.SubmitResult
 import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.model.ZashiAccount
+import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_DUST_THRESHOLD_ZATOSHI
 import co.electriccoin.zcash.ui.common.provider.HasLockedOrchardDustStorageProvider
 import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
+import co.electriccoin.zcash.ui.common.repository.BiometricRepository
+import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
+import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
+import co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionArgs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -113,18 +125,135 @@ class MigrationCompleteVMTest {
         assertEquals(1, router.backToRootCount)
     }
 
+    @Test
+    fun keystoneAccountWithDustResidualBelowThresholdMarksSeenInsteadOfClearing() = runTest {
+        // Pins the fix for Task 3's bug: a bare `> 0L` check used to treat *any* nonzero residual
+        // as "more rounds needed", incorrectly clearing the plan even for a genuinely-dust residual
+        // well below the real completion threshold.
+        val plans = mockk<MigrationPlanRepository>(relaxed = true)
+        val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
+        val router = FakeNavigationRouter()
+        val vm = vm(
+            plans = plans,
+            seen = seen,
+            account = mockk<KeystoneAccount>(relaxed = true),
+            orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI - 1L,
+            router = router,
+        )
+
+        advanceUntilIdle()
+        invokeOnDone(vm)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { plans.clear() }
+        coVerify(exactly = 1) { seen.store(true) }
+        assertEquals(1, router.backToRootCount)
+    }
+
+    @Test
+    fun keystoneAccountWithResidualExactlyAtThresholdMarksSeenInsteadOfClearing() = runTest {
+        // Boundary check: exactly-at-threshold is still "done" (comparison is strictly `>`).
+        val plans = mockk<MigrationPlanRepository>(relaxed = true)
+        val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
+        val router = FakeNavigationRouter()
+        val vm = vm(
+            plans = plans,
+            seen = seen,
+            account = mockk<KeystoneAccount>(relaxed = true),
+            orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI,
+            router = router,
+        )
+
+        advanceUntilIdle()
+        invokeOnDone(vm)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { plans.clear() }
+        coVerify(exactly = 1) { seen.store(true) }
+        assertEquals(1, router.backToRootCount)
+    }
+
+    @Test
+    fun migrateAnywayForZashiAccountSignsAndSubmitsProposalDirectly() = runTest {
+        val router = FakeNavigationRouter()
+        val proposalDataSource = mockk<ProposalDataSource>(relaxed = true)
+        val proposal = mockk<Proposal>(relaxed = true)
+        val usk = mockk<UnifiedSpendingKey>(relaxed = true)
+        val sdk = mockk<OrchardMigrationSdk> {
+            coEvery { proposeImmediateMigration() } returns proposal
+        }
+        coEvery { proposalDataSource.submitTransaction(proposal, usk) } returns SubmitResult.Success(listOf("txid"))
+
+        val vm = vm(
+            account = mockk<ZashiAccount>(relaxed = true),
+            orchardBalanceZatoshi = 500_000L,
+            router = router,
+            getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
+            zashiSpendingKeyDataSource = mockk { coEvery { getZashiSpendingKey() } returns usk },
+            proposalDataSource = proposalDataSource,
+        )
+
+        advanceUntilIdle()
+        invokeOnMigrateAnyway(vm)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { proposalDataSource.submitTransaction(proposal, usk) }
+        assertEquals(listOf<Any>(MigrationSuccessArgs("txid")), router.forwardedRoutes)
+    }
+
+    @Test
+    fun migrateAnywayForKeystoneAccountBuildsPcztAndNavigatesToSign() = runTest {
+        val router = FakeNavigationRouter()
+        val proposal = mockk<Proposal>(relaxed = true)
+        val sdk = mockk<OrchardMigrationSdk> {
+            coEvery { proposeImmediateMigration() } returns proposal
+        }
+        val keystoneProposalRepository = mockk<KeystoneProposalRepository>(relaxed = true)
+        val proposalDataSource = mockk<ProposalDataSource>(relaxed = true)
+
+        val vm = vm(
+            account = mockk<KeystoneAccount>(relaxed = true),
+            orchardBalanceZatoshi = 500_000L,
+            router = router,
+            getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
+            keystoneProposalRepository = keystoneProposalRepository,
+            proposalDataSource = proposalDataSource,
+        )
+
+        advanceUntilIdle()
+        invokeOnMigrateAnyway(vm)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { keystoneProposalRepository.setMigrationSweepProposal(proposal, Zatoshi(500_000L)) }
+        coVerify(exactly = 1) { keystoneProposalRepository.createPCZTFromProposal() }
+        coVerify(exactly = 0) { proposalDataSource.submitTransaction(any<Proposal>(), any<UnifiedSpendingKey>()) }
+        assertEquals(1, router.forwardedRoutes.count { it == SignKeystoneTransactionArgs })
+    }
+
     private fun invokeOnDone(vm: MigrationCompleteVM) {
         val onDone = MigrationCompleteVM::class.java.getDeclaredMethod("onDone")
         onDone.isAccessible = true
         onDone.invoke(vm)
     }
 
+    private fun invokeOnMigrateAnyway(vm: MigrationCompleteVM) {
+        val onMigrateAnyway = MigrationCompleteVM::class.java.getDeclaredMethod("onMigrateAnyway")
+        onMigrateAnyway.isAccessible = true
+        onMigrateAnyway.invoke(vm)
+    }
+
+    @Suppress("LongParameterList")
     private fun vm(
-        plans: MigrationPlanRepository,
-        seen: HasSeenMigrationCompleteStorageProvider,
+        plans: MigrationPlanRepository = mockk(relaxed = true),
+        seen: HasSeenMigrationCompleteStorageProvider = mockk(relaxed = true),
         account: WalletAccount,
         orchardBalanceZatoshi: Long,
         router: FakeNavigationRouter,
+        getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase = mockk(relaxed = true),
+        zashiSpendingKeyDataSource: ZashiSpendingKeyDataSource = mockk(relaxed = true),
+        biometricRepository: BiometricRepository = mockk(relaxed = true),
+        proposalDataSource: ProposalDataSource = mockk(relaxed = true),
+        keystoneProposalRepository: KeystoneProposalRepository = mockk(relaxed = true),
     ) = MigrationCompleteVM(
         migrationPlanRepository = plans,
         getOrchardBalance = mockk<GetOrchardBalanceUseCase> {
@@ -137,12 +266,20 @@ class MigrationCompleteVMTest {
         },
         navigationRouter = router,
         errorStateMapper = mockk<ErrorMapperUseCase>(relaxed = true),
+        getOrchardMigrationSdk = getOrchardMigrationSdk,
+        zashiSpendingKeyDataSource = zashiSpendingKeyDataSource,
+        biometricRepository = biometricRepository,
+        proposalDataSource = proposalDataSource,
+        keystoneProposalRepository = keystoneProposalRepository,
     )
 
     private class FakeNavigationRouter : NavigationRouter {
         var backToRootCount = 0
+        val forwardedRoutes = mutableListOf<Any>()
 
-        override fun forward(vararg routes: Any) = Unit
+        override fun forward(vararg routes: Any) {
+            forwardedRoutes.addAll(routes)
+        }
         override fun replace(vararg routes: Any) = Unit
         override fun replaceAll(vararg routes: Any) = Unit
         override fun back() = Unit

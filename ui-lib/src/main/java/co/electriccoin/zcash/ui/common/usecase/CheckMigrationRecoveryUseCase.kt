@@ -3,6 +3,7 @@ package co.electriccoin.zcash.ui.common.usecase
 import cash.z.ecc.android.sdk.MigrationState
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_DUST_THRESHOLD_ZATOSHI
 import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.screen.home.HomeArgs
@@ -44,6 +45,7 @@ class CheckMigrationRecoveryUseCase(
     private val navigationRouter: NavigationRouter,
     private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
     private val migrationPlanRepository: MigrationPlanRepository,
+    private val getOrchardBalance: GetOrchardBalanceUseCase,
 ) {
     suspend operator fun invoke() {
         // No wallet yet (e.g. a fresh install before onboarding) — this runs on every
@@ -57,7 +59,13 @@ class CheckMigrationRecoveryUseCase(
             navigationRouter.replaceAll(HomeArgs, MigrationProgressArgs)
         } else if (sdk.getMigrationState() == MigrationState.Complete &&
             !hasSeenMigrationCompleteStorageProvider.get() &&
-            migrationPlanRepository.load() != null
+            migrationPlanRepository.load() != null &&
+            // Truly complete, not just "this round's transfers are all mined" — a multi-round
+            // Keystone migration reports Complete at every round boundary even with a large
+            // residual balance still needing another round (see
+            // MIGRATION_DUST_THRESHOLD_ZATOSHI's kdoc). Routing to the celebration screen at that
+            // point would also dangerously offer "Lock balance" on an above-threshold balance.
+            getOrchardBalance().value <= MIGRATION_DUST_THRESHOLD_ZATOSHI
         ) {
             // A fresh install / a wallet that never needed to migrate never reaches
             // MigrationState.Complete — that requires a MigrationPlan to have existed and finished,

@@ -42,6 +42,7 @@ import co.electriccoin.zcash.ui.design.util.scaffoldPadding
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.common.LceRenderer
 import co.electriccoin.zcash.ui.screen.common.PrivacyDisclaimerCard
+import co.electriccoin.zcash.ui.screen.migration.component.MigrationFailureBottomSheet
 import kotlinx.serialization.Serializable
 import org.koin.androidx.compose.koinViewModel
 
@@ -54,6 +55,8 @@ data class MigrationCompleteState(
     val onDone: () -> Unit,
     val onMigrateAnyway: () -> Unit,
     val onLockBalance: () -> Unit,
+    val isMigrating: Boolean = false,
+    val failureSheet: co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState? = null,
 )
 
 @Serializable
@@ -147,7 +150,12 @@ fun MigrationCompleteView(state: MigrationCompleteState) {
                     )
                     Spacer(Modifier.height(20.dp))
                     ZashiButton(
-                        state = ButtonState(text = stringRes("Migrate anyway"), onClick = state.onMigrateAnyway),
+                        state = ButtonState(
+                            text = stringRes(if (state.isMigrating) "Migrating…" else "Migrate anyway"),
+                            onClick = state.onMigrateAnyway,
+                            isEnabled = !state.isMigrating,
+                            isLoading = state.isMigrating,
+                        ),
                         modifier = Modifier.fillMaxWidth(),
                         defaultPrimaryColors = ZashiButtonDefaults.secondaryColors(
                             contentColor = ZashiColors.Utility.WarningYellow.utilityOrange700,
@@ -156,13 +164,18 @@ fun MigrationCompleteView(state: MigrationCompleteState) {
                     )
                     Spacer(Modifier.height(8.dp))
                     ZashiButton(
-                        state = ButtonState(text = stringRes("Lock balance"), onClick = state.onLockBalance),
+                        state = ButtonState(
+                            text = stringRes("Lock balance"),
+                            onClick = state.onLockBalance,
+                            isEnabled = !state.isMigrating,
+                        ),
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
         }
     }
+    MigrationFailureBottomSheet(state.failureSheet)
 }
 
 @Composable

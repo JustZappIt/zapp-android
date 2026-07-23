@@ -2,11 +2,17 @@ package co.electriccoin.zcash.ui.common.repository
 
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
 import co.electriccoin.zcash.preference.model.entry.PreferenceKey
+import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
+import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 
@@ -30,33 +36,43 @@ interface MigrationPlanRepository {
     suspend fun clear()
 }
 
+/**
+ * Keyed per-account (see [AccountDataSource]) — a Zodl and a Keystone account can each run their
+ * own migration plan independently; without this, completing/clearing one account's plan would
+ * clobber the other's in-progress plan (they'd share a single global key).
+ */
 class MigrationPlanRepositoryImpl(
-    private val encryptedPreferenceProvider: EncryptedPreferenceProvider
+    private val encryptedPreferenceProvider: EncryptedPreferenceProvider,
+    private val accountDataSource: AccountDataSource,
 ) : MigrationPlanRepository {
     private val json = Json { ignoreUnknownKeys = true }
-    private val key = PreferenceKey("migration_plan")
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun observe(): Flow<MigrationPlan?> =
-        flow {
-            emit(load())
-            emitAll(
-                encryptedPreferenceProvider()
-                    .observe(key = key)
-                    .map { encoded -> encoded?.toMigrationPlan() }
-            )
+        accountDataSource.selectedAccount.flatMapLatest { account ->
+            if (account == null) {
+                flowOf(null)
+            } else {
+                val key = key(account)
+                flow {
+                    emit(loadByKey(key))
+                    emitAll(
+                        encryptedPreferenceProvider()
+                            .observe(key = key)
+                            .map { encoded -> encoded?.toMigrationPlan() }
+                    )
+                }
+            }
         }
 
     override suspend fun save(plan: MigrationPlan) {
         encryptedPreferenceProvider().putString(
-            key = key,
+            key = currentKey(),
             value = json.encodeToString(MigrationPlan.serializer(), plan)
         )
     }
 
-    override suspend fun load(): MigrationPlan? =
-        encryptedPreferenceProvider()
-            .getString(key)
-            ?.toMigrationPlan()
+    override suspend fun load(): MigrationPlan? = loadByKey(currentKey())
 
     override suspend fun updateTransfer(
         index: Int,
@@ -87,8 +103,18 @@ class MigrationPlanRepositoryImpl(
     }
 
     override suspend fun clear() {
-        encryptedPreferenceProvider().remove(key)
+        encryptedPreferenceProvider().remove(currentKey())
     }
+
+    private suspend fun loadByKey(key: PreferenceKey): MigrationPlan? =
+        encryptedPreferenceProvider()
+            .getString(key)
+            ?.toMigrationPlan()
+
+    private suspend fun currentKey(): PreferenceKey = key(accountDataSource.getSelectedAccount())
+
+    private fun key(account: WalletAccount): PreferenceKey =
+        PreferenceKey("migration_plan_${account.sdkAccount.accountUuid.toStorageKeyId()}")
 
     private fun String.toMigrationPlan(): MigrationPlan? =
         runCatching { json.decodeFromString<MigrationPlan>(this) }.getOrNull()
