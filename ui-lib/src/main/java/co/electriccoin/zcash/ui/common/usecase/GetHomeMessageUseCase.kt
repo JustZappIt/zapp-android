@@ -10,6 +10,7 @@ import co.electriccoin.zcash.ui.common.model.SynchronizerError
 import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.model.WalletRestoringState
 import co.electriccoin.zcash.ui.common.model.WalletSnapshot
+import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_DUST_THRESHOLD_ZATOSHI
 import co.electriccoin.zcash.ui.common.provider.CrashReportingStorageProvider
 import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
 import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
@@ -305,7 +306,15 @@ internal fun migrationMessageFor(
     when {
         sdkState is MigrationState.InProgress -> HomeMessageData.Migration(plan)
 
-        sdkState == MigrationState.Complete && plan != null && !hasSeenComplete ->
+        // Gated on the real dust threshold, not just the SDK's per-round Complete state — a
+        // multi-round Keystone migration reports Complete as soon as the *current* round's
+        // transfers are all mined, even with a large residual balance still needing another
+        // round (see MIGRATION_DUST_THRESHOLD_ZATOSHI's kdoc). Without this, finishing an
+        // earlier round would incorrectly show the one-time completion banner.
+        sdkState == MigrationState.Complete &&
+            plan != null &&
+            !hasSeenComplete &&
+            orchardBalanceZatoshi <= MIGRATION_DUST_THRESHOLD_ZATOSHI ->
             // Stays visible until the user actually engages with it — marked seen in
             // MigrationCompleteVM.onDone(), not just for having been displayed.
             HomeMessageData.Migration(plan, isComplete = true)
@@ -314,7 +323,9 @@ internal fun migrationMessageFor(
         // this must never fire for a wallet whose Orchard balance is 0, even with real Sapling
         // funds). Falls through here regardless of what sdkState says once plan is null — covers
         // both "never migrated" and "a round finished, more residual balance needs another round."
-        orchardBalanceZatoshi > 0L && plan == null -> HomeMessageData.Migration(null)
+        // Same dust threshold as above, not a bare `> 0L` — a truly-dust balance never needs a
+        // migration prompt of its own.
+        orchardBalanceZatoshi > MIGRATION_DUST_THRESHOLD_ZATOSHI && plan == null -> HomeMessageData.Migration(null)
 
         else -> null
     }
