@@ -321,6 +321,14 @@ class OrchardMigrationSdkMock(
     // TODO: no-op stub, mirrors OrchardMigrationSdkImpl — no real unspendable-note tracking yet.
     override suspend fun lockRemainingOrchardBalance() = Unit
 
+    // ── Debug ─────────────────────────────────────────────────────────────────
+
+    // No-op: this mock has no persisted migration table to wipe.
+    override suspend fun clearMigration() = Unit
+
+    // No-op: this mock has no persisted schedule to rewrite.
+    override suspend fun debugRescheduleTransfers() = 0
+
     // Debug-only QA hook (see MigrationProgressVM.onSimulateInvalidTransfer) — the real SDK
     // will surface RequiresAttention(InvalidTransfer) on its own once it exists; this mock has
     // no organic way to reach that state otherwise.
