@@ -5,7 +5,6 @@ import cash.z.ecc.android.sdk.MigrationState
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
-import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_DUST_THRESHOLD_ZATOSHI
 import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
 import co.electriccoin.zcash.ui.common.provider.IsBackgroundExecutionAvailableProvider
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
@@ -106,10 +105,9 @@ class CheckMigrationRecoveryUseCase(
             migrationPlanRepository.load() != null &&
             // Truly complete, not just "this round's transfers are all mined" — a multi-round
             // Keystone migration reports Complete at every round boundary even with a large
-            // residual balance still needing another round (see
-            // MIGRATION_DUST_THRESHOLD_ZATOSHI's kdoc). Routing to the celebration screen at that
-            // point would also dangerously offer "Lock balance" on an above-threshold balance.
-            getOrchardBalance().value <= MIGRATION_DUST_THRESHOLD_ZATOSHI
+            // residual balance still needing another round. Routing to the celebration screen at
+            // that point would also dangerously offer "Lock balance" on an above-threshold balance.
+            getOrchardBalance().value <= sdk.migrationDustThresholdZatoshi()
         ) {
             // A fresh install / a wallet that never needed to migrate never reaches
             // MigrationState.Complete — that requires a MigrationPlan to have existed and finished,

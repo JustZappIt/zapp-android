@@ -1,9 +1,8 @@
 package co.electriccoin.zcash.ui.common.model.migration
 
-// TODO: replace with `OrchardMigrationSdk.migrationDustThresholdZatoshi()` (or however it ends up
-// named) once the SDK exposes the real Rust-layer constant — this is a placeholder duplicating the
-// documented ~0.001 ZEC `residual_after_migration()` threshold so the app has *a* real gate instead
-// of the bare `> 0L`/`== MigrationState.Complete` checks that used to treat every round boundary as
-// full completion. Every "is migration truly, fully complete" check in the app should compare
-// against this constant (or its eventual SDK replacement), not define its own threshold.
+// Callers should prefer the live `OrchardMigrationSdk.migrationDustThresholdZatoshi()` value —
+// this constant exists only as the fallback for the rare case where no SDK/wallet is available yet
+// (e.g. `getOrchardMigrationSdk()` returns null), so those call sites still have *a* real gate
+// instead of a bare `> 0L`/`== MigrationState.Complete` check. Matches the Rust-layer
+// `MIGRATION_DUST_THRESHOLD_ZATOSHI` in `migration.rs` as of this writing.
 const val MIGRATION_DUST_THRESHOLD_ZATOSHI = 100_000L

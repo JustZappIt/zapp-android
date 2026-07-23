@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.common.usecase
 
+import cash.z.ecc.android.sdk.AttentionReason
 import cash.z.ecc.android.sdk.MigrationState
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.model.Zatoshi
@@ -91,7 +92,7 @@ class CheckMigrationRecoveryUseCaseTest {
     @Test
     fun noPendingTorFailureFallsThroughToInvalidTransferCheck() = runTest {
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { hasInvalidTransfers() } returns true
+            coEvery { getMigrationState() } returns MigrationState.RequiresAttention(AttentionReason.TransferExpired)
         }
         val router = mockk<NavigationRouter>(relaxed = true)
 
@@ -125,7 +126,7 @@ class CheckMigrationRecoveryUseCaseTest {
         val now = Clock.System.now()
         val plan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { hasInvalidTransfers() } returns true
+            coEvery { getMigrationState() } returns MigrationState.RequiresAttention(AttentionReason.InvalidTransfer("t1"))
         }
         val router = mockk<NavigationRouter>(relaxed = true)
 

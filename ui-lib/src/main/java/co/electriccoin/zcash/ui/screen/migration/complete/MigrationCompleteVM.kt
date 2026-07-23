@@ -155,9 +155,11 @@ class MigrationCompleteVM(
                 // migrationMessageFor() then naturally re-evaluates to REQUIRED (plan == null) even
                 // though the SDK's own MigrationState is still Complete (it only advances once the
                 // next round is actually committed).
+                val dustThreshold = getOrchardMigrationSdk()?.migrationDustThresholdZatoshi()
+                    ?: MIGRATION_DUST_THRESHOLD_ZATOSHI
                 val moreRoundsNeeded =
                     getSelectedWalletAccount() is KeystoneAccount &&
-                        getOrchardBalance().value > MIGRATION_DUST_THRESHOLD_ZATOSHI
+                        getOrchardBalance().value > dustThreshold
                 if (moreRoundsNeeded) {
                     migrationPlanRepository.clear()
                 } else {

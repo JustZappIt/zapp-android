@@ -127,6 +127,7 @@ class GetHomeMessageUseCase(
                     plan = plan,
                     hasSeenComplete = hasSeenComplete,
                     orchardBalanceZatoshi = getOrchardBalance().value,
+                    dustThresholdZatoshi = sdk?.migrationDustThresholdZatoshi() ?: MIGRATION_DUST_THRESHOLD_ZATOSHI,
                     isBackgroundExecutionAvailable = readyToSendSignal.isBackgroundExecutionAvailable,
                     hasOverdueTransfers = readyToSendSignal.hasOverdueTransfers,
                     attentionKind = attentionKind,
@@ -378,6 +379,7 @@ internal fun migrationMessageFor(
     plan: co.electriccoin.zcash.ui.common.model.migration.MigrationPlan?,
     hasSeenComplete: Boolean,
     orchardBalanceZatoshi: Long,
+    dustThresholdZatoshi: Long = MIGRATION_DUST_THRESHOLD_ZATOSHI,
     isBackgroundExecutionAvailable: Boolean = true,
     hasOverdueTransfers: Boolean = false,
     now: Instant = Clock.System.now(),
@@ -412,12 +414,12 @@ internal fun migrationMessageFor(
         // Gated on the real dust threshold, not just the SDK's per-round Complete state — a
         // multi-round Keystone migration reports Complete as soon as the *current* round's
         // transfers are all mined, even with a large residual balance still needing another
-        // round (see MIGRATION_DUST_THRESHOLD_ZATOSHI's kdoc). Without this, finishing an
-        // earlier round would incorrectly show the one-time completion banner.
+        // round. Without this, finishing an earlier round would incorrectly show the one-time
+        // completion banner.
         sdkState == MigrationState.Complete &&
             plan != null &&
             !hasSeenComplete &&
-            orchardBalanceZatoshi <= MIGRATION_DUST_THRESHOLD_ZATOSHI ->
+            orchardBalanceZatoshi <= dustThresholdZatoshi ->
             // Stays visible until the user actually engages with it — marked seen in
             // MigrationCompleteVM.onDone(), not just for having been displayed.
             HomeMessageData.Migration(plan, isComplete = true)
@@ -428,7 +430,7 @@ internal fun migrationMessageFor(
         // both "never migrated" and "a round finished, more residual balance needs another round."
         // Same dust threshold as above, not a bare `> 0L` — a truly-dust balance never needs a
         // migration prompt of its own.
-        orchardBalanceZatoshi > MIGRATION_DUST_THRESHOLD_ZATOSHI && plan == null -> HomeMessageData.Migration(null)
+        orchardBalanceZatoshi > dustThresholdZatoshi && plan == null -> HomeMessageData.Migration(null)
 
         else -> null
     }

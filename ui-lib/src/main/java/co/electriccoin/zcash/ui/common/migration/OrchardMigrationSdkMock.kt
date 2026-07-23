@@ -328,6 +328,9 @@ class OrchardMigrationSdkMock(
 
     // ── Dust locking ─────────────────────────────────────────────────────────
 
+    // Matches the real Rust-layer MIGRATION_DUST_THRESHOLD_ZATOSHI constant this mock stands in for.
+    override suspend fun migrationDustThresholdZatoshi(): Long = MIGRATION_DUST_THRESHOLD_ZATOSHI
+
     // TODO: no-op stub, mirrors OrchardMigrationSdkImpl — no real unspendable-note tracking yet.
     override suspend fun lockRemainingOrchardBalance() = Unit
 
@@ -409,6 +412,7 @@ class OrchardMigrationSdkMock(
         private const val MIGRATION_MAX_PREPARED_NOTES_PER_RUN = 64
         private const val TRANSFER_FEE_BUFFER_ZATOSHI = 20_000L
         private const val RESIDUAL_MIGRATION_MIN_ZATOSHI = 100_000L
+        private const val MIGRATION_DUST_THRESHOLD_ZATOSHI = 100_000L
         private const val NOTE_SPLIT_PREP_FEE_ZATOSHI = 10_000L
 
         // Compressed stand-in for the real ~6h target / ~24h max cadence (TARGET_CADENCE_BLOCKS /
