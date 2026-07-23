@@ -22,8 +22,6 @@ import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepository
 import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepositoryImpl
-import co.electriccoin.zcash.ui.common.repository.PendingImmediateProposalRepository
-import co.electriccoin.zcash.ui.common.repository.PendingImmediateProposalRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPcztsRepository
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPcztsRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
@@ -93,7 +91,6 @@ val repositoryModule =
         singleOf(::PendingMigrationScheduleRepositoryImpl) bind PendingMigrationScheduleRepository::class
         singleOf(::PendingMigrationTorFailureDecisionRepositoryImpl) bind
             PendingMigrationTorFailureDecisionRepository::class
-        singleOf(::PendingImmediateProposalRepositoryImpl) bind PendingImmediateProposalRepository::class
         singleOf(::PendingKeystoneMigrationPcztsRepositoryImpl) bind PendingKeystoneMigrationPcztsRepository::class
         singleOf(::MockOrchardBalanceRepositoryImpl) bind MockOrchardBalanceRepository::class
     }
