@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
@@ -37,7 +36,6 @@ import org.koin.androidx.compose.koinViewModel
 fun MigrationSendingScreen() {
     val vm = koinViewModel<MigrationSendingVM>()
     val state by vm.state.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { vm.send() }
     LceRenderer(state) { MigrationSendingView(it) }
 }
 

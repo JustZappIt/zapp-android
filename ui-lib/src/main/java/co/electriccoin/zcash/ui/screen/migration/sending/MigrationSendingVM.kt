@@ -83,6 +83,7 @@ class MigrationSendingVM(
                 pendingMigrationTorFailureDecisionRepository.clear()
                 sendLce.execute { sendOnce(useTor) }
             }.launchIn(viewModelScope)
+        send()
     }
 
     val state: StateFlow<LceState<MigrationSendingState>> =
@@ -103,7 +104,7 @@ class MigrationSendingVM(
         }.withLce(sendLce, errorStateMapper::mapToState)
             .stateIn(this)
 
-    fun send() = sendLce.execute { sendOnce(useTor = isTorEnabledStorageProvider.get() == true) }
+    private fun send() = sendLce.execute { sendOnce(useTor = isTorEnabledStorageProvider.get() == true) }
 
     private suspend fun sendOnce(useTor: Boolean) {
         val sdk = getOrchardMigrationSdk() ?: error("MigrationSendingVM: no wallet available to send")

@@ -56,7 +56,6 @@ class MigrationSendingVMTest {
         val router = FakeNavigationRouter()
         val vm = vm(sdk = sdk, router = router)
         val collectJob = launch { vm.state.collect {} }
-        vm.send()
 
         advanceUntilIdle()
 
@@ -77,7 +76,6 @@ class MigrationSendingVMTest {
         val router = FakeNavigationRouter()
         val vm = vm(sdk = sdk, router = router)
         val collectJob = launch { vm.state.collect {} }
-        vm.send()
 
         advanceUntilIdle()
 
@@ -99,8 +97,7 @@ class MigrationSendingVMTest {
         val plans = mockk<MigrationPlanRepository> {
             coEvery { load() } returns null
         }
-        val vm = vm(sdk = sdk, router = router, plans = plans)
-        vm.send()
+        vm(sdk = sdk, router = router, plans = plans)
 
         advanceUntilIdle()
 
@@ -109,6 +106,21 @@ class MigrationSendingVMTest {
             sdk.executeNextPendingTransfer(any())
         }
         assertEquals<List<Any>>(listOf(MigrationSuccessArgs("txid123")), router.forwardedRoutes)
+    }
+
+    @Test
+    fun sendIsTriggeredAutomaticallyOnConstructionWithoutAnExternalCall() = runTest {
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+        coEvery { sdk.finalizeReadyTransfers() } returns 0
+        coEvery { sdk.executeNextPendingTransfer(any()) } returns TransferResult.Success("txid456")
+        val router = FakeNavigationRouter()
+        val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
+
+        // No call to vm.send() anywhere in this test — construction alone must trigger it.
+        vm(sdk = sdk, router = router, plans = plans)
+        advanceUntilIdle()
+
+        io.mockk.coVerify(exactly = 1) { sdk.executeNextPendingTransfer(any()) }
     }
 
     private fun vm(
