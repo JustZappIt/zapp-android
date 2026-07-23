@@ -1,14 +1,18 @@
 package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.MigrationState
+import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
+import co.electriccoin.zcash.ui.common.provider.IsBackgroundExecutionAvailableProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.screen.home.HomeArgs
 import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteArgs
 import co.electriccoin.zcash.ui.screen.migration.invalid.MigrationTransferInvalidArgs
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
+import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs
+import kotlin.time.Clock
 
 /**
  * Single source of truth for migration re-entry routing on app launch/foreground — MainActivity's
@@ -38,12 +42,18 @@ import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
  * immediate WorkManager schedule) — the user must explicitly choose to send or reschedule. Sync is
  * already stopped independently of this, via OrchardMigrationSdk.isSyncBlocked() feeding directly
  * into the synchronizer.
+ *
+ * A ready-to-send check (spec §6.4) is inserted BEFORE the overdue-transfer branch — a transfer
+ * that's due but background execution never had a chance to run it takes priority over (and is
+ * narrower than) the general overdue/missed-transfer state, matching the same condition
+ * `GetHomeMessageUseCase.migrationMessageFor()` uses for the home banner.
  */
 class CheckMigrationRecoveryUseCase(
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val navigationRouter: NavigationRouter,
     private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
     private val migrationPlanRepository: MigrationPlanRepository,
+    private val isBackgroundExecutionAvailableProvider: IsBackgroundExecutionAvailableProvider,
 ) {
     suspend operator fun invoke() {
         // No wallet yet (e.g. a fresh install before onboarding) — this runs on every
@@ -52,6 +62,12 @@ class CheckMigrationRecoveryUseCase(
         if (sdk.hasInvalidTransfers()) {
             Twig.debug { "MIGRATION_DIAG MigrationRecovery: invalid transfer detected — redirecting to Transfer Invalid." }
             navigationRouter.replaceAll(HomeArgs, MigrationTransferInvalidArgs)
+        } else if (isTransferReadyToSendWithoutBackground(sdk)) {
+            Twig.debug {
+                "MIGRATION_DIAG MigrationRecovery: transfer due, background execution unavailable — " +
+                    "redirecting to Transfer Review."
+            }
+            navigationRouter.replaceAll(HomeArgs, MigrationTransferReviewArgs)
         } else if (sdk.hasOverdueTransfers()) {
             Twig.debug { "MIGRATION_DIAG MigrationRecovery: overdue transfer detected — redirecting to Resume Migration." }
             navigationRouter.replaceAll(HomeArgs, MigrationProgressArgs)
@@ -65,5 +81,16 @@ class CheckMigrationRecoveryUseCase(
             Twig.debug { "MIGRATION_DIAG MigrationRecovery: migration just completed — showing one-time celebration." }
             navigationRouter.replaceAll(HomeArgs, MigrationCompleteArgs)
         }
+    }
+
+    // Same condition GetHomeMessageUseCase.migrationMessageFor() uses for the home banner: the
+    // next pending transfer's scheduled time has arrived, background execution can't run it, and
+    // the SDK doesn't (yet) count it as overdue — a narrower, earlier window than the general
+    // overdue branch above.
+    private suspend fun isTransferReadyToSendWithoutBackground(sdk: OrchardMigrationSdk): Boolean {
+        if (isBackgroundExecutionAvailableProvider.isAvailable()) return false
+        val next = migrationPlanRepository.load()?.nextPending ?: return false
+        if (next.scheduledAt > Clock.System.now()) return false
+        return !sdk.hasOverdueTransfers()
     }
 }
