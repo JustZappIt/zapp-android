@@ -1,7 +1,9 @@
 package co.electriccoin.zcash.ui.common.usecase
 
+import cash.z.ecc.android.sdk.AttentionReason
 import cash.z.ecc.android.sdk.MigrationProgress
 import cash.z.ecc.android.sdk.MigrationState
+import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.repository.HomeMessageData
@@ -107,5 +109,52 @@ class GetHomeMessageUseCaseMigrationTest {
             orchardBalanceZatoshi = 0L,
         )
         assertNull(result)
+    }
+
+    // Spec §6.2/§6.3 — the home banner must distinguish the two RequiresAttention causes instead
+    // of returning null for both (the pre-fix behavior, which left the user with nothing on Home
+    // if they backed out of the forced full-screen redirect).
+
+    @Test
+    fun requiresAttentionInvalidTransferShowsPlanUpdateBannerWithNoRange() {
+        val result = migrationMessageFor(
+            sdkState = MigrationState.RequiresAttention(AttentionReason.InvalidTransfer("t1")),
+            plan = plan(),
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = 300_000L,
+        )
+        assertEquals(
+            HomeMessageData.Migration(plan(), attentionKind = MigrationAttentionKind.PLAN_UPDATE, attentionRangeText = null),
+            result,
+        )
+    }
+
+    @Test
+    fun requiresAttentionTransferExpiredShowsTransferExpiredBannerWithPrecomputedRange() {
+        val result = migrationMessageFor(
+            sdkState = MigrationState.RequiresAttention(AttentionReason.TransferExpired),
+            plan = plan(),
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = 300_000L,
+            attentionKind = MigrationAttentionKind.TRANSFER_EXPIRED,
+            attentionRangeText = "3–5",
+        )
+        assertEquals(
+            HomeMessageData.Migration(plan(), attentionKind = MigrationAttentionKind.TRANSFER_EXPIRED, attentionRangeText = "3–5"),
+            result,
+        )
+    }
+
+    @Test
+    fun requiresAttentionWithNoPlanFallsThroughToOrdinaryLogicInsteadOfCrashing() {
+        // Defensive case — RequiresAttention in practice always implies a plan/schedule already
+        // existed, but must not NPE or otherwise misbehave if it's somehow null.
+        val result = migrationMessageFor(
+            sdkState = MigrationState.RequiresAttention(AttentionReason.TransferExpired),
+            plan = null,
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = 300_000L,
+        )
+        assertEquals(HomeMessageData.Migration(null), result)
     }
 }

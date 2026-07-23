@@ -1,6 +1,9 @@
 package co.electriccoin.zcash.ui.common.usecase
 
+import cash.z.ecc.android.sdk.AttentionReason
 import cash.z.ecc.android.sdk.MigrationState
+import cash.z.ecc.android.sdk.MigrationTransferStates
+import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.Synchronizer
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
@@ -10,6 +13,10 @@ import co.electriccoin.zcash.ui.common.model.SynchronizerError
 import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.model.WalletRestoringState
 import co.electriccoin.zcash.ui.common.model.WalletSnapshot
+import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
+import co.electriccoin.zcash.ui.common.model.migration.affectedTransferIndices
+import co.electriccoin.zcash.ui.common.model.migration.toMigrationRangeText
+import co.electriccoin.zcash.ui.common.model.migration.toUiKind
 import co.electriccoin.zcash.ui.common.provider.CrashReportingStorageProvider
 import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
 import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
@@ -19,6 +26,7 @@ import co.electriccoin.zcash.ui.common.repository.HomeMessageData
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.RuntimeMessage
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
+import kotlin.time.Clock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -99,14 +107,41 @@ class GetHomeMessageUseCase(
                 migrationPlanRepository.observe(),
                 hasSeenMigrationCompleteStorageProvider.observe(),
             ) { plan, hasSeenComplete ->
+                val sdk = getOrchardMigrationSdk()
+                val sdkState = sdk?.getMigrationState()
+                // Only computed when actually needed (RequiresAttention) — an extra
+                // getMigrationTransferStates() read on every other state would be wasted work.
+                val (attentionKind, attentionRangeText) =
+                    (sdkState as? MigrationState.RequiresAttention)?.let { requiresAttention ->
+                        attentionInfoFor(sdk, requiresAttention.reason, plan)
+                    } ?: (null to null)
                 migrationMessageFor(
-                    sdkState = getOrchardMigrationSdk()?.getMigrationState(),
+                    sdkState = sdkState,
                     plan = plan,
                     hasSeenComplete = hasSeenComplete,
                     orchardBalanceZatoshi = getOrchardBalance().value,
+                    attentionKind = attentionKind,
+                    attentionRangeText = attentionRangeText,
                 )
             }
         }
+
+    // Spec §6.2/§6.3 home-banner support — see MigrationAttentionKind's doc. Correlates the
+    // reason's affected transfer(s) by stable id (never array index, same as MigrationProgressVM's
+    // withLiveState) rather than assuming every not-yet-completed cached transfer is affected.
+    private suspend fun attentionInfoFor(
+        sdk: OrchardMigrationSdk?,
+        reason: AttentionReason,
+        plan: co.electriccoin.zcash.ui.common.model.migration.MigrationPlan?,
+    ): Pair<MigrationAttentionKind, String?> {
+        val kind = reason.toUiKind()
+        if (plan == null) return kind to null
+        val liveStates: MigrationTransferStates? = sdk?.getMigrationTransferStates()
+        val rangeText = reason
+            .affectedTransferIndices(plan, liveStates, Clock.System.now().epochSeconds)
+            .toMigrationRangeText()
+        return kind to rangeText
+    }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun observeShieldFundsMessage() =
@@ -301,8 +336,24 @@ internal fun migrationMessageFor(
     plan: co.electriccoin.zcash.ui.common.model.migration.MigrationPlan?,
     hasSeenComplete: Boolean,
     orchardBalanceZatoshi: Long,
+    // Additive — see HomeMessageData.Migration's doc. Both null unless sdkState is
+    // RequiresAttention; callers precompute these (GetHomeMessageUseCase.attentionInfoFor()) so this
+    // function stays a pure, synchronous decision with no SDK access of its own.
+    attentionKind: MigrationAttentionKind? = null,
+    attentionRangeText: String? = null,
 ): HomeMessageData.Migration? =
     when {
+        // Spec §6.2/§6.3 — takes priority over InProgress/Complete below: a plan needing
+        // re-confirmation is more actionable than its last-known progress snapshot. Falls through
+        // to the ordinary branches below when plan is null (a defensive case — RequiresAttention in
+        // practice always implies a plan/schedule already existed).
+        sdkState is MigrationState.RequiresAttention && plan != null ->
+            HomeMessageData.Migration(
+                plan,
+                attentionKind = attentionKind ?: sdkState.reason.toUiKind(),
+                attentionRangeText = attentionRangeText,
+            )
+
         sdkState is MigrationState.InProgress -> HomeMessageData.Migration(plan)
 
         sdkState == MigrationState.Complete && plan != null && !hasSeenComplete ->

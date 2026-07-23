@@ -76,14 +76,22 @@ fun MigrationMessage(
                         colorFilter = ColorFilter.tint(LocalContentColor.current)
                     )
                 }
+                MigrationBannerPhase.ATTENTION -> {
+                    Image(
+                        painter = painterResource(R.drawable.ic_alert_circle),
+                        contentDescription = null,
+                        colorFilter = ColorFilter.tint(LocalContentColor.current)
+                    )
+                }
             }
         },
         title = {
             Text(
-                when (state.phase) {
+                state.title ?: when (state.phase) {
                     MigrationBannerPhase.COMPLETE -> "Migration complete"
                     MigrationBannerPhase.IN_PROGRESS -> "Migration Progress"
                     MigrationBannerPhase.REQUIRED -> "Migration Required"
+                    MigrationBannerPhase.ATTENTION -> "Migration needs attention"
                 }
             )
         },
@@ -147,6 +155,42 @@ private fun PreviewComplete() =
                 contentPadding = PaddingValues(),
                 state = MigrationMessageState(
                     phase = MigrationBannerPhase.COMPLETE,
+                    progressLabel = "Tap to review the details",
+                    onClick = {},
+                    onButtonClick = {},
+                ),
+            )
+        }
+    }
+
+@PreviewScreens
+@Composable
+private fun PreviewAttentionTransferExpired() =
+    ZcashTheme {
+        BlankSurface {
+            MigrationMessage(
+                contentPadding = PaddingValues(),
+                state = MigrationMessageState(
+                    phase = MigrationBannerPhase.ATTENTION,
+                    title = "Transfer 3–5 expired",
+                    progressLabel = "Tap to review the details",
+                    onClick = {},
+                    onButtonClick = {},
+                ),
+            )
+        }
+    }
+
+@PreviewScreens
+@Composable
+private fun PreviewAttentionPlanUpdate() =
+    ZcashTheme {
+        BlankSurface {
+            MigrationMessage(
+                contentPadding = PaddingValues(),
+                state = MigrationMessageState(
+                    phase = MigrationBannerPhase.ATTENTION,
+                    title = "Update migration plan",
                     progressLabel = "Tap to review the details",
                     onClick = {},
                     onButtonClick = {},
