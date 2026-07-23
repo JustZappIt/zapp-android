@@ -7,7 +7,6 @@ import cash.z.ecc.android.sdk.TransferResult
 import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
 import cash.z.ecc.android.sdk.model.Proposal
 import cash.z.ecc.android.sdk.model.Zatoshi
-import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
@@ -29,6 +28,7 @@ import co.electriccoin.zcash.ui.common.repository.BiometricRequest
 import co.electriccoin.zcash.ui.common.repository.BiometricsCancelledException
 import co.electriccoin.zcash.ui.common.repository.BiometricsFailureException
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
+import co.electriccoin.zcash.ui.common.repository.PendingImmediateProposalRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
@@ -40,6 +40,7 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.screen.migration.keystonesign.MigrationKeystoneSignArgs
+import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -59,6 +60,7 @@ class MigrationReviewVM(
     private val errorStateMapper: ErrorMapperUseCase,
     private val zashiSpendingKeyDataSource: ZashiSpendingKeyDataSource,
     private val biometricRepository: BiometricRepository,
+    private val pendingImmediateProposalRepository: PendingImmediateProposalRepository,
 ) : ViewModel() {
 
     // proposeImmediateMigration() now returns an ordinary send-max Proposal (bypassing the
@@ -171,12 +173,6 @@ class MigrationReviewVM(
     // "list of transfers" the way a MigrationSchedule does — this renders it as a single
     // synthetic row so the (shared) review layout still has something to show, using the real
     // fee from Proposal.totalFeeRequired() instead of AUTOMATIC's placeholder.
-    //
-    // onConfirm is intentionally NOT wired to a real submission yet: this mode's actual send
-    // path (proposal → broadcast) hasn't been implemented app-side since proposeImmediateMigration
-    // stopped returning a MigrationSchedule (see OrchardMigrationSdk's kdoc) — the confirm tap
-    // surfaces a clear failure instead of silently doing nothing or misusing
-    // signAndStoreMigrationSchedule against the wrong data shape.
     private fun createImmediateState(
         proposal: ReviewProposal.Immediate,
         isConfirming: Boolean,
@@ -199,12 +195,7 @@ class MigrationReviewVM(
             ),
             fee = stringRes(fee),
             isConfirming = isConfirming,
-            // No TransferResult variant fits "not implemented yet" without showing a misleading
-            // message (NetworkError/InvalidNote/Expired all imply a specific real failure this
-            // isn't), so this logs rather than surfacing a wrong failureSheet message.
-            onConfirm = {
-                Twig.error { "MigrationReviewVM: IMMEDIATE mode confirm is not yet implemented" }
-            },
+            onConfirm = { onConfirmImmediate(proposal.proposal) },
             onBack = ::onBack,
         )
     }
@@ -281,6 +272,37 @@ class MigrationReviewVM(
         }
         sdk.signAndStoreMigrationSchedule(scheduleToSign, zashiSpendingKeyDataSource.getZashiSpendingKey())
         finalizeMigrationSchedule(scheduleToSign, args.mode)
+    }
+
+    private fun onConfirmImmediate(proposal: Proposal) =
+        confirmLce.execute {
+            try {
+                biometricRepository.requestBiometrics(
+                    request =
+                        BiometricRequest(
+                            message =
+                                stringRes(
+                                    R.string.authentication_system_ui_subtitle,
+                                    stringRes(R.string.authentication_use_case_send_funds)
+                                )
+                        )
+                )
+            } catch (_: BiometricsFailureException) {
+                return@execute
+            } catch (_: BiometricsCancelledException) {
+                return@execute
+            }
+            confirmImmediate(proposal)
+        }
+
+    private fun confirmImmediate(proposal: Proposal) {
+        // The actual sign+submit happens on the Sending screen (see
+        // docs/superpowers/plans/2026-07-23-migration-immediate-integration.md) — this hand-off
+        // mirrors PendingMigrationScheduleRepository's role for the Keystone detour, just for an
+        // ordinary send-max Proposal instead of a MigrationSchedule. IMMEDIATE mode has no
+        // Keystone branch (pre-existing, accepted gap), so there is no account-type check here.
+        pendingImmediateProposalRepository.set(proposal)
+        navigationRouter.forward(MigrationSendingArgs)
     }
 
     private fun onBack() = proposeLce.guardLoading { navigationRouter.back() }
