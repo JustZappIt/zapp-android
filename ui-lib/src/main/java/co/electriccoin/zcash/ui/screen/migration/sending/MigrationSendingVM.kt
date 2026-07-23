@@ -12,7 +12,8 @@ import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
-import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
+import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
+import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationTorFailureDecisionRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
@@ -37,8 +38,9 @@ class MigrationSendingVM(
     private val scheduleNextMigrationWindow: ScheduleNextMigrationWindowUseCase,
     private val navigationRouter: NavigationRouter,
     private val errorStateMapper: ErrorMapperUseCase,
-    private val isTorEnabledStorageProvider: IsTorEnabledStorageProvider,
+    private val isMigrationTorEnabledStorageProvider: IsMigrationTorEnabledStorageProvider,
     private val pendingMigrationTorFailureDecisionRepository: PendingMigrationTorFailureDecisionRepository,
+    private val pendingMigrationTorFailureStorageProvider: PendingMigrationTorFailureStorageProvider,
 ) : ViewModel() {
 
     private val sendLce = mutableLce<Unit>()
@@ -95,7 +97,7 @@ class MigrationSendingVM(
         }.withLce(sendLce, errorStateMapper::mapToState)
             .stateIn(this)
 
-    private fun send() = sendLce.execute { sendOnce(useTor = isTorEnabledStorageProvider.get() == true) }
+    private fun send() = sendLce.execute { sendOnce(useTor = isMigrationTorEnabledStorageProvider.get()) }
 
     fun onBack() = navigationRouter.back()
 
@@ -113,6 +115,12 @@ class MigrationSendingVM(
         }
         when (val r = result) {
             is TransferResult.Success -> {
+                // The one unambiguous "problem resolved" signal — clears a pending background Tor
+                // failure (see PendingMigrationTorFailureStorageProvider) so app-open reconciliation
+                // stops re-routing through this screen. Left `true` on every other outcome
+                // (including a renewed Tor failure below), so it keeps re-surfacing until an actual
+                // successful send happens. A no-op if nothing was pending.
+                pendingMigrationTorFailureStorageProvider.store(false)
                 // Re-arms the next window for a resumed/manually-confirmed transfer in a
                 // multi-transfer AUTOMATIC plan; no-ops once the plan is already complete.
                 scheduleNextMigrationWindow()

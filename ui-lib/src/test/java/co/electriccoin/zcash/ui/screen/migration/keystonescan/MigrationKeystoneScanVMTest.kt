@@ -10,7 +10,6 @@ import co.electriccoin.zcash.ui.BaseNavigationCommand
 import co.electriccoin.zcash.ui.NavigationCommand
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
-import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPczts
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPcztsRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepositoryImpl
@@ -147,7 +146,7 @@ class MigrationKeystoneScanVMTest {
         pendingSchedule = pendingSchedule,
         pendingKeystonePczts = pendingPczts,
         finalizeMigrationSchedule = finalize,
-        isTorEnabledStorageProvider = mockk(relaxed = true),
+        isMigrationTorEnabledStorageProvider = mockk(relaxed = true),
         navigationRouter = router,
     )
 
