@@ -238,8 +238,6 @@ class OrchardMigrationSdkMock(
 
     // ── Background execution ─────────────────────────────────────────────────
 
-    override suspend fun isSyncRequiredBeforeNextTransfer(): Boolean = false
-
     override suspend fun finalizeReadyTransfers(): Int = 0
 
     override suspend fun executeNextPendingTransfer(options: NetworkPrivacyOptions): TransferResult? {

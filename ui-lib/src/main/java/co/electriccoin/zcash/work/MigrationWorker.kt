@@ -45,12 +45,6 @@ class MigrationWorker(
             Twig.debug { "MIGRATION_DIAG MigrationWorker: finalized $finalizedCount transfer(s) awaiting proof." }
         }
 
-        if (sdk.isSyncRequiredBeforeNextTransfer()) {
-            // Sync and broadcast must be decoupled — skip this window, reconcile on next launch.
-            Twig.debug { "MIGRATION_DIAG MigrationWorker: sync required before next transfer — skipping." }
-            return Result.success()
-        }
-
         val plan = migrationPlanRepository.load()
         val next = plan?.nextPending
         val useTor = isTorEnabledStorageProvider.get() == true
