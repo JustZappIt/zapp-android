@@ -10,8 +10,9 @@ import cash.z.ecc.android.sdk.TransferResult
 import cash.z.ecc.android.sdk.ext.ZcashSdk
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
-import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
+import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
+import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
@@ -38,7 +39,8 @@ class MigrationWorker(
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase by inject()
     private val migrationPlanRepository: MigrationPlanRepository by inject()
     private val migrationNotifier: MigrationNotifier by inject()
-    private val isTorEnabledStorageProvider: IsTorEnabledStorageProvider by inject()
+    private val isMigrationTorEnabledStorageProvider: IsMigrationTorEnabledStorageProvider by inject()
+    private val pendingMigrationTorFailureStorageProvider: PendingMigrationTorFailureStorageProvider by inject()
     private val synchronizerProvider: SynchronizerProvider by inject()
 
     override suspend fun doWork(): Result {
@@ -73,7 +75,7 @@ class MigrationWorker(
 
         val plan = migrationPlanRepository.load()
         val next = plan?.nextPending
-        val useTor = isTorEnabledStorageProvider.get() == true
+        val useTor = isMigrationTorEnabledStorageProvider.get()
         return when (val result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor))) {
             null -> {
                 if (next != null) {
@@ -111,6 +113,17 @@ class MigrationWorker(
                 Twig.debug { "MIGRATION_DIAG MigrationWorker: network error, retryable=${result.retryable}" }
                 if (result.retryable) {
                     Result.retry()
+                } else if (useTor) {
+                    // A non-retryable network error while Tor was in use for this attempt is
+                    // presumptively a Tor-connectivity failure, same reasoning as
+                    // MigrationSendingVM.sendOnce()'s interactive NetworkError branch. Persist a
+                    // flag so app-open reconciliation (CheckMigrationRecoveryUseCase) routes back
+                    // through the Sending screen instead of the generic manual-confirmation path,
+                    // and surface a distinct notification so this looks different from any other
+                    // missed transfer.
+                    pendingMigrationTorFailureStorageProvider.store(true)
+                    migrationNotifier.notifyMigrationTorFailure()
+                    Result.failure()
                 } else {
                     // Nothing else re-arms a future attempt for a non-retryable failure — the
                     // user must open the app and act, same as a missed/stalled window.

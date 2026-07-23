@@ -7,7 +7,8 @@ import cash.z.ecc.android.sdk.TransferResult
 import co.electriccoin.zcash.ui.BaseNavigationCommand
 import co.electriccoin.zcash.ui.NavigationCommand
 import co.electriccoin.zcash.ui.NavigationRouter
-import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
+import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
+import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationTorFailureDecisionRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
@@ -205,6 +206,36 @@ class MigrationSendingVMTest {
         coVerify(exactly = 1) { sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = false)) }
     }
 
+    @Test
+    fun successfulSendClearsPendingTorFailureFlag() = runTest {
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+        coEvery { sdk.finalizeReadyTransfers() } returns 0
+        coEvery { sdk.executeNextPendingTransfer(any()) } returns TransferResult.Success("txid789")
+        val router = FakeNavigationRouter()
+        val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
+        val pendingTorFailure = mockk<PendingMigrationTorFailureStorageProvider>(relaxed = true)
+
+        vm(sdk = sdk, router = router, plans = plans, pendingMigrationTorFailureStorageProvider = pendingTorFailure)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { pendingTorFailure.store(false) }
+    }
+
+    @Test
+    fun networkErrorDoesNotClearPendingTorFailureFlag() = runTest {
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+        coEvery { sdk.finalizeReadyTransfers() } returns 0
+        coEvery { sdk.executeNextPendingTransfer(any()) } returns TransferResult.NetworkError(retryable = false)
+        val router = FakeNavigationRouter()
+        val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
+        val pendingTorFailure = mockk<PendingMigrationTorFailureStorageProvider>(relaxed = true)
+
+        vm(sdk = sdk, router = router, plans = plans, pendingMigrationTorFailureStorageProvider = pendingTorFailure)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { pendingTorFailure.store(any()) }
+    }
+
     private fun vm(
         sdk: OrchardMigrationSdk,
         router: FakeNavigationRouter,
@@ -212,6 +243,7 @@ class MigrationSendingVMTest {
         torDecisionRepository: PendingMigrationTorFailureDecisionRepository = mockk {
             every { decision } returns MutableStateFlow(null)
         },
+        pendingMigrationTorFailureStorageProvider: PendingMigrationTorFailureStorageProvider = mockk(relaxed = true),
     ) = MigrationSendingVM(
         getOrchardMigrationSdk = mockk<GetOrchardMigrationSdkUseCase> {
             coEvery { this@mockk() } returns sdk
@@ -220,10 +252,11 @@ class MigrationSendingVMTest {
         scheduleNextMigrationWindow = mockk<ScheduleNextMigrationWindowUseCase>(relaxed = true),
         navigationRouter = router,
         errorStateMapper = mockk<ErrorMapperUseCase>(relaxed = true),
-        isTorEnabledStorageProvider = mockk<IsTorEnabledStorageProvider> {
+        isMigrationTorEnabledStorageProvider = mockk<IsMigrationTorEnabledStorageProvider> {
             coEvery { get() } returns false
         },
         pendingMigrationTorFailureDecisionRepository = torDecisionRepository,
+        pendingMigrationTorFailureStorageProvider = pendingMigrationTorFailureStorageProvider,
     )
 
     private class FakeNavigationRouter : NavigationRouter {

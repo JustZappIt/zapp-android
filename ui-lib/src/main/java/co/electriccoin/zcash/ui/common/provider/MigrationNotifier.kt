@@ -63,6 +63,19 @@ class MigrationNotifier(private val context: Context) {
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_PROGRESS, notification)
     }
 
+    fun notifyMigrationTorFailure() {
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_alert_circle)
+            .setContentTitle("Migration: Couldn't Connect to Tor")
+            .setContentText("A scheduled transfer couldn't send over Tor. Open Zodl to resolve.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(mainActivityIntent())
+            .setAutoCancel(true)
+            .build()
+
+        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_PROGRESS, notification)
+    }
+
     fun notifyMigrationPlanInvalid() {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alert_circle)

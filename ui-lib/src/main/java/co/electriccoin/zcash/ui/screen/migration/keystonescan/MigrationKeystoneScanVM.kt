@@ -13,7 +13,7 @@ import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.toKeystoneFwVersion
-import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
+import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPcztsRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
@@ -36,7 +36,7 @@ class MigrationKeystoneScanVM(
     private val pendingSchedule: PendingMigrationScheduleRepository,
     private val pendingKeystonePczts: PendingKeystoneMigrationPcztsRepository,
     private val finalizeMigrationSchedule: FinalizeMigrationScheduleUseCase,
-    private val isTorEnabledStorageProvider: IsTorEnabledStorageProvider,
+    private val isMigrationTorEnabledStorageProvider: IsMigrationTorEnabledStorageProvider,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
 
@@ -172,7 +172,7 @@ class MigrationKeystoneScanVM(
             finalizingLce.execute {
                 val splitSignedPczt = accumulatedSplitSigned
                 if (splitSignedPczt != null) {
-                    val useTor = isTorEnabledStorageProvider.get() == true
+                    val useTor = isMigrationTorEnabledStorageProvider.get()
                     val splitResult = sdk.storeSignedNoteSplitPczt(
                         splitSignedPczt,
                         NetworkPrivacyOptions(useTor = useTor),

@@ -27,6 +27,8 @@ import co.electriccoin.zcash.ui.common.provider.IsExchangeRateEnabledStorageProv
 import co.electriccoin.zcash.ui.common.provider.IsExchangeRateEnabledStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.IsKeepScreenOnDuringRestoreProvider
 import co.electriccoin.zcash.ui.common.provider.IsKeepScreenOnDuringRestoreProviderImpl
+import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
+import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.IsServerSelectionAutomaticProvider
 import co.electriccoin.zcash.ui.common.provider.IsServerSelectionAutomaticProviderImpl
 import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
@@ -72,6 +74,8 @@ import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeCountStorage
 import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeTimestampStorageProvider
 import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeTimestampStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
+import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
+import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.WalletRestoringStateProvider
 import co.electriccoin.zcash.ui.common.provider.WalletRestoringStateProviderImpl
 import co.electriccoin.zcash.work.MigrationScheduler
@@ -111,6 +115,9 @@ val providerModule =
         singleOf(::HasLockedOrchardDustStorageProviderImpl) bind
             HasLockedOrchardDustStorageProvider::class
         singleOf(::IsTorEnabledStorageProviderImpl) bind IsTorEnabledStorageProvider::class
+        singleOf(::IsMigrationTorEnabledStorageProviderImpl) bind IsMigrationTorEnabledStorageProvider::class
+        singleOf(::PendingMigrationTorFailureStorageProviderImpl) bind
+            PendingMigrationTorFailureStorageProvider::class
         singleOf(::BlockchainProviderImpl) bind BlockchainProvider::class
         singleOf(::TokenIconProviderImpl) bind TokenIconProvider::class
         singleOf(::TokenNameProviderImpl) bind TokenNameProvider::class

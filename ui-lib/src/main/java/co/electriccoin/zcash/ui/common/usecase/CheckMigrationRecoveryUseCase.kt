@@ -5,11 +5,13 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_DUST_THRESHOLD_ZATOSHI
 import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
+import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.screen.home.HomeArgs
 import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteArgs
 import co.electriccoin.zcash.ui.screen.migration.invalid.MigrationTransferInvalidArgs
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
+import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
 
 /**
  * Single source of truth for migration re-entry routing on app launch/foreground — MainActivity's
@@ -17,7 +19,10 @@ import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
  * the SDK checks directly, so the two never drift out of sync with each other or with this
  * ordering. Cheap and idempotent (NavigationRouter dedupes identical commands).
  *
- * Checks invalid transfers before overdue ones, per spec §4.3 — a plan that needs to be
+ * Checks a pending background Tor failure before everything else — see
+ * [PendingMigrationTorFailureStorageProvider] — since re-entering the Sending screen naturally
+ * reproduces (and, via its own existing routing, resolves or re-surfaces) that specific failure
+ * mode. Checks invalid transfers before overdue ones, per spec §4.3 — a plan that needs to be
  * re-created takes priority over merely resuming a stale schedule. The one-time Migration
  * Complete celebration screen is lowest priority — it's non-actionable, so it never preempts an
  * actual problem needing attention.
@@ -46,12 +51,23 @@ class CheckMigrationRecoveryUseCase(
     private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
     private val migrationPlanRepository: MigrationPlanRepository,
     private val getOrchardBalance: GetOrchardBalanceUseCase,
+    private val pendingMigrationTorFailureStorageProvider: PendingMigrationTorFailureStorageProvider,
 ) {
     suspend operator fun invoke() {
         // No wallet yet (e.g. a fresh install before onboarding) — this runs on every
         // MainActivity launch regardless, so treat "no SDK available" as "nothing to recover".
         val sdk = getOrchardMigrationSdk() ?: return
-        if (sdk.hasInvalidTransfers()) {
+        if (pendingMigrationTorFailureStorageProvider.get()) {
+            // A background attempt failed specifically because of Tor — route through the Sending
+            // screen first rather than straight to MigrationProgressArgs/MigrationTorFailureArgs:
+            // MigrationSendingVM's init{} always attempts a send immediately on construction,
+            // reproducing the exact condition that failed in the background using the current
+            // migration Tor setting. If it fails again, MigrationSendingVM's own existing
+            // sendOnce() logic already forwards to MigrationTorFailureArgs — no need to duplicate
+            // that routing here.
+            Twig.debug { "MIGRATION_DIAG MigrationRecovery: pending background Tor failure — redirecting to Sending." }
+            navigationRouter.replaceAll(HomeArgs, MigrationSendingArgs)
+        } else if (sdk.hasInvalidTransfers()) {
             Twig.debug { "MIGRATION_DIAG MigrationRecovery: invalid transfer detected — redirecting to Transfer Invalid." }
             navigationRouter.replaceAll(HomeArgs, MigrationTransferInvalidArgs)
         } else if (sdk.hasOverdueTransfers()) {
