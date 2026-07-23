@@ -27,6 +27,7 @@ import co.electriccoin.zcash.ui.common.repository.WalletRepository
 import co.electriccoin.zcash.ui.common.repository.WalletSnapshotRepository
 import co.electriccoin.zcash.ui.screen.error.ErrorArgs
 import co.electriccoin.zcash.ui.screen.error.NavigateToErrorUseCase
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
@@ -54,6 +55,8 @@ class ZcashApplication : CoroutineApplication() {
         super.onCreate()
 
         configureLogging()
+
+        preloadSdkNativeLibrary()
 
         configureStrictMode()
 
@@ -86,6 +89,19 @@ class ZcashApplication : CoroutineApplication() {
         automaticServerRepository.init()
         walletRepository.init()
         observeSynchronizerError()
+    }
+
+    /**
+     * Kicks off the SDK's native-library load off the main thread during app startup, so the
+     * one-time [System.loadLibrary] cost is already paid (overlapping the splash/authentication
+     * screens) before the Synchronizer is constructed, shortening its cold-start critical path.
+     * Best-effort: if it fails, [Synchronizer.new] will simply load the library lazily as before.
+     */
+    private fun preloadSdkNativeLibrary() {
+        applicationScope.launch(Dispatchers.Default) {
+            runCatching { Synchronizer.preloadNativeLibrary() }
+                .onFailure { Twig.info { "SDK native library preload failed; will load lazily: $it" } }
+        }
     }
 
     private fun observeSynchronizerError() {
