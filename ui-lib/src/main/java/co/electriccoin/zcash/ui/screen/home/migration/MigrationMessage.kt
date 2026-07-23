@@ -76,6 +76,13 @@ fun MigrationMessage(
                         colorFilter = ColorFilter.tint(LocalContentColor.current)
                     )
                 }
+                MigrationBannerPhase.READY_TO_SEND -> {
+                    Image(
+                        painter = painterResource(co.electriccoin.zcash.ui.design.R.drawable.ic_info),
+                        contentDescription = null,
+                        colorFilter = ColorFilter.tint(LocalContentColor.current)
+                    )
+                }
             }
         },
         title = {
@@ -84,6 +91,7 @@ fun MigrationMessage(
                     MigrationBannerPhase.COMPLETE -> "Migration complete"
                     MigrationBannerPhase.IN_PROGRESS -> "Migration Progress"
                     MigrationBannerPhase.REQUIRED -> "Migration Required"
+                    MigrationBannerPhase.READY_TO_SEND -> "Transfer Ready"
                 }
             )
         },
@@ -148,6 +156,23 @@ private fun PreviewComplete() =
                 state = MigrationMessageState(
                     phase = MigrationBannerPhase.COMPLETE,
                     progressLabel = "Tap to review the details",
+                    onClick = {},
+                    onButtonClick = {},
+                ),
+            )
+        }
+    }
+
+@PreviewScreens
+@Composable
+private fun PreviewReadyToSend() =
+    ZcashTheme {
+        BlankSurface {
+            MigrationMessage(
+                contentPadding = PaddingValues(),
+                state = MigrationMessageState(
+                    phase = MigrationBannerPhase.READY_TO_SEND,
+                    progressLabel = "Transfer 3 is ready to send",
                     onClick = {},
                     onButtonClick = {},
                 ),

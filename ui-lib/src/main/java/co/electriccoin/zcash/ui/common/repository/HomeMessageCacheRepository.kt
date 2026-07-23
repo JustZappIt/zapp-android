@@ -82,6 +82,11 @@ sealed interface HomeMessageData {
     data class Migration(
         val plan: co.electriccoin.zcash.ui.common.model.migration.MigrationPlan?,
         val isComplete: Boolean = false,
+        // Spec §6.4 "Transfer Ready to Send": true when [plan]'s next pending transfer's scheduled
+        // time has arrived, background execution is unavailable, and the SDK doesn't yet count it
+        // as overdue — a narrower, earlier window than the general missed-transfer/overdue state.
+        // See migrationMessageFor() in GetHomeMessageUseCase.kt for the derivation.
+        val isReadyToSend: Boolean = false,
     ) : RuntimeMessage()
 
     data object EnableTor : Prioritized {

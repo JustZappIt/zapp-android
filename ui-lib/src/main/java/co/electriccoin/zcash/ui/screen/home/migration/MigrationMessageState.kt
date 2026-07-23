@@ -2,7 +2,7 @@ package co.electriccoin.zcash.ui.screen.home.migration
 
 import co.electriccoin.zcash.ui.screen.home.HomeMessageState
 
-enum class MigrationBannerPhase { REQUIRED, IN_PROGRESS, COMPLETE }
+enum class MigrationBannerPhase { REQUIRED, IN_PROGRESS, COMPLETE, READY_TO_SEND }
 
 class MigrationMessageState(
     val phase: MigrationBannerPhase,

@@ -401,6 +401,11 @@ class HomeVM(
                 val roundPrefix = plan?.keystoneRound?.let { "Round ${it.current} of ${it.total} · " }.orEmpty()
                 val (phase, subtitle) = when {
                     data.isComplete -> MigrationBannerPhase.COMPLETE to "Tap to review the details"
+                    // Spec §6.4: numbered per the due transfer, matching the convention used
+                    // elsewhere (e.g. MigrationProgressVM's "Transfer ${completedCount + 1}").
+                    data.isReadyToSend ->
+                        MigrationBannerPhase.READY_TO_SEND to
+                            "Transfer ${(plan?.completedCount ?: 0) + 1} is ready to send"
                     plan == null -> MigrationBannerPhase.REQUIRED to null
                     plan.completedCount == 0 -> MigrationBannerPhase.IN_PROGRESS to "${roundPrefix}First transfer sending…"
                     else ->
@@ -411,8 +416,12 @@ class HomeVM(
                     phase = phase,
                     progressLabel = subtitle,
                     progressPercent = percent.toFloat(),
-                    onClick = { onMigrationMessageClick(plan = plan, isComplete = data.isComplete) },
-                    onButtonClick = { onMigrationMessageClick(plan = plan, isComplete = data.isComplete) },
+                    onClick = {
+                        onMigrationMessageClick(plan = plan, isComplete = data.isComplete, isReadyToSend = data.isReadyToSend)
+                    },
+                    onButtonClick = {
+                        onMigrationMessageClick(plan = plan, isComplete = data.isComplete, isReadyToSend = data.isReadyToSend)
+                    },
                 )
             }
 
@@ -421,12 +430,22 @@ class HomeVM(
             }
         }
 
-    private fun onMigrationMessageClick(plan: MigrationPlan?, isComplete: Boolean) = viewModelScope.launch {
+    private fun onMigrationMessageClick(
+        plan: MigrationPlan?,
+        isComplete: Boolean,
+        isReadyToSend: Boolean = false,
+    ) = viewModelScope.launch {
         when {
             // Tapping the widget just opens the celebration screen now — MigrationCompleteVM.onDone()
             // owns the seen-flag decision, since it needs to know whether residual Orchard balance
             // still requires another Keystone round before deciding whether this is truly "seen".
             isComplete -> navigationRouter.forward(MigrationCompleteArgs)
+            // Spec §6.4: a distinct, lighter-weight review-and-send path — not the fuller
+            // Reschedule/Send-now recovery screen MigrationProgressArgs offers for a genuinely
+            // overdue transfer.
+            isReadyToSend -> navigationRouter.forward(
+                co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs
+            )
             plan != null -> navigationRouter.forward(MigrationProgressArgs)
             else -> navigationRouter.forward(MigrationSetupArgs)
         }
