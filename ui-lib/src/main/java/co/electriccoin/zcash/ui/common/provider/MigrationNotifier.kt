@@ -116,11 +116,31 @@ class MigrationNotifier(private val context: Context) {
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_PROGRESS, notification)
     }
 
+    // Spec §6.2 (Migration Plan Update) — notes were spent outside the migration flow, invalidating
+    // the plan. Kept distinct from notifyTransferExpired() below (spec §6.3) even though both
+    // currently deliver through the same TransferResult.InvalidNote/Expired branch in
+    // MigrationWorker — the two causes read differently to the user, matching the distinct
+    // Transfer Invalid screen copy (see MigrationAttentionKind).
     fun notifyMigrationPlanInvalid() {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alert_circle)
             .setContentTitle("Ironwood Migration")
             .setContentText("Migration plan needs update. Open Zodl to review the details.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(mainActivityIntent())
+            .setAutoCancel(true)
+            .build()
+
+        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_PROGRESS, notification)
+    }
+
+    // Spec §6.3 (Transfer(s) Expired) — one or more transfers expired without executing (the app
+    // wasn't opened in time to broadcast them before their anchor expired).
+    fun notifyTransferExpired() {
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_alert_circle)
+            .setContentTitle("Ironwood Migration")
+            .setContentText("A transfer expired. Open Zodl to continue your migration.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(mainActivityIntent())
             .setAutoCancel(true)

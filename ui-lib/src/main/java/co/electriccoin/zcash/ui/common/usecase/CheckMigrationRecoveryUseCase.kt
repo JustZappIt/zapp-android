@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.common.usecase
 
+import cash.z.ecc.android.sdk.AttentionReason
 import cash.z.ecc.android.sdk.MigrationState
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import co.electriccoin.zcash.spackle.Twig
@@ -67,6 +68,17 @@ class CheckMigrationRecoveryUseCase(
         // No wallet yet (e.g. a fresh install before onboarding) — this runs on every
         // MainActivity launch regardless, so treat "no SDK available" as "nothing to recover".
         val sdk = getOrchardMigrationSdk() ?: return
+        // Read the real state once instead of the old hasInvalidTransfers() boolean — the app must
+        // distinguish AttentionReason.InvalidTransfer (spec §6.2, external spend invalidated the
+        // plan) from AttentionReason.TransferExpired (spec §6.3, missed window) once inside the
+        // Transfer Invalid screen, and that screen re-reads getMigrationState() itself as its own
+        // source of truth. SyncRequiredBeforeNext is deliberately excluded here — nothing in the
+        // app surfaces that reason yet (see MigrationAttentionKind's doc), so it is left exactly as
+        // unhandled as it was before this change, rather than being routed to a screen that doesn't
+        // have copy for it.
+        val migrationState = sdk.getMigrationState()
+        val requiresAttention = migrationState is MigrationState.RequiresAttention &&
+            migrationState.reason !is AttentionReason.SyncRequiredBeforeNext
         if (pendingMigrationTorFailureStorageProvider.get()) {
             // A background attempt failed specifically because of Tor — route through the Sending
             // screen first rather than straight to MigrationProgressArgs/MigrationTorFailureArgs:
@@ -77,8 +89,8 @@ class CheckMigrationRecoveryUseCase(
             // that routing here.
             Twig.debug { "MIGRATION_DIAG MigrationRecovery: pending background Tor failure — redirecting to Sending." }
             navigationRouter.replaceAll(HomeArgs, MigrationSendingArgs)
-        } else if (sdk.hasInvalidTransfers()) {
-            Twig.debug { "MIGRATION_DIAG MigrationRecovery: invalid transfer detected — redirecting to Transfer Invalid." }
+        } else if (requiresAttention) {
+            Twig.debug { "MIGRATION_DIAG MigrationRecovery: attention required — redirecting to Transfer Invalid." }
             navigationRouter.replaceAll(HomeArgs, MigrationTransferInvalidArgs)
         } else if (isTransferReadyToSendWithoutBackground(sdk)) {
             Twig.debug {
@@ -89,7 +101,7 @@ class CheckMigrationRecoveryUseCase(
         } else if (sdk.hasOverdueTransfers()) {
             Twig.debug { "MIGRATION_DIAG MigrationRecovery: overdue transfer detected — redirecting to Resume Migration." }
             navigationRouter.replaceAll(HomeArgs, MigrationProgressArgs)
-        } else if (sdk.getMigrationState() == MigrationState.Complete &&
+        } else if (migrationState == MigrationState.Complete &&
             !hasSeenMigrationCompleteStorageProvider.get() &&
             migrationPlanRepository.load() != null &&
             // Truly complete, not just "this round's transfers are all mined" — a multi-round

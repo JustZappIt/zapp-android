@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.model.voting.VotingRound
 import co.electriccoin.zcash.ui.common.model.voting.VotingSession
@@ -38,6 +39,7 @@ import co.electriccoin.zcash.ui.screen.home.backup.SeedBackupInfo
 import co.electriccoin.zcash.ui.screen.home.migration.MigrationBannerPhase
 import co.electriccoin.zcash.ui.screen.home.migration.MigrationMessageState
 import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteArgs
+import co.electriccoin.zcash.ui.screen.migration.invalid.MigrationTransferInvalidArgs
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupArgs
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupDetail
@@ -399,28 +401,62 @@ class HomeVM(
                 // See MigrationKeystoneRound's kdoc — only ever non-null for a Keystone account's
                 // plan, prefixed onto the in-progress subtitle when present.
                 val roundPrefix = plan?.keystoneRound?.let { "Round ${it.current} of ${it.total} · " }.orEmpty()
-                val (phase, subtitle) = when {
-                    data.isComplete -> MigrationBannerPhase.COMPLETE to "Tap to review the details"
-                    // Spec §6.4: numbered per the due transfer, matching the convention used
-                    // elsewhere (e.g. MigrationProgressVM's "Transfer ${completedCount + 1}").
-                    data.isReadyToSend ->
-                        MigrationBannerPhase.READY_TO_SEND to
-                            "Transfer ${(plan?.completedCount ?: 0) + 1} is ready to send"
-                    plan == null -> MigrationBannerPhase.REQUIRED to null
-                    plan.completedCount == 0 -> MigrationBannerPhase.IN_PROGRESS to "${roundPrefix}First transfer sending…"
-                    else ->
-                        MigrationBannerPhase.IN_PROGRESS to
-                            "$roundPrefix${plan.completedCount} of ${plan.totalCount} transfers done ~ $percent% complete"
+                // Spec §6.2/§6.3 — takes priority over the ordinary phases below: a plan needing
+                // re-confirmation is more actionable than its last-known progress/completion state.
+                // Title carries the exact required copy ("Update migration plan." / "Transfer 3–5
+                // expired.") since that IS the home message per spec, not just a phase label.
+                val (phase, title, subtitle) = when (data.attentionKind) {
+                    MigrationAttentionKind.PLAN_UPDATE ->
+                        Triple(MigrationBannerPhase.ATTENTION, "Update migration plan", "Tap to review the details")
+                    MigrationAttentionKind.TRANSFER_EXPIRED -> {
+                        val range = data.attentionRangeText
+                        Triple(
+                            MigrationBannerPhase.ATTENTION,
+                            if (range != null) "Transfer $range expired" else "A transfer expired",
+                            "Tap to review the details",
+                        )
+                    }
+                    null -> when {
+                        data.isComplete -> Triple(MigrationBannerPhase.COMPLETE, null, "Tap to review the details")
+                        // Spec §6.4: numbered per the due transfer, matching the convention used
+                        // elsewhere (e.g. MigrationProgressVM's "Transfer ${completedCount + 1}").
+                        data.isReadyToSend ->
+                            Triple(
+                                MigrationBannerPhase.READY_TO_SEND,
+                                null,
+                                "Transfer ${(plan?.completedCount ?: 0) + 1} is ready to send",
+                            )
+                        plan == null -> Triple(MigrationBannerPhase.REQUIRED, null, null)
+                        plan.completedCount == 0 ->
+                            Triple(MigrationBannerPhase.IN_PROGRESS, null, "${roundPrefix}First transfer sending…")
+                        else ->
+                            Triple(
+                                MigrationBannerPhase.IN_PROGRESS,
+                                null,
+                                "$roundPrefix${plan.completedCount} of ${plan.totalCount} transfers done ~ $percent% complete",
+                            )
+                    }
                 }
                 MigrationMessageState(
                     phase = phase,
+                    title = title,
                     progressLabel = subtitle,
                     progressPercent = percent.toFloat(),
                     onClick = {
-                        onMigrationMessageClick(plan = plan, isComplete = data.isComplete, isReadyToSend = data.isReadyToSend)
+                        onMigrationMessageClick(
+                            plan = plan,
+                            isComplete = data.isComplete,
+                            isReadyToSend = data.isReadyToSend,
+                            hasAttention = data.attentionKind != null,
+                        )
                     },
                     onButtonClick = {
-                        onMigrationMessageClick(plan = plan, isComplete = data.isComplete, isReadyToSend = data.isReadyToSend)
+                        onMigrationMessageClick(
+                            plan = plan,
+                            isComplete = data.isComplete,
+                            isReadyToSend = data.isReadyToSend,
+                            hasAttention = data.attentionKind != null,
+                        )
                     },
                 )
             }
@@ -434,8 +470,12 @@ class HomeVM(
         plan: MigrationPlan?,
         isComplete: Boolean,
         isReadyToSend: Boolean = false,
+        hasAttention: Boolean = false,
     ) = viewModelScope.launch {
         when {
+            // A plan needing re-confirmation (spec §6.2/§6.3) always routes to the Transfer Invalid
+            // info screen, regardless of its last-known progress/completion state.
+            hasAttention -> navigationRouter.forward(MigrationTransferInvalidArgs)
             // Tapping the widget just opens the celebration screen now — MigrationCompleteVM.onDone()
             // owns the seen-flag decision, since it needs to know whether residual Orchard balance
             // still requires another Keystone round before deciding whether this is truly "seen".

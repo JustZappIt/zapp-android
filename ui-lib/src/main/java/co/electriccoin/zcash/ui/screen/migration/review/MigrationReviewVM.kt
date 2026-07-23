@@ -32,6 +32,7 @@ import co.electriccoin.zcash.ui.common.repository.BiometricsFailureException
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
+import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
@@ -57,6 +58,7 @@ class MigrationReviewVM(
     private val args: MigrationReviewArgs,
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val pendingMigrationScheduleRepository: PendingMigrationScheduleRepository,
+    private val restartMigrationScheduleRepository: RestartMigrationScheduleRepository,
     private val finalizeMigrationSchedule: FinalizeMigrationScheduleUseCase,
     private val navigationRouter: NavigationRouter,
     private val exchangeRateRepository: ExchangeRateRepository,
@@ -94,7 +96,15 @@ class MigrationReviewVM(
                     ReviewProposal.Immediate(sdk.proposeImmediateMigration(), amount)
                 }
                 MigrationMode.AUTOMATIC -> {
-                    val schedule = sdk.proposeMigrationTransfers()
+                    // If MigrationTransferInvalidVM.onContinue() already obtained a fresh schedule
+                    // via restartCurrentMigrationStep() — whose own doc requires that returned
+                    // schedule to go through this normal confirmation flow rather than being
+                    // silently re-proposed — reuse that exact schedule instead of calling
+                    // proposeMigrationTransfers() again (see RestartMigrationScheduleRepository's
+                    // doc: the two calls compute independent guesses over the same balance that
+                    // aren't guaranteed to agree). Falls back to a fresh proposal for every
+                    // ordinary, non-recovery entry into this screen.
+                    val schedule = restartMigrationScheduleRepository.consume() ?: sdk.proposeMigrationTransfers()
                     // IMMEDIATE has no Keystone branch at all (a documented pre-existing gap —
                     // see MigrationReviewVM.confirmAutomatic()'s Keystone check below), so round
                     // display is AUTOMATIC-only. Stateless preview, called fresh on every Review

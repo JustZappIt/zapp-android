@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
 import co.electriccoin.zcash.ui.design.component.BlankBgScaffold
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ZashiButton
@@ -68,15 +69,39 @@ fun MigrationTransferInvalidView(state: MigrationTransferInvalidState) {
                 .verticalScroll(rememberScrollState())
                 .scaffoldPadding(padding),
         ) {
+            // Same layout for both causes (spec §6.2/§6.3), only the title/body/first step differ:
+            // PLAN_UPDATE (§6.2) explains notes spent outside the migration flow invalidated the
+            // plan; TRANSFER_EXPIRED (§6.3) explains transfer(s) expired without executing (the app
+            // wasn't opened in time), naming the specific affected range.
+            val (title, body, firstStep) = when (state.kind) {
+                MigrationAttentionKind.PLAN_UPDATE ->
+                    Triple(
+                        "Update Migration Plan",
+                        "Some Orchard notes were spent outside the migration flow, which invalidated " +
+                            "the pre-signed transfer plan. The plan needs to be re-created for the " +
+                            "remaining balance. No funds are lost — only the pre-signed transactions " +
+                            "are discarded.",
+                        "The invalidated transfer is discarded",
+                    )
+                MigrationAttentionKind.TRANSFER_EXPIRED ->
+                    Triple(
+                        "Transfer No Longer Valid",
+                        "Transfer ${state.invalidRange.getValue()} expired without being sent — the app " +
+                            "wasn't opened in time to broadcast ${if (state.remainingCount > 1) "them" else "it"}. " +
+                            "The migration plan needs to be re-created for the remaining balance. No " +
+                            "funds are lost — only the pre-signed transactions are discarded.",
+                        "Expired transfer${if (state.remainingCount > 1) "s are" else " is"} discarded",
+                    )
+            }
             Text(
-                text = "Transfer No Longer Valid",
+                text = title,
                 style = ZashiTypography.header6,
                 fontWeight = FontWeight.SemiBold,
                 color = ZashiColors.Text.textPrimary,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Transfers ${state.invalidRange.getValue()} were pre-signed for a balance that has since changed. The migration plan needs to be re-created for the remaining amount. No funds are lost — only the pre-signed transactions are discarded.",
+                text = body,
                 style = ZashiTypography.textSm,
                 color = ZashiColors.Text.textTertiary,
             )
@@ -90,7 +115,7 @@ fun MigrationTransferInvalidView(state: MigrationTransferInvalidState) {
             Spacer(Modifier.height(12.dp))
             WhatHappensNextItem(
                 number = 1,
-                text = "Invalid transfers are discarded",
+                text = firstStep,
             )
             WhatHappensNextItem(
                 number = 2,
@@ -142,13 +167,30 @@ private fun WhatHappensNextItem(number: Int, text: String) {
 
 @PreviewScreens
 @Composable
-private fun Preview() = ZcashTheme {
+private fun PreviewTransferExpired() = ZcashTheme {
     MigrationTransferInvalidView(
         state = MigrationTransferInvalidState(
+            kind = MigrationAttentionKind.TRANSFER_EXPIRED,
             completedCount = 2,
             totalCount = 5,
             remainingCount = 3,
             invalidRange = stringRes("3–5"),
+            onContinue = {},
+            onBack = {},
+        )
+    )
+}
+
+@PreviewScreens
+@Composable
+private fun PreviewPlanUpdate() = ZcashTheme {
+    MigrationTransferInvalidView(
+        state = MigrationTransferInvalidState(
+            kind = MigrationAttentionKind.PLAN_UPDATE,
+            completedCount = 2,
+            totalCount = 5,
+            remainingCount = 1,
+            invalidRange = stringRes("3"),
             onContinue = {},
             onBack = {},
         )

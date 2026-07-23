@@ -24,6 +24,7 @@ import co.electriccoin.zcash.ui.common.model.guardLoading
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
+import co.electriccoin.zcash.ui.common.model.migration.withLiveState
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
 import co.electriccoin.zcash.work.MigrationScheduler
 import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
@@ -95,29 +96,8 @@ class MigrationProgressVM(
             }
         }
 
-    // amountZatoshi/createdAtEpochSeconds never change post-commit, so the cached plan stays the
-    // source of truth for those — only status/scheduledAt (the fields the SDK can independently
-    // reschedule) are overridden from the live read.
-    private fun MigrationPlan.withLiveState(live: MigrationTransferStates?): MigrationPlan {
-        if (live == null) return this
-        val now = Clock.System.now().epochSeconds
-        // Correlate by the transfer's real, stable id — NOT by [MigrationTransfer.index]. The
-        // engine assigns real ids in funding-note/crossing order; [index] is this transfer's
-        // position in the broadcast-height-sorted array the app displays as "Transfer N". ZIP 318
-        // deliberately shuffles those two orderings apart, so matching by index silently attaches
-        // the wrong transfer's live status/schedule to a displayed position (confirmed live).
-        val byId = live.transfers.associateBy { it.id }
-        return copy(
-            transfers = transfers.map { t ->
-                val liveTransfer = byId[t.id] ?: return@map t
-                t.copy(
-                    status = if (liveTransfer.isSent) MigrationTransferStatus.SENT else MigrationTransferStatus.PENDING,
-                    scheduledAtEpochSeconds =
-                        now + estimatedSecondsBetweenHeights(live.tipHeight, liveTransfer.scheduledHeight),
-                )
-            }
-        )
-    }
+    // withLiveState() (correlating by stable transfer id, never array index — see its doc) now
+    // lives in MigrationPlan.kt, shared with MigrationAttention.kt's affectedTransferIndices().
 
     fun navigateBack() = navigationRouter.back()
 

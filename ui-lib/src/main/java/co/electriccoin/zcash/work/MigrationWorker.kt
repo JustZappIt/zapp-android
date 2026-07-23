@@ -131,12 +131,21 @@ class MigrationWorker(
                     Result.failure()
                 }
             }
-            TransferResult.InvalidNote,
-            TransferResult.Expired -> {
-                // State is now RequiresAttention — on-launch reconciliation will surface the
-                // prompt, but the user still needs telling since nothing else runs meanwhile.
-                Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer invalid or expired — user action required on next open." }
+            TransferResult.InvalidNote -> {
+                // State is now RequiresAttention(InvalidTransfer) — spec §6.2, notes were spent
+                // outside the migration flow. On-launch reconciliation will surface the prompt, but
+                // the user still needs telling since nothing else runs meanwhile.
+                Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer invalid (note spent externally) — user action required on next open." }
                 migrationNotifier.notifyMigrationPlanInvalid()
+                Result.success()
+            }
+            TransferResult.Expired -> {
+                // State is now RequiresAttention(TransferExpired) — spec §6.3, the transfer's
+                // anchor expired before it could broadcast (the app wasn't opened in time). Distinct
+                // user-facing copy from InvalidNote above, even though both branches otherwise
+                // handle identically (no further action possible from the background worker).
+                Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer expired — user action required on next open." }
+                migrationNotifier.notifyTransferExpired()
                 Result.success()
             }
         }

@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
@@ -290,6 +291,7 @@ private fun previewProgressStateOverdue() = MigrationProgressState(
 )
 
 private fun previewTransferInvalidState() = MigrationTransferInvalidState(
+    kind = MigrationAttentionKind.TRANSFER_EXPIRED,
     completedCount = 2,
     totalCount = 5,
     remainingCount = 3,
