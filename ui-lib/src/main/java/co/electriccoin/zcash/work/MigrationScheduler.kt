@@ -20,9 +20,17 @@ import kotlin.time.toJavaDuration
  * OS-level "best-effort earliest begin" uncertainty to buffer against. The real Android-side
  * timing risk is Doze/App-Standby deferral, and that's already handled by the overdue-recovery
  * self-healing path (`CheckMigrationRecoveryUseCase` + `hasOverdueTransfers()`), not by adding
- * scheduling margins here.
+ * scheduling margins here — except for the specific case where the app can't run in the
+ * background at all (see [MigrationDueAlarmScheduler]), where an inexact-while-idle `AlarmManager`
+ * alarm is armed/cancelled alongside the WorkManager job below purely to surface a "ready to send"
+ * notification (spec §6.4), never to run the transfer itself.
  */
 class MigrationScheduler(private val context: Context) {
+    // Armed/cancelled alongside the WorkManager job below rather than threaded through every call
+    // site separately — see MigrationDueAlarmScheduler's kdoc for why this needs its own
+    // AlarmManager alarm instead of relying on the WorkManager job itself.
+    private val migrationDueAlarmScheduler = MigrationDueAlarmScheduler(context)
+
     fun schedule(delay: Duration) {
         Twig.debug { "MIGRATION_DIAG MigrationScheduler: scheduling next migration transfer in $delay" }
         WorkManager.getInstance(context).enqueueUniqueWork(
@@ -30,10 +38,12 @@ class MigrationScheduler(private val context: Context) {
             ExistingWorkPolicy.REPLACE,
             newWorkRequest(delay)
         )
+        migrationDueAlarmScheduler.schedule(delay)
     }
 
     fun cancel() {
         WorkManager.getInstance(context).cancelUniqueWork(WORK_ID)
+        migrationDueAlarmScheduler.cancel()
     }
 
     companion object {

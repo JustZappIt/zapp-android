@@ -5,10 +5,14 @@ import cash.z.ecc.android.sdk.MigrationState
 import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_DUST_THRESHOLD_ZATOSHI
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
+import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
+import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
 import co.electriccoin.zcash.ui.common.repository.HomeMessageData
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
 
 class GetHomeMessageUseCaseMigrationTest {
     private fun plan(id: String = "p1") =
@@ -16,6 +20,21 @@ class GetHomeMessageUseCaseMigrationTest {
             id = id,
             createdAtEpochSeconds = 0L,
             transfers = emptyList(),
+            mode = MigrationMode.AUTOMATIC,
+        )
+
+    private fun planWithPendingTransfer(scheduledAtEpochSeconds: Long) =
+        MigrationPlan(
+            id = "p-ready",
+            createdAtEpochSeconds = 0L,
+            transfers = listOf(
+                MigrationTransfer(
+                    index = 2,
+                    amountZatoshi = 100_000L,
+                    scheduledAtEpochSeconds = scheduledAtEpochSeconds,
+                    status = MigrationTransferStatus.PENDING,
+                )
+            ),
             mode = MigrationMode.AUTOMATIC,
         )
 
@@ -136,5 +155,88 @@ class GetHomeMessageUseCaseMigrationTest {
             orchardBalanceZatoshi = 0L,
         )
         assertNull(result)
+    }
+
+    // --- Spec §6.4 "Transfer Ready to Send" ---
+
+    @Test
+    fun dueTransferWithoutBackgroundExecutionAndNotOverdueShowsReadyToSend() {
+        val now = Clock.System.now()
+        val readyPlan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
+        val migrationProgress = MigrationProgress(1, 3, 100_000L, null)
+
+        val result = migrationMessageFor(
+            sdkState = MigrationState.InProgress(migrationProgress),
+            plan = readyPlan,
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = 100_000L,
+            isBackgroundExecutionAvailable = false,
+            hasOverdueTransfers = false,
+            now = now,
+        )
+
+        assertEquals(HomeMessageData.Migration(readyPlan, isReadyToSend = true), result)
+    }
+
+    @Test
+    fun dueTransferButBackgroundExecutionAvailableShowsRegularInProgress() {
+        // Background execution can run the WorkManager job itself — no need for the fallback
+        // ready-to-send banner in that case.
+        val now = Clock.System.now()
+        val readyPlan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
+        val migrationProgress = MigrationProgress(1, 3, 100_000L, null)
+
+        val result = migrationMessageFor(
+            sdkState = MigrationState.InProgress(migrationProgress),
+            plan = readyPlan,
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = 100_000L,
+            isBackgroundExecutionAvailable = true,
+            hasOverdueTransfers = false,
+            now = now,
+        )
+
+        assertEquals(HomeMessageData.Migration(readyPlan), result)
+    }
+
+    @Test
+    fun dueTransferAlreadyOverdueShowsRegularInProgressNotReadyToSend() {
+        // Once the SDK counts it as overdue, MigrationProgressVM's Reschedule/Send-now flow takes
+        // over — the ready-to-send banner is only for the narrower "just became due" window before
+        // that.
+        val now = Clock.System.now()
+        val readyPlan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
+        val migrationProgress = MigrationProgress(1, 3, 100_000L, null)
+
+        val result = migrationMessageFor(
+            sdkState = MigrationState.InProgress(migrationProgress),
+            plan = readyPlan,
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = 100_000L,
+            isBackgroundExecutionAvailable = false,
+            hasOverdueTransfers = true,
+            now = now,
+        )
+
+        assertEquals(HomeMessageData.Migration(readyPlan), result)
+    }
+
+    @Test
+    fun notYetDueTransferWithoutBackgroundExecutionShowsRegularInProgress() {
+        val now = Clock.System.now()
+        val notYetDuePlan = planWithPendingTransfer((now + 30.minutes).epochSeconds)
+        val migrationProgress = MigrationProgress(1, 3, 100_000L, null)
+
+        val result = migrationMessageFor(
+            sdkState = MigrationState.InProgress(migrationProgress),
+            plan = notYetDuePlan,
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = 100_000L,
+            isBackgroundExecutionAvailable = false,
+            hasOverdueTransfers = false,
+            now = now,
+        )
+
+        assertEquals(HomeMessageData.Migration(notYetDuePlan), result)
     }
 }

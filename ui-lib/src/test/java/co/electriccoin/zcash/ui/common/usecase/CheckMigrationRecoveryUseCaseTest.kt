@@ -2,9 +2,14 @@ package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.MigrationState
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
+import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
+import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
+import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
 import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
+import co.electriccoin.zcash.ui.common.provider.IsBackgroundExecutionAvailableProvider
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.screen.home.HomeArgs
@@ -12,13 +17,32 @@ import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteArgs
 import co.electriccoin.zcash.ui.screen.migration.invalid.MigrationTransferInvalidArgs
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
+import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
 
 class CheckMigrationRecoveryUseCaseTest {
+
+    private fun planWithPendingTransfer(scheduledAtEpochSeconds: Long) =
+        MigrationPlan(
+            id = "p1",
+            createdAtEpochSeconds = 0L,
+            transfers = listOf(
+                MigrationTransfer(
+                    index = 2,
+                    amountZatoshi = 100_000L,
+                    scheduledAtEpochSeconds = scheduledAtEpochSeconds,
+                    status = MigrationTransferStatus.PENDING,
+                )
+            ),
+            mode = MigrationMode.AUTOMATIC,
+        )
 
     private fun useCase(
         sdk: OrchardMigrationSdk?,
@@ -26,6 +50,8 @@ class CheckMigrationRecoveryUseCaseTest {
         pendingMigrationTorFailure: Boolean = false,
         hasSeenMigrationComplete: Boolean = false,
         savedPlan: MigrationPlan? = mockk(relaxed = true),
+        isBackgroundExecutionAvailable: Boolean = true,
+        orchardBalanceZatoshi: Long = 0L,
     ) = CheckMigrationRecoveryUseCase(
         getOrchardMigrationSdk = mockk<GetOrchardMigrationSdkUseCase> {
             coEvery { this@mockk() } returns sdk
@@ -37,8 +63,14 @@ class CheckMigrationRecoveryUseCaseTest {
         migrationPlanRepository = mockk<MigrationPlanRepository> {
             coEvery { load() } returns savedPlan
         },
+        getOrchardBalance = mockk<GetOrchardBalanceUseCase> {
+            coEvery { this@mockk() } returns Zatoshi(orchardBalanceZatoshi)
+        },
         pendingMigrationTorFailureStorageProvider = mockk<PendingMigrationTorFailureStorageProvider> {
             coEvery { get() } returns pendingMigrationTorFailure
+        },
+        isBackgroundExecutionAvailableProvider = mockk<IsBackgroundExecutionAvailableProvider> {
+            every { isAvailable() } returns isBackgroundExecutionAvailable
         },
     )
 
@@ -69,6 +101,113 @@ class CheckMigrationRecoveryUseCaseTest {
     }
 
     @Test
+    fun dueTransferWithoutBackgroundExecutionRoutesToTransferReview() = runTest {
+        val now = Clock.System.now()
+        val plan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
+            coEvery { hasInvalidTransfers() } returns false
+            coEvery { hasOverdueTransfers() } returns false
+        }
+        val router = mockk<NavigationRouter>(relaxed = true)
+
+        useCase(
+            sdk = sdk,
+            navigationRouter = router,
+            savedPlan = plan,
+            isBackgroundExecutionAvailable = false,
+        ).invoke()
+
+        coVerify(exactly = 1) { router.replaceAll(HomeArgs, MigrationTransferReviewArgs) }
+    }
+
+    @Test
+    fun invalidTransfersTakePriorityOverReadyToSend() = runTest {
+        val now = Clock.System.now()
+        val plan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
+            coEvery { hasInvalidTransfers() } returns true
+        }
+        val router = mockk<NavigationRouter>(relaxed = true)
+
+        useCase(
+            sdk = sdk,
+            navigationRouter = router,
+            savedPlan = plan,
+            isBackgroundExecutionAvailable = false,
+        ).invoke()
+
+        coVerify(exactly = 1) { router.replaceAll(HomeArgs, MigrationTransferInvalidArgs) }
+        coVerify(exactly = 0) { router.replaceAll(HomeArgs, MigrationTransferReviewArgs) }
+    }
+
+    @Test
+    fun alreadyOverdueTransferTakesPriorityOverReadyToSend() = runTest {
+        // Once the SDK itself counts it as overdue, the fuller Reschedule/Send-now recovery screen
+        // owns it — the ready-to-send branch is only for the narrower "just became due" window.
+        val now = Clock.System.now()
+        val plan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
+            coEvery { hasInvalidTransfers() } returns false
+            coEvery { hasOverdueTransfers() } returns true
+            coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))
+        }
+        val router = mockk<NavigationRouter>(relaxed = true)
+
+        useCase(
+            sdk = sdk,
+            navigationRouter = router,
+            savedPlan = plan,
+            isBackgroundExecutionAvailable = false,
+        ).invoke()
+
+        coVerify(exactly = 1) { router.replaceAll(HomeArgs, MigrationProgressArgs) }
+        coVerify(exactly = 0) { router.replaceAll(HomeArgs, MigrationTransferReviewArgs) }
+    }
+
+    @Test
+    fun backgroundExecutionAvailableFallsThroughToOverdueCheck() = runTest {
+        val now = Clock.System.now()
+        val plan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
+            coEvery { hasInvalidTransfers() } returns false
+            coEvery { hasOverdueTransfers() } returns true
+            coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))
+        }
+        val router = mockk<NavigationRouter>(relaxed = true)
+
+        useCase(
+            sdk = sdk,
+            navigationRouter = router,
+            savedPlan = plan,
+            isBackgroundExecutionAvailable = true,
+        ).invoke()
+
+        coVerify(exactly = 1) { router.replaceAll(HomeArgs, MigrationProgressArgs) }
+        coVerify(exactly = 0) { router.replaceAll(HomeArgs, MigrationTransferReviewArgs) }
+    }
+
+    @Test
+    fun notYetDueTransferDoesNotRouteToTransferReview() = runTest {
+        val now = Clock.System.now()
+        val plan = planWithPendingTransfer((now + 30.minutes).epochSeconds)
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
+            coEvery { hasInvalidTransfers() } returns false
+            coEvery { hasOverdueTransfers() } returns false
+            coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))
+        }
+        val router = mockk<NavigationRouter>(relaxed = true)
+
+        useCase(
+            sdk = sdk,
+            navigationRouter = router,
+            savedPlan = plan,
+            isBackgroundExecutionAvailable = false,
+        ).invoke()
+
+        coVerify(exactly = 0) { router.replaceAll(HomeArgs, MigrationTransferReviewArgs) }
+    }
+
+    @Test
     fun noPendingTorFailureAndNoInvalidTransfersFallsThroughToOverdueCheck() = runTest {
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
             coEvery { hasInvalidTransfers() } returns false
@@ -76,7 +215,12 @@ class CheckMigrationRecoveryUseCaseTest {
         }
         val router = mockk<NavigationRouter>(relaxed = true)
 
-        useCase(sdk = sdk, navigationRouter = router, pendingMigrationTorFailure = false).invoke()
+        useCase(
+            sdk = sdk,
+            navigationRouter = router,
+            pendingMigrationTorFailure = false,
+            isBackgroundExecutionAvailable = true,
+        ).invoke()
 
         coVerify(exactly = 1) { router.replaceAll(HomeArgs, MigrationProgressArgs) }
     }
@@ -96,6 +240,8 @@ class CheckMigrationRecoveryUseCaseTest {
             pendingMigrationTorFailure = false,
             hasSeenMigrationComplete = false,
             savedPlan = mockk(relaxed = true),
+            isBackgroundExecutionAvailable = true,
+            orchardBalanceZatoshi = 0L,
         ).invoke()
 
         coVerify(exactly = 1) { router.replaceAll(HomeArgs, MigrationCompleteArgs) }

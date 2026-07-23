@@ -49,9 +49,14 @@ class MigrationTransferReviewVM(
     private fun onBack() = navigationRouter.back()
 
     companion object {
-        // Mock-only placeholder network fee, mirroring the precedent already established by
-        // MigrationReviewVM's IMMEDIATE_MODE_MOCK_FEE_ZATOSHI for the same "no fee field on
-        // TransferProposal" gap.
+        // Placeholder network fee — TransferProposal (see cash.z.ecc.android.sdk.MigrationSdk.kt)
+        // carries no per-transfer fee field, and neither OrchardMigrationSdk.getMigrationTransferStates()
+        // nor any other AUTOMATIC-mode SDK surface exposes one today (confirmed 2026-07-24: the
+        // AUTOMATIC branch of MigrationReviewVM/MigrationReviewState.fee is likewise always null —
+        // only IMMEDIATE mode has a real fee, from Proposal.totalFeeRequired()). Kept as a
+        // best-effort estimate rather than blocked on an SDK change, but the screen's "Fee
+        // (estimated)" label (see MigrationTransferReviewScreen) must stay honest about this not
+        // being an exact, broadcast-time fee.
         private const val TRANSFER_FEE_ESTIMATE_ZATOSHI = 1_000L
     }
 }

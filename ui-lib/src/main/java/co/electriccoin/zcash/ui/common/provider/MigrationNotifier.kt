@@ -25,6 +25,24 @@ class MigrationNotifier(private val context: Context) {
         )
     }
 
+    // Distinct request code AND a distinct intent extra from mainActivityIntent()'s
+    // EXTRA_OPEN_MIGRATION — MainActivity.handleMigrationIntent() hard-routes that existing extra
+    // to MigrationProgressArgs (the missed-transfer screen), but this notification needs to land on
+    // MigrationTransferReviewArgs instead (spec §6.4 is deliberately a distinct, lighter-weight
+    // path from the overdue/missed-transfer recovery flow).
+    private fun transferReadyToSendIntent(): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(EXTRA_OPEN_TRANSFER_READY, true)
+        }
+        return PendingIntent.getActivity(
+            context,
+            REQUEST_CODE_TRANSFER_READY,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
     fun createChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
@@ -76,6 +94,28 @@ class MigrationNotifier(private val context: Context) {
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_PROGRESS, notification)
     }
 
+    /**
+     * Spec §6.4 "Transfer Ready to Send": posted the moment a scheduled transfer becomes due while
+     * background execution is unavailable (see [co.electriccoin.zcash.ui.common.provider
+     * .IsBackgroundExecutionAvailableProvider] and [co.electriccoin.zcash.work
+     * .MigrationTransferDueReceiver]) — distinct from [notifyManualConfirmationRequired], which is
+     * for a background broadcast that was actually attempted and failed. Tapping this routes to the
+     * lighter-weight review-and-send screen ([EXTRA_OPEN_TRANSFER_READY]), not the fuller
+     * Reschedule/Send-now recovery screen.
+     */
+    fun notifyTransferReadyToSend(transferIndex: Int, total: Int) {
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_alert_circle)
+            .setContentTitle("Ironwood Migration")
+            .setContentText("Transfer $transferIndex of $total is ready to send. Tap to review and send.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(transferReadyToSendIntent())
+            .setAutoCancel(true)
+            .build()
+
+        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_PROGRESS, notification)
+    }
+
     fun notifyMigrationPlanInvalid() {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alert_circle)
@@ -105,7 +145,9 @@ class MigrationNotifier(private val context: Context) {
     companion object {
         const val CHANNEL_ID = "migration_channel"
         const val EXTRA_OPEN_MIGRATION = "co.electriccoin.zcash.migration.open_progress"
+        const val EXTRA_OPEN_TRANSFER_READY = "co.electriccoin.zcash.migration.open_transfer_ready"
         private const val NOTIFICATION_ID_PROGRESS = 9001
         private const val REQUEST_CODE_MIGRATION = 9001
+        private const val REQUEST_CODE_TRANSFER_READY = 9002
     }
 }

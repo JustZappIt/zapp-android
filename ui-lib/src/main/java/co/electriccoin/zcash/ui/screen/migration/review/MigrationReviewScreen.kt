@@ -135,7 +135,14 @@ private fun ImmediateReviewContent(state: MigrationReviewState) {
 }
 
 @Composable
-internal fun ImmediateDetailsCard(amount: StringResource, fee: StringResource?) {
+internal fun ImmediateDetailsCard(
+    amount: StringResource,
+    fee: StringResource?,
+    // Overridable so callers whose [fee] is a placeholder (no real per-transfer fee field exists
+    // on TransferProposal — see MigrationTransferReviewVM) can be honest that it's an estimate,
+    // without relabeling the real, exact fee IMMEDIATE mode shows (Proposal.totalFeeRequired()).
+    feeLabel: String = "Fee",
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -148,7 +155,7 @@ internal fun ImmediateDetailsCard(amount: StringResource, fee: StringResource?) 
                 .height(1.dp)
                 .background(ZashiColors.Surfaces.bgPrimary),
         )
-        ImmediateDetailsRow(label = "Fee", value = fee?.getValue().orEmpty())
+        ImmediateDetailsRow(label = feeLabel, value = fee?.getValue().orEmpty())
     }
 }
 

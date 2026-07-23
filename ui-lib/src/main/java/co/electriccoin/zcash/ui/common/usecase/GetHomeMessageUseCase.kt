@@ -13,6 +13,7 @@ import co.electriccoin.zcash.ui.common.model.WalletSnapshot
 import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_DUST_THRESHOLD_ZATOSHI
 import co.electriccoin.zcash.ui.common.provider.CrashReportingStorageProvider
 import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
+import co.electriccoin.zcash.ui.common.provider.IsBackgroundExecutionAvailableProvider
 import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.HomeMessageCacheRepository
@@ -32,10 +33,14 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 class GetHomeMessageUseCase(
     private val walletBackupMessageUseCase: WalletBackupMessageUseCase,
@@ -50,6 +55,7 @@ class GetHomeMessageUseCase(
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val getOrchardBalance: GetOrchardBalanceUseCase,
     private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
+    private val isBackgroundExecutionAvailableProvider: IsBackgroundExecutionAvailableProvider,
 ) {
     @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
     fun observe(): Flow<HomeMessageData?> =
@@ -99,13 +105,38 @@ class GetHomeMessageUseCase(
             combine(
                 migrationPlanRepository.observe(),
                 hasSeenMigrationCompleteStorageProvider.observe(),
-            ) { plan, hasSeenComplete ->
+                observeReadyToSendSignal(),
+            ) { plan, hasSeenComplete, readyToSendSignal ->
                 migrationMessageFor(
                     sdkState = getOrchardMigrationSdk()?.getMigrationState(),
                     plan = plan,
                     hasSeenComplete = hasSeenComplete,
                     orchardBalanceZatoshi = getOrchardBalance().value,
+                    isBackgroundExecutionAvailable = readyToSendSignal.isBackgroundExecutionAvailable,
+                    hasOverdueTransfers = readyToSendSignal.hasOverdueTransfers,
                 )
+            }
+        }
+
+    private data class ReadyToSendSignal(
+        val isBackgroundExecutionAvailable: Boolean,
+        val hasOverdueTransfers: Boolean,
+    )
+
+    // Neither signal here is itself observable, so this polls on the same cadence
+    // MigrationProgressVM.reallyOverdueFlow() already uses for hasOverdueTransfers() — cheap local
+    // checks (no network), just re-evaluated periodically since wall-clock "has this transfer's due
+    // time arrived yet" can't otherwise be recomputed reactively.
+    private fun observeReadyToSendSignal(): Flow<ReadyToSendSignal> =
+        flow {
+            while (true) {
+                emit(
+                    ReadyToSendSignal(
+                        isBackgroundExecutionAvailable = isBackgroundExecutionAvailableProvider.isAvailable(),
+                        hasOverdueTransfers = getOrchardMigrationSdk()?.hasOverdueTransfers() ?: false,
+                    )
+                )
+                delay(READY_TO_SEND_RECHECK_INTERVAL)
             }
         }
 
@@ -282,6 +313,10 @@ class GetHomeMessageUseCase(
         syncMessageShownBefore: Boolean,
         someBalance: Boolean,
     ): RuntimeMessage? = syncingMessageFor(walletSnapshot, syncMessageShownBefore, someBalance)
+
+    private companion object {
+        val READY_TO_SEND_RECHECK_INTERVAL = 15.seconds
+    }
 }
 
 /**
@@ -296,14 +331,32 @@ class GetHomeMessageUseCase(
  * round" from "campaign genuinely done" — both look identical to the SDK. The app-side [plan] can:
  * `MigrationCompleteVM.onDone()` clears it (without setting [hasSeenComplete]) exactly when more
  * rounds are needed, so `plan == null` here means "treat this as if nothing has run yet."
+ *
+ * [isBackgroundExecutionAvailable] and [hasOverdueTransfers] together drive spec §6.4 "Transfer
+ * Ready to Send": a narrower, *earlier* window than the general overdue/missed-transfer state
+ * (`MigrationProgressVM`'s `hasOverdue`) — the next pending transfer's scheduled time has arrived,
+ * background execution can't run it, but the SDK doesn't (yet) count it as overdue. Both default to
+ * "don't show this banner" (available/not-overdue) so existing callers/tests that don't pass them
+ * keep behaving exactly as before.
  */
 internal fun migrationMessageFor(
     sdkState: MigrationState?,
     plan: co.electriccoin.zcash.ui.common.model.migration.MigrationPlan?,
     hasSeenComplete: Boolean,
     orchardBalanceZatoshi: Long,
-): HomeMessageData.Migration? =
-    when {
+    isBackgroundExecutionAvailable: Boolean = true,
+    hasOverdueTransfers: Boolean = false,
+    now: Instant = Clock.System.now(),
+): HomeMessageData.Migration? {
+    val next = plan?.nextPending
+    return when {
+        sdkState is MigrationState.InProgress &&
+            next != null &&
+            !isBackgroundExecutionAvailable &&
+            !hasOverdueTransfers &&
+            next.scheduledAt <= now ->
+            HomeMessageData.Migration(plan, isReadyToSend = true)
+
         sdkState is MigrationState.InProgress -> HomeMessageData.Migration(plan)
 
         // Gated on the real dust threshold, not just the SDK's per-round Complete state — a
@@ -329,6 +382,7 @@ internal fun migrationMessageFor(
 
         else -> null
     }
+}
 
 internal const val SYNCING_BANNER_HIDE_BELOW_BLOCKS = 3456L
 

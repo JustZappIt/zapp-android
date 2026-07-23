@@ -112,6 +112,18 @@ class MainActivity : FragmentActivity() {
                 co.electriccoin.zcash.ui.screen.home.HomeArgs,
                 co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs,
             )
+        } else if (intent.getBooleanExtra(
+                co.electriccoin.zcash.ui.common.provider.MigrationNotifier.EXTRA_OPEN_TRANSFER_READY,
+                false
+            )
+        ) {
+            // Distinct destination from EXTRA_OPEN_MIGRATION above — spec §6.4 "Transfer Ready to
+            // Send" is a lighter-weight review-and-send path, not the fuller Reschedule/Send-now
+            // recovery screen the overdue-transfer notification routes to.
+            navigationRouter.replaceAll(
+                co.electriccoin.zcash.ui.screen.home.HomeArgs,
+                co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs,
+            )
         }
     }
 
