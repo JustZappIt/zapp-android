@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.TransferResult
+import cash.z.ecc.android.sdk.model.Proposal
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.datasource.ProposalDataSource
+import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.SubmitResult
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
@@ -15,6 +18,7 @@ import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
+import co.electriccoin.zcash.ui.common.repository.PendingImmediateProposalRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationTorFailureDecisionRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
@@ -40,6 +44,9 @@ class MigrationSendingVM(
     private val errorStateMapper: ErrorMapperUseCase,
     private val isTorEnabledStorageProvider: IsTorEnabledStorageProvider,
     private val pendingMigrationTorFailureDecisionRepository: PendingMigrationTorFailureDecisionRepository,
+    private val proposalDataSource: ProposalDataSource,
+    private val pendingImmediateProposalRepository: PendingImmediateProposalRepository,
+    private val zashiSpendingKeyDataSource: ZashiSpendingKeyDataSource,
 ) : ViewModel() {
 
     private val sendLce = mutableLce<Unit>()
@@ -110,6 +117,11 @@ class MigrationSendingVM(
     fun onBack() = navigationRouter.back()
 
     private suspend fun sendOnce(useTor: Boolean) {
+        val pendingProposal = pendingImmediateProposalRepository.get()
+        if (pendingProposal != null) {
+            sendImmediateProposal(pendingProposal)
+            return
+        }
         val sdk = getOrchardMigrationSdk() ?: error("MigrationSendingVM: no wallet available to send")
         var result: TransferResult? = null
         var attempt = 0
@@ -148,6 +160,25 @@ class MigrationSendingVM(
             }
             null -> failure.value = SendFailure.NotReady
             else -> failure.value = SendFailure.Engine(r)
+        }
+    }
+
+    // IMMEDIATE mode bypasses the migration engine entirely (see
+    // OrchardMigrationSdk.proposeImmediateMigration's doc) — sign and submit exactly like an
+    // ordinary send, using the app's existing ordinary-send primitive.
+    private suspend fun sendImmediateProposal(proposal: Proposal) {
+        val usk = zashiSpendingKeyDataSource.getZashiSpendingKey()
+        val result = withContext(NonCancellable) { proposalDataSource.submitTransaction(proposal, usk) }
+        when (result) {
+            is SubmitResult.Success -> {
+                pendingImmediateProposalRepository.clear()
+                navigationRouter.forward(MigrationSuccessArgs(result.txIds.first()))
+            }
+            is SubmitResult.GrpcFailure -> failure.value = SendFailure.Submit(result)
+            else -> {
+                pendingImmediateProposalRepository.clear()
+                failure.value = SendFailure.Submit(result)
+            }
         }
     }
 
