@@ -6,6 +6,7 @@ import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.TransferResult
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
+import co.electriccoin.zcash.ui.common.model.SubmitResult
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
@@ -39,7 +40,38 @@ class MigrationSendingVM(
 ) : ViewModel() {
 
     private val sendLce = mutableLce<Unit>()
-    private val failure = MutableStateFlow<TransferResult?>(null)
+    private val failure = MutableStateFlow<SendFailure?>(null)
+
+    private sealed interface SendFailure {
+        data class Engine(val result: TransferResult) : SendFailure
+        // Populated by the IMMEDIATE-mode integration task (see
+        // docs/superpowers/plans/2026-07-23-migration-immediate-integration.md) — unused until then.
+        data class Submit(val result: SubmitResult) : SendFailure
+        data object NotReady : SendFailure
+    }
+
+    private fun SendFailure.message(): String = when (this) {
+        is SendFailure.Engine -> migrationFailureMessage(result)
+        is SendFailure.Submit -> when (result) {
+            is SubmitResult.GrpcFailure -> "Couldn't reach the network. Check your connection and try again."
+            is SubmitResult.Failure -> "The network rejected this transaction. Please contact support."
+            is SubmitResult.Error -> "Something went wrong while sending. Please contact support."
+            is SubmitResult.Partial -> "Some but not all of this transaction's parts were sent. Please contact support."
+            is SubmitResult.Success -> error("SendFailure.Submit constructed with a Success result")
+        }
+        SendFailure.NotReady -> "This transfer isn't ready to send yet. Please try again in a moment."
+    }
+
+    // Engine (TransferResult) failures and NotReady always offer a real retry (matches today's
+    // existing behavior of always calling send() again). A Submit failure only retries when it's
+    // SubmitResult.GrpcFailure — resubmitting the identical signed Proposal after a genuine
+    // Failure/Error/Partial would either re-fail identically or, for Partial, risk re-broadcasting
+    // already-sent internal transactions.
+    private fun SendFailure.isRetryable(): Boolean = when (this) {
+        is SendFailure.Engine -> true
+        is SendFailure.Submit -> result is SubmitResult.GrpcFailure
+        SendFailure.NotReady -> true
+    }
 
     init {
         pendingMigrationTorFailureDecisionRepository.decision
@@ -55,8 +87,12 @@ class MigrationSendingVM(
             MigrationSendingState(
                 failureSheet = f?.let {
                     MigrationTransferFailureState(
-                        message = migrationFailureMessage(it),
-                        onRetry = { failure.value = null; send() },
+                        message = it.message(),
+                        onRetry = if (it.isRetryable()) {
+                            { failure.value = null; send() }
+                        } else {
+                            { failure.value = null; navigationRouter.back() }
+                        },
                         onDismiss = { failure.value = null; navigationRouter.back() },
                     )
                 }
@@ -92,11 +128,11 @@ class MigrationSendingVM(
                 if (useTor) {
                     navigationRouter.forward(MigrationTorFailureArgs)
                 } else {
-                    failure.value = result
+                    failure.value = SendFailure.Engine(result)
                 }
             }
             null -> Unit
-            else -> failure.value = result
+            else -> failure.value = SendFailure.Engine(result)
         }
     }
 }
