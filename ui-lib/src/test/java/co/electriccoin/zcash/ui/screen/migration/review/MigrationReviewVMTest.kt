@@ -25,6 +25,7 @@ import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -172,7 +173,10 @@ class MigrationReviewVMTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { proposalDataSource.submitTransaction(any<Proposal>(), any<UnifiedSpendingKey>()) }
-        coVerify(exactly = 1) { keystoneProposalRepository.setMigrationSweepProposal(proposal, Zatoshi(500_000L)) }
+        coVerifyOrder {
+            keystoneProposalRepository.setMigrationSweepProposal(proposal, Zatoshi(500_000L))
+            keystoneProposalRepository.createPCZTFromProposal()
+        }
         assertEquals(
             listOf<Any>(co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionArgs),
             router.forwardedRoutes,

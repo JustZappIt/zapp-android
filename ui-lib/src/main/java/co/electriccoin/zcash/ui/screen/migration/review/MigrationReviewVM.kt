@@ -340,6 +340,12 @@ class MigrationReviewVM(
             // does (no migration-specific PCZT/QR machinery — one ordinary PCZT, same as any
             // regular Keystone send).
             keystoneProposalRepository.setMigrationSweepProposal(proposal, Zatoshi(amountZatoshi))
+            // Required before navigating — SignKeystoneTransactionVM's QR encoder is built from
+            // the already-created PCZT (createPCZTEncoder() reads KeystoneProposalRepository's
+            // cached proposalPczt); it never calls createPCZTFromProposal() itself. Every other
+            // Keystone entry point (CreateProposalUseCase, ShieldFundsUseCase, etc.) does this
+            // same two-call sequence before forwarding.
+            keystoneProposalRepository.createPCZTFromProposal()
             navigationRouter.forward(SignKeystoneTransactionArgs)
             return
         }
