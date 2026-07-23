@@ -83,7 +83,10 @@ fun MigrationTransferReviewView(state: MigrationTransferReviewState) {
                 color = ZashiColors.Text.textTertiary,
             )
             Spacer(Modifier.height(24.dp))
-            ImmediateDetailsCard(amount = state.amount, fee = state.fee)
+            // "Fee (estimated)" — TransferProposal (the SDK model backing this screen) has no real
+            // per-transfer fee field to show, unlike IMMEDIATE mode's Proposal.totalFeeRequired().
+            // See MigrationTransferReviewVM.TRANSFER_FEE_ESTIMATE_ZATOSHI's kdoc.
+            ImmediateDetailsCard(amount = state.amount, fee = state.fee, feeLabel = "Fee (estimated)")
             Spacer(Modifier.weight(1f))
             ZashiButton(
                 state = ButtonState(text = stringRes("Confirm"), onClick = state.onConfirm),
