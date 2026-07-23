@@ -123,6 +123,19 @@ class MigrationSendingVMTest {
         io.mockk.coVerify(exactly = 1) { sdk.executeNextPendingTransfer(any()) }
     }
 
+    @Test
+    fun onBackNavigatesBackImmediately() = runTest {
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+        coEvery { sdk.finalizeReadyTransfers() } returns 0
+        coEvery { sdk.executeNextPendingTransfer(any()) } returns null
+        val router = FakeNavigationRouter()
+        val vm = vm(sdk = sdk, router = router)
+
+        vm.onBack()
+
+        assertEquals(1, router.backCount)
+    }
+
     private fun vm(
         sdk: OrchardMigrationSdk,
         router: FakeNavigationRouter,
@@ -145,11 +158,12 @@ class MigrationSendingVMTest {
 
     private class FakeNavigationRouter : NavigationRouter {
         val forwardedRoutes = mutableListOf<Any>()
+        var backCount = 0
 
         override fun forward(vararg routes: Any) { forwardedRoutes.addAll(routes.toList()) }
         override fun replace(vararg routes: Any) = Unit
         override fun replaceAll(vararg routes: Any) = Unit
-        override fun back() = Unit
+        override fun back() { backCount++ }
         override fun backTo(route: KClass<*>) = Unit
         override fun custom(block: (NavBackStackEntry?) -> NavigationCommand?) = Unit
         override fun backToRoot() = Unit
