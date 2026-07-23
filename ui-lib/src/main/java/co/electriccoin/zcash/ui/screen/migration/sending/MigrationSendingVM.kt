@@ -22,12 +22,15 @@ import co.electriccoin.zcash.ui.common.usecase.ScheduleNextMigrationWindowUseCas
 import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteArgs
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
 import co.electriccoin.zcash.ui.screen.migration.torfailure.MigrationTorFailureArgs
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.withContext
 
 class MigrationSendingVM(
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
@@ -103,10 +106,18 @@ class MigrationSendingVM(
     fun send() = sendLce.execute { sendOnce(useTor = isTorEnabledStorageProvider.get() == true) }
 
     private suspend fun sendOnce(useTor: Boolean) {
-        when (
-            val result =
-                getOrchardMigrationSdk()?.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor))
-        ) {
+        val sdk = getOrchardMigrationSdk() ?: error("MigrationSendingVM: no wallet available to send")
+        var result: TransferResult? = null
+        var attempt = 0
+        while (result == null && attempt < SEND_MAX_ATTEMPTS) {
+            if (attempt > 0) delay(SEND_RETRY_DELAY_MS)
+            withContext(NonCancellable) {
+                sdk.finalizeReadyTransfers()
+                result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor))
+            }
+            attempt++
+        }
+        when (val r = result) {
             is TransferResult.Success -> {
                 // No-ops for IMMEDIATE mode's single-transfer plan (no nextPending); re-arms the
                 // next window for a resumed/manually-confirmed transfer in a multi-transfer plan.
@@ -118,7 +129,7 @@ class MigrationSendingVM(
                     // (CheckMigrationRecoveryUseCase, on next app open), rather than two.
                     navigationRouter.forward(MigrationCompleteArgs)
                 } else {
-                    navigationRouter.forward(MigrationSuccessArgs(result.txId))
+                    navigationRouter.forward(MigrationSuccessArgs(r.txId))
                 }
             }
             // A NetworkError while Tor was in use is presumptively a Tor-connectivity failure —
@@ -128,11 +139,16 @@ class MigrationSendingVM(
                 if (useTor) {
                     navigationRouter.forward(MigrationTorFailureArgs)
                 } else {
-                    failure.value = SendFailure.Engine(result)
+                    failure.value = SendFailure.Engine(r)
                 }
             }
-            null -> Unit
-            else -> failure.value = SendFailure.Engine(result)
+            null -> failure.value = SendFailure.NotReady
+            else -> failure.value = SendFailure.Engine(r)
         }
+    }
+
+    companion object {
+        private const val SEND_MAX_ATTEMPTS = 3
+        private const val SEND_RETRY_DELAY_MS = 1500L
     }
 }

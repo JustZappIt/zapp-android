@@ -15,6 +15,7 @@ import co.electriccoin.zcash.ui.common.repository.PendingMigrationTorFailureDeci
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.ScheduleNextMigrationWindowUseCase
+import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -66,6 +67,48 @@ class MigrationSendingVMTest {
             sheet?.message,
         )
         assertTrue(sheet != null)
+    }
+
+    @Test
+    fun persistentNullExecuteResultRetriesThenShowsNotReadySheet() = runTest {
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+        coEvery { sdk.finalizeReadyTransfers() } returns 0
+        coEvery { sdk.executeNextPendingTransfer(any()) } returns null
+        val router = FakeNavigationRouter()
+        val vm = vm(sdk = sdk, router = router)
+        val collectJob = launch { vm.state.collect {} }
+        vm.send()
+
+        advanceUntilIdle()
+
+        io.mockk.coVerify(exactly = 3) { sdk.executeNextPendingTransfer(any()) }
+        io.mockk.coVerify(exactly = 3) { sdk.finalizeReadyTransfers() }
+        assertEquals(
+            "This transfer isn't ready to send yet. Please try again in a moment.",
+            vm.state.value.content?.failureSheet?.message,
+        )
+        collectJob.cancel()
+    }
+
+    @Test
+    fun finalizeReadyTransfersIsCalledBeforeExecutingOnEverySuccessfulAttempt() = runTest {
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+        coEvery { sdk.finalizeReadyTransfers() } returns 1
+        coEvery { sdk.executeNextPendingTransfer(any()) } returns TransferResult.Success("txid123")
+        val router = FakeNavigationRouter()
+        val plans = mockk<MigrationPlanRepository> {
+            coEvery { load() } returns null
+        }
+        val vm = vm(sdk = sdk, router = router, plans = plans)
+        vm.send()
+
+        advanceUntilIdle()
+
+        io.mockk.coVerifyOrder {
+            sdk.finalizeReadyTransfers()
+            sdk.executeNextPendingTransfer(any())
+        }
+        assertEquals<List<Any>>(listOf(MigrationSuccessArgs("txid123")), router.forwardedRoutes)
     }
 
     private fun vm(
