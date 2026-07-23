@@ -57,7 +57,7 @@ class MoreVM(
                         title = stringRes(R.string.settings_coinholderPolling),
                         bigIcon = imageRes(R.drawable.ic_settings_voting),
                         onClick = ::onVotingClick
-                    ),
+                    ).takeIf { VOTING_ENABLED },
                     ListItemState(
                         title = stringRes(R.string.settings_advanced),
                         bigIcon = imageRes(R.drawable.ic_advanced_settings),
@@ -119,3 +119,5 @@ class MoreVM(
 
     private fun onWhatsNewClick() = navigationRouter.forward(WHATS_NEW)
 }
+
+internal const val VOTING_ENABLED = false

@@ -21,6 +21,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -28,7 +29,6 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEmpty
 import kotlinx.coroutines.flow.onStart
@@ -92,7 +92,8 @@ class TransactionRepositoryImpl(
                                     }.distinctUntilChanged()
 
                                 normalizedTransactions
-                                    .mapLatest { transactions ->
+                                    .conflate()
+                                    .map { transactions ->
                                         val now = Instant.now()
                                         transactions
                                             .map { transaction ->

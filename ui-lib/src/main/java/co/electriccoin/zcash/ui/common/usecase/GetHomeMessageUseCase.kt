@@ -159,18 +159,18 @@ class GetHomeMessageUseCase(
                         return@collect
                     }
 
-                    // migrationMessage leads the chain — the migration banner is the highest
-                    // product priority while actionable (must stay visible over
-                    // disconnected/error/syncing, not be hidden behind them).
-                    val message =
-                        migrationMessage
-                            ?: createDisconnectedMessage(walletSnapshot)
+                    // Priority order: disconnected -> synchronizer error -> syncing -> migration
+                    // -> shield funds. Connectivity/sync issues now lead the chain — a user can't
+                    // act on the migration banner while the wallet is disconnected, erroring, or
+                    // still syncing, so those states take priority over it.
+                    val message = createDisconnectedMessage(walletSnapshot)
                             ?: createSynchronizerErrorMessage(walletSnapshot)
                             ?: createSyncingMessage(
                                 walletSnapshot,
                                 syncMessageShownBefore = firstSyncingMessage != null,
                                 someBalance = (account?.spendableShieldedBalance?.value ?: 0) > 0
                             )
+                            ?: migrationMessage
                             ?: shieldFundsMessage
 
                     if (message is HomeMessageData.Syncing && firstSyncingMessage == null) {
