@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.screen.migration.sending
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -9,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
@@ -19,6 +19,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.BlankBgScaffold
+import co.electriccoin.zcash.ui.design.component.ZashiSmallTopAppBar
+import co.electriccoin.zcash.ui.design.component.ZashiTopAppBarCloseNavigation
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
@@ -37,17 +39,22 @@ import org.koin.androidx.compose.koinViewModel
 fun MigrationSendingScreen() {
     val vm = koinViewModel<MigrationSendingVM>()
     val state by vm.state.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { vm.send() }
+    BackHandler { vm.onBack() }
     LceRenderer(state) { MigrationSendingView(it) }
 }
 
-// Figma node 2618:6858 ("Sending") — reuses the same "sending" Lottie composition the standard
-// (non-migration) TransactionProgressView shows while a regular transfer is submitting. The
-// frame has no bottom CTA (empty CTA slot) since there's nothing actionable yet while sending —
-// this mirrors TransactionProgressVM.createSendingState(), which likewise leaves all buttons null.
+// Figma node 2618:6858 ("Sending") has no bottom CTA slot by design (nothing actionable while
+// sending) — the escape hatch lives in the top bar instead, not the bottom, so it doesn't
+// conflict with that layout decision.
 @Composable
 fun MigrationSendingView(state: MigrationSendingState) {
-    BlankBgScaffold { padding ->
+    BlankBgScaffold(
+        topBar = {
+            ZashiSmallTopAppBar(
+                navigationAction = { ZashiTopAppBarCloseNavigation(onBack = state.onBack) },
+            )
+        }
+    ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -91,4 +98,4 @@ private fun SendingAnimation() {
 
 @PreviewScreens
 @Composable
-private fun Preview() = ZcashTheme { MigrationSendingView(MigrationSendingState(failureSheet = null)) }
+private fun Preview() = ZcashTheme { MigrationSendingView(MigrationSendingState(failureSheet = null, onBack = {})) }
