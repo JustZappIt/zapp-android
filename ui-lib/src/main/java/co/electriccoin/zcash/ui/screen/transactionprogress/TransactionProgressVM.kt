@@ -7,6 +7,7 @@ import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.datasource.ExactInputSwapTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.ExactOutputSwapTransactionProposal
+import co.electriccoin.zcash.ui.common.datasource.MigrationSweepTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.RegularTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.SendTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.ShieldTransactionProposal
@@ -249,8 +250,11 @@ class TransactionProgressVM(
             background = PENDING,
             title =
                 when (proposal) {
+                    // Same shape as this block's RegularTransactionProposal/default arm — a
+                    // send-max sweep has no destination/memo of its own to show.
                     is Zip321TransactionProposal,
-                    is RegularTransactionProposal -> {
+                    is RegularTransactionProposal,
+                    is MigrationSweepTransactionProposal -> {
                         stringRes(R.string.send_pendingTitle)
                     }
 
@@ -269,8 +273,11 @@ class TransactionProgressVM(
             subtitle =
                 result.pendingDescription()
                     ?: when (proposal) {
+                        // Same shape as this block's RegularTransactionProposal/default arm — a
+                        // send-max sweep has no destination/memo of its own to show.
                         is Zip321TransactionProposal,
-                        is RegularTransactionProposal -> {
+                        is RegularTransactionProposal,
+                        is MigrationSweepTransactionProposal -> {
                             stringRes(R.string.send_pendingInfo)
                         }
 
