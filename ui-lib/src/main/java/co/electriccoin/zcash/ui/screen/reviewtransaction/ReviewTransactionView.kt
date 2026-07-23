@@ -67,6 +67,7 @@ import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.design.util.styleAsAddress
 import co.electriccoin.zcash.ui.design.util.withStyle
 import co.electriccoin.zcash.ui.screen.balances.BalanceWidgetHeader
+import co.electriccoin.zcash.ui.screen.common.PrivacyDisclaimerCard
 import co.electriccoin.zcash.ui.screen.exchangerate.widget.StyledExchangeLabel
 import kotlin.time.Clock
 
@@ -137,6 +138,11 @@ fun ReviewTransactionView(state: ReviewTransactionState) {
                         is MessagePlaceholderState -> {
                             Spacer(16.dp)
                             MessagePlaceholderWidget(item)
+                        }
+
+                        is OrchardPrivacyWarningState -> {
+                            Spacer(16.dp)
+                            PrivacyDisclaimerCard(title = item.title, body = item.body)
                         }
 
                         is SimpleListItemState -> {

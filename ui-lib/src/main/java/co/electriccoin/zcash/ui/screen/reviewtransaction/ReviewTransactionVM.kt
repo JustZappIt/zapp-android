@@ -22,6 +22,7 @@ import co.electriccoin.zcash.ui.common.usecase.ObserveSelectedWalletAccountUseCa
 import co.electriccoin.zcash.ui.common.usecase.SubmitProposalUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.design.component.ButtonState
+import co.electriccoin.zcash.ui.design.component.ButtonStyle
 import co.electriccoin.zcash.ui.design.component.ChipButtonState
 import co.electriccoin.zcash.ui.design.util.Ellipsize
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -162,6 +163,7 @@ class ReviewTransactionVM(
                     message = stringRes(R.string.send_info_memo),
                     icon = R.drawable.ic_confirmation_message_info,
                 ).takeIf { transactionProposal.destination is WalletAddress.Transparent },
+                orchardPrivacyWarningState(transactionProposal.proposal.usesOrchardInputs()),
             ),
         primaryButton =
             ButtonState(
@@ -170,6 +172,7 @@ class ReviewTransactionVM(
                         is KeystoneAccount -> stringRes(R.string.keystone_confirm)
                         is ZashiAccount -> stringRes(R.string.tabs_send)
                     },
+                style = orchardPrivacyWarningButtonStyle(transactionProposal.proposal.usesOrchardInputs()),
                 onClick = ::onConfirmClick
             ),
         onBack = ::onBack,
@@ -230,10 +233,12 @@ class ReviewTransactionVM(
                 FinancialInfoState(
                     title = stringRes(R.string.send_feeSummary),
                     amount = transactionProposal.proposal.totalFeeRequired()
-                )
+                ),
+                orchardPrivacyWarningState(transactionProposal.proposal.usesOrchardInputs()),
             ),
         primaryButton =
             ButtonState(
+                style = orchardPrivacyWarningButtonStyle(transactionProposal.proposal.usesOrchardInputs()),
                 text =
                     when (selectedWallet) {
                         is KeystoneAccount -> stringRes(R.string.keystone_confirm)
@@ -255,3 +260,17 @@ class ReviewTransactionVM(
 
     private fun onAddContactClick(address: String) = navigationRouter.forward(AddZashiABContactArgs(address))
 }
+
+// Spec §8 "Orchard Privacy Warning on Regular Send": extracted as pure functions so they're
+// directly testable without mocking the whole VM (mirrors GetHomeMessageUseCase.migrationMessageFor).
+// Checked once the proposal already exists (rather than eagerly re-proposing on every keystroke in
+// the Send form itself) — this is still shown "before they proceed with the send" per the spec,
+// since the user still has to tap Confirm/Send on this screen to actually broadcast.
+internal fun orchardPrivacyWarningState(usesOrchardInputs: Boolean): OrchardPrivacyWarningState? =
+    OrchardPrivacyWarningState(
+        title = "This send requires spending Orchard funds",
+        body = "We recommend migrating your funds first to avoid leaking the transaction amount on-chain.",
+    ).takeIf { usesOrchardInputs }
+
+internal fun orchardPrivacyWarningButtonStyle(usesOrchardInputs: Boolean): ButtonStyle? =
+    ButtonStyle.DESTRUCTIVE1.takeIf { usesOrchardInputs }

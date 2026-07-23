@@ -70,4 +70,13 @@ data class MessagePlaceholderState(
     val message: StringResource,
 ) : ReviewTransactionItemState
 
+// Spec §8 "Orchard Privacy Warning on Regular Send": shown when Proposal.usesOrchardInputs() is
+// true — see ReviewTransactionVM.createState(). Distinct from the migration flow's own
+// PrivacyDisclaimerCard usages (MigrationSetupScreen/MigrationCompleteScreen) despite sharing that
+// same Composable — this one is scoped entirely to the ordinary, non-migration send flow.
+data class OrchardPrivacyWarningState(
+    val title: String,
+    val body: String,
+) : ReviewTransactionItemState
+
 data object DividerState : ReviewTransactionItemState
