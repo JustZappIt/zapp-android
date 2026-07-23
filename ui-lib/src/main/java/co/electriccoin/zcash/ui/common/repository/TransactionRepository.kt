@@ -12,14 +12,17 @@ import cash.z.ecc.android.sdk.model.TransactionState.Pending
 import cash.z.ecc.android.sdk.model.WalletAddress
 import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.android.sdk.type.AddressType
+import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -33,11 +36,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEmpty
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.seconds
 
 interface TransactionRepository {
     val transactions: Flow<List<Transaction>?>
@@ -67,6 +72,7 @@ class TransactionRepositoryImpl(
     private val enhancedTxCache = ConcurrentHashMap<String, TxDetails>()
 
     @OptIn(ExperimentalCoroutinesApi::class)
+    @Suppress("TooGenericExceptionCaught")
     override val transactions: Flow<List<Transaction>?> =
         accountDataSource
             .selectedAccount
@@ -115,28 +121,36 @@ class TransactionRepositoryImpl(
                                             }
                                         val freshDetails =
                                             if (needsRefresh) {
-                                                coroutineScope {
-                                                    val outputsDeferred =
-                                                        async { synchronizer.getTransactionOutputs() }
-                                                    val recipientsDeferred = async { synchronizer.getRecipients() }
-                                                    val batchedOutputs = outputsDeferred.await()
-                                                    val batchedRecipients = recipientsDeferred.await()
-                                                    transactions.associate { transaction ->
-                                                        val details =
-                                                            TxDetails(
-                                                                outputs =
-                                                                    batchedOutputs[transaction.txId].orEmpty(),
-                                                                recipient =
-                                                                    batchedRecipients[transaction.txId]
-                                                                        ?.firstOrNull()
-                                                                        ?.addressValue
-                                                            )
-                                                        val key = transaction.txId.txIdString()
-                                                        if (transaction.raw != null) {
-                                                            enhancedTxCache[key] = details
+                                                try {
+                                                    coroutineScope {
+                                                        val outputsDeferred =
+                                                            async { synchronizer.getTransactionOutputs() }
+                                                        val recipientsDeferred =
+                                                            async { synchronizer.getRecipients() }
+                                                        val batchedOutputs = outputsDeferred.await()
+                                                        val batchedRecipients = recipientsDeferred.await()
+                                                        transactions.associate { transaction ->
+                                                            val details =
+                                                                TxDetails(
+                                                                    outputs =
+                                                                        batchedOutputs[transaction.txId].orEmpty(),
+                                                                    recipient =
+                                                                        batchedRecipients[transaction.txId]
+                                                                            ?.firstOrNull()
+                                                                            ?.addressValue
+                                                                )
+                                                            val key = transaction.txId.txIdString()
+                                                            if (transaction.raw != null) {
+                                                                enhancedTxCache[key] = details
+                                                            }
+                                                            key to details
                                                         }
-                                                        key to details
                                                     }
+                                                } catch (e: CancellationException) {
+                                                    throw e
+                                                } catch (e: Exception) {
+                                                    Twig.error(e) { "Batched transaction enhancement failed" }
+                                                    emptyMap()
                                                 }
                                             } else {
                                                 emptyMap()
@@ -156,6 +170,15 @@ class TransactionRepositoryImpl(
                                     }
                             }
                         }.onStart { emit(null) }
+                }
+            }.retryWhen { cause, attempt ->
+                if (cause is CancellationException) {
+                    false
+                } else {
+                    Twig.error(cause) { "Transactions flow failed; retrying" }
+                    emit(null)
+                    delay(attempt.coerceAtMost(TRANSACTIONS_RETRY_DELAY_CAP).seconds)
+                    true
                 }
             }.stateIn(
                 scope = scope,
@@ -475,3 +498,5 @@ private data class TxDetails(
     val outputs: List<TransactionOutput>,
     val recipient: String?,
 )
+
+private const val TRANSACTIONS_RETRY_DELAY_CAP = 10L
