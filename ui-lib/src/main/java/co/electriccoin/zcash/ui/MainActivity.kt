@@ -76,6 +76,7 @@ class MainActivity : FragmentActivity() {
     val configurationOverrideFlow = MutableStateFlow<ConfigurationOverride?>(null)
 
     private val navigationRouter: NavigationRouter by inject()
+    private val checkMigrationRecovery: co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,6 +93,7 @@ class MainActivity : FragmentActivity() {
         if (intent.data != null) {
             navigationRouter.forward(ThirdPartyScan)
         }
+        handleMigrationIntent(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -100,12 +102,32 @@ class MainActivity : FragmentActivity() {
         if (intent.data != null) {
             navigationRouter.forward(ThirdPartyScan)
         }
+        handleMigrationIntent(intent)
+    }
+
+    private fun handleMigrationIntent(intent: Intent) {
+        if (intent.getBooleanExtra(co.electriccoin.zcash.ui.common.provider.MigrationNotifier.EXTRA_OPEN_MIGRATION, false)) {
+            // replaceAll ensures Home is always on the back stack regardless of how the app was opened.
+            navigationRouter.replaceAll(
+                co.electriccoin.zcash.ui.screen.home.HomeArgs,
+                co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs,
+            )
+        }
     }
 
     override fun onStart() {
         Twig.debug { "Activity state: Start" }
         authenticationViewModel.runAuthenticationRequiredCheck()
+        checkMigrationRecoveryOnStart()
         super.onStart()
+    }
+
+    // RootNavGraph's secretState-driven redirect only re-fires when secretState changes
+    // identity, so it won't catch "a transfer became overdue while backgrounded, already
+    // unlocked." onStart() fires on every foreground transition and catches that case —
+    // isSyncBlocked() has already stopped sync regardless, this is routing only.
+    private fun checkMigrationRecoveryOnStart() {
+        lifecycleScope.launch { checkMigrationRecovery() }
     }
 
     override fun onStop() {

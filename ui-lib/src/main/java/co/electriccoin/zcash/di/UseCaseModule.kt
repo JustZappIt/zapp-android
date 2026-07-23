@@ -2,6 +2,9 @@ package co.electriccoin.zcash.di
 
 import co.electriccoin.zcash.ui.common.mapper.SwapSupportMapper
 import co.electriccoin.zcash.ui.common.usecase.ApplyTransactionFiltersUseCase
+import co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase
+import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
+import co.electriccoin.zcash.ui.common.usecase.ScheduleNextMigrationWindowUseCase
 import co.electriccoin.zcash.ui.common.usecase.ApplyTransactionFulltextFiltersUseCase
 import co.electriccoin.zcash.ui.common.usecase.AuthorizeVotingSubmissionUseCase
 import co.electriccoin.zcash.ui.common.usecase.CancelProposalFlowUseCase
@@ -41,6 +44,10 @@ import co.electriccoin.zcash.ui.common.usecase.GetFlexaStatusUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetHomeMessageUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetKeystoneStatusUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetORSwapQuoteUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetMigrationPrivacyOrReviewDestinationUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
+import co.electriccoin.zcash.ui.common.usecase.LockOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetPersistableWalletUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetProposalUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetResyncDataFromHeightUseCase
@@ -189,6 +196,10 @@ val useCaseModule =
         factoryOf(::Zip321BuildUriUseCase)
         factoryOf(::Zip321ParseUriValidationUseCase)
         factoryOf(::GetPersistableWalletUseCase)
+        factoryOf(::GetOrchardMigrationSdkUseCase)
+        factoryOf(::GetOrchardBalanceUseCase)
+        factoryOf(::LockOrchardBalanceUseCase)
+        factoryOf(::GetMigrationPrivacyOrReviewDestinationUseCase)
         factoryOf(::GetSupportUseCase)
         factoryOf(::GetWalletSeedBytesUseCase)
         factoryOf(::ErrorMapperUseCase)
@@ -314,4 +325,7 @@ val useCaseModule =
         factoryOf(::SwapSupportMapper)
         factoryOf(::GetAutomaticEndpointUseCase)
         factoryOf(::IsServerAutomaticUseCase)
+        factoryOf(::CheckMigrationRecoveryUseCase)
+        factoryOf(::FinalizeMigrationScheduleUseCase)
+        factoryOf(::ScheduleNextMigrationWindowUseCase)
     }

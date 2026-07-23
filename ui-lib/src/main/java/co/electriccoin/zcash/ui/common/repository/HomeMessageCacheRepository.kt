@@ -79,6 +79,11 @@ sealed interface HomeMessageData {
         val zatoshi: Zatoshi
     ) : RuntimeMessage()
 
+    data class Migration(
+        val plan: co.electriccoin.zcash.ui.common.model.migration.MigrationPlan?,
+        val isComplete: Boolean = false,
+    ) : RuntimeMessage()
+
     data object EnableTor : Prioritized {
         override val priority: Int = 3
     }

@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import co.electriccoin.zcash.ui.common.compose.LocalActivity
 import co.electriccoin.zcash.ui.common.provider.ApplicationStateProvider
+import co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase
 import co.electriccoin.zcash.ui.common.viewmodel.SecretState
 import co.electriccoin.zcash.ui.common.viewmodel.WalletViewModel
 import co.electriccoin.zcash.ui.design.LocalKeyboardManager
@@ -32,6 +33,7 @@ fun RootNavGraph(
     val flexaViewModel = koinViewModel<FlexaViewModel>()
     val navigationRouter = koinInject<NavigationRouter>()
     val applicationStateProvider = koinInject<ApplicationStateProvider>()
+    val checkMigrationRecovery = koinInject<CheckMigrationRecoveryUseCase>()
     val navController = LocalNavController.current
     val activity = LocalActivity.current
     val navigator: Navigator =
@@ -91,6 +93,11 @@ fun RootNavGraph(
                     inclusive = true
                 }
             }
+            // Same pattern as MainActivity.handleMigrationIntent — Home always lands on the
+            // back stack first, then we redirect on top of it if a migration transfer needs
+            // attention. isSyncBlocked() (fed into the synchronizer directly) already stopped
+            // sync regardless of whether this redirect lands — this is routing only.
+            checkMigrationRecovery()
         } else if (
             secretState == SecretState.NONE &&
             navController.currentDestination?.parent?.route != OnboardingGraph::class.qualifiedName

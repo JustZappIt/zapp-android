@@ -1,0 +1,430 @@
+package co.electriccoin.zcash.ui.screen.migration.review
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import co.electriccoin.zcash.ui.screen.common.LceRenderer
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.model.migration.MigrationKeystoneRound
+import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
+import co.electriccoin.zcash.ui.design.component.BlankBgScaffold
+import co.electriccoin.zcash.ui.design.component.ButtonState
+import co.electriccoin.zcash.ui.design.component.ZashiButton
+import co.electriccoin.zcash.ui.design.component.ZashiSmallTopAppBar
+import co.electriccoin.zcash.ui.design.component.ZashiTopAppBarBackNavigation
+import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
+import co.electriccoin.zcash.ui.design.theme.ZcashTheme
+import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
+import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
+import co.electriccoin.zcash.ui.design.util.StringResource
+import co.electriccoin.zcash.ui.design.util.getValue
+import co.electriccoin.zcash.ui.design.util.scaffoldPadding
+import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.common.WalletHeaderIcons
+import co.electriccoin.zcash.ui.screen.common.WalletHeaderIconsState
+import co.electriccoin.zcash.ui.screen.migration.component.MigrationFailureBottomSheet
+import org.koin.androidx.compose.koinViewModel
+import org.koin.core.parameter.parametersOf
+
+@Composable
+fun MigrationReviewScreen(args: MigrationReviewArgs) {
+    val vm = koinViewModel<MigrationReviewVM> { parametersOf(args) }
+    val state by vm.state.collectAsStateWithLifecycle()
+    LceRenderer(state) { s ->
+        BackHandler { s.onBack() }
+        MigrationReviewView(s)
+    }
+}
+
+@Composable
+fun MigrationReviewView(state: MigrationReviewState) {
+    BlankBgScaffold(
+        topBar = {
+            ZashiSmallTopAppBar(
+                navigationAction = { ZashiTopAppBarBackNavigation(onBack = state.onBack) },
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .scaffoldPadding(padding),
+        ) {
+            when (state.mode) {
+                MigrationMode.IMMEDIATE -> ImmediateReviewContent(state)
+                MigrationMode.AUTOMATIC -> PrivacyReviewContent(state)
+            }
+        }
+    }
+    MigrationFailureBottomSheet(state.failureSheet)
+}
+
+@Composable
+private fun ImmediateReviewContent(state: MigrationReviewState) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+    ) {
+        WalletHeaderIcons(
+            state = WalletHeaderIconsState(
+                isKeystone = state.isKeystone,
+                badgeIcon = R.drawable.ic_migration_coins_swap,
+            )
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = "Review Transfer",
+            style = ZashiTypography.header6,
+            fontWeight = FontWeight.SemiBold,
+            color = ZashiColors.Text.textPrimary,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "Your full Orchard balance will be transferred to Ironwood in a single on-chain transfer. " +
+                "Once confirmed, this transfer cannot be cancelled.",
+            style = ZashiTypography.textSm,
+            color = ZashiColors.Text.textTertiary,
+        )
+        Spacer(Modifier.height(24.dp))
+        ImmediateDetailsCard(amount = state.totalAmount, fee = state.fee)
+        Spacer(Modifier.height(24.dp))
+        ZashiButton(
+            state = ButtonState(
+                text = stringRes(if (state.isConfirming) "Signing..." else "Confirm"),
+                isEnabled = !state.isConfirming,
+                isLoading = state.isConfirming,
+                onClick = state.onConfirm,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+internal fun ImmediateDetailsCard(amount: StringResource, fee: StringResource?) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(ZashiColors.Surfaces.bgSecondary, RoundedCornerShape(16.dp)),
+    ) {
+        ImmediateDetailsRow(label = "Amount", value = amount.getValue())
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(ZashiColors.Surfaces.bgPrimary),
+        )
+        ImmediateDetailsRow(label = "Fee", value = fee?.getValue().orEmpty())
+    }
+}
+
+@Composable
+internal fun ImmediateDetailsRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = ZashiTypography.textSm,
+            color = ZashiColors.Text.textTertiary,
+        )
+        Text(
+            text = value,
+            style = ZashiTypography.textSm,
+            fontWeight = FontWeight.Medium,
+            color = ZashiColors.Text.textPrimary,
+        )
+    }
+}
+
+@Composable
+private fun PrivacyReviewContent(state: MigrationReviewState) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text(
+            text = "Confirm Transfer Plan",
+            style = ZashiTypography.header6,
+            fontWeight = FontWeight.SemiBold,
+            color = ZashiColors.Text.textPrimary,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "Your balance splits into ${state.transfers.size} transfers over " +
+                "${state.estimatedDuration.getValue()}. Approve once and " +
+                "we'll handle the rest — just keep the app running in the background. Amounts are randomized " +
+                "for privacy. If we miss a window, Zodl will prompt you on next open.",
+            style = ZashiTypography.textSm,
+            color = ZashiColors.Text.textTertiary,
+        )
+        Spacer(Modifier.height(24.dp))
+        state.keystoneRound?.let { round ->
+            Text(
+                text = "Round ${round.current} of ${round.total}",
+                style = ZashiTypography.textMd,
+                fontWeight = FontWeight.SemiBold,
+                color = ZashiColors.Text.textPrimary,
+            )
+            Spacer(Modifier.height(16.dp))
+        }
+        // Only this list scrolls when it doesn't fit — header and Confirm button stay pinned.
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            item {
+                TransferTimelineRow(
+                    title = "Split Balance",
+                    subtitle = stringRes("Ready now"),
+                    amount = state.totalAmount,
+                    fiatAmount = state.totalFiatAmount,
+                    // Figma PR App Designs Q3'26, node 4207-7450: a checkmark, not the coins-swap
+                    // glyph used for pool-crossing transfers below it — Split Balance is a
+                    // same-device self-send, not a swap.
+                    icon = R.drawable.ic_migration_check,
+                    isFirst = true,
+                    isLast = state.transfers.isEmpty(),
+                )
+            }
+            items(state.transfers) { transfer ->
+                TransferTimelineRow(
+                    title = "Transfer ${transfer.index}",
+                    subtitle = transfer.scheduledLabel,
+                    amount = transfer.amount,
+                    fiatAmount = transfer.fiatAmount,
+                    index = transfer.index,
+                    isFirst = false,
+                    isLast = transfer.index == state.transfers.size,
+                )
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+        ZashiButton(
+            state = ButtonState(
+                text = stringRes(if (state.isConfirming) "Signing..." else "Confirm"),
+                isEnabled = !state.isConfirming,
+                isLoading = state.isConfirming,
+                onClick = state.onConfirm,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Suppress("LongParameterList")
+@Composable
+private fun TransferTimelineRow(
+    title: String,
+    subtitle: StringResource,
+    amount: StringResource,
+    fiatAmount: StringResource?,
+    isFirst: Boolean,
+    isLast: Boolean,
+    index: Int = 0,
+    @DrawableRes icon: Int? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .padding(bottom = if (isLast) 0.dp else 12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(24.dp),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            if (!isLast) {
+                if (isFirst) {
+                    // A weighted Box nested inside a Column here doesn't get a usable intrinsic
+                    // height from the parent Row's IntrinsicSize.Min pass (weight is only
+                    // meaningful once real constraints are known), so the "rest of the line"
+                    // segment below the short active stub collapsed to ~0px. Paint both segments
+                    // in one fillMaxHeight() Box instead — drawBehind uses the box's actual
+                    // resolved size, sidestepping the intrinsic-measurement pass entirely.
+                    val activeColor = ZashiColors.Btns.Primary.btnPrimaryBg
+                    val inactiveColor = ZashiColors.Surfaces.strokePrimary
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .padding(top = 24.dp)
+                            .width(2.dp)
+                            .drawBehind {
+                                val activeHeight = 10.dp.toPx().coerceAtMost(size.height)
+                                drawRect(color = activeColor, size = Size(size.width, activeHeight))
+                                if (size.height > activeHeight) {
+                                    drawRect(
+                                        color = inactiveColor,
+                                        topLeft = Offset(0f, activeHeight),
+                                        size = Size(size.width, size.height - activeHeight),
+                                    )
+                                }
+                            }
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .padding(top = 24.dp)
+                            .width(2.dp)
+                            .background(ZashiColors.Surfaces.strokePrimary)
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .background(
+                        if (isFirst) ZashiColors.Btns.Primary.btnPrimaryBg else ZashiColors.Surfaces.bgTertiary,
+                        CircleShape
+                    )
+                    .border(2.dp, ZashiColors.Surfaces.bgPrimary, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (icon != null) {
+                    Icon(
+                        painter = painterResource(icon),
+                        contentDescription = null,
+                        tint = if (isFirst) ZashiColors.Btns.Primary.btnPrimaryFg else ZashiColors.Text.textTertiary,
+                        modifier = Modifier.size(14.dp),
+                    )
+                } else {
+                    Text(
+                        text = "$index",
+                        style = ZashiTypography.textXs,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isFirst) ZashiColors.Btns.Primary.btnPrimaryFg else ZashiColors.Text.textTertiary,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = ZashiTypography.textSm,
+                fontWeight = FontWeight.Medium,
+                color = ZashiColors.Text.textPrimary,
+            )
+            Text(
+                text = subtitle.getValue(),
+                style = ZashiTypography.textXs,
+                color = ZashiColors.Text.textTertiary,
+            )
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                text = amount.getValue(),
+                style = ZashiTypography.textSm,
+                fontWeight = FontWeight.Medium,
+                color = ZashiColors.Text.textPrimary,
+            )
+            fiatAmount?.let { fiat ->
+                Text(
+                    text = fiat.getValue(),
+                    style = ZashiTypography.textXs,
+                    color = ZashiColors.Text.textTertiary,
+                )
+            }
+        }
+    }
+}
+
+@PreviewScreens
+@Composable
+private fun PreviewImmediate() = ZcashTheme {
+    MigrationReviewView(
+        state = MigrationReviewState(
+            mode = MigrationMode.IMMEDIATE,
+            totalAmount = stringRes("12.458 ZEC"),
+            estimatedDuration = stringRes("~1 min"),
+            transfers = listOf(
+                MigrationReviewTransferState(
+                    1, 1, stringRes("12.458 ZEC"), stringRes("$4,832.86"), stringRes("Send immediately")
+                ),
+            ),
+            isKeystone = false,
+            fee = stringRes("0.0003 ZEC"),
+            onConfirm = {},
+            onBack = {},
+        )
+    )
+}
+
+@PreviewScreens
+@Composable
+private fun PreviewPrivacy() = ZcashTheme {
+    MigrationReviewView(
+        state = MigrationReviewState(
+            mode = MigrationMode.AUTOMATIC,
+            totalAmount = stringRes("12.458 ZEC"),
+            estimatedDuration = stringRes("~8 min"),
+            transfers = listOf(
+                MigrationReviewTransferState(1, 5, stringRes("1.348 ZEC"), stringRes("$521.30"), stringRes("~10 mins")),
+                MigrationReviewTransferState(2, 5, stringRes("1.052 ZEC"), stringRes("$406.86"), stringRes("~6 hours")),
+                MigrationReviewTransferState(3, 5, stringRes("2.105 ZEC"), stringRes("$813.74"), stringRes("~12 hours")),
+                MigrationReviewTransferState(4, 5, stringRes("1.897 ZEC"), stringRes("$733.51"), stringRes("~18 hours")),
+                MigrationReviewTransferState(5, 5, stringRes("4.456 ZEC"), stringRes("$1,723.53"), stringRes("~24 hours")),
+            ),
+            onConfirm = {},
+            onBack = {},
+        )
+    )
+}
+
+@PreviewScreens
+@Composable
+private fun PreviewPrivacyWithKeystoneRound() = ZcashTheme {
+    MigrationReviewView(
+        state = MigrationReviewState(
+            mode = MigrationMode.AUTOMATIC,
+            totalAmount = stringRes("12.458 ZEC"),
+            estimatedDuration = stringRes("~8 min"),
+            transfers = listOf(
+                MigrationReviewTransferState(1, 5, stringRes("1.348 ZEC"), stringRes("$521.30"), stringRes("~10 mins")),
+                MigrationReviewTransferState(2, 5, stringRes("1.052 ZEC"), stringRes("$406.86"), stringRes("~6 hours")),
+                MigrationReviewTransferState(3, 5, stringRes("2.105 ZEC"), stringRes("$813.74"), stringRes("~12 hours")),
+                MigrationReviewTransferState(4, 5, stringRes("1.897 ZEC"), stringRes("$733.51"), stringRes("~18 hours")),
+                MigrationReviewTransferState(5, 5, stringRes("4.456 ZEC"), stringRes("$1,723.53"), stringRes("~24 hours")),
+            ),
+            isKeystone = true,
+            keystoneRound = MigrationKeystoneRound(current = 1, total = 4),
+            onConfirm = {},
+            onBack = {},
+        )
+    )
+}

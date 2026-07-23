@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.model.voting.VotingRound
 import co.electriccoin.zcash.ui.common.model.voting.VotingSession
+import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
 import co.electriccoin.zcash.ui.common.provider.ShieldFundsInfoProvider
 import co.electriccoin.zcash.ui.common.repository.HomeMessageData
 import co.electriccoin.zcash.ui.common.repository.VotingApiRepository
@@ -15,6 +17,7 @@ import co.electriccoin.zcash.ui.common.repository.VotingRecoveryRepository
 import co.electriccoin.zcash.ui.common.repository.VotingRecoverySnapshot
 import co.electriccoin.zcash.ui.common.repository.VotingSessionStore
 import co.electriccoin.zcash.ui.common.repository.toVotingAccountScopeId
+import co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetHomeMessageUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.IsRestoreSuccessDialogVisibleUseCase
@@ -32,6 +35,11 @@ import co.electriccoin.zcash.ui.screen.error.ErrorArgs
 import co.electriccoin.zcash.ui.screen.error.NavigateToErrorUseCase
 import co.electriccoin.zcash.ui.screen.exchangerate.optin.ExchangeRateOptInArgs
 import co.electriccoin.zcash.ui.screen.home.backup.SeedBackupInfo
+import co.electriccoin.zcash.ui.screen.home.migration.MigrationBannerPhase
+import co.electriccoin.zcash.ui.screen.home.migration.MigrationMessageState
+import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteArgs
+import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
+import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupArgs
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupDetail
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupMessageState
 import co.electriccoin.zcash.ui.screen.home.currency.EnableCurrencyConversionMessageState
@@ -91,12 +99,18 @@ class HomeVM(
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
     private val refreshActiveVotingSession: RefreshActiveVotingSessionUseCase,
     private val votingShareTrackingScheduler: VotingShareTrackingScheduler,
+    private val checkMigrationRecovery: CheckMigrationRecoveryUseCase,
+    private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
 ) : ViewModel() {
     private var hasSyncErrorBeenShown = false
     private var hasRestoreSuccessBeenShown = false
     private var hasAttemptedPendingVotingRouteRecovery = false
     private var hasRecoveredPendingVotingRoute = false
     private var hasResumedShareTracking = false
+
+    init {
+        viewModelScope.launch { checkMigrationRecovery() }
+    }
 
     private val messageData =
         getHomeMessage
@@ -373,10 +387,48 @@ class HomeVM(
                 )
             }
 
+            is HomeMessageData.Migration -> {
+                val plan = data.plan
+                val percent = if (plan != null && plan.totalCount > 0) {
+                    (plan.completedCount * 100) / plan.totalCount
+                } else {
+                    0
+                }
+                // See MigrationKeystoneRound's kdoc — only ever non-null for a Keystone account's
+                // plan, prefixed onto the in-progress subtitle when present.
+                val roundPrefix = plan?.keystoneRound?.let { "Round ${it.current} of ${it.total} · " }.orEmpty()
+                val (phase, subtitle) = when {
+                    data.isComplete -> MigrationBannerPhase.COMPLETE to "Tap to review the details"
+                    plan == null -> MigrationBannerPhase.REQUIRED to null
+                    plan.completedCount == 0 -> MigrationBannerPhase.IN_PROGRESS to "${roundPrefix}First transfer sending…"
+                    else ->
+                        MigrationBannerPhase.IN_PROGRESS to
+                            "$roundPrefix${plan.completedCount} of ${plan.totalCount} transfers done ~ $percent% complete"
+                }
+                MigrationMessageState(
+                    phase = phase,
+                    progressLabel = subtitle,
+                    progressPercent = percent.toFloat(),
+                    onClick = { onMigrationMessageClick(plan = plan, isComplete = data.isComplete) },
+                    onButtonClick = { onMigrationMessageClick(plan = plan, isComplete = data.isComplete) },
+                )
+            }
+
             null -> {
                 null
             }
         }
+
+    private fun onMigrationMessageClick(plan: MigrationPlan?, isComplete: Boolean) = viewModelScope.launch {
+        when {
+            // Tapping the widget just opens the celebration screen now — MigrationCompleteVM.onDone()
+            // owns the seen-flag decision, since it needs to know whether residual Orchard balance
+            // still requires another Keystone round before deciding whether this is truly "seen".
+            isComplete -> navigationRouter.forward(MigrationCompleteArgs)
+            plan != null -> navigationRouter.forward(MigrationProgressArgs)
+            else -> navigationRouter.forward(MigrationSetupArgs)
+        }
+    }
 
     private fun onCrashReportMessageClick() = navigationRouter.forward(CrashReportOptIn)
 

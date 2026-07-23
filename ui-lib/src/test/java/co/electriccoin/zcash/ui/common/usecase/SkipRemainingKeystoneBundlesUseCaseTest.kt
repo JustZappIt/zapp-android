@@ -147,6 +147,7 @@ class SkipRemainingKeystoneBundlesUseCaseTest {
                     address = WalletAddressFixture.unified(),
                     balance = WalletBalanceFixture.newLong()
                 ),
+            ironwoodBalance = WalletBalanceFixture.newLong(0, 0, 0),
             transparent =
                 TransparentInfo(
                     address = WalletAddressFixture.transparent(),
