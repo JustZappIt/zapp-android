@@ -24,8 +24,9 @@ data class MigrationReviewState(
     val isConfirming: Boolean = false,
     val onConfirm: () -> Unit,
     val onBack: () -> Unit,
-    // Only ever set for AUTOMATIC + MANUAL delivery, where confirming sends transfer #1
-    // synchronously in the foreground and can fail right here on this screen.
+    // Set for AUTOMATIC + MANUAL delivery, where confirming sends transfer #1 synchronously in
+    // the foreground and can fail right here on this screen, and for IMMEDIATE, where confirming
+    // is now a single inline sign+submit action with no separate Sending-screen hand-off.
     val failureSheet: MigrationTransferFailureState? = null,
 )
 
