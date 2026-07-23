@@ -4,7 +4,10 @@ import cash.z.ecc.android.sdk.TransferResult
 
 data class MigrationTransferFailureState(
     val message: String,
-    val onRetry: () -> Unit,
+    // Null when the failure isn't safely resubmittable (e.g. a non-retryable SubmitResult) — the
+    // shared bottom sheet omits the Retry button entirely in that case rather than silently
+    // wiring it to mean "go back".
+    val onRetry: (() -> Unit)?,
     val onDismiss: () -> Unit,
 )
 

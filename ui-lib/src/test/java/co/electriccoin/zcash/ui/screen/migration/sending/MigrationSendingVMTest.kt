@@ -1,14 +1,12 @@
 package co.electriccoin.zcash.ui.screen.migration.sending
 
 import androidx.navigation.NavBackStackEntry
-import cash.z.ecc.android.sdk.MigrationProgress
 import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferResult
 import co.electriccoin.zcash.ui.BaseNavigationCommand
 import co.electriccoin.zcash.ui.NavigationCommand
 import co.electriccoin.zcash.ui.NavigationRouter
-import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationTorFailureDecisionRepository
@@ -17,9 +15,13 @@ import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.ScheduleNextMigrationWindowUseCase
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
 import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.coVerifyOrder
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
@@ -27,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.reflect.KClass
@@ -79,8 +82,8 @@ class MigrationSendingVMTest {
 
         advanceUntilIdle()
 
-        io.mockk.coVerify(exactly = 3) { sdk.executeNextPendingTransfer(any()) }
-        io.mockk.coVerify(exactly = 3) { sdk.finalizeReadyTransfers() }
+        coVerify(exactly = 3) { sdk.executeNextPendingTransfer(any()) }
+        coVerify(exactly = 3) { sdk.finalizeReadyTransfers() }
         assertEquals(
             "This transfer isn't ready to send yet. Please try again in a moment.",
             vm.state.value.content?.failureSheet?.message,
@@ -101,7 +104,7 @@ class MigrationSendingVMTest {
 
         advanceUntilIdle()
 
-        io.mockk.coVerifyOrder {
+        coVerifyOrder {
             sdk.finalizeReadyTransfers()
             sdk.executeNextPendingTransfer(any())
         }
@@ -120,7 +123,7 @@ class MigrationSendingVMTest {
         vm(sdk = sdk, router = router, plans = plans)
         advanceUntilIdle()
 
-        io.mockk.coVerify(exactly = 1) { sdk.executeNextPendingTransfer(any()) }
+        coVerify(exactly = 1) { sdk.executeNextPendingTransfer(any()) }
     }
 
     @Test
@@ -137,84 +140,78 @@ class MigrationSendingVMTest {
     }
 
     @Test
-    fun pendingImmediateProposalIsSubmittedInsteadOfCallingTheEngine() = runTest {
+    fun stateOnBackIsNoopWhileSendingIsInProgress() = runTest {
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
-        val proposal = mockk<cash.z.ecc.android.sdk.model.Proposal>()
-        val usk = mockk<cash.z.ecc.android.sdk.model.UnifiedSpendingKey>()
-        val pendingProposalRepository = mockk<co.electriccoin.zcash.ui.common.repository.PendingImmediateProposalRepository> {
-            io.mockk.every { get() } returns proposal
-            io.mockk.every { clear() } returns Unit
+        // A delay that never resolves within this test: keeps sendOnce() suspended mid-flight, so
+        // the LCE stays loading and no failure sheet is ever shown, mirroring "actively sending".
+        coEvery { sdk.finalizeReadyTransfers() } coAnswers {
+            delay(Long.MAX_VALUE / 2)
+            0
         }
-        val proposalDataSource = mockk<co.electriccoin.zcash.ui.common.datasource.ProposalDataSource> {
-            coEvery {
-                submitTransaction(proposal, usk)
-            } returns co.electriccoin.zcash.ui.common.model.SubmitResult.Success(listOf("tx789"))
-        }
-        val spendingKeyDataSource = mockk<co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource> {
-            coEvery { getZashiSpendingKey() } returns usk
-        }
+        coEvery { sdk.executeNextPendingTransfer(any()) } returns TransferResult.Success("txid")
         val router = FakeNavigationRouter()
+        val vm = vm(sdk = sdk, router = router)
+        val collectJob = launch { vm.state.collect {} }
 
-        vm(
-            sdk = sdk,
-            router = router,
-            proposalDataSource = proposalDataSource,
-            pendingImmediateProposalRepository = pendingProposalRepository,
-            zashiSpendingKeyDataSource = spendingKeyDataSource,
-        )
-        advanceUntilIdle()
+        // Don't advanceUntilIdle() — that fast-forwards virtual time and would resolve the huge
+        // delay above too, completing the send. runCurrent() only runs already-ready continuations
+        // (registering the in-flight job and emitting the first combine() value) without advancing
+        // the virtual clock.
+        runCurrent()
 
-        io.mockk.coVerify(exactly = 0) { sdk.executeNextPendingTransfer(any()) }
-        io.mockk.coVerify(exactly = 1) { pendingProposalRepository.clear() }
-        assertEquals<List<Any>>(listOf(MigrationSuccessArgs("tx789")), router.forwardedRoutes)
+        val content = vm.state.value.content
+        assertTrue(content != null)
+        assertTrue(content.failureSheet == null)
+        content.onBack()
+
+        assertEquals(0, router.backCount)
+        collectJob.cancel()
     }
 
     @Test
-    fun pendingImmediateProposalGrpcFailureIsRetryableAndKeepsTheProposal() = runTest {
+    fun stateOnBackNavigatesBackOnceFailureSheetIsShowing() = runTest {
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
-        val proposal = mockk<cash.z.ecc.android.sdk.model.Proposal>()
-        val usk = mockk<cash.z.ecc.android.sdk.model.UnifiedSpendingKey>()
-        val pendingProposalRepository = mockk<co.electriccoin.zcash.ui.common.repository.PendingImmediateProposalRepository> {
-            io.mockk.every { get() } returns proposal
-            io.mockk.every { clear() } returns Unit
-        }
-        val proposalDataSource = mockk<co.electriccoin.zcash.ui.common.datasource.ProposalDataSource> {
-            coEvery {
-                submitTransaction(proposal, usk)
-            } returns co.electriccoin.zcash.ui.common.model.SubmitResult.GrpcFailure(listOf())
-        }
-        val spendingKeyDataSource = mockk<co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource> {
-            coEvery { getZashiSpendingKey() } returns usk
-        }
+        coEvery { sdk.finalizeReadyTransfers() } returns 0
+        coEvery { sdk.executeNextPendingTransfer(any()) } returns TransferResult.InvalidNote
         val router = FakeNavigationRouter()
-
-        val vm = vm(
-            sdk = sdk,
-            router = router,
-            proposalDataSource = proposalDataSource,
-            pendingImmediateProposalRepository = pendingProposalRepository,
-            zashiSpendingKeyDataSource = spendingKeyDataSource,
-        )
+        val vm = vm(sdk = sdk, router = router)
         val collectJob = launch { vm.state.collect {} }
+
         advanceUntilIdle()
 
-        io.mockk.coVerify(exactly = 0) { pendingProposalRepository.clear() }
-        val sheet = vm.state.value.content?.failureSheet
+        assertTrue(vm.state.value.content?.failureSheet != null)
+        vm.state.value.content?.onBack?.invoke()
+
+        assertEquals(1, router.backCount)
         collectJob.cancel()
-        assertEquals("Couldn't reach the network. Check your connection and try again.", sheet?.message)
+    }
+
+    @Test
+    fun pendingTorDecisionAtConstructionTimeIsUsedInsteadOfADuplicateDefaultSend() = runTest {
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+        coEvery { sdk.finalizeReadyTransfers() } returns 0
+        coEvery { sdk.executeNextPendingTransfer(any()) } returns TransferResult.Success("txid")
+        val router = FakeNavigationRouter()
+        val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
+        val decisionFlow = MutableStateFlow<Boolean?>(false)
+        val torDecisionRepository = mockk<PendingMigrationTorFailureDecisionRepository> {
+            every { decision } returns decisionFlow
+            every { clear() } answers { decisionFlow.value = null }
+        }
+
+        vm(sdk = sdk, router = router, plans = plans, torDecisionRepository = torDecisionRepository)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = false)) }
     }
 
     private fun vm(
         sdk: OrchardMigrationSdk,
         router: FakeNavigationRouter,
         plans: MigrationPlanRepository = mockk(relaxed = true),
-        proposalDataSource: co.electriccoin.zcash.ui.common.datasource.ProposalDataSource = mockk(relaxed = true),
-        pendingImmediateProposalRepository: co.electriccoin.zcash.ui.common.repository.PendingImmediateProposalRepository =
-            mockk {
-                io.mockk.every { get() } returns null
-            },
-        zashiSpendingKeyDataSource: co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource =
-            mockk(relaxed = true),
+        torDecisionRepository: PendingMigrationTorFailureDecisionRepository = mockk {
+            every { decision } returns MutableStateFlow(null)
+        },
     ) = MigrationSendingVM(
         getOrchardMigrationSdk = mockk<GetOrchardMigrationSdkUseCase> {
             coEvery { this@mockk() } returns sdk
@@ -226,12 +223,7 @@ class MigrationSendingVMTest {
         isTorEnabledStorageProvider = mockk<IsTorEnabledStorageProvider> {
             coEvery { get() } returns false
         },
-        pendingMigrationTorFailureDecisionRepository = mockk<PendingMigrationTorFailureDecisionRepository> {
-            io.mockk.every { decision } returns MutableStateFlow(null)
-        },
-        proposalDataSource = proposalDataSource,
-        pendingImmediateProposalRepository = pendingImmediateProposalRepository,
-        zashiSpendingKeyDataSource = zashiSpendingKeyDataSource,
+        pendingMigrationTorFailureDecisionRepository = torDecisionRepository,
     )
 
     private class FakeNavigationRouter : NavigationRouter {

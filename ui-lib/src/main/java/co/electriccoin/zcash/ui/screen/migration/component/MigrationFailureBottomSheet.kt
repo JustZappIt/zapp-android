@@ -41,11 +41,14 @@ fun MigrationFailureBottomSheet(state: MigrationTransferFailureState?) {
                 color = ZashiColors.Text.textTertiary,
             )
             Spacer(Modifier.height(24.dp))
-            ZashiButton(
-                state = ButtonState(text = stringRes("Retry"), onClick = state.onRetry),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(8.dp))
+            val onRetry = state.onRetry
+            if (onRetry != null) {
+                ZashiButton(
+                    state = ButtonState(text = stringRes("Retry"), onClick = onRetry),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+            }
             ZashiButton(
                 state = ButtonState(text = stringRes("Dismiss"), onClick = state.onDismiss),
                 modifier = Modifier.fillMaxWidth(),
