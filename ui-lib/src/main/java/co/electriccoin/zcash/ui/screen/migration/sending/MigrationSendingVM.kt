@@ -99,12 +99,15 @@ class MigrationSendingVM(
                         },
                         onDismiss = { failure.value = null; navigationRouter.back() },
                     )
-                }
+                },
+                onBack = ::onBack,
             )
         }.withLce(sendLce, errorStateMapper::mapToState)
             .stateIn(this)
 
     private fun send() = sendLce.execute { sendOnce(useTor = isTorEnabledStorageProvider.get() == true) }
+
+    fun onBack() = navigationRouter.back()
 
     private suspend fun sendOnce(useTor: Boolean) {
         val sdk = getOrchardMigrationSdk() ?: error("MigrationSendingVM: no wallet available to send")
