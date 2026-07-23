@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
 import android.os.PowerManager
+import co.electriccoin.zcash.ui.BuildConfig
 
 /**
  * Live, always-recomputed signal for whether this app can currently execute background work
@@ -35,6 +36,7 @@ import android.os.PowerManager
  */
 class IsBackgroundExecutionAvailableProvider(private val context: Context) {
     fun isAvailable(): Boolean {
+        if (BuildConfig.DEBUG && DebugForceBackgroundExecutionUnavailable.isForced(context)) return false
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
         return isBackgroundExecutionAvailable(

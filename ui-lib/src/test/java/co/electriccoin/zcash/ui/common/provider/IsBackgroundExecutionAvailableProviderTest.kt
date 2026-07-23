@@ -78,7 +78,9 @@ class IsBackgroundExecutionAvailableProviderTest {
         val activityManager = mockk<ActivityManager> {
             every { isBackgroundRestricted } returns false
         }
-        val context = mockk<Context> {
+        // Relaxed so the unrelated getSharedPreferences() call made by the DEBUG-only
+        // DebugForceBackgroundExecutionUnavailable override check doesn't need its own stub here.
+        val context = mockk<Context>(relaxed = true) {
             every { packageName } returns "co.electriccoin.zcash.test"
             every { getSystemService(Context.POWER_SERVICE) } returns powerManager
             every { getSystemService(Context.ACTIVITY_SERVICE) } returns activityManager

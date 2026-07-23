@@ -7,8 +7,12 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.ZashiAccount
+import co.electriccoin.zcash.ui.common.provider.DebugForceBackgroundExecutionUnavailable
+import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
+import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
 import co.electriccoin.zcash.ui.common.repository.EphemeralAddressRepository
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
+import co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.design.component.listitem.ListItemState
@@ -30,6 +34,9 @@ class DebugVM(
     private val accountDataSource: AccountDataSource,
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val migrationPlanRepository: MigrationPlanRepository,
+    private val pendingMigrationTorFailureStorageProvider: PendingMigrationTorFailureStorageProvider,
+    private val migrationNotifier: MigrationNotifier,
+    private val checkMigrationRecovery: CheckMigrationRecoveryUseCase,
     private val context: Context,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
@@ -78,6 +85,14 @@ class DebugVM(
                         ListItemState(
                             title = stringRes("Migration reschedule transfers (fast test)"),
                             onClick = ::onMigrationRescheduleTransfersClick
+                        ),
+                        ListItemState(
+                            title = stringRes("Migration: simulate Tor background failure"),
+                            onClick = ::onSimulateMigrationTorFailureClick
+                        ),
+                        ListItemState(
+                            title = stringRes("Migration: toggle 'no background execution' (Transfer Ready to Send)"),
+                            onClick = ::onToggleBackgroundExecutionUnavailableClick
                         )
                     )
             )
@@ -176,6 +191,49 @@ class DebugVM(
                     } else {
                         "0 transfers rescheduled — no in-progress migration found, or every " +
                             "transfer is already broadcast/mined. Nothing was changed."
+                    }
+                )
+            )
+        }
+
+    // Reproduces spec §6.2's "background Tor failure" state (MigrationWorker's non-retryable
+    // NetworkError-while-useTor branch) without waiting for a real background run to fail — sets
+    // the same persisted flag and posts the same notification, then immediately re-runs the same
+    // on-launch reconciliation HomeVM's init{} triggers, so the Sending screen shows up right away
+    // instead of only on the next app relaunch/foreground.
+    private fun onSimulateMigrationTorFailureClick() =
+        viewModelScope.launch {
+            pendingMigrationTorFailureStorageProvider.store(true)
+            migrationNotifier.notifyMigrationTorFailure()
+            checkMigrationRecovery()
+            navigationRouter.forward(
+                DebugTextArgs(
+                    title = "Migration: simulate Tor background failure",
+                    text = "Pending Tor failure flag set. Routing to the Sending screen now " +
+                        "(same routing HomeVM triggers on every launch/foreground)."
+                )
+            )
+        }
+
+    // Spec §6.4 "Transfer Ready to Send" is otherwise only reachable by actually revoking the
+    // app's battery-optimization exemption from system Settings — this flips a debug-only override
+    // read by IsBackgroundExecutionAvailableProvider.isAvailable() instead, so QA can toggle the
+    // condition on demand. Toggling back "on" (available) doesn't undo an already-shown banner —
+    // that still needs a fresh reconciliation pass (e.g. reopening the app) to re-evaluate.
+    private fun onToggleBackgroundExecutionUnavailableClick() =
+        viewModelScope.launch {
+            val nowForced = !DebugForceBackgroundExecutionUnavailable.isForced(context)
+            DebugForceBackgroundExecutionUnavailable.set(context, nowForced)
+            checkMigrationRecovery()
+            navigationRouter.forward(
+                DebugTextArgs(
+                    title = "Migration: toggle 'no background execution'",
+                    text = if (nowForced) {
+                        "Background execution now forced UNAVAILABLE. Reschedule a transfer to be " +
+                            "due soon (see 'Migration reschedule transfers') to see the Transfer " +
+                            "Ready to Send banner/screen."
+                    } else {
+                        "Background execution restored to the device's real state."
                     }
                 )
             )
