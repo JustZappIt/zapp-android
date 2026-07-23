@@ -124,6 +124,10 @@ class TransactionProgressVM(
                         stringRes(R.string.swapAndPay_sendingInfo).withStyle()
                     }
 
+                    is MigrationSweepTransactionProposal -> {
+                        stringRes("Your ZEC is being migrated to\nIronwood...").withStyle()
+                    }
+
                     else -> {
                         styledStringResource(
                             R.string.send_sendingInfo,
@@ -170,6 +174,10 @@ class TransactionProgressVM(
 
                     is ExactOutputSwapTransactionProposal -> {
                         stringRes(R.string.swapAndPay_successPayInfo).withStyle()
+                    }
+
+                    is MigrationSweepTransactionProposal -> {
+                        stringRes("Your ZEC was successfully\nmigrated to Ironwood.").withStyle()
                     }
 
                     else -> {
@@ -225,6 +233,14 @@ class TransactionProgressVM(
                         } else {
                             null
                         }
+                    }
+
+                    is MigrationSweepTransactionProposal -> {
+                        ButtonState(
+                            text = stringRes(R.string.general_close),
+                            onClick = ::onCloseClick,
+                            style = ButtonStyle.PRIMARY
+                        )
                     }
 
                     else -> {
