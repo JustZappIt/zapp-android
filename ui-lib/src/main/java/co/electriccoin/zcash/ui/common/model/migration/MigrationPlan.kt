@@ -65,6 +65,7 @@ fun MigrationSchedule.toMigrationPlan(mode: MigrationMode, keystoneRound: Migrat
                 scheduledAtEpochSeconds = now + estimatedSecondsBetweenHeights(t.anchorHeight, t.nextExecutableAfterHeight),
                 status = MigrationTransferStatus.PENDING,
                 expiryAtEpochSeconds = now + estimatedSecondsBetweenHeights(t.anchorHeight, t.expiryHeight),
+                id = t.id,
             )
         },
         mode = mode,

@@ -2,6 +2,7 @@ package co.electriccoin.zcash.ui.screen.migration.progress
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
+import cash.z.ecc.android.sdk.MigrationTransferStates
 import cash.z.ecc.android.sdk.TransferProposal
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
@@ -50,8 +51,13 @@ class MigrationProgressVM(
     private val sendLce = mutableLce<Unit>()
 
     val state: StateFlow<LceState<MigrationProgressState>> =
-        combine(migrationPlanRepository.observe(), exchangeRateRepository.state, reallyOverdueFlow()) { plan, rate, reallyOverdue ->
-            plan?.let { createState(it, rate, reallyOverdue) }
+        combine(
+            migrationPlanRepository.observe(),
+            exchangeRateRepository.state,
+            reallyOverdueFlow(),
+            liveTransferStatesFlow(),
+        ) { plan, rate, reallyOverdue, liveStates ->
+            plan?.let { createState(it.withLiveState(liveStates), rate, reallyOverdue) }
         }.withLce(sendLce, errorStateMapper::mapToState)
             .stateIn(this)
 
@@ -72,6 +78,46 @@ class MigrationProgressVM(
                 delay(OVERDUE_RECHECK_INTERVAL)
             }
         }
+
+    // MigrationPlanRepository's per-transfer status/scheduledAt is a cache, written once at
+    // propose/commit time and only ever updated by whichever caller remembers to write through it
+    // (production rescheduleOverdueTransfer() and the debug-only debugRescheduleTransfers() both
+    // currently forget — see MIGRATION_DIAG "next transfer in N hours never changes" report).
+    // Polling the SDK's own persisted state directly, the same way reallyOverdueFlow() already
+    // does for the overdue check, makes the displayed schedule correct regardless of which caller
+    // last rescheduled.
+    private fun liveTransferStatesFlow(): Flow<MigrationTransferStates?> =
+        flow {
+            while (true) {
+                val sdk = getOrchardMigrationSdk()
+                emit(sdk?.getMigrationTransferStates())
+                delay(OVERDUE_RECHECK_INTERVAL)
+            }
+        }
+
+    // amountZatoshi/createdAtEpochSeconds never change post-commit, so the cached plan stays the
+    // source of truth for those — only status/scheduledAt (the fields the SDK can independently
+    // reschedule) are overridden from the live read.
+    private fun MigrationPlan.withLiveState(live: MigrationTransferStates?): MigrationPlan {
+        if (live == null) return this
+        val now = Clock.System.now().epochSeconds
+        // Correlate by the transfer's real, stable id — NOT by [MigrationTransfer.index]. The
+        // engine assigns real ids in funding-note/crossing order; [index] is this transfer's
+        // position in the broadcast-height-sorted array the app displays as "Transfer N". ZIP 318
+        // deliberately shuffles those two orderings apart, so matching by index silently attaches
+        // the wrong transfer's live status/schedule to a displayed position (confirmed live).
+        val byId = live.transfers.associateBy { it.id }
+        return copy(
+            transfers = transfers.map { t ->
+                val liveTransfer = byId[t.id] ?: return@map t
+                t.copy(
+                    status = if (liveTransfer.isSent) MigrationTransferStatus.SENT else MigrationTransferStatus.PENDING,
+                    scheduledAtEpochSeconds =
+                        now + estimatedSecondsBetweenHeights(live.tipHeight, liveTransfer.scheduledHeight),
+                )
+            }
+        )
+    }
 
     fun navigateBack() = navigationRouter.back()
 

@@ -5,11 +5,14 @@ import cash.z.ecc.android.sdk.KeystoneBatchSignedPczts
 import cash.z.ecc.android.sdk.MigrationProgress
 import cash.z.ecc.android.sdk.MigrationSchedule
 import cash.z.ecc.android.sdk.MigrationState
+import cash.z.ecc.android.sdk.MigrationTransferState
+import cash.z.ecc.android.sdk.MigrationTransferStates
 import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.NoteSplitProposal
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferProposal
 import cash.z.ecc.android.sdk.TransferResult
+import cash.z.ecc.android.sdk.ext.ZcashSdk
 import cash.z.ecc.android.sdk.model.UnifiedSpendingKey
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.BuildConfig
@@ -305,6 +308,25 @@ class OrchardMigrationSdkMock(
         if (plan.isComplete) return false
         val next = plan.nextPending ?: return false
         return next.expiryAt <= Clock.System.now()
+    }
+
+    // This mock has no real block heights — its "heights" are epoch seconds scaled down by the
+    // block interval, so that MigrationProgressVM's shared estimatedSecondsBetweenHeights(tip,
+    // scheduled) conversion (which multiplies back up by the same interval) round-trips to
+    // approximately the right wall-clock time.
+    override suspend fun getMigrationTransferStates(): MigrationTransferStates? {
+        val plan = repository.load() ?: return null
+        val blockIntervalSeconds = ZcashSdk.BLOCK_INTERVAL_MILLIS / 1000
+        return MigrationTransferStates(
+            transfers = plan.transfers.map { t ->
+                MigrationTransferState(
+                    id = t.id,
+                    isSent = t.status == MigrationTransferStatus.SENT,
+                    scheduledHeight = t.scheduledAtEpochSeconds / blockIntervalSeconds,
+                )
+            },
+            tipHeight = Clock.System.now().epochSeconds / blockIntervalSeconds,
+        )
     }
 
     // ── Invalidity recovery ──────────────────────────────────────────────────
