@@ -22,11 +22,9 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import co.electriccoin.zcash.ui.common.appbar.ZashiMainTopAppBarState.AccountType
 import co.electriccoin.zcash.ui.design.R
 import co.electriccoin.zcash.ui.design.component.IconButtonState
@@ -39,6 +37,7 @@ import co.electriccoin.zcash.ui.design.component.rememberZashiShimmer
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
+import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import com.valentinilk.shimmer.shimmer
 
 @Composable
@@ -113,14 +112,10 @@ private fun AccountSwitch(state: AccountSwitchState?) {
         ShimmerableText(
             text = text,
             shimmerText = stringResource(co.electriccoin.zcash.ui.R.string.accounts_zashi),
-            style =
-                TextStyle(
-                    fontSize = 24.sp,
-                    lineHeight = 24.sp,
-                    fontWeight = FontWeight.W600,
-                    color = ZashiColors.Text.textPrimary,
-                    textAlign = TextAlign.Center,
-                ),
+            style = ZashiTypography.header6,
+            fontWeight = FontWeight.SemiBold,
+            color = ZashiColors.Text.textPrimary,
+            textAlign = TextAlign.Center,
         )
         if (onAccountTypeClick != null) {
             Spacer(Modifier.width(8.dp))

@@ -46,6 +46,7 @@ fun HomeMessageWrapper(
         ),
     contentColor: Color = ZashiLightColors.Utility.Purple.utilityPurple50,
     subtitleColor: Color = ZashiLightColors.Utility.Purple.utilityPurple200,
+    progressTrackColor: Color = ZashiLightColors.Utility.Purple.utilityPurple400,
 ) {
     Container(
         contentPadding = contentPadding,
@@ -58,7 +59,7 @@ fun HomeMessageWrapper(
             LocalZashiCircularProgressIndicatorColors provides
                 ZashiCircularProgressIndicatorDefaults.colors(
                     progressColor = contentColor,
-                    trackColor = ZashiLightColors.Utility.Purple.utilityPurple400
+                    trackColor = progressTrackColor
                 )
         ) {
             start()

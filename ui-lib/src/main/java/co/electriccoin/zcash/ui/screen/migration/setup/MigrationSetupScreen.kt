@@ -148,6 +148,7 @@ fun MigrationSetupView(state: MigrationSetupState) {
                             fontWeight = FontWeight.Medium,
                             color = ZashiColors.Text.textTertiary,
                             textAlign = TextAlign.Center,
+                            modifier = Modifier.weight(1f, fill = false),
                         )
                     }
                     Spacer(Modifier.height(20.dp))
