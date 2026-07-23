@@ -5,7 +5,9 @@ import cash.z.ecc.android.sdk.MigrationSchedule
 import cash.z.ecc.android.sdk.TransferProposal
 import cash.z.ecc.android.sdk.TransferResult
 import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
+import cash.z.ecc.android.sdk.model.Proposal
 import cash.z.ecc.android.sdk.model.Zatoshi
+import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
@@ -17,7 +19,6 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureS
 import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
-import co.electriccoin.zcash.ui.common.model.migration.toMigrationPlan
 import co.electriccoin.zcash.ui.common.model.groupLce
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
@@ -28,10 +29,10 @@ import co.electriccoin.zcash.ui.common.repository.BiometricRequest
 import co.electriccoin.zcash.ui.common.repository.BiometricsCancelledException
 import co.electriccoin.zcash.ui.common.repository.BiometricsFailureException
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
@@ -39,7 +40,6 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.screen.migration.keystonesign.MigrationKeystoneSignArgs
-import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -50,18 +50,25 @@ import java.math.MathContext
 class MigrationReviewVM(
     private val args: MigrationReviewArgs,
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
-    private val migrationPlanRepository: MigrationPlanRepository,
     private val pendingMigrationScheduleRepository: PendingMigrationScheduleRepository,
     private val finalizeMigrationSchedule: FinalizeMigrationScheduleUseCase,
     private val navigationRouter: NavigationRouter,
     private val exchangeRateRepository: ExchangeRateRepository,
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
+    private val getOrchardBalance: GetOrchardBalanceUseCase,
     private val errorStateMapper: ErrorMapperUseCase,
     private val zashiSpendingKeyDataSource: ZashiSpendingKeyDataSource,
     private val biometricRepository: BiometricRepository,
 ) : ViewModel() {
 
-    private data class ReviewProposal(val schedule: MigrationSchedule, val keystoneRunCount: Int?)
+    // proposeImmediateMigration() now returns an ordinary send-max Proposal (bypassing the
+    // migration engine entirely — see OrchardMigrationSdk's kdoc), which carries no amount or
+    // destination of its own (only totalFeeRequired()/transactionCount()); the amount shown is
+    // this account's Orchard balance at propose time (the whole point of a send-max sweep).
+    private sealed class ReviewProposal {
+        data class Automatic(val schedule: MigrationSchedule, val keystoneRunCount: Int?) : ReviewProposal()
+        data class Immediate(val proposal: Proposal, val amountZatoshi: Long) : ReviewProposal()
+    }
 
     private val proposeLce = mutableLce<ReviewProposal>()
     private val confirmLce = mutableLce<Unit>()
@@ -71,19 +78,25 @@ class MigrationReviewVM(
     init {
         proposeLce.execute {
             val sdk = getOrchardMigrationSdk() ?: error("MigrationReviewVM: no wallet available to propose")
-            val schedule = when (args.mode) {
-                MigrationMode.IMMEDIATE -> sdk.proposeImmediateMigration()
-                MigrationMode.AUTOMATIC -> sdk.proposeMigrationTransfers()
+            when (args.mode) {
+                MigrationMode.IMMEDIATE -> {
+                    val amount = getOrchardBalance().value
+                    ReviewProposal.Immediate(sdk.proposeImmediateMigration(), amount)
+                }
+                MigrationMode.AUTOMATIC -> {
+                    val schedule = sdk.proposeMigrationTransfers()
+                    // IMMEDIATE has no Keystone branch at all (a documented pre-existing gap —
+                    // see MigrationReviewVM.confirmAutomatic()'s Keystone check below), so round
+                    // display is AUTOMATIC-only. Stateless preview, called fresh on every Review
+                    // entry — never cached.
+                    val keystoneRunCount = if (getSelectedWalletAccount() is KeystoneAccount) {
+                        sdk.estimateMigrationRunCount()
+                    } else {
+                        null
+                    }
+                    ReviewProposal.Automatic(schedule, keystoneRunCount)
+                }
             }
-            // IMMEDIATE has no Keystone branch at all (a documented pre-existing gap — see
-            // MigrationReviewVM.confirmAutomatic()'s Keystone check below), so round display is
-            // AUTOMATIC-only. Stateless preview, called fresh on every Review entry — never cached.
-            val keystoneRunCount = if (args.mode == MigrationMode.AUTOMATIC && getSelectedWalletAccount() is KeystoneAccount) {
-                sdk.estimateMigrationRunCount()
-            } else {
-                null
-            }
-            ReviewProposal(schedule, keystoneRunCount)
         }
     }
 
@@ -97,6 +110,17 @@ class MigrationReviewVM(
 
     private fun createState(
         proposal: ReviewProposal,
+        isConfirming: Boolean,
+        exchangeRateState: ExchangeRateState,
+        isKeystone: Boolean,
+        failureResult: TransferResult?,
+    ): MigrationReviewState = when (proposal) {
+        is ReviewProposal.Automatic -> createAutomaticState(proposal, isConfirming, exchangeRateState, isKeystone, failureResult)
+        is ReviewProposal.Immediate -> createImmediateState(proposal, isConfirming, exchangeRateState)
+    }
+
+    private fun createAutomaticState(
+        proposal: ReviewProposal.Automatic,
         isConfirming: Boolean,
         exchangeRateState: ExchangeRateState,
         isKeystone: Boolean,
@@ -125,25 +149,63 @@ class MigrationReviewVM(
                     totalCount = sched.transfers.size,
                     amount = stringRes(Zatoshi(t.amountZatoshi)),
                     fiatAmount = fiatAmount(Zatoshi(t.amountZatoshi), exchangeRateState),
-                    scheduledLabel = scheduledLabel(t, args.mode),
+                    scheduledLabel = scheduledLabel(t),
                 )
             },
             isKeystone = isKeystone,
             keystoneRound = proposal.keystoneRunCount?.takeIf { it > 1 }?.let { MigrationKeystoneRound(current = 1, total = it) },
-            // TransferProposal has no fee field (SDK model, out of scope to change here) — mirror
-            // the mock fee magnitude OrchardMigrationSdkMock.submitNoteSplit() already uses for a
-            // similar placeholder network fee shown in the UI.
-            fee = if (args.mode == MigrationMode.IMMEDIATE) stringRes(Zatoshi(IMMEDIATE_MODE_MOCK_FEE_ZATOSHI)) else null,
             isConfirming = isConfirming,
-            onConfirm = { proposeLce.guardLoading { onConfirm(sched) } },
+            onConfirm = { proposeLce.guardLoading { onConfirmAutomatic(sched) } },
             onBack = ::onBack,
             failureSheet = failureResult?.let {
                 MigrationTransferFailureState(
                     message = migrationFailureMessage(it),
-                    onRetry = { failure.value = null; proposeLce.guardLoading { onConfirm(sched) } },
+                    onRetry = { failure.value = null; proposeLce.guardLoading { onConfirmAutomatic(sched) } },
                     onDismiss = { failure.value = null },
                 )
             },
+        )
+    }
+
+    // proposeImmediateMigration()'s raw send-max Proposal carries no destination-facing
+    // "list of transfers" the way a MigrationSchedule does — this renders it as a single
+    // synthetic row so the (shared) review layout still has something to show, using the real
+    // fee from Proposal.totalFeeRequired() instead of AUTOMATIC's placeholder.
+    //
+    // onConfirm is intentionally NOT wired to a real submission yet: this mode's actual send
+    // path (proposal → broadcast) hasn't been implemented app-side since proposeImmediateMigration
+    // stopped returning a MigrationSchedule (see OrchardMigrationSdk's kdoc) — the confirm tap
+    // surfaces a clear failure instead of silently doing nothing or misusing
+    // signAndStoreMigrationSchedule against the wrong data shape.
+    private fun createImmediateState(
+        proposal: ReviewProposal.Immediate,
+        isConfirming: Boolean,
+        exchangeRateState: ExchangeRateState,
+    ): MigrationReviewState {
+        val fee = proposal.proposal.totalFeeRequired()
+        return MigrationReviewState(
+            mode = args.mode,
+            totalAmount = stringRes(Zatoshi(proposal.amountZatoshi)),
+            totalFiatAmount = fiatAmount(Zatoshi(proposal.amountZatoshi), exchangeRateState),
+            estimatedDuration = stringRes(formatMigrationDuration(0L)),
+            transfers = listOf(
+                MigrationReviewTransferState(
+                    index = 1,
+                    totalCount = 1,
+                    amount = stringRes(Zatoshi(proposal.amountZatoshi)),
+                    fiatAmount = fiatAmount(Zatoshi(proposal.amountZatoshi), exchangeRateState),
+                    scheduledLabel = stringRes("Send immediately"),
+                )
+            ),
+            fee = stringRes(fee),
+            isConfirming = isConfirming,
+            // No TransferResult variant fits "not implemented yet" without showing a misleading
+            // message (NetworkError/InvalidNote/Expired all imply a specific real failure this
+            // isn't), so this logs rather than surfacing a wrong failureSheet message.
+            onConfirm = {
+                Twig.error { "MigrationReviewVM: IMMEDIATE mode confirm is not yet implemented" }
+            },
+            onBack = ::onBack,
         )
     }
 
@@ -159,7 +221,7 @@ class MigrationReviewVM(
         )
     }
 
-    private fun onConfirm(sched: MigrationSchedule) =
+    private fun onConfirmAutomatic(sched: MigrationSchedule) =
         confirmLce.execute {
             try {
                 biometricRepository.requestBiometrics(
@@ -177,24 +239,7 @@ class MigrationReviewVM(
             } catch (_: BiometricsCancelledException) {
                 return@execute
             }
-            when (args.mode) {
-                // Immediate mode broadcasts synchronously in the foreground on the Sending
-                // screen — no WorkManager job needed (and scheduling one here would race it).
-                //
-                // Unlike confirmAutomatic(), this path doesn't branch on KeystoneAccount — a
-                // pre-existing gap, not introduced here. Signing always uses the Zashi account's
-                // own key until immediate mode gets the same Keystone detour.
-                MigrationMode.IMMEDIATE -> {
-                    val sdk = getOrchardMigrationSdk() ?: error("MigrationReviewVM: no wallet available to sign")
-                    sdk.signAndStoreMigrationSchedule(
-                        sched,
-                        zashiSpendingKeyDataSource.getZashiSpendingKey(),
-                    )
-                    migrationPlanRepository.save(sched.toMigrationPlan(args.mode))
-                    navigationRouter.forward(MigrationSendingArgs)
-                }
-                MigrationMode.AUTOMATIC -> confirmAutomatic(sched)
-            }
+            confirmAutomatic(sched)
         }
 
     private suspend fun confirmAutomatic(sched: MigrationSchedule) {
@@ -240,19 +285,14 @@ class MigrationReviewVM(
 
     private fun onBack() = proposeLce.guardLoading { navigationRouter.back() }
 
-    private fun scheduledLabel(t: TransferProposal, mode: MigrationMode): StringResource {
-        if (mode == MigrationMode.IMMEDIATE) return stringRes("Send immediately")
+    // Only ever called for AUTOMATIC (createImmediateState hardcodes its own single-row label
+    // instead — a raw send-max Proposal carries no per-transfer schedule to derive one from).
+    private fun scheduledLabel(t: TransferProposal): StringResource {
         val secondsUntil = estimatedSecondsBetweenHeights(t.anchorHeight, t.nextExecutableAfterHeight)
         return when {
             secondsUntil <= 0 -> stringRes("Ready now")
             secondsUntil < 3600 -> stringRes("~${(secondsUntil / 60).coerceAtLeast(1)} min")
             else -> stringRes("~${secondsUntil / 3600} hours")
         }
-    }
-
-    companion object {
-        // Mock-only placeholder network fee (zatoshi) for the IMMEDIATE Review screen's Details
-        // card. Mirrors OrchardMigrationSdkMock's NoteSplitProposal.fee precedent.
-        private const val IMMEDIATE_MODE_MOCK_FEE_ZATOSHI = 1_000L
     }
 }

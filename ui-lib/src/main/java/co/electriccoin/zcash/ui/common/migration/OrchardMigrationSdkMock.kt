@@ -13,6 +13,7 @@ import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferProposal
 import cash.z.ecc.android.sdk.TransferResult
 import cash.z.ecc.android.sdk.ext.ZcashSdk
+import cash.z.ecc.android.sdk.model.Proposal
 import cash.z.ecc.android.sdk.model.UnifiedSpendingKey
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.BuildConfig
@@ -179,22 +180,11 @@ class OrchardMigrationSdkMock(
         )
     }
 
-    override suspend fun proposeImmediateMigration(): MigrationSchedule {
-        val total = orchardBalance()
-        val nowSeconds = Clock.System.now().epochSeconds
-        return MigrationSchedule(
-            transfers = listOf(
-                TransferProposal(
-                    id = "transfer_immediate",
-                    amountZatoshi = total,
-                    anchorHeight = nowSeconds,
-                    nextExecutableAfterHeight = nowSeconds,
-                    expiryHeight = nowSeconds + IMMEDIATE_EXPIRY_WINDOW_SECONDS,
-                )
-            ),
-            estimatedDurationHours = 0,
-        )
-    }
+    // proposeImmediateMigration() now returns an ordinary send-max Proposal (bypassing the
+    // migration engine entirely), which this mock has no real wallet/note store to build one
+    // from — same "not mocked" treatment as the external-signer path below.
+    override suspend fun proposeImmediateMigration(): Proposal =
+        error("OrchardMigrationSdkMock: proposeImmediateMigration (send-max) is not mocked")
 
     // signAndStoreMigrationSchedule: SDK perspective (signing). Persistence is handled
     // separately by MigrationSetupVM via MigrationPlanRepository.
@@ -430,7 +420,6 @@ class OrchardMigrationSdkMock(
         private const val DEBUG_MAX_CADENCE_SECONDS = 4 * DEBUG_TARGET_CADENCE_SECONDS
         private const val PROD_TARGET_CADENCE_SECONDS = 6 * 3600L
         private const val PROD_MAX_CADENCE_SECONDS = 4 * PROD_TARGET_CADENCE_SECONDS
-        private const val IMMEDIATE_EXPIRY_WINDOW_SECONDS = 3600L
         private val NOTE_SPLIT_BROADCAST_DELAY = 500.milliseconds
 
         // Post-broadcast privacy buffer for the "send now" resume path — compressed in debug so
