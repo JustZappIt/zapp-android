@@ -46,18 +46,31 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicLong
 
+/**
+ * Kotlin surface over the native voting-crypto backend ([VotingRustBackend] and its per-round
+ * [VotingRustBackend.VotingDb] handles). All failures surface as [RuntimeException] from the
+ * native layer - every method below is annotated accordingly.
+ */
 @Suppress("TooManyFunctions")
 interface VotingCryptoClient {
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun openVotingDb(dbPath: String): Long
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun closeVotingDb(dbHandle: Long)
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun setWalletId(
         dbHandle: Long,
         walletId: String,
         networkId: Int
     )
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun initializeRound(
         dbHandle: Long,
         roundId: String,
@@ -68,53 +81,75 @@ interface VotingCryptoClient {
         sessionJson: String?
     )
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun getRoundState(
         dbHandle: Long,
         roundId: String
     ): RoundStateInfo?
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun listRoundsJson(dbHandle: Long): String
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun getBundleCount(
         dbHandle: Long,
         roundId: String
     ): Int
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun getVotes(
         dbHandle: Long,
         roundId: String
     ): List<VotingVoteRecord>
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun clearRound(
         dbHandle: Long,
         roundId: String
     )
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun deleteSkippedBundles(
         dbHandle: Long,
         roundId: String,
         keepCount: Int
     ): Long
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun setupBundles(
         dbHandle: Long,
         roundId: String,
         notesJson: String
     ): VotingBundleSetupResult
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun computeBundleSetup(notesJson: String): VotingBundleSetupResult
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun generateHotkey(
         dbHandle: Long,
         storedSecret: ByteArray
     ): VotingHotkey
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun storeTreeState(
         dbHandle: Long,
         roundId: String,
         treeStateBytes: ByteArray
     )
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun getWalletNotesJson(
         walletDbPath: String,
         snapshotHeight: Long,
@@ -122,11 +157,15 @@ interface VotingCryptoClient {
         accountUuidBytes: ByteArray
     ): String
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun deriveHotkeyRawAddress(
         hotkeySeed: ByteArray,
         networkId: Int
     ): ByteArray
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun generateNoteWitnessesJson(
         dbHandle: Long,
         roundId: String,
@@ -136,6 +175,8 @@ interface VotingCryptoClient {
         notesJson: String
     ): String
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun storeWitnesses(
         dbHandle: Long,
         roundId: String,
@@ -144,6 +185,8 @@ interface VotingCryptoClient {
         witnessesJson: String
     )
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun buildGovernancePczt(
         dbHandle: Long,
         roundId: String,
@@ -156,6 +199,8 @@ interface VotingCryptoClient {
         roundName: String
     ): VotingGovernancePczt
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun buildGovernancePcztFromSeed(
         dbHandle: Long,
         roundId: String,
@@ -170,13 +215,19 @@ interface VotingCryptoClient {
         roundName: String
     ): VotingGovernancePczt
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun extractPcztSighash(pcztBytes: ByteArray): ByteArray
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun extractSpendAuthSignatureFromSignedPczt(
         signedPcztBytes: ByteArray,
         actionIndex: Int
     ): ByteArray
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun precomputeDelegationPir(
         dbHandle: Long,
         roundId: String,
@@ -185,6 +236,8 @@ interface VotingCryptoClient {
         notesJson: String
     ): VotingDelegationPirPrecomputeResult
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun buildAndProveDelegation(
         dbHandle: Long,
         roundId: String,
@@ -199,6 +252,8 @@ interface VotingCryptoClient {
         proofProgress: ((Double) -> Unit)? = null
     ): VotingDelegationProof
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun getDelegationSubmission(
         dbHandle: Long,
         roundId: String,
@@ -210,6 +265,8 @@ interface VotingCryptoClient {
         senderSeed: ByteArray
     ): VotingDelegationSubmission
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun getDelegationSubmissionWithKeystoneSignature(
         dbHandle: Long,
         roundId: String,
@@ -218,6 +275,8 @@ interface VotingCryptoClient {
         keystoneSighash: ByteArray
     ): VotingDelegationSubmission
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun storeDelegationTxHash(
         dbHandle: Long,
         roundId: String,
@@ -225,12 +284,16 @@ interface VotingCryptoClient {
         txHash: String
     )
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun getDelegationTxHash(
         dbHandle: Long,
         roundId: String,
         bundleIndex: Int
     ): VotingTxHashLookup
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun storeVoteTxHash(
         dbHandle: Long,
         roundId: String,
@@ -239,6 +302,8 @@ interface VotingCryptoClient {
         txHash: String
     )
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun getVoteTxHash(
         dbHandle: Long,
         roundId: String,
@@ -246,6 +311,8 @@ interface VotingCryptoClient {
         proposalId: Int
     ): VotingTxHashLookup
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun markVoteSubmitted(
         dbHandle: Long,
         roundId: String,
@@ -253,6 +320,8 @@ interface VotingCryptoClient {
         proposalId: Int
     )
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun getCommitmentBundle(
         dbHandle: Long,
         roundId: String,
@@ -263,7 +332,10 @@ interface VotingCryptoClient {
     /**
      * Records the confirmed vote-commitment-tree position for an already-committed vote, once
      * its cast-vote transaction has been mined.
+     *
+     * @throws RuntimeException if the native layer reports a failure.
      */
+    @Throws(RuntimeException::class)
     suspend fun recordVcPosition(
         dbHandle: Long,
         roundId: String,
@@ -275,7 +347,10 @@ interface VotingCryptoClient {
     /**
      * Recovers the signed `vote::commit` result for an already-committed vote, together with
      * its confirmed vote-commitment-tree position recorded by [recordVcPosition].
+     *
+     * @throws RuntimeException if the native layer reports a failure.
      */
+    @Throws(RuntimeException::class)
     suspend fun recoverCommittedVote(
         dbHandle: Long,
         roundId: String,
@@ -283,11 +358,15 @@ interface VotingCryptoClient {
         proposalId: Int
     ): VotingCommittedVoteRecord
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun clearRecoveryState(
         dbHandle: Long,
         roundId: String
     )
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun recordShareDelegation(
         dbHandle: Long,
         roundId: String,
@@ -299,11 +378,15 @@ interface VotingCryptoClient {
         submitAt: Long
     )
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun getShareDelegations(
         dbHandle: Long,
         roundId: String
     ): List<VotingShareDelegationRecord>
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun markShareConfirmed(
         dbHandle: Long,
         roundId: String,
@@ -312,6 +395,8 @@ interface VotingCryptoClient {
         shareIndex: Int
     )
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun addSentServers(
         dbHandle: Long,
         roundId: String,
@@ -321,18 +406,24 @@ interface VotingCryptoClient {
         newUrls: List<String>
     )
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun computeShareNullifier(
         voteCommitment: ByteArray,
         shareIndex: Int,
         blind: ByteArray
     ): ByteArray
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun syncVoteTree(
         dbHandle: Long,
         roundId: String,
         nodeUrl: String
     ): Long
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun storeVanPosition(
         dbHandle: Long,
         roundId: String,
@@ -340,6 +431,8 @@ interface VotingCryptoClient {
         position: Int
     )
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun generateVanWitnessJson(
         dbHandle: Long,
         roundId: String,
@@ -347,6 +440,8 @@ interface VotingCryptoClient {
         anchorHeight: Int
     ): String
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun buildVoteCommitment(
         dbHandle: Long,
         roundId: String,
@@ -362,6 +457,8 @@ interface VotingCryptoClient {
         proofProgress: ((Double) -> Unit)? = null
     ): VotingVoteCommitment
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun buildSharePayloadsJson(
         encSharesJson: String,
         commitmentJson: String,
@@ -376,7 +473,10 @@ interface VotingCryptoClient {
      * last-moment buffer window. Sources its own entropy natively; callers must not
      * reimplement this scheduling in Kotlin. Returns unix seconds; `0` means "submit
      * immediately".
+     *
+     * @throws RuntimeException if the native layer reports a failure.
      */
+    @Throws(RuntimeException::class)
     suspend fun scheduledShareSubmitAt(
         nowSeconds: Long,
         ceremonyStartSeconds: Long,
@@ -384,10 +484,16 @@ interface VotingCryptoClient {
         singleShare: Boolean
     ): Long
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun warmProvingCaches()
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun ballotDivisorZatoshi(): Long
 
+    /** @throws RuntimeException if the native layer reports a failure. */
+    @Throws(RuntimeException::class)
     suspend fun extractOrchardFvkFromUfvk(
         ufvk: String,
         networkId: Int

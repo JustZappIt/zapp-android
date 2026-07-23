@@ -776,6 +776,7 @@ class SubmitVotesUseCase(
             }.takeIf { it is TxConfirmationProbeResult.Confirmed } as? TxConfirmationProbeResult.Confirmed
     }
 
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun submitCachedVoteIfReusable(
         context: VotingSubmitContext,
         dbHandle: Long,
@@ -814,7 +815,7 @@ class SubmitVotesUseCase(
             bundleIndex = bundleIndex,
             proposalId = proposalId
         ) {
-            runCatching {
+            try {
                 votingCryptoClient.recordVcPosition(
                     dbHandle = dbHandle,
                     roundId = roundId,
@@ -822,13 +823,16 @@ class SubmitVotesUseCase(
                     proposalId = proposalId,
                     vcTreePosition = vcTreePosition
                 )
-            }.getOrElse {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 throw VotingSubmissionRecoverableException(
                     VotingErrors.MissingCachedCommitment(
                         roundId = roundId,
                         bundleIndex = bundleIndex,
                         proposalId = proposalId
-                    )
+                    ),
+                    e
                 )
             }
         }
