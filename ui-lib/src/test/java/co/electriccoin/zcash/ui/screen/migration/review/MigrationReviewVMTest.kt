@@ -1,6 +1,9 @@
 package co.electriccoin.zcash.ui.screen.migration.review
 
 import androidx.navigation.NavBackStackEntry
+import cash.z.ecc.android.sdk.MigrationSchedule
+import cash.z.ecc.android.sdk.OrchardMigrationSdk
+import cash.z.ecc.android.sdk.TransferProposal
 import cash.z.ecc.android.sdk.model.Proposal
 import cash.z.ecc.android.sdk.model.UnifiedSpendingKey
 import cash.z.ecc.android.sdk.model.Zatoshi
@@ -16,6 +19,7 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
+import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
@@ -183,6 +187,83 @@ class MigrationReviewVMTest {
         )
     }
 
+    // Covers item 5 of the plan-update/expired-transfer fixes: restartCurrentMigrationStep()'s own
+    // doc requires its returned schedule to go through this normal confirmation flow rather than
+    // being discarded in favor of an independently re-proposed one.
+    @Test
+    fun automaticModeReusesPendingRestartScheduleInsteadOfProposingAFreshOne() = runTest {
+        val router = FakeNavigationRouter()
+        val restartSchedule = MigrationSchedule(
+            transfers = listOf(
+                TransferProposal(
+                    id = "restart_transfer_0",
+                    amountZatoshi = 900_000L,
+                    anchorHeight = 0L,
+                    nextExecutableAfterHeight = 100L,
+                    expiryHeight = 200L,
+                )
+            ),
+            estimatedDurationHours = 1,
+        )
+        val restartRepo = mockk<RestartMigrationScheduleRepository>(relaxed = true) {
+            every { consume() } returns restartSchedule
+        }
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+        val vm = vm(
+            router = router,
+            proposalDataSource = mockk(relaxed = true),
+            getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
+            mode = MigrationMode.AUTOMATIC,
+            restartMigrationScheduleRepository = restartRepo,
+        )
+        val collectJob = launch { vm.state.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(1, vm.state.value.content?.transfers?.size)
+        coVerify(exactly = 0) { sdk.proposeMigrationTransfers(any()) }
+        coVerify(exactly = 1) { restartRepo.consume() }
+        collectJob.cancel()
+    }
+
+    @Test
+    fun automaticModeProposesFreshScheduleWhenNoRestartIsPending() = runTest {
+        val router = FakeNavigationRouter()
+        val freshSchedule = MigrationSchedule(
+            transfers = listOf(
+                TransferProposal(
+                    id = "fresh_transfer_0",
+                    amountZatoshi = 100_000L,
+                    anchorHeight = 0L,
+                    nextExecutableAfterHeight = 100L,
+                    expiryHeight = 200L,
+                ),
+                TransferProposal(
+                    id = "fresh_transfer_1",
+                    amountZatoshi = 200_000L,
+                    anchorHeight = 0L,
+                    nextExecutableAfterHeight = 200L,
+                    expiryHeight = 300L,
+                ),
+            ),
+            estimatedDurationHours = 2,
+        )
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
+            coEvery { proposeMigrationTransfers(any()) } returns freshSchedule
+        }
+        val vm = vm(
+            router = router,
+            proposalDataSource = mockk(relaxed = true),
+            getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
+            mode = MigrationMode.AUTOMATIC,
+        )
+        val collectJob = launch { vm.state.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(2, vm.state.value.content?.transfers?.size)
+        coVerify(exactly = 1) { sdk.proposeMigrationTransfers(any()) }
+        collectJob.cancel()
+    }
+
     // MigrationReviewVM's IMMEDIATE-mode `onConfirm` callback only becomes reachable through
     // `state.value.content`, which is backed by a `combine(...).stateIn(WhileSubscribed)` chain
     // that (by design, same as every other LCE-driven VM in this codebase, e.g.
@@ -214,10 +295,14 @@ class MigrationReviewVMTest {
         getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase = mockk<GetOrchardMigrationSdkUseCase>(relaxed = true),
         keystoneProposalRepository: co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository =
             mockk(relaxed = true),
+        mode: MigrationMode = MigrationMode.IMMEDIATE,
+        restartMigrationScheduleRepository: RestartMigrationScheduleRepository =
+            mockk<RestartMigrationScheduleRepository>(relaxed = true) { every { consume() } returns null },
     ) = MigrationReviewVM(
-        args = MigrationReviewArgs(mode = MigrationMode.IMMEDIATE),
+        args = MigrationReviewArgs(mode = mode),
         getOrchardMigrationSdk = getOrchardMigrationSdk,
         pendingMigrationScheduleRepository = mockk<PendingMigrationScheduleRepository>(relaxed = true),
+        restartMigrationScheduleRepository = restartMigrationScheduleRepository,
         finalizeMigrationSchedule = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true),
         navigationRouter = router,
         exchangeRateRepository = mockk<ExchangeRateRepository>(relaxed = true) {

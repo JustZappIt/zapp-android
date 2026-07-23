@@ -28,6 +28,8 @@ import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleReposi
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationTorFailureDecisionRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationTorFailureDecisionRepositoryImpl
+import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepository
+import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.repository.SwapRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.TransactionFilterRepository
@@ -89,6 +91,7 @@ val repositoryModule =
         singleOf(::VotingSessionStoreImpl) bind VotingSessionStore::class
         singleOf(::MigrationPlanRepositoryImpl) bind MigrationPlanRepository::class
         singleOf(::PendingMigrationScheduleRepositoryImpl) bind PendingMigrationScheduleRepository::class
+        singleOf(::RestartMigrationScheduleRepositoryImpl) bind RestartMigrationScheduleRepository::class
         singleOf(::PendingMigrationTorFailureDecisionRepositoryImpl) bind
             PendingMigrationTorFailureDecisionRepository::class
         singleOf(::PendingKeystoneMigrationPcztsRepositoryImpl) bind PendingKeystoneMigrationPcztsRepository::class
