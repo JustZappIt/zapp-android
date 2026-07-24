@@ -1,23 +1,51 @@
 package co.electriccoin.zcash.ui.common.provider
 
 import co.electriccoin.zcash.preference.StandardPreferenceProvider
+import co.electriccoin.zcash.preference.model.entry.BooleanPreferenceDefault
 import co.electriccoin.zcash.preference.model.entry.PreferenceKey
+import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 
 /**
  * Persisted flag remembering that a background migration send attempt failed specifically because
- * of Tor connectivity and hasn't been resolved yet. Distinct from the in-memory
- * [co.electriccoin.zcash.ui.common.repository.PendingMigrationTorFailureDecisionRepository], which
- * only carries a single interactive retry decision and is explicitly not meant to survive process
- * death — this flag is what connects a *background* Tor failure to app-open recovery routing
- * ([co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase]) across process
- * restarts. Set to `true` when `MigrationWorker` hits a non-retryable network error while Tor was
- * in use, and cleared back to `false` on the one unambiguous "problem resolved" signal — a
- * subsequent successful transfer (`MigrationSendingVM.sendOnce()`'s `TransferResult.Success`
- * branch). Backed by regular (non-encrypted) app storage, wiped on uninstall.
+ * of Tor connectivity and hasn't been resolved yet. Keyed per-account (see [AccountDataSource]) so
+ * a Keystone account's background Tor failure never routes the Zashi account into recovery. Set to
+ * `true` when `MigrationWorker` hits a non-retryable network error while Tor was in use; cleared on
+ * a subsequent successful transfer. Backed by regular (non-encrypted) app storage, wiped on uninstall.
  */
 interface PendingMigrationTorFailureStorageProvider : BooleanStorageProvider
 
 class PendingMigrationTorFailureStorageProviderImpl(
-    override val preferenceHolder: StandardPreferenceProvider,
-) : BaseBooleanStorageProvider(key = PreferenceKey("pending_migration_tor_failure")),
-    PendingMigrationTorFailureStorageProvider
+    private val preferenceHolder: StandardPreferenceProvider,
+    private val accountDataSource: AccountDataSource,
+) : PendingMigrationTorFailureStorageProvider {
+    override suspend fun get(): Boolean = default(currentAccountUuid()).getValue(preferenceHolder())
+
+    override suspend fun store(value: Boolean) = default(currentAccountUuid()).putValue(preferenceHolder(), value)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observe(): Flow<Boolean> =
+        accountDataSource.selectedAccount.flatMapLatest { account ->
+            if (account == null) {
+                flowOf(false)
+            } else {
+                flow { emitAll(default(account.sdkAccount.accountUuid.toStorageKeyId()).observe(preferenceHolder())) }
+            }
+        }
+
+    override suspend fun clear() = default(currentAccountUuid()).clear(preferenceHolder())
+
+    override suspend fun flip() = store(!get())
+
+    private suspend fun currentAccountUuid(): String =
+        accountDataSource.getSelectedAccount().sdkAccount.accountUuid.toStorageKeyId()
+
+    private fun default(accountUuid: String) =
+        BooleanPreferenceDefault(key = PreferenceKey("pending_migration_tor_failure_$accountUuid"), defaultValue = false)
+}
