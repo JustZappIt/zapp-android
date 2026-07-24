@@ -27,43 +27,44 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class MigrationPlanRepositoryAccountBindingTest {
-
     private fun account(uuid: UUID): WalletAccount =
         mockk(relaxed = true) {
             every { sdkAccount } returns AccountFixture.new(accountUuid = uuid)
         }
 
-    private fun plan(id: String) = MigrationPlan(
-        id = id,
-        createdAtEpochSeconds = 0L,
-        transfers = emptyList(),
-        mode = MigrationMode.AUTOMATIC,
-    )
+    private fun plan(id: String) =
+        MigrationPlan(
+            id = id,
+            createdAtEpochSeconds = 0L,
+            transfers = emptyList(),
+            mode = MigrationMode.AUTOMATIC,
+        )
 
     @Test
-    fun loadByAccountKeyIdIsIndependentOfSelectedAccount() = runTest {
-        val uuidA = UUID.fromString("00000000-0000-0000-0000-000000000001")
-        val uuidB = UUID.fromString("00000000-0000-0000-0000-000000000002")
-        val accountA = account(uuidA)
-        val accountB = account(uuidB)
-        val keyA = accountA.sdkAccount.accountUuid.toStorageKeyId()
+    fun loadByAccountKeyIdIsIndependentOfSelectedAccount() =
+        runTest {
+            val uuidA = UUID.fromString("00000000-0000-0000-0000-000000000001")
+            val uuidB = UUID.fromString("00000000-0000-0000-0000-000000000002")
+            val accountA = account(uuidA)
+            val accountB = account(uuidB)
+            val keyA = accountA.sdkAccount.accountUuid.toStorageKeyId()
 
-        val selected = MutableStateFlow<WalletAccount?>(accountA)
-        val accountDataSource = FakeAccountDataSourceForRepoTest(selected)
-        val prefs = InMemoryPreferenceProviderForRepoTest()
-        val holder = mockk<EncryptedPreferenceProvider> { coEvery { this@mockk() } returns prefs }
-        val repo = MigrationPlanRepositoryImpl(holder, accountDataSource)
+            val selected = MutableStateFlow<WalletAccount?>(accountA)
+            val accountDataSource = FakeAccountDataSourceForRepoTest(selected)
+            val prefs = InMemoryPreferenceProviderForRepoTest()
+            val holder = mockk<EncryptedPreferenceProvider> { coEvery { this@mockk() } returns prefs }
+            val repo = MigrationPlanRepositoryImpl(holder, accountDataSource)
 
-        // save under account A (selected)
-        repo.save(plan("A"))
+            // save under account A (selected)
+            repo.save(plan("A"))
 
-        // switch selected to B — explicit-account load of A still returns A's plan
-        selected.value = accountB
-        assertEquals("A", repo.load(keyA)?.id)
+            // switch selected to B — explicit-account load of A still returns A's plan
+            selected.value = accountB
+            assertEquals("A", repo.load(keyA)?.id)
 
-        // explicit-account load of a never-written key returns null
-        assertNull(repo.load("deadbeefdeadbeef"))
-    }
+            // explicit-account load of a never-written key returns null
+            assertNull(repo.load("deadbeefdeadbeef"))
+        }
 }
 
 // ---------------------------------------------------------------------------
