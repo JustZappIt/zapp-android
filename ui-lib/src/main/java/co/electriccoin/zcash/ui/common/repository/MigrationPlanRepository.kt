@@ -23,6 +23,15 @@ interface MigrationPlanRepository {
 
     suspend fun load(): MigrationPlan?
 
+    /**
+     * Loads the migration plan keyed by the passed [accountKeyId] (hex storage key derived from the
+     * account's UUID via [co.electriccoin.zcash.ui.common.model.toStorageKeyId]), independent of
+     * whichever account is currently selected. Returns `null` when no plan has been stored for
+     * that key. Used by [co.electriccoin.zcash.work.MigrationWorker] to act on the account it was
+     * enqueued for rather than the currently-selected account.
+     */
+    suspend fun load(accountKeyId: String): MigrationPlan?
+
     suspend fun updateTransfer(
         index: Int,
         status: MigrationTransferStatus
@@ -73,6 +82,9 @@ class MigrationPlanRepositoryImpl(
     }
 
     override suspend fun load(): MigrationPlan? = loadByKey(currentKey())
+
+    override suspend fun load(accountKeyId: String): MigrationPlan? =
+        loadByKey(PreferenceKey("migration_plan_$accountKeyId"))
 
     override suspend fun updateTransfer(
         index: Int,
