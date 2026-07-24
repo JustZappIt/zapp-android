@@ -48,7 +48,16 @@ class MigrationTransferDueReceiver : BroadcastReceiver(), KoinComponent {
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.Default).launch {
             try {
-                val plan = migrationPlanRepository.load()
+                // Read the plan of the account this alarm was armed for (carried in the intent
+                // extra), not the currently-selected one — so a "ready to send" notification shows
+                // the right account's transfer counts even after the user switches accounts. Falls
+                // back to the selected account only for a pre-upgrade alarm with no extra.
+                val plan =
+                    if (accountKeyId != null) {
+                        migrationPlanRepository.load(accountKeyId)
+                    } else {
+                        migrationPlanRepository.load()
+                    }
                 val next = plan?.nextPending
                 if (plan != null && next != null && next.scheduledAt <= Clock.System.now()) {
                     Twig.debug {
