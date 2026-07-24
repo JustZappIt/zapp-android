@@ -65,7 +65,10 @@ Add explicit-account variants; keep the existing selected-account variants for U
    no-arg `load()`/`save()` and `observe()` (selected-account, used by UI) stay.
 5. `IsMigrationTorEnabledStorageProvider` — a `get(accountKeyId: String)` overload that
    reads the passed account's key. The existing no-arg `get()`/`store()`/`observe()` stay.
-6. `MigrationTransferDueReceiver` — already reads `EXTRA_ACCOUNT_KEY_ID`; ensure any action
+6. `PendingMigrationTorFailureStorageProvider` — a `store(accountKeyId: String, value: Boolean)`
+   overload. The worker sets this flag on a background Tor failure (`MigrationWorker.kt:134`),
+   which must target the enqueued account. Existing no-arg accessors stay.
+7. `MigrationTransferDueReceiver` — already reads `EXTRA_ACCOUNT_KEY_ID`; ensure any action
    it triggers targets that account (it currently only routes a notification).
 
 ### Error handling
