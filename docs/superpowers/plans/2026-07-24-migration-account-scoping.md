@@ -532,13 +532,13 @@ companion object {
     const val CHANNEL_ID = "migration_channel"
     const val EXTRA_OPEN_MIGRATION = "co.electriccoin.zcash.migration.open_progress"
     const val EXTRA_OPEN_TRANSFER_READY = "co.electriccoin.zcash.migration.open_transfer_ready"
-    private const val NOTIFICATION_ID_PROGRESS_BASE = 90_0000        // notification-id namespace
-    private const val REQUEST_CODE_MIGRATION_BASE = 90_0000          // PendingIntent-request-code namespace
-    private const val REQUEST_CODE_TRANSFER_READY_BASE = 91_0000     // PendingIntent-request-code namespace
+    private const val NOTIFICATION_ID_PROGRESS_BASE = 0x10_0000      // notification-id namespace
+    private const val REQUEST_CODE_MIGRATION_BASE = 0x10_0000        // PendingIntent-request-code namespace
+    private const val REQUEST_CODE_TRANSFER_READY_BASE = 0x20_0000   // PendingIntent-request-code namespace
 }
 ```
 
-(Notification-id and PendingIntent-request-code are separate Android namespaces, so `NOTIFICATION_ID_PROGRESS_BASE` may share a value with a request-code base without colliding; within the request-code namespace, `MIGRATION` and `TRANSFER_READY` bases differ by `0x10000`.)
+Use **hex** bases (not decimal) so the required spacing is self-evident and can't be misread: `accountIdOffset` returns `0..0xFFFF`, so bases must be ≥ `0x10000` apart. `0x10_0000` and `0x20_0000` are `0x10_0000` apart — far more than the offset range. (Notification-id and PendingIntent-request-code are separate Android namespaces, so `NOTIFICATION_ID_PROGRESS_BASE` may share a value with a request-code base without colliding; within the request-code namespace, `MIGRATION` and `TRANSFER_READY` bases differ by `0x10_0000`.) **Do not use decimal `90_0000`/`91_0000` — those differ by only 10,000, which overlaps.**
 
 - [ ] **Step 2: Update callers to pass the account key id**
 
