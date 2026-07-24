@@ -2,6 +2,7 @@ package co.electriccoin.zcash.ui.screen.migration.review
 
 import androidx.lifecycle.ViewModel
 import cash.z.ecc.android.sdk.MigrationSchedule
+import cash.z.ecc.android.sdk.MigrationState
 import cash.z.ecc.android.sdk.TransferProposal
 import cash.z.ecc.android.sdk.TransferResult
 import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
@@ -43,6 +44,7 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.screen.migration.keystonesign.MigrationKeystoneSignArgs
+import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionArgs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -260,6 +262,19 @@ class MigrationReviewVM(
             return
         }
         val sdk = getOrchardMigrationSdk() ?: error("MigrationReviewVM: no wallet available to sign")
+        // A migration already committed in the SDK must never be pushed back through the split/sign
+        // steps below: submitNoteSplit()/signAndStoreMigrationSchedule() both go through the engine's
+        // commit_or_reuse, whose reuse path re-finalizes the already-finalized, in-flight split and
+        // fails ("transaction 0 is not signed and ready to prove"). getMigrationState() — NOT our own
+        // app-side plan, which is only written once this flow reaches finalizeMigrationSchedule — is
+        // the source of truth for "already committed". A prior confirm that committed but crashed
+        // before finalizing lands here on re-entry; resume to the progress screen instead of
+        // re-committing. (A NotStarted state with a stale write-ahead plan is reconciled separately by
+        // CheckMigrationRecoveryUseCase.)
+        if (sdk.getMigrationState() is MigrationState.InProgress) {
+            navigationRouter.forward(MigrationProgressArgs)
+            return
+        }
         // Note-split is the first step of this confirm action (design spec §7) — a schedule with
         // more than one denomination proposed against raw, unsplit notes exhausts the wallet's
         // balance on the first transfer, leaving every subsequent transfer InsufficientFunds. Per
@@ -287,6 +302,11 @@ class MigrationReviewVM(
             // prepareNoteSplit()) mirrors MigrationKeystoneSignVM, which likewise derives the
             // from-split schedule before its first commit.
             val scheduleFromSplit = sdk.proposeMigrationTransfersFromSplit(proposal)
+            // Write-ahead: persist the plan BEFORE the irreversible submitNoteSplit() (which commits
+            // AND broadcasts the split). If the app dies between here and finalizeMigrationSchedule
+            // below, re-entry then sees InProgress + a saved plan and resumes (see the guard above),
+            // instead of mistaking the committed migration for a fresh start and re-running the split.
+            finalizeMigrationSchedule.persistPlan(scheduleFromSplit, args.mode)
             val splitResult = sdk.submitNoteSplit(proposal, zashiSpendingKeyDataSource.getZashiSpendingKey())
             if (splitResult !is TransferResult.Success) {
                 failure.value = splitResult
@@ -294,6 +314,9 @@ class MigrationReviewVM(
             }
             scheduleFromSplit
         } else {
+            // Same write-ahead as the split branch: persist before signAndStoreMigrationSchedule()
+            // (the commit for the no-split path) so a crash before finalize is recoverable.
+            finalizeMigrationSchedule.persistPlan(sched, args.mode)
             sched
         }
         sdk.signAndStoreMigrationSchedule(scheduleToSign, zashiSpendingKeyDataSource.getZashiSpendingKey())

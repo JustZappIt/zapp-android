@@ -114,6 +114,17 @@ class CheckMigrationRecoveryUseCase(
             // so this can never fire for them.
             Twig.debug { "MIGRATION_DIAG MigrationRecovery: migration just completed — showing one-time celebration." }
             navigationRouter.replaceAll(HomeArgs, MigrationCompleteArgs)
+        } else if (migrationState == MigrationState.NotStarted && migrationPlanRepository.load() != null) {
+            // A stale write-ahead plan: MigrationReviewVM.confirmAutomatic persists the plan just
+            // before the irreversible SDK commit (see FinalizeMigrationScheduleUseCase.persistPlan),
+            // so if that commit never actually happened — submitNoteSplit()/signAndStoreMigrationSchedule()
+            // threw before commit_preparation, leaving the SDK NotStarted — the plan is left behind
+            // pointing at a migration that doesn't exist. The SDK state is authoritative, so discard
+            // it rather than letting the home banner offer to "resume" a phantom migration. (An
+            // actually-committed migration reports InProgress here, not NotStarted, and is left
+            // untouched — its saved plan is real and drives the progress screen.)
+            Twig.debug { "MIGRATION_DIAG MigrationRecovery: stale write-ahead plan, SDK NotStarted — clearing." }
+            migrationPlanRepository.clear()
         }
     }
 

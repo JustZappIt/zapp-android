@@ -2,6 +2,7 @@ package co.electriccoin.zcash.ui.screen.migration.review
 
 import androidx.navigation.NavBackStackEntry
 import cash.z.ecc.android.sdk.MigrationSchedule
+import cash.z.ecc.android.sdk.MigrationState
 import cash.z.ecc.android.sdk.NoteSplitProposal
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferProposal
@@ -29,6 +30,7 @@ import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.SubmitProposalUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
+import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionArgs
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -227,25 +229,69 @@ class MigrationReviewVMTest {
             proposalHandle = 42L,
         )
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
+            coEvery { getMigrationState() } returns MigrationState.NotStarted
             coEvery { isNoteSplitNeeded() } returns true
             coEvery { prepareNoteSplit() } returns splitProposal
             coEvery { proposeMigrationTransfersFromSplit(splitProposal) } returns scheduleFromSplit
             coEvery { submitNoteSplit(splitProposal, usk) } returns TransferResult.Success("splittx")
         }
+        val finalizeMigrationSchedule = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true)
         val vm = vm(
             router = router,
             getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
             zashiSpendingKeyDataSource = mockk { coEvery { getZashiSpendingKey() } returns usk },
+            finalizeMigrationSchedule = finalizeMigrationSchedule,
             mode = MigrationMode.AUTOMATIC,
         )
 
         invokeOnConfirmAutomatic(vm, scheduleFromSplit)
         advanceUntilIdle()
 
+        // Schedule is derived from the split before the split is submitted, and the app-side plan is
+        // written (write-ahead) before that same irreversible submit.
         coVerifyOrder {
             sdk.proposeMigrationTransfersFromSplit(splitProposal)
+            finalizeMigrationSchedule.persistPlan(scheduleFromSplit, MigrationMode.AUTOMATIC)
             sdk.submitNoteSplit(splitProposal, usk)
         }
+    }
+
+    // Guard: a migration already committed in the SDK (InProgress) must never be pushed back through
+    // the split/sign steps — that re-finalizes the already-broadcast split and fails ("transaction 0
+    // is not signed and ready to prove"). getMigrationState() is the source of truth; on re-entry the
+    // flow resumes to the progress screen instead of re-committing.
+    @Test
+    fun automaticConfirmSkipsReCommitWhenMigrationAlreadyInProgress() = runTest {
+        val router = FakeNavigationRouter()
+        val preSplitSchedule = MigrationSchedule(
+            transfers = listOf(
+                TransferProposal(
+                    id = "t0",
+                    amountZatoshi = 100_000L,
+                    anchorHeight = 0L,
+                    nextExecutableAfterHeight = 100L,
+                    expiryHeight = 200L,
+                )
+            ),
+            estimatedDurationHours = 1,
+            proposalHandle = 0L,
+        )
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
+            coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))
+        }
+        val vm = vm(
+            router = router,
+            getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
+            mode = MigrationMode.AUTOMATIC,
+        )
+
+        invokeOnConfirmAutomatic(vm, preSplitSchedule)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { sdk.prepareNoteSplit() }
+        coVerify(exactly = 0) { sdk.submitNoteSplit(any(), any()) }
+        coVerify(exactly = 0) { sdk.signAndStoreMigrationSchedule(any(), any()) }
+        assertEquals(listOf<Any>(MigrationProgressArgs), router.forwardedRoutes)
     }
 
     private fun invokeOnConfirmAutomatic(vm: MigrationReviewVM, sched: MigrationSchedule) {
@@ -286,6 +332,7 @@ class MigrationReviewVMTest {
         keystoneProposalRepository: KeystoneProposalRepository = mockk(relaxed = true),
         zashiProposalRepository: ZashiProposalRepository = mockk(relaxed = true),
         submitProposal: SubmitProposalUseCase = mockk(relaxed = true),
+        finalizeMigrationSchedule: FinalizeMigrationScheduleUseCase = mockk(relaxed = true),
         mode: MigrationMode = MigrationMode.IMMEDIATE,
         restartMigrationScheduleRepository: RestartMigrationScheduleRepository =
             mockk<RestartMigrationScheduleRepository>(relaxed = true) { every { consume() } returns null },
@@ -294,7 +341,7 @@ class MigrationReviewVMTest {
         getOrchardMigrationSdk = getOrchardMigrationSdk,
         pendingMigrationScheduleRepository = mockk<PendingMigrationScheduleRepository>(relaxed = true),
         restartMigrationScheduleRepository = restartMigrationScheduleRepository,
-        finalizeMigrationSchedule = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true),
+        finalizeMigrationSchedule = finalizeMigrationSchedule,
         navigationRouter = router,
         exchangeRateRepository = mockk<ExchangeRateRepository>(relaxed = true) {
             every { state } returns MutableStateFlow(ExchangeRateState.OptedOut)
