@@ -9,11 +9,13 @@ import cash.z.ecc.android.sdk.TransferResult
 import cash.z.ecc.android.sdk.ext.ZcashSdk
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import kotlinx.coroutines.delay
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -29,6 +31,7 @@ class MigrationWorker(
 ) : CoroutineWorker(context, workerParameters), KoinComponent {
 
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase by inject()
+    private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase by inject()
     private val migrationPlanRepository: MigrationPlanRepository by inject()
     private val migrationNotifier: MigrationNotifier by inject()
     private val isMigrationTorEnabledStorageProvider: IsMigrationTorEnabledStorageProvider by inject()
@@ -39,6 +42,7 @@ class MigrationWorker(
             Twig.debug { "MIGRATION_DIAG MigrationWorker: no wallet available — skipping." }
             return Result.success()
         }
+        val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
 
         // Completes any transfer that was pre-signed with a placeholder witness (sign-now/
         // prove-later pipeline) whose funding note has since become witnessed, so it can be
@@ -90,7 +94,7 @@ class MigrationWorker(
                         // interval is the finest granularity at which the underlying chain state can
                         // actually change.
                         val delay = ZcashSdk.BLOCK_INTERVAL_MILLIS.milliseconds
-                        MigrationScheduler(applicationContext).schedule(delay)
+                        MigrationScheduler(applicationContext).schedule(accountKeyId, delay)
                         Twig.debug { "MIGRATION_DIAG MigrationWorker: no pending transfer yet — retrying in $delay." }
                         Result.success()
                     }
@@ -105,7 +109,7 @@ class MigrationWorker(
                 val updatedPlan = migrationPlanRepository.load()
                 if (updatedPlan?.nextPending != null) {
                     val delay = nextDelay(updatedPlan)
-                    MigrationScheduler(applicationContext).schedule(delay)
+                    MigrationScheduler(applicationContext).schedule(accountKeyId, delay)
                     migrationNotifier.notifyTransferComplete(updatedPlan.completedCount, updatedPlan.totalCount)
                     Twig.debug { "MIGRATION_DIAG MigrationWorker: next transfer scheduled in $delay" }
                 } else {

@@ -38,6 +38,8 @@ class MigrationTransferDueReceiver : BroadcastReceiver(), KoinComponent {
     private val isBackgroundExecutionAvailableProvider: IsBackgroundExecutionAvailableProvider by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
+        val accountKeyId = intent.getStringExtra(MigrationDueAlarmScheduler.EXTRA_ACCOUNT_KEY_ID)
+
         if (isBackgroundExecutionAvailableProvider.isAvailable()) {
             Twig.debug { "MIGRATION_DIAG MigrationTransferDueReceiver: background execution available — no-op." }
             return
@@ -51,7 +53,7 @@ class MigrationTransferDueReceiver : BroadcastReceiver(), KoinComponent {
                 if (plan != null && next != null && next.scheduledAt <= Clock.System.now()) {
                     Twig.debug {
                         "MIGRATION_DIAG MigrationTransferDueReceiver: transfer ${next.index + 1} of " +
-                            "${plan.totalCount} due — notifying."
+                            "${plan.totalCount} due — notifying (accountKeyId=$accountKeyId)."
                     }
                     migrationNotifier.notifyTransferReadyToSend(next.index + 1, plan.totalCount)
                 } else {

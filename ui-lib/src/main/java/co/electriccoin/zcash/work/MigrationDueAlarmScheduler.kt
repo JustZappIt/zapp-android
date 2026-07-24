@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.common.model.accountIdOffset
 import kotlin.time.Duration
 
 /**
@@ -26,33 +27,36 @@ import kotlin.time.Duration
  * background worker already goes through that one class.
  */
 class MigrationDueAlarmScheduler(private val context: Context) {
-    fun schedule(delay: Duration) {
+    fun schedule(accountKeyId: String, delay: Duration) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
         if (alarmManager == null) {
             Twig.warn { "MIGRATION_DIAG MigrationDueAlarmScheduler: AlarmManager unavailable — skipping." }
             return
         }
         val triggerAtMillis = System.currentTimeMillis() + delay.inWholeMilliseconds
-        Twig.debug { "MIGRATION_DIAG MigrationDueAlarmScheduler: arming ready-to-send alarm in $delay" }
-        alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent())
+        Twig.debug { "MIGRATION_DIAG MigrationDueAlarmScheduler: arming ready-to-send alarm for $accountKeyId in $delay" }
+        alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent(accountKeyId))
     }
 
-    fun cancel() {
+    fun cancel(accountKeyId: String) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-        alarmManager.cancel(pendingIntent())
+        alarmManager.cancel(pendingIntent(accountKeyId))
     }
 
-    private fun pendingIntent(): PendingIntent {
-        val intent = Intent(context, MigrationTransferDueReceiver::class.java)
+    private fun pendingIntent(accountKeyId: String): PendingIntent {
+        val intent = Intent(context, MigrationTransferDueReceiver::class.java).apply {
+            putExtra(EXTRA_ACCOUNT_KEY_ID, accountKeyId)
+        }
         return PendingIntent.getBroadcast(
             context,
-            REQUEST_CODE,
+            ALARM_REQUEST_CODE_BASE + accountIdOffset(accountKeyId),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }
 
     companion object {
-        private const val REQUEST_CODE = 9101
+        const val EXTRA_ACCOUNT_KEY_ID = "co.electriccoin.zcash.migration.account_key_id"
+        private const val ALARM_REQUEST_CODE_BASE = 91_0000
     }
 }

@@ -12,10 +12,12 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -42,6 +44,7 @@ import kotlin.time.Instant
 
 class MigrationProgressVM(
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
+    private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
     private val migrationPlanRepository: MigrationPlanRepository,
     private val navigationRouter: NavigationRouter,
     private val exchangeRateRepository: ExchangeRateRepository,
@@ -176,9 +179,10 @@ class MigrationProgressVM(
         // delivery is scheduled unconditionally — see MigrationScheduler/
         // FinalizeMigrationScheduleUseCase for why this no longer depends on a delivery-mode flag.
         val sdk = getOrchardMigrationSdk() ?: error("MigrationProgressVM: no wallet available to reschedule")
+        val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
         val proposal = sdk.rescheduleOverdueTransfer()
         val delay = delayUntil(proposal)
-        MigrationScheduler(context).schedule(delay)
+        MigrationScheduler(context).schedule(accountKeyId, delay)
         navigationRouter.back()
     }
 

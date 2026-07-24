@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.common.usecase
 
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.work.MigrationScheduler
 import kotlin.time.Clock
@@ -16,12 +17,14 @@ import kotlin.time.Duration.Companion.seconds
 class ScheduleNextMigrationWindowUseCase(
     private val migrationPlanRepository: MigrationPlanRepository,
     private val migrationScheduler: MigrationScheduler,
+    private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
 ) {
     suspend operator fun invoke() {
         val plan = migrationPlanRepository.load() ?: return
         val next = plan.nextPending ?: return
+        val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
         val delay = delayUntil(next.scheduledAtEpochSeconds)
-        migrationScheduler.schedule(delay)
+        migrationScheduler.schedule(accountKeyId, delay)
     }
 
     private fun delayUntil(epochSeconds: Long): Duration {

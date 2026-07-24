@@ -7,6 +7,7 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.ZashiAccount
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.DebugForceBackgroundExecutionUnavailable
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
@@ -181,7 +182,8 @@ class DebugVM(
     private fun onMigrationRescheduleTransfersClick() =
         viewModelScope.launch {
             val count = getOrchardMigrationSdk()?.debugRescheduleTransfers() ?: 0
-            MigrationScheduler(context).schedule(3.minutes)
+            val accountKeyId = accountDataSource.getSelectedAccount().sdkAccount.accountUuid.toStorageKeyId()
+            MigrationScheduler(context).schedule(accountKeyId, 3.minutes)
             navigationRouter.forward(
                 DebugTextArgs(
                     title = "Migration reschedule transfers",

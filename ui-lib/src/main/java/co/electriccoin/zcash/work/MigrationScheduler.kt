@@ -31,23 +31,25 @@ class MigrationScheduler(private val context: Context) {
     // AlarmManager alarm instead of relying on the WorkManager job itself.
     private val migrationDueAlarmScheduler = MigrationDueAlarmScheduler(context)
 
-    fun schedule(delay: Duration) {
-        Twig.debug { "MIGRATION_DIAG MigrationScheduler: scheduling next migration transfer in $delay" }
+    fun schedule(accountKeyId: String, delay: Duration) {
+        Twig.debug { "MIGRATION_DIAG MigrationScheduler: scheduling next migration transfer for $accountKeyId in $delay" }
         WorkManager.getInstance(context).enqueueUniqueWork(
-            WORK_ID,
+            workId(accountKeyId),
             ExistingWorkPolicy.REPLACE,
             newWorkRequest(delay)
         )
-        migrationDueAlarmScheduler.schedule(delay)
+        migrationDueAlarmScheduler.schedule(accountKeyId, delay)
     }
 
-    fun cancel() {
-        WorkManager.getInstance(context).cancelUniqueWork(WORK_ID)
-        migrationDueAlarmScheduler.cancel()
+    fun cancel(accountKeyId: String) {
+        WorkManager.getInstance(context).cancelUniqueWork(workId(accountKeyId))
+        migrationDueAlarmScheduler.cancel(accountKeyId)
     }
 
     companion object {
-        const val WORK_ID = "co.electriccoin.zcash.migration_transfer"
+        const val WORK_ID_PREFIX = "co.electriccoin.zcash.migration_transfer"
+
+        fun workId(accountKeyId: String): String = "${WORK_ID_PREFIX}_$accountKeyId"
 
         fun newWorkRequest(delay: Duration): OneTimeWorkRequest =
             OneTimeWorkRequestBuilder<MigrationWorker>()
