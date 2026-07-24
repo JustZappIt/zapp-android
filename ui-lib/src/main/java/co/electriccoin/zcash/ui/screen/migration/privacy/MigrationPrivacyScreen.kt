@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,6 +41,7 @@ import co.electriccoin.zcash.ui.design.component.rememberScreenModalBottomSheetS
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
+import co.electriccoin.zcash.ui.design.theme.colors.ZashiLightColors
 import co.electriccoin.zcash.ui.design.theme.dimensions.ZashiDimensions
 import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.getValue
@@ -103,15 +105,16 @@ fun MigrationPrivacyView(
     }
 }
 
-// Same hand-styled pill switch RestoreTorView.kt already uses for the app's other Tor toggle —
-// Material3's default Switch renders solid black-on-black in this app's theme, so every real Tor
-// toggle in this codebase uses this pattern instead of the raw component.
+// Hand-styled pill switch (Material3's default Switch renders solid black-on-black in this app's
+// theme). Based on RestoreTorView.kt's toggle, but per the migration Figma the thumb is a
+// theme-independent white and the active state shows no border highlight. If the two Tor toggles
+// must stay identical, mirror these two tweaks in RestoreTorView.kt as well.
 @Suppress("MagicNumber")
 @Composable
 private fun TorToggleCard(state: CheckboxState) {
     val borderColor by animateColorAsState(
         if (state.isChecked) {
-            ZashiColors.Utility.Gray.utilityGray900
+            Color.Transparent
         } else {
             ZashiColors.Surfaces.strokeSecondary
         }
@@ -166,7 +169,7 @@ private fun TorToggleCard(state: CheckboxState) {
                             .width(39.dp)
                             .height(24.dp)
                             .clip(CircleShape)
-                            .background(ZashiColors.Surfaces.bgPrimary)
+                            .background(ZashiLightColors.Surfaces.bgPrimary)
                     )
                 }
             }

@@ -24,9 +24,9 @@ import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 
 @Composable
 fun PrivacyDisclaimerCard(
-    title: String,
     body: String,
     modifier: Modifier = Modifier,
+    title: String? = null,
 ) {
     val warningBg = ZashiColors.Utility.WarningYellow.utilityOrange50
     val warningText = ZashiColors.Utility.WarningYellow.utilityOrange700
@@ -38,13 +38,15 @@ fun PrivacyDisclaimerCard(
         verticalAlignment = Alignment.Top,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = ZashiTypography.textSm,
-                fontWeight = FontWeight.SemiBold,
-                color = warningText,
-            )
-            Spacer(Modifier.height(4.dp))
+            if (title != null) {
+                Text(
+                    text = title,
+                    style = ZashiTypography.textSm,
+                    fontWeight = FontWeight.SemiBold,
+                    color = warningText,
+                )
+                Spacer(Modifier.height(4.dp))
+            }
             Text(
                 text = body,
                 style = ZashiTypography.textXs,
