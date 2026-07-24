@@ -6,27 +6,34 @@ import cash.z.ecc.android.sdk.KeystoneBatchSignedPczts
 import cash.z.ecc.android.sdk.MigrationSchedule
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferProposal
+import cash.z.ecc.android.sdk.fixture.AccountFixture
 import co.electriccoin.zcash.ui.BaseNavigationCommand
 import co.electriccoin.zcash.ui.NavigationCommand
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPczts
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPcztsRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepositoryImpl
 import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.Dispatchers
+import java.util.UUID
 import kotlin.reflect.KClass
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -37,6 +44,20 @@ import kotlin.test.assertNull
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MigrationKeystoneScanVMTest {
+
+    // Fixed test account — all tests use the same account key so the repo guard is satisfied.
+    private val testSdkAccount = AccountFixture.new(
+        accountUuid = UUID.fromString("00000000-0000-0000-0000-000000000001")
+    )
+    private val testAccountKeyId = testSdkAccount.accountUuid.toStorageKeyId()
+    private val testWalletAccount: WalletAccount = mockk(relaxed = true) {
+        every { sdkAccount } returns testSdkAccount
+    }
+    private val testGetSelectedWalletAccount: GetSelectedWalletAccountUseCase = mockk {
+        coEvery { this@mockk() } returns testWalletAccount
+        every { observe() } returns flowOf(testWalletAccount)
+    }
+
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(StandardTestDispatcher())
@@ -51,8 +72,10 @@ class MigrationKeystoneScanVMTest {
     fun outdatedFirmwareOnFirstRoundBlocksWithoutFinalizing() =
         runTest {
             val sdk = fakeSdk(firmwareVersion = byteArrayOf(2, 9, 9))
-            val pendingSchedule = PendingMigrationScheduleRepositoryImpl().apply { set(schedule()) }
-            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl().apply { set(pending(roundIndex = 0)) }
+            val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
+                .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+                .apply { set(testAccountKeyId, pending(roundIndex = 0)) }
             val finalize = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true)
             val router = FakeNavigationRouter()
             val vm = vm(sdk, pendingSchedule, pendingPczts, finalize, router)
@@ -62,9 +85,9 @@ class MigrationKeystoneScanVMTest {
 
             assertNotNull(vm.failureSheet.value)
             coVerify(exactly = 0) { finalize(any(), any()) }
-            assertNotNull(pendingSchedule.get())
-            assertNotNull(pendingPczts.get())
-            assertEquals(0, pendingPczts.get()?.roundIndex)
+            assertNotNull(pendingSchedule.get(testAccountKeyId))
+            assertNotNull(pendingPczts.get(testAccountKeyId))
+            assertEquals(0, pendingPczts.get(testAccountKeyId)?.roundIndex)
 
             vm.failureSheet.value?.onDismiss?.invoke()
             assertNull(vm.failureSheet.value)
@@ -75,8 +98,10 @@ class MigrationKeystoneScanVMTest {
     fun upToDateFirmwareOnFirstRoundProceedsToFinalize() =
         runTest {
             val sdk = fakeSdk(firmwareVersion = byteArrayOf(3, 0, 2))
-            val pendingSchedule = PendingMigrationScheduleRepositoryImpl().apply { set(schedule()) }
-            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl().apply { set(pending(roundIndex = 0)) }
+            val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
+                .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+                .apply { set(testAccountKeyId, pending(roundIndex = 0)) }
             val finalize = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true)
             val router = FakeNavigationRouter()
             val vm = vm(sdk, pendingSchedule, pendingPczts, finalize, router)
@@ -86,16 +111,18 @@ class MigrationKeystoneScanVMTest {
 
             assertNull(vm.failureSheet.value)
             coVerify(exactly = 1) { finalize(any(), any()) }
-            assertNull(pendingSchedule.get())
-            assertNull(pendingPczts.get())
+            assertNull(pendingSchedule.get(testAccountKeyId))
+            assertNull(pendingPczts.get(testAccountKeyId))
         }
 
     @Test
     fun missingFirmwareOnFirstRoundBlocksWithoutFinalizing() =
         runTest {
             val sdk = fakeSdk(firmwareVersion = null)
-            val pendingSchedule = PendingMigrationScheduleRepositoryImpl().apply { set(schedule()) }
-            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl().apply { set(pending(roundIndex = 0)) }
+            val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
+                .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+                .apply { set(testAccountKeyId, pending(roundIndex = 0)) }
             val finalize = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true)
             val router = FakeNavigationRouter()
             val vm = vm(sdk, pendingSchedule, pendingPczts, finalize, router)
@@ -111,18 +138,21 @@ class MigrationKeystoneScanVMTest {
     fun outdatedFirmwareOnLaterRoundSkipsCheckAndProceeds() =
         runTest {
             val sdk = fakeSdk(firmwareVersion = byteArrayOf(2, 9, 9))
-            val pendingSchedule = PendingMigrationScheduleRepositoryImpl().apply { set(schedule()) }
-            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl().apply {
-                set(
-                    PendingKeystoneMigrationPczts(
-                        requestId = byteArrayOf(1, 2, 3),
-                        splitUnsignedPczt = null,
-                        transferUnsignedPczts = (0 until 36).map { "t$it" to byteArrayOf(it.toByte()) },
-                        roundIndex = 1,
-                        accumulatedTransferSigned = (0 until 35).map { "t$it" to byteArrayOf(it.toByte()) },
+            val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
+                .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+                .apply {
+                    set(
+                        testAccountKeyId,
+                        PendingKeystoneMigrationPczts(
+                            requestId = byteArrayOf(1, 2, 3),
+                            splitUnsignedPczt = null,
+                            transferUnsignedPczts = (0 until 36).map { "t$it" to byteArrayOf(it.toByte()) },
+                            roundIndex = 1,
+                            accumulatedTransferSigned = (0 until 35).map { "t$it" to byteArrayOf(it.toByte()) },
+                        )
                     )
-                )
-            }
+                }
             val finalize = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true)
             val router = FakeNavigationRouter()
             val vm = vm(sdk, pendingSchedule, pendingPczts, finalize, router)
@@ -143,6 +173,7 @@ class MigrationKeystoneScanVMTest {
     ) = MigrationKeystoneScanVM(
         args = MigrationKeystoneScanArgs(mode = MigrationMode.IMMEDIATE),
         getOrchardMigrationSdk = mockk<GetOrchardMigrationSdkUseCase> { coEvery { this@mockk() } returns sdk },
+        getSelectedWalletAccount = testGetSelectedWalletAccount,
         pendingSchedule = pendingSchedule,
         pendingKeystonePczts = pendingPczts,
         finalizeMigrationSchedule = finalize,

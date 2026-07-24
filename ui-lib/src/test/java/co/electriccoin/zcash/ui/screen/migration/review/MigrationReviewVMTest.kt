@@ -209,7 +209,7 @@ class MigrationReviewVMTest {
             proposalHandle = 0L,
         )
         val restartRepo = mockk<RestartMigrationScheduleRepository>(relaxed = true) {
-            every { consume() } returns restartSchedule
+            every { consume(any()) } returns restartSchedule
         }
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
         val vm = vm(
@@ -224,7 +224,7 @@ class MigrationReviewVMTest {
 
         assertEquals(1, vm.state.value.content?.transfers?.size)
         coVerify(exactly = 0) { sdk.proposeMigrationTransfers(any()) }
-        coVerify(exactly = 1) { restartRepo.consume() }
+        coVerify(exactly = 1) { restartRepo.consume(any()) }
         collectJob.cancel()
     }
 
@@ -301,7 +301,7 @@ class MigrationReviewVMTest {
             mockk(relaxed = true),
         mode: MigrationMode = MigrationMode.IMMEDIATE,
         restartMigrationScheduleRepository: RestartMigrationScheduleRepository =
-            mockk<RestartMigrationScheduleRepository>(relaxed = true) { every { consume() } returns null },
+            mockk<RestartMigrationScheduleRepository>(relaxed = true) { every { consume(any()) } returns null },
     ) = MigrationReviewVM(
         args = MigrationReviewArgs(mode = mode),
         getOrchardMigrationSdk = getOrchardMigrationSdk,

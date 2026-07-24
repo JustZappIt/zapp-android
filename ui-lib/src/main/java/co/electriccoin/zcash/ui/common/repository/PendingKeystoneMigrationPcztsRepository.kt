@@ -30,23 +30,31 @@ data class PendingKeystoneMigrationPczts(
  * (which builds the unsigned PCZTs and the QR) and the scan screen (which applies the device's
  * signatures back to them) — sibling to [PendingMigrationScheduleRepository], same "not persisted,
  * re-enter from Confirm Transfer Plan on process death" contract.
+ *
+ * The PCZTs are stored together with the [accountKeyId] of the account that set them. [get]
+ * returns `null` and clears the stored value when the caller's key id does not match the stored
+ * one, preventing an account switch mid-flow from feeding one account's unsigned PCZTs (which
+ * carry that account's private key material) into another account's scan path.
  */
 interface PendingKeystoneMigrationPcztsRepository {
-    fun set(pczts: PendingKeystoneMigrationPczts)
+    fun set(accountKeyId: String, pczts: PendingKeystoneMigrationPczts)
 
-    fun get(): PendingKeystoneMigrationPczts?
+    fun get(accountKeyId: String): PendingKeystoneMigrationPczts?
 
     fun clear()
 }
 
 class PendingKeystoneMigrationPcztsRepositoryImpl : PendingKeystoneMigrationPcztsRepository {
-    private val pending = MutableStateFlow<PendingKeystoneMigrationPczts?>(null)
+    private val pending = MutableStateFlow<Pair<String, PendingKeystoneMigrationPczts>?>(null)
 
-    override fun set(pczts: PendingKeystoneMigrationPczts) {
-        pending.value = pczts
+    override fun set(accountKeyId: String, pczts: PendingKeystoneMigrationPczts) {
+        pending.value = accountKeyId to pczts
     }
 
-    override fun get(): PendingKeystoneMigrationPczts? = pending.value
+    override fun get(accountKeyId: String): PendingKeystoneMigrationPczts? {
+        val current = pending.value ?: return null
+        return if (current.first == accountKeyId) current.second else null
+    }
 
     override fun clear() {
         pending.value = null

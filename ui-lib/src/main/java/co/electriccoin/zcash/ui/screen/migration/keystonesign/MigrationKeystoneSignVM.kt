@@ -8,6 +8,7 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureS
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPczts
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPcztsRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
@@ -59,11 +60,12 @@ class MigrationKeystoneSignVM(
     // scanned, and so a resumed round never rebuilds (and thereby diverges from) PCZTs an earlier
     // round already got signatures for.
     private fun buildBatch() {
-        val sched = pendingSchedule.get() ?: return // handled by state's null-schedule branch below
         viewModelScope.launch {
             runCatching {
+                val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
+                val sched = pendingSchedule.get(accountKeyId) ?: return@runCatching null
                 val sdk = getOrchardMigrationSdk() ?: error("MigrationKeystoneSignVM: no wallet available to sign")
-                val existing = pendingKeystonePczts.get()
+                val existing = pendingKeystonePczts.get(accountKeyId)
                 val splitUnsignedPczt: ByteArray?
                 val transferUnsignedPczts: List<Pair<String, ByteArray>>
                 val roundIndex: Int
@@ -90,7 +92,7 @@ class MigrationKeystoneSignVM(
                         val scheduleFromSplit = sdk.proposeMigrationTransfersFromSplit(splitProposal)
                         splitUnsignedPczt = sdk.createUnsignedNoteSplitPczt(splitProposal)
                         transferUnsignedPczts = sdk.createUnsignedTransferPczts(scheduleFromSplit)
-                        pendingSchedule.set(scheduleFromSplit)
+                        pendingSchedule.set(accountKeyId, scheduleFromSplit)
                     } else {
                         splitUnsignedPczt = null
                         transferUnsignedPczts = sdk.createUnsignedTransferPczts(sched)
@@ -116,6 +118,7 @@ class MigrationKeystoneSignVM(
                     maxFragmentLen = MAX_FRAGMENT_LEN,
                 )
                 pendingKeystonePczts.set(
+                    accountKeyId,
                     PendingKeystoneMigrationPczts(
                         requestId = requestId,
                         splitUnsignedPczt = splitUnsignedPczt,
@@ -131,10 +134,13 @@ class MigrationKeystoneSignVM(
                     maxItems = KEYSTONE_BATCH_MAX_ITEMS,
                 )
                 Triple(parts, roundIndex, totalRounds)
-            }.onSuccess { (parts, roundIndex, totalRounds) ->
-                qrFrameIndex.value = 0
-                qrParts.value = parts
-                roundInfo.value = roundIndex to totalRounds
+            }.onSuccess { result ->
+                if (result != null) {
+                    val (parts, roundIndex, totalRounds) = result
+                    qrFrameIndex.value = 0
+                    qrParts.value = parts
+                    roundInfo.value = roundIndex to totalRounds
+                }
             }.onFailure {
                 failureSheet.update {
                     MigrationTransferFailureState(
@@ -149,7 +155,8 @@ class MigrationKeystoneSignVM(
 
     private val combinedState: Flow<SignKeystoneTransactionState?> =
         combine(getSelectedWalletAccount.observe(), qrParts, qrFrameIndex, roundInfo) { account, parts, frameIndex, round ->
-            if (account == null || pendingSchedule.get() == null) {
+            val accountKeyId = account?.sdkAccount?.accountUuid?.toStorageKeyId()
+            if (account == null || accountKeyId == null || pendingSchedule.get(accountKeyId) == null) {
                 // Edge case only (e.g. process death mid-flow) — the schedule is proposed
                 // fresh every time Confirm Transfer Plan is entered, so just bounce back there.
                 navigationRouter.back()

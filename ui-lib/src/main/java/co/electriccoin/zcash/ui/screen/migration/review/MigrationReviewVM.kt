@@ -11,6 +11,7 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.LceState
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.model.guardLoading
 import co.electriccoin.zcash.ui.common.model.migration.MigrationKeystoneRound
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
@@ -100,7 +101,8 @@ class MigrationReviewVM(
                     // doc: the two calls compute independent guesses over the same balance that
                     // aren't guaranteed to agree). Falls back to a fresh proposal for every
                     // ordinary, non-recovery entry into this screen.
-                    val schedule = restartMigrationScheduleRepository.consume() ?: sdk.proposeMigrationTransfers()
+                    val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
+                    val schedule = restartMigrationScheduleRepository.consume(accountKeyId) ?: sdk.proposeMigrationTransfers()
                     // IMMEDIATE has no Keystone branch at all (a documented pre-existing gap —
                     // see MigrationReviewVM.confirmAutomatic()'s Keystone check below), so round
                     // display is AUTOMATIC-only. Stateless preview, called fresh on every Review
@@ -255,7 +257,8 @@ class MigrationReviewVM(
             // Keystone can't sign in-process — hand the unsigned schedule off to the QR
             // sign/scan detour; FinalizeMigrationScheduleUseCase runs after a successful scan
             // instead (MigrationKeystoneScanVM), not here.
-            pendingMigrationScheduleRepository.set(sched)
+            val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
+            pendingMigrationScheduleRepository.set(accountKeyId, sched)
             navigationRouter.forward(MigrationKeystoneSignArgs(mode = args.mode))
             return
         }

@@ -8,9 +8,11 @@ import cash.z.ecc.android.sdk.MigrationTransferState
 import cash.z.ecc.android.sdk.MigrationTransferStates
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferProposal
+import cash.z.ecc.android.sdk.fixture.AccountFixture
 import co.electriccoin.zcash.ui.BaseNavigationCommand
 import co.electriccoin.zcash.ui.NavigationCommand
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
@@ -20,11 +22,13 @@ import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.design.util.StringResource
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -168,7 +172,7 @@ class MigrationTransferInvalidVMTest {
         invokeOnContinue(vm)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { restartRepo.set(restartedSchedule) }
+        coVerify(exactly = 1) { restartRepo.set(any(), restartedSchedule) }
         assertEquals(1, router.replacedRoutes.size)
         collectJob.cancel()
     }
@@ -184,13 +188,25 @@ class MigrationTransferInvalidVMTest {
         getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
         restartMigrationScheduleRepository: RestartMigrationScheduleRepository = mockk(relaxed = true),
         router: NavigationRouter = FakeNavigationRouter(),
-    ) = MigrationTransferInvalidVM(
-        getOrchardMigrationSdk = getOrchardMigrationSdk,
-        migrationPlanRepository = plans,
-        restartMigrationScheduleRepository = restartMigrationScheduleRepository,
-        navigationRouter = router,
-        errorStateMapper = mockk<ErrorMapperUseCase>(relaxed = true),
-    )
+    ): MigrationTransferInvalidVM {
+        val fakeAccount = AccountFixture.new(
+            accountUuid = UUID.fromString("00000000-0000-0000-0000-000000000001")
+        )
+        val walletAccount: WalletAccount = mockk(relaxed = true) {
+            every { sdkAccount } returns fakeAccount
+        }
+        val getSelectedWalletAccount = mockk<GetSelectedWalletAccountUseCase> {
+            coEvery { this@mockk() } returns walletAccount
+        }
+        return MigrationTransferInvalidVM(
+            getOrchardMigrationSdk = getOrchardMigrationSdk,
+            getSelectedWalletAccount = getSelectedWalletAccount,
+            migrationPlanRepository = plans,
+            restartMigrationScheduleRepository = restartMigrationScheduleRepository,
+            navigationRouter = router,
+            errorStateMapper = mockk<ErrorMapperUseCase>(relaxed = true),
+        )
+    }
 
     private class FakeNavigationRouter : NavigationRouter {
         val replacedRoutes = mutableListOf<Any>()

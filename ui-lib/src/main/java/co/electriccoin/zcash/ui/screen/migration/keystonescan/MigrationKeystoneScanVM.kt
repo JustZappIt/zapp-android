@@ -13,11 +13,13 @@ import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.toKeystoneFwVersion
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPcztsRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.migration.keystonesign.KEYSTONE_BATCH_MAX_ITEMS
 import co.electriccoin.zcash.ui.screen.migration.keystonesign.MigrationKeystoneSignArgs
@@ -33,6 +35,7 @@ import kotlinx.coroutines.launch
 class MigrationKeystoneScanVM(
     private val args: MigrationKeystoneScanArgs,
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
+    private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
     private val pendingSchedule: PendingMigrationScheduleRepository,
     private val pendingKeystonePczts: PendingKeystoneMigrationPcztsRepository,
     private val finalizeMigrationSchedule: FinalizeMigrationScheduleUseCase,
@@ -71,8 +74,9 @@ class MigrationKeystoneScanVM(
         if (isProcessing || finalizingLce.state.value.loading) return
         isProcessing = true
         viewModelScope.launch {
-            val sched = pendingSchedule.get()
-            val pending = pendingKeystonePczts.get()
+            val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
+            val sched = pendingSchedule.get(accountKeyId)
+            val pending = pendingKeystonePczts.get(accountKeyId)
             if (sched == null || pending == null) {
                 // Edge case only (e.g. process death mid-flow) — bounce back to Confirm Transfer
                 // Plan, which will propose a fresh schedule.
@@ -153,6 +157,7 @@ class MigrationKeystoneScanVM(
                 // fresh sign-screen instance for the next round. replace() keeps the back stack at
                 // a constant depth regardless of how many rounds a large migration needs.
                 pendingKeystonePczts.set(
+                    accountKeyId,
                     pending.copy(
                         roundIndex = pending.roundIndex + 1,
                         accumulatedSplitSigned = accumulatedSplitSigned,

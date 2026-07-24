@@ -15,10 +15,12 @@ import co.electriccoin.zcash.ui.common.model.migration.toUiKind
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewArgs
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
@@ -29,6 +31,7 @@ import kotlin.time.Clock
 
 class MigrationTransferInvalidVM(
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
+    private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
     private val migrationPlanRepository: MigrationPlanRepository,
     private val restartMigrationScheduleRepository: RestartMigrationScheduleRepository,
     private val navigationRouter: NavigationRouter,
@@ -96,7 +99,8 @@ class MigrationTransferInvalidVM(
         // instead of letting it independently re-propose (see RestartMigrationScheduleRepository's
         // doc for why this is a separate slot from the Keystone sign/scan hand-off).
         val schedule = sdk.restartCurrentMigrationStep()
-        restartMigrationScheduleRepository.set(schedule)
+        val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
+        restartMigrationScheduleRepository.set(accountKeyId, schedule)
         navigationRouter.replace(MigrationReviewArgs(MigrationMode.AUTOMATIC))
     }
 

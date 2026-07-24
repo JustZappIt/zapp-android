@@ -21,20 +21,28 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * (restart → Review → Keystone sign) inside a single confirmation, and keeping them in separate
  * slots means an abandoned Keystone attempt's leftover state can never be mistaken for a pending
  * restart schedule on some later, unrelated Review entry.
+ *
+ * The schedule is stored together with the [accountKeyId] of the account that set it.
+ * [consume] returns `null` and clears the stored value when the caller's key id does not match
+ * the stored one, preventing cross-account contamination on an account switch mid-flow.
  */
 interface RestartMigrationScheduleRepository {
-    fun set(schedule: MigrationSchedule)
+    fun set(accountKeyId: String, schedule: MigrationSchedule)
 
-    /** Reads and clears the pending schedule in one step — consumed at most once. */
-    fun consume(): MigrationSchedule?
+    /** Reads and clears the pending schedule in one step — consumed at most once.
+     *  Returns `null` (and clears) when the stored account key id differs from [accountKeyId]. */
+    fun consume(accountKeyId: String): MigrationSchedule?
 }
 
 class RestartMigrationScheduleRepositoryImpl : RestartMigrationScheduleRepository {
-    private val pending = MutableStateFlow<MigrationSchedule?>(null)
+    private val pending = MutableStateFlow<Pair<String, MigrationSchedule>?>(null)
 
-    override fun set(schedule: MigrationSchedule) {
-        pending.value = schedule
+    override fun set(accountKeyId: String, schedule: MigrationSchedule) {
+        pending.value = accountKeyId to schedule
     }
 
-    override fun consume(): MigrationSchedule? = pending.value.also { pending.value = null }
+    override fun consume(accountKeyId: String): MigrationSchedule? {
+        val current = pending.value.also { pending.value = null } ?: return null
+        return if (current.first == accountKeyId) current.second else null
+    }
 }

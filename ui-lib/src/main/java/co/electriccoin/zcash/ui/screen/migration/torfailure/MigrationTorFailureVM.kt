@@ -4,8 +4,10 @@ import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationTorFailureDecisionRepository
+import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.screen.home.HomeArgs
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,6 +19,7 @@ import kotlinx.coroutines.launch
 
 class MigrationTorFailureVM(
     private val navigationRouter: NavigationRouter,
+    private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
     private val pendingMigrationTorFailureDecisionRepository: PendingMigrationTorFailureDecisionRepository,
     private val isMigrationTorEnabledStorageProvider: IsMigrationTorEnabledStorageProvider,
 ) : ViewModel() {
@@ -39,7 +42,10 @@ class MigrationTorFailureVM(
         // setting) so future migration broadcasts — background or foreground — also skip Tor,
         // not just this one retry.
         viewModelScope.launch { isMigrationTorEnabledStorageProvider.store(false) }
-        pendingMigrationTorFailureDecisionRepository.set(useTor = false)
+        viewModelScope.launch {
+            val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
+            pendingMigrationTorFailureDecisionRepository.set(accountKeyId, useTor = false)
+        }
         navigationRouter.back()
     }
 
