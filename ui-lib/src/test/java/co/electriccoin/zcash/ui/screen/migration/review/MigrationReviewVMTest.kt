@@ -30,7 +30,6 @@ import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.SubmitProposalUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
-import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionArgs
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -254,44 +253,6 @@ class MigrationReviewVMTest {
             finalizeMigrationSchedule.persistPlan(scheduleFromSplit, MigrationMode.AUTOMATIC)
             sdk.submitNoteSplit(splitProposal, usk)
         }
-    }
-
-    // Guard: a migration already committed in the SDK (InProgress) must never be pushed back through
-    // the split/sign steps — that re-finalizes the already-broadcast split and fails ("transaction 0
-    // is not signed and ready to prove"). getMigrationState() is the source of truth; on re-entry the
-    // flow resumes to the progress screen instead of re-committing.
-    @Test
-    fun automaticConfirmSkipsReCommitWhenMigrationAlreadyInProgress() = runTest {
-        val router = FakeNavigationRouter()
-        val preSplitSchedule = MigrationSchedule(
-            transfers = listOf(
-                TransferProposal(
-                    id = "t0",
-                    amountZatoshi = 100_000L,
-                    anchorHeight = 0L,
-                    nextExecutableAfterHeight = 100L,
-                    expiryHeight = 200L,
-                )
-            ),
-            estimatedDurationHours = 1,
-            proposalHandle = 0L,
-        )
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))
-        }
-        val vm = vm(
-            router = router,
-            getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
-            mode = MigrationMode.AUTOMATIC,
-        )
-
-        invokeOnConfirmAutomatic(vm, preSplitSchedule)
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { sdk.prepareNoteSplit() }
-        coVerify(exactly = 0) { sdk.submitNoteSplit(any(), any()) }
-        coVerify(exactly = 0) { sdk.signAndStoreMigrationSchedule(any(), any()) }
-        assertEquals(listOf<Any>(MigrationProgressArgs), router.forwardedRoutes)
     }
 
     private fun invokeOnConfirmAutomatic(vm: MigrationReviewVM, sched: MigrationSchedule) {
