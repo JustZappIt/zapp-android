@@ -38,11 +38,15 @@ class MigrationWorker(
     private val pendingMigrationTorFailureStorageProvider: PendingMigrationTorFailureStorageProvider by inject()
 
     override suspend fun doWork(): Result {
-        val sdk = getOrchardMigrationSdk() ?: run {
-            Twig.debug { "MIGRATION_DIAG MigrationWorker: no wallet available — skipping." }
+        val accountKeyId = inputData.getString(MigrationScheduler.KEY_ACCOUNT_KEY_ID)
+            ?: getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId().also {
+                Twig.warn { "MIGRATION_DIAG MigrationWorker: no accountKeyId in inputData — falling back to selected account (pre-upgrade job)" }
+            }
+
+        val sdk = getOrchardMigrationSdk(accountKeyId) ?: run {
+            Twig.debug { "MIGRATION_DIAG MigrationWorker: no SDK for account $accountKeyId — skipping." }
             return Result.success()
         }
-        val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
 
         // Completes any transfer that was pre-signed with a placeholder witness (sign-now/
         // prove-later pipeline) whose funding note has since become witnessed, so it can be
@@ -53,9 +57,9 @@ class MigrationWorker(
             Twig.debug { "MIGRATION_DIAG MigrationWorker: finalized $finalizedCount transfer(s) awaiting proof." }
         }
 
-        val plan = migrationPlanRepository.load()
+        val plan = migrationPlanRepository.load(accountKeyId)
         val next = plan?.nextPending
-        val useTor = isMigrationTorEnabledStorageProvider.get()
+        val useTor = isMigrationTorEnabledStorageProvider.get(accountKeyId)
         // Retries within this single worker invocation, same attempt count (3) as
         // MigrationSendingVM.sendOnce()'s foreground loop — but a different trigger: sendOnce()
         // retries while the result is null (still polling for readiness) and stops on any
@@ -106,7 +110,7 @@ class MigrationWorker(
             }
             is TransferResult.Success -> {
                 Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer sent — txId=${result.txId}" }
-                val updatedPlan = migrationPlanRepository.load()
+                val updatedPlan = migrationPlanRepository.load(accountKeyId)
                 if (updatedPlan?.nextPending != null) {
                     val delay = nextDelay(updatedPlan)
                     MigrationScheduler(applicationContext).schedule(accountKeyId, delay)
@@ -131,7 +135,7 @@ class MigrationWorker(
                     // (CheckMigrationRecoveryUseCase) routes back through the Sending screen
                     // instead of the generic manual-confirmation path, and surface a distinct
                     // notification so this looks different from any other missed transfer.
-                    pendingMigrationTorFailureStorageProvider.store(true)
+                    pendingMigrationTorFailureStorageProvider.store(accountKeyId, true)
                     migrationNotifier.notifyMigrationTorFailure(accountKeyId)
                 } else if (next != null) {
                     // Nothing else re-arms a future attempt for a non-retryable failure — the

@@ -7,6 +7,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.workDataOf
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.BuildConfig
 import kotlin.time.Duration
@@ -36,7 +37,7 @@ class MigrationScheduler(private val context: Context) {
         WorkManager.getInstance(context).enqueueUniqueWork(
             workId(accountKeyId),
             ExistingWorkPolicy.REPLACE,
-            newWorkRequest(delay)
+            newWorkRequest(accountKeyId, delay)
         )
         migrationDueAlarmScheduler.schedule(accountKeyId, delay)
     }
@@ -48,13 +49,15 @@ class MigrationScheduler(private val context: Context) {
 
     companion object {
         const val WORK_ID_PREFIX = "co.electriccoin.zcash.migration_transfer"
+        const val KEY_ACCOUNT_KEY_ID = "co.electriccoin.zcash.migration.work_account_key_id"
 
         fun workId(accountKeyId: String): String = "${WORK_ID_PREFIX}_$accountKeyId"
 
-        fun newWorkRequest(delay: Duration): OneTimeWorkRequest =
+        fun newWorkRequest(accountKeyId: String, delay: Duration): OneTimeWorkRequest =
             OneTimeWorkRequestBuilder<MigrationWorker>()
                 .setConstraints(workConstraints())
                 .setInitialDelay(delay.toJavaDuration())
+                .setInputData(workDataOf(KEY_ACCOUNT_KEY_ID to accountKeyId))
                 .build()
 
         private fun workConstraints(): Constraints =
