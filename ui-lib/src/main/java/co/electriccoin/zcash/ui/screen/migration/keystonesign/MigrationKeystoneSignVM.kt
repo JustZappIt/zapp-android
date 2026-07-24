@@ -156,9 +156,13 @@ class MigrationKeystoneSignVM(
     private val combinedState: Flow<SignKeystoneTransactionState?> =
         combine(getSelectedWalletAccount.observe(), qrParts, qrFrameIndex, roundInfo) { account, parts, frameIndex, round ->
             val accountKeyId = account?.sdkAccount?.accountUuid?.toStorageKeyId()
-            if (account == null || accountKeyId == null || pendingSchedule.get(accountKeyId) == null) {
+            if (account == null || accountKeyId == null || pendingSchedule.peek(accountKeyId) == null) {
                 // Edge case only (e.g. process death mid-flow) — the schedule is proposed
                 // fresh every time Confirm Transfer Plan is entered, so just bounce back there.
+                // NOTE: peek() is used here (not get()) because this is a reactive combine block
+                // that may be re-evaluated on every selected-account emission; get() clears the
+                // stored schedule on account mismatch which would strand the QR screen if a
+                // transient wrong-account emission arrived before the correct one.
                 navigationRouter.back()
                 return@combine null
             }

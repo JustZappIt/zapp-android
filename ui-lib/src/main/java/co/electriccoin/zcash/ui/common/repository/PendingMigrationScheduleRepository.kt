@@ -18,7 +18,25 @@ import kotlinx.coroutines.flow.MutableStateFlow
 interface PendingMigrationScheduleRepository {
     fun set(accountKeyId: String, schedule: MigrationSchedule)
 
+    /**
+     * Reads and clears the stored schedule in one step.
+     * Returns `null` **and clears** the stored value when the stored account key id differs from
+     * [accountKeyId]. Use only for one-shot, non-reactive consumption.
+     *
+     * **Do NOT call this inside a reactive context** (e.g. inside a `combine`, `map`, or `flow`
+     * block): on an account-mismatch emission the clearing side-effect would permanently destroy
+     * the schedule while the correct account emission is still pending. Use [peek] inside reactive
+     * contexts instead.
+     */
     fun get(accountKeyId: String): MigrationSchedule?
+
+    /**
+     * Non-mutating read: returns the stored schedule if the stored account key id matches
+     * [accountKeyId], else `null`. **Never clears or mutates the stored value** — safe to call
+     * inside reactive contexts such as `combine` or `map` where the same block may be re-evaluated
+     * on multiple emissions.
+     */
+    fun peek(accountKeyId: String): MigrationSchedule?
 
     fun clear()
 }
@@ -38,6 +56,11 @@ class PendingMigrationScheduleRepositoryImpl : PendingMigrationScheduleRepositor
             pending.value = null
             null
         }
+    }
+
+    override fun peek(accountKeyId: String): MigrationSchedule? {
+        val current = pending.value ?: return null
+        return if (current.first == accountKeyId) current.second else null
     }
 
     override fun clear() {
