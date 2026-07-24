@@ -57,6 +57,12 @@ class MigrationDueAlarmScheduler(private val context: Context) {
 
     companion object {
         const val EXTRA_ACCOUNT_KEY_ID = "co.electriccoin.zcash.migration.account_key_id"
-        private const val ALARM_REQUEST_CODE_BASE = 91_0000
+
+        // Per-account request code = base + accountIdOffset(...) (offset range 0..0xFFFF). Hex base,
+        // same self-documenting scheme as MigrationNotifier's request-code bases (0x10_0000/0x20_0000),
+        // spaced ≥ 0x10000 from them so the ranges can't overlap even by accident. (A getBroadcast
+        // PendingIntent is a separate namespace from the notifier's getActivity ones anyway, but
+        // keeping one legible scheme avoids a future edit reintroducing an overlap.)
+        private const val ALARM_REQUEST_CODE_BASE = 0x30_0000
     }
 }
