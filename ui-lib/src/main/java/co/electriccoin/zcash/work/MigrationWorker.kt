@@ -52,11 +52,14 @@ class MigrationWorker(
         val plan = migrationPlanRepository.load()
         val next = plan?.nextPending
         val useTor = isMigrationTorEnabledStorageProvider.get()
-        // Retries within this single worker invocation, same attempt budget as
-        // MigrationSendingVM.sendOnce()'s foreground loop — so a persistent network error settles
-        // into an error state after 3 attempts instead of retrying via WorkManager's Result.retry()
-        // indefinitely (previously observed: dumpsys jobscheduler showed the same worker restarting
-        // and running for the full ~10-minute execution ceiling, repeatedly, for hours).
+        // Retries within this single worker invocation, same attempt count (3) as
+        // MigrationSendingVM.sendOnce()'s foreground loop — but a different trigger: sendOnce()
+        // retries while the result is null (still polling for readiness) and stops on any
+        // non-null result, while this retries only on a retryable NetworkError and stops
+        // immediately on null. So a persistent network error settles into an error state after 3
+        // attempts instead of retrying via WorkManager's Result.retry() indefinitely (previously
+        // observed: dumpsys jobscheduler showed the same worker restarting and running for the
+        // full ~10-minute execution ceiling, repeatedly, for hours).
         return when (val result = executeWithRetries { sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor)) }) {
             null -> {
                 when (
@@ -160,8 +163,11 @@ class MigrationWorker(
     }
 }
 
-// Same attempt budget as MigrationSendingVM.sendOnce()'s foreground retry loop, so background and
-// foreground give up after the same number of attempts.
+// Same attempt count (3) as MigrationSendingVM.sendOnce()'s foreground retry loop — but not the
+// same retry trigger: sendOnce() retries while polling for readiness (result == null) and stops
+// on any non-null result; this retries only on a retryable NetworkError and stops on null. Each
+// loop is correct for its own context (foreground polls for the transfer becoming ready;
+// background rides out a flaky network) — they just happen to share the same attempt budget.
 private const val MAX_BROADCAST_ATTEMPTS = 3
 private const val BROADCAST_RETRY_DELAY_MS = 1500L
 
