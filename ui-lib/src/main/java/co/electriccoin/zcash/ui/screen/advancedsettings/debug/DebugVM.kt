@@ -205,8 +205,9 @@ class DebugVM(
     // instead of only on the next app relaunch/foreground.
     private fun onSimulateMigrationTorFailureClick() =
         viewModelScope.launch {
+            val accountKeyId = accountDataSource.getSelectedAccount().sdkAccount.accountUuid.toStorageKeyId()
             pendingMigrationTorFailureStorageProvider.store(true)
-            migrationNotifier.notifyMigrationTorFailure()
+            migrationNotifier.notifyMigrationTorFailure(accountKeyId)
             checkMigrationRecovery()
             navigationRouter.forward(
                 DebugTextArgs(

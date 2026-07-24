@@ -9,17 +9,18 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import co.electriccoin.zcash.ui.MainActivity
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.model.accountIdOffset
 
 class MigrationNotifier(private val context: Context) {
 
-    private fun mainActivityIntent(): PendingIntent {
+    private fun mainActivityIntent(accountKeyId: String): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra(EXTRA_OPEN_MIGRATION, true)
         }
         return PendingIntent.getActivity(
             context,
-            REQUEST_CODE_MIGRATION,
+            REQUEST_CODE_MIGRATION_BASE + accountIdOffset(accountKeyId),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -30,18 +31,21 @@ class MigrationNotifier(private val context: Context) {
     // to MigrationProgressArgs (the missed-transfer screen), but this notification needs to land on
     // MigrationTransferReviewArgs instead (spec §6.4 is deliberately a distinct, lighter-weight
     // path from the overdue/missed-transfer recovery flow).
-    private fun transferReadyToSendIntent(): PendingIntent {
+    private fun transferReadyToSendIntent(accountKeyId: String): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra(EXTRA_OPEN_TRANSFER_READY, true)
         }
         return PendingIntent.getActivity(
             context,
-            REQUEST_CODE_TRANSFER_READY,
+            REQUEST_CODE_TRANSFER_READY_BASE + accountIdOffset(accountKeyId),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }
+
+    private fun progressNotificationId(accountKeyId: String): Int =
+        NOTIFICATION_ID_PROGRESS_BASE + accountIdOffset(accountKeyId)
 
     fun createChannel() {
         val channel = NotificationChannel(
@@ -55,43 +59,43 @@ class MigrationNotifier(private val context: Context) {
         manager.createNotificationChannel(channel)
     }
 
-    fun notifyTransferComplete(completed: Int, total: Int) {
+    fun notifyTransferComplete(accountKeyId: String, completed: Int, total: Int) {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alert_circle)
             .setContentTitle("Ironwood Migration")
             .setContentText("Transfer $completed of $total complete")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setContentIntent(mainActivityIntent())
+            .setContentIntent(mainActivityIntent(accountKeyId))
             .setAutoCancel(true)
             .build()
 
-        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_PROGRESS, notification)
+        NotificationManagerCompat.from(context).notify(progressNotificationId(accountKeyId), notification)
     }
 
-    fun notifyManualConfirmationRequired(transferIndex: Int, total: Int) {
+    fun notifyManualConfirmationRequired(accountKeyId: String, transferIndex: Int, total: Int) {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alert_circle)
             .setContentTitle("Migration: Action Required")
             .setContentText("Transfer $transferIndex of $total is ready. Tap to confirm.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(mainActivityIntent())
+            .setContentIntent(mainActivityIntent(accountKeyId))
             .setAutoCancel(true)
             .build()
 
-        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_PROGRESS, notification)
+        NotificationManagerCompat.from(context).notify(progressNotificationId(accountKeyId), notification)
     }
 
-    fun notifyMigrationTorFailure() {
+    fun notifyMigrationTorFailure(accountKeyId: String) {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alert_circle)
             .setContentTitle("Migration: Couldn't Connect to Tor")
             .setContentText("A scheduled transfer couldn't send over Tor. Open Zodl to resolve.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(mainActivityIntent())
+            .setContentIntent(mainActivityIntent(accountKeyId))
             .setAutoCancel(true)
             .build()
 
-        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_PROGRESS, notification)
+        NotificationManagerCompat.from(context).notify(progressNotificationId(accountKeyId), notification)
     }
 
     /**
@@ -103,17 +107,17 @@ class MigrationNotifier(private val context: Context) {
      * lighter-weight review-and-send screen ([EXTRA_OPEN_TRANSFER_READY]), not the fuller
      * Reschedule/Send-now recovery screen.
      */
-    fun notifyTransferReadyToSend(transferIndex: Int, total: Int) {
+    fun notifyTransferReadyToSend(accountKeyId: String, transferIndex: Int, total: Int) {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alert_circle)
             .setContentTitle("Ironwood Migration")
             .setContentText("Transfer $transferIndex of $total is ready to send. Tap to review and send.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(transferReadyToSendIntent())
+            .setContentIntent(transferReadyToSendIntent(accountKeyId))
             .setAutoCancel(true)
             .build()
 
-        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_PROGRESS, notification)
+        NotificationManagerCompat.from(context).notify(progressNotificationId(accountKeyId), notification)
     }
 
     // Spec §6.2 (Migration Plan Update) — notes were spent outside the migration flow, invalidating
@@ -121,53 +125,53 @@ class MigrationNotifier(private val context: Context) {
     // currently deliver through the same TransferResult.InvalidNote/Expired branch in
     // MigrationWorker — the two causes read differently to the user, matching the distinct
     // Transfer Invalid screen copy (see MigrationAttentionKind).
-    fun notifyMigrationPlanInvalid() {
+    fun notifyMigrationPlanInvalid(accountKeyId: String) {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alert_circle)
             .setContentTitle("Ironwood Migration")
             .setContentText("Migration plan needs update. Open Zodl to review the details.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(mainActivityIntent())
+            .setContentIntent(mainActivityIntent(accountKeyId))
             .setAutoCancel(true)
             .build()
 
-        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_PROGRESS, notification)
+        NotificationManagerCompat.from(context).notify(progressNotificationId(accountKeyId), notification)
     }
 
     // Spec §6.3 (Transfer(s) Expired) — one or more transfers expired without executing (the app
     // wasn't opened in time to broadcast them before their anchor expired).
-    fun notifyTransferExpired() {
+    fun notifyTransferExpired(accountKeyId: String) {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alert_circle)
             .setContentTitle("Ironwood Migration")
             .setContentText("A transfer expired. Open Zodl to continue your migration.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(mainActivityIntent())
+            .setContentIntent(mainActivityIntent(accountKeyId))
             .setAutoCancel(true)
             .build()
 
-        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_PROGRESS, notification)
+        NotificationManagerCompat.from(context).notify(progressNotificationId(accountKeyId), notification)
     }
 
-    fun notifyMigrationComplete() {
+    fun notifyMigrationComplete(accountKeyId: String) {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alert_circle)
             .setContentTitle("Ironwood Migration Complete")
             .setContentText("All your funds have been migrated to Ironwood.")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setContentIntent(mainActivityIntent())
+            .setContentIntent(mainActivityIntent(accountKeyId))
             .setAutoCancel(true)
             .build()
 
-        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_PROGRESS, notification)
+        NotificationManagerCompat.from(context).notify(progressNotificationId(accountKeyId), notification)
     }
 
     companion object {
         const val CHANNEL_ID = "migration_channel"
         const val EXTRA_OPEN_MIGRATION = "co.electriccoin.zcash.migration.open_progress"
         const val EXTRA_OPEN_TRANSFER_READY = "co.electriccoin.zcash.migration.open_transfer_ready"
-        private const val NOTIFICATION_ID_PROGRESS = 9001
-        private const val REQUEST_CODE_MIGRATION = 9001
-        private const val REQUEST_CODE_TRANSFER_READY = 9002
+        private const val NOTIFICATION_ID_PROGRESS_BASE = 90_0000        // notification-id namespace
+        private const val REQUEST_CODE_MIGRATION_BASE = 90_0000          // PendingIntent-request-code namespace
+        private const val REQUEST_CODE_TRANSFER_READY_BASE = 91_0000     // PendingIntent-request-code namespace
     }
 }

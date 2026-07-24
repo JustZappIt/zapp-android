@@ -84,7 +84,7 @@ class MigrationWorker(
                         Twig.debug {
                             "MIGRATION_DIAG MigrationWorker: transfer overdue and still not ready — handing off to Resume Migration."
                         }
-                        if (next != null) migrationNotifier.notifyManualConfirmationRequired(next.index + 1, plan.totalCount)
+                        if (next != null) migrationNotifier.notifyManualConfirmationRequired(accountKeyId, next.index + 1, plan.totalCount)
                         Result.failure()
                     }
                     NullResultAction.WAIT_AND_RETRY -> {
@@ -110,10 +110,10 @@ class MigrationWorker(
                 if (updatedPlan?.nextPending != null) {
                     val delay = nextDelay(updatedPlan)
                     MigrationScheduler(applicationContext).schedule(accountKeyId, delay)
-                    migrationNotifier.notifyTransferComplete(updatedPlan.completedCount, updatedPlan.totalCount)
+                    migrationNotifier.notifyTransferComplete(accountKeyId, updatedPlan.completedCount, updatedPlan.totalCount)
                     Twig.debug { "MIGRATION_DIAG MigrationWorker: next transfer scheduled in $delay" }
                 } else {
-                    migrationNotifier.notifyMigrationComplete()
+                    migrationNotifier.notifyMigrationComplete(accountKeyId)
                     Twig.debug { "MIGRATION_DIAG MigrationWorker: migration complete!" }
                 }
                 Result.success()
@@ -132,11 +132,11 @@ class MigrationWorker(
                     // instead of the generic manual-confirmation path, and surface a distinct
                     // notification so this looks different from any other missed transfer.
                     pendingMigrationTorFailureStorageProvider.store(true)
-                    migrationNotifier.notifyMigrationTorFailure()
+                    migrationNotifier.notifyMigrationTorFailure(accountKeyId)
                 } else if (next != null) {
                     // Nothing else re-arms a future attempt for a non-retryable failure — the
                     // user must open the app and act, same as a missed/stalled window.
-                    migrationNotifier.notifyManualConfirmationRequired(next.index + 1, plan.totalCount)
+                    migrationNotifier.notifyManualConfirmationRequired(accountKeyId, next.index + 1, plan.totalCount)
                 }
                 Result.failure()
             }
@@ -145,7 +145,7 @@ class MigrationWorker(
                 // outside the migration flow. On-launch reconciliation will surface the prompt, but
                 // the user still needs telling since nothing else runs meanwhile.
                 Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer invalid (note spent externally) — user action required on next open." }
-                migrationNotifier.notifyMigrationPlanInvalid()
+                migrationNotifier.notifyMigrationPlanInvalid(accountKeyId)
                 Result.success()
             }
             TransferResult.Expired -> {
@@ -154,7 +154,7 @@ class MigrationWorker(
                 // user-facing copy from InvalidNote above, even though both branches otherwise
                 // handle identically (no further action possible from the background worker).
                 Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer expired — user action required on next open." }
-                migrationNotifier.notifyTransferExpired()
+                migrationNotifier.notifyTransferExpired(accountKeyId)
                 Result.success()
             }
         }

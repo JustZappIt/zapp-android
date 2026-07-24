@@ -55,7 +55,7 @@ class MigrationTransferDueReceiver : BroadcastReceiver(), KoinComponent {
                         "MIGRATION_DIAG MigrationTransferDueReceiver: transfer ${next.index + 1} of " +
                             "${plan.totalCount} due — notifying (accountKeyId=$accountKeyId)."
                     }
-                    migrationNotifier.notifyTransferReadyToSend(next.index + 1, plan.totalCount)
+                    migrationNotifier.notifyTransferReadyToSend(accountKeyId.orEmpty(), next.index + 1, plan.totalCount)
                 } else {
                     Twig.debug { "MIGRATION_DIAG MigrationTransferDueReceiver: no due transfer — no-op." }
                 }
