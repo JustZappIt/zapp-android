@@ -2,15 +2,17 @@ package co.electriccoin.zcash.ui.screen.migration.keystonesign
 
 /**
  * Device-safety cap on how many PCZTs one Keystone batch-signing QR round trip may cover.
- * Matches the value settled on in Slack (`#ext-zodl-valargroup`, Keystone firmware team,
- * 2026-07-17) after real on-device OOM testing at 50; the shipped Vizor reference implementation
- * (`valargroup/vizor-wallet` PR #73, `keystone.rs:124`) uses a slightly higher 40 as of this
- * writing, but 35 is the more conservative of the two documented, tested numbers — see
- * `docs/superpowers/specs/2026-07-19-vizor-migration-reference-comparison.md` §2.4. A migration
- * whose split + schedule together exceed this is split into multiple rounds (see
+ * Set to 40 to match the wallet-team action target settled on in Slack (`#ext-zodl-valargroup`,
+ * 2026-07-24): 128 actions / 40 transactions max, after Harry reliably signed a 40-transfer batch
+ * (40×3 = 120 actions) end-to-end on device against the fixed Keystone firmware. This also aligns
+ * with the shipped Vizor reference implementation (`valargroup/vizor-wallet` PR #73,
+ * `keystone.rs:124`), which caps at 40 — see
+ * `docs/superpowers/specs/2026-07-19-vizor-migration-reference-comparison.md` §2.4. (An earlier,
+ * more conservative 35 predated the 2026-07-24 on-device validation.) A migration whose split +
+ * schedule together exceed this is split into multiple rounds (see
  * [keystoneBatchTotalRounds]/[keystoneBatchRoundSlice]) rather than sent as one oversized batch.
  */
-const val KEYSTONE_BATCH_MAX_ITEMS = 35
+const val KEYSTONE_BATCH_MAX_ITEMS = 40
 
 /**
  * One round of a (possibly multi-round) Keystone batch-signing sequence: whether this round's QR
