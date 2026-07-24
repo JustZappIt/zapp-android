@@ -71,5 +71,5 @@ class GetOrchardMigrationSdkUseCase(
  * [co.electriccoin.zcash.ui.common.model.toStorageKeyId] matches [accountKeyId], or `null` if
  * none match.
  */
-fun List<WalletAccount>.findByAccountKeyId(accountKeyId: String): WalletAccount? =
+internal fun List<WalletAccount>.findByAccountKeyId(accountKeyId: String): WalletAccount? =
     firstOrNull { it.sdkAccount.accountUuid.toStorageKeyId() == accountKeyId }

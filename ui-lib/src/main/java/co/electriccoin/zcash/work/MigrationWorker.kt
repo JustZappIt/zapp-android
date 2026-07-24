@@ -40,7 +40,7 @@ class MigrationWorker(
     override suspend fun doWork(): Result {
         val accountKeyId = inputData.getString(MigrationScheduler.KEY_ACCOUNT_KEY_ID)
             ?: getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId().also {
-                Twig.warn { "MIGRATION_DIAG MigrationWorker: no accountKeyId in inputData — falling back to selected account (pre-upgrade job)" }
+                Twig.warn { "MIGRATION_DIAG MigrationWorker: no accountKeyId in inputData — falling back to selected account $it (pre-upgrade job)" }
             }
 
         val sdk = getOrchardMigrationSdk(accountKeyId) ?: run {
