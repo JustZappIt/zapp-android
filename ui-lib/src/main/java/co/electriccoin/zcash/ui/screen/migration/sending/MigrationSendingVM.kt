@@ -9,6 +9,7 @@ import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
+import co.electriccoin.zcash.ui.common.model.migration.withLiveStatusOnly
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
@@ -124,7 +125,13 @@ class MigrationSendingVM(
                 // Re-arms the next window for a resumed/manually-confirmed transfer in a
                 // multi-transfer AUTOMATIC plan; no-ops once the plan is already complete.
                 scheduleNextMigrationWindow()
+                // Write the SDK's authoritative "sent" status back into the persisted plan, so the
+                // home banner's raw cached completedCount/isComplete actually advance (without this
+                // it stays stuck on "First transfer sending…" even though the send landed). The
+                // isComplete check just below then reads the reconciled plan, not the stale one.
                 val plan = migrationPlanRepository.load()
+                    ?.withLiveStatusOnly(sdk.getMigrationTransferStates())
+                    ?.also { migrationPlanRepository.save(it) }
                 if (plan?.mode == MigrationMode.AUTOMATIC && plan.isComplete) {
                     // This was the plan's last transfer — one Migration Complete screen covers
                     // both this (foreground, just confirmed) and the background-completion case
