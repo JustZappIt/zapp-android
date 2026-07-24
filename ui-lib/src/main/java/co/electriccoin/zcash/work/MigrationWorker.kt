@@ -5,7 +5,6 @@ import androidx.annotation.Keep
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import cash.z.ecc.android.sdk.NetworkPrivacyOptions
-import cash.z.ecc.android.sdk.Synchronizer
 import cash.z.ecc.android.sdk.TransferResult
 import cash.z.ecc.android.sdk.ext.ZcashSdk
 import co.electriccoin.zcash.spackle.Twig
@@ -13,21 +12,13 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
-import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.takeWhile
-import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 @Keep
@@ -41,27 +32,11 @@ class MigrationWorker(
     private val migrationNotifier: MigrationNotifier by inject()
     private val isMigrationTorEnabledStorageProvider: IsMigrationTorEnabledStorageProvider by inject()
     private val pendingMigrationTorFailureStorageProvider: PendingMigrationTorFailureStorageProvider by inject()
-    private val synchronizerProvider: SynchronizerProvider by inject()
 
     override suspend fun doWork(): Result {
         val sdk = getOrchardMigrationSdk() ?: run {
             Twig.debug { "MIGRATION_DIAG MigrationWorker: no wallet available — skipping." }
             return Result.success()
-        }
-
-        // Nothing else advances the wallet's locally-known chain tip in the background — the
-        // main Synchronizer only runs while something collects SynchronizerProvider.synchronizer
-        // (normally a foreground screen), and the daily SyncWorker is gated behind
-        // unmetered+charging constraints that rarely hold. Without this, finalizeReadyTransfers/
-        // executeNextPendingTransfer below would keep reading a frozen tip and this worker would
-        // retry forever without ever reaching the transfer's target height — exactly the "nothing
-        // happens until the app is reopened" symptom this closes. Skipped once the transfer is
-        // already overdue: at that point OrchardMigrationSdk.isSyncBlocked() intentionally keeps
-        // the synchronizer closed (decouples sync timing from broadcast timing for privacy), and
-        // the foreground Resume Migration screen — not this worker — is the sanctioned recovery
-        // path (see CheckMigrationRecoveryUseCase).
-        if (!sdk.hasOverdueTransfers()) {
-            awaitSyncCaughtUp()
         }
 
         // Completes any transfer that was pre-signed with a placeholder witness (sign-now/
@@ -155,26 +130,5 @@ class MigrationWorker(
         val next = plan.nextPending ?: return 0.seconds
         val remaining = next.scheduledAt - Clock.System.now()
         return if (remaining.isNegative()) 0.seconds else remaining
-    }
-
-    /**
-     * Same idiom as [co.electriccoin.zcash.work.SyncWorker]: collecting [SynchronizerProvider.synchronizer]
-     * is what (re)starts the shared Synchronizer via its WhileSubscribed sharing, so this both
-     * triggers a sync pass and suspends until it reaches a terminal state. Bounded so a stalled or
-     * offline sync can't eat the worker's whole execution budget — on timeout, this just falls
-     * through to whatever chain tip is already known, same as before this change existed.
-     */
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private suspend fun awaitSyncCaughtUp() {
-        withTimeoutOrNull(SYNC_CATCH_UP_TIMEOUT) {
-            synchronizerProvider.synchronizer
-                .flatMapLatest { synchronizer -> synchronizer?.status ?: emptyFlow() }
-                .takeWhile { it != Synchronizer.Status.SYNCED && it != Synchronizer.Status.DISCONNECTED }
-                .collect()
-        }
-    }
-
-    companion object {
-        private val SYNC_CATCH_UP_TIMEOUT = 2.minutes
     }
 }
