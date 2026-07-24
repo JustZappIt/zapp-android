@@ -19,7 +19,13 @@ import kotlinx.coroutines.flow.flowOf
  * `true` when `MigrationWorker` hits a non-retryable network error while Tor was in use; cleared on
  * a subsequent successful transfer. Backed by regular (non-encrypted) app storage, wiped on uninstall.
  */
-interface PendingMigrationTorFailureStorageProvider : BooleanStorageProvider
+interface PendingMigrationTorFailureStorageProvider : BooleanStorageProvider {
+    /** Reads the pending Tor-failure flag for the explicitly supplied account key, bypassing the selected account. */
+    suspend fun get(accountKeyId: String): Boolean
+
+    /** Writes the pending Tor-failure flag for the explicitly supplied account key, bypassing the selected account. */
+    suspend fun store(accountKeyId: String, value: Boolean)
+}
 
 class PendingMigrationTorFailureStorageProviderImpl(
     private val preferenceHolder: StandardPreferenceProvider,
@@ -27,7 +33,12 @@ class PendingMigrationTorFailureStorageProviderImpl(
 ) : PendingMigrationTorFailureStorageProvider {
     override suspend fun get(): Boolean = default(currentAccountUuid()).getValue(preferenceHolder())
 
+    override suspend fun get(accountKeyId: String): Boolean = default(accountKeyId).getValue(preferenceHolder())
+
     override suspend fun store(value: Boolean) = default(currentAccountUuid()).putValue(preferenceHolder(), value)
+
+    override suspend fun store(accountKeyId: String, value: Boolean) =
+        default(accountKeyId).putValue(preferenceHolder(), value)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun observe(): Flow<Boolean> =

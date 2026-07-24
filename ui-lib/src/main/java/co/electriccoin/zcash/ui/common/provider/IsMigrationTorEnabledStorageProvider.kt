@@ -21,13 +21,18 @@ import kotlinx.coroutines.flow.flowOf
  * migration broadcast site (`MigrationSendingVM`, `MigrationWorker`, `MigrationKeystoneScanVM`).
  * Backed by regular (non-encrypted) app storage, wiped on uninstall.
  */
-interface IsMigrationTorEnabledStorageProvider : BooleanStorageProvider
+interface IsMigrationTorEnabledStorageProvider : BooleanStorageProvider {
+    /** Reads the Tor-enabled flag for the explicitly supplied account key, bypassing the selected account. */
+    suspend fun get(accountKeyId: String): Boolean
+}
 
 class IsMigrationTorEnabledStorageProviderImpl(
     private val preferenceHolder: StandardPreferenceProvider,
     private val accountDataSource: AccountDataSource,
 ) : IsMigrationTorEnabledStorageProvider {
     override suspend fun get(): Boolean = default(currentAccountUuid()).getValue(preferenceHolder())
+
+    override suspend fun get(accountKeyId: String): Boolean = default(accountKeyId).getValue(preferenceHolder())
 
     override suspend fun store(value: Boolean) = default(currentAccountUuid()).putValue(preferenceHolder(), value)
 

@@ -9,6 +9,7 @@ import co.electriccoin.zcash.preference.model.entry.PreferenceKey
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.model.ZashiAccount
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -21,6 +22,7 @@ import kotlinx.coroutines.test.runTest
 import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MigrationTorPreferenceAccountScopingTest {
@@ -87,6 +89,62 @@ class MigrationTorPreferenceAccountScopingTest {
 
             selected.value = accountB
             assertEquals(false, provider.get()) // account B unaffected
+        }
+
+    @Test
+    fun torEnabledGetByAccountKeyIdIgnoresSelectedAccount() =
+        runTest {
+            val uuidA = UUID.fromString("00000000-0000-0000-0000-000000000001")
+            val uuidB = UUID.fromString("00000000-0000-0000-0000-000000000002")
+            val accountA = account(uuidA)
+            val accountB = account(uuidB)
+
+            val selected = MutableStateFlow<WalletAccount?>(accountA)
+            val accountDataSource = FakeAccountDataSource(selected)
+            val prefs = InMemoryPreferenceProvider()
+            val holder = mockk<StandardPreferenceProvider> { coEvery { this@mockk() } returns prefs }
+
+            val provider = IsMigrationTorEnabledStorageProviderImpl(holder, accountDataSource)
+            val keyA = accountA.sdkAccount.accountUuid.toStorageKeyId()
+
+            // write false while A is selected
+            provider.store(false)
+
+            // switch selected to B
+            selected.value = accountB
+
+            // explicit-account get still reads A's value
+            assertEquals(false, provider.get(keyA))
+
+            // unknown key returns the default (true)
+            assertTrue(provider.get("ffffffffffffffff"))
+        }
+
+    @Test
+    fun pendingTorFailureStoreByAccountKeyIdTargetsThatAccount() =
+        runTest {
+            val uuidA = UUID.fromString("00000000-0000-0000-0000-000000000001")
+            val uuidB = UUID.fromString("00000000-0000-0000-0000-000000000002")
+            val accountA = account(uuidA)
+            val accountB = account(uuidB)
+
+            val selected = MutableStateFlow<WalletAccount?>(accountA)
+            val accountDataSource = FakeAccountDataSource(selected)
+            val prefs = InMemoryPreferenceProvider()
+            val holder = mockk<StandardPreferenceProvider> { coEvery { this@mockk() } returns prefs }
+
+            val provider = PendingMigrationTorFailureStorageProviderImpl(holder, accountDataSource)
+            val keyA = accountA.sdkAccount.accountUuid.toStorageKeyId()
+
+            // B selected, but store for A explicitly
+            selected.value = accountB
+            provider.store(keyA, true)
+
+            // A has the value
+            assertEquals(true, provider.get(keyA))
+
+            // selected B has the default (false)
+            assertFalse(provider.get())
         }
 }
 
