@@ -15,6 +15,7 @@ import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.ScheduleNextMigrationWindowUseCase
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
+import co.electriccoin.zcash.ui.screen.migration.torfailure.MigrationTorFailureArgs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.coVerifyOrder
@@ -234,6 +235,24 @@ class MigrationSendingVMTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { pendingTorFailure.store(any()) }
+    }
+
+    @Test
+    fun networkErrorWithIsTorFailureRoutesToTorFailureScreenEvenWhenLocalUseTorFlagIsFalse() = runTest {
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+        coEvery { sdk.finalizeReadyTransfers() } returns 0
+        // isTorFailure=true, but the vm() helper's isMigrationTorEnabledStorageProvider mock
+        // always returns false for the local useTor flag — proves routing now follows the
+        // result's own signal, not the interactive-attempt's local Tor setting.
+        coEvery { sdk.executeNextPendingTransfer(any()) } returns
+            TransferResult.NetworkError(retryable = false, isTorFailure = true)
+        val router = FakeNavigationRouter()
+        val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
+
+        vm(sdk = sdk, router = router, plans = plans)
+        advanceUntilIdle()
+
+        assertTrue(router.forwardedRoutes.any { it is MigrationTorFailureArgs })
     }
 
     private fun vm(

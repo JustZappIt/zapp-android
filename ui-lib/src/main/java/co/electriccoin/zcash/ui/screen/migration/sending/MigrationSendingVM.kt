@@ -134,11 +134,11 @@ class MigrationSendingVM(
                     navigationRouter.forward(MigrationSuccessArgs(r.txId))
                 }
             }
-            // A NetworkError while Tor was in use is presumptively a Tor-connectivity failure —
-            // routed to its own sheet (offering "continue without Tor") instead of the generic
-            // "Couldn't Send" one, since the fix (drop Tor) differs from a real network outage.
+            // A NetworkError whose failure is specifically Tor-attributable is routed to its own
+            // sheet (offering "continue without Tor") instead of the generic "Couldn't Send" one,
+            // since the fix (drop Tor) differs from a real network outage.
             is TransferResult.NetworkError -> {
-                if (useTor) {
+                if (r.isTorFailure) {
                     navigationRouter.forward(MigrationTorFailureArgs)
                 } else {
                     failure.value = SendFailure.Engine(r)
