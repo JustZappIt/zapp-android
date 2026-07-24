@@ -278,12 +278,21 @@ class MigrationReviewVM(
         // plan makes every crossing value provably match a note this split actually produces.
         val scheduleToSign = if (sdk.isNoteSplitNeeded()) {
             val proposal = sdk.prepareNoteSplit()
+            // Derive the from-split schedule BEFORE submitting the split, not after: submitNoteSplit()
+            // signs the split through the SDK's commit_or_reuse, which clears the in-memory
+            // migration-plan cache that `proposal.proposalHandle` points at once it commits. Calling
+            // proposeMigrationTransfersFromSplit() afterwards then throws "No pending migration
+            // proposal for this account — call propose/prepare first", because the plan the handle
+            // identifies is already gone. Reading the schedule first (the cache is still populated by
+            // prepareNoteSplit()) mirrors MigrationKeystoneSignVM, which likewise derives the
+            // from-split schedule before its first commit.
+            val scheduleFromSplit = sdk.proposeMigrationTransfersFromSplit(proposal)
             val splitResult = sdk.submitNoteSplit(proposal, zashiSpendingKeyDataSource.getZashiSpendingKey())
             if (splitResult !is TransferResult.Success) {
                 failure.value = splitResult
                 return
             }
-            sdk.proposeMigrationTransfersFromSplit(proposal)
+            scheduleFromSplit
         } else {
             sched
         }
