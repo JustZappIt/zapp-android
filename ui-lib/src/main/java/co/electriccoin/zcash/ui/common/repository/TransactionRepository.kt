@@ -1,10 +1,12 @@
 package co.electriccoin.zcash.ui.common.repository
 
 import cash.z.ecc.android.sdk.Synchronizer
+import cash.z.ecc.android.sdk.model.AccountUuid
 import cash.z.ecc.android.sdk.model.BlockHeight
 import cash.z.ecc.android.sdk.model.TransactionId
 import cash.z.ecc.android.sdk.model.TransactionOutput
 import cash.z.ecc.android.sdk.model.TransactionOverview
+import cash.z.ecc.android.sdk.model.TransactionRecipient
 import cash.z.ecc.android.sdk.model.TransactionState
 import cash.z.ecc.android.sdk.model.TransactionState.Confirmed
 import cash.z.ecc.android.sdk.model.TransactionState.Expired
@@ -71,6 +73,8 @@ class TransactionRepositoryImpl(
      */
     private val enhancedTxCache = ConcurrentHashMap<String, TxDetails>()
 
+    private val ownAddressCache = ConcurrentHashMap<AccountUuid, String>()
+
     @OptIn(ExperimentalCoroutinesApi::class)
     @Suppress("TooGenericExceptionCaught")
     override val transactions: Flow<List<Transaction>?> =
@@ -136,8 +140,19 @@ class TransactionRepositoryImpl(
                                                                         batchedOutputs[transaction.txId].orEmpty(),
                                                                     recipient =
                                                                         batchedRecipients[transaction.txId]
-                                                                            ?.firstOrNull()
-                                                                            ?.addressValue
+                                                                            .orEmpty()
+                                                                            .let { recipients ->
+                                                                                selectDisplayRecipient(recipients)
+                                                                                    ?: recipients
+                                                                                        .firstNotNullOfOrNull {
+                                                                                            it.accountUuid
+                                                                                        }?.let {
+                                                                                            ownUnifiedAddress(
+                                                                                                synchronizer,
+                                                                                                it
+                                                                                            )
+                                                                                        }
+                                                                            }
                                                                 )
                                                             val key = transaction.txId.txIdString()
                                                             if (transaction.raw != null) {
@@ -320,7 +335,7 @@ class TransactionRepositoryImpl(
      * returned to this account. For a same-account cross-pool transfer (e.g. a pool migration),
      * the scanner's change-detection heuristic misclassifies the crossing output as change
      * ([TransactionOverview.sentNoteCount] and [TransactionOverview.receivedNoteCount] both end up
-     * 0), which collapses [TransactionOverview.netValue] down to just the fee. [totalReceived]
+     * 0), which collapses [TransactionOverview.netValue] down to just the fee. [TransactionOverview.totalReceived]
      * still reflects the real crossing amount in that case.
      */
     private fun sentTransactionAmount(transaction: TransactionOverview): Zatoshi =
@@ -372,6 +387,30 @@ class TransactionRepositoryImpl(
             AddressType.Transparent -> WalletAddress.Transparent.new(address)
             AddressType.Unified -> WalletAddress.Unified.new(address)
             else -> null
+        }
+
+    /**
+     * Resolves the wallet's own unified address for [uuid] — the display recipient of a
+     * wallet-internal transaction (e.g. an Orchard->Ironwood pool migration), whose outputs
+     * carry only the receiving account and no stored address string in the wallet database.
+     * Failures degrade to null (the detail screen renders the row empty), rethrowing
+     * cancellation per the coroutine exception-handling convention.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun ownUnifiedAddress(
+        synchronizer: Synchronizer,
+        uuid: AccountUuid
+    ): String? =
+        ownAddressCache[uuid] ?: try {
+            synchronizer
+                .getAccounts()
+                .firstOrNull { it.accountUuid == uuid }
+                ?.let { synchronizer.getUnifiedAddress(it) }
+                ?.also { ownAddressCache[uuid] = it }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
         }
 }
 
@@ -498,5 +537,15 @@ private data class TxDetails(
     val outputs: List<TransactionOutput>,
     val recipient: String?,
 )
+
+/**
+ * Chooses the address to display as a transaction's recipient from its [recipients]. An external
+ * row ([TransactionRecipient.accountUuid] `== null`) is preferred regardless of list order; if
+ * only wallet-internal rows are present, the first one's stored [TransactionRecipient.addressValue]
+ * is used (this is what surfaces a self-transfer, e.g. a pool migration). Returns `null` when
+ * [recipients] is empty, or when no entry has a stored address.
+ */
+internal fun selectDisplayRecipient(recipients: List<TransactionRecipient>): String? =
+    recipients.sortedBy { it.accountUuid != null }.firstNotNullOfOrNull { it.addressValue }
 
 private const val TRANSACTIONS_RETRY_DELAY_CAP = 10L
