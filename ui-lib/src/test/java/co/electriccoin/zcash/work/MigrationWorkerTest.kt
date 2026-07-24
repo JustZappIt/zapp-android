@@ -66,4 +66,27 @@ class MigrationWorkerTest {
         assertIs<TransferResult.Success>(result)
         assertEquals(2, callCount)
     }
+
+    @Test
+    fun `decideNullResultAction waits and retries when a transfer is pending but not yet overdue`() {
+        val action = decideNullResultAction(hasNextPending = true, isOverdue = false)
+
+        assertEquals(NullResultAction.WAIT_AND_RETRY, action)
+    }
+
+    @Test
+    fun `decideNullResultAction hands off to the app once confirmed overdue`() {
+        val action = decideNullResultAction(hasNextPending = true, isOverdue = true)
+
+        assertEquals(NullResultAction.HANDOFF_TO_APP, action)
+    }
+
+    @Test
+    fun `decideNullResultAction does nothing when there is no pending transfer at all`() {
+        // hasNextPending=false takes priority over isOverdue=true — there's nothing to be
+        // "overdue" about if there's no pending transfer at all.
+        val action = decideNullResultAction(hasNextPending = false, isOverdue = true)
+
+        assertEquals(NullResultAction.NOTHING_PENDING, action)
+    }
 }

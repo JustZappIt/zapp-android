@@ -59,22 +59,43 @@ class MigrationWorker(
         // and running for the full ~10-minute execution ceiling, repeatedly, for hours).
         return when (val result = executeWithRetries { sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor)) }) {
             null -> {
-                if (next != null) {
-                    // A transfer is still pending but wasn't ready to broadcast this run — most
-                    // commonly its funding note isn't witnessed at the freshly-computed anchor
-                    // yet (design spec §6's ordinary transient state, not a failure). Unlike the
-                    // TransferResult.Success branch below, nothing else re-arms a future attempt
-                    // for this case, so without rescheduling here the plan would silently stall
-                    // until the user happens to notice an overdue transfer and manually
-                    // reschedules from Migration Progress. One block interval is the finest
-                    // granularity at which the underlying chain state can actually change.
-                    val delay = ZcashSdk.BLOCK_INTERVAL_MILLIS.milliseconds
-                    MigrationScheduler(applicationContext).schedule(delay)
-                    Twig.debug { "MIGRATION_DIAG MigrationWorker: no pending transfer yet — retrying in $delay." }
-                } else {
-                    Twig.debug { "MIGRATION_DIAG MigrationWorker: no pending transfer." }
+                when (
+                    decideNullResultAction(
+                        hasNextPending = next != null,
+                        isOverdue = next != null && sdk.hasOverdueTransfers(),
+                    )
+                ) {
+                    NullResultAction.HANDOFF_TO_APP -> {
+                        // sdk.hasOverdueTransfers() is height-based — a confirmed fact, not this
+                        // transfer's own wall-clock scheduledAt estimate — so we KNOW the wallet
+                        // can't make progress here on its own. Background execution never drives
+                        // sync itself (sync/broadcast timing must stay decoupled — see
+                        // isSyncBlocked()'s KDoc), so nothing else will ever unstick this purely
+                        // from the background. Stop silently rescheduling and hand off to the
+                        // Resume Migration screen (Send Now / Reschedule), same as the
+                        // NetworkError/InvalidNote branches below already do.
+                        Twig.debug {
+                            "MIGRATION_DIAG MigrationWorker: transfer overdue and still not ready — handing off to Resume Migration."
+                        }
+                        if (next != null) migrationNotifier.notifyManualConfirmationRequired(next.index + 1, plan.totalCount)
+                        Result.failure()
+                    }
+                    NullResultAction.WAIT_AND_RETRY -> {
+                        // A transfer is still pending but wasn't ready to broadcast this run — most
+                        // commonly its funding note isn't witnessed at the freshly-computed anchor
+                        // yet (design spec §6's ordinary transient state, not a failure). One block
+                        // interval is the finest granularity at which the underlying chain state can
+                        // actually change.
+                        val delay = ZcashSdk.BLOCK_INTERVAL_MILLIS.milliseconds
+                        MigrationScheduler(applicationContext).schedule(delay)
+                        Twig.debug { "MIGRATION_DIAG MigrationWorker: no pending transfer yet — retrying in $delay." }
+                        Result.success()
+                    }
+                    NullResultAction.NOTHING_PENDING -> {
+                        Twig.debug { "MIGRATION_DIAG MigrationWorker: no pending transfer." }
+                        Result.success()
+                    }
                 }
-                Result.success()
             }
             is TransferResult.Success -> {
                 Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer sent — txId=${result.txId}" }
@@ -165,3 +186,17 @@ internal suspend fun executeWithRetries(
     }
     return result
 }
+
+/**
+ * What MigrationWorker's `null` (nothing due/ready) branch should do next. Takes pre-computed
+ * booleans (rather than the SDK/plan directly) specifically so it's unit-testable without Koin,
+ * WorkManager, or a real OrchardMigrationSdk.
+ */
+internal enum class NullResultAction { WAIT_AND_RETRY, HANDOFF_TO_APP, NOTHING_PENDING }
+
+internal fun decideNullResultAction(hasNextPending: Boolean, isOverdue: Boolean): NullResultAction =
+    when {
+        !hasNextPending -> NullResultAction.NOTHING_PENDING
+        isOverdue -> NullResultAction.HANDOFF_TO_APP
+        else -> NullResultAction.WAIT_AND_RETRY
+    }
