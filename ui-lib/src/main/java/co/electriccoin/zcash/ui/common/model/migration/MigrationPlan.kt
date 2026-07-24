@@ -105,3 +105,33 @@ fun MigrationPlan.withLiveState(live: MigrationTransferStates?): MigrationPlan {
         }
     )
 }
+
+/**
+ * The write-through counterpart to [withLiveState]: folds the SDK's authoritative "sent" status
+ * back into the persisted plan so a saved [MigrationPlan]'s `completedCount`/`nextPending`/
+ * `isComplete` actually advance after a broadcast. The send path must persist this after every
+ * successful `executeNextPendingTransfer()` — the home banner reads the RAW cached plan (not a
+ * live read-time overlay like [withLiveState]), so without this write-through it stays stuck on
+ * "First transfer sending…" even though the SDK already recorded the send.
+ *
+ * Unlike [withLiveState] this deliberately leaves [MigrationTransfer.scheduledAtEpochSeconds]
+ * alone — it's a status-only reconcile, so it never clobbers a user/engine reschedule with a
+ * fresh tip-based estimate. Correlates by stable [MigrationTransfer.id], never
+ * [MigrationTransfer.index] (ZIP 318 shuffles the two orderings apart — see [withLiveState]), and
+ * only ever upgrades PENDING→SENT, so it can't regress a status the cache already advanced past
+ * what a momentarily-stale live read reports.
+ */
+fun MigrationPlan.withLiveStatusOnly(live: MigrationTransferStates?): MigrationPlan {
+    if (live == null) return this
+    val sentIds = live.transfers.filter { it.isSent }.mapTo(mutableSetOf()) { it.id }
+    if (sentIds.isEmpty()) return this
+    return copy(
+        transfers = transfers.map { t ->
+            if (t.status != MigrationTransferStatus.SENT && t.id in sentIds) {
+                t.copy(status = MigrationTransferStatus.SENT)
+            } else {
+                t
+            }
+        }
+    )
+}

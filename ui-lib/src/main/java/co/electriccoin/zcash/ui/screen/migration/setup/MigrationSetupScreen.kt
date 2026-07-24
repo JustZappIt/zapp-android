@@ -38,7 +38,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -124,7 +123,6 @@ fun MigrationSetupView(state: MigrationSetupState) {
             when (state.mode) {
                 MigrationMode.IMMEDIATE -> {
                     PrivacyDisclaimerCard(
-                        title = "Privacy Disclaimer",
                         body = "All funds transferred in this transaction will be revealed on-chain.",
                     )
                     Spacer(Modifier.height(20.dp))
@@ -132,8 +130,7 @@ fun MigrationSetupView(state: MigrationSetupState) {
                 MigrationMode.AUTOMATIC -> {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalAlignment = Alignment.Top,
                     ) {
                         Icon(
                             painter = painterResource(co.electriccoin.zcash.ui.design.R.drawable.ic_info),
@@ -147,8 +144,7 @@ fun MigrationSetupView(state: MigrationSetupState) {
                             style = ZashiTypography.textXs,
                             fontWeight = FontWeight.Medium,
                             color = ZashiColors.Text.textTertiary,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.weight(1f, fill = false),
+                            modifier = Modifier.weight(1f),
                         )
                     }
                     Spacer(Modifier.height(20.dp))

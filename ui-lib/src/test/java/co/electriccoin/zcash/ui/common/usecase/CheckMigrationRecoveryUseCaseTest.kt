@@ -51,6 +51,9 @@ class CheckMigrationRecoveryUseCaseTest {
         pendingMigrationTorFailure: Boolean = false,
         hasSeenMigrationComplete: Boolean = false,
         savedPlan: MigrationPlan? = mockk(relaxed = true),
+        migrationPlanRepository: MigrationPlanRepository = mockk(relaxed = true) {
+            coEvery { load() } returns savedPlan
+        },
         isBackgroundExecutionAvailable: Boolean = true,
         orchardBalanceZatoshi: Long = 0L,
     ) = CheckMigrationRecoveryUseCase(
@@ -61,9 +64,7 @@ class CheckMigrationRecoveryUseCaseTest {
         hasSeenMigrationCompleteStorageProvider = mockk<HasSeenMigrationCompleteStorageProvider> {
             coEvery { get() } returns hasSeenMigrationComplete
         },
-        migrationPlanRepository = mockk<MigrationPlanRepository> {
-            coEvery { load() } returns savedPlan
-        },
+        migrationPlanRepository = migrationPlanRepository,
         getOrchardBalance = mockk<GetOrchardBalanceUseCase> {
             coEvery { this@mockk() } returns Zatoshi(orchardBalanceZatoshi)
         },
@@ -246,6 +247,45 @@ class CheckMigrationRecoveryUseCaseTest {
         ).invoke()
 
         coVerify(exactly = 1) { router.replaceAll(HomeArgs, MigrationCompleteArgs) }
+    }
+
+    @Test
+    fun notStartedWithStaleWriteAheadPlanClearsTheStalePlan() = runTest {
+        // MigrationReviewVM persists the plan just before the irreversible SDK commit; if that commit
+        // never happened the SDK stays NotStarted while a stale plan lingers. The SDK state is
+        // authoritative, so the stale plan is discarded (and nothing is navigated).
+        val plans = mockk<MigrationPlanRepository>(relaxed = true) {
+            coEvery { load() } returns mockk(relaxed = true)
+        }
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
+            coEvery { hasInvalidTransfers() } returns false
+            coEvery { hasOverdueTransfers() } returns false
+            coEvery { getMigrationState() } returns MigrationState.NotStarted
+        }
+        val router = mockk<NavigationRouter>(relaxed = true)
+
+        useCase(sdk = sdk, navigationRouter = router, migrationPlanRepository = plans).invoke()
+
+        coVerify(exactly = 1) { plans.clear() }
+        coVerify(exactly = 0) { router.replaceAll(any()) }
+    }
+
+    @Test
+    fun notStartedWithNoPlanLeavesEverythingAlone() = runTest {
+        val plans = mockk<MigrationPlanRepository>(relaxed = true) {
+            coEvery { load() } returns null
+        }
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
+            coEvery { hasInvalidTransfers() } returns false
+            coEvery { hasOverdueTransfers() } returns false
+            coEvery { getMigrationState() } returns MigrationState.NotStarted
+        }
+        val router = mockk<NavigationRouter>(relaxed = true)
+
+        useCase(sdk = sdk, navigationRouter = router, migrationPlanRepository = plans).invoke()
+
+        coVerify(exactly = 0) { plans.clear() }
+        coVerify(exactly = 0) { router.replaceAll(any()) }
     }
 
     @Test

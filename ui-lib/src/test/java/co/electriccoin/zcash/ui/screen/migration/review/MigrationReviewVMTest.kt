@@ -2,22 +2,24 @@ package co.electriccoin.zcash.ui.screen.migration.review
 
 import androidx.navigation.NavBackStackEntry
 import cash.z.ecc.android.sdk.MigrationSchedule
+import cash.z.ecc.android.sdk.MigrationState
+import cash.z.ecc.android.sdk.NoteSplitProposal
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferProposal
+import cash.z.ecc.android.sdk.TransferResult
 import cash.z.ecc.android.sdk.model.Proposal
 import cash.z.ecc.android.sdk.model.UnifiedSpendingKey
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.BaseNavigationCommand
 import co.electriccoin.zcash.ui.NavigationCommand
 import co.electriccoin.zcash.ui.NavigationRouter
-import co.electriccoin.zcash.ui.common.datasource.ProposalDataSource
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
-import co.electriccoin.zcash.ui.common.model.SubmitResult
 import co.electriccoin.zcash.ui.common.model.ZashiAccount
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
+import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepository
@@ -28,7 +30,7 @@ import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.SubmitProposalUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
-import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
+import co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionArgs
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.coVerifyOrder
@@ -49,11 +51,8 @@ import kotlinx.coroutines.test.setMain
 import kotlin.reflect.KClass
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MigrationReviewVMTest {
@@ -67,108 +66,30 @@ class MigrationReviewVMTest {
         Dispatchers.resetMain()
     }
 
-    // QUARANTINED (pre-existing, unrelated to account-scoping): commit 7c64fed3b routed Zashi
-    // IMMEDIATE confirm through the shared send pipeline (zashiProposalRepository.setMigrationSweepProposal
-    // + submitProposal()), moving success/retry/failure handling out of MigrationReviewVM. This test still
-    // asserts the removed inline proposalDataSource.submitTransaction() path. It never compiled at the
-    // branch tip (ctor drift) and does not reflect the current contract — needs a rewrite by the send-pipeline
-    // author. See docs/superpowers/specs/2026-07-24-migration-account-scoping-design.md follow-ups.
-    @Ignore
     @Test
-    fun immediateConfirmSubmitsProposalAndNavigatesToSuccessOnSuccess() = runTest {
+    fun immediateConfirmOnZashiAccountHandsSweepProposalToSharedSendPipeline() = runTest {
         val proposal = mockk<Proposal> {
             coEvery { totalFeeRequired() } returns Zatoshi(1_000L)
         }
-        val usk = mockk<UnifiedSpendingKey>()
         val router = FakeNavigationRouter()
-        val proposalDataSource = mockk<ProposalDataSource> {
-            coEvery { submitTransaction(proposal, usk) } returns SubmitResult.Success(listOf("tx1"))
-        }
+        val zashiProposalRepository = mockk<ZashiProposalRepository>(relaxed = true)
+        val submitProposal = mockk<SubmitProposalUseCase>(relaxed = true)
         val vm = vm(
             router = router,
-            proposalDataSource = proposalDataSource,
-            zashiSpendingKeyDataSource = mockk { coEvery { getZashiSpendingKey() } returns usk },
+            zashiProposalRepository = zashiProposalRepository,
+            submitProposal = submitProposal,
         )
 
         invokeOnConfirmImmediate(vm, proposal)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { proposalDataSource.submitTransaction(proposal, usk) }
-        assertEquals(listOf<Any>(MigrationSuccessArgs("tx1")), router.forwardedRoutes)
-    }
-
-    // QUARANTINED (pre-existing, unrelated to account-scoping) — see note on
-    // immediateConfirmSubmitsProposalAndNavigatesToSuccessOnSuccess above. Retry/failure handling moved
-    // into the shared send pipeline (7c64fed3b); this test asserts the removed inline-submit retry path.
-    @Ignore
-    @Test
-    fun immediateConfirmGrpcFailureShowsRetryableFailureSheetAndRetryResubmits() = runTest {
-        val proposal = mockk<Proposal> {
-            coEvery { totalFeeRequired() } returns Zatoshi(1_000L)
+        // IMMEDIATE confirm on a Zashi account no longer signs/broadcasts in this VM — it adopts the
+        // send-max sweep proposal into the shared send pipeline (SubmitProposalUseCase owns biometrics,
+        // broadcast, and the Transaction Progress navigation).
+        coVerifyOrder {
+            zashiProposalRepository.setMigrationSweepProposal(proposal, Zatoshi(500_000L))
+            submitProposal()
         }
-        val usk = mockk<UnifiedSpendingKey>()
-        val router = FakeNavigationRouter()
-        val proposalDataSource = mockk<ProposalDataSource> {
-            coEvery { submitTransaction(proposal, usk) } returns SubmitResult.GrpcFailure(listOf())
-        }
-        // The failure sheet's onRetry (built by createImmediateState from the VM's own proposed
-        // ReviewProposal.Immediate, not from whatever argument a caller happens to pass to
-        // onConfirmImmediate) re-confirms that same proposed Proposal — so proposeImmediateMigration()
-        // must return this exact `proposal` instance for the retry-resubmit assertion below to line up.
-        val sdk = mockk<cash.z.ecc.android.sdk.OrchardMigrationSdk>(relaxed = true) {
-            coEvery { proposeImmediateMigration() } returns proposal
-        }
-        val vm = vm(
-            router = router,
-            proposalDataSource = proposalDataSource,
-            zashiSpendingKeyDataSource = mockk { coEvery { getZashiSpendingKey() } returns usk },
-            getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
-        )
-        val collectJob = launch { vm.state.collect {} }
-
-        invokeOnConfirmImmediate(vm, proposal)
-        advanceUntilIdle()
-
-        val sheet = assertNotNull(vm.state.value.content?.failureSheet)
-        assertEquals("Couldn't reach the network. Check your connection and try again.", sheet.message)
-        val onRetry = assertNotNull(sheet.onRetry)
-
-        onRetry.invoke()
-        advanceUntilIdle()
-
-        collectJob.cancel()
-        coVerify(exactly = 2) { proposalDataSource.submitTransaction(proposal, usk) }
-    }
-
-    // QUARANTINED (pre-existing, unrelated to account-scoping) — see note on
-    // immediateConfirmSubmitsProposalAndNavigatesToSuccessOnSuccess above. Failure handling moved into the
-    // shared send pipeline (7c64fed3b); this test asserts the removed inline-submit failure path.
-    @Ignore
-    @Test
-    fun immediateConfirmNonResubmittableFailureOffersNoRetry() = runTest {
-        val proposal = mockk<Proposal> {
-            coEvery { totalFeeRequired() } returns Zatoshi(1_000L)
-        }
-        val usk = mockk<UnifiedSpendingKey>()
-        val router = FakeNavigationRouter()
-        val proposalDataSource = mockk<ProposalDataSource> {
-            coEvery {
-                submitTransaction(proposal, usk)
-            } returns SubmitResult.Failure(txIds = listOf(), code = -1, description = "rejected")
-        }
-        val vm = vm(
-            router = router,
-            proposalDataSource = proposalDataSource,
-            zashiSpendingKeyDataSource = mockk { coEvery { getZashiSpendingKey() } returns usk },
-        )
-        val collectJob = launch { vm.state.collect {} }
-
-        invokeOnConfirmImmediate(vm, proposal)
-        advanceUntilIdle()
-
-        val sheet = assertNotNull(vm.state.value.content?.failureSheet)
-        collectJob.cancel()
-        assertNull(sheet.onRetry)
     }
 
     @Test
@@ -177,13 +98,9 @@ class MigrationReviewVMTest {
             coEvery { totalFeeRequired() } returns Zatoshi(1_000L)
         }
         val router = FakeNavigationRouter()
-        val proposalDataSource = mockk<ProposalDataSource>(relaxed = true)
-        val keystoneProposalRepository = mockk<co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository>(
-            relaxed = true
-        )
+        val keystoneProposalRepository = mockk<KeystoneProposalRepository>(relaxed = true)
         val vm = vm(
             router = router,
-            proposalDataSource = proposalDataSource,
             keystoneProposalRepository = keystoneProposalRepository,
             getSelectedWalletAccount = mockk {
                 coEvery { this@mockk() } returns mockk<KeystoneAccount>(relaxed = true)
@@ -194,13 +111,12 @@ class MigrationReviewVMTest {
         invokeOnConfirmImmediate(vm, proposal)
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { proposalDataSource.submitTransaction(any<Proposal>(), any<UnifiedSpendingKey>()) }
         coVerifyOrder {
             keystoneProposalRepository.setMigrationSweepProposal(proposal, Zatoshi(500_000L))
             keystoneProposalRepository.createPCZTFromProposal()
         }
         assertEquals(
-            listOf<Any>(co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionArgs),
+            listOf<Any>(SignKeystoneTransactionArgs),
             router.forwardedRoutes,
         )
     }
@@ -230,7 +146,6 @@ class MigrationReviewVMTest {
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
         val vm = vm(
             router = router,
-            proposalDataSource = mockk(relaxed = true),
             getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
             mode = MigrationMode.AUTOMATIC,
             restartMigrationScheduleRepository = restartRepo,
@@ -272,7 +187,6 @@ class MigrationReviewVMTest {
         }
         val vm = vm(
             router = router,
-            proposalDataSource = mockk(relaxed = true),
             getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
             mode = MigrationMode.AUTOMATIC,
         )
@@ -282,6 +196,70 @@ class MigrationReviewVMTest {
         assertEquals(2, vm.state.value.content?.transfers?.size)
         coVerify(exactly = 1) { sdk.proposeMigrationTransfers(any()) }
         collectJob.cancel()
+    }
+
+    // Regression (root cause of the live "No pending migration proposal for this account — call
+    // propose/prepare first" crash): on the Zashi in-process signing split path,
+    // proposeMigrationTransfersFromSplit() MUST run before submitNoteSplit(). submitNoteSplit()
+    // signs the split via the SDK's commit_or_reuse, which clears the in-memory migration-plan
+    // cache the handle identifies — so deriving the from-split schedule AFTER submitting throws,
+    // because the plan the handle points at is already gone. Mirrors MigrationKeystoneSignVM, which
+    // likewise derives the from-split schedule before its first commit.
+    @Test
+    fun automaticConfirmWithNoteSplitDerivesScheduleFromSplitBeforeSubmittingIt() = runTest {
+        val usk = mockk<UnifiedSpendingKey>()
+        val router = FakeNavigationRouter()
+        val splitProposal = NoteSplitProposal(
+            outputNotes = listOf(100_000L),
+            fee = 1_000L,
+            proposalHandle = 42L,
+        )
+        val scheduleFromSplit = MigrationSchedule(
+            transfers = listOf(
+                TransferProposal(
+                    id = "split_transfer_0",
+                    amountZatoshi = 100_000L,
+                    anchorHeight = 0L,
+                    nextExecutableAfterHeight = 100L,
+                    expiryHeight = 200L,
+                )
+            ),
+            estimatedDurationHours = 1,
+            proposalHandle = 42L,
+        )
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
+            coEvery { getMigrationState() } returns MigrationState.NotStarted
+            coEvery { isNoteSplitNeeded() } returns true
+            coEvery { prepareNoteSplit() } returns splitProposal
+            coEvery { proposeMigrationTransfersFromSplit(splitProposal) } returns scheduleFromSplit
+            coEvery { submitNoteSplit(splitProposal, usk) } returns TransferResult.Success("splittx")
+        }
+        val finalizeMigrationSchedule = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true)
+        val vm = vm(
+            router = router,
+            getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
+            zashiSpendingKeyDataSource = mockk { coEvery { getZashiSpendingKey() } returns usk },
+            finalizeMigrationSchedule = finalizeMigrationSchedule,
+            mode = MigrationMode.AUTOMATIC,
+        )
+
+        invokeOnConfirmAutomatic(vm, scheduleFromSplit)
+        advanceUntilIdle()
+
+        // Schedule is derived from the split before the split is submitted, and the app-side plan is
+        // written (write-ahead) before that same irreversible submit.
+        coVerifyOrder {
+            sdk.proposeMigrationTransfersFromSplit(splitProposal)
+            finalizeMigrationSchedule.persistPlan(scheduleFromSplit, MigrationMode.AUTOMATIC)
+            sdk.submitNoteSplit(splitProposal, usk)
+        }
+    }
+
+    private fun invokeOnConfirmAutomatic(vm: MigrationReviewVM, sched: MigrationSchedule) {
+        val method =
+            MigrationReviewVM::class.java.getDeclaredMethod("onConfirmAutomatic", MigrationSchedule::class.java)
+        method.isAccessible = true
+        method.invoke(vm, sched)
     }
 
     // MigrationReviewVM's IMMEDIATE-mode `onConfirm` callback only becomes reachable through
@@ -304,7 +282,6 @@ class MigrationReviewVMTest {
 
     private fun vm(
         router: NavigationRouter,
-        proposalDataSource: ProposalDataSource,
         getSelectedWalletAccount: GetSelectedWalletAccountUseCase = mockk {
             coEvery { this@mockk() } returns mockk<ZashiAccount>(relaxed = true)
             every { observe() } returns flowOf(mockk<ZashiAccount>(relaxed = true))
@@ -313,8 +290,10 @@ class MigrationReviewVMTest {
             coEvery { getZashiSpendingKey() } returns mockk<UnifiedSpendingKey>()
         },
         getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase = mockk<GetOrchardMigrationSdkUseCase>(relaxed = true),
-        keystoneProposalRepository: co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository =
-            mockk(relaxed = true),
+        keystoneProposalRepository: KeystoneProposalRepository = mockk(relaxed = true),
+        zashiProposalRepository: ZashiProposalRepository = mockk(relaxed = true),
+        submitProposal: SubmitProposalUseCase = mockk(relaxed = true),
+        finalizeMigrationSchedule: FinalizeMigrationScheduleUseCase = mockk(relaxed = true),
         mode: MigrationMode = MigrationMode.IMMEDIATE,
         restartMigrationScheduleRepository: RestartMigrationScheduleRepository =
             mockk<RestartMigrationScheduleRepository>(relaxed = true) { every { consume(any()) } returns null },
@@ -323,7 +302,7 @@ class MigrationReviewVMTest {
         getOrchardMigrationSdk = getOrchardMigrationSdk,
         pendingMigrationScheduleRepository = mockk<PendingMigrationScheduleRepository>(relaxed = true),
         restartMigrationScheduleRepository = restartMigrationScheduleRepository,
-        finalizeMigrationSchedule = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true),
+        finalizeMigrationSchedule = finalizeMigrationSchedule,
         navigationRouter = router,
         exchangeRateRepository = mockk<ExchangeRateRepository>(relaxed = true) {
             every { state } returns MutableStateFlow(ExchangeRateState.OptedOut)
@@ -333,9 +312,9 @@ class MigrationReviewVMTest {
         errorStateMapper = mockk<ErrorMapperUseCase>(relaxed = true),
         zashiSpendingKeyDataSource = zashiSpendingKeyDataSource,
         biometricRepository = mockk<BiometricRepository>(relaxed = true),
-        zashiProposalRepository = mockk(relaxed = true),
+        zashiProposalRepository = zashiProposalRepository,
         keystoneProposalRepository = keystoneProposalRepository,
-        submitProposal = mockk<SubmitProposalUseCase>(relaxed = true),
+        submitProposal = submitProposal,
     )
 
     private class FakeNavigationRouter : NavigationRouter {

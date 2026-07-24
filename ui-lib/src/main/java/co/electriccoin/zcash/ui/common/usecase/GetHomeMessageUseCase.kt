@@ -113,7 +113,15 @@ class GetHomeMessageUseCase(
                 migrationPlanRepository.observe(),
                 hasSeenMigrationCompleteStorageProvider.observe(),
                 observeReadyToSendSignal(),
-            ) { plan, hasSeenComplete, readyToSendSignal ->
+                // Observed, not a one-shot getOrchardBalance().value read: an IMMEDIATE migration
+                // never touches the plan or the SDK's MigrationState (it bypasses the migration
+                // engine — a plain send-max sweep), so the balance is the *only* input that can hide
+                // the "Migrate required" banner once its Orchard funds are spent. Reading it one-shot
+                // left the combine re-firing solely on the 15s readyToSendSignal poll, so the stale
+                // Required banner lingered over the whole in-flight transfer even though the balance
+                // had already dropped to (and the setup screen showed) 0.
+                getOrchardBalance.observe(),
+            ) { plan, hasSeenComplete, readyToSendSignal, orchardBalance ->
                 val sdk = getOrchardMigrationSdk()
                 val sdkState = sdk?.getMigrationState()
                 // Only computed when actually needed (RequiresAttention) — an extra
@@ -126,7 +134,7 @@ class GetHomeMessageUseCase(
                     sdkState = sdkState,
                     plan = plan,
                     hasSeenComplete = hasSeenComplete,
-                    orchardBalanceZatoshi = getOrchardBalance().value,
+                    orchardBalanceZatoshi = orchardBalance?.value ?: 0L,
                     dustThresholdZatoshi = sdk?.migrationDustThresholdZatoshi() ?: MIGRATION_DUST_THRESHOLD_ZATOSHI,
                     isBackgroundExecutionAvailable = readyToSendSignal.isBackgroundExecutionAvailable,
                     hasOverdueTransfers = readyToSendSignal.hasOverdueTransfers,
