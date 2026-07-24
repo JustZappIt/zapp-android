@@ -13,3 +13,12 @@ import cash.z.ecc.android.sdk.model.AccountUuid
  * `AccountUuid.toCanonicalUuidString()` (voting) for that.
  */
 fun AccountUuid.toStorageKeyId(): String = value.toHex()
+
+/**
+ * A stable per-account offset in `0..0xFFFF`, derived from the account's storage-key id
+ * ([toStorageKeyId]). Used to make otherwise-global integer identifiers (WorkManager work name
+ * suffix, AlarmManager request code, notification ids) distinct per account so a Zashi and a
+ * Keystone account's migration never overwrite each other's. Hash collision across two accounts is
+ * theoretically possible but negligible; a registry was considered and rejected as unnecessary state.
+ */
+fun accountIdOffset(accountKeyId: String): Int = accountKeyId.hashCode() and 0xFFFF
