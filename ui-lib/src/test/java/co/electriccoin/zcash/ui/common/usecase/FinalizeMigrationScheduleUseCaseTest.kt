@@ -33,6 +33,7 @@ class FinalizeMigrationScheduleUseCaseTest {
                 )
             ),
             estimatedDurationHours = 1,
+            proposalHandle = 0L,
         )
 
     @Test

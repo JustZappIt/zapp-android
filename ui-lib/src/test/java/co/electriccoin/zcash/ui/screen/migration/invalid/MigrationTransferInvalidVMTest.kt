@@ -147,6 +147,7 @@ class MigrationTransferInvalidVMTest {
                 )
             ),
             estimatedDurationHours = 1,
+            proposalHandle = 0L,
         )
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
             coEvery { getMigrationState() } returns MigrationState.RequiresAttention(AttentionReason.TransferExpired)

@@ -204,6 +204,7 @@ class MigrationReviewVMTest {
                 )
             ),
             estimatedDurationHours = 1,
+            proposalHandle = 0L,
         )
         val restartRepo = mockk<RestartMigrationScheduleRepository>(relaxed = true) {
             every { consume() } returns restartSchedule
@@ -246,6 +247,7 @@ class MigrationReviewVMTest {
                 ),
             ),
             estimatedDurationHours = 2,
+            proposalHandle = 0L,
         )
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
             coEvery { proposeMigrationTransfers(any()) } returns freshSchedule

@@ -175,6 +175,7 @@ class MigrationKeystoneScanVMTest {
                 )
             ),
             estimatedDurationHours = 1,
+            proposalHandle = 0L,
         )
 
     private fun pending(roundIndex: Int) =

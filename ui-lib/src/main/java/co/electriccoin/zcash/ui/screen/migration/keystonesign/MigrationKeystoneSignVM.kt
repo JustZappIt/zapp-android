@@ -76,8 +76,25 @@ class MigrationKeystoneSignVM(
                     accumulatedSplitSigned = existing.accumulatedSplitSigned
                     accumulatedTransferSigned = existing.accumulatedTransferSigned
                 } else {
-                    splitUnsignedPczt = if (sdk.isNoteSplitNeeded()) sdk.createUnsignedNoteSplitPczt() else null
-                    transferUnsignedPczts = sdk.createUnsignedTransferPczts(sched)
+                    // Opaque-handle contract (SDK 2.6.5+): createUnsignedNoteSplitPczt(proposal)
+                    // and createUnsignedTransferPczts(schedule) must refer to the SAME cached plan
+                    // (same proposalHandle) or the split call throws "plan superseded". When a
+                    // split is needed we therefore prepare it and re-derive the schedule FROM it —
+                    // proposeMigrationTransfersFromSplit() keeps the same handle — mirroring
+                    // MigrationReviewVM's Zashi path, which re-derives for the same reason (a
+                    // pre-split proposeMigrationTransfers() schedule can name denominations the
+                    // split never actually mints). The re-derived schedule is written back to
+                    // pendingSchedule so the scan screen finalizes THIS plan, not the pre-split one.
+                    if (sdk.isNoteSplitNeeded()) {
+                        val splitProposal = sdk.prepareNoteSplit()
+                        val scheduleFromSplit = sdk.proposeMigrationTransfersFromSplit(splitProposal)
+                        splitUnsignedPczt = sdk.createUnsignedNoteSplitPczt(splitProposal)
+                        transferUnsignedPczts = sdk.createUnsignedTransferPczts(scheduleFromSplit)
+                        pendingSchedule.set(scheduleFromSplit)
+                    } else {
+                        splitUnsignedPczt = null
+                        transferUnsignedPczts = sdk.createUnsignedTransferPczts(sched)
+                    }
                     roundIndex = 0
                     accumulatedSplitSigned = null
                     accumulatedTransferSigned = emptyList()
