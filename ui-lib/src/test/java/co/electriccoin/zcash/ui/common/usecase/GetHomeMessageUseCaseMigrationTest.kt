@@ -80,7 +80,6 @@ class GetHomeMessageUseCaseMigrationTest {
         val migrationProgress = MigrationProgress(
             completedTransfers = 1,
             totalTransfers = 3,
-            remainingOrchardZatoshi = 500_000L,
             nextTransferReadyAtHeight = null,
         )
         val result = migrationMessageFor(
@@ -165,7 +164,7 @@ class GetHomeMessageUseCaseMigrationTest {
     fun dueTransferWithoutBackgroundExecutionAndNotOverdueShowsReadyToSend() {
         val now = Clock.System.now()
         val readyPlan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
-        val migrationProgress = MigrationProgress(1, 3, 100_000L, null)
+        val migrationProgress = MigrationProgress(1, 3, null)
 
         val result = migrationMessageFor(
             sdkState = MigrationState.InProgress(migrationProgress),
@@ -186,7 +185,7 @@ class GetHomeMessageUseCaseMigrationTest {
         // ready-to-send banner in that case.
         val now = Clock.System.now()
         val readyPlan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
-        val migrationProgress = MigrationProgress(1, 3, 100_000L, null)
+        val migrationProgress = MigrationProgress(1, 3, null)
 
         val result = migrationMessageFor(
             sdkState = MigrationState.InProgress(migrationProgress),
@@ -208,7 +207,7 @@ class GetHomeMessageUseCaseMigrationTest {
         // that.
         val now = Clock.System.now()
         val readyPlan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
-        val migrationProgress = MigrationProgress(1, 3, 100_000L, null)
+        val migrationProgress = MigrationProgress(1, 3, null)
 
         val result = migrationMessageFor(
             sdkState = MigrationState.InProgress(migrationProgress),
@@ -227,7 +226,7 @@ class GetHomeMessageUseCaseMigrationTest {
     fun notYetDueTransferWithoutBackgroundExecutionShowsRegularInProgress() {
         val now = Clock.System.now()
         val notYetDuePlan = planWithPendingTransfer((now + 30.minutes).epochSeconds)
-        val migrationProgress = MigrationProgress(1, 3, 100_000L, null)
+        val migrationProgress = MigrationProgress(1, 3, null)
 
         val result = migrationMessageFor(
             sdkState = MigrationState.InProgress(migrationProgress),
