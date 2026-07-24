@@ -2,7 +2,6 @@ package co.electriccoin.zcash.work
 
 import cash.z.ecc.android.sdk.Synchronizer
 import cash.z.ecc.android.sdk.TransferResult
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -99,58 +98,21 @@ class MigrationWorkerTest {
     // ── Background sync-advance ─────────────────────────────────────────────────
 
     @Test
-    fun `isSyncBurstTerminal treats a synced synchronizer as terminal`() {
-        assertTrue(isSyncBurstTerminal(Synchronizer.Status.SYNCED))
+    fun `isBroadcastableAfterBurst is true when the burst reached the target`() {
+        // The burst advanced the tip until the migration height gate confirmed the transfer.
+        assertTrue(isBroadcastableAfterBurst(Synchronizer.SyncBurstResult.TARGET_REACHED, hasOverdueNow = false))
     }
 
     @Test
-    fun `isSyncBurstTerminal treats a disconnected synchronizer as terminal`() {
-        assertTrue(isSyncBurstTerminal(Synchronizer.Status.DISCONNECTED))
+    fun `isBroadcastableAfterBurst is true when the transfer is overdue even if the burst did not report it`() {
+        // The gate flipped just after the burst returned a non-target terminal; the fresh
+        // hasOverdueTransfers() read still catches it.
+        assertTrue(isBroadcastableAfterBurst(Synchronizer.SyncBurstResult.SYNCED_TO_TIP, hasOverdueNow = true))
     }
 
     @Test
-    fun `isSyncBurstTerminal treats a stopped synchronizer as terminal`() {
-        assertTrue(isSyncBurstTerminal(Synchronizer.Status.STOPPED))
-    }
-
-    @Test
-    fun `isSyncBurstTerminal treats a null status (gate closed - synchronizer torn down) as terminal`() {
-        // Once the tip reaches the next transfer's height, isSyncBlocked() flips true and
-        // WalletCoordinator emits a null synchronizer. That null is the signal the burst is done.
-        assertTrue(isSyncBurstTerminal(null))
-    }
-
-    @Test
-    fun `isSyncBurstTerminal keeps waiting while still syncing`() {
-        assertFalse(isSyncBurstTerminal(Synchronizer.Status.SYNCING))
-    }
-
-    @Test
-    fun `isSyncBurstTerminal keeps waiting while initializing`() {
-        assertFalse(isSyncBurstTerminal(Synchronizer.Status.INITIALIZING))
-    }
-
-    @Test
-    fun `awaitSyncBurst returns once syncing reaches SYNCED`() = runTest {
-        val terminal = awaitSyncBurst(
-            flowOf(Synchronizer.Status.SYNCING, Synchronizer.Status.SYNCING, Synchronizer.Status.SYNCED)
-        )
-
-        assertEquals(Synchronizer.Status.SYNCED, terminal)
-    }
-
-    @Test
-    fun `awaitSyncBurst returns when the synchronizer is torn down (null) mid-sync`() = runTest {
-        val terminal = awaitSyncBurst(flowOf(Synchronizer.Status.SYNCING, null))
-
-        assertEquals(null, terminal)
-    }
-
-    @Test
-    fun `awaitSyncBurst returns on disconnect`() = runTest {
-        val terminal = awaitSyncBurst(flowOf(Synchronizer.Status.SYNCING, Synchronizer.Status.DISCONNECTED))
-
-        assertEquals(Synchronizer.Status.DISCONNECTED, terminal)
+    fun `isBroadcastableAfterBurst is false when the burst made no progress and nothing is overdue`() {
+        assertFalse(isBroadcastableAfterBurst(Synchronizer.SyncBurstResult.TIMEOUT, hasOverdueNow = false))
     }
 
     @Test

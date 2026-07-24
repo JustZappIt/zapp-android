@@ -19,17 +19,13 @@ import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 @Keep
@@ -46,7 +42,6 @@ class MigrationWorker(
     private val pendingMigrationTorFailureStorageProvider: PendingMigrationTorFailureStorageProvider by inject()
     private val synchronizerProvider: SynchronizerProvider by inject()
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun doWork(): Result {
         val accountKeyId = inputData.getString(MigrationScheduler.KEY_ACCOUNT_KEY_ID)
             ?: getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId().also {
@@ -88,12 +83,11 @@ class MigrationWorker(
                 ) {
                     NullResultAction.HANDOFF_TO_APP -> {
                         // sdk.hasOverdueTransfers() is height-based — a confirmed fact, not this
-                        // transfer's own wall-clock scheduledAt estimate — so we KNOW the wallet
-                        // can't make progress here on its own. Background execution never drives
-                        // sync itself (sync/broadcast timing must stay decoupled — see
-                        // isSyncBlocked()'s KDoc), so nothing else will ever unstick this purely
-                        // from the background. Stop silently rescheduling and hand off to the
-                        // Resume Migration screen (Send Now / Reschedule), same as the
+                        // transfer's own wall-clock scheduledAt estimate — so the tip has ALREADY
+                        // reached the transfer's height yet it still isn't broadcastable (e.g. its
+                        // funding note isn't witnessed). A sync burst can't fix that — more blocks
+                        // won't un-stick a witness/anchor problem — so hand off to the Resume
+                        // Migration screen (Send Now / Reschedule), same as the
                         // NetworkError/InvalidNote branches below already do.
                         Twig.debug {
                             "MIGRATION_DIAG MigrationWorker: transfer overdue and still not ready — handing off to Resume Migration."
@@ -107,25 +101,28 @@ class MigrationWorker(
                         // yet, or the synced tip hasn't reached the transfer's executable height
                         // (design spec §6's ordinary transient state, not a failure).
                         //
-                        // Advance the synced chain tip ourselves: in the background nothing else
-                        // drives sync (SyncWorker runs ~daily), so without this the tip never
-                        // reaches the transfer's height and the migration stalls until the app is
-                        // foregrounded. The privacy gate needs no override — isSyncBlocked() is
-                        // height-based and stays open while the transfer isn't yet broadcastable,
-                        // then closes itself (WalletCoordinator tears the synchronizer down, which
-                        // is the null terminal awaitSyncBurst() waits for) once the tip reaches it.
+                        // Actively drive a bounded sync advance: in the background the Slipstream
+                        // engine is stopped (onBackground), so merely observing status would read a
+                        // stale SYNCED and do nothing — the tip would never reach the transfer's
+                        // height and the migration would stall until the app is foregrounded.
+                        // syncBurst() force-starts the engine and syncs until the height gate
+                        // (hasOverdueTransfers) confirms the transfer is broadcastable, then
+                        // restores the backgrounded/paused state. It refuses to run
+                        // (PRIVACY_BLOCKED) while a post-broadcast privacy buffer is pausing sync.
                         //
                         // Deliberately does NOT broadcast in this same run: the sync burst and the
                         // eventual broadcast must stay decoupled so an observer can't correlate sync
-                        // traffic with the transaction (the whole point of isSyncBlocked()).
-                        val terminal = awaitSyncBurst(
-                            synchronizerProvider.synchronizer.flatMapLatest { it?.status ?: flowOf(null) }
-                        )
+                        // traffic with the transaction (the whole point of isSyncBlocked()). The
+                        // broadcast happens on the next run, a full privacy buffer later.
+                        val burst =
+                            synchronizerProvider.getSynchronizerOrNull()
+                                ?.syncBurst(timeout = SYNC_BURST_TIMEOUT) { sdk.hasOverdueTransfers() }
+                                ?: Synchronizer.SyncBurstResult.UNAVAILABLE
                         // If the burst advanced the tip far enough that the transfer is now
                         // broadcastable, wait a full privacy buffer before the next run broadcasts
                         // it, so the sync burst and the broadcast are separated in time. Otherwise
                         // fall back to the ordinary short retry (finest chain-state granularity).
-                        val isNowOverdue = next != null && sdk.hasOverdueTransfers()
+                        val isNowOverdue = next != null && isBroadcastableAfterBurst(burst, sdk.hasOverdueTransfers())
                         val delay = rescheduleDelayAfterSyncBurst(
                             isNowOverdue = isNowOverdue,
                             privacyBuffer = sdk.privacySyncBufferDuration(),
@@ -133,7 +130,7 @@ class MigrationWorker(
                         )
                         MigrationScheduler(applicationContext).schedule(accountKeyId, delay)
                         Twig.debug {
-                            "MIGRATION_DIAG MigrationWorker: drove sync burst (terminal=$terminal), " +
+                            "MIGRATION_DIAG MigrationWorker: drove sync burst (result=$burst), " +
                                 "isNowOverdue=$isNowOverdue — next run in $delay."
                         }
                         Result.success()
@@ -222,6 +219,12 @@ class MigrationWorker(
 private const val MAX_BROADCAST_ATTEMPTS = 3
 private const val BROADCAST_RETRY_DELAY_MS = 1500L
 
+// Upper bound on one background sync-advance ([Synchronizer.syncBurst]). Well under the ~10-minute
+// WorkManager execution ceiling (leaving room for the 60s-bounded broadcast attempts on OTHER
+// runs), and generous for the expected catch-up of a few dozen blocks. A stuck server hits this
+// instead of hanging the worker to the ceiling.
+private val SYNC_BURST_TIMEOUT = 3.minutes
+
 /**
  * Calls [attempt] up to [maxAttempts] times, retrying only while the result is a retryable
  * [TransferResult.NetworkError] — anything else (success, not-yet-due null, a non-retryable
@@ -259,27 +262,16 @@ internal fun decideNullResultAction(hasNextPending: Boolean, isOverdue: Boolean)
     }
 
 /**
- * Whether a background sync burst driven from [MigrationWorker] should stop. A `null` status means
- * `WalletCoordinator` has torn the synchronizer down — during a migration that happens precisely
- * when the tip reaches the next transfer's height and `isSyncBlocked()` flips true, so `null` is the
- * signal the burst has done its job. [Synchronizer.Status.SYNCED]/[Synchronizer.Status.DISCONNECTED]/
- * [Synchronizer.Status.STOPPED] are the ordinary end-of-sync terminals; anything else (SYNCING,
- * INITIALIZING) means keep waiting. Top-level and `internal` so it's unit-testable without Koin/
- * WorkManager, mirroring [executeWithRetries]/[decideNullResultAction].
+ * Whether the next migration transfer is ready to broadcast after a [Synchronizer.syncBurst]. True
+ * when the burst itself advanced the tip until the migration height gate confirmed the transfer
+ * ([Synchronizer.SyncBurstResult.TARGET_REACHED]), or a fresh height-gate read ([hasOverdueNow])
+ * confirms it — the latter catches a gate that flipped just after a non-target terminal. Top-level
+ * and `internal` so it's unit-testable without Koin/WorkManager, mirroring [decideNullResultAction].
  */
-internal fun isSyncBurstTerminal(status: Synchronizer.Status?): Boolean =
-    status == null ||
-        status == Synchronizer.Status.SYNCED ||
-        status == Synchronizer.Status.DISCONNECTED ||
-        status == Synchronizer.Status.STOPPED
-
-/**
- * Collects a stream of synchronizer statuses (null = synchronizer torn down) until it hits a
- * terminal one (see [isSyncBurstTerminal]), then returns that terminal so the caller can log it.
- * [firstOrNull] cancels the upstream collection on the first match, which stops driving sync.
- */
-internal suspend fun awaitSyncBurst(statuses: Flow<Synchronizer.Status?>): Synchronizer.Status? =
-    statuses.firstOrNull { isSyncBurstTerminal(it) }
+internal fun isBroadcastableAfterBurst(
+    burst: Synchronizer.SyncBurstResult,
+    hasOverdueNow: Boolean,
+): Boolean = burst == Synchronizer.SyncBurstResult.TARGET_REACHED || hasOverdueNow
 
 /**
  * How long to wait before the next [MigrationWorker] run after a background sync burst. If the burst
