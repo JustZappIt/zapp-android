@@ -94,33 +94,38 @@ fun MigrationReviewView(state: MigrationReviewState) {
 
 @Composable
 private fun ImmediateReviewContent(state: MigrationReviewState) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
-    ) {
-        WalletHeaderIcons(
-            state = WalletHeaderIconsState(
-                isKeystone = state.isKeystone,
-                badgeIcon = R.drawable.ic_migration_coins_swap,
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Content scrolls in this weighted region so the Confirm button stays pinned to the bottom
+        // of the screen (matching PrivacyReviewContent), rather than floating right under the short
+        // details card.
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            WalletHeaderIcons(
+                state = WalletHeaderIconsState(
+                    isKeystone = state.isKeystone,
+                    badgeIcon = R.drawable.ic_migration_coins_swap,
+                )
             )
-        )
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = "Review Transfer",
-            style = ZashiTypography.header6,
-            fontWeight = FontWeight.SemiBold,
-            color = ZashiColors.Text.textPrimary,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "Your full Orchard balance will be transferred to Ironwood in a single on-chain transfer. " +
-                "Once confirmed, this transfer cannot be cancelled.",
-            style = ZashiTypography.textSm,
-            color = ZashiColors.Text.textTertiary,
-        )
-        Spacer(Modifier.height(24.dp))
-        ImmediateDetailsCard(amount = state.totalAmount, fee = state.fee)
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = "Review Transfer",
+                style = ZashiTypography.header6,
+                fontWeight = FontWeight.SemiBold,
+                color = ZashiColors.Text.textPrimary,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Your full Orchard balance will be transferred to Ironwood in a single on-chain transfer. " +
+                    "Once confirmed, this transfer cannot be cancelled.",
+                style = ZashiTypography.textSm,
+                color = ZashiColors.Text.textTertiary,
+            )
+            Spacer(Modifier.height(24.dp))
+            ImmediateDetailsCard(amount = state.totalAmount, fee = state.fee)
+        }
         Spacer(Modifier.height(24.dp))
         ZashiButton(
             state = ButtonState(

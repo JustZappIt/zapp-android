@@ -18,10 +18,8 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureS
 import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
-import co.electriccoin.zcash.ui.common.model.SubmitResult
 import co.electriccoin.zcash.ui.common.model.groupLce
 import co.electriccoin.zcash.ui.common.model.mutableLce
-import co.electriccoin.zcash.ui.common.datasource.ProposalDataSource
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
@@ -33,24 +31,23 @@ import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepository
+import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
+import co.electriccoin.zcash.ui.common.usecase.SubmitProposalUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.screen.migration.keystonesign.MigrationKeystoneSignArgs
-import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
 import co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionArgs
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.withContext
 import java.math.BigDecimal
 import java.math.MathContext
 
@@ -67,8 +64,9 @@ class MigrationReviewVM(
     private val errorStateMapper: ErrorMapperUseCase,
     private val zashiSpendingKeyDataSource: ZashiSpendingKeyDataSource,
     private val biometricRepository: BiometricRepository,
-    private val proposalDataSource: ProposalDataSource,
+    private val zashiProposalRepository: ZashiProposalRepository,
     private val keystoneProposalRepository: KeystoneProposalRepository,
+    private val submitProposal: SubmitProposalUseCase,
 ) : ViewModel() {
 
     // proposeImmediateMigration() now returns an ordinary send-max Proposal (bypassing the
@@ -84,8 +82,6 @@ class MigrationReviewVM(
     private val confirmLce = mutableLce<Unit>()
     private val isKeystoneAccount = getSelectedWalletAccount.observe().map { it is KeystoneAccount }
     private val failure = MutableStateFlow<TransferResult?>(null)
-    private val immediateFailure = MutableStateFlow<SubmitResult?>(null)
-    private val failures = combine(failure, immediateFailure, ::Pair)
 
     init {
         proposeLce.execute {
@@ -122,9 +118,9 @@ class MigrationReviewVM(
 
     val state: StateFlow<LceState<MigrationReviewState>> =
         combine(
-            proposeLce.state, exchangeRateRepository.state, isKeystoneAccount, failures, confirmLce.state
-        ) { lce, rate, isKeystone, (f, imf), confirmState ->
-            lce.success?.let { proposal -> createState(proposal, confirmState.loading, rate, isKeystone, f, imf) }
+            proposeLce.state, exchangeRateRepository.state, isKeystoneAccount, failure, confirmLce.state
+        ) { lce, rate, isKeystone, f, confirmState ->
+            lce.success?.let { proposal -> createState(proposal, confirmState.loading, rate, isKeystone, f) }
         }.withLce(groupLce(proposeLce, confirmLce), errorStateMapper::mapToState)
             .stateIn(this)
 
@@ -134,10 +130,9 @@ class MigrationReviewVM(
         exchangeRateState: ExchangeRateState,
         isKeystone: Boolean,
         failureResult: TransferResult?,
-        immediateFailureResult: SubmitResult?,
     ): MigrationReviewState = when (proposal) {
         is ReviewProposal.Automatic -> createAutomaticState(proposal, isConfirming, exchangeRateState, isKeystone, failureResult)
-        is ReviewProposal.Immediate -> createImmediateState(proposal, isConfirming, exchangeRateState, immediateFailureResult)
+        is ReviewProposal.Immediate -> createImmediateState(proposal, isConfirming, exchangeRateState)
     }
 
     private fun createAutomaticState(
@@ -196,7 +191,6 @@ class MigrationReviewVM(
         proposal: ReviewProposal.Immediate,
         isConfirming: Boolean,
         exchangeRateState: ExchangeRateState,
-        immediateFailureResult: SubmitResult?,
     ): MigrationReviewState {
         val fee = proposal.proposal.totalFeeRequired()
         return MigrationReviewState(
@@ -217,35 +211,10 @@ class MigrationReviewVM(
             isConfirming = isConfirming,
             onConfirm = { onConfirmImmediate(proposal.proposal, proposal.amountZatoshi) },
             onBack = ::onBack,
-            failureSheet = immediateFailureResult?.let {
-                MigrationTransferFailureState(
-                    message = immediateSubmitFailureMessage(it),
-                    // Only a GrpcFailure is safely resubmittable — resending the identical signed
-                    // Proposal after a genuine Failure/Error/Partial would either re-fail
-                    // identically or, for Partial, risk re-broadcasting already-sent internal
-                    // transactions. Omitting the retry button (rather than silently wiring it to
-                    // "go back", which the shared bottom sheet used to do for such cases) keeps the
-                    // sheet from lying about what its button does.
-                    onRetry = if (it is SubmitResult.GrpcFailure) {
-                        {
-                            immediateFailure.value = null
-                            confirmLce.execute { confirmImmediate(proposal.proposal, proposal.amountZatoshi) }
-                        }
-                    } else {
-                        null
-                    },
-                    onDismiss = { immediateFailure.value = null },
-                )
-            },
+            // Submit failures now surface on the Sending screen (which owns the broadcast) rather
+            // than here — this screen only hands the signed proposal off after biometric auth.
+            failureSheet = null,
         )
-    }
-
-    private fun immediateSubmitFailureMessage(result: SubmitResult): String = when (result) {
-        is SubmitResult.GrpcFailure -> "Couldn't reach the network. Check your connection and try again."
-        is SubmitResult.Failure -> "The network rejected this transaction. Please contact support."
-        is SubmitResult.Error -> "Something went wrong while sending. Please contact support."
-        is SubmitResult.Partial -> "Some but not all of this transaction's parts were sent. Please contact support."
-        is SubmitResult.Success -> error("immediateSubmitFailureMessage called with a Success result")
     }
 
     private fun fiatAmount(zatoshi: Zatoshi, exchangeRateState: ExchangeRateState): StringResource? {
@@ -322,52 +291,46 @@ class MigrationReviewVM(
         finalizeMigrationSchedule(scheduleToSign, args.mode)
     }
 
+    // The IMMEDIATE send-max sweep is, from the wallet's point of view, an ordinary send — so it
+    // reuses the exact same submit pipeline every other send does: adopt the proposal as the current
+    // MigrationSweepTransactionProposal, then hand off to SubmitProposalUseCase (biometrics + async
+    // broadcast + Transaction Progress screen, whose sending/success states already render the
+    // migration-sweep "…migrated to Ironwood" copy). No migration-specific screen or handoff.
     private fun onConfirmImmediate(proposal: Proposal, amountZatoshi: Long) =
         confirmLce.execute {
-            try {
-                biometricRepository.requestBiometrics(
-                    request =
-                        BiometricRequest(
-                            message =
-                                stringRes(
-                                    R.string.authentication_system_ui_subtitle,
-                                    stringRes(R.string.authentication_use_case_send_funds)
-                                )
-                        )
-                )
-            } catch (_: BiometricsFailureException) {
-                return@execute
-            } catch (_: BiometricsCancelledException) {
-                return@execute
+            if (getSelectedWalletAccount() is KeystoneAccount) {
+                // Keystone can't sign in-process — adopt the already-built send-max proposal into the
+                // app's existing generic external-signer pipeline exactly as an ordinary Keystone
+                // send does (one ordinary PCZT, same as any regular Keystone send). Biometrics are
+                // requested here because the Keystone branch skips SubmitProposalUseCase (which owns
+                // biometrics for the Zashi path) in favour of the QR sign/scan detour.
+                try {
+                    biometricRepository.requestBiometrics(
+                        request =
+                            BiometricRequest(
+                                message =
+                                    stringRes(
+                                        R.string.authentication_system_ui_subtitle,
+                                        stringRes(R.string.authentication_use_case_send_funds)
+                                    )
+                            )
+                    )
+                } catch (_: BiometricsFailureException) {
+                    return@execute
+                } catch (_: BiometricsCancelledException) {
+                    return@execute
+                }
+                keystoneProposalRepository.setMigrationSweepProposal(proposal, Zatoshi(amountZatoshi))
+                // Required before navigating — SignKeystoneTransactionVM's QR encoder is built from
+                // the already-created PCZT (createPCZTEncoder() reads KeystoneProposalRepository's
+                // cached proposalPczt); it never calls createPCZTFromProposal() itself.
+                keystoneProposalRepository.createPCZTFromProposal()
+                navigationRouter.forward(SignKeystoneTransactionArgs)
+            } else {
+                zashiProposalRepository.setMigrationSweepProposal(proposal, Zatoshi(amountZatoshi))
+                submitProposal()
             }
-            confirmImmediate(proposal, amountZatoshi)
         }
-
-    private suspend fun confirmImmediate(proposal: Proposal, amountZatoshi: Long) {
-        if (getSelectedWalletAccount() is KeystoneAccount) {
-            // Keystone can't sign in-process — adopt the already-built send-max proposal into the
-            // app's existing generic external-signer pipeline exactly as an ordinary Keystone send
-            // does (no migration-specific PCZT/QR machinery — one ordinary PCZT, same as any
-            // regular Keystone send).
-            keystoneProposalRepository.setMigrationSweepProposal(proposal, Zatoshi(amountZatoshi))
-            // Required before navigating — SignKeystoneTransactionVM's QR encoder is built from
-            // the already-created PCZT (createPCZTEncoder() reads KeystoneProposalRepository's
-            // cached proposalPczt); it never calls createPCZTFromProposal() itself. Every other
-            // Keystone entry point (CreateProposalUseCase, ShieldFundsUseCase, etc.) does this
-            // same two-call sequence before forwarding.
-            keystoneProposalRepository.createPCZTFromProposal()
-            navigationRouter.forward(SignKeystoneTransactionArgs)
-            return
-        }
-        val usk = zashiSpendingKeyDataSource.getZashiSpendingKey()
-        val result = withContext(NonCancellable) {
-            proposalDataSource.submitTransaction(proposal, usk)
-        }
-        when (result) {
-            is SubmitResult.Success -> navigationRouter.forward(MigrationSuccessArgs(result.txIds.lastOrNull()))
-            else -> immediateFailure.value = result
-        }
-    }
 
     private fun onBack() = proposeLce.guardLoading { navigationRouter.back() }
 
