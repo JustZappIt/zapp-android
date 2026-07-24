@@ -20,11 +20,13 @@ import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepository
+import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
+import co.electriccoin.zcash.ui.common.usecase.SubmitProposalUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
 import io.mockk.coEvery
@@ -315,8 +317,9 @@ class MigrationReviewVMTest {
         errorStateMapper = mockk<ErrorMapperUseCase>(relaxed = true),
         zashiSpendingKeyDataSource = zashiSpendingKeyDataSource,
         biometricRepository = mockk<BiometricRepository>(relaxed = true),
-        proposalDataSource = proposalDataSource,
+        zashiProposalRepository = mockk(relaxed = true),
         keystoneProposalRepository = keystoneProposalRepository,
+        submitProposal = mockk<SubmitProposalUseCase>(relaxed = true),
     )
 
     private class FakeNavigationRouter : NavigationRouter {
