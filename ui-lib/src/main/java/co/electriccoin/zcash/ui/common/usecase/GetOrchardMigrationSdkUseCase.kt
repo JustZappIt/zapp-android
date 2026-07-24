@@ -2,6 +2,10 @@ package co.electriccoin.zcash.ui.common.usecase
 
 import android.content.Context
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
+import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
+import co.electriccoin.zcash.ui.common.model.WalletAccount
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
 
 /**
@@ -23,15 +27,36 @@ import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
  * Unlike `WalletCoordinatorFactory`'s own `OrchardMigrationSdk.new(... account = null)` call (which
  * gates sync before any `Synchronizer`/account selection exists), this always resolves a real
  * selected account whenever a wallet exists.
+ *
+ * An explicit-account overload [invoke(accountKeyId)] is provided for contexts where the account
+ * is known by its storage key ID (e.g. [co.electriccoin.zcash.work.MigrationWorker]) rather than
+ * being read from the current selection.
  */
 class GetOrchardMigrationSdkUseCase(
     private val context: Context,
     private val persistableWalletProvider: PersistableWalletProvider,
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
+    private val accountDataSource: AccountDataSource,
 ) {
-    suspend operator fun invoke(): OrchardMigrationSdk? {
+    /** Resolves the SDK for the currently selected wallet account. */
+    suspend operator fun invoke(): OrchardMigrationSdk? =
+        buildFor(getSelectedWalletAccount())
+
+    /**
+     * Resolves the SDK for the account identified by [accountKeyId] (its
+     * [co.electriccoin.zcash.ui.common.model.toStorageKeyId] value), or `null` if no such account
+     * exists or there is no persisted wallet.
+     */
+    suspend operator fun invoke(accountKeyId: String): OrchardMigrationSdk? {
+        val account = accountDataSource.getAllAccounts().findByAccountKeyId(accountKeyId) ?: run {
+            Twig.warn { "MIGRATION_DIAG GetOrchardMigrationSdk: no account for keyId=$accountKeyId" }
+            return null
+        }
+        return buildFor(account)
+    }
+
+    private suspend fun buildFor(account: WalletAccount): OrchardMigrationSdk? {
         val wallet = persistableWalletProvider.getPersistableWallet() ?: return null
-        val account = getSelectedWalletAccount()
         return OrchardMigrationSdk.new(
             appContext = context,
             zcashNetwork = wallet.network,
@@ -40,3 +65,11 @@ class GetOrchardMigrationSdkUseCase(
         )
     }
 }
+
+/**
+ * Returns the first [WalletAccount] in the list whose
+ * [co.electriccoin.zcash.ui.common.model.toStorageKeyId] matches [accountKeyId], or `null` if
+ * none match.
+ */
+fun List<WalletAccount>.findByAccountKeyId(accountKeyId: String): WalletAccount? =
+    firstOrNull { it.sdkAccount.accountUuid.toStorageKeyId() == accountKeyId }
