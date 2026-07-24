@@ -170,8 +170,13 @@ class MigrationNotifier(private val context: Context) {
         const val CHANNEL_ID = "migration_channel"
         const val EXTRA_OPEN_MIGRATION = "co.electriccoin.zcash.migration.open_progress"
         const val EXTRA_OPEN_TRANSFER_READY = "co.electriccoin.zcash.migration.open_transfer_ready"
-        private const val NOTIFICATION_ID_PROGRESS_BASE = 90_0000        // notification-id namespace
-        private const val REQUEST_CODE_MIGRATION_BASE = 90_0000          // PendingIntent-request-code namespace
-        private const val REQUEST_CODE_TRANSFER_READY_BASE = 91_0000     // PendingIntent-request-code namespace
+        // Notification-id namespace (NotificationManager ids). Independent of the PendingIntent
+        // request-code namespace below — sharing the same numeric base value across the two namespaces
+        // does not collide. Per-account via `+ accountIdOffset(...)` (range 0..0xFFFF).
+        private const val NOTIFICATION_ID_PROGRESS_BASE = 0x10_0000
+        // PendingIntent request-code namespace. The two bases are spaced 0x10_0000 apart — far more than
+        // accountIdOffset's 0..0xFFFF range — so per-account request-code ranges can never overlap.
+        private const val REQUEST_CODE_MIGRATION_BASE = 0x10_0000
+        private const val REQUEST_CODE_TRANSFER_READY_BASE = 0x20_0000
     }
 }
