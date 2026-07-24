@@ -14,6 +14,7 @@ import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
+import kotlinx.coroutines.delay
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import kotlin.time.Clock
@@ -51,7 +52,12 @@ class MigrationWorker(
         val plan = migrationPlanRepository.load()
         val next = plan?.nextPending
         val useTor = isMigrationTorEnabledStorageProvider.get()
-        return when (val result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor))) {
+        // Retries within this single worker invocation, same attempt budget as
+        // MigrationSendingVM.sendOnce()'s foreground loop — so a persistent network error settles
+        // into an error state after 3 attempts instead of retrying via WorkManager's Result.retry()
+        // indefinitely (previously observed: dumpsys jobscheduler showed the same worker restarting
+        // and running for the full ~10-minute execution ceiling, repeatedly, for hours).
+        return when (val result = executeWithRetries { sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor)) }) {
             null -> {
                 if (next != null) {
                     // A transfer is still pending but wasn't ready to broadcast this run — most
@@ -85,26 +91,26 @@ class MigrationWorker(
                 Result.success()
             }
             is TransferResult.NetworkError -> {
-                Twig.debug { "MIGRATION_DIAG MigrationWorker: network error, retryable=${result.retryable}" }
-                if (result.retryable) {
-                    Result.retry()
-                } else if (useTor) {
-                    // A non-retryable network error while Tor was in use for this attempt is
-                    // presumptively a Tor-connectivity failure, same reasoning as
-                    // MigrationSendingVM.sendOnce()'s interactive NetworkError branch. Persist a
-                    // flag so app-open reconciliation (CheckMigrationRecoveryUseCase) routes back
-                    // through the Sending screen instead of the generic manual-confirmation path,
-                    // and surface a distinct notification so this looks different from any other
-                    // missed transfer.
+                // Retries already exhausted (or the failure was non-retryable) inside
+                // executeWithRetries above — settle into an error state now rather than asking
+                // WorkManager for yet another attempt.
+                Twig.debug {
+                    "MIGRATION_DIAG MigrationWorker: network error after retries, isTorFailure=${result.isTorFailure}"
+                }
+                if (result.isTorFailure) {
+                    // Same reasoning as MigrationSendingVM.sendOnce()'s interactive NetworkError
+                    // branch. Persist a flag so app-open reconciliation
+                    // (CheckMigrationRecoveryUseCase) routes back through the Sending screen
+                    // instead of the generic manual-confirmation path, and surface a distinct
+                    // notification so this looks different from any other missed transfer.
                     pendingMigrationTorFailureStorageProvider.store(true)
                     migrationNotifier.notifyMigrationTorFailure()
-                    Result.failure()
-                } else {
+                } else if (next != null) {
                     // Nothing else re-arms a future attempt for a non-retryable failure — the
                     // user must open the app and act, same as a missed/stalled window.
-                    if (next != null) migrationNotifier.notifyManualConfirmationRequired(next.index + 1, plan.totalCount)
-                    Result.failure()
+                    migrationNotifier.notifyManualConfirmationRequired(next.index + 1, plan.totalCount)
                 }
+                Result.failure()
             }
             TransferResult.InvalidNote -> {
                 // State is now RequiresAttention(InvalidTransfer) — spec §6.2, notes were spent
@@ -131,4 +137,31 @@ class MigrationWorker(
         val remaining = next.scheduledAt - Clock.System.now()
         return if (remaining.isNegative()) 0.seconds else remaining
     }
+}
+
+// Same attempt budget as MigrationSendingVM.sendOnce()'s foreground retry loop, so background and
+// foreground give up after the same number of attempts.
+private const val MAX_BROADCAST_ATTEMPTS = 3
+private const val BROADCAST_RETRY_DELAY_MS = 1500L
+
+/**
+ * Calls [attempt] up to [maxAttempts] times, retrying only while the result is a retryable
+ * [TransferResult.NetworkError] — anything else (success, not-yet-due null, a non-retryable
+ * error, an invalid/expired transfer) short-circuits immediately. Top-level and `internal`
+ * (rather than a private method on [MigrationWorker]) specifically so it's unit-testable without
+ * Koin or WorkManager, neither of which this codebase has test infrastructure for today.
+ */
+internal suspend fun executeWithRetries(
+    maxAttempts: Int = MAX_BROADCAST_ATTEMPTS,
+    retryDelayMs: Long = BROADCAST_RETRY_DELAY_MS,
+    attempt: suspend () -> TransferResult?,
+): TransferResult? {
+    var result: TransferResult? = null
+    for (i in 0 until maxAttempts) {
+        if (i > 0) delay(retryDelayMs)
+        result = attempt()
+        val current = result
+        if (current !is TransferResult.NetworkError || !current.retryable) break
+    }
+    return result
 }
