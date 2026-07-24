@@ -7,7 +7,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 class MigrationHandoffAccountGuardTest {
-
     @Test
     fun pendingScheduleReturnsNullForDifferentAccount() {
         val repo = PendingMigrationScheduleRepositoryImpl()
@@ -37,11 +36,12 @@ class MigrationHandoffAccountGuardTest {
     @Test
     fun keystonePcztsReturnsNullForDifferentAccount() {
         val repo = PendingKeystoneMigrationPcztsRepositoryImpl()
-        val pczts = PendingKeystoneMigrationPczts(
-            requestId = byteArrayOf(1),
-            splitUnsignedPczt = null,
-            transferUnsignedPczts = emptyList(),
-        )
+        val pczts =
+            PendingKeystoneMigrationPczts(
+                requestId = byteArrayOf(1),
+                splitUnsignedPczt = null,
+                transferUnsignedPczts = emptyList(),
+            )
         repo.set("accountA", pczts)
         assertNull(repo.get("accountB"))
         assertSame(pczts, repo.get("accountA"))
