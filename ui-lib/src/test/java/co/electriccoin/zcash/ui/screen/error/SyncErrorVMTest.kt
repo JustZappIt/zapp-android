@@ -52,7 +52,7 @@ class SyncErrorVMTest {
     fun genericSyncErrorShowsNoDiagnostics() =
         runTest {
             val vm = vm(cause = IOException("connection reset"))
-            backgroundScope.launch { vm.state.collect {} }
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
 
             assertNull(vm.state.value.diagnostics)
         }
@@ -61,7 +61,7 @@ class SyncErrorVMTest {
     fun consensusBranchMismatchExplainsItselfWithoutBlamingEitherSide() =
         runTest {
             val vm = vm(cause = consensusMismatch())
-            backgroundScope.launch { vm.state.collect {} }
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
 
             val diagnostics = assertNotNull(vm.state.value.diagnostics)
             assertEquals(stringRes(R.string.sync_error_incompatible_consensus_message), diagnostics.explanation)
@@ -71,7 +71,7 @@ class SyncErrorVMTest {
     fun consensusBranchMismatchNamesTheServerAndBothBranchIds() =
         runTest {
             val vm = vm(cause = consensusMismatch())
-            backgroundScope.launch { vm.state.collect {} }
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
 
             assertEquals(
                 listOf(
@@ -88,7 +88,7 @@ class SyncErrorVMTest {
     fun serverLineIsOmittedWhenNoEndpointIsSelected() =
         runTest {
             val vm = vm(cause = consensusMismatch(), endpoint = null)
-            backgroundScope.launch { vm.state.collect {} }
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
 
             val facts = assertNotNull(vm.state.value.diagnostics).facts
             assertEquals(
@@ -112,7 +112,7 @@ class SyncErrorVMTest {
                             serverNetwork = null
                         )
                 )
-            backgroundScope.launch { vm.state.collect {} }
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
 
             assertEquals(
                 listOf(
@@ -129,7 +129,7 @@ class SyncErrorVMTest {
         runTest {
             val router = mockk<NavigationRouter>(relaxed = true)
             val vm = vm(cause = consensusMismatch(), router = router)
-            backgroundScope.launch { vm.state.collect {} }
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
 
             val state = vm.state.value
             // The remedy already existed; this change must not introduce another button.
