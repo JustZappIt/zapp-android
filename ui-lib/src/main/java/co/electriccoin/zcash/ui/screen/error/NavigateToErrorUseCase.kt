@@ -5,6 +5,7 @@ import co.electriccoin.lightwallet.client.model.UninitializedTorClientException
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.SubmitResult
 import co.electriccoin.zcash.ui.common.model.SynchronizerError
+import co.electriccoin.zcash.ui.common.model.toServerCompatibilityError
 import co.electriccoin.zcash.ui.common.repository.HomeMessageData
 import co.electriccoin.zcash.ui.design.util.getCausesAsSequence
 
@@ -46,8 +47,13 @@ class NavigateToErrorUseCase(
     }
 
     @Suppress("MagicNumber")
-    private fun isSyncError(synchronizerError: SynchronizerError): Boolean =
-        synchronizerError.cause
+    private fun isSyncError(synchronizerError: SynchronizerError): Boolean {
+        // A server the app is incompatible with is a sync error whose remedy is "Switch server",
+        // which only the sync error sheet offers. Without this the mismatch falls through to the
+        // generic error bottom sheet, which shows a stack trace and no way to change server.
+        if (synchronizerError.toServerCompatibilityError() != null) return true
+
+        return synchronizerError.cause
             ?.getCausesAsSequence()
             .orEmpty()
             .any { e ->
@@ -70,6 +76,7 @@ class NavigateToErrorUseCase(
                     else -> false
                 }
             }
+    }
 
     fun requireCurrentArgs() = args as ErrorArgs
 
