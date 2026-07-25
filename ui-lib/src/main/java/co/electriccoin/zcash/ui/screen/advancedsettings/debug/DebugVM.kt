@@ -22,12 +22,10 @@ import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.text.DebugTextArgs
 import co.electriccoin.zcash.ui.screen.hotfix.ephemeral.EphemeralHotfixArgs
-import co.electriccoin.zcash.work.MigrationScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlin.time.Duration.Companion.minutes
 
 class DebugVM(
     private val copyToClipboardUseCase: CopyToClipboardUseCase,
@@ -82,10 +80,6 @@ class DebugVM(
                         ListItemState(
                             title = stringRes("Migration restart"),
                             onClick = ::onMigrationRestartClick
-                        ),
-                        ListItemState(
-                            title = stringRes("Migration reschedule transfers (fast test)"),
-                            onClick = ::onMigrationRescheduleTransfersClick
                         ),
                         ListItemState(
                             title = stringRes("Migration: simulate Tor background failure"),
@@ -170,34 +164,6 @@ class DebugVM(
             )
         }
 
-    // Reschedules an already-committed migration's transfers to become due within minutes instead
-    // of ZIP 318's normal ~3h-apart privacy schedule (see OrchardMigrationSdk.
-    // debugRescheduleTransfers's kdoc) — run this AFTER confirming a migration, not instead of it.
-    //
-    // Rewriting the Rust-persisted scheduled_height alone isn't enough: MigrationScheduler's
-    // WorkManager job was already enqueued with a fixed initial delay computed from the ORIGINAL
-    // (long) schedule at confirm time, and won't fire any sooner on its own. Re-arming it here
-    // with a short delay (via ExistingWorkPolicy.REPLACE) is what actually makes the background
-    // worker check again soon enough to broadcast the now-due transfer.
-    private fun onMigrationRescheduleTransfersClick() =
-        viewModelScope.launch {
-            val count = getOrchardMigrationSdk()?.debugRescheduleTransfers() ?: 0
-            val accountKeyId = accountDataSource.getSelectedAccount().sdkAccount.accountUuid.toStorageKeyId()
-            MigrationScheduler(context).schedule(accountKeyId, 3.minutes)
-            navigationRouter.forward(
-                DebugTextArgs(
-                    title = "Migration reschedule transfers",
-                    text = if (count > 0) {
-                        "$count transfer(s) rescheduled: first due in ~2.5 min, then ~5 min apart. " +
-                            "Background worker re-armed to check again in ~3 min."
-                    } else {
-                        "0 transfers rescheduled — no in-progress migration found, or every " +
-                            "transfer is already broadcast/mined. Nothing was changed."
-                    }
-                )
-            )
-        }
-
     // Reproduces spec §6.2's "background Tor failure" state (MigrationWorker's non-retryable
     // NetworkError-while-useTor branch) without waiting for a real background run to fail — sets
     // the same persisted flag and posts the same notification, then immediately re-runs the same
@@ -232,9 +198,9 @@ class DebugVM(
                 DebugTextArgs(
                     title = "Migration: toggle 'no background execution'",
                     text = if (nowForced) {
-                        "Background execution now forced UNAVAILABLE. Reschedule a transfer to be " +
-                            "due soon (see 'Migration reschedule transfers') to see the Transfer " +
-                            "Ready to Send banner/screen."
+                        "Background execution now forced UNAVAILABLE. On testnet a committed " +
+                            "transfer becomes due within ~15 min (12-block anchor bucket); once " +
+                            "due, the Transfer Ready to Send banner/screen appears."
                     } else {
                         "Background execution restored to the device's real state."
                     }
