@@ -115,13 +115,20 @@ are removed:
      only say "a submit may have happened", which the txid probe already answers
      definitively (discussed and rejected as redundant).
    - **Invalid/Expired recording becomes real (M1, §6.C)** — today it is a no-op.
-4. **Consecutive-shift counter** (per transfer id, per account, persisted): at run start, if
-   the tri-state names the same transfer id as last time and it is again AWAITING_PROOF →
-   increment; if it is READY, or a different id, or the migration was replanned → reset. On
-   the **3rd** consecutive shift: run `reconcileInvalidations()`; if clean →
-   `notifyManualConfirmationRequired` once (something is systematically wrong or the OS is
-   hostile). Shifting itself continues on subsequent runs (the plan must stay alive — the
-   notification is not a stop), but the notification does not repeat for the same transfer.
+4. **Consecutive-shift counter** (per transfer id, per account, persisted). Rationale: the OS
+   throttles the app as a whole, so "Lane B runs while Lane A is starved" is not the real
+   scenario. AWAITING_PROOF at a Lane B run has three causes: (a) same-wake ordering (B
+   drained before A after a Doze window — benign, self-heals next window), (b) Lane A runs
+   but sync keeps failing (connectivity — shifting is the correct response, escalation would
+   be noise), (c) **sync succeeds and the transfer still won't prove** (a spent note that
+   detection A somehow missed, or a witness/retention hole) — the only case worth escalating.
+   The counter therefore counts only case (c): **increment only when a successful sync
+   completed since the previous shift** (`lastNetworkActivity` newer than the last shift
+   timestamp); otherwise shift silently without counting. Reset on READY, a different
+   transfer id, or replan. On the **3rd** counted shift: run `reconcileInvalidations()`; if
+   clean → `notifyManualConfirmationRequired` once. Shifting itself continues on subsequent
+   runs (the plan must stay alive — the notification is not a stop), and the notification
+   does not repeat for the same transfer.
 
 ### Foreground equivalent of Lane A
 
