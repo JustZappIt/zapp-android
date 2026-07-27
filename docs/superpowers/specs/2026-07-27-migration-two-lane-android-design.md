@@ -59,7 +59,13 @@ due-alarm does not (§10).
 
 One instance per wallet (not per account — sync traffic is wallet-global); its window check
 considers **all** accounts' next due times, mirroring `isSyncBlockedNow()`'s all-accounts loop.
-Fixed cadence, independent of the plan: mainnet 60 min ± jitter, testnet 5 min. Run body:
+Cadence: **interim** fixed and plan-independent — mainnet 60 min ± jitter, testnet 5 min.
+**Target state**: consume the engine-computed minimal wake-up schedule once
+[librustzcash#2801](https://github.com/zcash/librustzcash/pull/2801)
+(`MigrationState::sync_wakeup_schedule` — minimal piercing set over proving windows, bucketed
+heights + jitter as thundering-herd defense, mandatory immediate wake for overdue; part of
+epic #2630) lands and the SDK exposes it — the fixed cadence then remains as fallback when the
+schedule is empty/unavailable. Run body:
 
 1. **Window check**: compute `nextEstimatedDue` from **live** transfer states
    (`migrationTransferStates()`, i.e. current engine `scheduled_height`s — NOT the
@@ -87,7 +93,10 @@ are removed:
 1. **Overlap check** (all sync sources, M3): defer with a local delay (§5) if any of:
    Lane A RUNNING (`WorkManager.getWorkInfosForUniqueWork`); the synchronizer status is
    SYNCING (foreground session or daily `SyncWorker` live); or
-   `now − lastNetworkActivity < privacyBuffer`.
+   `now − lastNetworkActivity < privacyBuffer`. Before the submit itself Lane B sets a
+   short-lived **broadcast-in-flight flag** that `isSyncBlockedNow()` ORs in, so a sync
+   session cannot *start* mid-submit either (bidirectional yield through existing gate
+   plumbing); the flag clears on record or run end.
 2. `nextDueTransfer(estimatedTip)` → tri-state:
    - **READY** → extract → submit (Tor per flow-scoped flag) → record → post-broadcast privacy
      buffer (existing) → schedule next per plan. An overdue-but-proved transfer is simply READY
@@ -102,7 +111,9 @@ are removed:
      already on-chain. Reconciliation (§6.D) additionally probes `get_tx_height(txid(pczt))`
      for `Proved` transfers (the txid is deterministically extractable from the stored PCZT)
      and marks Broadcast+Mined on a hit; a "duplicate/already in mempool" submit rejection is
-     treated as success.
+     treated as success. No additional persisted "sending" sub-state is introduced — it could
+     only say "a submit may have happened", which the txid probe already answers
+     definitively (discussed and rejected as redundant).
    - **Invalid/Expired recording becomes real (M1, §6.C)** — today it is a no-op.
 4. **Consecutive-shift counter** (per transfer id, per account, persisted): at run start, if
    the tri-state names the same transfer id as last time and it is again AWAITING_PROOF →
@@ -116,7 +127,10 @@ are removed:
 
 During an active migration, when the foreground synchronizer reaches `SYNCED`, a
 WalletCoordinator-level observer calls `finalizeReadyTransfers()` + `reconcileInvalidations()`
-and stamps the last-network-activity timestamp. The daily `SyncWorker` stamps it too.
+and stamps the last-network-activity timestamp. The daily `SyncWorker` **no-ops while a
+migration is active** (Lane A supersedes it — more frequent, coordinated; checked at
+execution time so the system-shifted run time is irrelevant); outside migration it stamps the
+timestamp too.
 `MigrationSendingVM`'s `finalize + execute` weld is removed; the VM uses the same tri-state
 call as Lane B.
 
@@ -221,6 +235,9 @@ When can "a funding note is already spent elsewhere" be known? Four points, orde
    pass −1; expiry sub-checks on scanned tip.
 3. Kotlin `ChainTipEstimator` (§4) wired through `OrchardMigrationSdk`.
 4. **NEW `rescheduleUnprovenTransferNative`** (B1 — no production reschedule exists; the
+   core team's epic #2630 is expected to deliver an engine primitive eventually — when it
+   lands this FFI becomes a wrapper over it; #2801, the epic's first PR, covers Lane A
+   wake-ups, not transfer rescheduling. The
    Kotlin `rescheduleOverdueTransfer()` is a non-persisting stub with a units bug — epoch
    seconds compared against block heights — and is deleted/replaced as part of this work).
    Modeled on `debugRescheduleTransfersNative`'s `from_parts` rebuild: rewrites
@@ -240,8 +257,10 @@ When can "a funding note is already spent elsewhere" be known? Four points, orde
 9. Privacy buffer becomes **network-scaled** (not build-type-scaled): mainnet 10 min, testnet
    3 min (m5 — today a single fixed constant shared by the post-broadcast gate and
    `privacySyncBufferDuration()`; both scale together).
-10. Unchanged: `finalizeReadyTransfers`, `isSyncBlocked` semantics, Keystone signing paths
-    (pre-signed PCZTs flow through the same lanes; shifts don't re-sign).
+10. Broadcast-in-flight flag ORed into `isSyncBlockedNow()` (§2.B.1); daily `SyncWorker`
+    no-op during active migration (§2, foreground section).
+11. Unchanged: `finalizeReadyTransfers`, `isSyncBlocked` gate semantics otherwise, Keystone
+    signing paths (pre-signed PCZTs flow through the same lanes; shifts don't re-sign).
 
 ## 8. App changes
 
@@ -249,8 +268,9 @@ New: `MigrationSyncWorker` + `MigrationSyncScheduler` (Lane A: one chain per wal
 per-network cadence constants); shared `LastNetworkActivityStore` (wallet-global, stamped by
 Lane A, foreground hook, `SyncWorker`); per-transfer consecutive-shift counter store (keyed
 account + transfer id, semantics §2.B.4); app-open at-most-one-overdue catch-up in
-`CheckMigrationRecoveryUseCase` (§5); `BOOT_COMPLETED` receiver re-arming the due-alarm (m1 —
-WorkManager survives reboot, `AlarmManager` does not).
+`CheckMigrationRecoveryUseCase` (§5). Optional/nice-to-have: `BOOT_COMPLETED` receiver
+re-arming the due-alarm (m1 — WorkManager survives reboot, `AlarmManager` does not; the
+worker lanes themselves need no receiver).
 
 Modified: `MigrationWorker` decision core → tri-state (§2.B; `decideNullResultAction`, the
 burst branch, and the run-start finalize are removed); `MigrationSendingVM` (weld removed);
@@ -355,6 +375,9 @@ reschedule time (§7.4's fallback covers it).
   is enabled; the M4 fallback (keep old boundary) is the safe default meanwhile.
 - iOS implementation (expected shape documented in §10).
 - Batch-sending multiple overdue transfers with pauses (engine policy question for core team).
+- Track epic librustzcash#2630: #2801 (`sync_wakeup_schedule`) replaces Lane A's fixed
+  cadence when exposed through the SDK; a future engine reschedule primitive replaces the
+  internals of §7.4.
 
 ## 14. Adversarial review changelog (2026-07-27)
 
