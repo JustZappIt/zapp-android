@@ -196,10 +196,23 @@ class MigrationProgressVM(
             }
             MigrationScheduler(context).schedule(accountKeyId, delay)
             val nowEpochSeconds = Clock.System.now().epochSeconds
-            migrationPlanRepository.rescheduleTransfer(
-                index = liveStates.transfers.indexOfFirst { it.id == nextPendingId }.coerceAtLeast(0),
-                scheduledAtEpochSeconds = nowEpochSeconds + delay.inWholeSeconds,
-            )
+            // Look up the transfer's display index from the app plan by stable id — the SDK's engine
+            // ordering (funding-note/crossing order) can differ from the app plan's broadcast-height-
+            // sorted display order (ZIP 318 shuffles them), so liveStates array position ≠ app-plan
+            // transfer.index. rescheduleTransfer() matches on transfer.index, so using the SDK
+            // array position here would silently update the wrong cache entry. When the id isn't in
+            // the app plan yet (plan not yet written through), skip the write-through rather than
+            // clobbering index 0 — the SDK state is authoritative; the Progress screen overlays live
+            // state at render time via withLiveState() anyway. (MIGRATION_DIAG)
+            val appPlanIndex = migrationPlanRepository.load()?.transfers?.firstOrNull { it.id == nextPendingId }?.index
+            if (appPlanIndex != null) {
+                migrationPlanRepository.rescheduleTransfer(
+                    index = appPlanIndex,
+                    scheduledAtEpochSeconds = nowEpochSeconds + delay.inWholeSeconds,
+                )
+            } else {
+                Twig.warn { "MIGRATION_DIAG MigrationProgressVM.onReschedule: transfer $nextPendingId not found in app plan — skipping write-through." }
+            }
             navigationRouter.back()
         } else {
             // Transfer is already Proved — reschedule not possible. Log and refresh.

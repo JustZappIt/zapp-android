@@ -21,10 +21,12 @@ import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
 import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs
 import co.electriccoin.zcash.work.MigrationSyncScheduler
+import co.electriccoin.zcash.work.laneACadence
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -333,5 +335,47 @@ class CheckMigrationRecoveryUseCaseTest {
     fun overdueTransfersToShift_twoElements_returnsSecond() {
         val result = overdueTransfersToShift(listOf("first", "second"))
         assertEquals(listOf("second"), result)
+    }
+
+    // ── Lane A reconciliation tests (Finding 3) ────────────────────────────────────────
+
+    @Test
+    fun laneAReconciliation_planExistsAndLaneInactive_schedulesLaneA() = runTest {
+        // Finding 3: plan exists + isLaneAActive = false → migrationSyncScheduler.schedule called.
+        val syncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
+            coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))
+            coEvery { hasOverdueTransfers() } returns false
+        }
+
+        useCase(
+            sdk = sdk,
+            navigationRouter = mockk(relaxed = true),
+            savedPlan = mockk(relaxed = true),
+            migrationSyncScheduler = syncScheduler,
+            isLaneAActive = { false },
+        ).invoke()
+
+        verify { syncScheduler.schedule(any(), laneACadence()) }
+    }
+
+    @Test
+    fun laneAReconciliation_planExistsAndLaneActive_doesNotScheduleLaneA() = runTest {
+        // Finding 3: plan exists + isLaneAActive = true → migrationSyncScheduler.schedule NOT called.
+        val syncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
+            coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))
+            coEvery { hasOverdueTransfers() } returns false
+        }
+
+        useCase(
+            sdk = sdk,
+            navigationRouter = mockk(relaxed = true),
+            savedPlan = mockk(relaxed = true),
+            migrationSyncScheduler = syncScheduler,
+            isLaneAActive = { true },
+        ).invoke()
+
+        verify(exactly = 0) { syncScheduler.schedule(any(), any()) }
     }
 }

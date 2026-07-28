@@ -12,10 +12,12 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.work.MigrationScheduler
 import co.electriccoin.zcash.work.MigrationSyncScheduler
+import co.electriccoin.zcash.work.laneACadence
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -36,6 +38,26 @@ class FinalizeMigrationScheduleUseCaseTest {
             estimatedDurationHours = 1,
             proposalHandle = 0L,
         )
+
+    @Test
+    fun invokeSchedulesLaneASyncScheduler() = runTest {
+        // Finding 2: verify migrationSyncScheduler.schedule is called with laneACadence() on invoke.
+        val syncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
+        val useCase = FinalizeMigrationScheduleUseCase(
+            migrationPlanRepository = mockk(relaxed = true),
+            migrationScheduler = mockk<MigrationScheduler>(relaxed = true),
+            migrationSyncScheduler = syncScheduler,
+            navigationRouter = mockk<NavigationRouter>(relaxed = true),
+            getOrchardMigrationSdk = mockk<GetOrchardMigrationSdkUseCase>(relaxed = true),
+            getSelectedWalletAccount = mockk<GetSelectedWalletAccountUseCase> {
+                coEvery { this@mockk() } returns mockk<ZashiAccount>(relaxed = true)
+            },
+        )
+
+        useCase(schedule(), MigrationMode.AUTOMATIC)
+
+        verify { syncScheduler.schedule(any(), laneACadence()) }
+    }
 
     @Test
     fun keystoneAccountPopulatesKeystoneRoundFromFreshEstimate() = runTest {
