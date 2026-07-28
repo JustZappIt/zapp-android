@@ -23,7 +23,7 @@ class MigrationWorkerTest {
         }
 
         assertIs<TransferAttemptOutcome.Executed>(result)
-        assertIs<TransferResult.Success>((result as TransferAttemptOutcome.Executed).result)
+        assertIs<TransferResult.Success>(result.result)
         assertEquals(1, callCount)
     }
 
@@ -36,7 +36,7 @@ class MigrationWorkerTest {
         }
 
         assertIs<TransferAttemptOutcome.Executed>(result)
-        assertIs<TransferResult.NetworkError>((result as TransferAttemptOutcome.Executed).result)
+        assertIs<TransferResult.NetworkError>(result.result)
         assertEquals(3, callCount)
     }
 
@@ -49,7 +49,7 @@ class MigrationWorkerTest {
         }
 
         assertIs<TransferAttemptOutcome.Executed>(result)
-        assertIs<TransferResult.NetworkError>((result as TransferAttemptOutcome.Executed).result)
+        assertIs<TransferResult.NetworkError>(result.result)
         assertEquals(1, callCount)
     }
 
@@ -90,7 +90,7 @@ class MigrationWorkerTest {
         }
 
         assertIs<TransferAttemptOutcome.Executed>(result)
-        assertIs<TransferResult.Success>((result as TransferAttemptOutcome.Executed).result)
+        assertIs<TransferResult.Success>(result.result)
         assertEquals(2, callCount)
     }
 

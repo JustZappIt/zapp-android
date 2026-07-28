@@ -3,7 +3,6 @@ package co.electriccoin.zcash.ui.screen.migration.progress
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import cash.z.ecc.android.sdk.MigrationTransferStates
-import cash.z.ecc.android.sdk.TransferProposal
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
@@ -23,8 +22,8 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.common.model.guardLoading
+import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
-import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.ui.common.model.migration.withLiveState
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
@@ -38,7 +37,6 @@ import kotlinx.coroutines.flow.flow
 import java.math.BigDecimal
 import java.math.MathContext
 import kotlin.time.Clock
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -173,25 +171,43 @@ class MigrationProgressVM(
     private fun onSendNow(plan: MigrationPlan) = navigationRouter.forward(MigrationSendingArgs)
 
     private fun onReschedule() = sendLce.execute {
-        // rescheduleOverdueTransfer() persists the new schedule itself (SDK-owned) — sync
-        // unblocking follows automatically via isSyncBlocked() once the plan changes. The VM
-        // still owns WorkManager scheduling for the new time, same as everywhere else. Background
-        // delivery is scheduled unconditionally — see MigrationScheduler/
+        // Uses rescheduleUnprovenTransfer() on the next pending transfer (the one the user just
+        // asked to push out). Returns the new scheduledHeight, or -1 if the transfer is already
+        // Proved (can't shift a proved transfer; the engine will offer it on the next broadcast
+        // cycle via the existing post-broadcast buffer). On -1, just log and let the state flow
+        // refresh naturally — no new UI is shown.
+        // Background delivery is scheduled unconditionally — see MigrationScheduler/
         // FinalizeMigrationScheduleUseCase for why this no longer depends on a delivery-mode flag.
         val sdk = getOrchardMigrationSdk() ?: error("MigrationProgressVM: no wallet available to reschedule")
         val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
-        val proposal = sdk.rescheduleOverdueTransfer()
-        val delay = delayUntil(proposal)
-        MigrationScheduler(context).schedule(accountKeyId, delay)
-        navigationRouter.back()
+        val liveStates = sdk.getMigrationTransferStates()
+        val nextPendingId = liveStates?.transfers?.filter { !it.isSent }?.minByOrNull { it.scheduledHeight }?.id
+        if (nextPendingId == null) {
+            Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: no pending transfer found, ignoring." }
+            return@execute
+        }
+        val newHeight = sdk.rescheduleUnprovenTransfer(nextPendingId)
+        if (newHeight >= 0) {
+            val tip = sdk.estimatedChainTip()
+            val delay = if (tip >= 0) {
+                ((newHeight - tip).coerceAtLeast(1) * 75).seconds
+            } else {
+                75.seconds
+            }
+            MigrationScheduler(context).schedule(accountKeyId, delay)
+            val nowEpochSeconds = Clock.System.now().epochSeconds
+            migrationPlanRepository.rescheduleTransfer(
+                index = liveStates.transfers.indexOfFirst { it.id == nextPendingId }.coerceAtLeast(0),
+                scheduledAtEpochSeconds = nowEpochSeconds + delay.inWholeSeconds,
+            )
+            navigationRouter.back()
+        } else {
+            // Transfer is already Proved — reschedule not possible. Log and refresh.
+            Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: transfer $nextPendingId already Proved, skipping reschedule." }
+        }
     }
 
     private fun onDone() = navigationRouter.backToRoot()
-
-    private fun delayUntil(proposal: TransferProposal): Duration {
-        val remaining = estimatedSecondsBetweenHeights(proposal.anchorHeight, proposal.nextExecutableAfterHeight)
-        return if (remaining <= 0) 0.seconds else remaining.seconds
-    }
 
     private fun transferLabel(t: MigrationTransfer, now: Instant): StringResource =
         when (t.status) {

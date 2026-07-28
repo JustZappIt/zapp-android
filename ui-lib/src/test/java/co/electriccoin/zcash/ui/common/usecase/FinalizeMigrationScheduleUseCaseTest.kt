@@ -11,6 +11,7 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.work.MigrationScheduler
+import co.electriccoin.zcash.work.MigrationSyncScheduler
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -46,6 +47,7 @@ class FinalizeMigrationScheduleUseCaseTest {
         val useCase = FinalizeMigrationScheduleUseCase(
             migrationPlanRepository = plans,
             migrationScheduler = mockk<MigrationScheduler>(relaxed = true),
+            migrationSyncScheduler = mockk<MigrationSyncScheduler>(relaxed = true),
             navigationRouter = mockk<NavigationRouter>(relaxed = true),
             getOrchardMigrationSdk = mockk<GetOrchardMigrationSdkUseCase> {
                 coEvery { this@mockk() } returns sdk
@@ -68,6 +70,7 @@ class FinalizeMigrationScheduleUseCaseTest {
         val useCase = FinalizeMigrationScheduleUseCase(
             migrationPlanRepository = plans,
             migrationScheduler = mockk<MigrationScheduler>(relaxed = true),
+            migrationSyncScheduler = mockk<MigrationSyncScheduler>(relaxed = true),
             navigationRouter = mockk<NavigationRouter>(relaxed = true),
             getOrchardMigrationSdk = mockk<GetOrchardMigrationSdkUseCase>(relaxed = true),
             getSelectedWalletAccount = mockk<GetSelectedWalletAccountUseCase> {

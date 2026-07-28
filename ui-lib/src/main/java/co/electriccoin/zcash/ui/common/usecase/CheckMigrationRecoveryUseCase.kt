@@ -1,10 +1,14 @@
 package co.electriccoin.zcash.ui.common.usecase
 
+import android.content.Context
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import cash.z.ecc.android.sdk.AttentionReason
 import cash.z.ecc.android.sdk.MigrationState
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
 import co.electriccoin.zcash.ui.common.provider.IsBackgroundExecutionAvailableProvider
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
@@ -15,6 +19,11 @@ import co.electriccoin.zcash.ui.screen.migration.invalid.MigrationTransferInvali
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
 import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs
+import co.electriccoin.zcash.work.MigrationSyncScheduler
+import co.electriccoin.zcash.work.WorkIds
+import co.electriccoin.zcash.work.laneACadence
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 
 /**
@@ -62,11 +71,26 @@ class CheckMigrationRecoveryUseCase(
     private val getOrchardBalance: GetOrchardBalanceUseCase,
     private val pendingMigrationTorFailureStorageProvider: PendingMigrationTorFailureStorageProvider,
     private val isBackgroundExecutionAvailableProvider: IsBackgroundExecutionAvailableProvider,
+    private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
+    private val migrationSyncScheduler: MigrationSyncScheduler,
+    private val context: Context,
+    /** Extracted for testability — production default checks WorkManager. */
+    private val isLaneAActive: suspend () -> Boolean = { isLaneAActiveInWorkManager(context) },
 ) {
     suspend operator fun invoke() {
         // No wallet yet (e.g. a fresh install before onboarding) — this runs on every
         // MainActivity launch regardless, so treat "no SDK available" as "nothing to recover".
         val sdk = getOrchardMigrationSdk() ?: return
+
+        // (a) Lane A reconciliation — if a plan exists but the Lane A unique work is absent
+        // (ENQUEUED or RUNNING), re-schedule it. This self-heals after process kill, device
+        // reboot, or an app upgrade that cleared WorkManager state, without requiring the user to
+        // re-enter the migration flow.
+        if (migrationPlanRepository.load() != null && !isLaneAActive()) {
+            val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
+            Twig.debug { "MIGRATION_DIAG MigrationRecovery: Lane A absent, re-scheduling." }
+            migrationSyncScheduler.schedule(accountKeyId, laneACadence())
+        }
         // Read the real state once instead of the old hasInvalidTransfers() boolean — the app must
         // distinguish AttentionReason.InvalidTransfer (spec §6.2, external spend invalidated the
         // plan) from AttentionReason.TransferExpired (spec §6.3, missed window) once inside the
@@ -98,6 +122,23 @@ class CheckMigrationRecoveryUseCase(
             }
             navigationRouter.replaceAll(HomeArgs, MigrationTransferReviewArgs)
         } else if (sdk.hasOverdueTransfers()) {
+            // (b) Overdue catch-up: keep the earliest overdue transfer (the engine will offer it
+            // as the immediate candidate), and shift the rest to future windows so only one
+            // transfer is ever broadcasting at a time. Proved transfers return -1 from
+            // rescheduleUnprovenTransfer — they cannot be shifted; the engine will offer them
+            // one-per-broadcast with the existing post-broadcast buffer (accepted residual until
+            // a core primitive exists).
+            val liveStates = sdk.getMigrationTransferStates()
+            val tipHeight = liveStates?.tipHeight ?: sdk.estimatedChainTip()
+            val overdueIds = liveStates?.transfers
+                ?.filter { !it.isSent && it.scheduledHeight <= tipHeight }
+                ?.sortedBy { it.scheduledHeight }
+                ?.map { it.id }
+                .orEmpty()
+            for (id in overdueTransfersToShift(overdueIds)) {
+                val result = sdk.rescheduleUnprovenTransfer(id)
+                Twig.debug { "MIGRATION_DIAG MigrationRecovery: at-most-one catch-up: shifted $id to $result" }
+            }
             Twig.debug { "MIGRATION_DIAG MigrationRecovery: overdue transfer detected — redirecting to Resume Migration." }
             navigationRouter.replaceAll(HomeArgs, MigrationProgressArgs)
         } else if (migrationState == MigrationState.Complete &&
@@ -139,3 +180,24 @@ class CheckMigrationRecoveryUseCase(
         return !sdk.hasOverdueTransfers()
     }
 }
+
+/**
+ * Spec §5 B2 "at-most-one-overdue" catch-up: given the pending (not-yet-sent) transfers sorted
+ * ascending by scheduled height, keep the earliest one (the engine's natural next candidate) and
+ * return the rest for rescheduling to future windows. Empty and single-element lists return empty
+ * — nothing to shift.
+ */
+internal fun overdueTransfersToShift(pendingSortedByHeight: List<String>): List<String> =
+    pendingSortedByHeight.drop(1)
+
+/**
+ * Production implementation of the Lane A active check — reads WorkManager unique work state.
+ * Extracted so [CheckMigrationRecoveryUseCase] tests can supply a lambda stub instead of
+ * needing a real WorkManager context (unit tests can't initialise WorkManager).
+ */
+internal suspend fun isLaneAActiveInWorkManager(context: Context): Boolean =
+    withContext(Dispatchers.IO) {
+        WorkManager.getInstance(context)
+            .getWorkInfosForUniqueWork(WorkIds.WORK_ID_MIGRATION_SYNC)
+            .get()
+    }.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }

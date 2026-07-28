@@ -49,6 +49,7 @@ interface SynchronizerProvider {
     fun resetSynchronizer()
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class SynchronizerProviderImpl(
     private val walletCoordinator: WalletCoordinator,
     private val persistableWalletProvider: PersistableWalletProvider,

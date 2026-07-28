@@ -168,7 +168,7 @@ class MigrationWorker(
                     } else if (next != null) {
                         // Nothing else re-arms a future attempt for a non-retryable failure — the
                         // user must open the app and act, same as a missed/stalled window.
-                        migrationNotifier.notifyManualConfirmationRequired(accountKeyId, next.index + 1, plan?.totalCount ?: 0)
+                        migrationNotifier.notifyManualConfirmationRequired(accountKeyId, next.index + 1, plan.totalCount)
                     }
                     Result.failure()
                 }

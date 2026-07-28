@@ -11,6 +11,8 @@ import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.screen.migration.scheduled.MigrationScheduledArgs
 import co.electriccoin.zcash.work.MigrationScheduler
+import co.electriccoin.zcash.work.MigrationSyncScheduler
+import co.electriccoin.zcash.work.laneACadence
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -31,16 +33,18 @@ import kotlin.time.Duration.Companion.seconds
 class FinalizeMigrationScheduleUseCase(
     private val migrationPlanRepository: MigrationPlanRepository,
     private val migrationScheduler: MigrationScheduler,
+    private val migrationSyncScheduler: MigrationSyncScheduler,
     private val navigationRouter: NavigationRouter,
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
 ) {
     suspend operator fun invoke(sched: MigrationSchedule, mode: MigrationMode) {
         persistPlan(sched, mode)
-        migrationScheduler.schedule(
-            getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId(),
-            delayUntilFirstTransfer(sched)
-        )
+        val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
+        migrationScheduler.schedule(accountKeyId, delayUntilFirstTransfer(sched))
+        // Lane A starts alongside the plan — the sync heartbeat ensures notes get witnessed
+        // (finalizeReadyTransfers) on cadence, independent of when Lane B fires.
+        migrationSyncScheduler.schedule(accountKeyId, laneACadence())
         navigationRouter.forward(MigrationScheduledArgs)
     }
 

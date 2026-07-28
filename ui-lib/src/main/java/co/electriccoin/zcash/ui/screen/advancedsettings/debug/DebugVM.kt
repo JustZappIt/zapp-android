@@ -17,6 +17,8 @@ import co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.design.component.listitem.ListItemState
+import co.electriccoin.zcash.work.MigrationScheduler
+import co.electriccoin.zcash.work.MigrationSyncScheduler
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceArgs
@@ -151,7 +153,11 @@ class DebugVM(
     // waiting out or resuming whatever migration is already in progress.
     private fun onMigrationRestartClick() =
         viewModelScope.launch {
+            val accountKeyId = accountDataSource.getSelectedAccount().sdkAccount.accountUuid.toStorageKeyId()
             getOrchardMigrationSdk()?.clearMigration()
+            // Cancel both background lanes so they don't fire for a migration that no longer exists.
+            MigrationScheduler(context).cancel(accountKeyId)
+            MigrationSyncScheduler(context).cancel(accountKeyId)
             // Without this, GetHomeMessageUseCase.migrationMessageFor's `plan == null` fallback
             // never fires: the stale app-side plan blocks the home banner even though the SDK's
             // migration state is back to NotStarted, so no "start a new migration" message shows.

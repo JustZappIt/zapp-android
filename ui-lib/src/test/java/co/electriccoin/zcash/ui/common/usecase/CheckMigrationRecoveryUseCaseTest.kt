@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.common.usecase
 
+import android.content.Context
 import cash.z.ecc.android.sdk.AttentionReason
 import cash.z.ecc.android.sdk.MigrationState
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
@@ -19,12 +20,15 @@ import co.electriccoin.zcash.ui.screen.migration.invalid.MigrationTransferInvali
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
 import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs
+import co.electriccoin.zcash.work.MigrationSyncScheduler
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 
@@ -56,6 +60,10 @@ class CheckMigrationRecoveryUseCaseTest {
         },
         isBackgroundExecutionAvailable: Boolean = true,
         orchardBalanceZatoshi: Long = 0L,
+        migrationSyncScheduler: MigrationSyncScheduler = mockk(relaxed = true),
+        // Default: Lane A is always active in tests so the reconciliation branch is skipped,
+        // keeping existing test behaviour unchanged. Override to test reconciliation explicitly.
+        isLaneAActive: suspend () -> Boolean = { true },
     ) = CheckMigrationRecoveryUseCase(
         getOrchardMigrationSdk = mockk<GetOrchardMigrationSdkUseCase> {
             coEvery { this@mockk() } returns sdk
@@ -74,6 +82,10 @@ class CheckMigrationRecoveryUseCaseTest {
         isBackgroundExecutionAvailableProvider = mockk<IsBackgroundExecutionAvailableProvider> {
             every { isAvailable() } returns isBackgroundExecutionAvailable
         },
+        getSelectedWalletAccount = mockk<GetSelectedWalletAccountUseCase>(relaxed = true),
+        migrationSyncScheduler = migrationSyncScheduler,
+        context = mockk<Context>(relaxed = true),
+        isLaneAActive = isLaneAActive,
     )
 
     @Test
@@ -295,5 +307,31 @@ class CheckMigrationRecoveryUseCaseTest {
         useCase(sdk = null, navigationRouter = router).invoke()
 
         coVerify(exactly = 0) { router.replaceAll(any()) }
+    }
+
+    // ── overdueTransfersToShift pure-function tests ────────────────────────────────────
+
+    @Test
+    fun overdueTransfersToShift_threeElements_dropsFirst() {
+        val result = overdueTransfersToShift(listOf("a", "b", "c"))
+        assertEquals(listOf("b", "c"), result)
+    }
+
+    @Test
+    fun overdueTransfersToShift_emptyList_returnsEmpty() {
+        val result = overdueTransfersToShift(emptyList())
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun overdueTransfersToShift_singleElement_returnsEmpty() {
+        val result = overdueTransfersToShift(listOf("only"))
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun overdueTransfersToShift_twoElements_returnsSecond() {
+        val result = overdueTransfersToShift(listOf("first", "second"))
+        assertEquals(listOf("second"), result)
     }
 }

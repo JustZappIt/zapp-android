@@ -76,6 +76,7 @@ class MigrationSyncWorker(
                 // and do NOT re-arm Lane A.
                 migrationNotifier.notifyMigrationPlanInvalid(accountKeyId)
                 MigrationScheduler(applicationContext).cancel(accountKeyId)
+                MigrationSyncScheduler(applicationContext).cancel(accountKeyId)
                 Twig.debug { "MIGRATION_DIAG LaneA: invalidation detected — cancelling both lanes." }
                 return Result.success()
             }
