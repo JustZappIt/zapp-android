@@ -11,8 +11,10 @@ import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.DebugForceBackgroundExecutionUnavailable
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
+import co.electriccoin.zcash.ui.common.provider.MigrationShiftCounterStorageProvider
 import co.electriccoin.zcash.ui.common.repository.EphemeralAddressRepository
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
+import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
@@ -36,6 +38,8 @@ class DebugVM(
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val migrationPlanRepository: MigrationPlanRepository,
     private val pendingMigrationTorFailureStorageProvider: PendingMigrationTorFailureStorageProvider,
+    private val migrationShiftCounterStorageProvider: MigrationShiftCounterStorageProvider,
+    private val restartMigrationScheduleRepository: RestartMigrationScheduleRepository,
     private val migrationNotifier: MigrationNotifier,
     private val checkMigrationRecovery: CheckMigrationRecoveryUseCase,
     private val context: Context,
@@ -162,6 +166,19 @@ class DebugVM(
             // never fires: the stale app-side plan blocks the home banner even though the SDK's
             // migration state is back to NotStarted, so no "start a new migration" message shows.
             migrationPlanRepository.clear()
+            // A leftover Tor-failure flag would keep routing every app launch into the Sending
+            // recovery screen for a migration that no longer exists.
+            pendingMigrationTorFailureStorageProvider.store(accountKeyId, false)
+            // Transfer ids restart from the same values on a fresh plan, so a stale counter
+            // could resume mid-count and escalate the new plan's first shift prematurely.
+            migrationShiftCounterStorageProvider.reset(accountKeyId)
+            // An unconsumed restart schedule (invalid-screen Continue → debug restart instead of
+            // Review) would otherwise be silently used by the next Review entry in place of a
+            // fresh proposal over the post-clear balance.
+            restartMigrationScheduleRepository.consume(accountKeyId)
+            // Dismiss whatever migration notification is still showing — its tap routes into
+            // the migration that was just cleared.
+            migrationNotifier.cancel(accountKeyId)
             navigationRouter.forward(
                 DebugTextArgs(
                     title = "Migration restart",

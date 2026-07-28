@@ -113,8 +113,10 @@ would have caught both DI crashes — worth adding.
 whole plan execute in the background exactly as designed.**
 
 Steps:
-1. `ANDROID_SERIAL=emulator-5556 ./gradlew :app:installZcashtestnetInternalDebug -Pcoverage=false --max-workers=1`,
-   launch, wait for SYNCED.
+1. `ANDROID_SERIAL=emulator-5556 ./gradlew :app:installZcashtestnetInternalDebug -Pcoverage=false --max-workers=1 -PSDK_INCLUDED_BUILD_PATH=../zcash-android-wallet-sdk`
+   (the `-P` flag is REQUIRED — project `gradle.properties` has the property empty and the
+   user-level pin is commented out, so a plain build silently uses the Maven SDK without our
+   changes), launch, wait for SYNCED.
 2. Home → Migration banner → create AUTOMATIC plan → check the
    `MIGRATION_DIAG Plan:` dump (per-transfer anchor/send/expiry + dueIn/gapFromPrev at the
    measured rate) → confirm (sign) → `MIGRATION_DIAG committedPlan:` dump shows the REAL drawn

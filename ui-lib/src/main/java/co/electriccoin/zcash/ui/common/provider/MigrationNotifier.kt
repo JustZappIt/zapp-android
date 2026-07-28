@@ -162,6 +162,17 @@ class MigrationNotifier(private val context: Context) {
         NotificationManagerCompat.from(context).notify(progressNotificationId(accountKeyId), notification)
     }
 
+    /**
+     * Dismisses whatever migration notification is currently showing for [accountKeyId]. All
+     * notify* methods above share the single per-account [progressNotificationId], so one cancel
+     * covers them all — used when the migration itself is discarded (debug "Migration restart"),
+     * where a leftover "ready to send"/"Tor failure" notification would tap into a migration that
+     * no longer exists.
+     */
+    fun cancel(accountKeyId: String) {
+        NotificationManagerCompat.from(context).cancel(progressNotificationId(accountKeyId))
+    }
+
     fun notifyMigrationComplete(accountKeyId: String) {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alert_circle)
