@@ -328,13 +328,25 @@ exactly the correlation metadata this design eliminates.
 | **Background ✓** | Happy path: lanes do everything; notifications inform. | Lanes do everything; user learns state from the home banner at open. Nothing requires a notification to progress (§1.5). |
 | **Background ✗** | Doze case: due-alarm fires → "ready to send" notification → app open → `transferreview/`. Hard-restricted case behaves like the right cell. | **App-open is the only driver**: reconciliation → foreground sync + prove → §5 catch-up offers one transfer (`transferreview/`/`progress/`), rest shift. Slow but lossless. |
 
-Platform comparison (iOS column is the *expected* sibling design, not implemented here):
+Platform comparison (iOS column is the *expected* sibling design, not implemented here).
+**iOS background reality (verified 2026-07-28, web research vs Apple DTS + measured reports):**
+there is NO frequency guarantee anywhere in BackgroundTasks; `earliestBeginDate` means only
+"not before". For a daily-active user expect a few ~30 s `BGAppRefreshTask` slots (useless for
+proving) plus **at most ~1 usable minutes-long `BGProcessingTask` window per day** (overnight,
+charging, killed when the user picks up the device). For a rarely-opening user the predictive
+scheduler converges to **zero**, and force-quit is an absolute zero until the next manual
+launch. iOS design must therefore be **notification-driven** (~2 pre-scheduled local
+notifications per transfer: a prove-visit CTA after its boundary settles + a send CTA at S,
+adaptively re-armed/cancelled on every app open — one prove visit covers all settled
+boundaries, so merges reduce the count), with background windows as an opportunistic bonus
+only, and proving checkpointable (interruptible mid-run).
 
 | | Android (this design) | iOS (expected) |
 |---|---|---|
-| Primary driver | WorkManager lanes A (sync+prove) + B (broadcast) | BGProcessingTask (1–2×/day sync+prove); background broadcast rarely possible |
+| Primary driver | WorkManager lanes A (sync+prove) + B (broadcast) | Scheduled local notifications + user opens; background = best-effort bonus (0–1 usable window/day engaged, 0 disengaged) |
 | Future-scheduled notification | Not available; inexact alarm → receiver → post | Native (`UNUserNotificationCenter`), system-delivered at time S without app execution |
-| Notification role | Status visual + fallback CTA | Primary broadcast channel: notification at S → tap → open → send/reschedule |
+| Notification role | Status visual + fallback CTA | Load-bearing: ~2 per transfer (prove visit + send visit), adaptively re-armed on every open |
+| Sync ↔ send separation | Window type: a Worker run is sync+prove XOR broadcast | Visit type: prove visits sync; send visits don't (overdue gate blocks sync at open) |
 | Invariant | Progress never depends on a notification | Progress depends on notification *or* app open — estimated-height rescheduling matters even more there |
 | Last-resort fallback | App-open reconciliation | App-open reconciliation |
 
