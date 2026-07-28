@@ -105,14 +105,14 @@ fun MigrationScheduledView(state: MigrationScheduledState) {
                     SummaryRow(label = "Pool", value = "Orchard → Ironwood")
                     SummaryRow(label = "Transfers", value = state.transfersProgress.getValue())
                     SummaryRow(label = "Duration", value = state.duration.getValue())
-                    state.backgroundHint?.let {
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = it.getValue(),
-                            style = ZashiTypography.textSm,
-                            color = ZashiColors.Text.textTertiary,
-                        )
-                    }
+                }
+                state.backgroundHint?.let {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = it.getValue(),
+                        style = ZashiTypography.textSm,
+                        color = ZashiColors.Text.textTertiary,
+                    )
                 }
             }
             ZashiButton(
