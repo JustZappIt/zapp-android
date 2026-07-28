@@ -73,10 +73,19 @@ class MigrationNotifier(private val context: Context) {
     }
 
     fun notifyManualConfirmationRequired(accountKeyId: String, transferIndex: Int, total: Int) {
+        // F7: render real "Transfer X of Y" counts when the caller has them; fall back to generic
+        // copy when they're unknown (total <= 0 or index <= 0) instead of the meaningless
+        // "Transfer 0 of 0" the escalation call site used to pass.
+        val contentText =
+            if (total > 0 && transferIndex > 0) {
+                "Transfer $transferIndex of $total is ready. Tap to confirm."
+            } else {
+                "A migration transfer is ready. Tap to confirm."
+            }
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_alert_circle)
             .setContentTitle("Migration: Action Required")
-            .setContentText("Transfer $transferIndex of $total is ready. Tap to confirm.")
+            .setContentText(contentText)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(mainActivityIntent(accountKeyId))
             .setAutoCancel(true)

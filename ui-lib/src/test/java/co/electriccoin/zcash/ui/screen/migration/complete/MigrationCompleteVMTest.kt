@@ -26,6 +26,8 @@ import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
 import co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionArgs
+import co.electriccoin.zcash.work.MigrationScheduler
+import co.electriccoin.zcash.work.MigrationSyncScheduler
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -258,6 +260,8 @@ class MigrationCompleteVMTest {
         biometricRepository: BiometricRepository = mockk(relaxed = true),
         proposalDataSource: ProposalDataSource = mockk(relaxed = true),
         keystoneProposalRepository: KeystoneProposalRepository = mockk(relaxed = true),
+        migrationScheduler: MigrationScheduler = mockk(relaxed = true),
+        migrationSyncScheduler: MigrationSyncScheduler = mockk(relaxed = true),
     ) = MigrationCompleteVM(
         migrationPlanRepository = plans,
         getOrchardBalance = mockk<GetOrchardBalanceUseCase> {
@@ -275,6 +279,8 @@ class MigrationCompleteVMTest {
         biometricRepository = biometricRepository,
         proposalDataSource = proposalDataSource,
         keystoneProposalRepository = keystoneProposalRepository,
+        migrationScheduler = migrationScheduler,
+        migrationSyncScheduler = migrationSyncScheduler,
     )
 
     private class FakeNavigationRouter : NavigationRouter {

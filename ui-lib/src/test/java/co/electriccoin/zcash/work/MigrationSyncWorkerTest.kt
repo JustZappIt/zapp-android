@@ -1,8 +1,12 @@
 package co.electriccoin.zcash.work
 
+import cash.z.ecc.android.sdk.AttentionReason
+import cash.z.ecc.android.sdk.MigrationProgress
+import cash.z.ecc.android.sdk.MigrationState
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -240,5 +244,34 @@ class MigrationSyncWorkerTest {
         val result = nextEstimatedDueEpochSeconds(states, est = est, nowEpochSeconds = now)
         assertNotNull(result)
         assertEquals(now + 1500L, result)
+    }
+
+    // ── shouldLaneAStop (F3) ──────────────────────────────────────────────────
+    // Lane A stops only on terminal states: Complete, or RequiresAttention with a terminal reason
+    // (InvalidTransfer / TransferExpired). SyncRequiredBeforeNext is NOT terminal — Lane A heals it.
+
+    @Test
+    fun `lane A stops when the migration is complete`() {
+        assertTrue(shouldLaneAStop(MigrationState.Complete))
+    }
+
+    @Test
+    fun `lane A stops on terminal RequiresAttention reasons`() {
+        assertTrue(shouldLaneAStop(MigrationState.RequiresAttention(AttentionReason.InvalidTransfer("t1"))))
+        assertTrue(shouldLaneAStop(MigrationState.RequiresAttention(AttentionReason.TransferExpired)))
+    }
+
+    @Test
+    fun `lane A keeps running on SyncRequiredBeforeNext`() {
+        // Lane A's own sync is what heals this reason — it must not stop.
+        assertFalse(shouldLaneAStop(MigrationState.RequiresAttention(AttentionReason.SyncRequiredBeforeNext)))
+    }
+
+    @Test
+    fun `lane A keeps running while in progress or pre-commit`() {
+        assertFalse(shouldLaneAStop(MigrationState.InProgress(MigrationProgress(0, 3, null))))
+        assertFalse(shouldLaneAStop(MigrationState.NotStarted))
+        assertFalse(shouldLaneAStop(MigrationState.SplitPendingConfirmation))
+        assertFalse(shouldLaneAStop(MigrationState.ReadyToPropose))
     }
 }

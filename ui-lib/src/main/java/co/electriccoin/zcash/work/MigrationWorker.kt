@@ -115,12 +115,28 @@ class MigrationWorker(
                 val syncSince = syncCompletedSince(lastActivity, lastShift)
                 val count = shiftCounter.incrementIfSameTransfer(accountKeyId, outcome.transferId, syncCompletedSinceLastShift = syncSince)
                 val newHeight = sdk.rescheduleUnprovenTransfer(outcome.transferId)
-                if (count == SHIFT_ESCALATION_THRESHOLD) {
+                // F4: escalate only on the TRANSITION to the 3rd counted shift — the counter stays
+                // at 3 on subsequent no-sync shifts (nextShiftCount doesn't increment without a
+                // sync), so gating on `count == THRESHOLD` alone would re-fire every shift. Requiring
+                // `syncSince` means we only escalate the run that actually reached the 3rd counted
+                // (sync-completed) shift — i.e. spec §2.B.4 case (c).
+                if (shouldEscalateShift(syncSince, count)) {
                     if (sdk.reconcileInvalidations()) {
+                        // F5: the plan is invalid — notify, cancel BOTH lanes, and do NOT re-arm.
+                        // The app-open router (CheckMigrationRecoveryUseCase) takes over from here.
                         migrationNotifier.notifyMigrationPlanInvalid(accountKeyId)
+                        MigrationScheduler(applicationContext).cancel(accountKeyId)
+                        MigrationSyncScheduler(applicationContext).cancel(accountKeyId)
+                        Twig.debug { "MIGRATION_DIAG LaneB: 3rd-shift reconcile found invalidation — cancelling both lanes." }
+                        return Result.success()
                     } else {
                         // Once only — count == 3 exact equality ensures single notification.
-                        migrationNotifier.notifyManualConfirmationRequired(accountKeyId, 0, 0)
+                        // F7: render real "Transfer X of Y" values from the plan instead of 0 of 0.
+                        migrationNotifier.notifyManualConfirmationRequired(
+                            accountKeyId,
+                            (plan?.nextPending?.index?.plus(1)) ?: 1,
+                            plan?.totalCount ?: 0,
+                        )
                     }
                 }
                 scheduleForNextLiveWindow(accountKeyId, sdk)
@@ -178,6 +194,9 @@ class MigrationWorker(
                     // the user still needs telling since nothing else runs meanwhile.
                     Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer invalid (note spent externally) — user action required on next open." }
                     migrationNotifier.notifyMigrationPlanInvalid(accountKeyId)
+                    // F5: this is a terminal migration state — cancel Lane A too (Lane B already
+                    // stops re-arming by returning without scheduling).
+                    MigrationSyncScheduler(applicationContext).cancel(accountKeyId)
                     Result.success()
                 }
                 TransferResult.Expired -> {
@@ -187,6 +206,8 @@ class MigrationWorker(
                     // handle identically (no further action possible from the background worker).
                     Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer expired — user action required on next open." }
                     migrationNotifier.notifyTransferExpired(accountKeyId)
+                    // F5: terminal migration state — cancel Lane A too (Lane B already stops re-arming).
+                    MigrationSyncScheduler(applicationContext).cancel(accountKeyId)
                     Result.success()
                 }
             }
@@ -235,8 +256,20 @@ class MigrationWorker(
 }
 
 private val STATUS_READ_TIMEOUT = 2.seconds
-private const val SHIFT_ESCALATION_THRESHOLD = 3
+internal const val SHIFT_ESCALATION_THRESHOLD = 3
 private const val SECONDS_PER_BLOCK_LANE_B = 75L
+
+/**
+ * F4: whether an AWAITING_PROOF shift should escalate (run the 3rd-shift reconcile + notify).
+ *
+ * Escalation must fire ONLY on the transition to the [SHIFT_ESCALATION_THRESHOLD]th COUNTED shift.
+ * The shift counter only increments when a sync completed since the last shift (spec §2.B.4 case
+ * c); on a no-sync shift the counter stays at 3, so gating on `count == THRESHOLD` alone would
+ * re-fire the escalation (and its once-only notification) on every subsequent no-sync shift.
+ * Requiring [syncSince] restricts firing to the run that actually reached the 3rd counted shift.
+ */
+internal fun shouldEscalateShift(syncSince: Boolean, count: Int): Boolean =
+    syncSince && count == SHIFT_ESCALATION_THRESHOLD
 
 // Same attempt count (3) as MigrationSendingVM.sendOnce()'s foreground retry loop — but not the
 // same retry trigger: sendOnce() retries while polling for readiness (result == null) and stops

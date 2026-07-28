@@ -18,6 +18,7 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureS
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.provider.HasLockedOrchardDustStorageProvider
 import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
@@ -35,6 +36,8 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.migration.lockexplainer.MigrationLockExplainerArgs
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
 import co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionArgs
+import co.electriccoin.zcash.work.MigrationScheduler
+import co.electriccoin.zcash.work.MigrationSyncScheduler
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -55,6 +58,8 @@ class MigrationCompleteVM(
     private val biometricRepository: BiometricRepository,
     private val proposalDataSource: ProposalDataSource,
     private val keystoneProposalRepository: KeystoneProposalRepository,
+    private val migrationScheduler: MigrationScheduler,
+    private val migrationSyncScheduler: MigrationSyncScheduler,
 ) : ViewModel() {
 
     private data class Summary(
@@ -160,6 +165,14 @@ class MigrationCompleteVM(
                 val moreRoundsNeeded =
                     getSelectedWalletAccount() is KeystoneAccount &&
                         getOrchardBalance().value > dustThreshold
+                // F3: the current committed migration has reached Complete, so BOTH background
+                // lanes are stale and must be cancelled. Lane A self-cancels on its next run (its
+                // terminal-state guard), but cancelling here is immediate and covers the case where
+                // no further Lane A run is scheduled. A subsequent Keystone round re-arms fresh
+                // lanes at its own commit, so cancelling now is safe in both branches below.
+                val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
+                migrationScheduler.cancel(accountKeyId)
+                migrationSyncScheduler.cancel(accountKeyId)
                 if (moreRoundsNeeded) {
                     migrationPlanRepository.clear()
                 } else {

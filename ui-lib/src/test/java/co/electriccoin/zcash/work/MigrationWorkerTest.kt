@@ -207,4 +207,31 @@ class MigrationWorkerTest {
             )
         )
     }
+
+    // ── shouldEscalateShift (F4) ──────────────────────────────────────────────
+    // Escalation fires only on the TRANSITION to the 3rd counted shift: syncSince && count == 3.
+
+    @Test
+    fun `escalation fires only on the counted 3rd shift with a completed sync`() {
+        // count < threshold → never, regardless of syncSince.
+        assertFalse(shouldEscalateShift(syncSince = true, count = 1))
+        assertFalse(shouldEscalateShift(syncSince = true, count = 2))
+        assertFalse(shouldEscalateShift(syncSince = false, count = 2))
+
+        // The exact transition — sync completed AND count reached the threshold.
+        assertTrue(shouldEscalateShift(syncSince = true, count = SHIFT_ESCALATION_THRESHOLD))
+    }
+
+    @Test
+    fun `escalation does not re-fire on a no-sync shift that leaves count at threshold`() {
+        // count stays at 3 on subsequent no-sync shifts; without the syncSince gate this would
+        // re-fire the once-only notification every run. The gate blocks it.
+        assertFalse(shouldEscalateShift(syncSince = false, count = SHIFT_ESCALATION_THRESHOLD))
+    }
+
+    @Test
+    fun `escalation does not fire past the threshold`() {
+        // Counter never exceeds 3 in practice, but guard the equality boundary anyway.
+        assertFalse(shouldEscalateShift(syncSince = true, count = SHIFT_ESCALATION_THRESHOLD + 1))
+    }
 }

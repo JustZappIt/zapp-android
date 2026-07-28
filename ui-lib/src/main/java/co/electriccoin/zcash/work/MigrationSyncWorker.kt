@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.annotation.Keep
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import cash.z.ecc.android.sdk.AttentionReason
+import cash.z.ecc.android.sdk.MigrationState
 import cash.z.ecc.android.sdk.MigrationTransferStates
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.BuildConfig
@@ -36,6 +38,18 @@ class MigrationSyncWorker(
             ?: return Result.success()
 
         val sdk = getOrchardMigrationSdk(accountKeyId) ?: return Result.success()
+
+        // F3: Lane A must terminate once the migration reaches a terminal state. Unlike Lane B,
+        // whose only stop signal is states==null, migrationTransferStates() keeps returning rows
+        // for a terminal (Complete / permanently-attention) migration so the Complete screens can
+        // still read them for display. So gate on the migration STATE here: if terminal, cancel
+        // Lane A's own re-arm (return without scheduling). SyncRequiredBeforeNext is NOT terminal —
+        // Lane A's sync is exactly what heals it, so that reason keeps Lane A alive.
+        if (shouldLaneAStop(sdk.getMigrationState())) {
+            Twig.debug { "MIGRATION_DIAG LaneA: migration terminal — stopping Lane A." }
+            MigrationSyncScheduler(applicationContext).cancel(accountKeyId)
+            return Result.success()
+        }
 
         // Cache privacy buffer duration to avoid redundant calls.
         val privacyBufferSeconds = sdk.privacySyncBufferDuration().inWholeSeconds
@@ -118,6 +132,31 @@ internal fun laneACadence(): Duration =
 internal fun nowEpochSeconds(): Long = Clock.System.now().epochSeconds
 
 // ── Pure functions (tested) ────────────────────────────────────────────────────
+
+/**
+ * F3: whether Lane A should stop re-arming for the given migration [state].
+ *
+ * Terminal states — the plan can make no further automatic progress, so Lane A's sync+prove loop
+ * has nothing left to do:
+ * - [MigrationState.Complete] — all transfers confirmed on-chain.
+ * - [MigrationState.RequiresAttention] with [AttentionReason.InvalidTransfer] or
+ *   [AttentionReason.TransferExpired] — the plan is dead; the app-open router handles it.
+ *
+ * NON-terminal (Lane A keeps running):
+ * - [AttentionReason.SyncRequiredBeforeNext] — Lane A's own sync is exactly what heals this, so
+ *   stopping here would strand the migration.
+ * - [MigrationState.InProgress] / pre-commit states — the migration is still executing.
+ */
+internal fun shouldLaneAStop(state: MigrationState): Boolean =
+    when (state) {
+        is MigrationState.Complete -> true
+        is MigrationState.RequiresAttention ->
+            when (state.reason) {
+                is AttentionReason.InvalidTransfer, is AttentionReason.TransferExpired -> true
+                is AttentionReason.SyncRequiredBeforeNext -> false
+            }
+        else -> false
+    }
 
 internal enum class LaneARunDecision { RUN, SKIP_NEAR_DUE, SKIP_GATE_BLOCKED }
 
