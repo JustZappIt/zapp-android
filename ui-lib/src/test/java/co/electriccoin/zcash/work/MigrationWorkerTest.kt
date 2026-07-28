@@ -1,26 +1,29 @@
 package co.electriccoin.zcash.work
 
-import cash.z.ecc.android.sdk.Synchronizer
+import cash.z.ecc.android.sdk.TransferAttemptOutcome
 import cash.z.ecc.android.sdk.TransferResult
 import kotlinx.coroutines.test.runTest
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.minutes
 
 class MigrationWorkerTest {
+
+    // ── executeWithRetries ────────────────────────────────────────────────────
+
     @Test
     fun `a Success on the first attempt does not retry`() = runTest {
         var callCount = 0
         val result = executeWithRetries(retryDelayMs = 0) {
             callCount++
-            TransferResult.Success("txid")
+            TransferAttemptOutcome.Executed(TransferResult.Success("txid"))
         }
 
-        assertIs<TransferResult.Success>(result)
+        assertIs<TransferAttemptOutcome.Executed>(result)
+        assertIs<TransferResult.Success>((result as TransferAttemptOutcome.Executed).result)
         assertEquals(1, callCount)
     }
 
@@ -29,10 +32,11 @@ class MigrationWorkerTest {
         var callCount = 0
         val result = executeWithRetries(maxAttempts = 3, retryDelayMs = 0) {
             callCount++
-            TransferResult.NetworkError(retryable = true)
+            TransferAttemptOutcome.Executed(TransferResult.NetworkError(retryable = true))
         }
 
-        assertIs<TransferResult.NetworkError>(result)
+        assertIs<TransferAttemptOutcome.Executed>(result)
+        assertIs<TransferResult.NetworkError>((result as TransferAttemptOutcome.Executed).result)
         assertEquals(3, callCount)
     }
 
@@ -41,22 +45,35 @@ class MigrationWorkerTest {
         var callCount = 0
         val result = executeWithRetries(maxAttempts = 3, retryDelayMs = 0) {
             callCount++
-            TransferResult.NetworkError(retryable = false)
+            TransferAttemptOutcome.Executed(TransferResult.NetworkError(retryable = false))
         }
 
-        assertIs<TransferResult.NetworkError>(result)
+        assertIs<TransferAttemptOutcome.Executed>(result)
+        assertIs<TransferResult.NetworkError>((result as TransferAttemptOutcome.Executed).result)
         assertEquals(1, callCount)
     }
 
     @Test
-    fun `a null result (nothing due yet) stops immediately without retrying`() = runTest {
+    fun `a NothingDue result stops immediately without retrying`() = runTest {
         var callCount = 0
         val result = executeWithRetries(maxAttempts = 3, retryDelayMs = 0) {
             callCount++
-            null
+            TransferAttemptOutcome.NothingDue
         }
 
-        assertEquals(null, result)
+        assertIs<TransferAttemptOutcome.NothingDue>(result)
+        assertEquals(1, callCount)
+    }
+
+    @Test
+    fun `an AwaitingProof result stops immediately without retrying`() = runTest {
+        var callCount = 0
+        val result = executeWithRetries(maxAttempts = 3, retryDelayMs = 0) {
+            callCount++
+            TransferAttemptOutcome.AwaitingProof("transfer-id-1")
+        }
+
+        assertIs<TransferAttemptOutcome.AwaitingProof>(result)
         assertEquals(1, callCount)
     }
 
@@ -65,78 +82,129 @@ class MigrationWorkerTest {
         var callCount = 0
         val result = executeWithRetries(maxAttempts = 3, retryDelayMs = 0) {
             callCount++
-            if (callCount < 2) TransferResult.NetworkError(retryable = true) else TransferResult.Success("txid")
+            if (callCount < 2) {
+                TransferAttemptOutcome.Executed(TransferResult.NetworkError(retryable = true))
+            } else {
+                TransferAttemptOutcome.Executed(TransferResult.Success("txid"))
+            }
         }
 
-        assertIs<TransferResult.Success>(result)
+        assertIs<TransferAttemptOutcome.Executed>(result)
+        assertIs<TransferResult.Success>((result as TransferAttemptOutcome.Executed).result)
         assertEquals(2, callCount)
     }
 
-    @Test
-    fun `decideNullResultAction waits and retries when a transfer is pending but not yet overdue`() {
-        val action = decideNullResultAction(hasNextPending = true, isOverdue = false)
-
-        assertEquals(NullResultAction.WAIT_AND_RETRY, action)
-    }
+    // ── decideLaneBPreflight ──────────────────────────────────────────────────
 
     @Test
-    fun `decideNullResultAction hands off to the app once confirmed overdue`() {
-        val action = decideNullResultAction(hasNextPending = true, isOverdue = true)
-
-        assertEquals(NullResultAction.HANDOFF_TO_APP, action)
-    }
-
-    @Test
-    fun `decideNullResultAction does nothing when there is no pending transfer at all`() {
-        // hasNextPending=false takes priority over isOverdue=true — there's nothing to be
-        // "overdue" about if there's no pending transfer at all.
-        val action = decideNullResultAction(hasNextPending = false, isOverdue = true)
-
-        assertEquals(NullResultAction.NOTHING_PENDING, action)
-    }
-
-    // ── Background sync-advance ─────────────────────────────────────────────────
-
-    @Test
-    fun `isBroadcastableAfterBurst is true when the burst reached the target`() {
-        // The burst advanced the tip until the migration height gate confirmed the transfer.
-        assertTrue(isBroadcastableAfterBurst(Synchronizer.SyncBurstResult.TARGET_REACHED, hasOverdueNow = false))
-    }
-
-    @Test
-    fun `isBroadcastableAfterBurst is true when the transfer is overdue even if the burst did not report it`() {
-        // The gate flipped just after the burst returned a non-target terminal; the fresh
-        // hasOverdueTransfers() read still catches it.
-        assertTrue(isBroadcastableAfterBurst(Synchronizer.SyncBurstResult.SYNCED_TO_TIP, hasOverdueNow = true))
-    }
-
-    @Test
-    fun `isBroadcastableAfterBurst is false when the burst made no progress and nothing is overdue`() {
-        assertFalse(isBroadcastableAfterBurst(Synchronizer.SyncBurstResult.TIMEOUT, hasOverdueNow = false))
-    }
-
-    @Test
-    fun `rescheduleDelayAfterSyncBurst waits a full privacy buffer once the transfer is broadcastable`() {
-        // The burst advanced the tip and the transfer is now overdue/broadcastable. Wait a full
-        // buffer before the next run broadcasts, so the sync burst and the broadcast are decoupled.
-        val delay = rescheduleDelayAfterSyncBurst(
-            isNowOverdue = true,
-            privacyBuffer = 10.minutes,
-            retryInterval = 75_000.milliseconds,
+    fun `lane B defers while lane A is running`() {
+        assertEquals(
+            LaneBAction.DEFER_OVERLAP,
+            decideLaneBPreflight(
+                laneARunning = true,
+                synchronizerSyncing = false,
+                nowEpochSeconds = 1000,
+                lastNetworkActivityEpochSeconds = 0,
+                privacyBufferSeconds = 600,
+            )
         )
-
-        assertEquals(10.minutes, delay)
     }
 
     @Test
-    fun `rescheduleDelayAfterSyncBurst falls back to the short retry when still not broadcastable`() {
-        // Tip still short (or proof not witnessed) — nothing to decouple yet, so retry soon.
-        val delay = rescheduleDelayAfterSyncBurst(
-            isNowOverdue = false,
-            privacyBuffer = 10.minutes,
-            retryInterval = 75_000.milliseconds,
+    fun `lane B defers inside the quiet gap`() {
+        assertEquals(
+            LaneBAction.DEFER_OVERLAP,
+            decideLaneBPreflight(
+                laneARunning = false,
+                synchronizerSyncing = false,
+                nowEpochSeconds = 1000,
+                lastNetworkActivityEpochSeconds = 700,
+                privacyBufferSeconds = 600,
+            )
         )
+    }
 
-        assertEquals(75_000.milliseconds, delay)
+    @Test
+    fun `lane B proceeds when all sources quiet past the gap`() {
+        assertEquals(
+            LaneBAction.BROADCAST,
+            decideLaneBPreflight(false, false, 1000, 100, 600)
+        )
+    }
+
+    @Test
+    fun `lane B proceeds when no sync ever happened`() {
+        assertEquals(
+            LaneBAction.BROADCAST,
+            decideLaneBPreflight(false, false, 1000, null, 600)
+        )
+    }
+
+    @Test
+    fun `lane B defers when synchronizer is syncing even if lane A is not running`() {
+        assertEquals(
+            LaneBAction.DEFER_OVERLAP,
+            decideLaneBPreflight(
+                laneARunning = false,
+                synchronizerSyncing = true,
+                nowEpochSeconds = 1000,
+                lastNetworkActivityEpochSeconds = null,
+                privacyBufferSeconds = 600,
+            )
+        )
+    }
+
+    @Test
+    fun `lane B proceeds when gap exactly elapsed`() {
+        // now=1000, last=400, buffer=600 → gap=600, exactly elapsed → BROADCAST
+        assertEquals(
+            LaneBAction.BROADCAST,
+            decideLaneBPreflight(false, false, 1000, 400, 600)
+        )
+    }
+
+    // ── syncCompletedSince ────────────────────────────────────────────────────
+
+    @Test
+    fun `syncCompletedSince returns false when lastActivity is null`() {
+        assertFalse(syncCompletedSince(lastActivity = null, lastShift = null))
+        assertFalse(syncCompletedSince(lastActivity = null, lastShift = Instant.ofEpochSecond(500)))
+    }
+
+    @Test
+    fun `syncCompletedSince returns true when lastActivity is non-null and lastShift is null`() {
+        // Null shift → treat as EPOCH; any activity is "since" then.
+        assertTrue(syncCompletedSince(lastActivity = Instant.ofEpochSecond(1000), lastShift = null))
+    }
+
+    @Test
+    fun `syncCompletedSince returns true when lastActivity is after lastShift`() {
+        assertTrue(
+            syncCompletedSince(
+                lastActivity = Instant.ofEpochSecond(1000),
+                lastShift = Instant.ofEpochSecond(500),
+            )
+        )
+    }
+
+    @Test
+    fun `syncCompletedSince returns false when lastActivity is before lastShift`() {
+        assertFalse(
+            syncCompletedSince(
+                lastActivity = Instant.ofEpochSecond(400),
+                lastShift = Instant.ofEpochSecond(500),
+            )
+        )
+    }
+
+    @Test
+    fun `syncCompletedSince returns false when lastActivity equals lastShift`() {
+        // Strictly after — equal timestamps mean no NEW activity since the shift.
+        assertFalse(
+            syncCompletedSince(
+                lastActivity = Instant.ofEpochSecond(500),
+                lastShift = Instant.ofEpochSecond(500),
+            )
+        )
     }
 }
