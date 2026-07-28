@@ -1,5 +1,91 @@
 # Two-lane migration background execution — CANONICAL spec + status + test case
 
+## 0. LATEST STATUS (2026-07-28 evening) — FULL E2E SUCCESS ✅
+
+A complete background migration ran end to end with the app closed and no
+intervention: plan committed 20:42 → Lane A anchor-driven sync+prove → checkpoint
+backfill → Lane B broadcast 20:52:06 → `migration complete!`. Log proof (single-transfer
+plan, the fast completion case):
+```
+20:42:32 committedPlan(1 transfer, boundary 4213512) + sync-session restart (retention) ✓
+20:43:32 LaneA wake at anchor height → sync
+20:45:25 checkpointBackfill: orchard + ironwood @ 4213512 (empty gap) ✓
+20:45:52 LaneB DEFER — post-sync privacy buffer ✓
+20:51:08 LaneA SKIP_NEAR_DUE, unproven=[] ✓
+20:52:06 transfer sent + migration complete! ✓
+```
+Earlier the same evening a 9-transfer plan sent 8/9 in the background before lifecycle
+churn (self-inflicted reinstalls) stalled the last one — the fixes below are exactly that
+churn hardened.
+
+**SCHEDULING IS ANCHOR-DRIVEN, NOT CADENCE (test phase).** Lane A currently wakes ONLY at
+anchor-boundary heights (+ settle margin); cadence is a states-unavailable fallback only.
+The FINAL Android implementation per Kris returns to a fixed sync CADENCE (60 min mainnet)
+and consumes the engine's `sync_wakeup_schedule` (#2801, present in the merged engine, not
+yet wired). The current anchor-driven mode exists for deterministic testnet full-flow
+testing — do not mistake it for the shipping design. `laneACadence()`/`laneAFirstRunLead()`
+carry TODO notes to this effect.
+
+### The 9 bugs fixed today (autonomous E2E loop) — grouped by system layer
+
+ANCHOR/CHECKPOINT CHAIN (the real design gaps — nothing proved in the background until all
+three landed):
+1. **Session-scoped retention floor.** The engine reads the migration anchor-retention floor
+   once, at `start_session`; a session already live at commit didn't protect the new plan's
+   boundaries. Fix: `Synchronizer.restartSyncSession()` after commit
+   (`FinalizeMigrationScheduleUseCase`).
+2. **Retention gated on an in-progress migration.** But ZIP 318 draws boundaries in the recent
+   PAST (age 1..16 buckets below tip), so retention that only turns on once a plan exists loses
+   exactly the checkpoints the plan draws against. Fix: ALWAYS-ON retention (18-bucket window
+   below the scanned tip) + commit-time `BoundaryCheckpointMissing` validation → re-propose.
+3. **Sync checkpoints per scan sub-batch, not per block.** A grid height inside a multi-block
+   chunk gets no checkpoint even with retention. Fix: empty-gap checkpoint BACKFILL (copy the
+   nearest earlier checkpoint's position across a provably commitment-free gap — exact, not an
+   approximation). Real fix (grid-aligned sub-batch cuts) belongs in slipstream-core → report.
+
+LIFECYCLE ROBUSTNESS (all variants of "a self-rechaining lane must never silently vanish" —
+triggered by reinstalls here, by Doze/kill/reboot in production):
+4. **Worker returned success when the SDK wasn't up yet** (post-update WorkManager re-run before
+   the synchronizer inits) → consumed the OneTimeWork without re-arming → lane dead. Fix:
+   `Result.retry()`.
+5. **App-open recovery burned its throttle window on an SDK-null attempt.** Fix: un-stamp the
+   throttle when the SDK isn't ready.
+6. **Both lanes woke in the same second** (WorkManager batches similar due times) → Lane B saw
+   Lane A RUNNING and deferred a full buffer every cycle → deterministic lockstep (5 proved, due
+   transfers stuck 17 min). Fix: Lane B waits out a same-instant Lane A wake (≤30s) instead of a
+   blind buffer defer.
+7. **Broadcast over a cold-bootstrapping Tor client hung with no timeout** until the WorkManager
+   ceiling, nothing re-armed. Fix: 3-min timeout around the broadcast → retryable (a late detached
+   completion is safely classified as a duplicate submit).
+8. **Lane B had no reviver.** Lane A was revived by recovery + SYNCED hook; Lane B only re-armed
+   at the end of its own run → an update mid-plan killed all future broadcasts (final transfer
+   proved+due with no job to send it). Fix: revive BOTH lanes in the SYNCED hook AND app-open
+   recovery.
+9. **Revival keyed on the app-side plan cache**, which can be lost while the engine still holds a
+   live run. Fix: gate revival on the engine's `MigrationState.InProgress` (single source of truth).
+
+### Missed / can't-execute handling — HOW IT WORKS NOW (answers the "Danny shift" question)
+
+We NEVER recompute safe points. The engine draws and stores each transfer's `anchor_boundary` +
+`scheduled_height` + `expiry_height` ONCE at commit; they are fixed. Our hand-rolled reschedule
+(a second source of truth) is DELETED.
+- **Lane A didn't run / Lane B has no proof:** Lane B's run converts into a sync run (does the
+  prove itself, against the STORED boundary), never broadcasting in the same execution, then
+  re-arms the send from the engine's own live `scheduled_height` (`getMigrationTransferStates`),
+  translated height→time via the measured block rate. We only TIME the wake; the engine already
+  decided the safe point.
+- **Missed but UNEXPIRED:** no action needed. ZIP 374 (signature excludes the anchor) + retained
+  boundary checkpoint mean the transfer is still broadcastable against its original boundary, days
+  late; the engine's `next_broadcastable(tip)` serves it whenever Lane B next wakes. "Missed" =
+  just "late".
+- **EXPIRED (chain passed `expiry_height`):** THIS is the one case that needs a recompute, and it
+  is the engine's `rebuild_expired_transfer(_unsigned)` — Danny's "migration shift" (Slack
+  1785231345.187899). We do NOT wire it yet: today we `mark Failed` (migration.rs ~1176), killing
+  the plan. FOLLOW-UP TICKET. Mainnet expiry is ~30 days out, so rare in practice, but the correct
+  handling is the engine rebuild (fresh boundary+expiry, re-sign), not plan death.
+
+---
+
 Date: 2026-07-28. This document supersedes and replaces:
 `2026-07-27-migration-background-anchor-sync-understanding.md`,
 `2026-07-27-migration-anchor-sync-diff-vs-core-guidance.md`,

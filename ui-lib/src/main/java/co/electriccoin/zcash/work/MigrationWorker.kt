@@ -34,6 +34,7 @@ import org.koin.core.component.inject
 import java.time.Instant
 import kotlin.time.Clock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 @Keep
@@ -59,14 +60,27 @@ class MigrationWorker(
             }
 
         val sdk = getOrchardMigrationSdk(accountKeyId) ?: run {
-            Twig.debug { "MIGRATION_DIAG MigrationWorker: no SDK for account $accountKeyId — skipping." }
-            return Result.success()
+            // Same reasoning as MigrationSyncWorker: a not-yet-initialized wallet right after an
+            // app update/reboot must not silently consume (and thereby kill) the self-rechaining
+            // lane — retry until the SDK is reachable.
+            Twig.debug { "MIGRATION_DIAG LaneB: SDK not ready — retrying via WorkManager backoff." }
+            return Result.retry()
         }
 
-        val laneARunning = withContext(Dispatchers.IO) {
-            WorkManager.getInstance(applicationContext)
-                .getWorkInfosForUniqueWork(WorkIds.WORK_ID_MIGRATION_SYNC).get()
-        }.any { it.state == WorkInfo.State.RUNNING }
+        // WorkManager batches jobs with similar due times, so both lanes routinely WAKE IN THE
+        // SAME SECOND — a naive "Lane A is RUNNING → defer a full privacy buffer" then re-collides
+        // every cycle forever (observed live: five proved, due transfers deferred for 17+ minutes
+        // across perfectly synchronized wakes). Lane A's runs take seconds (and a step-aside run
+        // does no network work at all), so wait it out briefly and re-check; the quiet-gap check
+        // below still guards the case where Lane A actually synced just now.
+        var laneARunning = isLaneARunning()
+        if (laneARunning) {
+            repeat(LANE_A_WAIT_CHECKS) {
+                delay(LANE_A_WAIT_STEP)
+                laneARunning = isLaneARunning()
+                if (!laneARunning) return@repeat
+            }
+        }
 
         // status is a Flow<Status> — timeout if cold; null synchronizer is non-syncing.
         // timeout → assume SYNCING → defer (privacy-safe default; production status is a StateFlow and answers immediately).
@@ -111,7 +125,20 @@ class MigrationWorker(
         // attempts instead of retrying via WorkManager's Result.retry() indefinitely (previously
         // observed: dumpsys jobscheduler showed the same worker restarting and running for the
         // full ~10-minute execution ceiling, repeatedly, for hours).
-        return when (val outcome = executeWithRetries { sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor), useEstimatedTip = true) }) {
+        // Hard timeout around the whole broadcast attempt: a cold-bootstrapping Tor client can
+        // hang the submit indefinitely (observed live: tx stuck in-flight 10+ minutes until the
+        // WorkManager execution ceiling killed the worker and nothing re-armed). On timeout the
+        // native call may still complete detached — a re-submit of the same tx is safely
+        // classified as a duplicate by the SDK (F2 classifier + mined-height probe), so
+        // re-arming for another attempt is correct.
+        val outcome = withTimeoutOrNull(BROADCAST_ATTEMPT_TIMEOUT) {
+            executeWithRetries { sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor), useEstimatedTip = true) }
+        } ?: run {
+            Twig.debug { "MIGRATION_DIAG LaneB: broadcast attempt timed out after $BROADCAST_ATTEMPT_TIMEOUT — re-arming." }
+            scheduleForNextLiveWindow(accountKeyId, sdk, floor = AWAITING_PROOF_REARM_FLOOR)
+            return Result.success()
+        }
+        return when (outcome) {
             is TransferAttemptOutcome.NothingDue -> {
                 // Not due yet by estimate: re-arm for the live next window (states-based, like Lane A).
                 scheduleForNextLiveWindow(accountKeyId, sdk)
@@ -255,9 +282,14 @@ class MigrationWorker(
                     Result.success()
                 }
             }
-            null -> Result.success() // executeWithRetries exhausted on retryable network errors mid-outcome
         }
     }
+
+    private suspend fun isLaneARunning(): Boolean =
+        withContext(Dispatchers.IO) {
+            WorkManager.getInstance(applicationContext)
+                .getWorkInfosForUniqueWork(WorkIds.WORK_ID_MIGRATION_SYNC).get()
+        }.any { it.state == WorkInfo.State.RUNNING }
 
     /**
      * Schedules the next Lane B run based on live SDK transfer states. Reads the next pending
@@ -308,6 +340,9 @@ class MigrationWorker(
 
 private val STATUS_READ_TIMEOUT = 2.seconds
 internal val AWAITING_PROOF_REARM_FLOOR = 60.seconds
+private val LANE_A_WAIT_STEP = 5.seconds
+private val BROADCAST_ATTEMPT_TIMEOUT = 3.minutes
+private const val LANE_A_WAIT_CHECKS = 6
 internal const val SHIFT_ESCALATION_THRESHOLD = 3
 
 /**

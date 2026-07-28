@@ -65,4 +65,13 @@ class MigrationDurationFormatTest {
         assertEquals("~15 min", formatMigrationDuration(totalSeconds = 900L, fineGrained = true))
         assertEquals("~15 min", formatMigrationDuration(totalSeconds = 900L, fineGrained = false))
     }
+
+    @Test
+    fun formatMigrationDuration_distinguishes_75min_from_119min_when_fine_grained() {
+        // Issue 2: the progress screen's old inline branch bucketed to coarse integer hours and
+        // dropped the minutes, so 75 min and 119 min both rendered "~1 hours". The shared formatter
+        // the progress screen now calls keeps them distinct (and matches the Review screen).
+        assertEquals("~1 h 15 min", formatMigrationDuration(totalSeconds = 75L * 60L, fineGrained = true))
+        assertEquals("~1 h 59 min", formatMigrationDuration(totalSeconds = 119L * 60L, fineGrained = true))
+    }
 }

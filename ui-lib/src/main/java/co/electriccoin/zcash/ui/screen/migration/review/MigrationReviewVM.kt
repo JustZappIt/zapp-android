@@ -319,13 +319,17 @@ class MigrationReviewVM(
             sdk.signAndStoreMigrationSchedule(scheduleToSign, zashiSpendingKeyDataSource.getZashiSpendingKey())
             finalizeMigrationSchedule(scheduleToSign, args.mode)
         } catch (e: RuntimeException) {
-            if (e.message?.contains("StalePlan") != true) throw e
-            // The engine's plan is a planning-time snapshot of wallet note indices; any note
+            val retryable = e.message?.contains("StalePlan") == true ||
+                e.message?.contains("BoundaryCheckpointMissing") == true
+            if (!retryable) throw e
+            // StalePlan: the plan is a planning-time snapshot of wallet note indices; any note
             // received or changed between this screen's propose and the commit (the bursty
             // testnet syncs continuously) shifts them and the engine correctly refuses with
             // "must be re-planned". Same balance, fresh draw — re-propose once and commit that.
             // Retrying the SAME cached schedule can never succeed (observed live: six identical
-            // StalePlan failures from the retry button).
+            // StalePlan failures from the retry button). BoundaryCheckpointMissing: the commit
+            // drew an anchor boundary onto a grid height with no retained checkpoint (pre-
+            // always-on-retention scan history) — a fresh draw lands on retained boundaries.
             Twig.debug { "MIGRATION_DIAG MigrationReview: StalePlan on commit — re-proposing once and retrying" }
             val fresh = sdk.proposeMigrationTransfers()
             finalizeMigrationSchedule.persistPlan(fresh, args.mode)
@@ -381,20 +385,27 @@ class MigrationReviewVM(
     // instead — a raw send-max Proposal carries no per-transfer schedule to derive one from).
     /** One-shot plan dump at propose time: absolute heights + wall-clock estimates. */
     private fun logProposedPlan(sched: MigrationSchedule) {
-        val referenceAnchor = sched.transfers.minOfOrNull { it.anchorHeight } ?: return
+        // `anchorHeight` on a PROPOSED transfer is NOT a real commitment-tree anchor — the engine
+        // draws anchor boundaries only at COMMIT (commit_preparation), so a proposal carries none.
+        // The field holds the plan-time tip as a "now" reference for the height→time estimates
+        // below; it is deliberately NOT logged per-transfer as "anchor=" (that read as a real
+        // boundary and was misleading). The real per-transfer boundaries are logged post-commit by
+        // the Rust `committedPlan:` dump (boundary=Some(...)).
+        val referenceTip = sched.transfers.minOfOrNull { it.anchorHeight } ?: return
         Twig.debug {
             buildString {
                 appendLine(
-                    "MIGRATION_DIAG Plan: ${sched.transfers.size} transfer(s), referenceAnchor=$referenceAnchor " +
-                        "(times estimated at measured ${secondsPerBlock}s/block from the reference tip)"
+                    "MIGRATION_DIAG Plan: ${sched.transfers.size} transfer(s), referenceTip=$referenceTip " +
+                        "(anchors are drawn at commit — see committedPlan; times estimated at measured " +
+                        "${secondsPerBlock}s/block from the reference tip)"
                 )
-                var prev = referenceAnchor
+                var prev = referenceTip
                 sched.transfers.forEachIndexed { i, t ->
-                    val fromNow = estimatedSecondsBetweenHeights(referenceAnchor, t.nextExecutableAfterHeight, secondsPerBlock)
+                    val fromNow = estimatedSecondsBetweenHeights(referenceTip, t.nextExecutableAfterHeight, secondsPerBlock)
                     val gap = estimatedSecondsBetweenHeights(prev, t.nextExecutableAfterHeight, secondsPerBlock)
                     prev = t.nextExecutableAfterHeight
                     appendLine(
-                        "MIGRATION_DIAG Plan: transfer[${i + 1}] anchor=${t.anchorHeight} " +
+                        "MIGRATION_DIAG Plan: transfer[${i + 1}] " +
                             "send=${t.nextExecutableAfterHeight} expiry=${t.expiryHeight} " +
                             "dueIn=${formatMigrationDuration(fromNow, fineGrained = true)} " +
                             "gapFromPrev=${formatMigrationDuration(gap, fineGrained = true)}"

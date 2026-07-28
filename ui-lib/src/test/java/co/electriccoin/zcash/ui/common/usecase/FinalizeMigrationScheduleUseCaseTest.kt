@@ -53,6 +53,7 @@ class FinalizeMigrationScheduleUseCaseTest {
             getSelectedWalletAccount = mockk<GetSelectedWalletAccountUseCase> {
                 coEvery { this@mockk() } returns mockk<ZashiAccount>(relaxed = true)
             },
+            synchronizerProvider = mockk(relaxed = true),
         )
 
         useCase(schedule(), MigrationMode.AUTOMATIC)
@@ -79,6 +80,7 @@ class FinalizeMigrationScheduleUseCaseTest {
             getSelectedWalletAccount = mockk<GetSelectedWalletAccountUseCase> {
                 coEvery { this@mockk() } returns mockk<KeystoneAccount>(relaxed = true)
             },
+            synchronizerProvider = mockk(relaxed = true),
         )
 
         useCase(schedule(), MigrationMode.AUTOMATIC)
@@ -100,6 +102,7 @@ class FinalizeMigrationScheduleUseCaseTest {
             getSelectedWalletAccount = mockk<GetSelectedWalletAccountUseCase> {
                 coEvery { this@mockk() } returns mockk<ZashiAccount>(relaxed = true)
             },
+            synchronizerProvider = mockk(relaxed = true),
         )
 
         useCase(schedule(), MigrationMode.AUTOMATIC)

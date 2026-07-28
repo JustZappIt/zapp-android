@@ -4,8 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import co.electriccoin.zcash.ui.screen.common.LceRenderer
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -21,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +30,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.BlankBgScaffold
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ZashiButton
@@ -45,7 +45,7 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.scaffoldPadding
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.screen.common.LceRenderer
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -69,7 +69,6 @@ fun MigrationProgressView(state: MigrationProgressState) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
                 .scaffoldPadding(padding),
         ) {
             Text(
@@ -86,33 +85,39 @@ fun MigrationProgressView(state: MigrationProgressState) {
             )
             Spacer(Modifier.height(24.dp))
 
-            TransferProgressTimelineRow(
-                title = "Split Balance",
-                statusLabel = stringRes("Done"),
-                amount = state.totalAmount,
-                fiatAmount = state.totalFiatAmount,
-                // No icon param needed: isDone=true always renders ic_migration_check regardless
-                // (see TransferProgressTimelineRow below) — this row is always Done by the time
-                // this screen exists, so it was already showing the right glyph; the old
-                // ic_migration_coins_swap value here was unused dead code.
-                isDone = true,
-                isActive = false,
-                isOverdue = false,
-                isLast = state.transfers.isEmpty(),
-            )
-            val activeIndex = state.transfers.indexOfFirst { !it.isSent }
-            state.transfers.forEachIndexed { i, transfer ->
+            Column(
+                Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+            ) {
                 TransferProgressTimelineRow(
-                    title = "Transfer ${transfer.index}",
-                    statusLabel = transfer.statusLabel,
-                    amount = transfer.amount,
-                    fiatAmount = transfer.fiatAmount,
-                    index = transfer.index,
-                    isDone = transfer.isSent,
-                    isActive = i == activeIndex,
-                    isOverdue = transfer.isOverdue,
-                    isLast = i == state.transfers.lastIndex,
+                    title = "Split Balance",
+                    statusLabel = stringRes("Done"),
+                    amount = state.totalAmount,
+                    fiatAmount = state.totalFiatAmount,
+                    // No icon param needed: isDone=true always renders ic_migration_check regardless
+                    // (see TransferProgressTimelineRow below) — this row is always Done by the time
+                    // this screen exists, so it was already showing the right glyph; the old
+                    // ic_migration_coins_swap value here was unused dead code.
+                    isDone = true,
+                    isActive = false,
+                    isOverdue = false,
+                    isLast = state.transfers.isEmpty(),
                 )
+                val activeIndex = state.transfers.indexOfFirst { !it.isSent }
+                state.transfers.forEachIndexed { i, transfer ->
+                    TransferProgressTimelineRow(
+                        title = "Transfer ${transfer.index}",
+                        statusLabel = transfer.statusLabel,
+                        amount = transfer.amount,
+                        fiatAmount = transfer.fiatAmount,
+                        index = transfer.index,
+                        isDone = transfer.isSent,
+                        isActive = i == activeIndex,
+                        isOverdue = transfer.isOverdue,
+                        isLast = i == state.transfers.lastIndex,
+                    )
+                }
             }
 
             if (state.hasOverdue) {
@@ -124,7 +129,6 @@ fun MigrationProgressView(state: MigrationProgressState) {
                 )
             }
 
-            Spacer(Modifier.weight(1f))
             Spacer(Modifier.height(24.dp))
 
             if (state.isComplete) {
@@ -216,12 +220,14 @@ private fun TransferProgressTimelineRow(
                         tint = ZashiColors.Btns.Primary.btnPrimaryFg,
                         modifier = Modifier.size(16.dp),
                     )
+
                     icon != null -> Icon(
                         painter = painterResource(icon),
                         contentDescription = null,
                         tint = textColor,
                         modifier = Modifier.size(14.dp),
                     )
+
                     else -> Text(
                         text = "$index",
                         style = ZashiTypography.textXs,
@@ -277,6 +283,13 @@ private fun PreviewResume() = ZcashTheme {
                 MigrationProgressTransferState(2, stringRes("1.052 ZEC"), stringRes("Sent 18 min ago"), false, true, stringRes("$406.86")),
                 MigrationProgressTransferState(3, stringRes("2.105 ZEC"), stringRes("Overdue · 6h ago"), true, false, stringRes("$813.74")),
                 MigrationProgressTransferState(4, stringRes("1.897 ZEC"), stringRes("~10 hours"), false, false, stringRes("$733.51")),
+                MigrationProgressTransferState(5, stringRes("4.056 ZEC"), stringRes("~16 hours"), false, false, stringRes("$1,568.05")),
+                MigrationProgressTransferState(5, stringRes("4.056 ZEC"), stringRes("~16 hours"), false, false, stringRes("$1,568.05")),
+                MigrationProgressTransferState(5, stringRes("4.056 ZEC"), stringRes("~16 hours"), false, false, stringRes("$1,568.05")),
+                MigrationProgressTransferState(5, stringRes("4.056 ZEC"), stringRes("~16 hours"), false, false, stringRes("$1,568.05")),
+                MigrationProgressTransferState(5, stringRes("4.056 ZEC"), stringRes("~16 hours"), false, false, stringRes("$1,568.05")),
+                MigrationProgressTransferState(5, stringRes("4.056 ZEC"), stringRes("~16 hours"), false, false, stringRes("$1,568.05")),
+                MigrationProgressTransferState(5, stringRes("4.056 ZEC"), stringRes("~16 hours"), false, false, stringRes("$1,568.05")),
                 MigrationProgressTransferState(5, stringRes("4.056 ZEC"), stringRes("~16 hours"), false, false, stringRes("$1,568.05")),
             ),
             isComplete = false,

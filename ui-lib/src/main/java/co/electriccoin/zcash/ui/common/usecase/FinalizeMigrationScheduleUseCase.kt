@@ -2,6 +2,8 @@ package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.MigrationSchedule
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.migration.MigrationKeystoneRound
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
@@ -36,6 +38,7 @@ class FinalizeMigrationScheduleUseCase(
     private val navigationRouter: NavigationRouter,
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
+    private val synchronizerProvider: SynchronizerProvider,
 ) {
     suspend operator fun invoke(sched: MigrationSchedule, mode: MigrationMode) {
         // Measured block rate — the 75s constant grossly overestimates on the bursty testnet,
@@ -43,11 +46,21 @@ class FinalizeMigrationScheduleUseCase(
         val secondsPerBlock = getOrchardMigrationSdk()?.estimatedSecondsPerBlock() ?: 75L
         persistPlan(sched, mode, secondsPerBlock)
         val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
+        logCommittedBoundaries()
         migrationScheduler.schedule(accountKeyId, delayUntilFirstTransfer(sched, secondsPerBlock))
         // Lane A first arm is a short flat delay: the schedule object carries no anchor
         // boundaries, so the worker's FIRST run reads the freshly committed engine states and
         // computes the precise boundary-driven wake itself (see MigrationSyncWorker).
         migrationSyncScheduler.schedule(accountKeyId, 60.seconds)
+        // The engine's anchor-retention floor is session-scoped and was computed BEFORE this plan
+        // existed — restart the sync session now, before the chain crosses the plan's first
+        // boundary, or that boundary's checkpoint is never created and its transfer can never be
+        // proved (see Synchronizer.restartSyncSession; observed live as a permanent
+        // AnchorNotFound on the plan's first bucket).
+        val restarted = synchronizerProvider.getSynchronizerOrNull()?.restartSyncSession() ?: false
+        Twig.debug {
+            "MIGRATION_DIAG FinalizeMigrationSchedule: sync-session restart for anchor retention — restarted=$restarted"
+        }
         navigationRouter.forward(MigrationScheduledArgs)
     }
 
@@ -76,6 +89,45 @@ class FinalizeMigrationScheduleUseCase(
             null
         }
         migrationPlanRepository.save(sched.toMigrationPlan(mode, keystoneRound, secondsPerBlock))
+    }
+
+    /**
+     * Post-commit discoverability log (Issue 1): re-surface the engine's REAL per-transfer anchor
+     * boundaries from the Kotlin side, right after the commit, so `grep MIGRATION_DIAG` shows the
+     * true committed anchors without having to read the Rust `committedPlan:` dump.
+     *
+     * The propose-time app log (MigrationReviewVM.logProposedPlan) deliberately carries no
+     * `boundary=` — anchor boundaries are drawn only at COMMIT (commit_preparation), so a proposal
+     * has none. This reads them back from [OrchardMigrationSdk.getMigrationTransferStates], which
+     * surfaces `anchorBoundaryHeight` per transfer (null for preparations — they anchor to the
+     * natural tip, not a drawn grid boundary). Correlates by the stable transfer id (never array
+     * index — ZIP 318 shuffles the two orderings apart). Best-effort: a failed/absent read logs a
+     * single warning and is otherwise silent, never blocking the commit's scheduling/navigation.
+     */
+    private suspend fun logCommittedBoundaries() {
+        val states = runCatching { getOrchardMigrationSdk()?.getMigrationTransferStates() }.getOrNull()
+        if (states == null) {
+            Twig.debug { "MIGRATION_DIAG committedPlan(app): no live transfer states available post-commit" }
+            return
+        }
+        Twig.debug {
+            buildString {
+                appendLine(
+                    "MIGRATION_DIAG committedPlan(app): ${states.transfers.size} transaction(s), scannedTip=${states.tipHeight}"
+                )
+                states.transfers
+                    .sortedBy { it.scheduledHeight }
+                    .forEach { t ->
+                        appendLine(
+                            "MIGRATION_DIAG committedPlan(app): id=${t.id} " +
+                                "kind=${if (t.isTransfer) "Transfer" else "Preparation"} " +
+                                "scheduled=${t.scheduledHeight} " +
+                                "boundary=${t.anchorBoundaryHeight ?: "natural"} " +
+                                "proved=${t.isProved} sent=${t.isSent}"
+                        )
+                    }
+            }.trimEnd()
+        }
     }
 
     // The first transfer is never "ready now" (same anchor/proposal round trip as any other

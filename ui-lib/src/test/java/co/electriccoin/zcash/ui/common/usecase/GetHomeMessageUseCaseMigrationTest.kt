@@ -4,6 +4,7 @@ import cash.z.ecc.android.sdk.AttentionReason
 import cash.z.ecc.android.sdk.MigrationProgress
 import cash.z.ecc.android.sdk.MigrationState
 import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_DUST_THRESHOLD_ZATOSHI
+import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_RESIDUAL_MIN_ZATOSHI
 import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
@@ -52,14 +53,66 @@ class GetHomeMessageUseCaseMigrationTest {
     }
 
     @Test
-    fun freshWalletWithBalanceAndNoPlanShowsRequired() {
+    fun freshWalletWithMigratableBalanceAndNoPlanShowsRequired() {
+        // A balance at or above the migratable minimum (0.01 ZEC) is genuinely migratable, so the
+        // "Migrate now" prompt is correct — tapping it will produce a real proposal, not
+        // NothingToMigrate.
         val result = migrationMessageFor(
             sdkState = null,
             plan = null,
             hasSeenComplete = false,
-            orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI + 100_000L,
+            orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI,
         )
         assertEquals(HomeMessageData.Migration(null), result)
+    }
+
+    @Test
+    fun freshWalletWithLargeBalanceAndNoPlanShowsRequired() {
+        val result = migrationMessageFor(
+            sdkState = null,
+            plan = null,
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI + 500_000L,
+        )
+        assertEquals(HomeMessageData.Migration(null), result)
+    }
+
+    @Test
+    fun residueInGapWithNoPlanShowsCompletedNotRequired() {
+        // The bug this fixes: a leftover Orchard balance above the dust threshold but below the
+        // migratable minimum (here 500_000 zat = 0.005 ZEC, the live-observed residue) is
+        // un-migratable — proposeMigrationTransfers would return NothingToMigrate. It must be
+        // evaluated as "migration completed" and route to the residue flow (lock / migrate-anyway),
+        // NOT shown as "Migrate now".
+        val result = migrationMessageFor(
+            sdkState = null,
+            plan = null,
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = 500_000L,
+        )
+        assertEquals(HomeMessageData.Migration(plan = null, isComplete = true), result)
+    }
+
+    @Test
+    fun residueJustBelowMinWithNoPlanShowsCompleted() {
+        val result = migrationMessageFor(
+            sdkState = null,
+            plan = null,
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI - 1L,
+        )
+        assertEquals(HomeMessageData.Migration(plan = null, isComplete = true), result)
+    }
+
+    @Test
+    fun residueJustAboveDustWithNoPlanShowsCompleted() {
+        val result = migrationMessageFor(
+            sdkState = null,
+            plan = null,
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI + 1L,
+        )
+        assertEquals(HomeMessageData.Migration(plan = null, isComplete = true), result)
     }
 
     @Test
@@ -103,33 +156,66 @@ class GetHomeMessageUseCaseMigrationTest {
     }
 
     @Test
-    fun completeWithUnacknowledgedPlanButResidualAboveThresholdDoesNotShowCompleteBanner() {
+    fun completeWithUnacknowledgedPlanButMigratableResidualDoesNotShowCompleteBanner() {
         // Pins the fix for the multi-round Keystone bug: the SDK's own MigrationState reports
-        // Complete as soon as the *current* round's transfers are all mined, even with a large
-        // residual balance well above the dust threshold still needing another round. Showing the
-        // one-time completion banner (and its "Lock balance" option) at that point would be wrong.
+        // Complete as soon as the *current* round's transfers are all mined, even with a still
+        // migratable residual balance (at or above the migratable minimum) needing another round.
+        // Showing the one-time completion banner (and its "Lock balance" option) at that point would
+        // be wrong. Gated on the migratable minimum now, not the dust threshold: a sub-migratable
+        // residue genuinely IS complete (there's no further round to run) — see
+        // completeWithUnacknowledgedPlanAndSubMigratableResidueShowsCompleteBanner below.
+        val result = migrationMessageFor(
+            sdkState = MigrationState.Complete,
+            plan = plan(),
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI + 500_000L,
+        )
+        assertNull(result)
+    }
+
+    @Test
+    fun completeWithUnacknowledgedPlanAndSubMigratableResidueShowsCompleteBanner() {
+        // A residual left after the final round that is above the dust threshold but below the
+        // migratable minimum (500_000 zat here) still counts as complete: the engine cannot migrate
+        // it, so the completion/residue screen (lock / migrate-anyway) is the correct destination.
         val result = migrationMessageFor(
             sdkState = MigrationState.Complete,
             plan = plan(),
             hasSeenComplete = false,
             orchardBalanceZatoshi = 500_000L,
         )
-        assertNull(result)
+        assertEquals(HomeMessageData.Migration(plan(), isComplete = true), result)
     }
 
     @Test
-    fun completeWithClearedPlanAndResidualBalanceReEvaluatesToRequired() {
-        // Simulates the auto-continuation case: Task 7 clears the plan (without setting
-        // hasSeenComplete) when a round finishes but residual balance still needs another round.
-        // The SDK's own MigrationState is still Complete at this point (it only advances once the
-        // next round is actually committed) — the plan==null check must take priority over it.
+    fun completeWithClearedPlanAndMigratableResidualBalanceReEvaluatesToRequired() {
+        // Simulates the auto-continuation case: the plan is cleared (without setting
+        // hasSeenComplete) when a round finishes but a still-migratable residual balance (>= the
+        // migratable minimum) needs another round. The SDK's own MigrationState is still Complete at
+        // this point (it only advances once the next round is actually committed) — the plan==null
+        // check must take priority over it and show "Migrate now" again.
         val result = migrationMessageFor(
             sdkState = MigrationState.Complete,
             plan = null,
             hasSeenComplete = false,
-            orchardBalanceZatoshi = 300_000L,
+            orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI + 200_000L,
         )
         assertEquals(HomeMessageData.Migration(null), result)
+    }
+
+    @Test
+    fun completeWithClearedPlanAndSubMigratableResidueShowsCompletedNotRequired() {
+        // The other half of the cleared-plan case: the residual left after a round is below the
+        // migratable minimum (0.005 ZEC here), so there is no further round to run. It must present
+        // as the completed/residue banner (lock / migrate-anyway), not "Migrate now" — which would
+        // tap into a NothingToMigrate failure.
+        val result = migrationMessageFor(
+            sdkState = MigrationState.Complete,
+            plan = null,
+            hasSeenComplete = false,
+            orchardBalanceZatoshi = 500_000L,
+        )
+        assertEquals(HomeMessageData.Migration(plan = null, isComplete = true), result)
     }
 
     @Test
@@ -283,7 +369,7 @@ class GetHomeMessageUseCaseMigrationTest {
             sdkState = MigrationState.RequiresAttention(AttentionReason.TransferExpired),
             plan = null,
             hasSeenComplete = false,
-            orchardBalanceZatoshi = 300_000L,
+            orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI + 200_000L,
         )
         assertEquals(HomeMessageData.Migration(null), result)
     }

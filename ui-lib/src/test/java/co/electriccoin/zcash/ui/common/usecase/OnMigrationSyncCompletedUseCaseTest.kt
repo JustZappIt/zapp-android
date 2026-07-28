@@ -29,6 +29,12 @@ class OnMigrationSyncCompletedUseCaseTest {
         migrationNotifier = migrationNotifier,
         migrationScheduler = migrationScheduler,
         migrationSyncScheduler = migrationSyncScheduler,
+        // Explicit null plan: skips the lane-revival branch (which would touch WorkManager via a
+        // real Context) in these unit tests — a relaxed mock would return a mock plan instead.
+        migrationPlanRepository = mockk {
+            coEvery { load(any()) } returns null
+        },
+        context = mockk(relaxed = true),
     )
 
     @Test

@@ -2,7 +2,9 @@ package co.electriccoin.zcash.ui.screen.migration.progress
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.sdk.MigrationTransferStates
+import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
@@ -26,6 +28,7 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.ui.common.model.migration.withLiveState
+import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
@@ -38,6 +41,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.math.MathContext
 import kotlin.time.Clock
@@ -53,6 +57,7 @@ class MigrationProgressVM(
     private val errorStateMapper: ErrorMapperUseCase,
     private val synchronizerProvider: SynchronizerProvider,
     private val lastNetworkActivity: LastNetworkActivityStorageProvider,
+    private val isMigrationTorEnabledStorageProvider: IsMigrationTorEnabledStorageProvider,
     private val context: Context,
 ) : ViewModel() {
 
@@ -62,39 +67,40 @@ class MigrationProgressVM(
         combine(
             migrationPlanRepository.observe(),
             exchangeRateRepository.state,
-            reallyOverdueFlow(),
             liveTransferStatesFlow(),
-        ) { plan, rate, reallyOverdue, liveStates ->
+        ) { plan, rate, liveStates ->
             // Measured block rate for the height->wall-clock re-projection — the 75s default
             // turned minute-scale testnet schedules into "~1 hour" rows (caught live 28.7.).
             val secondsPerBlock = getOrchardMigrationSdk()?.estimatedSecondsPerBlock() ?: 75L
+            // Issue 3a: gate the recovery buttons on a GRACED, transfers-only overdue check
+            // computed app-side from the live states' SCANNED tip — NOT the raw SDK
+            // hasOverdueTransfers() (Rust any_overdue), which is un-graced and includes
+            // preparations, so it flashed the buttons the instant a proved tx passed its
+            // scheduled height during otherwise-normal execution.
+            val reallyOverdue = hasGenuinelyOverdueTransfer(liveStates)
             plan?.let { createState(it.withLiveState(liveStates, secondsPerBlock), rate, reallyOverdue) }
         }.withLce(sendLce, errorStateMapper::mapToState)
             .stateIn(this)
 
-    // plan.nextPending.scheduledAt is a wall-clock estimate computed once, at schedule-persist
-    // time, from the Rust schedule's block-height deltas — it can drift from the actual
-    // height-based due time the SDK enforces (most obviously under a device/emulator wall-clock
-    // jump; see zcash_pool_migration design spec §4.6). Gating Send Now/Reschedule on that
-    // estimate alone let the button appear before the transfer was really due, and clicking it
-    // then crashed (rescheduleOverdueTransfer() found nothing pending, since the SDK's own
-    // height-based check correctly disagreed). Polling the SDK's authoritative
-    // hasOverdueTransfers() — the same check the background sync-block mechanism relies on —
-    // keeps this screen's notion of "overdue" consistent with what the SDK will actually act on.
-    private fun reallyOverdueFlow(): Flow<Boolean> =
-        flow {
-            while (true) {
-                val sdk = getOrchardMigrationSdk()
-                emit(sdk?.hasOverdueTransfers() ?: false)
-                delay(OVERDUE_RECHECK_INTERVAL)
-            }
-        }
+    init {
+        // Issue 3b: drive migration forward WHILE the progress screen is foregrounded.
+        //
+        // Root cause of the stall: on this screen the app is foreground and the main synchronizer
+        // follows the chain tip continuously, so Lane B's background preflight sees
+        // synchronizerSyncing=true and DEFER_OVERLAPs forever — nothing ever broadcasts while the
+        // user watches (every successful E2E previously required backgrounding the app to open a
+        // Lane B quiet window). This foreground pass opens that window itself, PRIVACY-PRESERVED:
+        // it pauses the main synchronizer, waits out the privacy quiet gap, then broadcasts through
+        // the EXACT same pipeline Lane B/Sending use (executeNextPendingTransfer) — never a raw
+        // send, and never while a sync source is live. The side effect lives here in init{} (not in
+        // the state combine) so it runs once per VM instance rather than re-subscribing.
+        foregroundBroadcastLoop()
+    }
 
     // MigrationPlanRepository's per-transfer status/scheduledAt is a display cache, written once
-    // at propose/commit time. Polling the SDK's own persisted state directly, the same way
-    // reallyOverdueFlow() already does for the overdue check, keeps the displayed schedule true
-    // to the engine — the single source of truth for the plan — regardless of what the cache
-    // last recorded.
+    // at propose/commit time. Polling the SDK's own persisted state directly keeps the displayed
+    // schedule true to the engine — the single source of truth for the plan — regardless of what
+    // the cache last recorded.
     private fun liveTransferStatesFlow(): Flow<MigrationTransferStates?> =
         flow {
             while (true) {
@@ -103,6 +109,93 @@ class MigrationProgressVM(
                 delay(OVERDUE_RECHECK_INTERVAL)
             }
         }
+
+    /**
+     * Issue 3b — the foreground broadcast pass. Periodically, while this VM is alive (i.e. the
+     * progress screen is on top), checks whether a transfer is genuinely due AND proved; if so,
+     * acquires a privacy-safe broadcast window and broadcasts it via the same SDK pipeline the
+     * background Lane B uses. Runs on the VM scope, so it is cancelled automatically when the
+     * screen leaves.
+     */
+    private fun foregroundBroadcastLoop() =
+        viewModelScope.launch {
+            while (true) {
+                runCatching { attemptForegroundBroadcast() }
+                    .onFailure { Twig.warn(it) { "MIGRATION_DIAG ProgressBroadcast: pass failed (transient) — retrying next tick" } }
+                delay(FOREGROUND_BROADCAST_INTERVAL)
+            }
+        }
+
+    /**
+     * One foreground broadcast attempt, privacy-preserved.
+     *
+     * 1. Only proceeds when the engine holds a PROVED, unsent transaction whose scheduledHeight has
+     *    been reached at the SCANNED tip (a broadcast that can actually happen). An unproven due
+     *    transfer is left to Lane A's sync to prove — never force-broadcast here.
+     * 2. Respects the SDK's own post-broadcast privacy gate (isSyncBlocked): if active, defers.
+     * 3. PAUSES the main synchronizer so no sync source is live, waits out the privacy quiet gap
+     *    from the last network activity, then broadcasts through executeNextPendingTransfer — the
+     *    identical call Lane B and the Sending screen use. After a successful overdue broadcast the
+     *    SDK itself sets the post-broadcast resume-at buffer, which keeps the main sync paused via
+     *    isSyncBlocked; we still resume() so the SDK-owned gate — not this manual pause — governs
+     *    sync from here on.
+     */
+    private suspend fun attemptForegroundBroadcast() {
+        val sdk = getOrchardMigrationSdk() ?: return
+        val states = sdk.getMigrationTransferStates() ?: return
+        if (!hasBroadcastableTransfer(states)) {
+            return
+        }
+        if (sdk.isSyncBlocked().first()) {
+            Twig.debug { "MIGRATION_DIAG ProgressBroadcast: privacy gate active (isSyncBlocked) — deferring foreground broadcast." }
+            return
+        }
+        val synchronizer = synchronizerProvider.getSynchronizerOrNull()
+        // Pause the continuously-syncing foreground synchronizer so the broadcast never overlaps a
+        // live sync (privacy). Cast mirrors ResetZashiUseCase — the runtime instance is always a
+        // CloseableSynchronizer; a null/incompatible synchronizer simply skips this pass.
+        val closeable = synchronizer as? cash.z.ecc.android.sdk.CloseableSynchronizer ?: run {
+            Twig.debug { "MIGRATION_DIAG ProgressBroadcast: no pausable synchronizer — skipping foreground broadcast." }
+            return
+        }
+        closeable.pause()
+        // Stamp "network activity" at the moment of pause so the quiet gap below is measured from
+        // when THIS sync stopped — not from the last SYNCED transition. In the exact state this
+        // path targets (the foreground synchronizer catching up continuously and never reaching
+        // SYNCED), lastNetworkActivity is stamped only on SYNCED, so it would be stale and the gap
+        // would collapse to ~0 → an immediate broadcast right after an ASYNC pause() whose
+        // stopPolling() may still be in flight, i.e. sync traffic still adjacent to the broadcast.
+        // Stamping here forces the full privacy buffer to elapse after the sync actually stopped,
+        // covering the async stop and giving real decorrelation.
+        lastNetworkActivity.stampNow()
+        Twig.debug { "MIGRATION_DIAG ProgressBroadcast: paused foreground sync to open a broadcast window." }
+        try {
+            // Wait out the privacy quiet gap since the pause stamp above (same buffer Lane B's
+            // preflight enforces) so an observer can't correlate the just-stopped sync with the
+            // broadcast. The pause above already removed the live-sync source; this covers the gap.
+            val gap = quietGapRemaining(sdk.privacySyncBufferDuration())
+            if (gap.isPositive()) {
+                Twig.debug { "MIGRATION_DIAG ProgressBroadcast: waiting privacy quiet gap $gap before broadcast." }
+                delay(gap)
+            }
+            val useTor = isMigrationTorEnabledStorageProvider.get()
+            val outcome = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor), useEstimatedTip = false)
+            Twig.debug { "MIGRATION_DIAG ProgressBroadcast: foreground broadcast outcome=$outcome" }
+            lastNetworkActivity.stampNow()
+        } finally {
+            // Hand sync governance back to the SDK-owned isSyncBlocked gate (which, after a
+            // successful overdue broadcast, keeps sync paused for the post-broadcast buffer).
+            closeable.resume()
+            Twig.debug { "MIGRATION_DIAG ProgressBroadcast: resumed foreground sync (SDK gate now governs)." }
+        }
+    }
+
+    private suspend fun quietGapRemaining(privacyBuffer: kotlin.time.Duration): kotlin.time.Duration {
+        val last = lastNetworkActivity.get() ?: return kotlin.time.Duration.ZERO
+        val elapsed = (Clock.System.now().epochSeconds - last.epochSecond).seconds
+        val remaining = privacyBuffer - elapsed
+        return if (remaining.isPositive()) remaining else kotlin.time.Duration.ZERO
+    }
 
     // withLiveState() (correlating by stable transfer id, never array index — see its doc) now
     // lives in MigrationPlan.kt, shared with MigrationAttention.kt's affectedTransferIndices().
@@ -222,12 +315,12 @@ class MigrationProgressVM(
                 when {
                     scheduled <= now -> stringRes("Overdue · ${overdueHours(t, now)}h ago")
                     else -> {
-                        val minutesLeft = (scheduled - now).inWholeMinutes
-                        when {
-                            minutesLeft <= 0 -> stringRes("Ready now")
-                            minutesLeft < 60 -> stringRes("~$minutesLeft min")
-                            else -> stringRes("~${minutesLeft / 60} hours")
-                        }
+                        // Use the shared formatter (Issue 2) so this screen and the Review screen
+                        // format identically ("~1 h 15 min") — the old inline branch bucketed to
+                        // coarse integer hours ("~1 hours") and dropped the minutes, so 75 min and
+                        // 119 min both rendered the same. fineGrained defaults to testnet=true.
+                        val secondsLeft = (scheduled - now).inWholeSeconds
+                        stringRes(formatMigrationDuration(secondsLeft))
                     }
                 }
             }
@@ -238,5 +331,58 @@ class MigrationProgressVM(
 
     companion object {
         private val OVERDUE_RECHECK_INTERVAL = 15.seconds
+
+        // How often the foreground broadcast pass (Issue 3b) re-checks for a due, proved transfer.
+        // Short enough to advance the migration responsively while watched, long enough not to
+        // churn; the SDK's own gates make redundant passes cheap no-ops.
+        internal val FOREGROUND_BROADCAST_INTERVAL = 20.seconds
+
+        /**
+         * Issue 3a — blocks a genuinely-overdue transfer must be past its scheduled height (at the
+         * SCANNED tip) before the Send-now/Reschedule recovery buttons appear.
+         *
+         * Derivation: the buttons must NOT flash during normal execution, where a proved transfer
+         * legitimately sits a few blocks past its scheduled height waiting for the next quiet
+         * broadcast window (the privacy buffer). The privacy buffer is 3 min testnet / 10 min
+         * mainnet; at the observed ~75 s/block that is ~2–8 blocks. A safe constant of 12 blocks
+         * clears the mainnet worst case (~8) plus a small margin for proof/scan jitter, so the
+         * buttons only appear when a transfer is overdue BEYOND the normal proof→broadcast latency
+         * — i.e. genuinely missed, not merely mid-execution.
+         */
+        internal const val OVERDUE_GRACE_BLOCKS = 12L
+    }
+}
+
+/**
+ * Issue 3a — the graced, transfers-only overdue predicate that gates the Send-now/Reschedule
+ * recovery buttons. A transfer counts as GENUINELY overdue only when it is a real transfer (NOT a
+ * preparation — those are internal plumbing the user never reasons about), not yet sent, and its
+ * scheduled height plus [MigrationProgressVM.OVERDUE_GRACE_BLOCKS] has been reached at the SCANNED
+ * tip ([MigrationTransferStates.tipHeight] — never an estimated tip, which would trip the buttons
+ * before a sync could confirm the miss).
+ *
+ * Top-level and internal so it is unit-testable without Koin/Android — mirrors MigrationSyncWorker's
+ * pure decision functions.
+ */
+internal fun hasGenuinelyOverdueTransfer(states: MigrationTransferStates?): Boolean {
+    if (states == null) return false
+    return states.transfers.any { t ->
+        t.isTransfer && !t.isSent &&
+            t.scheduledHeight + MigrationProgressVM.OVERDUE_GRACE_BLOCKS <= states.tipHeight
+    }
+}
+
+/**
+ * Issue 3b — whether the engine currently holds a transaction the foreground pass may broadcast:
+ * a PROVED, unsent transaction whose scheduled height has been reached at the SCANNED tip. Proved
+ * is load-bearing — an unproven due transfer can only be made broadcastable by Lane A's sync, never
+ * force-broadcast here. Kind-agnostic (transfers AND preparations), matching the engine's own
+ * next-due serving, so the pass never sleeps past a due preparation layer. Top-level and internal
+ * for the same testability reason as [hasGenuinelyOverdueTransfer].
+ */
+internal fun hasBroadcastableTransfer(states: MigrationTransferStates?): Boolean {
+    if (states == null) return false
+    return states.transfers.any { t ->
+        t.isProved && !t.isSent && t.scheduledHeight <= states.tipHeight
     }
 }

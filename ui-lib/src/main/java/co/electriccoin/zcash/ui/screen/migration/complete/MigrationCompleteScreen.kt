@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -28,10 +29,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.design.component.BlankBgScaffold
 import co.electriccoin.zcash.ui.design.component.ButtonState
-import co.electriccoin.zcash.ui.design.component.GradientBgScaffold
+import co.electriccoin.zcash.ui.design.component.IconButtonState
 import co.electriccoin.zcash.ui.design.component.ZashiButton
 import co.electriccoin.zcash.ui.design.component.ZashiButtonDefaults
+import co.electriccoin.zcash.ui.design.component.ZashiIconButton
+import co.electriccoin.zcash.ui.design.component.ZashiSmallTopAppBar
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
@@ -55,7 +59,9 @@ data class MigrationCompleteState(
     val onDone: () -> Unit,
     val onMigrateAnyway: () -> Unit,
     val onLockBalance: () -> Unit,
+    val onHelp: () -> Unit,
     val isMigrating: Boolean = false,
+    val isLocking: Boolean = false,
     val failureSheet: co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState? = null,
 )
 
@@ -69,11 +75,29 @@ fun MigrationCompleteScreen() {
     LceRenderer(state) { MigrationCompleteView(it) }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MigrationCompleteView(state: MigrationCompleteState) {
-    GradientBgScaffold(
-        startColor = ZashiColors.Utility.SuccessGreen.utilitySuccess100,
-        endColor = ZashiColors.Surfaces.bgPrimary,
+    BlankBgScaffold(
+        topBar = {
+            ZashiSmallTopAppBar(
+                // The "?" opens the lock explainer as pure information. It's only meaningful while
+                // there's an unlocked residue that can still be locked, so it's hidden once the
+                // balance is locked or when there's no residual dust at all.
+                regularActions = {
+                    if (state.remainingDust != null && !state.isDustLocked) {
+                        ZashiIconButton(
+                            state = IconButtonState(
+                                icon = R.drawable.ic_help,
+                                onClick = state.onHelp,
+                            ),
+                            modifier = Modifier.size(40.dp),
+                        )
+                        Spacer(Modifier.width(20.dp))
+                    }
+                },
+            )
+        },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -88,9 +112,9 @@ fun MigrationCompleteView(state: MigrationCompleteState) {
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Image(
-                    painter = painterResource(R.drawable.ic_fist_punch),
+                    painter = painterResource(R.drawable.ic_migration_complete),
                     contentDescription = null,
-                    modifier = Modifier.size(120.dp),
+                    modifier = Modifier.size(52.dp),
                 )
                 Spacer(Modifier.height(24.dp))
                 Text(
@@ -153,7 +177,7 @@ fun MigrationCompleteView(state: MigrationCompleteState) {
                         state = ButtonState(
                             text = stringRes(if (state.isMigrating) "Migrating…" else "Migrate anyway"),
                             onClick = state.onMigrateAnyway,
-                            isEnabled = !state.isMigrating,
+                            isEnabled = !state.isMigrating && !state.isLocking,
                             isLoading = state.isMigrating,
                         ),
                         modifier = Modifier.fillMaxWidth(),
@@ -165,9 +189,10 @@ fun MigrationCompleteView(state: MigrationCompleteState) {
                     Spacer(Modifier.height(8.dp))
                     ZashiButton(
                         state = ButtonState(
-                            text = stringRes("Lock balance"),
+                            text = stringRes(if (state.isLocking) "Locking balance…" else "Lock balance"),
                             onClick = state.onLockBalance,
-                            isEnabled = !state.isMigrating,
+                            isEnabled = !state.isMigrating && !state.isLocking,
+                            isLoading = state.isLocking,
                         ),
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -246,6 +271,7 @@ private fun PreviewWithDust() = ZcashTheme {
             onDone = {},
             onMigrateAnyway = {},
             onLockBalance = {},
+            onHelp = {},
         )
     )
 }
@@ -263,6 +289,7 @@ private fun PreviewWithLockedDust() = ZcashTheme {
             onDone = {},
             onMigrateAnyway = {},
             onLockBalance = {},
+            onHelp = {},
         )
     )
 }
@@ -280,6 +307,7 @@ private fun PreviewNoDust() = ZcashTheme {
             onDone = {},
             onMigrateAnyway = {},
             onLockBalance = {},
+            onHelp = {},
         )
     )
 }

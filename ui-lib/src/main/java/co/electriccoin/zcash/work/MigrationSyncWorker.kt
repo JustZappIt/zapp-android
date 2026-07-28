@@ -58,7 +58,16 @@ class MigrationSyncWorker(
         val accountKeyId = inputData.getString(MigrationScheduler.KEY_ACCOUNT_KEY_ID)
             ?: return Result.success()
 
-        val sdk = getOrchardMigrationSdk(accountKeyId) ?: return Result.success()
+        val sdk = getOrchardMigrationSdk(accountKeyId) ?: run {
+            // The wallet isn't up yet — happens deterministically right after an app
+            // update/reboot, when WorkManager greedily re-runs the restored job before the
+            // synchronizer initializes. Returning success here silently BREAKS the
+            // self-rechaining lane (no re-arm ever happens again — observed live: both lanes
+            // dead after a reinstall). Retry lets WorkManager back off and re-run until the
+            // SDK is reachable, at which point the normal run re-arms the chain.
+            Twig.debug { "MIGRATION_DIAG LaneA: SDK not ready — retrying via WorkManager backoff." }
+            return Result.retry()
+        }
 
         // F3: Lane A must terminate once the migration reaches a terminal state. Unlike Lane B,
         // whose only stop signal is states==null, migrationTransferStates() keeps returning rows

@@ -257,6 +257,7 @@ private fun previewCompleteStateWithDust() = MigrationCompleteState(
     onDone = {},
     onMigrateAnyway = {},
     onLockBalance = {},
+    onHelp = {},
 )
 
 private fun previewTransferReviewState() = MigrationTransferReviewState(

@@ -14,6 +14,7 @@ import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.model.WalletRestoringState
 import co.electriccoin.zcash.ui.common.model.WalletSnapshot
 import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_DUST_THRESHOLD_ZATOSHI
+import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_RESIDUAL_MIN_ZATOSHI
 import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
 import co.electriccoin.zcash.ui.common.model.migration.affectedTransferIndices
 import co.electriccoin.zcash.ui.common.model.migration.toMigrationRangeText
@@ -423,26 +424,45 @@ internal fun migrationMessageFor(
 
         sdkState is MigrationState.InProgress -> HomeMessageData.Migration(plan)
 
-        // Gated on the real dust threshold, not just the SDK's per-round Complete state — a
+        // Gated on the migratable minimum, not just the SDK's per-round Complete state — a
         // multi-round Keystone migration reports Complete as soon as the *current* round's
         // transfers are all mined, even with a large residual balance still needing another
         // round. Without this, finishing an earlier round would incorrectly show the one-time
-        // completion banner.
+        // completion banner. A sub-migratable residue (below MIGRATION_RESIDUAL_MIN_ZATOSHI, which
+        // the engine can't migrate — proposeMigrationTransfers would return NothingToMigrate) still
+        // counts as "complete": there is no further round to run, so the completion/residue screen
+        // (lock / migrate-anyway) is the correct destination.
         sdkState == MigrationState.Complete &&
             plan != null &&
             !hasSeenComplete &&
-            orchardBalanceZatoshi <= dustThresholdZatoshi ->
+            orchardBalanceZatoshi < MIGRATION_RESIDUAL_MIN_ZATOSHI ->
             // Stays visible until the user actually engages with it — marked seen in
             // MigrationCompleteVM.onDone(), not just for having been displayed.
             HomeMessageData.Migration(plan, isComplete = true)
+
+        // RESIDUE (plan == null, post-completion cleared plan): a leftover Orchard balance above the
+        // dust threshold but below the migratable minimum. The engine cannot migrate it
+        // (proposeMigrationTransfers returns NothingToMigrate), so a "Migrate now" prompt here would
+        // tap into a guaranteed failure. Present it as "migration completed" instead and route to
+        // MigrationCompleteScreen, whose residue flow lets the user LOCK it or MIGRATE it anyway.
+        // Real Orchard-only balance (not the combined Sapling+Orchard spendableShieldedBalance).
+        // The reported Orchard balance is the *spendable* balance, which excludes locked notes
+        // (librustzcash get_wallet_summary buckets a spendable-but-locked note into locked_value,
+        // not spendable_value), so once the user locks the residue this branch stops firing on its
+        // own — no separate locked-state signal is needed to make the prompt go away.
+        plan == null &&
+            orchardBalanceZatoshi > dustThresholdZatoshi &&
+            orchardBalanceZatoshi < MIGRATION_RESIDUAL_MIN_ZATOSHI ->
+            HomeMessageData.Migration(plan = null, isComplete = true)
 
         // Real Orchard-only balance (not the combined Sapling+Orchard spendableShieldedBalance —
         // this must never fire for a wallet whose Orchard balance is 0, even with real Sapling
         // funds). Falls through here regardless of what sdkState says once plan is null — covers
         // both "never migrated" and "a round finished, more residual balance needs another round."
-        // Same dust threshold as above, not a bare `> 0L` — a truly-dust balance never needs a
-        // migration prompt of its own.
-        orchardBalanceZatoshi > dustThresholdZatoshi && plan == null -> HomeMessageData.Migration(null)
+        // Gated on the migratable minimum, not the dust threshold: only fire "Migrate now" when the
+        // balance is genuinely migratable (>= MIGRATION_RESIDUAL_MIN_ZATOSHI). Anything in the
+        // [dust, min) gap is a residue and was already handled by the RESIDUE branch above.
+        orchardBalanceZatoshi >= MIGRATION_RESIDUAL_MIN_ZATOSHI && plan == null -> HomeMessageData.Migration(null)
 
         else -> null
     }

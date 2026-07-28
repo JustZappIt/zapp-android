@@ -69,6 +69,7 @@ class CheckMigrationRecoveryUseCaseTest {
         // Default: Lane A is always active in tests so the reconciliation branch is skipped,
         // keeping existing test behaviour unchanged. Override to test reconciliation explicitly.
         isLaneAActive: suspend () -> Boolean = { true },
+        isLaneBActive: suspend (String) -> Boolean = { true },
     ) = CheckMigrationRecoveryUseCase(
         getOrchardMigrationSdk = mockk<GetOrchardMigrationSdkUseCase> {
             coEvery { this@mockk() } returns sdk
@@ -91,6 +92,7 @@ class CheckMigrationRecoveryUseCaseTest {
         migrationSyncScheduler = migrationSyncScheduler,
         context = mockk<Context>(relaxed = true),
         isLaneAActive = isLaneAActive,
+        isLaneBActive = isLaneBActive,
     )
 
     @Test
@@ -330,6 +332,7 @@ class CheckMigrationRecoveryUseCaseTest {
             navigationRouter = mockk(relaxed = true),
             savedPlan = mockk(relaxed = true),
             migrationSyncScheduler = syncScheduler,
+            isLaneBActive = { true },
             isLaneAActive = { false },
         ).invoke()
 
@@ -351,6 +354,7 @@ class CheckMigrationRecoveryUseCaseTest {
             navigationRouter = mockk(relaxed = true),
             savedPlan = mockk(relaxed = true),
             migrationSyncScheduler = syncScheduler,
+            isLaneBActive = { true },
             isLaneAActive = { true },
         ).invoke()
 

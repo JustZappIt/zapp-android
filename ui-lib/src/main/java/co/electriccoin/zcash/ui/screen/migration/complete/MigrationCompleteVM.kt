@@ -32,6 +32,7 @@ import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
+import co.electriccoin.zcash.ui.common.usecase.LockOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.migration.lockexplainer.MigrationLockExplainerArgs
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
@@ -54,6 +55,7 @@ class MigrationCompleteVM(
     private val navigationRouter: NavigationRouter,
     private val errorStateMapper: ErrorMapperUseCase,
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
+    private val lockOrchardBalance: LockOrchardBalanceUseCase,
     private val zashiSpendingKeyDataSource: ZashiSpendingKeyDataSource,
     private val biometricRepository: BiometricRepository,
     private val proposalDataSource: ProposalDataSource,
@@ -79,19 +81,29 @@ class MigrationCompleteVM(
 
     private val loadLce = mutableLce<Summary>()
     private val migrateAnywayLce = mutableLce<Unit>()
+    // Locking runs inline on this screen (the "Lock balance" button) rather than in the explainer
+    // sheet, so its loading/error state is kept OUT of groupLce below — a lock in progress shows a
+    // spinner on the button, it must never blank the whole success screen behind a full-screen
+    // loader, and a lock error simply re-enables the button for a retry.
+    private val lockLce = mutableLce<Unit>()
     private val migrateAnywayFailure = MutableStateFlow<SubmitResult?>(null)
 
     init {
         loadLce.execute {
-            val plan = migrationPlanRepository.load()
+            // Read the REAL migration summary (amount migrated, transfer count, duration) from the
+            // ENGINE's persisted migration data — the single source of truth that survives
+            // completion. The app-side plan is cleared once migration finishes, so it can no longer
+            // supply these (it would read 0.000 ZEC / 0 of 0). Null-safe: a missing SDK/summary
+            // falls back to zeros.
+            val summary = getOrchardMigrationSdk()?.getMigrationSummary()
             // Whatever's still in the real Orchard balance once every transfer has sent is the
             // dust/residual left behind (below the migratable threshold, or an un-migrated
             // opt-in residual — either way, it's what's actually still sitting in Orchard).
             Summary(
-                totalTransferred = plan?.transfers?.sumOf { it.amountZatoshi } ?: 0L,
-                totalCount = plan?.totalCount ?: 0,
-                firstAt = plan?.transfers?.minOfOrNull { it.scheduledAtEpochSeconds } ?: 0L,
-                lastAt = plan?.transfers?.maxOfOrNull { it.scheduledAtEpochSeconds } ?: 0L,
+                totalTransferred = summary?.totalMigratedZatoshi ?: 0L,
+                totalCount = summary?.transferCount ?: 0,
+                firstAt = summary?.firstMinedEpochSeconds ?: 0L,
+                lastAt = summary?.lastMinedEpochSeconds ?: 0L,
                 dustZatoshi = getOrchardBalance().value,
             )
         }
@@ -102,15 +114,19 @@ class MigrationCompleteVM(
             loadLce.state,
             hasLockedOrchardDustStorageProvider.observe(),
             migrateAnywayLce.state,
+            lockLce.state,
             migrateAnywayFailure,
-        ) { lce, isLocked, migrateAnywayState, failure ->
-            lce.success?.let { summary -> createState(summary, isLocked, migrateAnywayState.loading, failure) }
+        ) { lce, isLocked, migrateAnywayState, lockState, failure ->
+            lce.success?.let { summary ->
+                createState(summary, isLocked, migrateAnywayState.loading, lockState.loading, failure)
+            }
         }.withLce(groupLce(loadLce, migrateAnywayLce), errorStateMapper::mapToState).stateIn(this)
 
     private fun createState(
         summary: Summary,
         isLocked: Boolean,
         isMigrating: Boolean,
+        isLocking: Boolean,
         failure: SubmitResult?,
     ): MigrationCompleteState =
         MigrationCompleteState(
@@ -120,9 +136,11 @@ class MigrationCompleteVM(
             transfersProgress = stringRes("${summary.totalCount} of ${summary.totalCount} sent"),
             duration = stringRes(formatMigrationDuration(summary.lastAt - summary.firstAt)),
             isMigrating = isMigrating,
+            isLocking = isLocking,
             onDone = ::onDone,
             onMigrateAnyway = { migrateAnywayLce.guardLoading(::onMigrateAnyway) },
-            onLockBalance = ::onLockBalance,
+            onLockBalance = { lockLce.guardLoading(::onLockBalance) },
+            onHelp = ::onHelp,
             failureSheet = failure?.let {
                 MigrationTransferFailureState(
                     message = migrateAnywaySubmitFailureMessage(it),
@@ -189,7 +207,17 @@ class MigrationCompleteVM(
         }
     }
 
-    private fun onLockBalance() = navigationRouter.forward(MigrationLockExplainerArgs)
+    // "Lock balance" locks the residual Orchard balance directly (real lock in Rust —
+    // MigrationSdk.lockRemainingOrchardBalance → lockRemainingOrchardBalanceNative), then flips the
+    // persisted flag that re-renders this screen into its "Orchard balance locked" state. No
+    // navigation: the user stays on this screen and confirms the result inline.
+    private fun onLockBalance() = lockLce.execute {
+        lockOrchardBalance()
+        hasLockedOrchardDustStorageProvider.store(true)
+    }
+
+    // The "?" in the top bar opens the lock explainer purely as information about what locking does.
+    private fun onHelp() = navigationRouter.forward(MigrationLockExplainerArgs)
 
     // Mirrors MigrationReviewVM.confirmImmediate() — the canonical reference implementation for
     // sweeping a residual balance via the IMMEDIATE-mode send-max Proposal. Unlike Review, there's

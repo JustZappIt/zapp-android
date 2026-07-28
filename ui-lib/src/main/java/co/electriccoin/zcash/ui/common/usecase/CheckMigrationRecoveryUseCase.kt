@@ -76,6 +76,8 @@ class CheckMigrationRecoveryUseCase(
     private val context: Context,
     /** Extracted for testability — production default checks WorkManager. */
     private val isLaneAActive: suspend () -> Boolean = { isLaneAActiveInWorkManager(context) },
+    /** Lane B twin, same testability rationale. */
+    private val isLaneBActive: suspend (String) -> Boolean = { isLaneBActiveInWorkManager(context, it) },
 ) {
     suspend operator fun invoke() {
         // Three independent triggers exist (MainActivity.onStart, RootNavGraph unlock, and any
@@ -91,21 +93,44 @@ class CheckMigrationRecoveryUseCase(
             }
             lastRunElapsedMs = nowMs
         }
-        // No wallet yet (e.g. a fresh install before onboarding) — this runs on every
-        // MainActivity launch regardless, so treat "no SDK available" as "nothing to recover".
-        val sdk = getOrchardMigrationSdk() ?: return
+        // No wallet YET — on a cold start this fires before the synchronizer initializes, and
+        // silently consuming the throttle window here left recovery permanently ineffective
+        // (observed live: 1st call = SDK null + throttle stamped, 2nd call 3s later = throttled;
+        // both lanes stayed dead after a reinstall). Un-stamp the throttle so the next trigger
+        // (foreground/unlock/onStart all re-fire) gets a real attempt once the wallet is up.
+        val sdk = getOrchardMigrationSdk() ?: run {
+            synchronized(CheckMigrationRecoveryUseCase) { lastRunElapsedMs = 0L }
+            Twig.debug { "MIGRATION_DIAG MigrationRecovery: SDK not ready — will retry on next trigger." }
+            return
+        }
 
         // (a) Lane A reconciliation — if a plan exists but the Lane A unique work is absent
         // (ENQUEUED or RUNNING), re-schedule it. This self-heals after process kill, device
         // reboot, or an app upgrade that cleared WorkManager state, without requiring the user to
         // re-enter the migration flow.
-        if (migrationPlanRepository.load() != null && !isLaneAActive()) {
+        // Gate on the ENGINE's state, not only the app-side plan cache: the cache can be lost
+        // (observed live: repository empty while the engine held a run with 8/9 broadcast and the
+        // last transfer proved) and the engine is the single source of truth — a live in-progress
+        // migration must always have its lanes running.
+        val engineInProgress = sdk.getMigrationState() is MigrationState.InProgress
+        if (migrationPlanRepository.load() != null || engineInProgress) {
             val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
-            Twig.debug { "MIGRATION_DIAG MigrationRecovery: Lane A absent, re-scheduling." }
-            // A short flat first arm: the schedule object carries no plan knowledge — the worker's
-            // first run reads the live engine states and computes the precise boundary-driven wake
-            // itself (see MigrationSyncWorker).
-            migrationSyncScheduler.schedule(accountKeyId, 60.seconds)
+            if (!isLaneAActive()) {
+                Twig.debug { "MIGRATION_DIAG MigrationRecovery: Lane A absent, re-scheduling." }
+                // A short flat first arm: the schedule object carries no plan knowledge — the
+                // worker's first run reads the live engine states and computes the precise
+                // boundary-driven wake itself (see MigrationSyncWorker).
+                migrationSyncScheduler.schedule(accountKeyId, 60.seconds)
+            }
+            // Lane B revival too — its re-arm only happens at the end of its own run and its due
+            // alarms don't survive a package update, so an update mid-plan otherwise kills every
+            // future broadcast (see OnMigrationSyncCompletedUseCase; duplicated here because the
+            // SYNCED hook needs a synced foreground synchronizer, which a freshly relaunched app
+            // may not reach for minutes).
+            if (!isLaneBActive(accountKeyId)) {
+                Twig.debug { "MIGRATION_DIAG MigrationRecovery: Lane B absent, re-scheduling." }
+                co.electriccoin.zcash.work.MigrationScheduler(context).schedule(accountKeyId, 60.seconds)
+            }
         }
         // Read the real state once instead of the old hasInvalidTransfers() boolean — the app must
         // distinguish AttentionReason.InvalidTransfer (spec §6.2, external spend invalidated the
@@ -205,5 +230,13 @@ internal suspend fun isLaneAActiveInWorkManager(context: Context): Boolean =
     withContext(Dispatchers.IO) {
         WorkManager.getInstance(context)
             .getWorkInfosForUniqueWork(WorkIds.WORK_ID_MIGRATION_SYNC)
+            .get()
+    }.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
+
+/** Lane B (broadcast) twin of [isLaneAActiveInWorkManager] — per-account unique work name. */
+internal suspend fun isLaneBActiveInWorkManager(context: Context, accountKeyId: String): Boolean =
+    withContext(Dispatchers.IO) {
+        WorkManager.getInstance(context)
+            .getWorkInfosForUniqueWork(co.electriccoin.zcash.work.MigrationScheduler.workId(accountKeyId))
             .get()
     }.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }

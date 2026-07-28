@@ -77,6 +77,7 @@ class MainActivity : FragmentActivity() {
 
     private val navigationRouter: NavigationRouter by inject()
     private val checkMigrationRecovery: co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase by inject()
+    private val debugStartMigrationE2E: co.electriccoin.zcash.ui.common.usecase.DebugStartMigrationE2EUseCase by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -106,7 +107,15 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun handleMigrationIntent(intent: Intent) {
-        if (intent.getBooleanExtra(co.electriccoin.zcash.ui.common.provider.MigrationNotifier.EXTRA_OPEN_MIGRATION, false)) {
+        if (BuildConfig.DEBUG &&
+            intent.getBooleanExtra(
+                co.electriccoin.zcash.ui.common.usecase.DebugStartMigrationE2EUseCase.EXTRA_START_MIGRATION,
+                false
+            )
+        ) {
+            // Debug-only E2E driver: reset + commit a fresh AUTOMATIC plan from adb, no UI taps.
+            lifecycleScope.launch { debugStartMigrationE2E() }
+        } else if (intent.getBooleanExtra(co.electriccoin.zcash.ui.common.provider.MigrationNotifier.EXTRA_OPEN_MIGRATION, false)) {
             // replaceAll ensures Home is always on the back stack regardless of how the app was opened.
             navigationRouter.replaceAll(
                 co.electriccoin.zcash.ui.screen.home.HomeArgs,

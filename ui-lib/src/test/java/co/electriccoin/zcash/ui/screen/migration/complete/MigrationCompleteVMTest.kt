@@ -1,6 +1,7 @@
 package co.electriccoin.zcash.ui.screen.migration.complete
 
 import androidx.navigation.NavBackStackEntry
+import cash.z.ecc.android.sdk.MigrationSummary
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.model.Proposal
 import cash.z.ecc.android.sdk.model.UnifiedSpendingKey
@@ -183,6 +184,7 @@ class MigrationCompleteVMTest {
         val usk = mockk<UnifiedSpendingKey>(relaxed = true)
         val sdk = mockk<OrchardMigrationSdk> {
             coEvery { proposeImmediateMigration() } returns proposal
+            coEvery { getMigrationSummary() } returns null
         }
         coEvery { proposalDataSource.submitTransaction(proposal, usk) } returns SubmitResult.Success(listOf("txid"))
 
@@ -209,6 +211,7 @@ class MigrationCompleteVMTest {
         val proposal = mockk<Proposal>(relaxed = true)
         val sdk = mockk<OrchardMigrationSdk> {
             coEvery { proposeImmediateMigration() } returns proposal
+            coEvery { getMigrationSummary() } returns null
         }
         val keystoneProposalRepository = mockk<KeystoneProposalRepository>(relaxed = true)
         val proposalDataSource = mockk<ProposalDataSource>(relaxed = true)
@@ -230,6 +233,38 @@ class MigrationCompleteVMTest {
         coVerify(exactly = 1) { keystoneProposalRepository.createPCZTFromProposal() }
         coVerify(exactly = 0) { proposalDataSource.submitTransaction(any<Proposal>(), any<UnifiedSpendingKey>()) }
         assertEquals(1, router.forwardedRoutes.count { it == SignKeystoneTransactionArgs })
+    }
+
+    @Test
+    fun summaryIsReadFromEngineSdkNotTheAppSidePlan() = runTest {
+        // The Migration Complete summary (amount migrated / transfer count / duration) must come
+        // from the engine's persisted migration data via the SDK, not the app-side plan (cleared on
+        // completion). Pins that the VM queries the SDK's getMigrationSummary() and never reads the
+        // now-obsolete plan for the summary.
+        val plans = mockk<MigrationPlanRepository>(relaxed = true)
+        val summary =
+            MigrationSummary(
+                totalMigratedZatoshi = 9_779_000_000L,
+                transferCount = 10,
+                firstMinedEpochSeconds = 1_785_281_502L,
+                lastMinedEpochSeconds = 1_785_283_542L,
+            )
+        val sdk = mockk<OrchardMigrationSdk> {
+            coEvery { getMigrationSummary() } returns summary
+        }
+        val vm = vm(
+            plans = plans,
+            account = mockk<KeystoneAccount>(relaxed = true),
+            orchardBalanceZatoshi = 500_000L,
+            router = FakeNavigationRouter(),
+            getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
+        )
+
+        vm.state.value // force lazy init to run (loadLce.execute reads the SDK summary)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { sdk.getMigrationSummary() }
+        coVerify(exactly = 0) { plans.load() }
     }
 
     private fun invokeOnDone(vm: MigrationCompleteVM) {
@@ -275,6 +310,7 @@ class MigrationCompleteVMTest {
         navigationRouter = router,
         errorStateMapper = mockk<ErrorMapperUseCase>(relaxed = true),
         getOrchardMigrationSdk = getOrchardMigrationSdk,
+        lockOrchardBalance = mockk(relaxed = true),
         zashiSpendingKeyDataSource = zashiSpendingKeyDataSource,
         biometricRepository = biometricRepository,
         proposalDataSource = proposalDataSource,
