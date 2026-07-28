@@ -8,6 +8,7 @@ import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
+import co.electriccoin.zcash.ui.common.provider.IsBackgroundExecutionAvailableProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -18,6 +19,7 @@ class MigrationScheduledVM(
     private val migrationPlanRepository: MigrationPlanRepository,
     private val navigationRouter: NavigationRouter,
     private val errorStateMapper: ErrorMapperUseCase,
+    private val isBackgroundExecutionAvailableProvider: IsBackgroundExecutionAvailableProvider,
 ) : ViewModel() {
 
     private val loadLce = mutableLce<Unit>()
@@ -28,10 +30,16 @@ class MigrationScheduledVM(
             val count = plan?.totalCount ?: 0
             val lastScheduledAt = plan?.transfers?.maxOfOrNull { it.scheduledAtEpochSeconds } ?: 0L
             val span = lastScheduledAt - (plan?.createdAtEpochSeconds ?: lastScheduledAt)
+            val backgroundHint = if (!isBackgroundExecutionAvailableProvider.isAvailable()) {
+                stringRes("Transfers run when you open the app — enable background activity in Settings for automatic sending.")
+            } else {
+                null
+            }
             MigrationScheduledState(
                 totalAmount = stringRes(Zatoshi(total)),
                 transfersProgress = stringRes("0 of $count"),
                 duration = stringRes(formatMigrationDuration(span)),
+                backgroundHint = backgroundHint,
                 onDone = ::onDone,
             )
         }.withLce(loadLce, errorStateMapper::mapToState)

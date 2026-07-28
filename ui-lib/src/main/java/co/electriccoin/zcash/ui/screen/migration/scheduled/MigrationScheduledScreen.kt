@@ -44,6 +44,7 @@ data class MigrationScheduledState(
     val totalAmount: StringResource,
     val transfersProgress: StringResource,
     val duration: StringResource,
+    val backgroundHint: StringResource? = null,
     val onDone: () -> Unit,
 )
 
@@ -104,6 +105,14 @@ fun MigrationScheduledView(state: MigrationScheduledState) {
                     SummaryRow(label = "Pool", value = "Orchard → Ironwood")
                     SummaryRow(label = "Transfers", value = state.transfersProgress.getValue())
                     SummaryRow(label = "Duration", value = state.duration.getValue())
+                    state.backgroundHint?.let {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = it.getValue(),
+                            style = ZashiTypography.textSm,
+                            color = ZashiColors.Text.textTertiary,
+                        )
+                    }
                 }
             }
             ZashiButton(
@@ -143,6 +152,7 @@ private fun Preview() = ZcashTheme {
             totalAmount = stringRes("12.45800 ZEC"),
             transfersProgress = stringRes("0 of 5"),
             duration = stringRes("~24 hours"),
+            backgroundHint = stringRes("Transfers run when you open the app — enable background activity in Settings for automatic sending."),
             onDone = {},
         )
     )
