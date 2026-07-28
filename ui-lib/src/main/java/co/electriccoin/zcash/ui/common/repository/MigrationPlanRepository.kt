@@ -44,11 +44,6 @@ interface MigrationPlanRepository {
         status: MigrationTransferStatus
     )
 
-    suspend fun rescheduleTransfer(
-        index: Int,
-        scheduledAtEpochSeconds: Long
-    )
-
     suspend fun clear()
 }
 
@@ -108,22 +103,6 @@ class MigrationPlanRepositoryImpl(
         val updatedTransfers =
             current.transfers.map { transfer ->
                 if (transfer.index == index) transfer.copy(status = status) else transfer
-            }
-        save(current.copy(transfers = updatedTransfers))
-    }
-
-    override suspend fun rescheduleTransfer(
-        index: Int,
-        scheduledAtEpochSeconds: Long
-    ) {
-        val current = load() ?: return
-        val updatedTransfers =
-            current.transfers.map { transfer ->
-                if (transfer.index == index) {
-                    transfer.copy(scheduledAtEpochSeconds = scheduledAtEpochSeconds)
-                } else {
-                    transfer
-                }
             }
         save(current.copy(transfers = updatedTransfers))
     }

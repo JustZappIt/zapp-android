@@ -6,14 +6,17 @@ import co.electriccoin.zcash.preference.model.entry.StringPreferenceDefault
 import java.time.Instant
 
 /**
- * Per-account store for the consecutive "shift count" — how many times in a row
- * the migration lane has advanced for the same [transferId] while a completed sync
- * was observed since the previous shift.
+ * Per-account store for the consecutive awaiting-proof STRIKE count — how many times in a row
+ * Lane B found the same due [transferId] still unproven (the engine returned `AwaitingProof`)
+ * while a completed sync was observed since the previous strike. "Shift" in the type/key names is
+ * historical (the counter predates the deletion of the reschedule/shift stack); the storage keys
+ * are deliberately unchanged so live installs keep their counts.
  *
  * Stored as a single pipe-delimited string: `"transferId|count|epochSeconds"` under
  * key `"migration_shift_<accountKeyId>"`.
  *
- * Used by the two-lane scheduler to decide when to escalate from Automatic to IMMEDIATE.
+ * Used by the two-lane scheduler as the "sync ran but proving is still impossible" alarm — see
+ * `shouldEscalateShift` in MigrationWorker.kt.
  */
 interface MigrationShiftCounterStorageProvider {
     /**

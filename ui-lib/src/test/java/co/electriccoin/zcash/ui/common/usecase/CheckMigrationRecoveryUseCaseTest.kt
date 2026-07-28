@@ -21,7 +21,6 @@ import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
 import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs
 import co.electriccoin.zcash.work.MigrationSyncScheduler
-import co.electriccoin.zcash.work.laneACadence
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -29,10 +28,9 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 class CheckMigrationRecoveryUseCaseTest {
 
@@ -316,32 +314,6 @@ class CheckMigrationRecoveryUseCaseTest {
         coVerify(exactly = 0) { router.replaceAll(any()) }
     }
 
-    // ── overdueTransfersToShift pure-function tests ────────────────────────────────────
-
-    @Test
-    fun overdueTransfersToShift_threeElements_dropsFirst() {
-        val result = overdueTransfersToShift(listOf("a", "b", "c"))
-        assertEquals(listOf("b", "c"), result)
-    }
-
-    @Test
-    fun overdueTransfersToShift_emptyList_returnsEmpty() {
-        val result = overdueTransfersToShift(emptyList())
-        assertTrue(result.isEmpty())
-    }
-
-    @Test
-    fun overdueTransfersToShift_singleElement_returnsEmpty() {
-        val result = overdueTransfersToShift(listOf("only"))
-        assertTrue(result.isEmpty())
-    }
-
-    @Test
-    fun overdueTransfersToShift_twoElements_returnsSecond() {
-        val result = overdueTransfersToShift(listOf("first", "second"))
-        assertEquals(listOf("second"), result)
-    }
-
     // ── Lane A reconciliation tests (Finding 3) ────────────────────────────────────────
 
     @Test
@@ -361,7 +333,8 @@ class CheckMigrationRecoveryUseCaseTest {
             isLaneAActive = { false },
         ).invoke()
 
-        verify { syncScheduler.schedule(any(), laneACadence()) }
+        // A short flat first arm — the worker's first run computes the precise boundary wake.
+        verify { syncScheduler.schedule(any(), 60.seconds) }
     }
 
     @Test

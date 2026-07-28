@@ -119,49 +119,72 @@ class MigrationWorker(
                 Result.success()
             }
             is TransferAttemptOutcome.AwaitingProof -> {
+                // The engine only serves proved transactions, so AwaitingProof means the due
+                // transaction has no proof yet — a race with the sync lane (Lane A's wake is
+                // pending or late), never a plan state. The plan itself stays exactly as the
+                // engine committed it (the engine is the single source of truth; missed-but-
+                // unexpired transfers need no shift — ZIP 374's signature does not cover the
+                // anchor, so they prove late against their committed boundary and broadcast late).
+                //
+                // Strike counter: counts consecutive awaiting-proof STRIKES on the same transfer
+                // with a completed sync in between (storage keys unchanged — historically named
+                // "shift" after the deleted reschedule stack).
                 val lastActivity: Instant? = lastNetworkActivity.get()
-                val lastShift: Instant? = shiftCounter.lastShiftAt(accountKeyId)
-                val syncSince = syncCompletedSince(lastActivity, lastShift)
+                val lastStrike: Instant? = shiftCounter.lastShiftAt(accountKeyId)
+                val syncSince = syncCompletedSince(lastActivity, lastStrike)
                 val count = shiftCounter.incrementIfSameTransfer(accountKeyId, outcome.transferId, syncCompletedSinceLastShift = syncSince)
-                // Engine-shift DISABLED (deliberate no-op): rescheduleUnprovenTransfer was OUR JNI
-                // layer's own boundary redraw on top of the engine — a second source of truth for
-                // the plan, and its redraw drew from the full [funding..tip] grid, once landing a
-                // transfer on an ancient, never-checkpointed boundary (3565620) that could never
-                // prove again. The plan now stays exactly as the engine committed it; an unproven
-                // due transfer simply waits for the next Lane A sync+prove pass (grid-aligned
-                // checkpoints make its committed boundary provable), and the shift counter below
-                // still escalates if that repeatedly fails to help.
-                Twig.debug { "MIGRATION_DIAG LaneB: shift disabled (noop) — keeping ${outcome.transferId} on its committed boundary" }
-                // F4: escalate only on the TRANSITION to the 3rd counted shift — the counter stays
-                // at 3 on subsequent no-sync shifts (nextShiftCount doesn't increment without a
-                // sync), so gating on `count == THRESHOLD` alone would re-fire every shift. Requiring
-                // `syncSince` means we only escalate the run that actually reached the 3rd counted
-                // (sync-completed) shift — i.e. spec §2.B.4 case (c).
-                if (shouldEscalateShift(syncSince, count)) {
+                Twig.debug {
+                    "MIGRATION_DIAG LaneB: AwaitingProof for ${outcome.transferId} " +
+                        "(strike=$count, syncSinceLastStrike=$syncSince) — converting this run into a sync run"
+                }
+
+                // Convert THIS run into a Lane A run: sync + finalize + reconcile, under the same
+                // privacy guard Lane A honours (the post-broadcast gate). Sync XOR broadcast per
+                // execution — the broadcast already did not happen (nothing proved), and it is
+                // re-armed for the next live window below, never attempted in this same run.
+                if (sdk.isSyncBlocked().first()) {
+                    Twig.debug { "MIGRATION_DIAG LaneB: sync-fallback skipped — post-broadcast privacy gate is active." }
+                } else {
+                    val burst = synchronizerProvider.getSynchronizerOrNull()?.syncToTip(timeout = LANE_A_SYNC_TIMEOUT)
+                    Twig.debug { "MIGRATION_DIAG LaneB: sync-fallback syncToTip result=$burst" }
+                    val proved = sdk.finalizeReadyTransfers()
+                    Twig.debug { "MIGRATION_DIAG LaneB: sync-fallback proved=$proved" }
                     if (sdk.reconcileInvalidations()) {
                         // F5: the plan is invalid — notify, cancel BOTH lanes, and do NOT re-arm.
                         // The app-open router (CheckMigrationRecoveryUseCase) takes over from here.
                         migrationNotifier.notifyMigrationPlanInvalid(accountKeyId)
                         MigrationScheduler(applicationContext).cancel(accountKeyId)
                         MigrationSyncScheduler(applicationContext).cancel(accountKeyId)
-                        Twig.debug { "MIGRATION_DIAG LaneB: 3rd-shift reconcile found invalidation — cancelling both lanes." }
+                        Twig.debug { "MIGRATION_DIAG LaneB: sync-fallback reconcile found invalidation — cancelling both lanes." }
                         return Result.success()
-                    } else {
-                        // Once only — count == 3 exact equality ensures single notification.
-                        // F7: render real "Transfer X of Y" values from the plan instead of 0 of 0.
-                        migrationNotifier.notifyManualConfirmationRequired(
-                            accountKeyId,
-                            (plan?.nextPending?.index?.plus(1)) ?: 1,
-                            plan?.totalCount ?: 0,
-                        )
                     }
+                    lastNetworkActivity.stampNow()
                 }
-                // Floor the re-arm: the shifted transfer is typically due immediately, which
-                // otherwise collapses the delay to seconds and hammers shift/redraw cycles
-                // (observed live: one run every 5 s) while the proof it is waiting for can only
-                // arrive from Lane A. 60 s keeps the loop responsive without the churn.
+
+                // F4: escalate only on the TRANSITION to the 3rd counted strike — the counter
+                // stays at 3 on subsequent no-sync strikes (nextShiftCount doesn't increment
+                // without a sync), so gating on `count == THRESHOLD` alone would re-fire every
+                // strike. Requiring `syncSince` means we only escalate the run that actually
+                // reached the 3rd counted (sync-completed) strike: even Lane B's own sync
+                // repeatedly failed to make the transaction provable — the "sync ran but proof
+                // still impossible" alarm.
+                if (shouldEscalateShift(syncSince, count)) {
+                    // Once only — count == 3 exact equality ensures single notification.
+                    // F7: render real "Transfer X of Y" values from the plan instead of 0 of 0.
+                    migrationNotifier.notifyManualConfirmationRequired(
+                        accountKeyId,
+                        (plan?.nextPending?.index?.plus(1)) ?: 1,
+                        plan?.totalCount ?: 0,
+                    )
+                }
+                // Floor the re-arm: the unproven transaction is typically due immediately, which
+                // otherwise collapses the delay to seconds and hammers the engine (observed live:
+                // one run every 5 s). 60 s keeps the loop responsive without the churn.
                 scheduleForNextLiveWindow(accountKeyId, sdk, floor = AWAITING_PROOF_REARM_FLOOR)
-                Twig.debug { "MIGRATION_DIAG LaneB: awaiting proof for ${outcome.transferId} (count=$count)" }
+                Twig.debug {
+                    "MIGRATION_DIAG LaneB: awaiting proof for ${outcome.transferId} — " +
+                        "broadcast re-armed for the next live window (strike=$count)"
+                }
                 Result.success()
             }
             is TransferAttemptOutcome.Executed -> when (val result = outcome.result) {
@@ -238,8 +261,11 @@ class MigrationWorker(
 
     /**
      * Schedules the next Lane B run based on live SDK transfer states. Reads the next pending
-     * transfer's scheduledHeight from the SDK and computes a block-time-based delay; falls back to
-     * the plan-repo scheduledAt estimate when the SDK has no pending states.
+     * transaction's scheduledHeight from the SDK and computes a block-time-based delay; falls back
+     * to the plan-repo scheduledAt estimate when the SDK has no pending states. The states include
+     * preparations (kind-agnostic min over `!isSent`) — deliberately matching the engine's own
+     * `nextDueTransferNative`, which serves due preparations for broadcast exactly like transfers,
+     * so Lane B can never sleep past a due preparation layer.
      */
     private suspend fun scheduleForNextLiveWindow(
         accountKeyId: String,
@@ -283,16 +309,18 @@ class MigrationWorker(
 private val STATUS_READ_TIMEOUT = 2.seconds
 internal val AWAITING_PROOF_REARM_FLOOR = 60.seconds
 internal const val SHIFT_ESCALATION_THRESHOLD = 3
-private const val SECONDS_PER_BLOCK_LANE_B = 75L
 
 /**
- * F4: whether an AWAITING_PROOF shift should escalate (run the 3rd-shift reconcile + notify).
+ * F4: whether an AWAITING_PROOF strike should escalate (notify for manual confirmation).
  *
- * Escalation must fire ONLY on the transition to the [SHIFT_ESCALATION_THRESHOLD]th COUNTED shift.
- * The shift counter only increments when a sync completed since the last shift (spec §2.B.4 case
- * c); on a no-sync shift the counter stays at 3, so gating on `count == THRESHOLD` alone would
- * re-fire the escalation (and its once-only notification) on every subsequent no-sync shift.
- * Requiring [syncSince] restricts firing to the run that actually reached the 3rd counted shift.
+ * Escalation must fire ONLY on the transition to the [SHIFT_ESCALATION_THRESHOLD]th COUNTED
+ * strike. The strike counter only increments when a sync completed since the last strike (spec
+ * §2.B.4 case c); on a no-sync strike the counter stays at 3, so gating on `count == THRESHOLD`
+ * alone would re-fire the escalation (and its once-only notification) on every subsequent no-sync
+ * strike. Requiring [syncSince] restricts firing to the run that actually reached the 3rd counted
+ * strike — i.e. "a sync ran between strikes and the transaction STILL cannot be proved" repeated
+ * three times. (The name says "shift" for historical reasons — the counter and its storage keys
+ * predate the deletion of the reschedule/shift stack.)
  */
 internal fun shouldEscalateShift(syncSince: Boolean, count: Int): Boolean =
     syncSince && count == SHIFT_ESCALATION_THRESHOLD
@@ -366,13 +394,15 @@ internal fun decideLaneBPreflight(
 }
 
 /**
- * Returns true if a completed sync has been observed since the last shift for this account.
+ * Returns true if a completed sync has been observed since the last awaiting-proof strike for
+ * this account.
  *
- * A sync is considered "completed since last shift" when [lastActivity] is non-null (meaning a
- * network broadcast has been stamped) AND it is strictly after [lastShift] (the timestamp of the
- * most recent reschedule for this transfer). If either is null the function returns false:
- * - [lastActivity] null  → no network broadcast ever recorded → no completed sync observed
- * - [lastShift] null     → no previous shift → treat as "before all time"; if lastActivity is
+ * A sync is considered "completed since the last strike" when [lastActivity] is non-null (meaning
+ * network activity has been stamped) AND it is strictly after [lastShift] (the timestamp of the
+ * most recent strike for this transfer — "shift" in the name/storage for historical reasons).
+ * If either is null the function returns false:
+ * - [lastActivity] null  → no network activity ever recorded → no completed sync observed
+ * - [lastShift] null     → no previous strike → treat as "before all time"; if lastActivity is
  *   non-null a sync HAS completed since the beginning, so return true in that case.
  *
  * Exposed as a top-level function so it can be unit-tested in isolation (both providers return

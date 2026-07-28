@@ -89,7 +89,14 @@ class MigrationAttentionTest {
         )
         val liveStates = MigrationTransferStates(
             transfers = listOf(
-                MigrationTransferState(id = "t1", isSent = true, scheduledHeight = 10L),
+                MigrationTransferState(
+                    id = "t1",
+                    isTransfer = true,
+                    isSent = true,
+                    isProved = true,
+                    scheduledHeight = 10L,
+                    anchorBoundaryHeight = null,
+                ),
             ),
             tipHeight = 10L,
         )

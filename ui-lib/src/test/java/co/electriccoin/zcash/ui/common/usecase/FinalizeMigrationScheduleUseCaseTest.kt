@@ -12,7 +12,6 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.work.MigrationScheduler
 import co.electriccoin.zcash.work.MigrationSyncScheduler
-import co.electriccoin.zcash.work.laneACadence
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -22,6 +21,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.time.Duration.Companion.seconds
 
 class FinalizeMigrationScheduleUseCaseTest {
     private fun schedule() =
@@ -41,7 +41,8 @@ class FinalizeMigrationScheduleUseCaseTest {
 
     @Test
     fun invokeSchedulesLaneASyncScheduler() = runTest {
-        // Finding 2: verify migrationSyncScheduler.schedule is called with laneACadence() on invoke.
+        // Lane A's first arm is a short flat delay — the worker's first run reads the freshly
+        // committed engine states and computes the precise boundary-driven wake itself.
         val syncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
         val useCase = FinalizeMigrationScheduleUseCase(
             migrationPlanRepository = mockk(relaxed = true),
@@ -56,7 +57,7 @@ class FinalizeMigrationScheduleUseCaseTest {
 
         useCase(schedule(), MigrationMode.AUTOMATIC)
 
-        verify { syncScheduler.schedule(any(), laneACadence()) }
+        verify { syncScheduler.schedule(any(), 60.seconds) }
     }
 
     @Test

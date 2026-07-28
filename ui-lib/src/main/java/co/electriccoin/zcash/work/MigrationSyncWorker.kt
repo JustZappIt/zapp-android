@@ -6,6 +6,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import cash.z.ecc.android.sdk.AttentionReason
 import cash.z.ecc.android.sdk.MigrationState
+import cash.z.ecc.android.sdk.MigrationTransferState
 import cash.z.ecc.android.sdk.MigrationTransferStates
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.BuildConfig
@@ -16,12 +17,32 @@ import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import kotlinx.coroutines.flow.first
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
-import kotlin.random.Random
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * Lane A — the sync (and prove) lane of the two-lane migration scheduler.
+ *
+ * Plan-fixed wakes (iOS-style): the worker wakes exactly at the anchor-boundary heights (plus a
+ * small settle margin) of not-yet-proved, not-yet-sent transactions — the heights the engine's
+ * committed plan says a proof becomes possible at. A woken Lane A ALWAYS syncs (sync +
+ * finalizeReadyTransfers + reconcile; the proof falls out of the sync when the moment is right).
+ * The only reasons not to sync on a wake:
+ *  (a) the post-broadcast privacy gate (`isSyncBlocked`), and
+ *  (b) the imminent-due step-aside — ONLY when the imminently due transaction is ALREADY proved
+ *      (i.e. a broadcast that can actually happen; syncing then would correlate the sync burst
+ *      with it, per ZIP 318's sync/broadcast de-correlation).
+ * An unproven due transfer never triggers the step-aside — its proof can only come from this
+ * lane's own sync, so stepping aside would livelock the plan (observed live pre-rewrite).
+ *
+ * Cadence survives ONLY as the fallback when live states are unavailable.
+ *
+ * TODO(final impl per Kris): Lane A may later be adjusted back to a periodic (cadence-driven)
+ * sync, consuming the engine's own `sync_wakeup_schedule` (librustzcash #2801, boundary + settle
+ * margin + jitter) via FFI once the SDK moves to the rc.3+ engine crates — do not build that now.
+ */
 @Keep
 class MigrationSyncWorker(
     context: Context,
@@ -54,14 +75,12 @@ class MigrationSyncWorker(
         // Cache privacy buffer duration to avoid redundant calls.
         val privacyBufferSeconds = sdk.privacySyncBufferDuration().inWholeSeconds
 
-        // Read live scheduled heights directly from the SDK (NOT the MigrationPlanRepository
-        // cache — spec M5: Lane A must use authoritative SDK state to avoid stale plan data).
+        // Read live states directly from the SDK (NOT the MigrationPlanRepository cache — the
+        // engine is the single source of truth; this lane only surfaces it). The estimated chain
+        // tip is read immediately after states to minimize drift: it is the right denominator for
+        // wall-clock projection (states.tipHeight is the scanned tip, which can be hours stale in
+        // a backgrounded wallet).
         val states = sdk.getMigrationTransferStates()
-        // Estimated chain tip is read immediately after states to minimize drift. The estimated
-        // tip is the right denominator for due-time estimation (based on block interval extrapolation),
-        // whereas states.tipHeight is the scanned tip — can be hours stale in backgrounded wallets,
-        // which would overestimate remaining time. The two reads are adjacent so scheduledHeight
-        // offsets and the tip denominator drift by <1 block.
         val est = sdk.estimatedChainTip()
 
         if (states == null) {
@@ -72,22 +91,25 @@ class MigrationSyncWorker(
 
         val nowSec = nowEpochSeconds()
         val secondsPerBlock = sdk.estimatedSecondsPerBlock()
-        val nextDueEpoch = nextEstimatedDueEpochSeconds(states, est, nowSec, secondsPerBlock)
-        val overdueSec = overdueUnsentSeconds(states, est, secondsPerBlock)
+        val nextProvedDue = nextProvedDueEpochSeconds(states, est, nowSec, secondsPerBlock)
         val decision = decideLaneARun(
             nowEpochSeconds = nowSec,
-            nextEstimatedDueEpochSeconds = nextDueEpoch,
+            nextProvedDueEpochSeconds = nextProvedDue,
             privacyBufferSeconds = privacyBufferSeconds,
             isGateBlocked = sdk.isSyncBlocked().first(),
-            overdueUnsentSeconds = overdueSec,
         )
 
         Twig.debug {
+            val unproven = states.transfers.filter { !it.isSent && !it.isProved }
             "MIGRATION_DIAG LaneA: run start account=$accountKeyId decision=$decision " +
-                "(estimatedTip=$est, nextEstimatedDueEpoch=$nextDueEpoch, overdueUnsentSeconds=$overdueSec, " +
-                "now=$nowSec, secondsPerBlock=$secondsPerBlock)"
+                "(estimatedTip=$est, nextProvedDueEpoch=$nextProvedDue, now=$nowSec, " +
+                "secondsPerBlock=$secondsPerBlock, unproven=[" +
+                unproven.joinToString {
+                    "${it.id}(boundary=${it.anchorBoundaryHeight ?: "natural"}," +
+                        "provableAt=${provableAtHeight(it)})"
+                } + "])"
         }
-        if (decision == LaneARunDecision.RUN || decision == LaneARunDecision.RUN_OVERDUE_UNSENT) {
+        if (decision == LaneARunDecision.RUN) {
             val burst = synchronizerProvider.getSynchronizerOrNull()?.syncToTip(timeout = LANE_A_SYNC_TIMEOUT)
             Twig.debug { "MIGRATION_DIAG LaneA: syncToTip result=$burst" }
             val proved = sdk.finalizeReadyTransfers()
@@ -107,34 +129,47 @@ class MigrationSyncWorker(
             lastNetworkActivity.stampNow()
         }
 
-        // Re-arm Lane A for the next run — plan-driven for the test phase: target the next
-        // unsent transfer's estimated due time minus a lead (privacy buffer + sync headroom), so
-        // the sync+prove pass lands BEFORE the window instead of on a blind cadence tick. The
-        // post-run states are re-read so a transfer just sent above doesn't anchor the target.
-        //
-        // TEST-PHASE DESIGN NOTE: the final Android implementation per Kris uses a fixed sync
-        // cadence (60 min mainnet); the engine's own `sync_wakeup_schedule` (librustzcash #2801,
-        // boundary + settle margin + jitter) is the precise source of these wake-ups and will be
-        // consumed via FFI once the SDK moves to the rc.3+ engine crates (planned with the
-        // feature/ironwood-slipstream merge — the [patch.crates-io] path-dep is currently
-        // inactive against the locked rc.1 engine, which predates #2801). The cadence below
-        // remains the fallback either way.
-        val postRunStates = sdk.getMigrationTransferStates()
-        val postRunEst = sdk.estimatedChainTip()
-        val reArmDelay = laneAPlanDrivenReArmDelay(
-            decision = decision,
-            nowEpochSeconds = nowEpochSeconds(),
-            nextEstimatedDueEpochSeconds =
-                if (postRunStates != null) {
-                    nextEstimatedDueEpochSeconds(postRunStates, postRunEst, nowEpochSeconds(), secondsPerBlock)
-                } else {
-                    nextDueEpoch
-                },
-            privacyBufferSeconds = privacyBufferSeconds,
-            cadenceSeconds = laneACadence().inWholeSeconds,
-            jitterSeconds = LANE_A_JITTER.inWholeSeconds,
-            random = Random,
-        )
+        // Re-arm Lane A. After a RUN the post-run states are re-read so anything just proved
+        // above doesn't anchor the next wake; the wake targets the next unproven, unsent
+        // transaction's provable-at height (committed boundary + settle margin). When no unproven
+        // work remains, a single completion sweep is armed at the LAST unsent scheduled height +
+        // privacy buffer: the run-start terminal check then stops Lane A after the final mine.
+        // Cadence remains only for the states-unavailable fallback.
+        val reArmDelay: Duration = when (decision) {
+            LaneARunDecision.SKIP_GATE_BLOCKED, LaneARunDecision.SKIP_NEAR_DUE ->
+                laneASkipReArmDelay(
+                    decision = decision,
+                    nowEpochSeconds = nowEpochSeconds(),
+                    nextProvedDueEpochSeconds = nextProvedDue,
+                    privacyBufferSeconds = privacyBufferSeconds,
+                )
+            LaneARunDecision.RUN -> {
+                val postRunStates = sdk.getMigrationTransferStates()
+                val postRunEst = sdk.estimatedChainTip()
+                val wake = postRunStates?.let { nextBoundaryWake(it, postRunEst, secondsPerBlock) }
+                when {
+                    wake != null -> {
+                        Twig.debug {
+                            "MIGRATION_DIAG LaneA: next wake from boundary — tx=${wake.txId} " +
+                                "wakeHeight=${wake.wakeHeight} (estimatedTip=$postRunEst) in ${wake.delay}"
+                        }
+                        wake.delay
+                    }
+                    postRunStates != null -> {
+                        val sweep = completionSweepDelay(postRunStates, postRunEst, secondsPerBlock, privacyBufferSeconds)
+                        if (sweep != null) {
+                            Twig.debug { "MIGRATION_DIAG LaneA: nothing left to prove — completion sweep in $sweep" }
+                            sweep
+                        } else {
+                            // All transactions sent (awaiting mining) or no estimate — cadence
+                            // fallback until the run-start terminal check stops the lane.
+                            laneACadence()
+                        }
+                    }
+                    else -> laneACadence() // states unavailable — the only cadence left
+                }
+            }
+        }
         MigrationSyncScheduler(applicationContext).schedule(accountKeyId, reArmDelay)
         Twig.debug { "MIGRATION_DIAG LaneA: decision=$decision, re-arming in $reArmDelay" }
 
@@ -143,10 +178,11 @@ class MigrationSyncWorker(
 }
 
 internal val LANE_A_SYNC_TIMEOUT = 3.minutes
-internal val LANE_A_JITTER = 10.minutes
 
 /**
- * Lane A cadence: 5 min on testnet, 60 min on mainnet.
+ * Fallback-only cadence: 5 min on testnet, 60 min on mainnet. Used ONLY when live transfer
+ * states (or the tip estimate) are unavailable — every regular Lane A wake is computed from the
+ * engine's committed anchor boundaries instead (see [nextBoundaryWake]).
  *
  * Uses [BuildConfig.FLAVOR] because the SDK's network id is not cheaply reachable from a static
  * context without a full OrchardMigrationSdk instance. BuildConfig.FLAVOR contains the full
@@ -154,17 +190,6 @@ internal val LANE_A_JITTER = 10.minutes
  */
 internal fun laneACadence(): Duration =
     if (BuildConfig.FLAVOR.contains("testnet", ignoreCase = true)) 5.minutes else 60.minutes
-
-/**
- * How far BEFORE the first broadcast window Lane A's first run is aimed (see
- * FinalizeMigrationScheduleUseCase): privacy buffer (3 min testnet / 10 min mainnet) plus sync
- * headroom, so the first sync+prove pass completes and the quiet gap still elapses before Lane B
- * fires. Static per-flavor equivalent of the worker's own
- * `privacyBufferSeconds + LANE_A_SYNC_LEAD_HEADROOM_SECONDS` (the SDK isn't in reach at
- * scheduling time without an extra round trip).
- */
-internal fun laneAFirstRunLead(): Duration =
-    if (BuildConfig.FLAVOR.contains("testnet", ignoreCase = true)) 5.minutes else 30.minutes
 
 /** Returns the current wall-clock time as epoch seconds. Extracted for testability. */
 internal fun nowEpochSeconds(): Long = Clock.System.now().epochSeconds
@@ -196,143 +221,164 @@ internal fun shouldLaneAStop(state: MigrationState): Boolean =
         else -> false
     }
 
-internal enum class LaneARunDecision { RUN, RUN_OVERDUE_UNSENT, SKIP_NEAR_DUE, SKIP_GATE_BLOCKED }
+internal enum class LaneARunDecision { RUN, SKIP_NEAR_DUE, SKIP_GATE_BLOCKED }
 
 /**
- * Decides whether Lane A should run a full sync+prove cycle this invocation.
+ * Decides whether a woken Lane A runs its sync+prove cycle this invocation. Lane A ALWAYS syncs
+ * on a wake except for exactly two reasons:
  *
- * Priority:
- * 1. [LaneARunDecision.SKIP_GATE_BLOCKED] — isSyncBlocked is true (privacy buffer is active);
- *    running a sync now would correlate the sync burst with the pending broadcast.
- * 2. [LaneARunDecision.RUN_OVERDUE_UNSENT] — the earliest pending transfer's window passed at
- *    least [LANE_A_OVERDUE_OVERRIDE_SECONDS] ago and it is STILL unsent. A proved+due transfer is
- *    broadcast by Lane B within seconds of its window, so a transfer this far past due means Lane
- *    B is returning AwaitingProof — and the step-aside below would deadlock the plan: Lane A
- *    forever yields to a broadcast that cannot happen without Lane A's own sync+prove (observed
- *    live: Lane B shifting the same transfer every 5 s while Lane A logged SKIP_NEAR_DUE every
- *    3 min, scanned tip frozen). Syncing now is safe for the privacy choreography: Lane B's
- *    preflight re-imposes the quiet gap from the fresh sync stamp before it broadcasts.
- * 3. [LaneARunDecision.SKIP_NEAR_DUE] — the next transfer's estimated due time minus the privacy
- *    buffer has already passed; we are inside the pre-due window and should wait for Lane B to
- *    fire instead of advancing the tip prematurely.
- * 4. [LaneARunDecision.RUN] — no reason to skip; proceed with syncToTip + finalizeReadyTransfers.
+ * 1. [LaneARunDecision.SKIP_GATE_BLOCKED] — isSyncBlocked is true (post-broadcast privacy buffer
+ *    is active); running a sync now would correlate the sync burst with the pending broadcast.
+ * 2. [LaneARunDecision.SKIP_NEAR_DUE] — a PROVED, unsent transaction's estimated due time minus
+ *    the privacy buffer has passed: a broadcast that can actually happen is imminent, so step
+ *    aside and let Lane B fire instead of advancing the tip right before it. The proved filter is
+ *    load-bearing: an UNPROVEN due transaction never holds Lane A back — its proof can only come
+ *    from this lane's own sync (the pre-rewrite unproven step-aside livelocked a live plan).
+ * 3. [LaneARunDecision.RUN] — otherwise: syncToTip + finalizeReadyTransfers + reconcile.
  */
 internal fun decideLaneARun(
     nowEpochSeconds: Long,
-    nextEstimatedDueEpochSeconds: Long?,
+    nextProvedDueEpochSeconds: Long?,
     privacyBufferSeconds: Long,
     isGateBlocked: Boolean,
-    overdueUnsentSeconds: Long? = null,
 ): LaneARunDecision =
     when {
         isGateBlocked -> LaneARunDecision.SKIP_GATE_BLOCKED
-        overdueUnsentSeconds != null && overdueUnsentSeconds >= LANE_A_OVERDUE_OVERRIDE_SECONDS ->
-            LaneARunDecision.RUN_OVERDUE_UNSENT
-        nextEstimatedDueEpochSeconds != null &&
-            nowEpochSeconds >= nextEstimatedDueEpochSeconds - privacyBufferSeconds ->
+        nextProvedDueEpochSeconds != null &&
+            nowEpochSeconds >= nextProvedDueEpochSeconds - privacyBufferSeconds ->
             LaneARunDecision.SKIP_NEAR_DUE
         else -> LaneARunDecision.RUN
     }
 
-internal const val LANE_A_OVERDUE_OVERRIDE_SECONDS = 60L
+/**
+ * Settle margin on top of an anchor boundary before Lane A wakes for it: the boundary block must
+ * be strictly below the scanned tip for the checkpoint to exist, and a couple of blocks of
+ * headroom absorbs propagation/scan jitter. 2 blocks ≈ the engine's WakeupParams margin scaled to
+ * the 12-block testnet grid (10 @ the 144-block mainnet grid — revisit with the final cadence
+ * impl, see the class kdoc TODO).
+ */
+internal const val SETTLE_MARGIN_BLOCKS = 2L
 
 /**
- * How many estimated seconds the MOST overdue pending transfer is past its window — `null` when
- * nothing is pending, nothing is past due, or the estimated tip is unavailable (`est < 0`).
- * Uses the estimated tip deliberately: accelerating `scheduled_height` due-ness is exactly what
- * the estimate is for (hard invariant 1); expiry/invalidity decisions elsewhere stay on the
- * scanned tip.
+ * The block height at which [t] becomes provable: its committed anchor bucket boundary when the
+ * engine drew one, otherwise (preparations — natural anchor) its own scheduled height; plus
+ * [SETTLE_MARGIN_BLOCKS].
  */
-internal fun overdueUnsentSeconds(
+internal fun provableAtHeight(t: MigrationTransferState): Long =
+    (t.anchorBoundaryHeight ?: t.scheduledHeight) + SETTLE_MARGIN_BLOCKS
+
+/** The next plan-fixed Lane A wake — see [nextBoundaryWake]. */
+internal data class LaneABoundaryWake(
+    val delay: Duration,
+    /** The unproven, unsent transaction whose provable-at height drives this wake (diagnostics). */
+    val txId: String,
+    /** The absolute block height the wake targets ([provableAtHeight] of [txId]). */
+    val wakeHeight: Long,
+)
+
+/**
+ * Computes the next Lane A wake from the engine's committed plan: the minimum [provableAtHeight]
+ * over all not-yet-proved, not-yet-sent transactions, converted to a wall-clock delay at the
+ * measured block rate. Floor [MIN_LANE_A_BACKOFF_SECONDS] (WorkManager slack / hot-loop guard);
+ * deliberately NO upper cap — the wake is plan-fixed, not cadence-bounded.
+ *
+ * Returns `null` when nothing unproven+unsent remains, or when the tip estimate is unavailable
+ * (`est < 0`) — callers fall back to the completion sweep or the cadence, respectively.
+ */
+internal fun nextBoundaryWake(
     states: MigrationTransferStates,
     est: Long,
+    secondsPerBlock: Long,
+): LaneABoundaryWake? {
+    if (est < 0L) return null
+    val next = states.transfers
+        .filter { !it.isSent && !it.isProved }
+        .minByOrNull { provableAtHeight(it) }
+        ?: return null
+    val wakeHeight = provableAtHeight(next)
+    val delaySeconds = ((wakeHeight - est) * secondsPerBlock).coerceAtLeast(MIN_LANE_A_BACKOFF_SECONDS)
+    return LaneABoundaryWake(delaySeconds.seconds, next.id, wakeHeight)
+}
+
+/**
+ * Epoch seconds at which the earliest PROVED, unsent transaction's broadcast window opens — the
+ * only case where the privacy step-aside is meaningful (the broadcast can actually happen).
+ * Returns `null` when nothing proved is pending or the tip estimate is unavailable (`est < 0`).
+ */
+internal fun nextProvedDueEpochSeconds(
+    states: MigrationTransferStates,
+    est: Long,
+    nowEpochSeconds: Long,
     secondsPerBlock: Long,
 ): Long? {
     if (est < 0L) return null
     return states.transfers
+        .filter { it.isProved && !it.isSent }
+        .minOfOrNull { t ->
+            val blocksRemaining = (t.scheduledHeight - est).coerceAtLeast(0L)
+            nowEpochSeconds + blocksRemaining * secondsPerBlock
+        }
+}
+
+/**
+ * Re-arm delay when no unproven work remains but unsent (proved) transactions do: one completion
+ * sweep at the LAST unsent scheduled height plus the privacy buffer, so the wake lands after the
+ * final broadcast window — its run-start terminal check then stops Lane A once the migration
+ * completes. Returns `null` when everything is sent or the tip estimate is unavailable.
+ */
+internal fun completionSweepDelay(
+    states: MigrationTransferStates,
+    est: Long,
+    secondsPerBlock: Long,
+    privacyBufferSeconds: Long,
+): Duration? {
+    if (est < 0L) return null
+    val lastUnsentHeight = states.transfers
         .filter { !it.isSent }
-        .maxOfOrNull { (est - it.scheduledHeight) * secondsPerBlock }
-        ?.takeIf { it > 0L }
+        .maxOfOrNull { it.scheduledHeight }
+        ?: return null
+    val delaySeconds = ((lastUnsentHeight - est).coerceAtLeast(0L) * secondsPerBlock + privacyBufferSeconds)
+        .coerceAtLeast(MIN_LANE_A_BACKOFF_SECONDS)
+    return delaySeconds.seconds
 }
 
 /**
- * Computes the delay until the next Lane A re-arm.
- *
- * - [LaneARunDecision.SKIP_NEAR_DUE]: wait until after the due window closes
- *   (`nextDue + buffer − now`), with a minimum of 60 s to prevent hot-loop spinning when the
- *   estimate is already in the past (spec M5 hot-loop guard).
- * - Otherwise: cadence ± random jitter in `[-jitter, +jitter]`.
+ * Re-arm delay for the two SKIP decisions:
+ * - [LaneARunDecision.SKIP_NEAR_DUE]: wait until after the proved transaction's window closes
+ *   (`nextProvedDue + buffer − now`), floored at [MIN_LANE_A_BACKOFF_SECONDS] to prevent
+ *   hot-loop spinning when the estimate is already in the past.
+ * - [LaneARunDecision.SKIP_GATE_BLOCKED]: wait out the privacy buffer that blocked the gate.
  */
-internal fun laneAReArmDelay(
+internal fun laneASkipReArmDelay(
     decision: LaneARunDecision,
     nowEpochSeconds: Long,
-    nextEstimatedDueEpochSeconds: Long?,
+    nextProvedDueEpochSeconds: Long?,
     privacyBufferSeconds: Long,
-    cadenceSeconds: Long,
-    jitterSeconds: Long,
-    random: Random,
-): Duration {
-    if (decision == LaneARunDecision.SKIP_NEAR_DUE && nextEstimatedDueEpochSeconds != null) {
-        val remaining = nextEstimatedDueEpochSeconds + privacyBufferSeconds - nowEpochSeconds
-        return maxOf(remaining, MIN_LANE_A_BACKOFF_SECONDS).seconds
+): Duration =
+    if (decision == LaneARunDecision.SKIP_NEAR_DUE && nextProvedDueEpochSeconds != null) {
+        (nextProvedDueEpochSeconds + privacyBufferSeconds - nowEpochSeconds)
+            .coerceAtLeast(MIN_LANE_A_BACKOFF_SECONDS).seconds
+    } else {
+        privacyBufferSeconds.coerceAtLeast(MIN_LANE_A_BACKOFF_SECONDS).seconds
     }
-    val jitterOffset = random.nextLong(-jitterSeconds, jitterSeconds + 1)
-    return (cadenceSeconds + jitterOffset).coerceAtLeast(MIN_LANE_A_BACKOFF_SECONDS).seconds
-}
 
-/**
- * Plan-driven Lane A re-arm (test phase — see the design note at the call site): aim the next run
- * at `nextDue − lead`, where the lead is the privacy buffer plus [LANE_A_SYNC_LEAD_HEADROOM_SECONDS]
- * of sync headroom, so the transfer is proved before its window opens and Lane B's quiet-gap check
- * still has room after the sync. Clamped to `[MIN_LANE_A_BACKOFF_SECONDS, cadence]`:
- * - already inside the lead (or past due) → the floor, 60 s — the overdue override
- *   ([LaneARunDecision.RUN_OVERDUE_UNSENT]) takes over if a proof is actually missing;
- * - no pending transfer / no estimate → plain cadence via [laneAReArmDelay];
- * - the SKIP_NEAR_DUE wait-out-the-window rule is unchanged (delegated).
- */
-internal fun laneAPlanDrivenReArmDelay(
-    decision: LaneARunDecision,
-    nowEpochSeconds: Long,
-    nextEstimatedDueEpochSeconds: Long?,
-    privacyBufferSeconds: Long,
-    cadenceSeconds: Long,
-    jitterSeconds: Long,
-    random: Random,
-): Duration {
-    if (decision == LaneARunDecision.SKIP_NEAR_DUE || nextEstimatedDueEpochSeconds == null) {
-        return laneAReArmDelay(
-            decision = decision,
-            nowEpochSeconds = nowEpochSeconds,
-            nextEstimatedDueEpochSeconds = nextEstimatedDueEpochSeconds,
-            privacyBufferSeconds = privacyBufferSeconds,
-            cadenceSeconds = cadenceSeconds,
-            jitterSeconds = jitterSeconds,
-            random = random,
-        )
-    }
-    val lead = privacyBufferSeconds + LANE_A_SYNC_LEAD_HEADROOM_SECONDS
-    val target = nextEstimatedDueEpochSeconds - lead - nowEpochSeconds
-    return target.coerceIn(MIN_LANE_A_BACKOFF_SECONDS, cadenceSeconds).seconds
-}
-
-internal const val LANE_A_SYNC_LEAD_HEADROOM_SECONDS = 120L
-
-private const val MIN_LANE_A_BACKOFF_SECONDS = 60L
+internal const val MIN_LANE_A_BACKOFF_SECONDS = 60L
 
 /**
  * Returns the minimum estimated epoch-second at which the earliest PENDING (not yet sent)
- * transfer will be ready to broadcast, based on `(scheduledHeight − est) * 75 s/block`.
+ * transaction will be ready to broadcast, based on `(scheduledHeight − est) * secondsPerBlock`.
+ * Deliberately kind- and proof-agnostic (min over `!isSent`, preparations included) — this is
+ * Lane B's next-window basis, not a Lane A wake source.
  *
  * Returns `null` when:
- * - [states] has no pending transfers (all sent or empty list)
+ * - [states] has no pending transactions (all sent or empty list)
  * - [est] is the sentinel value `-1` (chain tip unavailable)
  *
- * The block-time constant 75 s matches [cash.z.ecc.android.sdk.ext.ZcashSdk.BLOCK_INTERVAL_MILLIS]
- * / 1000. Blocks remaining is clamped to ≥ 0 so an already-past height gives an offset of 0
- * instead of a negative result.
+ * Blocks remaining is clamped to ≥ 0 so an already-past height gives an offset of 0 instead of a
+ * negative result.
  *
  * NOTE: This function considers only the account whose [states] are passed. In a multi-account
- * wallet each account would have its own Lane A worker carrying its own accountKeyId; the
+ * wallet each account would have its own worker carrying its own accountKeyId; the
  * single-account path (most deployments) is the designed norm and is fully correct here.
  */
 internal fun nextEstimatedDueEpochSeconds(

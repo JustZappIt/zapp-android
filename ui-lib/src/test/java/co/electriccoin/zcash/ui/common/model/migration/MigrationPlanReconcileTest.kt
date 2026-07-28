@@ -29,7 +29,16 @@ class MigrationPlanReconcileTest {
 
     private fun live(vararg sent: Pair<String, Boolean>, tipHeight: Long = 100L) =
         MigrationTransferStates(
-            transfers = sent.map { (id, isSent) -> MigrationTransferState(id = id, isSent = isSent, scheduledHeight = 50L) },
+            transfers = sent.map { (id, isSent) ->
+                MigrationTransferState(
+                    id = id,
+                    isTransfer = true,
+                    isSent = isSent,
+                    isProved = isSent,
+                    scheduledHeight = 50L,
+                    anchorBoundaryHeight = null,
+                )
+            },
             tipHeight = tipHeight,
         )
 

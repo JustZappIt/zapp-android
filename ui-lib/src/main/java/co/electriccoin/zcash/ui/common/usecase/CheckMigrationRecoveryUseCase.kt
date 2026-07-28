@@ -21,10 +21,10 @@ import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
 import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs
 import co.electriccoin.zcash.work.MigrationSyncScheduler
 import co.electriccoin.zcash.work.WorkIds
-import co.electriccoin.zcash.work.laneACadence
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Single source of truth for migration re-entry routing on app launch/foreground — MainActivity's
@@ -102,7 +102,10 @@ class CheckMigrationRecoveryUseCase(
         if (migrationPlanRepository.load() != null && !isLaneAActive()) {
             val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
             Twig.debug { "MIGRATION_DIAG MigrationRecovery: Lane A absent, re-scheduling." }
-            migrationSyncScheduler.schedule(accountKeyId, laneACadence())
+            // A short flat first arm: the schedule object carries no plan knowledge — the worker's
+            // first run reads the live engine states and computes the precise boundary-driven wake
+            // itself (see MigrationSyncWorker).
+            migrationSyncScheduler.schedule(accountKeyId, 60.seconds)
         }
         // Read the real state once instead of the old hasInvalidTransfers() boolean — the app must
         // distinguish AttentionReason.InvalidTransfer (spec §6.2, external spend invalidated the
@@ -135,12 +138,10 @@ class CheckMigrationRecoveryUseCase(
             }
             navigationRouter.replaceAll(HomeArgs, MigrationTransferReviewArgs)
         } else if (sdk.hasOverdueTransfers()) {
-            // Engine-shift DISABLED (deliberate no-op — same reasoning as MigrationWorker's
-            // AwaitingProof branch): the at-most-one-overdue catch-up used to redraw the later
-            // overdue transfers' boundaries via our own rescheduleUnprovenTransfer JNI layer — a
-            // second source of truth over the engine's committed plan. The plan now stays exactly
-            // as committed; the engine serves overdue transfers one-per-broadcast in its own
-            // order, paced by the existing post-broadcast privacy buffer.
+            // No catch-up shifting here: the plan stays exactly as the engine committed it (the
+            // engine is the single source of truth); overdue transfers are served
+            // one-per-broadcast in the engine's own order, paced by the post-broadcast privacy
+            // buffer.
             Twig.debug { "MIGRATION_DIAG MigrationRecovery: overdue transfer detected — redirecting to Resume Migration." }
             navigationRouter.replaceAll(HomeArgs, MigrationProgressArgs)
         } else if (migrationState == MigrationState.Complete &&
@@ -194,15 +195,6 @@ class CheckMigrationRecoveryUseCase(
         return !sdk.hasOverdueTransfers()
     }
 }
-
-/**
- * Spec §5 B2 "at-most-one-overdue" catch-up: given the pending (not-yet-sent) transfers sorted
- * ascending by scheduled height, keep the earliest one (the engine's natural next candidate) and
- * return the rest for rescheduling to future windows. Empty and single-element lists return empty
- * — nothing to shift.
- */
-internal fun overdueTransfersToShift(pendingSortedByHeight: List<String>): List<String> =
-    pendingSortedByHeight.drop(1)
 
 /**
  * Production implementation of the Lane A active check — reads WorkManager unique work state.

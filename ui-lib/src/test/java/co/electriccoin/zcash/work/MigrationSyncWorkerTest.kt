@@ -3,7 +3,8 @@ package co.electriccoin.zcash.work
 import cash.z.ecc.android.sdk.AttentionReason
 import cash.z.ecc.android.sdk.MigrationProgress
 import cash.z.ecc.android.sdk.MigrationState
-import kotlin.random.Random
+import cash.z.ecc.android.sdk.MigrationTransferState
+import cash.z.ecc.android.sdk.MigrationTransferStates
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -14,15 +15,35 @@ import kotlin.time.Duration.Companion.seconds
 
 class MigrationSyncWorkerTest {
 
+    private fun tx(
+        id: String,
+        scheduledHeight: Long,
+        isSent: Boolean = false,
+        isProved: Boolean = false,
+        anchorBoundaryHeight: Long? = null,
+        isTransfer: Boolean = true,
+    ) = MigrationTransferState(
+        id = id,
+        isTransfer = isTransfer,
+        isSent = isSent,
+        isProved = isProved,
+        scheduledHeight = scheduledHeight,
+        anchorBoundaryHeight = anchorBoundaryHeight,
+    )
+
+    private fun states(vararg transfers: MigrationTransferState, tipHeight: Long = 0L) =
+        MigrationTransferStates(transfers = transfers.toList(), tipHeight = tipHeight)
+
     // ── decideLaneARun ─────────────────────────────────────────────────────────
+    // A1: a woken Lane A ALWAYS syncs except (a) the privacy gate and (b) an imminent PROVED due.
 
     @Test
-    fun `lane A skips inside the pre-due window`() {
+    fun `lane A steps aside inside a PROVED transaction's pre-due window`() {
         assertEquals(
             LaneARunDecision.SKIP_NEAR_DUE,
             decideLaneARun(
                 nowEpochSeconds = 1000,
-                nextEstimatedDueEpochSeconds = 1500,
+                nextProvedDueEpochSeconds = 1500,
                 privacyBufferSeconds = 600,
                 isGateBlocked = false,
             )
@@ -30,12 +51,27 @@ class MigrationSyncWorkerTest {
     }
 
     @Test
-    fun `lane A runs when no transfer is near due`() {
+    fun `lane A runs when the proved due window is still far away`() {
         assertEquals(
             LaneARunDecision.RUN,
             decideLaneARun(
                 nowEpochSeconds = 1000,
-                nextEstimatedDueEpochSeconds = 5000,
+                nextProvedDueEpochSeconds = 5000,
+                privacyBufferSeconds = 600,
+                isGateBlocked = false,
+            )
+        )
+    }
+
+    @Test
+    fun `lane A runs when nothing proved is pending — an unproven due transfer never steps aside`() {
+        // The precise replacement of the old overdue heuristic: an unproven due transaction's
+        // proof can only come from THIS lane's sync, so nextProvedDue is null and Lane A runs.
+        assertEquals(
+            LaneARunDecision.RUN,
+            decideLaneARun(
+                nowEpochSeconds = 1000,
+                nextProvedDueEpochSeconds = null,
                 privacyBufferSeconds = 600,
                 isGateBlocked = false,
             )
@@ -48,7 +84,7 @@ class MigrationSyncWorkerTest {
             LaneARunDecision.SKIP_GATE_BLOCKED,
             decideLaneARun(
                 nowEpochSeconds = 1000,
-                nextEstimatedDueEpochSeconds = 5000,
+                nextProvedDueEpochSeconds = 5000,
                 privacyBufferSeconds = 600,
                 isGateBlocked = true,
             )
@@ -56,12 +92,12 @@ class MigrationSyncWorkerTest {
     }
 
     @Test
-    fun `lane A skips gate blocked even when inside pre-due window`() {
+    fun `lane A gate block wins over the proved step-aside`() {
         assertEquals(
             LaneARunDecision.SKIP_GATE_BLOCKED,
             decideLaneARun(
                 nowEpochSeconds = 1000,
-                nextEstimatedDueEpochSeconds = 1500,
+                nextProvedDueEpochSeconds = 1500,
                 privacyBufferSeconds = 600,
                 isGateBlocked = true,
             )
@@ -69,284 +105,273 @@ class MigrationSyncWorkerTest {
     }
 
     @Test
-    fun `lane A runs when nextEstimatedDue is null (no pending transfers)`() {
-        assertEquals(
-            LaneARunDecision.RUN,
-            decideLaneARun(
-                nowEpochSeconds = 1000,
-                nextEstimatedDueEpochSeconds = null,
-                privacyBufferSeconds = 600,
-                isGateBlocked = false,
-            )
-        )
-    }
-
-    @Test
-    fun `lane A skips when now equals exactly the window boundary`() {
-        // now >= nextDue - buffer → 1000 >= 1600 - 600 = 1000 → SKIP_NEAR_DUE
+    fun `lane A steps aside when now equals exactly the window boundary`() {
+        // now >= nextProvedDue - buffer → 1000 >= 1600 - 600 = 1000 → SKIP_NEAR_DUE
         assertEquals(
             LaneARunDecision.SKIP_NEAR_DUE,
             decideLaneARun(
                 nowEpochSeconds = 1000,
-                nextEstimatedDueEpochSeconds = 1600,
+                nextProvedDueEpochSeconds = 1600,
                 privacyBufferSeconds = 600,
                 isGateBlocked = false,
             )
         )
     }
 
+    // ── provableAtHeight ───────────────────────────────────────────────────────
+
     @Test
-    fun `lane A overrides the step-aside when the due transfer is long overdue and unsent`() {
-        // Live-observed livelock: transfer due "now" forever (estimate clamps to now when past
-        // due), unproven, so Lane B can never broadcast — Lane A must run, not step aside.
+    fun `provableAt uses the committed boundary plus settle margin for transfers`() {
+        val t = tx("t1", scheduledHeight = 500L, anchorBoundaryHeight = 144L)
+        assertEquals(144L + SETTLE_MARGIN_BLOCKS, provableAtHeight(t))
+    }
+
+    @Test
+    fun `provableAt falls back to the scheduled height for preparations (natural anchor)`() {
+        val prep = tx("p1", scheduledHeight = 300L, anchorBoundaryHeight = null, isTransfer = false)
+        assertEquals(300L + SETTLE_MARGIN_BLOCKS, provableAtHeight(prep))
+    }
+
+    // ── nextBoundaryWake ───────────────────────────────────────────────────────
+
+    @Test
+    fun `boundary wake targets the minimum provable-at height over unproven unsent transactions`() {
+        val s = states(
+            tx("t1", scheduledHeight = 500L, anchorBoundaryHeight = 288L),
+            tx("t2", scheduledHeight = 400L, anchorBoundaryHeight = 144L),
+            tx("t3", scheduledHeight = 300L, anchorBoundaryHeight = 100L, isProved = true),
+            tx("t4", scheduledHeight = 200L, anchorBoundaryHeight = 50L, isSent = true),
+        )
+        // est=100, secondsPerBlock=10: t2 provable at 146 → (146-100)*10 = 460s.
+        // t3 (proved) and t4 (sent) must not drive the wake despite lower boundaries.
+        val wake = nextBoundaryWake(s, est = 100L, secondsPerBlock = 10L)
+        assertNotNull(wake)
+        assertEquals("t2", wake.txId)
+        assertEquals(144L + SETTLE_MARGIN_BLOCKS, wake.wakeHeight)
+        assertEquals(460.seconds, wake.delay)
+    }
+
+    @Test
+    fun `boundary wake floors at 60s when the boundary has already settled`() {
+        val s = states(tx("t1", scheduledHeight = 500L, anchorBoundaryHeight = 144L))
+        // est far past the boundary → raw delay negative → floor.
+        val wake = nextBoundaryWake(s, est = 10_000L, secondsPerBlock = 10L)
+        assertNotNull(wake)
+        assertEquals(MIN_LANE_A_BACKOFF_SECONDS.seconds, wake.delay)
+    }
+
+    @Test
+    fun `boundary wake has no upper cap — a distant boundary waits it out`() {
+        val s = states(tx("t1", scheduledHeight = 500_000L, anchorBoundaryHeight = 400_000L))
+        // est=100_000, 75s/block → (400_002-100_000)*75 s — far beyond any cadence.
+        val wake = nextBoundaryWake(s, est = 100_000L, secondsPerBlock = 75L)
+        assertNotNull(wake)
+        assertEquals(((400_000L + SETTLE_MARGIN_BLOCKS - 100_000L) * 75L).seconds, wake.delay)
+    }
+
+    @Test
+    fun `boundary wake is null when the tip estimate is unavailable`() {
+        val s = states(tx("t1", scheduledHeight = 500L, anchorBoundaryHeight = 144L))
+        assertNull(nextBoundaryWake(s, est = -1L, secondsPerBlock = 75L))
+    }
+
+    @Test
+    fun `boundary wake is null when no unproven unsent work remains`() {
+        val s = states(
+            tx("t1", scheduledHeight = 500L, anchorBoundaryHeight = 144L, isProved = true),
+            tx("t2", scheduledHeight = 400L, anchorBoundaryHeight = 100L, isSent = true),
+        )
+        assertNull(nextBoundaryWake(s, est = 100L, secondsPerBlock = 75L))
+    }
+
+    @Test
+    fun `boundary wake covers preparations via their natural anchor`() {
+        val s = states(
+            tx("p1", scheduledHeight = 200L, anchorBoundaryHeight = null, isTransfer = false),
+            tx("t1", scheduledHeight = 500L, anchorBoundaryHeight = 288L),
+        )
+        val wake = nextBoundaryWake(s, est = 100L, secondsPerBlock = 10L)
+        assertNotNull(wake)
+        assertEquals("p1", wake.txId)
+        assertEquals(200L + SETTLE_MARGIN_BLOCKS, wake.wakeHeight)
+    }
+
+    // ── nextProvedDueEpochSeconds ──────────────────────────────────────────────
+
+    @Test
+    fun `proved due filters to proved and unsent only`() {
+        val now = 1_000_000L
+        val est = 800_000L
+        val s = states(
+            tx("t1", scheduledHeight = 800_005L),                                  // unproven — ignored
+            tx("t2", scheduledHeight = 800_010L, isProved = true),                 // 10 blocks out
+            tx("t3", scheduledHeight = 800_001L, isProved = true, isSent = true),  // sent — ignored
+        )
+        val result = nextProvedDueEpochSeconds(s, est, now, secondsPerBlock = 75L)
+        assertEquals(now + 10L * 75L, result)
+    }
+
+    @Test
+    fun `proved due is null when nothing proved is pending`() {
+        val s = states(tx("t1", scheduledHeight = 800_005L))
+        assertNull(nextProvedDueEpochSeconds(s, est = 800_000L, nowEpochSeconds = 0L, secondsPerBlock = 75L))
+    }
+
+    @Test
+    fun `proved due is null when estimator is sentinel -1`() {
+        val s = states(tx("t1", scheduledHeight = 800_005L, isProved = true))
+        assertNull(nextProvedDueEpochSeconds(s, est = -1L, nowEpochSeconds = 0L, secondsPerBlock = 75L))
+    }
+
+    @Test
+    fun `proved due clamps an already-passed height to now`() {
+        val now = 1_000_000L
+        val s = states(tx("t1", scheduledHeight = 700_000L, isProved = true))
+        assertEquals(now, nextProvedDueEpochSeconds(s, est = 800_000L, nowEpochSeconds = now, secondsPerBlock = 75L))
+    }
+
+    // ── completionSweepDelay ───────────────────────────────────────────────────
+
+    @Test
+    fun `completion sweep targets the last unsent scheduled height plus buffer`() {
+        val s = states(
+            tx("t1", scheduledHeight = 800_010L, isProved = true),
+            tx("t2", scheduledHeight = 800_050L, isProved = true),
+            tx("t3", scheduledHeight = 800_100L, isSent = true, isProved = true),
+        )
+        // est=800_000, 10s/block, buffer=180 → (800_050-800_000)*10 + 180 = 680s
         assertEquals(
-            LaneARunDecision.RUN_OVERDUE_UNSENT,
-            decideLaneARun(
-                nowEpochSeconds = 1000,
-                nextEstimatedDueEpochSeconds = 1000,
-                privacyBufferSeconds = 600,
-                isGateBlocked = false,
-                overdueUnsentSeconds = 270,
+            680.seconds,
+            completionSweepDelay(s, est = 800_000L, secondsPerBlock = 10L, privacyBufferSeconds = 180L)
+        )
+    }
+
+    @Test
+    fun `completion sweep floors at 60s when everything unsent is already past due`() {
+        val s = states(tx("t1", scheduledHeight = 100L, isProved = true))
+        assertEquals(
+            MIN_LANE_A_BACKOFF_SECONDS.seconds,
+            completionSweepDelay(s, est = 10_000L, secondsPerBlock = 10L, privacyBufferSeconds = 0L)
+        )
+    }
+
+    @Test
+    fun `completion sweep is null when all transactions are sent`() {
+        val s = states(tx("t1", scheduledHeight = 100L, isSent = true, isProved = true))
+        assertNull(completionSweepDelay(s, est = 200L, secondsPerBlock = 10L, privacyBufferSeconds = 180L))
+    }
+
+    @Test
+    fun `completion sweep is null when the tip estimate is unavailable`() {
+        val s = states(tx("t1", scheduledHeight = 100L, isProved = true))
+        assertNull(completionSweepDelay(s, est = -1L, secondsPerBlock = 10L, privacyBufferSeconds = 180L))
+    }
+
+    // ── laneASkipReArmDelay ────────────────────────────────────────────────────
+
+    @Test
+    fun `near-due skip re-arm waits out the proved window`() {
+        // nextProvedDue=2000, buffer=300, now=1600 → remaining = 2000+300-1600 = 700s
+        assertEquals(
+            700.seconds,
+            laneASkipReArmDelay(
+                decision = LaneARunDecision.SKIP_NEAR_DUE,
+                nowEpochSeconds = 1600,
+                nextProvedDueEpochSeconds = 2000,
+                privacyBufferSeconds = 300,
             )
         )
     }
 
     @Test
-    fun `lane A still steps aside when overdue is under the override threshold`() {
-        assertEquals(
-            LaneARunDecision.SKIP_NEAR_DUE,
-            decideLaneARun(
-                nowEpochSeconds = 1000,
-                nextEstimatedDueEpochSeconds = 1000,
-                privacyBufferSeconds = 600,
-                isGateBlocked = false,
-                overdueUnsentSeconds = LANE_A_OVERDUE_OVERRIDE_SECONDS - 1,
-            )
-        )
-    }
-
-    @Test
-    fun `lane A gate block still wins over the overdue override`() {
-        assertEquals(
-            LaneARunDecision.SKIP_GATE_BLOCKED,
-            decideLaneARun(
-                nowEpochSeconds = 1000,
-                nextEstimatedDueEpochSeconds = 1000,
-                privacyBufferSeconds = 600,
-                isGateBlocked = true,
-                overdueUnsentSeconds = 10_000,
-            )
-        )
-    }
-
-    // ── laneAReArmDelay ────────────────────────────────────────────────────────
-
-    @Test
-    fun `lane A re-arm after past-due skip never goes negative`() {
-        val d = laneAReArmDelay(
+    fun `near-due skip re-arm never goes below the 60s floor`() {
+        val d = laneASkipReArmDelay(
             decision = LaneARunDecision.SKIP_NEAR_DUE,
-            nowEpochSeconds = 2000,
-            nextEstimatedDueEpochSeconds = 1500,
+            nowEpochSeconds = 5000,
+            nextProvedDueEpochSeconds = 1500,
             privacyBufferSeconds = 300,
-            cadenceSeconds = 3600,
-            jitterSeconds = 600,
-            random = Random(1),
         )
-        assertTrue(d >= 60.seconds, "hot-loop guard (spec M5): expected >= 60s but was $d")
+        assertEquals(MIN_LANE_A_BACKOFF_SECONDS.seconds, d)
     }
 
     @Test
-    fun `lane A re-arm for SKIP_NEAR_DUE uses max of remaining window and 60s`() {
-        // nextDue=2000, buffer=300, now=1600 → remaining = 2000+300-1600 = 700s
-        val d = laneAReArmDelay(
-            decision = LaneARunDecision.SKIP_NEAR_DUE,
-            nowEpochSeconds = 1600,
-            nextEstimatedDueEpochSeconds = 2000,
-            privacyBufferSeconds = 300,
-            cadenceSeconds = 3600,
-            jitterSeconds = 600,
-            random = Random(1),
+    fun `gate-blocked re-arm waits out the privacy buffer`() {
+        assertEquals(
+            600.seconds,
+            laneASkipReArmDelay(
+                decision = LaneARunDecision.SKIP_GATE_BLOCKED,
+                nowEpochSeconds = 1000,
+                nextProvedDueEpochSeconds = null,
+                privacyBufferSeconds = 600,
+            )
         )
-        assertEquals(700.seconds, d)
     }
 
-    @Test
-    fun `lane A re-arm for RUN uses cadence plus jitter`() {
-        val cadence = 3600L
-        val jitter = 600L
-        val d = laneAReArmDelay(
-            decision = LaneARunDecision.RUN,
-            nowEpochSeconds = 1000,
-            nextEstimatedDueEpochSeconds = 5000,
-            privacyBufferSeconds = 600,
-            cadenceSeconds = cadence,
-            jitterSeconds = jitter,
-            random = Random(42),
-        )
-        assertTrue(d >= (cadence - jitter).seconds, "re-arm must be >= cadence-jitter: was $d")
-        assertTrue(d <= (cadence + jitter).seconds, "re-arm must be <= cadence+jitter: was $d")
-    }
-
-    @Test
-    fun `lane A re-arm for SKIP_GATE_BLOCKED uses cadence plus jitter`() {
-        val cadence = 3600L
-        val jitter = 600L
-        val d = laneAReArmDelay(
-            decision = LaneARunDecision.SKIP_GATE_BLOCKED,
-            nowEpochSeconds = 1000,
-            nextEstimatedDueEpochSeconds = null,
-            privacyBufferSeconds = 600,
-            cadenceSeconds = cadence,
-            jitterSeconds = jitter,
-            random = Random(42),
-        )
-        assertTrue(d >= (cadence - jitter).seconds, "gate-blocked re-arm must be >= cadence-jitter: was $d")
-        assertTrue(d <= (cadence + jitter).seconds, "gate-blocked re-arm must be <= cadence+jitter: was $d")
-    }
-
-    // ── laneAPlanDrivenReArmDelay ──────────────────────────────────────────────
-
-    @Test
-    fun `plan-driven re-arm targets nextDue minus lead`() {
-        // due in 1000s, lead = 180 buffer + 120 headroom = 300 → target 700s (within [60, 3600])
-        val d = laneAPlanDrivenReArmDelay(
-            decision = LaneARunDecision.RUN,
-            nowEpochSeconds = 10_000,
-            nextEstimatedDueEpochSeconds = 11_000,
-            privacyBufferSeconds = 180,
-            cadenceSeconds = 3600,
-            jitterSeconds = 600,
-            random = Random(1),
-        )
-        assertEquals(700.seconds, d)
-    }
-
-    @Test
-    fun `plan-driven re-arm floors at 60s when already inside the lead`() {
-        val d = laneAPlanDrivenReArmDelay(
-            decision = LaneARunDecision.RUN_OVERDUE_UNSENT,
-            nowEpochSeconds = 10_000,
-            nextEstimatedDueEpochSeconds = 10_000,
-            privacyBufferSeconds = 180,
-            cadenceSeconds = 3600,
-            jitterSeconds = 600,
-            random = Random(1),
-        )
-        assertEquals(60.seconds, d)
-    }
-
-    @Test
-    fun `plan-driven re-arm caps at cadence for a distant window`() {
-        val d = laneAPlanDrivenReArmDelay(
-            decision = LaneARunDecision.RUN,
-            nowEpochSeconds = 10_000,
-            nextEstimatedDueEpochSeconds = 100_000,
-            privacyBufferSeconds = 180,
-            cadenceSeconds = 300,
-            jitterSeconds = 600,
-            random = Random(1),
-        )
-        assertEquals(300.seconds, d)
-    }
-
-    @Test
-    fun `plan-driven re-arm falls back to cadence when no due estimate exists`() {
-        val d = laneAPlanDrivenReArmDelay(
-            decision = LaneARunDecision.RUN,
-            nowEpochSeconds = 10_000,
-            nextEstimatedDueEpochSeconds = null,
-            privacyBufferSeconds = 180,
-            cadenceSeconds = 3600,
-            jitterSeconds = 600,
-            random = Random(7),
-        )
-        assertTrue(d >= (3600 - 600).seconds && d <= (3600 + 600).seconds, "cadence±jitter expected: was $d")
-    }
-
-    // ── nextEstimatedDueEpochSeconds ───────────────────────────────────────────
+    // ── nextEstimatedDueEpochSeconds (Lane B's window basis — kind-agnostic) ───
 
     @Test
     fun `nextEstimatedDue returns null when states has no pending transfers`() {
-        // All isSent=true → no pending → null
-        val states = cash.z.ecc.android.sdk.MigrationTransferStates(
-            transfers = listOf(
-                cash.z.ecc.android.sdk.MigrationTransferState("t1", isSent = true, scheduledHeight = 100L),
-            ),
-            tipHeight = 90L,
-        )
-        assertNull(nextEstimatedDueEpochSeconds(states, est = 90L))
+        val s = states(tx("t1", scheduledHeight = 100L, isSent = true), tipHeight = 90L)
+        assertNull(nextEstimatedDueEpochSeconds(s, est = 90L))
     }
 
     @Test
     fun `nextEstimatedDue returns null when estimator is sentinel -1`() {
-        val states = cash.z.ecc.android.sdk.MigrationTransferStates(
-            transfers = listOf(
-                cash.z.ecc.android.sdk.MigrationTransferState("t1", isSent = false, scheduledHeight = 200L),
-            ),
-            tipHeight = 100L,
-        )
-        assertNull(nextEstimatedDueEpochSeconds(states, est = -1L))
+        val s = states(tx("t1", scheduledHeight = 200L), tipHeight = 100L)
+        assertNull(nextEstimatedDueEpochSeconds(s, est = -1L))
     }
 
     @Test
     fun `nextEstimatedDue returns null when transfers list is empty`() {
-        val states = cash.z.ecc.android.sdk.MigrationTransferStates(
-            transfers = emptyList(),
-            tipHeight = 100L,
-        )
-        assertNull(nextEstimatedDueEpochSeconds(states, est = 100L))
+        val s = states(tipHeight = 100L)
+        assertNull(nextEstimatedDueEpochSeconds(s, est = 100L))
     }
 
     @Test
-    fun `nextEstimatedDue computes min over pending transfers`() {
+    fun `nextEstimatedDue computes min over pending transactions`() {
         val now = 1_000_000L
         val est = 800_000L
-        // transfer1: scheduledHeight=800_010 → 10 blocks remaining → 10*75=750s
-        // transfer2: scheduledHeight=800_100 → 100 blocks remaining → 100*75=7500s
-        // min = now + 750
-        val states = cash.z.ecc.android.sdk.MigrationTransferStates(
-            transfers = listOf(
-                cash.z.ecc.android.sdk.MigrationTransferState("t1", isSent = false, scheduledHeight = 800_010L),
-                cash.z.ecc.android.sdk.MigrationTransferState("t2", isSent = false, scheduledHeight = 800_100L),
-            ),
+        // t1: 10 blocks remaining → 750s; t2: 100 blocks → 7500s; min = now + 750
+        val s = states(
+            tx("t1", scheduledHeight = 800_010L),
+            tx("t2", scheduledHeight = 800_100L),
             tipHeight = est,
         )
-        val result = nextEstimatedDueEpochSeconds(states, est = est, nowEpochSeconds = now)
-        assertNotNull(result)
-        assertEquals(now + 750L, result)
+        assertEquals(now + 750L, nextEstimatedDueEpochSeconds(s, est = est, nowEpochSeconds = now))
+    }
+
+    @Test
+    fun `nextEstimatedDue includes unsent preparations`() {
+        // R1/A5: preparations are part of the surfaced states — Lane B's window basis must see
+        // a due prep (the engine serves preps for broadcast too), so no window can sleep past it.
+        val now = 1_000_000L
+        val est = 800_000L
+        val s = states(
+            tx("p1", scheduledHeight = 800_004L, isTransfer = false),
+            tx("t1", scheduledHeight = 800_100L),
+            tipHeight = est,
+        )
+        assertEquals(now + 4L * 75L, nextEstimatedDueEpochSeconds(s, est = est, nowEpochSeconds = now))
     }
 
     @Test
     fun `nextEstimatedDue clamps negative block difference to zero`() {
         val now = 1_000_000L
         val est = 800_100L
-        // scheduledHeight=800_000 < est → blocks remaining = coerceAtLeast(0) = 0 → offset=0
-        val states = cash.z.ecc.android.sdk.MigrationTransferStates(
-            transfers = listOf(
-                cash.z.ecc.android.sdk.MigrationTransferState("t1", isSent = false, scheduledHeight = 800_000L),
-            ),
-            tipHeight = est,
-        )
-        val result = nextEstimatedDueEpochSeconds(states, est = est, nowEpochSeconds = now)
-        assertNotNull(result)
-        assertEquals(now + 0L, result)
+        val s = states(tx("t1", scheduledHeight = 800_000L), tipHeight = est)
+        assertEquals(now, nextEstimatedDueEpochSeconds(s, est = est, nowEpochSeconds = now))
     }
 
     @Test
     fun `nextEstimatedDue ignores already-sent transfers`() {
         val now = 1_000_000L
         val est = 800_000L
-        // t1 is sent (ignore), t2 is pending with scheduledHeight=800_020 → 20*75=1500s
-        val states = cash.z.ecc.android.sdk.MigrationTransferStates(
-            transfers = listOf(
-                cash.z.ecc.android.sdk.MigrationTransferState("t1", isSent = true, scheduledHeight = 800_001L),
-                cash.z.ecc.android.sdk.MigrationTransferState("t2", isSent = false, scheduledHeight = 800_020L),
-            ),
+        val s = states(
+            tx("t1", scheduledHeight = 800_001L, isSent = true),
+            tx("t2", scheduledHeight = 800_020L),
             tipHeight = est,
         )
-        val result = nextEstimatedDueEpochSeconds(states, est = est, nowEpochSeconds = now)
-        assertNotNull(result)
-        assertEquals(now + 1500L, result)
+        assertEquals(now + 1500L, nextEstimatedDueEpochSeconds(s, est = est, nowEpochSeconds = now))
     }
 
     // ── shouldLaneAStop (F3) ──────────────────────────────────────────────────

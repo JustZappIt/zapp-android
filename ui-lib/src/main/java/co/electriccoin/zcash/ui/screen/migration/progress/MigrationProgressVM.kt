@@ -26,13 +26,17 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.ui.common.model.migration.withLiveState
+import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProvider
+import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
+import co.electriccoin.zcash.work.LANE_A_SYNC_TIMEOUT
 import co.electriccoin.zcash.work.MigrationScheduler
 import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import java.math.BigDecimal
 import java.math.MathContext
@@ -47,6 +51,8 @@ class MigrationProgressVM(
     private val navigationRouter: NavigationRouter,
     private val exchangeRateRepository: ExchangeRateRepository,
     private val errorStateMapper: ErrorMapperUseCase,
+    private val synchronizerProvider: SynchronizerProvider,
+    private val lastNetworkActivity: LastNetworkActivityStorageProvider,
     private val context: Context,
 ) : ViewModel() {
 
@@ -84,13 +90,11 @@ class MigrationProgressVM(
             }
         }
 
-    // MigrationPlanRepository's per-transfer status/scheduledAt is a cache, written once at
-    // propose/commit time and only ever updated by whichever caller remembers to write through it
-    // (production rescheduleOverdueTransfer() and the debug-only debugRescheduleTransfers() both
-    // currently forget — see MIGRATION_DIAG "next transfer in N hours never changes" report).
-    // Polling the SDK's own persisted state directly, the same way reallyOverdueFlow() already
-    // does for the overdue check, makes the displayed schedule correct regardless of which caller
-    // last rescheduled.
+    // MigrationPlanRepository's per-transfer status/scheduledAt is a display cache, written once
+    // at propose/commit time. Polling the SDK's own persisted state directly, the same way
+    // reallyOverdueFlow() already does for the overdue check, keeps the displayed schedule true
+    // to the engine — the single source of truth for the plan — regardless of what the cache
+    // last recorded.
     private fun liveTransferStatesFlow(): Flow<MigrationTransferStates?> =
         flow {
             while (true) {
@@ -173,55 +177,32 @@ class MigrationProgressVM(
     // (see MigrationSendingVM), reused instead of duplicated here.
     private fun onSendNow(plan: MigrationPlan) = navigationRouter.forward(MigrationSendingArgs)
 
+    // "Reschedule" no longer mutates the plan — a missed-but-unexpired transfer needs NO plan
+    // change by design (ZIP 374: the signature does not cover the anchor, so it proves late
+    // against its committed boundary and broadcasts late; the engine is the single source of
+    // truth). New semantics: SYNC NOW — run the same sync + finalizeReadyTransfers pass Lane A
+    // does, in the foreground, so the missing proof falls out immediately — then let the transfer
+    // go out in the next live window (background worker, or next app open).
     private fun onReschedule() = sendLce.execute {
-        // Uses rescheduleUnprovenTransfer() on the next pending transfer (the one the user just
-        // asked to push out). Returns the new scheduledHeight, or -1 if the transfer is already
-        // Proved (can't shift a proved transfer; the engine will offer it on the next broadcast
-        // cycle via the existing post-broadcast buffer). On -1, just log and let the state flow
-        // refresh naturally — no new UI is shown.
-        // Background delivery is scheduled unconditionally — see MigrationScheduler/
-        // FinalizeMigrationScheduleUseCase for why this no longer depends on a delivery-mode flag.
-        val sdk = getOrchardMigrationSdk() ?: error("MigrationProgressVM: no wallet available to reschedule")
+        val sdk = getOrchardMigrationSdk() ?: error("MigrationProgressVM: no wallet available to sync")
         val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
-        val liveStates = sdk.getMigrationTransferStates()
-        val nextPendingId = liveStates?.transfers?.filter { !it.isSent }?.minByOrNull { it.scheduledHeight }?.id
-        if (nextPendingId == null) {
-            Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: no pending transfer found, ignoring." }
-            return@execute
-        }
-        val newHeight = sdk.rescheduleUnprovenTransfer(nextPendingId)
-        if (newHeight >= 0) {
-            val tip = sdk.estimatedChainTip()
-            val secondsPerBlock = sdk.estimatedSecondsPerBlock()
-            val delay = if (tip >= 0) {
-                ((newHeight - tip).coerceAtLeast(1) * secondsPerBlock).seconds
-            } else {
-                secondsPerBlock.seconds
-            }
-            MigrationScheduler(context).schedule(accountKeyId, delay)
-            val nowEpochSeconds = Clock.System.now().epochSeconds
-            // Look up the transfer's display index from the app plan by stable id — the SDK's engine
-            // ordering (funding-note/crossing order) can differ from the app plan's broadcast-height-
-            // sorted display order (ZIP 318 shuffles them), so liveStates array position ≠ app-plan
-            // transfer.index. rescheduleTransfer() matches on transfer.index, so using the SDK
-            // array position here would silently update the wrong cache entry. When the id isn't in
-            // the app plan yet (plan not yet written through), skip the write-through rather than
-            // clobbering index 0 — the SDK state is authoritative; the Progress screen overlays live
-            // state at render time via withLiveState() anyway. (MIGRATION_DIAG)
-            val appPlanIndex = migrationPlanRepository.load()?.transfers?.firstOrNull { it.id == nextPendingId }?.index
-            if (appPlanIndex != null) {
-                migrationPlanRepository.rescheduleTransfer(
-                    index = appPlanIndex,
-                    scheduledAtEpochSeconds = nowEpochSeconds + delay.inWholeSeconds,
-                )
-            } else {
-                Twig.warn { "MIGRATION_DIAG MigrationProgressVM.onReschedule: transfer $nextPendingId not found in app plan — skipping write-through." }
-            }
-            navigationRouter.back()
+        if (sdk.isSyncBlocked().first()) {
+            // Post-broadcast privacy gate — same guard Lane A honours; the re-arm below still
+            // gives the transfer its next window once the gate lifts.
+            Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: privacy gate active — skipping the foreground sync." }
         } else {
-            // Transfer is already Proved — reschedule not possible. Log and refresh.
-            Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: transfer $nextPendingId already Proved, skipping reschedule." }
+            val burst = synchronizerProvider.getSynchronizerOrNull()?.syncToTip(timeout = LANE_A_SYNC_TIMEOUT)
+            Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: syncToTip result=$burst" }
+            val proved = sdk.finalizeReadyTransfers()
+            Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: proved=$proved" }
+            lastNetworkActivity.stampNow()
         }
+        // Re-arm Lane B for the next live window: after the privacy quiet gap from the sync just
+        // performed (Lane B's own preflight re-checks the gap from the fresh stamp regardless).
+        val reArm = sdk.privacySyncBufferDuration()
+        MigrationScheduler(context).schedule(accountKeyId, reArm)
+        Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: Lane B re-armed in $reArm" }
+        navigationRouter.back()
     }
 
     private fun onDone() = navigationRouter.backToRoot()

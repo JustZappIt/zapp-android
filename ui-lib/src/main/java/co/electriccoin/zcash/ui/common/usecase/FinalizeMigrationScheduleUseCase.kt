@@ -12,8 +12,6 @@ import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.screen.migration.scheduled.MigrationScheduledArgs
 import co.electriccoin.zcash.work.MigrationScheduler
 import co.electriccoin.zcash.work.MigrationSyncScheduler
-import co.electriccoin.zcash.work.laneACadence
-import co.electriccoin.zcash.work.laneAFirstRunLead
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -45,18 +43,11 @@ class FinalizeMigrationScheduleUseCase(
         val secondsPerBlock = getOrchardMigrationSdk()?.estimatedSecondsPerBlock() ?: 75L
         persistPlan(sched, mode, secondsPerBlock)
         val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
-        val firstWindow = delayUntilFirstTransfer(sched, secondsPerBlock)
-        migrationScheduler.schedule(accountKeyId, firstWindow)
-        // Lane A's FIRST run must land BEFORE the first broadcast window — every transfer is
-        // committed unproven (Signed), and proofs come only from a sync+prove pass, so arming Lane
-        // A on a blind cadence lets a close first window (minutes on testnet's 12-block grid)
-        // arrive with nothing proved: Lane B then returns AwaitingProof while Lane A's step-aside
-        // sees a due transfer and yields — the observed livelock. Aim ahead of the window with the
-        // same lead the worker's own plan-driven re-arm uses; cadence stays the upper bound.
-        // (Test-phase design — final impl per Kris is cadence-driven, with the engine's
-        // sync_wakeup_schedule (#2801) as the precise source once the rc.3+ engine lands.)
-        val firstLaneARun = (firstWindow - laneAFirstRunLead()).coerceIn(30.seconds, laneACadence())
-        migrationSyncScheduler.schedule(accountKeyId, firstLaneARun)
+        migrationScheduler.schedule(accountKeyId, delayUntilFirstTransfer(sched, secondsPerBlock))
+        // Lane A first arm is a short flat delay: the schedule object carries no anchor
+        // boundaries, so the worker's FIRST run reads the freshly committed engine states and
+        // computes the precise boundary-driven wake itself (see MigrationSyncWorker).
+        migrationSyncScheduler.schedule(accountKeyId, 60.seconds)
         navigationRouter.forward(MigrationScheduledArgs)
     }
 

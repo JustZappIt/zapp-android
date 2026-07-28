@@ -117,9 +117,30 @@ class MigrationTransferInvalidVMTest {
             coEvery { getMigrationState() } returns MigrationState.RequiresAttention(AttentionReason.TransferExpired)
             coEvery { getMigrationTransferStates() } returns MigrationTransferStates(
                 transfers = listOf(
-                    MigrationTransferState(id = "t0", isSent = true, scheduledHeight = 1L),
-                    MigrationTransferState(id = "t1", isSent = false, scheduledHeight = 2L),
-                    MigrationTransferState(id = "t2", isSent = false, scheduledHeight = 3L),
+                    MigrationTransferState(
+                        id = "t0",
+                        isTransfer = true,
+                        isSent = true,
+                        isProved = true,
+                        scheduledHeight = 1L,
+                        anchorBoundaryHeight = null,
+                    ),
+                    MigrationTransferState(
+                        id = "t1",
+                        isTransfer = true,
+                        isSent = false,
+                        isProved = false,
+                        scheduledHeight = 2L,
+                        anchorBoundaryHeight = null,
+                    ),
+                    MigrationTransferState(
+                        id = "t2",
+                        isTransfer = true,
+                        isSent = false,
+                        isProved = false,
+                        scheduledHeight = 3L,
+                        anchorBoundaryHeight = null,
+                    ),
                 ),
                 tipHeight = 3L,
             )

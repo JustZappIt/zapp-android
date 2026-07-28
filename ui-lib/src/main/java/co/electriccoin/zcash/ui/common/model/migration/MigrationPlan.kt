@@ -80,12 +80,13 @@ fun MigrationSchedule.toMigrationPlan(
 
 /**
  * Overrides [MigrationTransfer.status]/[MigrationTransfer.scheduledAtEpochSeconds] from the SDK's
- * live, persisted [MigrationTransferStates] — the cached [MigrationPlan] otherwise only reflects
- * whatever this app-side cache last wrote through (production `rescheduleOverdueTransfer()` and the
- * debug-only `debugRescheduleTransfers()` both currently forget to update it), so it can silently
- * fall behind the SDK's actual state without this. amountZatoshi/createdAtEpochSeconds never change
- * post-commit, so those keep coming from the cache — only the fields the SDK can independently
- * change are overridden here.
+ * live, persisted [MigrationTransferStates] — the cached [MigrationPlan] is a display cache
+ * written at propose/commit time, so without this overlay it silently falls behind the engine's
+ * actual state (the engine is the single source of truth for the plan).
+ * amountZatoshi/createdAtEpochSeconds never change post-commit, so those keep coming from the
+ * cache — only the fields the SDK can independently change are overridden here. Live entries that
+ * match no cached transfer id (preparation transactions, surfaced since the states began
+ * including them) are naturally ignored by the id correlation below.
  *
  * Correlates by the transfer's real, stable [MigrationTransfer.id] — NOT by [MigrationTransfer.index].
  * The engine assigns real ids in its own funding-note/crossing order, while [MigrationTransfer.index]
