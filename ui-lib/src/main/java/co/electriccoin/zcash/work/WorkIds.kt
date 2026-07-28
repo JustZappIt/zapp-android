@@ -8,6 +8,9 @@ import co.electriccoin.zcash.spackle.Twig
 object WorkIds {
     const val WORK_ID_BACKGROUND_SYNC = "co.electriccoin.zcash.background_sync"
 
+    /** Unique-work name for the wallet-global Lane A migration sync heartbeat. */
+    const val WORK_ID_MIGRATION_SYNC = "co.electriccoin.zcash.migration_sync"
+
     fun enableBackgroundSynchronization(context: Context) {
         val workManager = WorkManager.getInstance(context)
 

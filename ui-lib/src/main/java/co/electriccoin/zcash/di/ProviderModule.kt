@@ -84,6 +84,7 @@ import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorag
 import co.electriccoin.zcash.ui.common.provider.WalletRestoringStateProvider
 import co.electriccoin.zcash.ui.common.provider.WalletRestoringStateProviderImpl
 import co.electriccoin.zcash.work.MigrationScheduler
+import co.electriccoin.zcash.work.MigrationSyncScheduler
 import co.electriccoin.zcash.work.VotingShareTrackingScheduler
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
@@ -143,5 +144,6 @@ val providerModule =
         singleOf(::LastNetworkActivityStorageProviderImpl) bind LastNetworkActivityStorageProvider::class
         singleOf(::MigrationShiftCounterStorageProviderImpl) bind MigrationShiftCounterStorageProvider::class
         factoryOf(::MigrationScheduler)
+        factoryOf(::MigrationSyncScheduler)
         factoryOf(::IsBackgroundExecutionAvailableProvider)
     }
