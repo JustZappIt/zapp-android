@@ -53,9 +53,13 @@ interface SynchronizerProvider {
 class SynchronizerProviderImpl(
     private val walletCoordinator: WalletCoordinator,
     private val persistableWalletProvider: PersistableWalletProvider,
-    private val migrationPlanRepository: MigrationPlanRepository,
-    private val onMigrationSyncCompleted: OnMigrationSyncCompletedUseCase,
-    private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
+    // Lazy on purpose: all three resolve (via AccountDataSource) back to
+    // SynchronizerProvider — eager constructor injection forms a Koin resolution cycle that
+    // crashes startup with a StackOverflowError (caught on-emulator 2026-07-28). Resolved at
+    // first hook fire instead, when the graph is fully built.
+    private val migrationPlanRepository: Lazy<MigrationPlanRepository>,
+    private val onMigrationSyncCompleted: Lazy<OnMigrationSyncCompletedUseCase>,
+    private val getSelectedWalletAccount: Lazy<GetSelectedWalletAccountUseCase>,
 ) : SynchronizerProvider {
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
@@ -97,10 +101,11 @@ class SynchronizerProviderImpl(
                 .flatMapLatest { s -> s?.status ?: emptyFlow() }
                 .distinctUntilChanged()
                 .collect { status ->
-                    if (status == Synchronizer.Status.SYNCED && migrationPlanRepository.load() != null) {
+                    if (status == Synchronizer.Status.SYNCED && migrationPlanRepository.value.load() != null) {
                         runCatching {
-                            val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
-                            onMigrationSyncCompleted(accountKeyId)
+                            val accountKeyId =
+                                getSelectedWalletAccount.value().sdkAccount.accountUuid.toStorageKeyId()
+                            onMigrationSyncCompleted.value(accountKeyId)
                         }.onFailure { Twig.warn { "MIGRATION_DIAG foreground SYNCED hook: ${it.message}" } }
                     }
                 }

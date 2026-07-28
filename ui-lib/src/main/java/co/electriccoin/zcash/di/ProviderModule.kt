@@ -100,7 +100,16 @@ val providerModule =
         singleOf(::PersistableWalletProviderImpl) bind PersistableWalletProvider::class
         singleOf(::PreferredFiatProviderImpl) bind PreferredFiatProvider::class
         singleOf(::IsServerSelectionAutomaticProviderImpl) bind IsServerSelectionAutomaticProvider::class
-        singleOf(::SynchronizerProviderImpl) bind SynchronizerProvider::class
+        single {
+            SynchronizerProviderImpl(
+                walletCoordinator = get(),
+                persistableWalletProvider = get(),
+                // lazy {} breaks the AccountDataSource -> SynchronizerProvider resolution cycle
+                migrationPlanRepository = lazy { get() },
+                onMigrationSyncCompleted = lazy { get() },
+                getSelectedWalletAccount = lazy { get() },
+            )
+        } bind SynchronizerProvider::class
         singleOf(::ApplicationStateProviderImpl) bind ApplicationStateProvider::class
         singleOf(::RestoreTimestampStorageProviderImpl) bind RestoreTimestampStorageProvider::class
         singleOf(::WalletBackupRemindMeCountStorageProviderImpl) bind

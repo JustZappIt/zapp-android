@@ -326,7 +326,23 @@ val useCaseModule =
         factoryOf(::SwapSupportMapper)
         factoryOf(::GetAutomaticEndpointUseCase)
         factoryOf(::IsServerAutomaticUseCase)
-        factoryOf(::CheckMigrationRecoveryUseCase)
+        // Explicit factory: the defaulted isLaneAActive lambda must use its Kotlin default —
+        // factoryOf resolves ALL constructor params via Koin and dies on the Function1
+        // (NoDefinitionFoundException at startup, caught on-emulator 2026-07-28).
+        factory {
+            CheckMigrationRecoveryUseCase(
+                getOrchardMigrationSdk = get(),
+                navigationRouter = get(),
+                hasSeenMigrationCompleteStorageProvider = get(),
+                migrationPlanRepository = get(),
+                getOrchardBalance = get(),
+                pendingMigrationTorFailureStorageProvider = get(),
+                isBackgroundExecutionAvailableProvider = get(),
+                getSelectedWalletAccount = get(),
+                migrationSyncScheduler = get(),
+                context = get(),
+            )
+        }
         factoryOf(::FinalizeMigrationScheduleUseCase)
         factoryOf(::ScheduleNextMigrationWindowUseCase)
         factoryOf(::OnMigrationSyncCompletedUseCase)
