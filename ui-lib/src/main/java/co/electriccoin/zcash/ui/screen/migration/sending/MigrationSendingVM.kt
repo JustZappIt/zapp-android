@@ -3,6 +3,7 @@ package co.electriccoin.zcash.ui.screen.migration.sending
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.sdk.NetworkPrivacyOptions
+import cash.z.ecc.android.sdk.TransferAttemptOutcome
 import cash.z.ecc.android.sdk.TransferResult
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
@@ -104,55 +105,58 @@ class MigrationSendingVM(
 
     private suspend fun sendOnce(useTor: Boolean) {
         val sdk = getOrchardMigrationSdk() ?: error("MigrationSendingVM: no wallet available to send")
-        var result: TransferResult? = null
+        var outcome: TransferAttemptOutcome? = null
         var attempt = 0
-        while (result == null && attempt < SEND_MAX_ATTEMPTS) {
+        while ((outcome == null || outcome is TransferAttemptOutcome.NothingDue || outcome is TransferAttemptOutcome.AwaitingProof) && attempt < SEND_MAX_ATTEMPTS) {
             if (attempt > 0) delay(SEND_RETRY_DELAY_MS)
             withContext(NonCancellable) {
-                sdk.finalizeReadyTransfers()
-                result = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor))
+                outcome = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor), useEstimatedTip = true)
             }
             attempt++
         }
-        when (val r = result) {
-            is TransferResult.Success -> {
-                // The one unambiguous "problem resolved" signal — clears a pending background Tor
-                // failure (see PendingMigrationTorFailureStorageProvider) so app-open reconciliation
-                // stops re-routing through this screen. Left `true` on every other outcome
-                // (including a renewed Tor failure below), so it keeps re-surfacing until an actual
-                // successful send happens. A no-op if nothing was pending.
-                pendingMigrationTorFailureStorageProvider.store(false)
-                // Re-arms the next window for a resumed/manually-confirmed transfer in a
-                // multi-transfer AUTOMATIC plan; no-ops once the plan is already complete.
-                scheduleNextMigrationWindow()
-                // Write the SDK's authoritative "sent" status back into the persisted plan, so the
-                // home banner's raw cached completedCount/isComplete actually advance (without this
-                // it stays stuck on "First transfer sending…" even though the send landed). The
-                // isComplete check just below then reads the reconciled plan, not the stale one.
-                val plan = migrationPlanRepository.load()
-                    ?.withLiveStatusOnly(sdk.getMigrationTransferStates())
-                    ?.also { migrationPlanRepository.save(it) }
-                if (plan?.mode == MigrationMode.AUTOMATIC && plan.isComplete) {
-                    // This was the plan's last transfer — one Migration Complete screen covers
-                    // both this (foreground, just confirmed) and the background-completion case
-                    // (CheckMigrationRecoveryUseCase, on next app open), rather than two.
-                    navigationRouter.forward(MigrationCompleteArgs)
-                } else {
-                    navigationRouter.forward(MigrationSuccessArgs(r.txId))
+        when (val o = outcome) {
+            is TransferAttemptOutcome.Executed -> when (val r = o.result) {
+                is TransferResult.Success -> {
+                    // The one unambiguous "problem resolved" signal — clears a pending background Tor
+                    // failure (see PendingMigrationTorFailureStorageProvider) so app-open reconciliation
+                    // stops re-routing through this screen. Left `true` on every other outcome
+                    // (including a renewed Tor failure below), so it keeps re-surfacing until an actual
+                    // successful send happens. A no-op if nothing was pending.
+                    pendingMigrationTorFailureStorageProvider.store(false)
+                    // Re-arms the next window for a resumed/manually-confirmed transfer in a
+                    // multi-transfer AUTOMATIC plan; no-ops once the plan is already complete.
+                    scheduleNextMigrationWindow()
+                    // Write the SDK's authoritative "sent" status back into the persisted plan, so the
+                    // home banner's raw cached completedCount/isComplete actually advance (without this
+                    // it stays stuck on "First transfer sending…" even though the send landed). The
+                    // isComplete check just below then reads the reconciled plan, not the stale one.
+                    val plan = migrationPlanRepository.load()
+                        ?.withLiveStatusOnly(sdk.getMigrationTransferStates())
+                        ?.also { migrationPlanRepository.save(it) }
+                    if (plan?.mode == MigrationMode.AUTOMATIC && plan.isComplete) {
+                        // This was the plan's last transfer — one Migration Complete screen covers
+                        // both this (foreground, just confirmed) and the background-completion case
+                        // (CheckMigrationRecoveryUseCase, on next app open), rather than two.
+                        navigationRouter.forward(MigrationCompleteArgs)
+                    } else {
+                        navigationRouter.forward(MigrationSuccessArgs(r.txId))
+                    }
                 }
-            }
-            // A NetworkError whose failure is specifically Tor-attributable is routed to its own
-            // sheet (offering "continue without Tor") instead of the generic "Couldn't Send" one,
-            // since the fix (drop Tor) differs from a real network outage.
-            is TransferResult.NetworkError -> {
-                if (r.isTorFailure) {
-                    navigationRouter.forward(MigrationTorFailureArgs)
-                } else {
-                    failure.value = SendFailure.Engine(r)
+                // A NetworkError whose failure is specifically Tor-attributable is routed to its own
+                // sheet (offering "continue without Tor") instead of the generic "Couldn't Send" one,
+                // since the fix (drop Tor) differs from a real network outage.
+                is TransferResult.NetworkError -> {
+                    if (r.isTorFailure) {
+                        navigationRouter.forward(MigrationTorFailureArgs)
+                    } else {
+                        failure.value = SendFailure.Engine(r)
+                    }
                 }
+                else -> failure.value = SendFailure.Engine(r)
             }
-            null -> failure.value = SendFailure.NotReady
-            else -> failure.value = SendFailure.Engine(r)
+            // NothingDue or AwaitingProof after max attempts: the transfer isn't ready yet.
+            // The foreground sync + Lane A hook will prove it; the user can retry later.
+            else -> failure.value = SendFailure.NotReady
         }
     }
 

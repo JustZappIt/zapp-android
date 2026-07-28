@@ -101,6 +101,7 @@ import co.electriccoin.zcash.ui.common.usecase.ObserveSelectedWalletAccountUseCa
 import co.electriccoin.zcash.ui.common.usecase.ObserveTransactionSubmitStateUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveZashiAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.OnAddressScannedUseCase
+import co.electriccoin.zcash.ui.common.usecase.OnMigrationSyncCompletedUseCase
 import co.electriccoin.zcash.ui.common.usecase.OnUserSavedWalletBackupUseCase
 import co.electriccoin.zcash.ui.common.usecase.OnZip321ScannedUseCase
 import co.electriccoin.zcash.ui.common.usecase.OptInExchangeRateAndTorUseCase
@@ -328,4 +329,5 @@ val useCaseModule =
         factoryOf(::CheckMigrationRecoveryUseCase)
         factoryOf(::FinalizeMigrationScheduleUseCase)
         factoryOf(::ScheduleNextMigrationWindowUseCase)
+        factoryOf(::OnMigrationSyncCompletedUseCase)
     }
