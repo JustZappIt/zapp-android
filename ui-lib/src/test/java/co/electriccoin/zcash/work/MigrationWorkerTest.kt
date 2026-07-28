@@ -70,7 +70,7 @@ class MigrationWorkerTest {
         var callCount = 0
         val result = executeWithRetries(maxAttempts = 3, retryDelayMs = 0) {
             callCount++
-            TransferAttemptOutcome.AwaitingProof("transfer-id-1")
+            TransferAttemptOutcome.AwaitingProof(1L)
         }
 
         assertIs<TransferAttemptOutcome.AwaitingProof>(result)

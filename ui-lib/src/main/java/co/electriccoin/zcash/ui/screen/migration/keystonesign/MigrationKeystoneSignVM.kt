@@ -67,10 +67,10 @@ class MigrationKeystoneSignVM(
                 val sdk = getOrchardMigrationSdk() ?: error("MigrationKeystoneSignVM: no wallet available to sign")
                 val existing = pendingKeystonePczts.get(accountKeyId)
                 val splitUnsignedPczt: ByteArray?
-                val transferUnsignedPczts: List<Pair<String, ByteArray>>
+                val transferUnsignedPczts: List<Pair<Long, ByteArray>>
                 val roundIndex: Int
                 val accumulatedSplitSigned: ByteArray?
-                val accumulatedTransferSigned: List<Pair<String, ByteArray>>
+                val accumulatedTransferSigned: List<Pair<Long, ByteArray>>
                 if (existing != null) {
                     splitUnsignedPczt = existing.splitUnsignedPczt
                     transferUnsignedPczts = existing.transferUnsignedPczts

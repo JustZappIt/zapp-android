@@ -1,4 +1,4 @@
-@file:Suppress("TooManyFunctions")
+@file:Suppress("TooManyFunctions", "DEPRECATION_ERROR")
 
 package co.electriccoin.zcash.ui.common.provider
 

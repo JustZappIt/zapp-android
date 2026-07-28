@@ -130,7 +130,7 @@ class MigrationReviewVMTest {
         val restartSchedule = MigrationSchedule(
             transfers = listOf(
                 TransferProposal(
-                    id = "restart_transfer_0",
+                    id = 100L,
                     amountZatoshi = 900_000L,
                     anchorHeight = 0L,
                     nextExecutableAfterHeight = 100L,
@@ -165,14 +165,14 @@ class MigrationReviewVMTest {
         val freshSchedule = MigrationSchedule(
             transfers = listOf(
                 TransferProposal(
-                    id = "fresh_transfer_0",
+                    id = 200L,
                     amountZatoshi = 100_000L,
                     anchorHeight = 0L,
                     nextExecutableAfterHeight = 100L,
                     expiryHeight = 200L,
                 ),
                 TransferProposal(
-                    id = "fresh_transfer_1",
+                    id = 201L,
                     amountZatoshi = 200_000L,
                     anchorHeight = 0L,
                     nextExecutableAfterHeight = 200L,
@@ -217,7 +217,7 @@ class MigrationReviewVMTest {
         val scheduleFromSplit = MigrationSchedule(
             transfers = listOf(
                 TransferProposal(
-                    id = "split_transfer_0",
+                    id = 300L,
                     amountZatoshi = 100_000L,
                     anchorHeight = 0L,
                     nextExecutableAfterHeight = 100L,

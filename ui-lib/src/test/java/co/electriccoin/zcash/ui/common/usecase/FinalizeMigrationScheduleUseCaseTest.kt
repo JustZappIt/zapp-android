@@ -28,7 +28,7 @@ class FinalizeMigrationScheduleUseCaseTest {
         MigrationSchedule(
             transfers = listOf(
                 TransferProposal(
-                    id = "t1",
+                    id = 11L,
                     amountZatoshi = 100_000L,
                     anchorHeight = 100L,
                     nextExecutableAfterHeight = 200L,

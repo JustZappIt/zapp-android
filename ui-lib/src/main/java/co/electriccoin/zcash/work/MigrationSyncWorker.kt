@@ -271,7 +271,7 @@ internal fun provableAtHeight(t: MigrationTransferState): Long =
 internal data class LaneABoundaryWake(
     val delay: Duration,
     /** The unproven, unsent transaction whose provable-at height drives this wake (diagnostics). */
-    val txId: String,
+    val txId: Long,
     /** The absolute block height the wake targets ([provableAtHeight] of [txId]). */
     val wakeHeight: Long,
 )

@@ -19,10 +19,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 data class PendingKeystoneMigrationPczts(
     val requestId: ByteArray,
     val splitUnsignedPczt: ByteArray?,
-    val transferUnsignedPczts: List<Pair<String, ByteArray>>,
+    val transferUnsignedPczts: List<Pair<Long, ByteArray>>,
     val roundIndex: Int = 0,
     val accumulatedSplitSigned: ByteArray? = null,
-    val accumulatedTransferSigned: List<Pair<String, ByteArray>> = emptyList(),
+    val accumulatedTransferSigned: List<Pair<Long, ByteArray>> = emptyList(),
 )
 
 /**

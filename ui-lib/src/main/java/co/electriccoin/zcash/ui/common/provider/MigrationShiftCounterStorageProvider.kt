@@ -25,7 +25,7 @@ interface MigrationShiftCounterStorageProvider {
      */
     suspend fun incrementIfSameTransfer(
         accountKeyId: String,
-        transferId: String,
+        transferId: Long,
         syncCompletedSinceLastShift: Boolean,
     ): Int
 
@@ -85,13 +85,15 @@ class MigrationShiftCounterStorageProviderImpl(
 ) : MigrationShiftCounterStorageProvider {
     override suspend fun incrementIfSameTransfer(
         accountKeyId: String,
-        transferId: String,
+        transferId: Long,
         syncCompletedSinceLastShift: Boolean,
     ): Int {
         val pref = pref(accountKeyId)
         val stored = pref.getValue(preferenceHolder())
         val parsed = parseStoredShiftEntry(stored)
-        val newCount = nextShiftCount(parsed.transferId, parsed.count, transferId, syncCompletedSinceLastShift)
+        // The engine id is a Long since SDK #2068; the stored pipe-delimited format keeps its
+        // decimal rendering, so live installs' persisted counts keep matching.
+        val newCount = nextShiftCount(parsed.transferId, parsed.count, transferId.toString(), syncCompletedSinceLastShift)
         val nowEpoch = Instant.now().epochSecond
         pref.putValue(preferenceHolder(), "$transferId|$newCount|$nowEpoch")
         return newCount

@@ -248,7 +248,7 @@ class GetHomeMessageUseCaseMigrationTest {
     @Test
     fun requiresAttentionInvalidTransferShowsPlanUpdateBannerWithNoRange() {
         val result = migrationMessageFor(
-            sdkState = MigrationState.RequiresAttention(AttentionReason.InvalidTransfer("t1")),
+            sdkState = MigrationState.RequiresAttention(AttentionReason.InvalidTransfer(11L)),
             plan = plan(),
             hasSeenComplete = false,
             orchardBalanceZatoshi = 300_000L,

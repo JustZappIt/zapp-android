@@ -147,9 +147,9 @@ class MigrationKeystoneScanVMTest {
                         PendingKeystoneMigrationPczts(
                             requestId = byteArrayOf(1, 2, 3),
                             splitUnsignedPczt = null,
-                            transferUnsignedPczts = (0 until 36).map { "t$it" to byteArrayOf(it.toByte()) },
+                            transferUnsignedPczts = (0 until 36).map { it.toLong() to byteArrayOf(it.toByte()) },
                             roundIndex = 1,
-                            accumulatedTransferSigned = (0 until 35).map { "t$it" to byteArrayOf(it.toByte()) },
+                            accumulatedTransferSigned = (0 until 35).map { it.toLong() to byteArrayOf(it.toByte()) },
                         )
                     )
                 }
@@ -198,7 +198,7 @@ class MigrationKeystoneScanVMTest {
         MigrationSchedule(
             transfers = listOf(
                 TransferProposal(
-                    id = "t1",
+                    id = 11L,
                     amountZatoshi = 100_000L,
                     anchorHeight = 100L,
                     nextExecutableAfterHeight = 200L,
@@ -213,7 +213,7 @@ class MigrationKeystoneScanVMTest {
         PendingKeystoneMigrationPczts(
             requestId = byteArrayOf(1, 2, 3),
             splitUnsignedPczt = null,
-            transferUnsignedPczts = listOf("t1" to byteArrayOf(9, 9)),
+            transferUnsignedPczts = listOf(11L to byteArrayOf(9, 9)),
             roundIndex = roundIndex,
         )
 

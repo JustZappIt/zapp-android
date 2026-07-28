@@ -58,7 +58,7 @@ class MigrationTransferInvalidVMTest {
         Dispatchers.resetMain()
     }
 
-    private fun transfer(index: Int, id: String, status: MigrationTransferStatus, expiryAtEpochSeconds: Long) =
+    private fun transfer(index: Int, id: Long, status: MigrationTransferStatus, expiryAtEpochSeconds: Long) =
         MigrationTransfer(
             index = index,
             amountZatoshi = 100_000L,
@@ -79,12 +79,12 @@ class MigrationTransferInvalidVMTest {
     fun invalidTransferReasonShowsPlanUpdateKindAndTheOneNamedTransfer() = runTest {
         val plan = plan(
             listOf(
-                transfer(0, "t0", MigrationTransferStatus.SENT, 100L),
-                transfer(1, "t1", MigrationTransferStatus.PENDING, 200L),
+                transfer(0, 10L, MigrationTransferStatus.SENT, 100L),
+                transfer(1, 11L, MigrationTransferStatus.PENDING, 200L),
             )
         )
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { getMigrationState() } returns MigrationState.RequiresAttention(AttentionReason.InvalidTransfer("t1"))
+            coEvery { getMigrationState() } returns MigrationState.RequiresAttention(AttentionReason.InvalidTransfer(11L))
             coEvery { getMigrationTransferStates() } returns null
         }
         val vm = vm(
@@ -108,9 +108,9 @@ class MigrationTransferInvalidVMTest {
         val now = kotlin.time.Clock.System.now().epochSeconds
         val plan = plan(
             listOf(
-                transfer(0, "t0", MigrationTransferStatus.SENT, now - 1_000L),
-                transfer(1, "t1", MigrationTransferStatus.PENDING, now + 10_000L),
-                transfer(2, "t2", MigrationTransferStatus.PENDING, now - 100L),
+                transfer(0, 10L, MigrationTransferStatus.SENT, now - 1_000L),
+                transfer(1, 11L, MigrationTransferStatus.PENDING, now + 10_000L),
+                transfer(2, 12L, MigrationTransferStatus.PENDING, now - 100L),
             )
         )
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
@@ -118,7 +118,7 @@ class MigrationTransferInvalidVMTest {
             coEvery { getMigrationTransferStates() } returns MigrationTransferStates(
                 transfers = listOf(
                     MigrationTransferState(
-                        id = "t0",
+                        id = 10L,
                         isTransfer = true,
                         isSent = true,
                         isProved = true,
@@ -126,7 +126,7 @@ class MigrationTransferInvalidVMTest {
                         anchorBoundaryHeight = null,
                     ),
                     MigrationTransferState(
-                        id = "t1",
+                        id = 11L,
                         isTransfer = true,
                         isSent = false,
                         isProved = false,
@@ -134,7 +134,7 @@ class MigrationTransferInvalidVMTest {
                         anchorBoundaryHeight = null,
                     ),
                     MigrationTransferState(
-                        id = "t2",
+                        id = 12L,
                         isTransfer = true,
                         isSent = false,
                         isProved = false,
@@ -164,7 +164,7 @@ class MigrationTransferInvalidVMTest {
         val restartedSchedule = MigrationSchedule(
             transfers = listOf(
                 TransferProposal(
-                    id = "restart_0",
+                    id = 100L,
                     amountZatoshi = 900_000L,
                     anchorHeight = 0L,
                     nextExecutableAfterHeight = 100L,

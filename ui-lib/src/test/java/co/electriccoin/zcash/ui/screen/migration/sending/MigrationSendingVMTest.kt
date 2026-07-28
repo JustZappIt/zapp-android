@@ -95,7 +95,7 @@ class MigrationSendingVMTest {
     fun persistentAwaitingProofRetriesThenShowsNotReadySheet() = runTest {
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
         coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
-            TransferAttemptOutcome.AwaitingProof("transfer-1")
+            TransferAttemptOutcome.AwaitingProof(1L)
         val router = FakeNavigationRouter()
         val vm = vm(sdk = sdk, router = router)
         val collectJob = launch { vm.state.collect {} }

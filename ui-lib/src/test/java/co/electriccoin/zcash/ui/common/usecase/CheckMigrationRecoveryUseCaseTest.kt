@@ -144,7 +144,7 @@ class CheckMigrationRecoveryUseCaseTest {
         val now = Clock.System.now()
         val plan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { getMigrationState() } returns MigrationState.RequiresAttention(AttentionReason.InvalidTransfer("t1"))
+            coEvery { getMigrationState() } returns MigrationState.RequiresAttention(AttentionReason.InvalidTransfer(11L))
         }
         val router = mockk<NavigationRouter>(relaxed = true)
 

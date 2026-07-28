@@ -10,7 +10,7 @@ import kotlin.test.assertNull
 class MigrationAttentionTest {
     private fun transfer(
         index: Int,
-        id: String,
+        id: Long,
         status: MigrationTransferStatus = MigrationTransferStatus.PENDING,
         expiryAtEpochSeconds: Long = 1_000L,
     ) = MigrationTransfer(
@@ -31,7 +31,7 @@ class MigrationAttentionTest {
 
     @Test
     fun toUiKindMapsInvalidTransferToPlanUpdate() {
-        assertEquals(MigrationAttentionKind.PLAN_UPDATE, AttentionReason.InvalidTransfer("t1").toUiKind())
+        assertEquals(MigrationAttentionKind.PLAN_UPDATE, AttentionReason.InvalidTransfer(11L).toUiKind())
     }
 
     @Test
@@ -42,22 +42,22 @@ class MigrationAttentionTest {
     @Test
     fun invalidTransferFindsExactlyTheNamedTransferByIdNotIndex() {
         // Ids deliberately out of index order (ZIP 318 shuffles funding-note order away from
-        // broadcast-height order) — this must still find "t1" at index 2, not index 1.
+        // broadcast-height order) — this must still find id 11 at index 2, not index 1.
         val plan = plan(
             listOf(
-                transfer(index = 0, id = "t0"),
-                transfer(index = 1, id = "t2"),
-                transfer(index = 2, id = "t1"),
+                transfer(index = 0, id = 10L),
+                transfer(index = 1, id = 12L),
+                transfer(index = 2, id = 11L),
             )
         )
-        val indices = AttentionReason.InvalidTransfer("t1").affectedTransferIndices(plan, liveStates = null, nowEpochSeconds = 0L)
+        val indices = AttentionReason.InvalidTransfer(11L).affectedTransferIndices(plan, liveStates = null, nowEpochSeconds = 0L)
         assertEquals(listOf(2), indices)
     }
 
     @Test
     fun invalidTransferWithNoMatchingIdIsEmpty() {
-        val plan = plan(listOf(transfer(index = 0, id = "t0")))
-        val indices = AttentionReason.InvalidTransfer("unknown").affectedTransferIndices(plan, liveStates = null, nowEpochSeconds = 0L)
+        val plan = plan(listOf(transfer(index = 0, id = 10L)))
+        val indices = AttentionReason.InvalidTransfer(99L).affectedTransferIndices(plan, liveStates = null, nowEpochSeconds = 0L)
         assertEquals(emptyList(), indices)
     }
 
@@ -65,9 +65,9 @@ class MigrationAttentionTest {
     fun transferExpiredFindsEveryPendingTransferPastItsOwnExpiry() {
         val plan = plan(
             listOf(
-                transfer(index = 0, id = "t0", status = MigrationTransferStatus.SENT, expiryAtEpochSeconds = 100L),
-                transfer(index = 1, id = "t1", status = MigrationTransferStatus.PENDING, expiryAtEpochSeconds = 500L),
-                transfer(index = 2, id = "t2", status = MigrationTransferStatus.PENDING, expiryAtEpochSeconds = 2_000L),
+                transfer(index = 0, id = 10L, status = MigrationTransferStatus.SENT, expiryAtEpochSeconds = 100L),
+                transfer(index = 1, id = 11L, status = MigrationTransferStatus.PENDING, expiryAtEpochSeconds = 500L),
+                transfer(index = 2, id = 12L, status = MigrationTransferStatus.PENDING, expiryAtEpochSeconds = 2_000L),
             )
         )
         // now=1000: t0 is SENT (excluded regardless of expiry), t1 is PENDING and past its expiry
@@ -83,14 +83,14 @@ class MigrationAttentionTest {
         // actually already sent — it must be excluded even though its cached expiry has passed.
         val plan = plan(
             listOf(
-                transfer(index = 0, id = "t0", status = MigrationTransferStatus.PENDING, expiryAtEpochSeconds = 500L),
-                transfer(index = 1, id = "t1", status = MigrationTransferStatus.PENDING, expiryAtEpochSeconds = 500L),
+                transfer(index = 0, id = 10L, status = MigrationTransferStatus.PENDING, expiryAtEpochSeconds = 500L),
+                transfer(index = 1, id = 11L, status = MigrationTransferStatus.PENDING, expiryAtEpochSeconds = 500L),
             )
         )
         val liveStates = MigrationTransferStates(
             transfers = listOf(
                 MigrationTransferState(
-                    id = "t1",
+                    id = 11L,
                     isTransfer = true,
                     isSent = true,
                     isProved = true,
@@ -106,7 +106,7 @@ class MigrationAttentionTest {
 
     @Test
     fun syncRequiredBeforeNextHasNoAffectedTransfers() {
-        val plan = plan(listOf(transfer(index = 0, id = "t0")))
+        val plan = plan(listOf(transfer(index = 0, id = 10L)))
         val indices = AttentionReason.SyncRequiredBeforeNext.affectedTransferIndices(plan, liveStates = null, nowEpochSeconds = 0L)
         assertEquals(emptyList(), indices)
     }
