@@ -8,6 +8,7 @@ and this application adheres to [Semantic Versioning](https://semver.org/spec/v2
 
 ### Fixed:
 - When a send fails because the wallet's chain state changed between tapping review and confirm (due to syncing catching up, a reorg, or the app resuming from background), a clear actionable message is now shown instead of the generic error copy.
+- Transferring to a new phone via device-to-device setup no longer copies the app's local data, including the undecryptable encrypted preferences file, which previously forced a manual seed re-restore on the new device. Only the address book and metadata backups are carried over, matching cloud backup.
 
 ### Added:
 - Currency Conversion now supports multiple fiat currencies. You can pick which currency your balances and payment amounts are shown in from the Currency Conversion settings and opt-in screens.
