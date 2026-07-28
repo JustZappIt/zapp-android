@@ -74,7 +74,11 @@ import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeCountStorage
 import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeCountStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeTimestampStorageProvider
 import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeTimestampStorageProviderImpl
+import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProvider
+import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
+import co.electriccoin.zcash.ui.common.provider.MigrationShiftCounterStorageProvider
+import co.electriccoin.zcash.ui.common.provider.MigrationShiftCounterStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.WalletRestoringStateProvider
@@ -136,6 +140,8 @@ val providerModule =
         singleOf(::KtorVotingApiProvider) bind VotingApiProvider::class
         singleOf(::VotingShareTrackingScheduler)
         singleOf(::MigrationNotifier)
+        singleOf(::LastNetworkActivityStorageProviderImpl) bind LastNetworkActivityStorageProvider::class
+        singleOf(::MigrationShiftCounterStorageProviderImpl) bind MigrationShiftCounterStorageProvider::class
         factoryOf(::MigrationScheduler)
         factoryOf(::IsBackgroundExecutionAvailableProvider)
     }
