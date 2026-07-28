@@ -37,22 +37,31 @@ class MigrationSyncWorker(
 
         val sdk = getOrchardMigrationSdk(accountKeyId) ?: return Result.success()
 
+        // Cache privacy buffer duration to avoid redundant calls.
+        val privacyBufferSeconds = sdk.privacySyncBufferDuration().inWholeSeconds
+
         // Read live scheduled heights directly from the SDK (NOT the MigrationPlanRepository
         // cache — spec M5: Lane A must use authoritative SDK state to avoid stale plan data).
         val states = sdk.getMigrationTransferStates()
+        // Estimated chain tip is read immediately after states to minimize drift. The estimated
+        // tip is the right denominator for due-time estimation (based on block interval extrapolation),
+        // whereas states.tipHeight is the scanned tip — can be hours stale in backgrounded wallets,
+        // which would overestimate remaining time. The two reads are adjacent so scheduledHeight
+        // offsets and the tip denominator drift by <1 block.
+        val est = sdk.estimatedChainTip()
+
         if (states == null) {
             // No in-progress migration — stop re-arming Lane A entirely.
             Twig.debug { "MIGRATION_DIAG LaneA: no migration in progress, stopping." }
             return Result.success()
         }
 
-        val est = sdk.estimatedChainTip()
         val nowSec = nowEpochSeconds()
         val nextDueEpoch = nextEstimatedDueEpochSeconds(states, est, nowSec)
         val decision = decideLaneARun(
             nowEpochSeconds = nowSec,
             nextEstimatedDueEpochSeconds = nextDueEpoch,
-            privacyBufferSeconds = sdk.privacySyncBufferDuration().inWholeSeconds,
+            privacyBufferSeconds = privacyBufferSeconds,
             isGateBlocked = sdk.isSyncBlocked().first(),
         )
 
@@ -79,7 +88,7 @@ class MigrationSyncWorker(
             decision = decision,
             nowEpochSeconds = nowEpochSeconds(),
             nextEstimatedDueEpochSeconds = nextDueEpoch,
-            privacyBufferSeconds = sdk.privacySyncBufferDuration().inWholeSeconds,
+            privacyBufferSeconds = privacyBufferSeconds,
             cadenceSeconds = laneACadence().inWholeSeconds,
             jitterSeconds = LANE_A_JITTER.inWholeSeconds,
             random = Random,
