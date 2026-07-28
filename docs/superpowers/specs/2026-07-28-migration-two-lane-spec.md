@@ -76,6 +76,42 @@ spent-check with no-false-positive rule), duplicate-submit classifier + mined-he
 mainnet 10 min), `syncToTip`, `ChainTipEstimator` (+measured rate), both `open_at` connections
 with 5 s busy_timeout.
 
+## 2a. EVENING UPDATE (28.7.) — supersedes stale parts of §1/§2 below
+
+- **Cleanup landed** (commits `694700067` app / `8f82d782` SDK): Lane A wakes ONLY at anchor
+  boundary heights + 2-block settle margin (no cadence; cadence = states-unavailable fallback;
+  TODO notes for the final cadence-driven impl per Kris + #2801). Lane A always syncs on wake
+  except the privacy gate and a step-aside that now applies only when the imminent due tx is
+  ALREADY proved. Lane B is send-only; on AwaitingProof it converts the run into a sync run
+  (never sync+broadcast in one execution) and re-arms. The entire hand-rolled reschedule/shift
+  stack is DELETED (Rust+Kotlin+tests; engine is the only source of truth). States surface ALL
+  transactions with `(id, isTransfer, isSent, isProved, scheduledHeight, anchorBoundaryHeight)`.
+  Progress "Reschedule" button = sync now + next window (no plan mutation).
+- **Anchor provability root cause fixed**: scan batches are cut at anchor-grid multiples near
+  the tip (CompactBlockProcessor `clampBatchEndToAnchorGrid`, 12 testnet / 144 mainnet), so a
+  checkpoint exists exactly on every boundary; retention is the engine's `AnchorRetention`
+  (144/12, verified in open_at + lib.rs). Earlier livelock (Lane A stepping aside forever while
+  Lane B awaited proof) and its overdue-heuristic workaround are gone with the rewrite.
+- **DB robustness**: busy_timeout 15 s + `mmap_size=0` on both migration connections,
+  "database is locked" added to the SDK's transient retry classifier, StalePlan on commit →
+  re-propose once and retry (engine's note-index snapshot semantics). Milan's SQLite rules
+  verified: ONE libsqlite3-sys node, one zcash generation, no framework SQLite on the engine DB.
+- **Kris's `feature/ironwood-slipstream` MERGED** (SDK merge `2d7f8451`, app adaptation
+  `b0c824b81`, all pushed): engine generation now git-pinned at librustzcash `a00f4a7a`
+  (pool_migration 0.1.0-rc.3 etc.), our `[patch.crates-io]` path-dep block REMOVED (it had been
+  silently inactive), renamed migration API (MigrationTxId→MigrationTransferId,
+  note_split→denominations), transfer ids are Long end-to-end, voting disabled upstream.
+  `sync_wakeup_schedule` (#2801) IS present in this engine generation — wiring it into Lane A is
+  the designated follow-up. FLAGS: (1) Keystone batch redaction contract changed upstream
+  (dummy `spend_auth_sig` retained, alpha cleared) — needs an FW-compat check before Keystone
+  batch signing is trusted; (2) persisted `MigrationPlan` transfers changed id String→Long —
+  plans persisted by older builds fail deserialization (do a Migration restart after install);
+  (3) expired-transfer handling should move to engine `rebuild_expired_transfer` (follow-up
+  ticket; we currently mark the migration Failed).
+- THE test case in §3 is unchanged and still pending a full clean run on this new stack; the
+  §3 note about the first Lane A run applies with the rewrite: expect
+  `LaneA: next wake from boundary — tx=… wakeHeight=…` logs instead of cadence re-arms.
+
 ## 2. Where we are (status, 28.7. afternoon)
 
 - **All code implemented and committed LOCALLY (unpushed — push after user testing)** on
