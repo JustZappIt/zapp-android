@@ -125,7 +125,7 @@ fun MigrationTransferInvalidView(state: MigrationTransferInvalidState) {
                 number = 3,
                 text = "${state.completedCount} of ${state.totalCount} transfers done; migration will continue.",
             )
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.weight(1f))
             ZashiButton(
                 state = ButtonState(text = stringRes("Continue"), onClick = state.onContinue),
                 modifier = Modifier.fillMaxWidth(),

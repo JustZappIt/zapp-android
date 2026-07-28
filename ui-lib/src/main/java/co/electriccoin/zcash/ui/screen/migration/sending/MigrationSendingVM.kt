@@ -6,6 +6,7 @@ import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.TransferAttemptOutcome
 import cash.z.ecc.android.sdk.TransferResult
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
@@ -111,6 +112,7 @@ class MigrationSendingVM(
             if (attempt > 0) delay(SEND_RETRY_DELAY_MS)
             withContext(NonCancellable) {
                 outcome = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor), useEstimatedTip = true)
+                Twig.debug { "MIGRATION_DIAG SendingVM: attempt=${attempt + 1} outcome=$outcome" }
             }
             attempt++
         }

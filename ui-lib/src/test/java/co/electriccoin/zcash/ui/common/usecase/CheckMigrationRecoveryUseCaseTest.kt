@@ -36,6 +36,11 @@ import kotlin.time.Duration.Companion.minutes
 
 class CheckMigrationRecoveryUseCaseTest {
 
+    @kotlin.test.BeforeTest
+    fun resetThrottle() {
+        CheckMigrationRecoveryUseCase.resetRunThrottleForTests()
+    }
+
     private fun planWithPendingTransfer(scheduledAtEpochSeconds: Long) =
         MigrationPlan(
             id = "p1",

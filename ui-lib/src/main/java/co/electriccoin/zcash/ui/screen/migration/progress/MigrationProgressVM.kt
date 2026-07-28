@@ -59,7 +59,10 @@ class MigrationProgressVM(
             reallyOverdueFlow(),
             liveTransferStatesFlow(),
         ) { plan, rate, reallyOverdue, liveStates ->
-            plan?.let { createState(it.withLiveState(liveStates), rate, reallyOverdue) }
+            // Measured block rate for the height->wall-clock re-projection — the 75s default
+            // turned minute-scale testnet schedules into "~1 hour" rows (caught live 28.7.).
+            val secondsPerBlock = getOrchardMigrationSdk()?.estimatedSecondsPerBlock() ?: 75L
+            plan?.let { createState(it.withLiveState(liveStates, secondsPerBlock), rate, reallyOverdue) }
         }.withLce(sendLce, errorStateMapper::mapToState)
             .stateIn(this)
 
@@ -189,10 +192,11 @@ class MigrationProgressVM(
         val newHeight = sdk.rescheduleUnprovenTransfer(nextPendingId)
         if (newHeight >= 0) {
             val tip = sdk.estimatedChainTip()
+            val secondsPerBlock = sdk.estimatedSecondsPerBlock()
             val delay = if (tip >= 0) {
-                ((newHeight - tip).coerceAtLeast(1) * 75).seconds
+                ((newHeight - tip).coerceAtLeast(1) * secondsPerBlock).seconds
             } else {
-                75.seconds
+                secondsPerBlock.seconds
             }
             MigrationScheduler(context).schedule(accountKeyId, delay)
             val nowEpochSeconds = Clock.System.now().epochSeconds

@@ -78,6 +78,19 @@ class CheckMigrationRecoveryUseCase(
     private val isLaneAActive: suspend () -> Boolean = { isLaneAActiveInWorkManager(context) },
 ) {
     suspend operator fun invoke() {
+        // Three independent triggers exist (MainActivity.onStart, RootNavGraph unlock, and any
+        // future caller); without a throttle they cascade — each replaceAll builds a fresh Home
+        // entry whose composition can re-trigger recovery, observed live as 7 redirects (and 3
+        // duplicate catch-up shifts) within 8 seconds. One pass per window is enough: routing is
+        // idempotent for the user and isSyncBlocked() protects sync regardless.
+        val nowMs = android.os.SystemClock.elapsedRealtime()
+        synchronized(CheckMigrationRecoveryUseCase) {
+            if (nowMs - lastRunElapsedMs < RUN_THROTTLE_MS) {
+                Twig.debug { "MIGRATION_DIAG MigrationRecovery: throttled (ran ${nowMs - lastRunElapsedMs}ms ago)" }
+                return
+            }
+            lastRunElapsedMs = nowMs
+        }
         // No wallet yet (e.g. a fresh install before onboarding) — this runs on every
         // MainActivity launch regardless, so treat "no SDK available" as "nothing to recover".
         val sdk = getOrchardMigrationSdk() ?: return
@@ -173,6 +186,18 @@ class CheckMigrationRecoveryUseCase(
     // next pending transfer's scheduled time has arrived, background execution can't run it, and
     // the SDK doesn't (yet) count it as overdue — a narrower, earlier window than the general
     // overdue branch above.
+    companion object {
+        private const val RUN_THROTTLE_MS = 10_000L
+
+        @Volatile
+        private var lastRunElapsedMs = Long.MIN_VALUE / 2
+
+        /** Tests run in one JVM — reset the shared throttle between them. */
+        internal fun resetRunThrottleForTests() {
+            lastRunElapsedMs = Long.MIN_VALUE / 2
+        }
+    }
+
     private suspend fun isTransferReadyToSendWithoutBackground(sdk: OrchardMigrationSdk): Boolean {
         if (isBackgroundExecutionAvailableProvider.isAvailable()) return false
         val next = migrationPlanRepository.load()?.nextPending ?: return false

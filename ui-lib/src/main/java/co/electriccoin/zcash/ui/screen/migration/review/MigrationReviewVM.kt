@@ -16,6 +16,7 @@ import co.electriccoin.zcash.ui.common.model.guardLoading
 import co.electriccoin.zcash.ui.common.model.migration.MigrationKeystoneRound
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
+import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
@@ -79,6 +80,11 @@ class MigrationReviewVM(
         data class Immediate(val proposal: Proposal, val amountZatoshi: Long) : ReviewProposal()
     }
 
+    // Measured block rate captured at propose time; 75s until then. Drives every
+    // height-to-time label on this screen (bursty testnet vs the protocol constant).
+    @Volatile
+    private var secondsPerBlock: Long = 75L
+
     private val proposeLce = mutableLce<ReviewProposal>()
     private val confirmLce = mutableLce<Unit>()
     private val isKeystoneAccount = getSelectedWalletAccount.observe().map { it is KeystoneAccount }
@@ -112,6 +118,8 @@ class MigrationReviewVM(
                     } else {
                         null
                     }
+                    secondsPerBlock = sdk.estimatedSecondsPerBlock()
+                    logProposedPlan(schedule)
                     ReviewProposal.Automatic(schedule, keystoneRunCount)
                 }
             }
@@ -155,7 +163,7 @@ class MigrationReviewVM(
         // transfer's own "due in ~Nh" label showed).
         val anchorHeight = sched.transfers.minOfOrNull { it.anchorHeight } ?: 0L
         val lastAtHeight = sched.transfers.maxOfOrNull { it.nextExecutableAfterHeight } ?: 0L
-        val spanSeconds = estimatedSecondsBetweenHeights(anchorHeight, lastAtHeight)
+        val spanSeconds = estimatedSecondsBetweenHeights(anchorHeight, lastAtHeight, secondsPerBlock)
         return MigrationReviewState(
             mode = args.mode,
             totalAmount = stringRes(Zatoshi(total)),
@@ -356,12 +364,37 @@ class MigrationReviewVM(
 
     // Only ever called for AUTOMATIC (createImmediateState hardcodes its own single-row label
     // instead — a raw send-max Proposal carries no per-transfer schedule to derive one from).
+    /** One-shot plan dump at propose time: absolute heights + wall-clock estimates. */
+    private fun logProposedPlan(sched: MigrationSchedule) {
+        val referenceAnchor = sched.transfers.minOfOrNull { it.anchorHeight } ?: return
+        Twig.debug {
+            buildString {
+                appendLine(
+                    "MIGRATION_DIAG Plan: ${sched.transfers.size} transfer(s), referenceAnchor=$referenceAnchor " +
+                        "(times estimated at measured ${secondsPerBlock}s/block from the reference tip)"
+                )
+                var prev = referenceAnchor
+                sched.transfers.forEachIndexed { i, t ->
+                    val fromNow = estimatedSecondsBetweenHeights(referenceAnchor, t.nextExecutableAfterHeight, secondsPerBlock)
+                    val gap = estimatedSecondsBetweenHeights(prev, t.nextExecutableAfterHeight, secondsPerBlock)
+                    prev = t.nextExecutableAfterHeight
+                    appendLine(
+                        "MIGRATION_DIAG Plan: transfer[${i + 1}] anchor=${t.anchorHeight} " +
+                            "send=${t.nextExecutableAfterHeight} expiry=${t.expiryHeight} " +
+                            "dueIn=${formatMigrationDuration(fromNow, fineGrained = true)} " +
+                            "gapFromPrev=${formatMigrationDuration(gap, fineGrained = true)}"
+                    )
+                }
+            }.trimEnd()
+        }
+    }
+
     private fun scheduledLabel(t: TransferProposal): StringResource {
-        val secondsUntil = estimatedSecondsBetweenHeights(t.anchorHeight, t.nextExecutableAfterHeight)
+        val secondsUntil = estimatedSecondsBetweenHeights(t.anchorHeight, t.nextExecutableAfterHeight, secondsPerBlock)
         return when {
             secondsUntil <= 0 -> stringRes("Ready now")
-            secondsUntil < 3600 -> stringRes("~${(secondsUntil / 60).coerceAtLeast(1)} min")
-            else -> stringRes("~${secondsUntil / 3600} hours")
+            // Shares formatMigrationDuration's resolution rules (minute-level on testnet).
+            else -> stringRes(formatMigrationDuration(secondsUntil))
         }
     }
 }

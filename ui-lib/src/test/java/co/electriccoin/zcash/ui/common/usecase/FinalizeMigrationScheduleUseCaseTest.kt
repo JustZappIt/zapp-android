@@ -65,6 +65,7 @@ class FinalizeMigrationScheduleUseCaseTest {
         val savedPlan = slot<MigrationPlan>()
         val sdk = mockk<OrchardMigrationSdk> {
             coEvery { estimateMigrationRunCount() } returns 3
+            coEvery { estimatedSecondsPerBlock() } returns 75L
         }
         val useCase = FinalizeMigrationScheduleUseCase(
             migrationPlanRepository = plans,

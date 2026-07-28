@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.common.usecase
 
+import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProvider
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
 import co.electriccoin.zcash.work.MigrationScheduler
@@ -22,8 +23,12 @@ class OnMigrationSyncCompletedUseCase(
 ) {
     suspend operator fun invoke(accountKeyId: String) {
         val sdk = getOrchardMigrationSdk(accountKeyId) ?: return
-        sdk.finalizeReadyTransfers()
-        if (sdk.reconcileInvalidations()) {
+        val proved = sdk.finalizeReadyTransfers()
+        val invalidated = sdk.reconcileInvalidations()
+        Twig.debug {
+            "MIGRATION_DIAG ForegroundHook: SYNCED — proved=$proved, invalidated=$invalidated (account=$accountKeyId)"
+        }
+        if (invalidated) {
             migrationNotifier.notifyMigrationPlanInvalid(accountKeyId)
             migrationScheduler.cancel(accountKeyId)
             migrationSyncScheduler.cancel(accountKeyId)

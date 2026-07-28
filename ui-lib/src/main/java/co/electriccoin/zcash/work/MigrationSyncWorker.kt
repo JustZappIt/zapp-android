@@ -71,7 +71,8 @@ class MigrationSyncWorker(
         }
 
         val nowSec = nowEpochSeconds()
-        val nextDueEpoch = nextEstimatedDueEpochSeconds(states, est, nowSec)
+        val secondsPerBlock = sdk.estimatedSecondsPerBlock()
+        val nextDueEpoch = nextEstimatedDueEpochSeconds(states, est, nowSec, secondsPerBlock)
         val decision = decideLaneARun(
             nowEpochSeconds = nowSec,
             nextEstimatedDueEpochSeconds = nextDueEpoch,
@@ -79,8 +80,13 @@ class MigrationSyncWorker(
             isGateBlocked = sdk.isSyncBlocked().first(),
         )
 
+        Twig.debug {
+            "MIGRATION_DIAG LaneA: run start account=$accountKeyId decision=$decision " +
+                "(estimatedTip=$est, nextEstimatedDueEpoch=$nextDueEpoch, now=$nowSec, secondsPerBlock=$secondsPerBlock)"
+        }
         if (decision == LaneARunDecision.RUN) {
-            synchronizerProvider.getSynchronizerOrNull()?.syncToTip(timeout = LANE_A_SYNC_TIMEOUT)
+            val burst = synchronizerProvider.getSynchronizerOrNull()?.syncToTip(timeout = LANE_A_SYNC_TIMEOUT)
+            Twig.debug { "MIGRATION_DIAG LaneA: syncToTip result=$burst" }
             val proved = sdk.finalizeReadyTransfers()
             Twig.debug { "MIGRATION_DIAG LaneA: proved=$proved" }
 
@@ -232,13 +238,14 @@ internal fun nextEstimatedDueEpochSeconds(
     states: MigrationTransferStates,
     est: Long,
     nowEpochSeconds: Long = Clock.System.now().epochSeconds,
+    secondsPerBlock: Long = SECONDS_PER_BLOCK,
 ): Long? {
     if (est < 0L) return null
     return states.transfers
         .filter { !it.isSent }
         .minOfOrNull { transfer ->
             val blocksRemaining = (transfer.scheduledHeight - est).coerceAtLeast(0L)
-            nowEpochSeconds + blocksRemaining * SECONDS_PER_BLOCK
+            nowEpochSeconds + blocksRemaining * secondsPerBlock
         }
 }
 

@@ -48,4 +48,21 @@ class MigrationDurationFormatTest {
         assertEquals(height * (ZcashSdk.BLOCK_INTERVAL_MILLIS / 1000), secondsFromGenesis)
         assertEquals(height * 75L, secondsFromGenesis)
     }
+
+    @Test
+    fun formatMigrationDuration_keeps_minute_resolution_above_an_hour_when_fine_grained() {
+        assertEquals("~1 h 15 min", formatMigrationDuration(totalSeconds = 4_500L, fineGrained = true))
+        assertEquals("~2 h", formatMigrationDuration(totalSeconds = 7_200L, fineGrained = true))
+    }
+
+    @Test
+    fun formatMigrationDuration_uses_coarse_hours_when_not_fine_grained() {
+        assertEquals("~1 hours", formatMigrationDuration(totalSeconds = 4_500L, fineGrained = false))
+    }
+
+    @Test
+    fun formatMigrationDuration_shows_minutes_below_an_hour_in_both_modes() {
+        assertEquals("~15 min", formatMigrationDuration(totalSeconds = 900L, fineGrained = true))
+        assertEquals("~15 min", formatMigrationDuration(totalSeconds = 900L, fineGrained = false))
+    }
 }

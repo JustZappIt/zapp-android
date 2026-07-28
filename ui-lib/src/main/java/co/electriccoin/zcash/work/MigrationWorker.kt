@@ -74,16 +74,25 @@ class MigrationWorker(
             withTimeoutOrNull(STATUS_READ_TIMEOUT) { synchronizer.status.first() } ?: Synchronizer.Status.SYNCING
         } == Synchronizer.Status.SYNCING
 
+        val lastActivity = lastNetworkActivity.get()
         val preflight = decideLaneBPreflight(
             laneARunning = laneARunning,
             synchronizerSyncing = syncing,
             nowEpochSeconds = nowEpochSeconds(),
-            lastNetworkActivityEpochSeconds = lastNetworkActivity.get()?.epochSecond,
+            lastNetworkActivityEpochSeconds = lastActivity?.epochSecond,
             privacyBufferSeconds = sdk.privacySyncBufferDuration().inWholeSeconds,
         )
+        Twig.debug {
+            "MIGRATION_DIAG LaneB: run start account=$accountKeyId preflight=$preflight " +
+                "(laneARunning=$laneARunning, syncing=$syncing, lastNetworkActivity=$lastActivity)"
+        }
         when (preflight) {
             LaneBAction.DEFER_OVERLAP -> {
                 // Local delay (spec §5): engine untouched.
+                Twig.debug {
+                    "MIGRATION_DIAG LaneB: deferring broadcast ${sdk.privacySyncBufferDuration()} — " +
+                        "a sync source is live or the quiet gap is unmet."
+                }
                 MigrationScheduler(applicationContext).schedule(accountKeyId, sdk.privacySyncBufferDuration())
                 return Result.success()
             }
@@ -229,7 +238,7 @@ class MigrationWorker(
                 .minOfOrNull { it.scheduledHeight }
             if (nextScheduledHeight != null) {
                 val blocksRemaining = (nextScheduledHeight - est).coerceAtLeast(1L)
-                (blocksRemaining * SECONDS_PER_BLOCK_LANE_B).seconds
+                (blocksRemaining * sdk.estimatedSecondsPerBlock()).seconds
             } else {
                 // All transfers sent — fall through to plan-repo fallback which will also be empty.
                 planRepoDerivedDelay(accountKeyId)

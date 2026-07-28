@@ -39,9 +39,12 @@ class FinalizeMigrationScheduleUseCase(
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
 ) {
     suspend operator fun invoke(sched: MigrationSchedule, mode: MigrationMode) {
-        persistPlan(sched, mode)
+        // Measured block rate — the 75s constant grossly overestimates on the bursty testnet,
+        // scheduling Lane B far past the real due heights.
+        val secondsPerBlock = getOrchardMigrationSdk()?.estimatedSecondsPerBlock() ?: 75L
+        persistPlan(sched, mode, secondsPerBlock)
         val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
-        migrationScheduler.schedule(accountKeyId, delayUntilFirstTransfer(sched))
+        migrationScheduler.schedule(accountKeyId, delayUntilFirstTransfer(sched, secondsPerBlock))
         // Lane A starts alongside the plan — the sync heartbeat ensures notes get witnessed
         // (finalizeReadyTransfers) on cadence, independent of when Lane B fires.
         migrationSyncScheduler.schedule(accountKeyId, laneACadence())
@@ -63,7 +66,7 @@ class FinalizeMigrationScheduleUseCase(
      * plan, reconciled away by
      * [CheckMigrationRecoveryUseCase][co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase].
      */
-    suspend fun persistPlan(sched: MigrationSchedule, mode: MigrationMode) {
+    suspend fun persistPlan(sched: MigrationSchedule, mode: MigrationMode, secondsPerBlock: Long = 75L) {
         // Stateless preview, computed fresh here rather than threaded through from Review — see
         // MigrationKeystoneRound's kdoc. Never persisted as a running campaign counter: "current" is
         // always 1 ("this round, from here"), "total" is whatever the estimate says right now.
@@ -72,7 +75,7 @@ class FinalizeMigrationScheduleUseCase(
         } else {
             null
         }
-        migrationPlanRepository.save(sched.toMigrationPlan(mode, keystoneRound))
+        migrationPlanRepository.save(sched.toMigrationPlan(mode, keystoneRound, secondsPerBlock))
     }
 
     // The first transfer is never "ready now" (same anchor/proposal round trip as any other
@@ -82,9 +85,9 @@ class FinalizeMigrationScheduleUseCase(
     // nextExecutableAfterHeight/anchorHeight/expiryHeight are block heights, not timestamps — see
     // estimatedSecondsBetweenHeights for why they must never be used directly as (or against)
     // epoch seconds (this previously made every transfer look ~56 years overdue on a live device).
-    private fun delayUntilFirstTransfer(sched: MigrationSchedule): Duration {
+    private fun delayUntilFirstTransfer(sched: MigrationSchedule, secondsPerBlock: Long): Duration {
         val first = sched.transfers.minByOrNull { it.nextExecutableAfterHeight } ?: return 0.seconds
-        val remaining = estimatedSecondsBetweenHeights(first.anchorHeight, first.nextExecutableAfterHeight)
+        val remaining = estimatedSecondsBetweenHeights(first.anchorHeight, first.nextExecutableAfterHeight, secondsPerBlock)
         return if (remaining <= 0) 0.seconds else remaining.seconds
     }
 }

@@ -54,7 +54,11 @@ data class MigrationPlan(
  * duplication shape that let the anchorHeight/epoch-seconds bug survive one fix in an unfixed
  * sibling copy.
  */
-fun MigrationSchedule.toMigrationPlan(mode: MigrationMode, keystoneRound: MigrationKeystoneRound? = null): MigrationPlan {
+fun MigrationSchedule.toMigrationPlan(
+    mode: MigrationMode,
+    keystoneRound: MigrationKeystoneRound? = null,
+    secondsPerBlock: Long = 75L,
+): MigrationPlan {
     val now = Clock.System.now().epochSeconds
     return MigrationPlan(
         id = UUID.randomUUID().toString(),
@@ -63,9 +67,9 @@ fun MigrationSchedule.toMigrationPlan(mode: MigrationMode, keystoneRound: Migrat
             MigrationTransfer(
                 index = i,
                 amountZatoshi = t.amountZatoshi,
-                scheduledAtEpochSeconds = now + estimatedSecondsBetweenHeights(t.anchorHeight, t.nextExecutableAfterHeight),
+                scheduledAtEpochSeconds = now + estimatedSecondsBetweenHeights(t.anchorHeight, t.nextExecutableAfterHeight, secondsPerBlock),
                 status = MigrationTransferStatus.PENDING,
-                expiryAtEpochSeconds = now + estimatedSecondsBetweenHeights(t.anchorHeight, t.expiryHeight),
+                expiryAtEpochSeconds = now + estimatedSecondsBetweenHeights(t.anchorHeight, t.expiryHeight, secondsPerBlock),
                 id = t.id,
             )
         },
@@ -90,7 +94,7 @@ fun MigrationSchedule.toMigrationPlan(mode: MigrationMode, keystoneRound: Migrat
  * the wrong transfer's live status/schedule to a displayed position (confirmed live — see
  * [co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressVM]).
  */
-fun MigrationPlan.withLiveState(live: MigrationTransferStates?): MigrationPlan {
+fun MigrationPlan.withLiveState(live: MigrationTransferStates?, secondsPerBlock: Long = 75L): MigrationPlan {
     if (live == null) return this
     val now = Clock.System.now().epochSeconds
     val byId = live.transfers.associateBy { it.id }
@@ -100,7 +104,7 @@ fun MigrationPlan.withLiveState(live: MigrationTransferStates?): MigrationPlan {
             t.copy(
                 status = if (liveTransfer.isSent) MigrationTransferStatus.SENT else MigrationTransferStatus.PENDING,
                 scheduledAtEpochSeconds =
-                    now + estimatedSecondsBetweenHeights(live.tipHeight, liveTransfer.scheduledHeight),
+                    now + estimatedSecondsBetweenHeights(live.tipHeight, liveTransfer.scheduledHeight, secondsPerBlock),
             )
         }
     )

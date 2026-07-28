@@ -111,9 +111,11 @@ class HomeVM(
     private var hasRecoveredPendingVotingRoute = false
     private var hasResumedShareTracking = false
 
-    init {
-        viewModelScope.launch { checkMigrationRecovery() }
-    }
+    // NOTE: no checkMigrationRecovery() here. HomeVM is lazily created on Home's FIRST
+    // composition — with replaceAll(Home, Progress) that moment is exactly when the user backs
+    // out of the Progress screen, so an init-time recovery check re-redirected them straight
+    // back (visible as "back closes Progress and it immediately reopens", plus stacked Home
+    // entries). MainActivity.onStart and RootNavGraph's unlock redirect cover the real cases.
 
     private val messageData =
         getHomeMessage
