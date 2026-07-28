@@ -28,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.time.Instant
@@ -67,8 +68,11 @@ class MigrationWorker(
                 .getWorkInfosForUniqueWork(WorkIds.WORK_ID_MIGRATION_SYNC).get()
         }.any { it.state == WorkInfo.State.RUNNING }
 
-        // status is a Flow<Status> — take the first emission without blocking indefinitely.
-        val syncing = synchronizerProvider.synchronizer.value?.status?.first() == Synchronizer.Status.SYNCING
+        // status is a Flow<Status> — timeout if cold; null synchronizer is non-syncing.
+        // timeout → assume SYNCING → defer (privacy-safe default; production status is a StateFlow and answers immediately).
+        val syncing = synchronizerProvider.synchronizer.value?.let { synchronizer ->
+            withTimeoutOrNull(STATUS_READ_TIMEOUT) { synchronizer.status.first() } ?: Synchronizer.Status.SYNCING
+        } == Synchronizer.Status.SYNCING
 
         val preflight = decideLaneBPreflight(
             laneARunning = laneARunning,
@@ -77,10 +81,13 @@ class MigrationWorker(
             lastNetworkActivityEpochSeconds = lastNetworkActivity.get()?.epochSecond,
             privacyBufferSeconds = sdk.privacySyncBufferDuration().inWholeSeconds,
         )
-        if (preflight == LaneBAction.DEFER_OVERLAP) {
-            // Local delay (spec §5): engine untouched.
-            MigrationScheduler(applicationContext).schedule(accountKeyId, sdk.privacySyncBufferDuration())
-            return Result.success()
+        when (preflight) {
+            LaneBAction.DEFER_OVERLAP -> {
+                // Local delay (spec §5): engine untouched.
+                MigrationScheduler(applicationContext).schedule(accountKeyId, sdk.privacySyncBufferDuration())
+                return Result.success()
+            }
+            LaneBAction.BROADCAST -> Unit // proceed below
         }
 
         val plan = migrationPlanRepository.load(accountKeyId)
@@ -227,6 +234,7 @@ class MigrationWorker(
     }
 }
 
+private val STATUS_READ_TIMEOUT = 2.seconds
 private const val SHIFT_ESCALATION_THRESHOLD = 3
 private const val SECONDS_PER_BLOCK_LANE_B = 75L
 
@@ -272,7 +280,7 @@ internal suspend fun executeWithRetries(
  *   network activity has not yet elapsed. Engine untouched; schedule re-arm after the buffer.
  * - [LaneBAction.BROADCAST] — all sources are quiet and the gap has elapsed; proceed to the SDK.
  */
-internal enum class LaneBAction { BROADCAST, DEFER_OVERLAP, SHIFT, NOTHING }
+internal enum class LaneBAction { BROADCAST, DEFER_OVERLAP }
 
 /**
  * Pure preflight decision for Lane B.
