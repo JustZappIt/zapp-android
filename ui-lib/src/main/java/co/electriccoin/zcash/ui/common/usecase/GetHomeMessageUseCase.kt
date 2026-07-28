@@ -156,12 +156,16 @@ class GetHomeMessageUseCase(
     private fun observeReadyToSendSignal(): Flow<ReadyToSendSignal> =
         flow {
             while (true) {
-                emit(
+                // A failed tick (e.g. "database is locked" outlasting the SDK's own bounded
+                // retry while a sync write transaction holds the wallet DB) skips this emission
+                // instead of cancelling the whole home-message flow — observed live as a
+                // main-thread crash. The next tick re-reads; the signal is periodic anyway.
+                runCatching {
                     ReadyToSendSignal(
                         isBackgroundExecutionAvailable = isBackgroundExecutionAvailableProvider.isAvailable(),
                         hasOverdueTransfers = getOrchardMigrationSdk()?.hasOverdueTransfers() ?: false,
                     )
-                )
+                }.onSuccess { emit(it) }
                 delay(READY_TO_SEND_RECHECK_INTERVAL)
             }
         }

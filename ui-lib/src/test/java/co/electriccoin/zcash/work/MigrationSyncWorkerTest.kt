@@ -95,6 +95,50 @@ class MigrationSyncWorkerTest {
         )
     }
 
+    @Test
+    fun `lane A overrides the step-aside when the due transfer is long overdue and unsent`() {
+        // Live-observed livelock: transfer due "now" forever (estimate clamps to now when past
+        // due), unproven, so Lane B can never broadcast — Lane A must run, not step aside.
+        assertEquals(
+            LaneARunDecision.RUN_OVERDUE_UNSENT,
+            decideLaneARun(
+                nowEpochSeconds = 1000,
+                nextEstimatedDueEpochSeconds = 1000,
+                privacyBufferSeconds = 600,
+                isGateBlocked = false,
+                overdueUnsentSeconds = 270,
+            )
+        )
+    }
+
+    @Test
+    fun `lane A still steps aside when overdue is under the override threshold`() {
+        assertEquals(
+            LaneARunDecision.SKIP_NEAR_DUE,
+            decideLaneARun(
+                nowEpochSeconds = 1000,
+                nextEstimatedDueEpochSeconds = 1000,
+                privacyBufferSeconds = 600,
+                isGateBlocked = false,
+                overdueUnsentSeconds = LANE_A_OVERDUE_OVERRIDE_SECONDS - 1,
+            )
+        )
+    }
+
+    @Test
+    fun `lane A gate block still wins over the overdue override`() {
+        assertEquals(
+            LaneARunDecision.SKIP_GATE_BLOCKED,
+            decideLaneARun(
+                nowEpochSeconds = 1000,
+                nextEstimatedDueEpochSeconds = 1000,
+                privacyBufferSeconds = 600,
+                isGateBlocked = true,
+                overdueUnsentSeconds = 10_000,
+            )
+        )
+    }
+
     // ── laneAReArmDelay ────────────────────────────────────────────────────────
 
     @Test
@@ -158,6 +202,65 @@ class MigrationSyncWorkerTest {
         )
         assertTrue(d >= (cadence - jitter).seconds, "gate-blocked re-arm must be >= cadence-jitter: was $d")
         assertTrue(d <= (cadence + jitter).seconds, "gate-blocked re-arm must be <= cadence+jitter: was $d")
+    }
+
+    // ── laneAPlanDrivenReArmDelay ──────────────────────────────────────────────
+
+    @Test
+    fun `plan-driven re-arm targets nextDue minus lead`() {
+        // due in 1000s, lead = 180 buffer + 120 headroom = 300 → target 700s (within [60, 3600])
+        val d = laneAPlanDrivenReArmDelay(
+            decision = LaneARunDecision.RUN,
+            nowEpochSeconds = 10_000,
+            nextEstimatedDueEpochSeconds = 11_000,
+            privacyBufferSeconds = 180,
+            cadenceSeconds = 3600,
+            jitterSeconds = 600,
+            random = Random(1),
+        )
+        assertEquals(700.seconds, d)
+    }
+
+    @Test
+    fun `plan-driven re-arm floors at 60s when already inside the lead`() {
+        val d = laneAPlanDrivenReArmDelay(
+            decision = LaneARunDecision.RUN_OVERDUE_UNSENT,
+            nowEpochSeconds = 10_000,
+            nextEstimatedDueEpochSeconds = 10_000,
+            privacyBufferSeconds = 180,
+            cadenceSeconds = 3600,
+            jitterSeconds = 600,
+            random = Random(1),
+        )
+        assertEquals(60.seconds, d)
+    }
+
+    @Test
+    fun `plan-driven re-arm caps at cadence for a distant window`() {
+        val d = laneAPlanDrivenReArmDelay(
+            decision = LaneARunDecision.RUN,
+            nowEpochSeconds = 10_000,
+            nextEstimatedDueEpochSeconds = 100_000,
+            privacyBufferSeconds = 180,
+            cadenceSeconds = 300,
+            jitterSeconds = 600,
+            random = Random(1),
+        )
+        assertEquals(300.seconds, d)
+    }
+
+    @Test
+    fun `plan-driven re-arm falls back to cadence when no due estimate exists`() {
+        val d = laneAPlanDrivenReArmDelay(
+            decision = LaneARunDecision.RUN,
+            nowEpochSeconds = 10_000,
+            nextEstimatedDueEpochSeconds = null,
+            privacyBufferSeconds = 180,
+            cadenceSeconds = 3600,
+            jitterSeconds = 600,
+            random = Random(7),
+        )
+        assertTrue(d >= (3600 - 600).seconds && d <= (3600 + 600).seconds, "cadence±jitter expected: was $d")
     }
 
     // ── nextEstimatedDueEpochSeconds ───────────────────────────────────────────

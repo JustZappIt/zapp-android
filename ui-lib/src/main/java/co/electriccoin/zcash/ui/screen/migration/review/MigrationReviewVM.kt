@@ -315,8 +315,23 @@ class MigrationReviewVM(
             finalizeMigrationSchedule.persistPlan(sched, args.mode)
             sched
         }
-        sdk.signAndStoreMigrationSchedule(scheduleToSign, zashiSpendingKeyDataSource.getZashiSpendingKey())
-        finalizeMigrationSchedule(scheduleToSign, args.mode)
+        try {
+            sdk.signAndStoreMigrationSchedule(scheduleToSign, zashiSpendingKeyDataSource.getZashiSpendingKey())
+            finalizeMigrationSchedule(scheduleToSign, args.mode)
+        } catch (e: RuntimeException) {
+            if (e.message?.contains("StalePlan") != true) throw e
+            // The engine's plan is a planning-time snapshot of wallet note indices; any note
+            // received or changed between this screen's propose and the commit (the bursty
+            // testnet syncs continuously) shifts them and the engine correctly refuses with
+            // "must be re-planned". Same balance, fresh draw — re-propose once and commit that.
+            // Retrying the SAME cached schedule can never succeed (observed live: six identical
+            // StalePlan failures from the retry button).
+            Twig.debug { "MIGRATION_DIAG MigrationReview: StalePlan on commit — re-proposing once and retrying" }
+            val fresh = sdk.proposeMigrationTransfers()
+            finalizeMigrationSchedule.persistPlan(fresh, args.mode)
+            sdk.signAndStoreMigrationSchedule(fresh, zashiSpendingKeyDataSource.getZashiSpendingKey())
+            finalizeMigrationSchedule(fresh, args.mode)
+        }
     }
 
     // The IMMEDIATE send-max sweep is, from the wallet's point of view, an ordinary send — so it

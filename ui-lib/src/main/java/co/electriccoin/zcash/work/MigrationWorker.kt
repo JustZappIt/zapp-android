@@ -123,7 +123,15 @@ class MigrationWorker(
                 val lastShift: Instant? = shiftCounter.lastShiftAt(accountKeyId)
                 val syncSince = syncCompletedSince(lastActivity, lastShift)
                 val count = shiftCounter.incrementIfSameTransfer(accountKeyId, outcome.transferId, syncCompletedSinceLastShift = syncSince)
-                val newHeight = sdk.rescheduleUnprovenTransfer(outcome.transferId)
+                // Engine-shift DISABLED (deliberate no-op): rescheduleUnprovenTransfer was OUR JNI
+                // layer's own boundary redraw on top of the engine — a second source of truth for
+                // the plan, and its redraw drew from the full [funding..tip] grid, once landing a
+                // transfer on an ancient, never-checkpointed boundary (3565620) that could never
+                // prove again. The plan now stays exactly as the engine committed it; an unproven
+                // due transfer simply waits for the next Lane A sync+prove pass (grid-aligned
+                // checkpoints make its committed boundary provable), and the shift counter below
+                // still escalates if that repeatedly fails to help.
+                Twig.debug { "MIGRATION_DIAG LaneB: shift disabled (noop) — keeping ${outcome.transferId} on its committed boundary" }
                 // F4: escalate only on the TRANSITION to the 3rd counted shift — the counter stays
                 // at 3 on subsequent no-sync shifts (nextShiftCount doesn't increment without a
                 // sync), so gating on `count == THRESHOLD` alone would re-fire every shift. Requiring
@@ -148,8 +156,12 @@ class MigrationWorker(
                         )
                     }
                 }
-                scheduleForNextLiveWindow(accountKeyId, sdk)
-                Twig.debug { "MIGRATION_DIAG LaneB: shifted ${outcome.transferId} to $newHeight (count=$count)" }
+                // Floor the re-arm: the shifted transfer is typically due immediately, which
+                // otherwise collapses the delay to seconds and hammers shift/redraw cycles
+                // (observed live: one run every 5 s) while the proof it is waiting for can only
+                // arrive from Lane A. 60 s keeps the loop responsive without the churn.
+                scheduleForNextLiveWindow(accountKeyId, sdk, floor = AWAITING_PROOF_REARM_FLOOR)
+                Twig.debug { "MIGRATION_DIAG LaneB: awaiting proof for ${outcome.transferId} (count=$count)" }
                 Result.success()
             }
             is TransferAttemptOutcome.Executed -> when (val result = outcome.result) {
@@ -229,7 +241,11 @@ class MigrationWorker(
      * transfer's scheduledHeight from the SDK and computes a block-time-based delay; falls back to
      * the plan-repo scheduledAt estimate when the SDK has no pending states.
      */
-    private suspend fun scheduleForNextLiveWindow(accountKeyId: String, sdk: OrchardMigrationSdk) {
+    private suspend fun scheduleForNextLiveWindow(
+        accountKeyId: String,
+        sdk: OrchardMigrationSdk,
+        floor: Duration = Duration.ZERO,
+    ) {
         val states = sdk.getMigrationTransferStates()
         val est = sdk.estimatedChainTip()
         val delay: Duration = if (states != null && est >= 0L) {
@@ -246,8 +262,8 @@ class MigrationWorker(
         } else {
             planRepoDerivedDelay(accountKeyId)
         }
-        MigrationScheduler(applicationContext).schedule(accountKeyId, delay)
-        Twig.debug { "MIGRATION_DIAG LaneB: scheduleForNextLiveWindow — delay=$delay" }
+        MigrationScheduler(applicationContext).schedule(accountKeyId, maxOf(delay, floor))
+        Twig.debug { "MIGRATION_DIAG LaneB: scheduleForNextLiveWindow — delay=${maxOf(delay, floor)}" }
     }
 
     private suspend fun planRepoDerivedDelay(accountKeyId: String): Duration {
@@ -265,6 +281,7 @@ class MigrationWorker(
 }
 
 private val STATUS_READ_TIMEOUT = 2.seconds
+internal val AWAITING_PROOF_REARM_FLOOR = 60.seconds
 internal const val SHIFT_ESCALATION_THRESHOLD = 3
 private const val SECONDS_PER_BLOCK_LANE_B = 75L
 

@@ -135,23 +135,12 @@ class CheckMigrationRecoveryUseCase(
             }
             navigationRouter.replaceAll(HomeArgs, MigrationTransferReviewArgs)
         } else if (sdk.hasOverdueTransfers()) {
-            // (b) Overdue catch-up: keep the earliest overdue transfer (the engine will offer it
-            // as the immediate candidate), and shift the rest to future windows so only one
-            // transfer is ever broadcasting at a time. Proved transfers return -1 from
-            // rescheduleUnprovenTransfer — they cannot be shifted; the engine will offer them
-            // one-per-broadcast with the existing post-broadcast buffer (accepted residual until
-            // a core primitive exists).
-            val liveStates = sdk.getMigrationTransferStates()
-            val tipHeight = liveStates?.tipHeight ?: sdk.estimatedChainTip()
-            val overdueIds = liveStates?.transfers
-                ?.filter { !it.isSent && it.scheduledHeight <= tipHeight }
-                ?.sortedBy { it.scheduledHeight }
-                ?.map { it.id }
-                .orEmpty()
-            for (id in overdueTransfersToShift(overdueIds)) {
-                val result = sdk.rescheduleUnprovenTransfer(id)
-                Twig.debug { "MIGRATION_DIAG MigrationRecovery: at-most-one catch-up: shifted $id to $result" }
-            }
+            // Engine-shift DISABLED (deliberate no-op — same reasoning as MigrationWorker's
+            // AwaitingProof branch): the at-most-one-overdue catch-up used to redraw the later
+            // overdue transfers' boundaries via our own rescheduleUnprovenTransfer JNI layer — a
+            // second source of truth over the engine's committed plan. The plan now stays exactly
+            // as committed; the engine serves overdue transfers one-per-broadcast in its own
+            // order, paced by the existing post-broadcast privacy buffer.
             Twig.debug { "MIGRATION_DIAG MigrationRecovery: overdue transfer detected — redirecting to Resume Migration." }
             navigationRouter.replaceAll(HomeArgs, MigrationProgressArgs)
         } else if (migrationState == MigrationState.Complete &&

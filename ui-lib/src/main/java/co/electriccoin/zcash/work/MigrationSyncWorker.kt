@@ -73,18 +73,21 @@ class MigrationSyncWorker(
         val nowSec = nowEpochSeconds()
         val secondsPerBlock = sdk.estimatedSecondsPerBlock()
         val nextDueEpoch = nextEstimatedDueEpochSeconds(states, est, nowSec, secondsPerBlock)
+        val overdueSec = overdueUnsentSeconds(states, est, secondsPerBlock)
         val decision = decideLaneARun(
             nowEpochSeconds = nowSec,
             nextEstimatedDueEpochSeconds = nextDueEpoch,
             privacyBufferSeconds = privacyBufferSeconds,
             isGateBlocked = sdk.isSyncBlocked().first(),
+            overdueUnsentSeconds = overdueSec,
         )
 
         Twig.debug {
             "MIGRATION_DIAG LaneA: run start account=$accountKeyId decision=$decision " +
-                "(estimatedTip=$est, nextEstimatedDueEpoch=$nextDueEpoch, now=$nowSec, secondsPerBlock=$secondsPerBlock)"
+                "(estimatedTip=$est, nextEstimatedDueEpoch=$nextDueEpoch, overdueUnsentSeconds=$overdueSec, " +
+                "now=$nowSec, secondsPerBlock=$secondsPerBlock)"
         }
-        if (decision == LaneARunDecision.RUN) {
+        if (decision == LaneARunDecision.RUN || decision == LaneARunDecision.RUN_OVERDUE_UNSENT) {
             val burst = synchronizerProvider.getSynchronizerOrNull()?.syncToTip(timeout = LANE_A_SYNC_TIMEOUT)
             Twig.debug { "MIGRATION_DIAG LaneA: syncToTip result=$burst" }
             val proved = sdk.finalizeReadyTransfers()
@@ -104,11 +107,29 @@ class MigrationSyncWorker(
             lastNetworkActivity.stampNow()
         }
 
-        // Re-arm Lane A for the next run.
-        val reArmDelay = laneAReArmDelay(
+        // Re-arm Lane A for the next run — plan-driven for the test phase: target the next
+        // unsent transfer's estimated due time minus a lead (privacy buffer + sync headroom), so
+        // the sync+prove pass lands BEFORE the window instead of on a blind cadence tick. The
+        // post-run states are re-read so a transfer just sent above doesn't anchor the target.
+        //
+        // TEST-PHASE DESIGN NOTE: the final Android implementation per Kris uses a fixed sync
+        // cadence (60 min mainnet); the engine's own `sync_wakeup_schedule` (librustzcash #2801,
+        // boundary + settle margin + jitter) is the precise source of these wake-ups and will be
+        // consumed via FFI once the SDK moves to the rc.3+ engine crates (planned with the
+        // feature/ironwood-slipstream merge — the [patch.crates-io] path-dep is currently
+        // inactive against the locked rc.1 engine, which predates #2801). The cadence below
+        // remains the fallback either way.
+        val postRunStates = sdk.getMigrationTransferStates()
+        val postRunEst = sdk.estimatedChainTip()
+        val reArmDelay = laneAPlanDrivenReArmDelay(
             decision = decision,
             nowEpochSeconds = nowEpochSeconds(),
-            nextEstimatedDueEpochSeconds = nextDueEpoch,
+            nextEstimatedDueEpochSeconds =
+                if (postRunStates != null) {
+                    nextEstimatedDueEpochSeconds(postRunStates, postRunEst, nowEpochSeconds(), secondsPerBlock)
+                } else {
+                    nextDueEpoch
+                },
             privacyBufferSeconds = privacyBufferSeconds,
             cadenceSeconds = laneACadence().inWholeSeconds,
             jitterSeconds = LANE_A_JITTER.inWholeSeconds,
@@ -133,6 +154,17 @@ internal val LANE_A_JITTER = 10.minutes
  */
 internal fun laneACadence(): Duration =
     if (BuildConfig.FLAVOR.contains("testnet", ignoreCase = true)) 5.minutes else 60.minutes
+
+/**
+ * How far BEFORE the first broadcast window Lane A's first run is aimed (see
+ * FinalizeMigrationScheduleUseCase): privacy buffer (3 min testnet / 10 min mainnet) plus sync
+ * headroom, so the first sync+prove pass completes and the quiet gap still elapses before Lane B
+ * fires. Static per-flavor equivalent of the worker's own
+ * `privacyBufferSeconds + LANE_A_SYNC_LEAD_HEADROOM_SECONDS` (the SDK isn't in reach at
+ * scheduling time without an extra round trip).
+ */
+internal fun laneAFirstRunLead(): Duration =
+    if (BuildConfig.FLAVOR.contains("testnet", ignoreCase = true)) 5.minutes else 30.minutes
 
 /** Returns the current wall-clock time as epoch seconds. Extracted for testability. */
 internal fun nowEpochSeconds(): Long = Clock.System.now().epochSeconds
@@ -164,7 +196,7 @@ internal fun shouldLaneAStop(state: MigrationState): Boolean =
         else -> false
     }
 
-internal enum class LaneARunDecision { RUN, SKIP_NEAR_DUE, SKIP_GATE_BLOCKED }
+internal enum class LaneARunDecision { RUN, RUN_OVERDUE_UNSENT, SKIP_NEAR_DUE, SKIP_GATE_BLOCKED }
 
 /**
  * Decides whether Lane A should run a full sync+prove cycle this invocation.
@@ -172,24 +204,56 @@ internal enum class LaneARunDecision { RUN, SKIP_NEAR_DUE, SKIP_GATE_BLOCKED }
  * Priority:
  * 1. [LaneARunDecision.SKIP_GATE_BLOCKED] — isSyncBlocked is true (privacy buffer is active);
  *    running a sync now would correlate the sync burst with the pending broadcast.
- * 2. [LaneARunDecision.SKIP_NEAR_DUE] — the next transfer's estimated due time minus the privacy
+ * 2. [LaneARunDecision.RUN_OVERDUE_UNSENT] — the earliest pending transfer's window passed at
+ *    least [LANE_A_OVERDUE_OVERRIDE_SECONDS] ago and it is STILL unsent. A proved+due transfer is
+ *    broadcast by Lane B within seconds of its window, so a transfer this far past due means Lane
+ *    B is returning AwaitingProof — and the step-aside below would deadlock the plan: Lane A
+ *    forever yields to a broadcast that cannot happen without Lane A's own sync+prove (observed
+ *    live: Lane B shifting the same transfer every 5 s while Lane A logged SKIP_NEAR_DUE every
+ *    3 min, scanned tip frozen). Syncing now is safe for the privacy choreography: Lane B's
+ *    preflight re-imposes the quiet gap from the fresh sync stamp before it broadcasts.
+ * 3. [LaneARunDecision.SKIP_NEAR_DUE] — the next transfer's estimated due time minus the privacy
  *    buffer has already passed; we are inside the pre-due window and should wait for Lane B to
  *    fire instead of advancing the tip prematurely.
- * 3. [LaneARunDecision.RUN] — no reason to skip; proceed with syncToTip + finalizeReadyTransfers.
+ * 4. [LaneARunDecision.RUN] — no reason to skip; proceed with syncToTip + finalizeReadyTransfers.
  */
 internal fun decideLaneARun(
     nowEpochSeconds: Long,
     nextEstimatedDueEpochSeconds: Long?,
     privacyBufferSeconds: Long,
     isGateBlocked: Boolean,
+    overdueUnsentSeconds: Long? = null,
 ): LaneARunDecision =
     when {
         isGateBlocked -> LaneARunDecision.SKIP_GATE_BLOCKED
+        overdueUnsentSeconds != null && overdueUnsentSeconds >= LANE_A_OVERDUE_OVERRIDE_SECONDS ->
+            LaneARunDecision.RUN_OVERDUE_UNSENT
         nextEstimatedDueEpochSeconds != null &&
             nowEpochSeconds >= nextEstimatedDueEpochSeconds - privacyBufferSeconds ->
             LaneARunDecision.SKIP_NEAR_DUE
         else -> LaneARunDecision.RUN
     }
+
+internal const val LANE_A_OVERDUE_OVERRIDE_SECONDS = 60L
+
+/**
+ * How many estimated seconds the MOST overdue pending transfer is past its window — `null` when
+ * nothing is pending, nothing is past due, or the estimated tip is unavailable (`est < 0`).
+ * Uses the estimated tip deliberately: accelerating `scheduled_height` due-ness is exactly what
+ * the estimate is for (hard invariant 1); expiry/invalidity decisions elsewhere stay on the
+ * scanned tip.
+ */
+internal fun overdueUnsentSeconds(
+    states: MigrationTransferStates,
+    est: Long,
+    secondsPerBlock: Long,
+): Long? {
+    if (est < 0L) return null
+    return states.transfers
+        .filter { !it.isSent }
+        .maxOfOrNull { (est - it.scheduledHeight) * secondsPerBlock }
+        ?.takeIf { it > 0L }
+}
 
 /**
  * Computes the delay until the next Lane A re-arm.
@@ -215,6 +279,43 @@ internal fun laneAReArmDelay(
     val jitterOffset = random.nextLong(-jitterSeconds, jitterSeconds + 1)
     return (cadenceSeconds + jitterOffset).coerceAtLeast(MIN_LANE_A_BACKOFF_SECONDS).seconds
 }
+
+/**
+ * Plan-driven Lane A re-arm (test phase — see the design note at the call site): aim the next run
+ * at `nextDue − lead`, where the lead is the privacy buffer plus [LANE_A_SYNC_LEAD_HEADROOM_SECONDS]
+ * of sync headroom, so the transfer is proved before its window opens and Lane B's quiet-gap check
+ * still has room after the sync. Clamped to `[MIN_LANE_A_BACKOFF_SECONDS, cadence]`:
+ * - already inside the lead (or past due) → the floor, 60 s — the overdue override
+ *   ([LaneARunDecision.RUN_OVERDUE_UNSENT]) takes over if a proof is actually missing;
+ * - no pending transfer / no estimate → plain cadence via [laneAReArmDelay];
+ * - the SKIP_NEAR_DUE wait-out-the-window rule is unchanged (delegated).
+ */
+internal fun laneAPlanDrivenReArmDelay(
+    decision: LaneARunDecision,
+    nowEpochSeconds: Long,
+    nextEstimatedDueEpochSeconds: Long?,
+    privacyBufferSeconds: Long,
+    cadenceSeconds: Long,
+    jitterSeconds: Long,
+    random: Random,
+): Duration {
+    if (decision == LaneARunDecision.SKIP_NEAR_DUE || nextEstimatedDueEpochSeconds == null) {
+        return laneAReArmDelay(
+            decision = decision,
+            nowEpochSeconds = nowEpochSeconds,
+            nextEstimatedDueEpochSeconds = nextEstimatedDueEpochSeconds,
+            privacyBufferSeconds = privacyBufferSeconds,
+            cadenceSeconds = cadenceSeconds,
+            jitterSeconds = jitterSeconds,
+            random = random,
+        )
+    }
+    val lead = privacyBufferSeconds + LANE_A_SYNC_LEAD_HEADROOM_SECONDS
+    val target = nextEstimatedDueEpochSeconds - lead - nowEpochSeconds
+    return target.coerceIn(MIN_LANE_A_BACKOFF_SECONDS, cadenceSeconds).seconds
+}
+
+internal const val LANE_A_SYNC_LEAD_HEADROOM_SECONDS = 120L
 
 private const val MIN_LANE_A_BACKOFF_SECONDS = 60L
 
