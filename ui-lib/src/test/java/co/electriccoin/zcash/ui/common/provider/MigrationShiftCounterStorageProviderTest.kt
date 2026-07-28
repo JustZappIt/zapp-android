@@ -21,4 +21,25 @@ class MigrationShiftCounterStorageProviderTest {
         assertEquals(1, nextShiftCount(null, 0, "t1", syncCompletedSinceLastShift = true))
         assertEquals(0, nextShiftCount(null, 0, "t1", syncCompletedSinceLastShift = false))
     }
+
+    @Test
+    fun `parseStoredShiftEntry handles transferId with pipes`() {
+        val parsed = parseStoredShiftEntry("ab|cd|2|100")
+        assertEquals("ab|cd", parsed.transferId)
+        assertEquals(2, parsed.count)
+        assertEquals(100L, parsed.epochSeconds)
+    }
+
+    @Test
+    fun `parseStoredShiftEntry handles malformed input`() {
+        val emptyParsed = parseStoredShiftEntry("")
+        assertEquals(null, emptyParsed.transferId)
+        assertEquals(0, emptyParsed.count)
+        assertEquals(null, emptyParsed.epochSeconds)
+
+        val malformedParsed = parseStoredShiftEntry("x")
+        assertEquals(null, malformedParsed.transferId)
+        assertEquals(0, malformedParsed.count)
+        assertEquals(null, malformedParsed.epochSeconds)
+    }
 }

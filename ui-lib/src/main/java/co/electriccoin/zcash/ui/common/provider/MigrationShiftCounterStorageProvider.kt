@@ -34,6 +34,29 @@ interface MigrationShiftCounterStorageProvider {
 }
 
 /**
+ * Parses a stored shift entry `"transferId|count|epochSeconds"`.
+ * Handles transferIds containing pipes by taking the last two segments as count and epoch.
+ * Returns triple of (transferId, count, epochSeconds); any malformed field returns null for that field.
+ */
+internal data class ParsedShiftEntry(
+    val transferId: String?,
+    val count: Int,
+    val epochSeconds: Long?,
+)
+
+internal fun parseStoredShiftEntry(stored: String): ParsedShiftEntry {
+    if (stored.isEmpty()) return ParsedShiftEntry(null, 0, null)
+    val parts = stored.split("|")
+    if (parts.size < 3) return ParsedShiftEntry(null, 0, null)
+
+    val epochSeconds = parts.last().toLongOrNull()
+    val count = parts[parts.size - 2].toIntOrNull() ?: 0
+    val transferId = if (parts.size > 2) parts.dropLast(2).joinToString("|") else null
+
+    return ParsedShiftEntry(transferId, count, epochSeconds)
+}
+
+/**
  * Pure decision function for the shift counter.
  *
  * Rules (spec §2.B.4):
@@ -64,8 +87,8 @@ class MigrationShiftCounterStorageProviderImpl(
     ): Int {
         val pref = pref(accountKeyId)
         val stored = pref.getValue(preferenceHolder())
-        val (prevId, prevCount) = parseStored(stored)
-        val newCount = nextShiftCount(prevId, prevCount, transferId, syncCompletedSinceLastShift)
+        val parsed = parseStoredShiftEntry(stored)
+        val newCount = nextShiftCount(parsed.transferId, parsed.count, transferId, syncCompletedSinceLastShift)
         val nowEpoch = Instant.now().epochSecond
         pref.putValue(preferenceHolder(), "$transferId|$newCount|$nowEpoch")
         return newCount
@@ -77,10 +100,8 @@ class MigrationShiftCounterStorageProviderImpl(
 
     override suspend fun lastShiftAt(accountKeyId: String): Instant? {
         val stored = pref(accountKeyId).getValue(preferenceHolder())
-        if (stored.isEmpty()) return null
-        val parts = stored.split("|")
-        if (parts.size < 3) return null
-        return parts[2].toLongOrNull()?.let { Instant.ofEpochSecond(it) }
+        val parsed = parseStoredShiftEntry(stored)
+        return parsed.epochSeconds?.let { Instant.ofEpochSecond(it) }
     }
 
     // ---------------------------------------------------------------------------
@@ -93,13 +114,4 @@ class MigrationShiftCounterStorageProviderImpl(
             defaultValue = "",
         )
 
-    /**
-     * Parses `"transferId|count|epochSeconds"` — returns `null` id and `0` count on malformed input.
-     */
-    private fun parseStored(stored: String): Pair<String?, Int> {
-        if (stored.isEmpty()) return null to 0
-        val parts = stored.split("|")
-        if (parts.size < 2) return null to 0
-        return parts[0] to (parts[1].toIntOrNull() ?: 0)
-    }
 }
