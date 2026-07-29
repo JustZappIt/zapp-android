@@ -90,25 +90,41 @@ fun MigrationProgressView(state: MigrationProgressState) {
                     .weight(1f)
                     .verticalScroll(rememberScrollState())
             ) {
-                TransferProgressTimelineRow(
-                    title = "Split Balance",
-                    statusLabel = stringRes("Done"),
-                    amount = state.totalAmount,
-                    fiatAmount = state.totalFiatAmount,
-                    // No icon param needed: isDone=true always renders ic_migration_check regardless
-                    // (see TransferProgressTimelineRow below) — this row is always Done by the time
-                    // this screen exists, so it was already showing the right glyph; the old
-                    // ic_migration_coins_swap value here was unused dead code.
-                    isDone = true,
-                    isActive = false,
-                    isOverdue = false,
-                    isLast = state.transfers.isEmpty(),
-                )
+                // Render one "Split balance N" row per note-split (preparation) transaction,
+                // in broadcast/schedule order. When preparations is empty (single-note wallets),
+                // this block renders nothing and the transfers start immediately.
+                val firstUnsentPrepIndex = state.preparations.indexOfFirst { !it.isSent }
+                state.preparations.forEachIndexed { i, prep ->
+                    // When the debug syncLabel is present, append it as "· sync <label>" so the
+                    // row composable needs no new parameter — statusLabel is plain text.
+                    val rowStatusLabel = if (prep.syncLabel != null) {
+                        prep.statusLabel + stringRes(" · sync ") + prep.syncLabel
+                    } else {
+                        prep.statusLabel
+                    }
+                    TransferProgressTimelineRow(
+                        title = "Split balance ${prep.number}",
+                        statusLabel = rowStatusLabel,
+                        amount = null,
+                        fiatAmount = null,
+                        isDone = prep.isSent,
+                        isActive = i == firstUnsentPrepIndex,
+                        isOverdue = false,
+                        isLast = i == state.preparations.lastIndex && state.transfers.isEmpty(),
+                    )
+                }
                 val activeIndex = state.transfers.indexOfFirst { !it.isSent }
                 state.transfers.forEachIndexed { i, transfer ->
+                    // When the debug syncLabel is present, append it as "· sync <label>" so the
+                    // row composable needs no new parameter — statusLabel is plain text.
+                    val rowStatus = if (transfer.syncLabel != null) {
+                        transfer.statusLabel + stringRes(" · sync ") + transfer.syncLabel
+                    } else {
+                        transfer.statusLabel
+                    }
                     TransferProgressTimelineRow(
                         title = "Transfer ${transfer.index}",
-                        statusLabel = transfer.statusLabel,
+                        statusLabel = rowStatus,
                         amount = transfer.amount,
                         fiatAmount = transfer.fiatAmount,
                         index = transfer.index,
@@ -164,7 +180,7 @@ fun MigrationProgressView(state: MigrationProgressState) {
 private fun TransferProgressTimelineRow(
     title: String,
     statusLabel: StringResource,
-    amount: StringResource,
+    amount: StringResource?,
     fiatAmount: StringResource?,
     isDone: Boolean,
     isActive: Boolean,
@@ -252,12 +268,14 @@ private fun TransferProgressTimelineRow(
             )
         }
         Column(horizontalAlignment = Alignment.End) {
-            Text(
-                text = amount.getValue(),
-                style = ZashiTypography.textSm,
-                fontWeight = FontWeight.Medium,
-                color = ZashiColors.Text.textPrimary,
-            )
+            amount?.let {
+                Text(
+                    text = it.getValue(),
+                    style = ZashiTypography.textSm,
+                    fontWeight = FontWeight.Medium,
+                    color = ZashiColors.Text.textPrimary,
+                )
+            }
             fiatAmount?.let { fiat ->
                 Text(
                     text = fiat.getValue(),

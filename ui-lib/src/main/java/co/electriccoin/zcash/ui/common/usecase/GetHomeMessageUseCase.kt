@@ -408,7 +408,16 @@ internal fun migrationMessageFor(
         // re-confirmation is more actionable than its last-known progress snapshot. Falls through
         // to the ordinary branches below when plan is null (a defensive case — RequiresAttention in
         // practice always implies a plan/schedule already existed).
-        sdkState is MigrationState.RequiresAttention && plan != null ->
+        //
+        // SyncRequiredBeforeNext is explicitly excluded here (see MigrationAttentionKind's doc: it is
+        // out of scope for toUiKind(), which otherwise collapses it onto TRANSFER_EXPIRED and would
+        // surface a wrong "Transfer expired" attention banner). It is a transient "keep syncing"
+        // condition — not a user-action-required expiry — so it must not raise an attention banner;
+        // falling through lets the ordinary InProgress / no-message branches decide. This mirrors
+        // CheckMigrationRecoveryUseCase, which likewise does not route on this reason.
+        sdkState is MigrationState.RequiresAttention &&
+            sdkState.reason != AttentionReason.SyncRequiredBeforeNext &&
+            plan != null ->
             HomeMessageData.Migration(
                 plan,
                 attentionKind = attentionKind ?: sdkState.reason.toUiKind(),

@@ -88,10 +88,17 @@ class MigrationProgressOverdueTest {
     }
 
     @Test
-    fun overdue_ignores_proof_state_it_is_purely_a_miss_check() {
-        // Even an unproven transfer counts as overdue for the button gate once genuinely past due —
-        // 3a is about "genuinely missed", not "ready to broadcast".
+    fun overdue_requires_proved_unproved_past_grace_is_not_overdue() {
+        // An unproved transfer past the grace window is NOT genuinely overdue — it is simply
+        // waiting for Lane A's sync to produce a proof. Showing "Send now" would be a false alarm
+        // because the user can't manually broadcast an unproved transfer.
         val s = states(transfer(isProved = false, scheduledHeight = 1_000L), tipHeight = 1_000L + grace)
+        assertFalse(hasGenuinelyOverdueTransfer(s))
+    }
+
+    @Test
+    fun overdue_is_true_for_proved_transfer_past_grace_window() {
+        val s = states(transfer(isProved = true, scheduledHeight = 1_000L), tipHeight = 1_000L + grace)
         assertTrue(hasGenuinelyOverdueTransfer(s))
     }
 

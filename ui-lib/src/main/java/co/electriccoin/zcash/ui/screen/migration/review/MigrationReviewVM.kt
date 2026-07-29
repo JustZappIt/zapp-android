@@ -169,6 +169,9 @@ class MigrationReviewVM(
             totalAmount = stringRes(Zatoshi(total)),
             totalFiatAmount = fiatAmount(Zatoshi(total), exchangeRateState),
             estimatedDuration = stringRes(formatMigrationDuration(spanSeconds)),
+            preparations = sched.preparations.mapIndexed { i, p ->
+                MigrationReviewPreparationState(number = i + 1, scheduledLabel = scheduledLabelForPrep(p, sched))
+            },
             transfers = sched.transfers.mapIndexed { i, t ->
                 MigrationReviewTransferState(
                     index = i + 1,
@@ -422,5 +425,16 @@ class MigrationReviewVM(
             // Shares formatMigrationDuration's resolution rules (minute-level on testnet).
             else -> stringRes(formatMigrationDuration(secondsUntil))
         }
+    }
+
+    // Preparations carry no per-item anchorHeight; use the transfers' commit-tip baseline
+    // (same origin the transfer labels use).
+    private fun scheduledLabelForPrep(
+        p: cash.z.ecc.android.sdk.PreparationStep,
+        sched: MigrationSchedule,
+    ): StringResource {
+        val baseline = sched.transfers.minOfOrNull { it.anchorHeight } ?: p.broadcastHeight
+        val secondsUntil = estimatedSecondsBetweenHeights(baseline, p.broadcastHeight, secondsPerBlock)
+        return if (secondsUntil <= 0) stringRes("Ready now") else stringRes(formatMigrationDuration(secondsUntil))
     }
 }

@@ -5,6 +5,11 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.design.util.StringResource
 
+data class MigrationReviewPreparationState(
+    val number: Int,
+    val scheduledLabel: StringResource,
+)
+
 data class MigrationReviewState(
     val mode: MigrationMode,
     val totalAmount: StringResource,
@@ -12,6 +17,8 @@ data class MigrationReviewState(
     // timeline on Confirm Transfer Plan.
     val totalFiatAmount: StringResource? = null,
     val estimatedDuration: StringResource,
+    // Individual note-split (preparation) rows; empty for single-note wallets that need no split.
+    val preparations: List<MigrationReviewPreparationState> = emptyList(),
     val transfers: List<MigrationReviewTransferState>,
     val isKeystone: Boolean = false,
     // See MigrationKeystoneRound's kdoc — only non-null for a genuine multi-round Keystone

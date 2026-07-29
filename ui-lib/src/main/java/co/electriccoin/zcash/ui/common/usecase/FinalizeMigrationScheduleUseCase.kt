@@ -47,7 +47,9 @@ class FinalizeMigrationScheduleUseCase(
         persistPlan(sched, mode, secondsPerBlock)
         val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
         logCommittedBoundaries()
-        migrationScheduler.schedule(accountKeyId, delayUntilFirstTransfer(sched, secondsPerBlock))
+        val tipHeight = sched.transfers.minOfOrNull { it.anchorHeight }
+            ?: (sched.preparations.minOfOrNull { it.broadcastHeight } ?: 0L)
+        migrationScheduler.schedule(accountKeyId, delayUntilFirstStep(sched, secondsPerBlock, tipHeight))
         // Lane A first arm is a short flat delay: the schedule object carries no anchor
         // boundaries, so the worker's FIRST run reads the freshly committed engine states and
         // computes the precise boundary-driven wake itself (see MigrationSyncWorker).
@@ -130,16 +132,24 @@ class FinalizeMigrationScheduleUseCase(
         }
     }
 
-    // The first transfer is never "ready now" (same anchor/proposal round trip as any other
-    // transfer, per proposeMigrationTransfers()) — the very first WorkManager job must wait for
-    // it just like every job scheduled after it, not fire immediately.
+    // The first step (preparation or transfer) is never "ready now" (same anchor/proposal round
+    // trip as any other step, per proposeMigrationTransfers()) — the very first WorkManager job
+    // must wait for it just like every job scheduled after it, not fire immediately.
     //
-    // nextExecutableAfterHeight/anchorHeight/expiryHeight are block heights, not timestamps — see
-    // estimatedSecondsBetweenHeights for why they must never be used directly as (or against)
-    // epoch seconds (this previously made every transfer look ~56 years overdue on a live device).
-    private fun delayUntilFirstTransfer(sched: MigrationSchedule, secondsPerBlock: Long): Duration {
-        val first = sched.transfers.minByOrNull { it.nextExecutableAfterHeight } ?: return 0.seconds
-        val remaining = estimatedSecondsBetweenHeights(first.anchorHeight, first.nextExecutableAfterHeight, secondsPerBlock)
+    // broadcastHeight/nextExecutableAfterHeight/anchorHeight/expiryHeight are block heights, not
+    // timestamps — see estimatedSecondsBetweenHeights for why they must never be used directly as
+    // (or against) epoch seconds (this previously made every transfer look ~56 years overdue on a
+    // live device).
+    //
+    // [tipHeight] is the commit-tip baseline (= the min anchorHeight across transfers, which the
+    // SDK always draws from the same committed chain tip). Preparations and transfers share this
+    // one origin, so the delay to a preparation's broadcastHeight and the delay to a transfer's
+    // nextExecutableAfterHeight are comparable block-count deltas from the same point.
+    internal fun delayUntilFirstStep(sched: MigrationSchedule, secondsPerBlock: Long, tipHeight: Long): Duration {
+        val earliest = (sched.preparations.map { it.broadcastHeight } +
+            sched.transfers.map { it.nextExecutableAfterHeight }).minOrNull()
+            ?: return 0.seconds
+        val remaining = estimatedSecondsBetweenHeights(tipHeight, earliest, secondsPerBlock)
         return if (remaining <= 0) 0.seconds else remaining.seconds
     }
 }

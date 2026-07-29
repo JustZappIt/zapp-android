@@ -217,19 +217,36 @@ private fun PrivacyReviewContent(state: MigrationReviewState) {
         }
         // Only this list scrolls when it doesn't fit — header and Confirm button stay pinned.
         LazyColumn(modifier = Modifier.weight(1f)) {
-            item {
-                TransferTimelineRow(
-                    title = "Split Balance",
-                    subtitle = stringRes("Ready now"),
-                    amount = state.totalAmount,
-                    fiatAmount = state.totalFiatAmount,
-                    // Figma PR App Designs Q3'26, node 4207-7450: a checkmark, not the coins-swap
-                    // glyph used for pool-crossing transfers below it — Split Balance is a
-                    // same-device self-send, not a swap.
-                    icon = R.drawable.ic_migration_check,
-                    isFirst = true,
-                    isLast = state.transfers.isEmpty(),
-                )
+            if (state.preparations.isNotEmpty()) {
+                // Multi-note wallet: show one "Split balance N" row per preparation transaction.
+                // No amount shown — raw denominations are internal plumbing and confusing.
+                items(state.preparations) { prep ->
+                    TransferTimelineRow(
+                        title = "Split balance ${prep.number}",
+                        subtitle = prep.scheduledLabel,
+                        amount = null,
+                        fiatAmount = null,
+                        // Figma PR App Designs Q3'26, node 4207-7450: a checkmark, not the
+                        // coins-swap glyph — Split Balance is a same-device self-send.
+                        icon = R.drawable.ic_migration_check,
+                        isFirst = prep.number == 1,
+                        isLast = false,
+                    )
+                }
+            } else {
+                // Single-note wallet (no split needed): keep the original collapsed "Split Balance"
+                // row as a fallback so no regression on zero-preparations plans.
+                item {
+                    TransferTimelineRow(
+                        title = "Split Balance",
+                        subtitle = stringRes("Ready now"),
+                        amount = state.totalAmount,
+                        fiatAmount = state.totalFiatAmount,
+                        icon = R.drawable.ic_migration_check,
+                        isFirst = true,
+                        isLast = state.transfers.isEmpty(),
+                    )
+                }
             }
             items(state.transfers) { transfer ->
                 TransferTimelineRow(
@@ -261,7 +278,7 @@ private fun PrivacyReviewContent(state: MigrationReviewState) {
 private fun TransferTimelineRow(
     title: String,
     subtitle: StringResource,
-    amount: StringResource,
+    amount: StringResource?,
     fiatAmount: StringResource?,
     isFirst: Boolean,
     isLast: Boolean,
@@ -359,12 +376,14 @@ private fun TransferTimelineRow(
             )
         }
         Column(horizontalAlignment = Alignment.End) {
-            Text(
-                text = amount.getValue(),
-                style = ZashiTypography.textSm,
-                fontWeight = FontWeight.Medium,
-                color = ZashiColors.Text.textPrimary,
-            )
+            amount?.let {
+                Text(
+                    text = it.getValue(),
+                    style = ZashiTypography.textSm,
+                    fontWeight = FontWeight.Medium,
+                    color = ZashiColors.Text.textPrimary,
+                )
+            }
             fiatAmount?.let { fiat ->
                 Text(
                     text = fiat.getValue(),
@@ -435,6 +454,31 @@ private fun PreviewPrivacyWithKeystoneRound() = ZcashTheme {
             ),
             isKeystone = true,
             keystoneRound = MigrationKeystoneRound(current = 1, total = 4),
+            onConfirm = {},
+            onBack = {},
+        )
+    )
+}
+
+@PreviewScreens
+@Composable
+private fun PreviewPrivacyWithPreparations() = ZcashTheme {
+    MigrationReviewView(
+        state = MigrationReviewState(
+            mode = MigrationMode.AUTOMATIC,
+            totalAmount = stringRes("12.458 ZEC"),
+            estimatedDuration = stringRes("~8 min"),
+            preparations = listOf(
+                MigrationReviewPreparationState(1, stringRes("Ready now")),
+                MigrationReviewPreparationState(2, stringRes("Ready now")),
+            ),
+            transfers = listOf(
+                MigrationReviewTransferState(1, 5, stringRes("1.348 ZEC"), stringRes("$521.30"), stringRes("~10 mins")),
+                MigrationReviewTransferState(2, 5, stringRes("1.052 ZEC"), stringRes("$406.86"), stringRes("~6 hours")),
+                MigrationReviewTransferState(3, 5, stringRes("2.105 ZEC"), stringRes("$813.74"), stringRes("~12 hours")),
+                MigrationReviewTransferState(4, 5, stringRes("1.897 ZEC"), stringRes("$733.51"), stringRes("~18 hours")),
+                MigrationReviewTransferState(5, 5, stringRes("4.456 ZEC"), stringRes("$1,723.53"), stringRes("~24 hours")),
+            ),
             onConfirm = {},
             onBack = {},
         )

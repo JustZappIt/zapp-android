@@ -334,11 +334,8 @@ val useCaseModule =
             CheckMigrationRecoveryUseCase(
                 getOrchardMigrationSdk = get(),
                 navigationRouter = get(),
-                hasSeenMigrationCompleteStorageProvider = get(),
                 migrationPlanRepository = get(),
-                getOrchardBalance = get(),
                 pendingMigrationTorFailureStorageProvider = get(),
-                isBackgroundExecutionAvailableProvider = get(),
                 getSelectedWalletAccount = get(),
                 migrationSyncScheduler = get(),
                 context = get(),

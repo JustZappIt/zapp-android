@@ -2,6 +2,7 @@ package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.MigrationSchedule
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
+import cash.z.ecc.android.sdk.PreparationStep
 import cash.z.ecc.android.sdk.TransferProposal
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
@@ -87,6 +88,29 @@ class FinalizeMigrationScheduleUseCaseTest {
 
         coVerify { plans.save(capture(savedPlan)) }
         assertEquals(MigrationKeystoneRound(current = 1, total = 3), savedPlan.captured.keystoneRound)
+    }
+
+    @Test
+    fun `delay targets earliest step including preparations`() {
+        val sched = MigrationSchedule(
+            transfers = listOf(TransferProposal(id = 4, amountZatoshi = 1, anchorHeight = 4219036, nextExecutableAfterHeight = 4219108, expiryHeight = 9_999_999)),
+            preparations = listOf(PreparationStep(id = 1, layer = 0, index = 1, broadcastHeight = 4219043, dependsOn = emptyList())),
+            estimatedDurationHours = 1, proposalHandle = 1,
+        )
+        // exposed for test: delayUntilFirstStep(sched, secondsPerBlock=28, tipHeight=4219036)
+        val useCase = FinalizeMigrationScheduleUseCase(
+            migrationPlanRepository = mockk(relaxed = true),
+            migrationScheduler = mockk(relaxed = true),
+            migrationSyncScheduler = mockk(relaxed = true),
+            navigationRouter = mockk(relaxed = true),
+            getOrchardMigrationSdk = mockk(relaxed = true),
+            getSelectedWalletAccount = mockk<GetSelectedWalletAccountUseCase> {
+                coEvery { this@mockk() } returns mockk<ZashiAccount>(relaxed = true)
+            },
+            synchronizerProvider = mockk(relaxed = true),
+        )
+        val d = useCase.delayUntilFirstStep(sched, secondsPerBlock = 28, tipHeight = 4219036)
+        assertEquals((7 * 28).seconds, d)   // 4219043-4219036 = 7 blocks
     }
 
     @Test

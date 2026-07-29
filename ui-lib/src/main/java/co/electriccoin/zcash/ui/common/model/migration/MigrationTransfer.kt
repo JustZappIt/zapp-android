@@ -23,6 +23,10 @@ data class MigrationTransfer(
     // live-state correlation simply finds no match for those, same as a plan with no matching
     // live SDK state at all.
     val id: Long = -1L,
+    // Whether the engine has a proof for this transfer. Updated from live SDK state in
+    // [withLiveState]; defaults to false for plans persisted before this field existed (dev-only
+    // mock data) where live-state correlation finds no match.
+    val isProved: Boolean = false,
 ) {
     val scheduledAt: Instant get() = Instant.fromEpochSeconds(scheduledAtEpochSeconds)
     val expiryAt: Instant get() = Instant.fromEpochSeconds(expiryAtEpochSeconds)

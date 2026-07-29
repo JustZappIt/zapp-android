@@ -4,14 +4,11 @@ import android.content.Context
 import cash.z.ecc.android.sdk.AttentionReason
 import cash.z.ecc.android.sdk.MigrationState
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
-import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
-import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
-import co.electriccoin.zcash.ui.common.provider.IsBackgroundExecutionAvailableProvider
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.screen.home.HomeArgs
@@ -23,13 +20,10 @@ import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransfe
 import co.electriccoin.zcash.work.MigrationSyncScheduler
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
-import kotlin.time.Clock
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 class CheckMigrationRecoveryUseCaseTest {
@@ -58,13 +52,10 @@ class CheckMigrationRecoveryUseCaseTest {
         sdk: OrchardMigrationSdk?,
         navigationRouter: NavigationRouter,
         pendingMigrationTorFailure: Boolean = false,
-        hasSeenMigrationComplete: Boolean = false,
         savedPlan: MigrationPlan? = mockk(relaxed = true),
         migrationPlanRepository: MigrationPlanRepository = mockk(relaxed = true) {
             coEvery { load() } returns savedPlan
         },
-        isBackgroundExecutionAvailable: Boolean = true,
-        orchardBalanceZatoshi: Long = 0L,
         migrationSyncScheduler: MigrationSyncScheduler = mockk(relaxed = true),
         // Default: Lane A is always active in tests so the reconciliation branch is skipped,
         // keeping existing test behaviour unchanged. Override to test reconciliation explicitly.
@@ -75,18 +66,9 @@ class CheckMigrationRecoveryUseCaseTest {
             coEvery { this@mockk() } returns sdk
         },
         navigationRouter = navigationRouter,
-        hasSeenMigrationCompleteStorageProvider = mockk<HasSeenMigrationCompleteStorageProvider> {
-            coEvery { get() } returns hasSeenMigrationComplete
-        },
         migrationPlanRepository = migrationPlanRepository,
-        getOrchardBalance = mockk<GetOrchardBalanceUseCase> {
-            coEvery { this@mockk() } returns Zatoshi(orchardBalanceZatoshi)
-        },
         pendingMigrationTorFailureStorageProvider = mockk<PendingMigrationTorFailureStorageProvider> {
             coEvery { get() } returns pendingMigrationTorFailure
-        },
-        isBackgroundExecutionAvailableProvider = mockk<IsBackgroundExecutionAvailableProvider> {
-            every { isAvailable() } returns isBackgroundExecutionAvailable
         },
         getSelectedWalletAccount = mockk<GetSelectedWalletAccountUseCase>(relaxed = true),
         migrationSyncScheduler = migrationSyncScheduler,
@@ -95,22 +77,56 @@ class CheckMigrationRecoveryUseCaseTest {
         isLaneBActive = isLaneBActive,
     )
 
+    // ── Task 6: auto-navigation removal — only Tor-failure fires on app-open ─────────────
+
     @Test
-    fun pendingTorFailurePreemptsInvalidTransfersAndRoutesToSending() = runTest {
+    fun hasOverdueTransfers_doesNotAutoNavigateToMigrationProgress() = runTest {
+        // After Task 6 the overdue branch no longer auto-navigates — user reaches Progress via
+        // home banner only.
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { hasInvalidTransfers() } returns true
             coEvery { hasOverdueTransfers() } returns true
+            coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))
+        }
+        val router = mockk<NavigationRouter>(relaxed = true)
+
+        useCase(sdk = sdk, navigationRouter = router, pendingMigrationTorFailure = false).invoke()
+
+        coVerify(exactly = 0) { router.replaceAll(HomeArgs, MigrationProgressArgs) }
+    }
+
+    @Test
+    fun pendingTorFailureStillAutoNavigatesToMigrationSending() = runTest {
+        // The Tor-failure branch is the ONE auto-navigation kept after Task 6.
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
+            coEvery { hasOverdueTransfers() } returns true
+            coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))
         }
         val router = mockk<NavigationRouter>(relaxed = true)
 
         useCase(sdk = sdk, navigationRouter = router, pendingMigrationTorFailure = true).invoke()
 
         coVerify(exactly = 1) { router.replaceAll(HomeArgs, MigrationSendingArgs) }
-        coVerify(exactly = 0) { router.replaceAll(HomeArgs, MigrationTransferInvalidArgs) }
     }
 
     @Test
-    fun noPendingTorFailureFallsThroughToInvalidTransferCheck() = runTest {
+    fun pendingTorFailureDoesNotAutoNavigateToAnyOtherScreen() = runTest {
+        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
+            coEvery { hasOverdueTransfers() } returns true
+            coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))
+        }
+        val router = mockk<NavigationRouter>(relaxed = true)
+
+        useCase(sdk = sdk, navigationRouter = router, pendingMigrationTorFailure = true).invoke()
+
+        coVerify(exactly = 0) { router.replaceAll(HomeArgs, MigrationTransferInvalidArgs) }
+        coVerify(exactly = 0) { router.replaceAll(HomeArgs, MigrationTransferReviewArgs) }
+        coVerify(exactly = 0) { router.replaceAll(HomeArgs, MigrationProgressArgs) }
+        coVerify(exactly = 0) { router.replaceAll(HomeArgs, MigrationCompleteArgs) }
+    }
+
+    @Test
+    fun requiresAttention_doesNotAutoNavigate() = runTest {
+        // After Task 6, RequiresAttention no longer auto-navigates to MigrationTransferInvalidArgs.
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
             coEvery { getMigrationState() } returns MigrationState.RequiresAttention(AttentionReason.TransferExpired)
         }
@@ -118,136 +134,13 @@ class CheckMigrationRecoveryUseCaseTest {
 
         useCase(sdk = sdk, navigationRouter = router, pendingMigrationTorFailure = false).invoke()
 
-        coVerify(exactly = 1) { router.replaceAll(HomeArgs, MigrationTransferInvalidArgs) }
+        coVerify(exactly = 0) { router.replaceAll(HomeArgs, MigrationTransferInvalidArgs) }
+        coVerify(exactly = 0) { router.replaceAll(any()) }
     }
 
     @Test
-    fun dueTransferWithoutBackgroundExecutionRoutesToTransferReview() = runTest {
-        val now = Clock.System.now()
-        val plan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { hasInvalidTransfers() } returns false
-            coEvery { hasOverdueTransfers() } returns false
-        }
-        val router = mockk<NavigationRouter>(relaxed = true)
-
-        useCase(
-            sdk = sdk,
-            navigationRouter = router,
-            savedPlan = plan,
-            isBackgroundExecutionAvailable = false,
-        ).invoke()
-
-        coVerify(exactly = 1) { router.replaceAll(HomeArgs, MigrationTransferReviewArgs) }
-    }
-
-    @Test
-    fun invalidTransfersTakePriorityOverReadyToSend() = runTest {
-        val now = Clock.System.now()
-        val plan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { getMigrationState() } returns MigrationState.RequiresAttention(AttentionReason.InvalidTransfer(11L))
-        }
-        val router = mockk<NavigationRouter>(relaxed = true)
-
-        useCase(
-            sdk = sdk,
-            navigationRouter = router,
-            savedPlan = plan,
-            isBackgroundExecutionAvailable = false,
-        ).invoke()
-
-        coVerify(exactly = 1) { router.replaceAll(HomeArgs, MigrationTransferInvalidArgs) }
-        coVerify(exactly = 0) { router.replaceAll(HomeArgs, MigrationTransferReviewArgs) }
-    }
-
-    @Test
-    fun alreadyOverdueTransferTakesPriorityOverReadyToSend() = runTest {
-        // Once the SDK itself counts it as overdue, the fuller Reschedule/Send-now recovery screen
-        // owns it — the ready-to-send branch is only for the narrower "just became due" window.
-        val now = Clock.System.now()
-        val plan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { hasInvalidTransfers() } returns false
-            coEvery { hasOverdueTransfers() } returns true
-            coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))
-        }
-        val router = mockk<NavigationRouter>(relaxed = true)
-
-        useCase(
-            sdk = sdk,
-            navigationRouter = router,
-            savedPlan = plan,
-            isBackgroundExecutionAvailable = false,
-        ).invoke()
-
-        coVerify(exactly = 1) { router.replaceAll(HomeArgs, MigrationProgressArgs) }
-        coVerify(exactly = 0) { router.replaceAll(HomeArgs, MigrationTransferReviewArgs) }
-    }
-
-    @Test
-    fun backgroundExecutionAvailableFallsThroughToOverdueCheck() = runTest {
-        val now = Clock.System.now()
-        val plan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { hasInvalidTransfers() } returns false
-            coEvery { hasOverdueTransfers() } returns true
-            coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))
-        }
-        val router = mockk<NavigationRouter>(relaxed = true)
-
-        useCase(
-            sdk = sdk,
-            navigationRouter = router,
-            savedPlan = plan,
-            isBackgroundExecutionAvailable = true,
-        ).invoke()
-
-        coVerify(exactly = 1) { router.replaceAll(HomeArgs, MigrationProgressArgs) }
-        coVerify(exactly = 0) { router.replaceAll(HomeArgs, MigrationTransferReviewArgs) }
-    }
-
-    @Test
-    fun notYetDueTransferDoesNotRouteToTransferReview() = runTest {
-        val now = Clock.System.now()
-        val plan = planWithPendingTransfer((now + 30.minutes).epochSeconds)
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { hasInvalidTransfers() } returns false
-            coEvery { hasOverdueTransfers() } returns false
-            coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))
-        }
-        val router = mockk<NavigationRouter>(relaxed = true)
-
-        useCase(
-            sdk = sdk,
-            navigationRouter = router,
-            savedPlan = plan,
-            isBackgroundExecutionAvailable = false,
-        ).invoke()
-
-        coVerify(exactly = 0) { router.replaceAll(HomeArgs, MigrationTransferReviewArgs) }
-    }
-
-    @Test
-    fun noPendingTorFailureAndNoInvalidTransfersFallsThroughToOverdueCheck() = runTest {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { hasInvalidTransfers() } returns false
-            coEvery { hasOverdueTransfers() } returns true
-        }
-        val router = mockk<NavigationRouter>(relaxed = true)
-
-        useCase(
-            sdk = sdk,
-            navigationRouter = router,
-            pendingMigrationTorFailure = false,
-            isBackgroundExecutionAvailable = true,
-        ).invoke()
-
-        coVerify(exactly = 1) { router.replaceAll(HomeArgs, MigrationProgressArgs) }
-    }
-
-    @Test
-    fun noPendingTorFailureNoInvalidNoOverdueButCompleteRoutesToCompleteCelebration() = runTest {
+    fun complete_doesNotAutoNavigateToCelebration() = runTest {
+        // After Task 6, MigrationState.Complete no longer auto-routes to MigrationCompleteArgs.
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
             coEvery { hasInvalidTransfers() } returns false
             coEvery { hasOverdueTransfers() } returns false
@@ -259,14 +152,14 @@ class CheckMigrationRecoveryUseCaseTest {
             sdk = sdk,
             navigationRouter = router,
             pendingMigrationTorFailure = false,
-            hasSeenMigrationComplete = false,
             savedPlan = mockk(relaxed = true),
-            isBackgroundExecutionAvailable = true,
-            orchardBalanceZatoshi = 0L,
         ).invoke()
 
-        coVerify(exactly = 1) { router.replaceAll(HomeArgs, MigrationCompleteArgs) }
+        coVerify(exactly = 0) { router.replaceAll(HomeArgs, MigrationCompleteArgs) }
+        coVerify(exactly = 0) { router.replaceAll(any()) }
     }
+
+    // ── Stale write-ahead plan clearing (not navigation) ─────────────────────────────────
 
     @Test
     fun notStartedWithStaleWriteAheadPlanClearsTheStalePlan() = runTest {
@@ -316,11 +209,11 @@ class CheckMigrationRecoveryUseCaseTest {
         coVerify(exactly = 0) { router.replaceAll(any()) }
     }
 
-    // ── Lane A reconciliation tests (Finding 3) ────────────────────────────────────────
+    // ── Lane A/B reconciliation tests ─────────────────────────────────────────────────────
 
     @Test
     fun laneAReconciliation_planExistsAndLaneInactive_schedulesLaneA() = runTest {
-        // Finding 3: plan exists + isLaneAActive = false → migrationSyncScheduler.schedule called.
+        // plan exists + isLaneAActive = false → migrationSyncScheduler.schedule called.
         val syncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
             coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))
@@ -342,7 +235,7 @@ class CheckMigrationRecoveryUseCaseTest {
 
     @Test
     fun laneAReconciliation_planExistsAndLaneActive_doesNotScheduleLaneA() = runTest {
-        // Finding 3: plan exists + isLaneAActive = true → migrationSyncScheduler.schedule NOT called.
+        // plan exists + isLaneAActive = true → migrationSyncScheduler.schedule NOT called.
         val syncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
         val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
             coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))

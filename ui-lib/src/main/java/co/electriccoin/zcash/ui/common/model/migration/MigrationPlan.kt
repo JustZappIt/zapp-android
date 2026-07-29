@@ -8,6 +8,29 @@ import kotlin.time.Instant
 import java.util.UUID
 
 /**
+ * One note-split (preparation) transaction surfaced in the app-side [MigrationPlan]. Mirrors the
+ * SDK's [cash.z.ecc.android.sdk.PreparationStep] but carries wall-clock estimates and live status
+ * overlaid by [withLiveState].
+ *
+ * [status] starts [MigrationTransferStatus.PENDING]; once the engine reports [isSent] via live
+ * state the overlay advances it to [MigrationTransferStatus.SENT]. [isProved] tracks whether the
+ * engine has a proof for this preparation (for the debug "sync" field).
+ *
+ * Preparations do NOT contribute to [MigrationPlan.totalCount] / [MigrationPlan.completedCount] /
+ * [MigrationPlan.isComplete] — those stay crossings-only.
+ */
+@Serializable
+data class MigrationPreparation(
+    val id: Long,
+    val layer: Int,
+    val index: Int,
+    val scheduledAtEpochSeconds: Long,
+    val dependsOn: List<Long>,
+    val status: MigrationTransferStatus,
+    val isProved: Boolean = false,
+)
+
+/**
  * How many successive migration-engine RUNS the account's current residual balance is estimated
  * to need, for a Keystone account, per `estimate_migration_runs`/`OrchardMigrationSdk
  * .estimateMigrationRunCount()`. The engine caps each run at a fixed number of notes it will
@@ -36,6 +59,7 @@ data class MigrationPlan(
     val transfers: List<MigrationTransfer>,
     val mode: MigrationMode = MigrationMode.AUTOMATIC,
     val keystoneRound: MigrationKeystoneRound? = null,
+    val preparations: List<MigrationPreparation> = emptyList(),
 ) {
     val createdAt: Instant get() = Instant.fromEpochSeconds(createdAtEpochSeconds)
     val nextPending: MigrationTransfer? get() = transfers.firstOrNull { it.status == MigrationTransferStatus.PENDING }
@@ -60,6 +84,12 @@ fun MigrationSchedule.toMigrationPlan(
     secondsPerBlock: Long = 75L,
 ): MigrationPlan {
     val now = Clock.System.now().epochSeconds
+    // Preparations carry no per-item anchorHeight. Use the transfers' commit-tip baseline so all
+    // height-to-wall-clock estimates share the same reference point. Falls back to the
+    // preparations' own broadcastHeight minimum (or 0) when there are no transfers.
+    val baseline = transfers.minOfOrNull { it.anchorHeight }
+        ?: preparations.minOfOrNull { it.broadcastHeight }
+        ?: 0L
     return MigrationPlan(
         id = UUID.randomUUID().toString(),
         createdAtEpochSeconds = now,
@@ -73,6 +103,16 @@ fun MigrationSchedule.toMigrationPlan(
                 id = t.id,
             )
         },
+        preparations = preparations.map { p ->
+            MigrationPreparation(
+                id = p.id,
+                layer = p.layer,
+                index = p.index,
+                scheduledAtEpochSeconds = now + estimatedSecondsBetweenHeights(baseline, p.broadcastHeight, secondsPerBlock),
+                dependsOn = p.dependsOn,
+                status = MigrationTransferStatus.PENDING,
+            )
+        },
         mode = mode,
         keystoneRound = keystoneRound,
     )
@@ -84,9 +124,10 @@ fun MigrationSchedule.toMigrationPlan(
  * written at propose/commit time, so without this overlay it silently falls behind the engine's
  * actual state (the engine is the single source of truth for the plan).
  * amountZatoshi/createdAtEpochSeconds never change post-commit, so those keep coming from the
- * cache — only the fields the SDK can independently change are overridden here. Live entries that
- * match no cached transfer id (preparation transactions, surfaced since the states began
- * including them) are naturally ignored by the id correlation below.
+ * cache — only the fields the SDK can independently change are overridden here. Live entries whose
+ * [cash.z.ecc.android.sdk.MigrationTransferState.isTransfer] is false (preparation transactions)
+ * are now consumed by the preparations overlay below, updating [MigrationPlan.preparations]
+ * status/isProved/scheduledAtEpochSeconds in the same pass.
  *
  * Correlates by the transfer's real, stable [MigrationTransfer.id] — NOT by [MigrationTransfer.index].
  * The engine assigns real ids in its own funding-note/crossing order, while [MigrationTransfer.index]
@@ -98,16 +139,30 @@ fun MigrationSchedule.toMigrationPlan(
 fun MigrationPlan.withLiveState(live: MigrationTransferStates?, secondsPerBlock: Long = 75L): MigrationPlan {
     if (live == null) return this
     val now = Clock.System.now().epochSeconds
-    val byId = live.transfers.associateBy { it.id }
+    // Split by kind so the two overlays are self-evidently independent: a future SDK that
+    // reuses ids across kinds could not cross-wire a preparation's live state onto a transfer
+    // (or vice versa) even via the last-wins behaviour of associateBy.
+    val byTransferId = live.transfers.filter { it.isTransfer }.associateBy { it.id }
+    val byPrepId = live.transfers.filter { !it.isTransfer }.associateBy { it.id }
     return copy(
         transfers = transfers.map { t ->
-            val liveTransfer = byId[t.id] ?: return@map t
+            val liveTransfer = byTransferId[t.id] ?: return@map t
             t.copy(
                 status = if (liveTransfer.isSent) MigrationTransferStatus.SENT else MigrationTransferStatus.PENDING,
+                isProved = liveTransfer.isProved,
                 scheduledAtEpochSeconds =
                     now + estimatedSecondsBetweenHeights(live.tipHeight, liveTransfer.scheduledHeight, secondsPerBlock),
             )
-        }
+        },
+        preparations = preparations.map { p ->
+            val liveTransfer = byPrepId[p.id] ?: return@map p
+            p.copy(
+                status = if (liveTransfer.isSent) MigrationTransferStatus.SENT else MigrationTransferStatus.PENDING,
+                isProved = liveTransfer.isProved,
+                scheduledAtEpochSeconds =
+                    now + estimatedSecondsBetweenHeights(live.tipHeight, liveTransfer.scheduledHeight, secondsPerBlock),
+            )
+        },
     )
 }
 

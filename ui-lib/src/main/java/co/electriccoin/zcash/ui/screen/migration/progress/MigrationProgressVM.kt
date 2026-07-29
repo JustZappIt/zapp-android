@@ -25,7 +25,9 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.common.model.guardLoading
 import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
+import co.electriccoin.zcash.ui.common.model.migration.MigrationPreparation
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.ui.common.model.migration.withLiveState
 import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
@@ -224,19 +226,34 @@ class MigrationProgressVM(
         }
 
         val totalZatoshi = plan.transfers.sumOf { it.amountZatoshi }
+        // Sort preparations by their scheduled time to get a stable broadcast/display order.
+        val sortedPreps = plan.preparations.sortedBy { it.scheduledAtEpochSeconds }
         return MigrationProgressState(
             title = stringRes(if (isResume) "Resume Migration" else "Migration Progress"),
             subtitle = stringRes(subtitle),
             totalAmount = stringRes(Zatoshi(totalZatoshi)),
             totalFiatAmount = fiatAmount(Zatoshi(totalZatoshi), exchangeRateState),
+            preparations = sortedPreps.mapIndexed { i, p ->
+                MigrationProgressPreparationState(
+                    number = i + 1,
+                    statusLabel = preparationStatusLabel(p, now),
+                    isSent = p.status == MigrationTransferStatus.SENT,
+                    // BuildConfig.DEBUG read inline (matching the codebase's other VMs) rather than
+                    // injected — a `Boolean` constructor param breaks Koin's `viewModelOf` reflective
+                    // resolution (NoDefinitionFoundException at screen open). The unit test covers both
+                    // branches via the standalone `mapPreparationsToState(..., debugSyncEnabled)` helper.
+                    syncLabel = if (BuildConfig.DEBUG) preparationSyncLabel(p, now) else null,
+                )
+            },
             transfers = plan.transfers.map { t ->
                 MigrationProgressTransferState(
                     index = t.index + 1,
                     amount = stringRes(Zatoshi(t.amountZatoshi)),
                     fiatAmount = fiatAmount(Zatoshi(t.amountZatoshi), exchangeRateState),
                     statusLabel = transferLabel(t, now),
-                    isOverdue = t.status == MigrationTransferStatus.PENDING && t.scheduledAt <= now,
+                    isOverdue = t.status == MigrationTransferStatus.PENDING && t.isProved && t.scheduledAt <= now,
                     isSent = t.status == MigrationTransferStatus.SENT,
+                    syncLabel = if (BuildConfig.DEBUG) transferSyncLabel(t, now) else null,
                 )
             },
             isComplete = plan.isComplete,
@@ -300,35 +317,6 @@ class MigrationProgressVM(
 
     private fun onDone() = navigationRouter.backToRoot()
 
-    private fun transferLabel(t: MigrationTransfer, now: Instant): StringResource =
-        when (t.status) {
-            MigrationTransferStatus.SENT -> {
-                val agoMinutes = (now - t.scheduledAt).inWholeMinutes
-                when {
-                    agoMinutes < 1 -> stringRes("Sent recently")
-                    agoMinutes < 60 -> stringRes("Sent $agoMinutes min ago")
-                    else -> stringRes("Sent ${agoMinutes / 60}h ago")
-                }
-            }
-            MigrationTransferStatus.PENDING -> {
-                val scheduled = t.scheduledAt
-                when {
-                    scheduled <= now -> stringRes("Overdue · ${overdueHours(t, now)}h ago")
-                    else -> {
-                        // Use the shared formatter (Issue 2) so this screen and the Review screen
-                        // format identically ("~1 h 15 min") — the old inline branch bucketed to
-                        // coarse integer hours ("~1 hours") and dropped the minutes, so 75 min and
-                        // 119 min both rendered the same. fineGrained defaults to testnet=true.
-                        val secondsLeft = (scheduled - now).inWholeSeconds
-                        stringRes(formatMigrationDuration(secondsLeft))
-                    }
-                }
-            }
-        }
-
-    private fun overdueHours(t: MigrationTransfer, now: Instant) =
-        (now - t.scheduledAt).inWholeHours.coerceAtLeast(0)
-
     companion object {
         private val OVERDUE_RECHECK_INTERVAL = 15.seconds
 
@@ -367,7 +355,7 @@ class MigrationProgressVM(
 internal fun hasGenuinelyOverdueTransfer(states: MigrationTransferStates?): Boolean {
     if (states == null) return false
     return states.transfers.any { t ->
-        t.isTransfer && !t.isSent &&
+        t.isTransfer && !t.isSent && t.isProved &&
             t.scheduledHeight + MigrationProgressVM.OVERDUE_GRACE_BLOCKS <= states.tipHeight
     }
 }
@@ -384,5 +372,111 @@ internal fun hasBroadcastableTransfer(states: MigrationTransferStates?): Boolean
     if (states == null) return false
     return states.transfers.any { t ->
         t.isProved && !t.isSent && t.scheduledHeight <= states.tipHeight
+    }
+}
+
+/** Elapsed hours since a transfer's scheduled time (floored to 0). */
+internal fun overdueHours(t: MigrationTransfer, now: Instant) =
+    (now - t.scheduledAt).inWholeHours.coerceAtLeast(0)
+
+/**
+ * Status label for a crossing transfer row.
+ *
+ * PENDING splits into three sub-cases:
+ * - proved + past-due  → "Overdue · Xh ago"  (the recovery UI is for this state only)
+ * - unproved + past-due → "Awaiting proof"    (calm; Lane A's sync will prove it soon)
+ * - future scheduled   → relative "~X min" / "~X h Y min" label
+ *
+ * Top-level and internal for unit-testability without Android or Koin.
+ */
+internal fun transferLabel(t: MigrationTransfer, now: Instant): StringResource =
+    when (t.status) {
+        MigrationTransferStatus.SENT -> {
+            val agoMinutes = (now - t.scheduledAt).inWholeMinutes
+            when {
+                agoMinutes < 1 -> stringRes("Sent recently")
+                agoMinutes < 60 -> stringRes("Sent $agoMinutes min ago")
+                else -> stringRes("Sent ${agoMinutes / 60}h ago")
+            }
+        }
+        MigrationTransferStatus.PENDING -> {
+            val scheduled = t.scheduledAt
+            when {
+                scheduled <= now && t.isProved -> stringRes("Overdue · ${overdueHours(t, now)}h ago")
+                scheduled <= now -> stringRes("Awaiting proof")
+                else -> {
+                    // Use the shared formatter (Issue 2) so this screen and the Review screen
+                    // format identically ("~1 h 15 min") — the old inline branch bucketed to
+                    // coarse integer hours ("~1 hours") and dropped the minutes, so 75 min and
+                    // 119 min both rendered the same. fineGrained defaults to testnet=true.
+                    val secondsLeft = (scheduled - now).inWholeSeconds
+                    stringRes(formatMigrationDuration(secondsLeft))
+                }
+            }
+        }
+    }
+
+/**
+ * Status label for a preparation row. Mirrors [transferLabel]'s Sent and future-relative arms
+ * ("Sent recently" / "Sent X min ago" / "Sent Xh ago" / "~X min"), but deliberately does NOT
+ * surface an "Overdue" label: preparations are internal note-split plumbing and the
+ * overdue/recovery affordance is transfers-only, so a past-due unsent preparation reads simply
+ * "Pending". Top-level and internal for unit-testability without Android or Koin.
+ */
+internal fun preparationStatusLabel(p: MigrationPreparation, now: Instant): StringResource {
+    val scheduledAt = Instant.fromEpochSeconds(p.scheduledAtEpochSeconds)
+    return when (p.status) {
+        MigrationTransferStatus.SENT -> {
+            val agoMinutes = (now - scheduledAt).inWholeMinutes
+            when {
+                agoMinutes < 1 -> stringRes("Sent recently")
+                agoMinutes < 60 -> stringRes("Sent $agoMinutes min ago")
+                else -> stringRes("Sent ${agoMinutes / 60}h ago")
+            }
+        }
+        MigrationTransferStatus.PENDING -> {
+            when {
+                scheduledAt <= now -> stringRes("Pending")
+                else -> {
+                    val secondsLeft = (scheduledAt - now).inWholeSeconds
+                    stringRes(formatMigrationDuration(secondsLeft))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * DEBUG-only prove-state label for a preparation row, formatted with the same relative formatter
+ * as [preparationStatusLabel] so "~X min" / pending text look identical. Returns "proved" when
+ * the preparation already has a proof, otherwise a relative scheduled time or "pending".
+ * Top-level and internal for unit-testability.
+ */
+internal fun preparationSyncLabel(p: MigrationPreparation, now: Instant): StringResource {
+    if (p.isProved) return stringRes("proved")
+    val scheduledAt = Instant.fromEpochSeconds(p.scheduledAtEpochSeconds)
+    return when {
+        scheduledAt <= now -> stringRes("pending")
+        else -> {
+            val secondsLeft = (scheduledAt - now).inWholeSeconds
+            stringRes(formatMigrationDuration(secondsLeft))
+        }
+    }
+}
+
+/**
+ * DEBUG-only prove-state label for a transfer row, mirroring [preparationSyncLabel]: returns
+ * "proved" when the transfer already has a proof, otherwise a relative scheduled time or "pending".
+ * Top-level and internal for unit-testability.
+ */
+internal fun transferSyncLabel(t: MigrationTransfer, now: Instant): StringResource {
+    if (t.isProved) return stringRes("proved")
+    val scheduledAt = t.scheduledAt
+    return when {
+        scheduledAt <= now -> stringRes("pending")
+        else -> {
+            val secondsLeft = (scheduledAt - now).inWholeSeconds
+            stringRes(formatMigrationDuration(secondsLeft))
+        }
     }
 }
