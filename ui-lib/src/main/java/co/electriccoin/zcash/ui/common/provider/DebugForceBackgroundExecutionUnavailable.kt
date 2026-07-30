@@ -23,6 +23,10 @@ object DebugForceBackgroundExecutionUnavailable {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getBoolean(KEY, false)
 
     fun set(context: Context, forced: Boolean) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putBoolean(KEY, forced).apply()
+        context
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY, forced)
+            .apply()
     }
 }

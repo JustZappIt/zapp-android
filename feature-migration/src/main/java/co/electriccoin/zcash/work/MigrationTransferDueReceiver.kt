@@ -32,7 +32,9 @@ import kotlin.time.Clock
  * alarm is armed to fire right at the transfer's due instant, by construction it's "just become
  * due" whenever it does fire.
  */
-class MigrationTransferDueReceiver : BroadcastReceiver(), KoinComponent {
+class MigrationTransferDueReceiver :
+    BroadcastReceiver(),
+    KoinComponent {
     private val migrationPlanRepository: MigrationPlanRepository by inject()
     private val migrationNotifier: MigrationNotifier by inject()
     private val isBackgroundExecutionAvailableProvider: IsBackgroundExecutionAvailableProvider by inject()
@@ -65,7 +67,9 @@ class MigrationTransferDueReceiver : BroadcastReceiver(), KoinComponent {
                             "${plan.totalCount} due — notifying (accountKeyId=$accountKeyId)."
                     }
                     if (accountKeyId == null) {
-                        Twig.warn { "MIGRATION_DIAG MigrationTransferDueReceiver: no accountKeyId extra on alarm intent — falling back to offset 0 (pre-upgrade alarm)" }
+                        Twig.warn {
+                            "MIGRATION_DIAG MigrationTransferDueReceiver: no accountKeyId extra on alarm intent — falling back to offset 0 (pre-upgrade alarm)"
+                        }
                     }
                     migrationNotifier.notifyTransferReadyToSend(accountKeyId.orEmpty(), next.index + 1, plan.totalCount)
                 } else {

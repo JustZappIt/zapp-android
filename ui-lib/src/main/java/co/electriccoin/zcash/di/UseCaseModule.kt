@@ -2,10 +2,6 @@ package co.electriccoin.zcash.di
 
 import co.electriccoin.zcash.ui.common.mapper.SwapSupportMapper
 import co.electriccoin.zcash.ui.common.usecase.ApplyTransactionFiltersUseCase
-import co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase
-import co.electriccoin.zcash.ui.common.usecase.DebugStartMigrationE2EUseCase
-import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
-import co.electriccoin.zcash.ui.common.usecase.ScheduleNextMigrationWindowUseCase
 import co.electriccoin.zcash.ui.common.usecase.ApplyTransactionFulltextFiltersUseCase
 import co.electriccoin.zcash.ui.common.usecase.AuthorizeVotingSubmissionUseCase
 import co.electriccoin.zcash.ui.common.usecase.CancelProposalFlowUseCase
@@ -45,10 +41,7 @@ import co.electriccoin.zcash.ui.common.usecase.GetFlexaStatusUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetHomeMessageUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetKeystoneStatusUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetORSwapQuoteUseCase
-import co.electriccoin.zcash.ui.common.usecase.GetMigrationPrivacyOrReviewDestinationUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
-import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
-import co.electriccoin.zcash.ui.common.usecase.LockOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetPersistableWalletUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetProposalUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetResyncDataFromHeightUseCase
@@ -102,7 +95,6 @@ import co.electriccoin.zcash.ui.common.usecase.ObserveSelectedWalletAccountUseCa
 import co.electriccoin.zcash.ui.common.usecase.ObserveTransactionSubmitStateUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveZashiAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.OnAddressScannedUseCase
-import co.electriccoin.zcash.ui.common.usecase.OnMigrationSyncCompletedUseCase
 import co.electriccoin.zcash.ui.common.usecase.OnUserSavedWalletBackupUseCase
 import co.electriccoin.zcash.ui.common.usecase.OnZip321ScannedUseCase
 import co.electriccoin.zcash.ui.common.usecase.OptInExchangeRateAndTorUseCase
@@ -198,10 +190,7 @@ val useCaseModule =
         factoryOf(::Zip321BuildUriUseCase)
         factoryOf(::Zip321ParseUriValidationUseCase)
         factoryOf(::GetPersistableWalletUseCase)
-        factoryOf(::GetOrchardMigrationSdkUseCase)
         factoryOf(::GetOrchardBalanceUseCase)
-        factoryOf(::LockOrchardBalanceUseCase)
-        factoryOf(::GetMigrationPrivacyOrReviewDestinationUseCase)
         factoryOf(::GetSupportUseCase)
         factoryOf(::GetWalletSeedBytesUseCase)
         factoryOf(::ErrorMapperUseCase)
@@ -327,22 +316,4 @@ val useCaseModule =
         factoryOf(::SwapSupportMapper)
         factoryOf(::GetAutomaticEndpointUseCase)
         factoryOf(::IsServerAutomaticUseCase)
-        // Explicit factory: the defaulted isLaneAActive lambda must use its Kotlin default —
-        // factoryOf resolves ALL constructor params via Koin and dies on the Function1
-        // (NoDefinitionFoundException at startup, caught on-emulator 2026-07-28).
-        factory {
-            CheckMigrationRecoveryUseCase(
-                getOrchardMigrationSdk = get(),
-                navigationRouter = get(),
-                migrationPlanRepository = get(),
-                pendingMigrationTorFailureStorageProvider = get(),
-                getSelectedWalletAccount = get(),
-                migrationSyncScheduler = get(),
-                context = get(),
-            )
-        }
-        factoryOf(::FinalizeMigrationScheduleUseCase)
-        factoryOf(::DebugStartMigrationE2EUseCase)
-        factoryOf(::ScheduleNextMigrationWindowUseCase)
-        factoryOf(::OnMigrationSyncCompletedUseCase)
     }

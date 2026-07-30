@@ -48,15 +48,19 @@ fun AttentionReason.affectedTransferIndices(
 ): List<Int> {
     val merged = plan.withLiveState(liveStates)
     return when (this) {
-        is AttentionReason.InvalidTransfer ->
+        is AttentionReason.InvalidTransfer -> {
             merged.transfers.filter { it.id == transferId }.map { it.index }
+        }
 
-        AttentionReason.TransferExpired ->
+        AttentionReason.TransferExpired -> {
             merged.transfers
                 .filter { it.status == MigrationTransferStatus.PENDING && it.expiryAtEpochSeconds <= nowEpochSeconds }
                 .map { it.index }
+        }
 
-        AttentionReason.SyncRequiredBeforeNext -> emptyList()
+        AttentionReason.SyncRequiredBeforeNext -> {
+            emptyList()
+        }
     }
 }
 

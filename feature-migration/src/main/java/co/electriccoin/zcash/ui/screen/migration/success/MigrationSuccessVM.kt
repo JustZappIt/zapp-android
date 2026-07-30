@@ -17,7 +17,6 @@ class MigrationSuccessVM(
     private val viewTransactionDetail: ViewTransactionDetailAfterSuccessfulProposalUseCase,
     private val errorStateMapper: ErrorMapperUseCase,
 ) : ViewModel() {
-
     private val closeLce = mutableLce<Unit>()
 
     val state: StateFlow<LceState<MigrationSuccessState>> =

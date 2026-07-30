@@ -23,6 +23,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -32,7 +33,6 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.Dispatchers
 import java.util.UUID
 import kotlin.reflect.KClass
 import kotlin.test.AfterTest
@@ -44,19 +44,21 @@ import kotlin.test.assertNull
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MigrationKeystoneScanVMTest {
-
     // Fixed test account — all tests use the same account key so the repo guard is satisfied.
-    private val testSdkAccount = AccountFixture.new(
-        accountUuid = UUID.fromString("00000000-0000-0000-0000-000000000001")
-    )
+    private val testSdkAccount =
+        AccountFixture.new(
+            accountUuid = UUID.fromString("00000000-0000-0000-0000-000000000001")
+        )
     private val testAccountKeyId = testSdkAccount.accountUuid.toStorageKeyId()
-    private val testWalletAccount: WalletAccount = mockk(relaxed = true) {
-        every { sdkAccount } returns testSdkAccount
-    }
-    private val testGetSelectedWalletAccount: GetSelectedWalletAccountUseCase = mockk {
-        coEvery { this@mockk() } returns testWalletAccount
-        every { observe() } returns flowOf(testWalletAccount)
-    }
+    private val testWalletAccount: WalletAccount =
+        mockk(relaxed = true) {
+            every { sdkAccount } returns testSdkAccount
+        }
+    private val testGetSelectedWalletAccount: GetSelectedWalletAccountUseCase =
+        mockk {
+            coEvery { this@mockk() } returns testWalletAccount
+            every { observe() } returns flowOf(testWalletAccount)
+        }
 
     @BeforeTest
     fun setUp() {
@@ -72,10 +74,12 @@ class MigrationKeystoneScanVMTest {
     fun outdatedFirmwareOnFirstRoundBlocksWithoutFinalizing() =
         runTest {
             val sdk = fakeSdk(firmwareVersion = byteArrayOf(2, 9, 9))
-            val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-                .apply { set(testAccountKeyId, schedule()) }
-            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-                .apply { set(testAccountKeyId, pending(roundIndex = 0)) }
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts =
+                PendingKeystoneMigrationPcztsRepositoryImpl()
+                    .apply { set(testAccountKeyId, pending(roundIndex = 0)) }
             val finalize = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true)
             val router = FakeNavigationRouter()
             val vm = vm(sdk, pendingSchedule, pendingPczts, finalize, router)
@@ -89,7 +93,9 @@ class MigrationKeystoneScanVMTest {
             assertNotNull(pendingPczts.get(testAccountKeyId))
             assertEquals(0, pendingPczts.get(testAccountKeyId)?.roundIndex)
 
-            vm.failureSheet.value?.onDismiss?.invoke()
+            vm.failureSheet.value
+                ?.onDismiss
+                ?.invoke()
             assertNull(vm.failureSheet.value)
             assertEquals(1, router.backCount)
         }
@@ -98,10 +104,12 @@ class MigrationKeystoneScanVMTest {
     fun upToDateFirmwareOnFirstRoundProceedsToFinalize() =
         runTest {
             val sdk = fakeSdk(firmwareVersion = byteArrayOf(3, 0, 2))
-            val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-                .apply { set(testAccountKeyId, schedule()) }
-            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-                .apply { set(testAccountKeyId, pending(roundIndex = 0)) }
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts =
+                PendingKeystoneMigrationPcztsRepositoryImpl()
+                    .apply { set(testAccountKeyId, pending(roundIndex = 0)) }
             val finalize = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true)
             val router = FakeNavigationRouter()
             val vm = vm(sdk, pendingSchedule, pendingPczts, finalize, router)
@@ -119,10 +127,12 @@ class MigrationKeystoneScanVMTest {
     fun missingFirmwareOnFirstRoundBlocksWithoutFinalizing() =
         runTest {
             val sdk = fakeSdk(firmwareVersion = null)
-            val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-                .apply { set(testAccountKeyId, schedule()) }
-            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-                .apply { set(testAccountKeyId, pending(roundIndex = 0)) }
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts =
+                PendingKeystoneMigrationPcztsRepositoryImpl()
+                    .apply { set(testAccountKeyId, pending(roundIndex = 0)) }
             val finalize = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true)
             val router = FakeNavigationRouter()
             val vm = vm(sdk, pendingSchedule, pendingPczts, finalize, router)
@@ -138,21 +148,23 @@ class MigrationKeystoneScanVMTest {
     fun outdatedFirmwareOnLaterRoundSkipsCheckAndProceeds() =
         runTest {
             val sdk = fakeSdk(firmwareVersion = byteArrayOf(2, 9, 9))
-            val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-                .apply { set(testAccountKeyId, schedule()) }
-            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-                .apply {
-                    set(
-                        testAccountKeyId,
-                        PendingKeystoneMigrationPczts(
-                            requestId = byteArrayOf(1, 2, 3),
-                            splitUnsignedPczt = null,
-                            transferUnsignedPczts = (0 until 36).map { it.toLong() to byteArrayOf(it.toByte()) },
-                            roundIndex = 1,
-                            accumulatedTransferSigned = (0 until 35).map { it.toLong() to byteArrayOf(it.toByte()) },
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts =
+                PendingKeystoneMigrationPcztsRepositoryImpl()
+                    .apply {
+                        set(
+                            testAccountKeyId,
+                            PendingKeystoneMigrationPczts(
+                                requestId = byteArrayOf(1, 2, 3),
+                                splitUnsignedPczt = null,
+                                transferUnsignedPczts = (0 until 36).map { it.toLong() to byteArrayOf(it.toByte()) },
+                                roundIndex = 1,
+                                accumulatedTransferSigned = (0 until 35).map { it.toLong() to byteArrayOf(it.toByte()) },
+                            )
                         )
-                    )
-                }
+                    }
             val finalize = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true)
             val router = FakeNavigationRouter()
             val vm = vm(sdk, pendingSchedule, pendingPczts, finalize, router)
@@ -196,15 +208,16 @@ class MigrationKeystoneScanVMTest {
 
     private fun schedule() =
         MigrationSchedule(
-            transfers = listOf(
-                TransferProposal(
-                    id = 11L,
-                    amountZatoshi = 100_000L,
-                    anchorHeight = 100L,
-                    nextExecutableAfterHeight = 200L,
-                    expiryHeight = 300L,
-                )
-            ),
+            transfers =
+                listOf(
+                    TransferProposal(
+                        id = 11L,
+                        amountZatoshi = 100_000L,
+                        anchorHeight = 100L,
+                        nextExecutableAfterHeight = 200L,
+                        expiryHeight = 300L,
+                    )
+                ),
             estimatedDurationHours = 1,
             proposalHandle = 0L,
         )

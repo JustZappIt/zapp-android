@@ -7,23 +7,23 @@ import cash.z.ecc.android.sdk.TransferResult
 import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
 import cash.z.ecc.android.sdk.model.Proposal
 import cash.z.ecc.android.sdk.model.Zatoshi
+import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.LceState
-import co.electriccoin.zcash.ui.common.model.toStorageKeyId
+import co.electriccoin.zcash.ui.common.model.groupLce
 import co.electriccoin.zcash.ui.common.model.guardLoading
 import co.electriccoin.zcash.ui.common.model.migration.MigrationKeystoneRound
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
-import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
 import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
-import co.electriccoin.zcash.ui.common.model.groupLce
 import co.electriccoin.zcash.ui.common.model.mutableLce
-import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.stateIn
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.common.repository.BiometricRequest
@@ -70,14 +70,20 @@ class MigrationReviewVM(
     private val keystoneProposalRepository: KeystoneProposalRepository,
     private val submitProposal: SubmitProposalUseCase,
 ) : ViewModel() {
-
     // proposeImmediateMigration() now returns an ordinary send-max Proposal (bypassing the
     // migration engine entirely — see OrchardMigrationSdk's kdoc), which carries no amount or
     // destination of its own (only totalFeeRequired()/transactionCount()); the amount shown is
     // this account's Orchard balance at propose time (the whole point of a send-max sweep).
     private sealed class ReviewProposal {
-        data class Automatic(val schedule: MigrationSchedule, val keystoneRunCount: Int?) : ReviewProposal()
-        data class Immediate(val proposal: Proposal, val amountZatoshi: Long) : ReviewProposal()
+        data class Automatic(
+            val schedule: MigrationSchedule,
+            val keystoneRunCount: Int?
+        ) : ReviewProposal()
+
+        data class Immediate(
+            val proposal: Proposal,
+            val amountZatoshi: Long
+        ) : ReviewProposal()
     }
 
     // Measured block rate captured at propose time; 75s until then. Drives every
@@ -98,6 +104,7 @@ class MigrationReviewVM(
                     val amount = getOrchardBalance().value
                     ReviewProposal.Immediate(sdk.proposeImmediateMigration(), amount)
                 }
+
                 MigrationMode.AUTOMATIC -> {
                     // If MigrationTransferInvalidVM.onContinue() already obtained a fresh schedule
                     // via restartCurrentMigrationStep() — whose own doc requires that returned
@@ -113,11 +120,12 @@ class MigrationReviewVM(
                     // see MigrationReviewVM.confirmAutomatic()'s Keystone check below), so round
                     // display is AUTOMATIC-only. Stateless preview, called fresh on every Review
                     // entry — never cached.
-                    val keystoneRunCount = if (getSelectedWalletAccount() is KeystoneAccount) {
-                        sdk.estimateMigrationRunCount()
-                    } else {
-                        null
-                    }
+                    val keystoneRunCount =
+                        if (getSelectedWalletAccount() is KeystoneAccount) {
+                            sdk.estimateMigrationRunCount()
+                        } else {
+                            null
+                        }
                     secondsPerBlock = sdk.estimatedSecondsPerBlock()
                     logProposedPlan(schedule)
                     ReviewProposal.Automatic(schedule, keystoneRunCount)
@@ -128,7 +136,11 @@ class MigrationReviewVM(
 
     val state: StateFlow<LceState<MigrationReviewState>> =
         combine(
-            proposeLce.state, exchangeRateRepository.state, isKeystoneAccount, failure, confirmLce.state
+            proposeLce.state,
+            exchangeRateRepository.state,
+            isKeystoneAccount,
+            failure,
+            confirmLce.state
         ) { lce, rate, isKeystone, f, confirmState ->
             lce.success?.let { proposal -> createState(proposal, confirmState.loading, rate, isKeystone, f) }
         }.withLce(groupLce(proposeLce, confirmLce), errorStateMapper::mapToState)
@@ -140,10 +152,11 @@ class MigrationReviewVM(
         exchangeRateState: ExchangeRateState,
         isKeystone: Boolean,
         failureResult: TransferResult?,
-    ): MigrationReviewState = when (proposal) {
-        is ReviewProposal.Automatic -> createAutomaticState(proposal, isConfirming, exchangeRateState, isKeystone, failureResult)
-        is ReviewProposal.Immediate -> createImmediateState(proposal, isConfirming, exchangeRateState)
-    }
+    ): MigrationReviewState =
+        when (proposal) {
+            is ReviewProposal.Automatic -> createAutomaticState(proposal, isConfirming, exchangeRateState, isKeystone, failureResult)
+            is ReviewProposal.Immediate -> createImmediateState(proposal, isConfirming, exchangeRateState)
+        }
 
     private fun createAutomaticState(
         proposal: ReviewProposal.Automatic,
@@ -169,30 +182,36 @@ class MigrationReviewVM(
             totalAmount = stringRes(Zatoshi(total)),
             totalFiatAmount = fiatAmount(Zatoshi(total), exchangeRateState),
             estimatedDuration = stringRes(formatMigrationDuration(spanSeconds)),
-            preparations = sched.preparations.mapIndexed { i, p ->
-                MigrationReviewPreparationState(number = i + 1, scheduledLabel = scheduledLabelForPrep(p, sched))
-            },
-            transfers = sched.transfers.mapIndexed { i, t ->
-                MigrationReviewTransferState(
-                    index = i + 1,
-                    totalCount = sched.transfers.size,
-                    amount = stringRes(Zatoshi(t.amountZatoshi)),
-                    fiatAmount = fiatAmount(Zatoshi(t.amountZatoshi), exchangeRateState),
-                    scheduledLabel = scheduledLabel(t),
-                )
-            },
+            preparations =
+                sched.preparations.mapIndexed { i, p ->
+                    MigrationReviewPreparationState(number = i + 1, scheduledLabel = scheduledLabelForPrep(p, sched))
+                },
+            transfers =
+                sched.transfers.mapIndexed { i, t ->
+                    MigrationReviewTransferState(
+                        index = i + 1,
+                        totalCount = sched.transfers.size,
+                        amount = stringRes(Zatoshi(t.amountZatoshi)),
+                        fiatAmount = fiatAmount(Zatoshi(t.amountZatoshi), exchangeRateState),
+                        scheduledLabel = scheduledLabel(t),
+                    )
+                },
             isKeystone = isKeystone,
             keystoneRound = proposal.keystoneRunCount?.takeIf { it > 1 }?.let { MigrationKeystoneRound(current = 1, total = it) },
             isConfirming = isConfirming,
             onConfirm = { proposeLce.guardLoading { onConfirmAutomatic(sched) } },
             onBack = ::onBack,
-            failureSheet = failureResult?.let {
-                MigrationTransferFailureState(
-                    message = migrationFailureMessage(it),
-                    onRetry = { failure.value = null; proposeLce.guardLoading { onConfirmAutomatic(sched) } },
-                    onDismiss = { failure.value = null },
-                )
-            },
+            failureSheet =
+                failureResult?.let {
+                    MigrationTransferFailureState(
+                        message = migrationFailureMessage(it),
+                        onRetry = {
+                            failure.value = null
+                            proposeLce.guardLoading { onConfirmAutomatic(sched) }
+                        },
+                        onDismiss = { failure.value = null },
+                    )
+                },
         )
     }
 
@@ -211,15 +230,16 @@ class MigrationReviewVM(
             totalAmount = stringRes(Zatoshi(proposal.amountZatoshi)),
             totalFiatAmount = fiatAmount(Zatoshi(proposal.amountZatoshi), exchangeRateState),
             estimatedDuration = stringRes(formatMigrationDuration(0L)),
-            transfers = listOf(
-                MigrationReviewTransferState(
-                    index = 1,
-                    totalCount = 1,
-                    amount = stringRes(Zatoshi(proposal.amountZatoshi)),
-                    fiatAmount = fiatAmount(Zatoshi(proposal.amountZatoshi), exchangeRateState),
-                    scheduledLabel = stringRes("Send immediately"),
-                )
-            ),
+            transfers =
+                listOf(
+                    MigrationReviewTransferState(
+                        index = 1,
+                        totalCount = 1,
+                        amount = stringRes(Zatoshi(proposal.amountZatoshi)),
+                        fiatAmount = fiatAmount(Zatoshi(proposal.amountZatoshi), exchangeRateState),
+                        scheduledLabel = stringRes("Send immediately"),
+                    )
+                ),
             fee = stringRes(fee),
             isConfirming = isConfirming,
             onConfirm = { onConfirmImmediate(proposal.proposal, proposal.amountZatoshi) },
@@ -290,40 +310,42 @@ class MigrationReviewVM(
         // construction may already be consuming as one of its own inputs (a real double-spend
         // found live on testnet). Re-deriving the schedule from the split's own realized output
         // plan makes every crossing value provably match a note this split actually produces.
-        val scheduleToSign = if (sdk.isNoteSplitNeeded()) {
-            val proposal = sdk.prepareNoteSplit()
-            // Derive the from-split schedule BEFORE submitting the split, not after: submitNoteSplit()
-            // signs the split through the SDK's commit_or_reuse, which clears the in-memory
-            // migration-plan cache that `proposal.proposalHandle` points at once it commits. Calling
-            // proposeMigrationTransfersFromSplit() afterwards then throws "No pending migration
-            // proposal for this account — call propose/prepare first", because the plan the handle
-            // identifies is already gone. Reading the schedule first (the cache is still populated by
-            // prepareNoteSplit()) mirrors MigrationKeystoneSignVM, which likewise derives the
-            // from-split schedule before its first commit.
-            val scheduleFromSplit = sdk.proposeMigrationTransfersFromSplit(proposal)
-            // Write-ahead: persist the plan BEFORE the irreversible submitNoteSplit() (which commits
-            // AND broadcasts the split). If the app dies between here and finalizeMigrationSchedule
-            // below, re-entry then sees InProgress + a saved plan and resumes (see the guard above),
-            // instead of mistaking the committed migration for a fresh start and re-running the split.
-            finalizeMigrationSchedule.persistPlan(scheduleFromSplit, args.mode)
-            val splitResult = sdk.submitNoteSplit(proposal, zashiSpendingKeyDataSource.getZashiSpendingKey())
-            if (splitResult !is TransferResult.Success) {
-                failure.value = splitResult
-                return
+        val scheduleToSign =
+            if (sdk.isNoteSplitNeeded()) {
+                val proposal = sdk.prepareNoteSplit()
+                // Derive the from-split schedule BEFORE submitting the split, not after: submitNoteSplit()
+                // signs the split through the SDK's commit_or_reuse, which clears the in-memory
+                // migration-plan cache that `proposal.proposalHandle` points at once it commits. Calling
+                // proposeMigrationTransfersFromSplit() afterwards then throws "No pending migration
+                // proposal for this account — call propose/prepare first", because the plan the handle
+                // identifies is already gone. Reading the schedule first (the cache is still populated by
+                // prepareNoteSplit()) mirrors MigrationKeystoneSignVM, which likewise derives the
+                // from-split schedule before its first commit.
+                val scheduleFromSplit = sdk.proposeMigrationTransfersFromSplit(proposal)
+                // Write-ahead: persist the plan BEFORE the irreversible submitNoteSplit() (which commits
+                // AND broadcasts the split). If the app dies between here and finalizeMigrationSchedule
+                // below, re-entry then sees InProgress + a saved plan and resumes (see the guard above),
+                // instead of mistaking the committed migration for a fresh start and re-running the split.
+                finalizeMigrationSchedule.persistPlan(scheduleFromSplit, args.mode)
+                val splitResult = sdk.submitNoteSplit(proposal, zashiSpendingKeyDataSource.getZashiSpendingKey())
+                if (splitResult !is TransferResult.Success) {
+                    failure.value = splitResult
+                    return
+                }
+                scheduleFromSplit
+            } else {
+                // Same write-ahead as the split branch: persist before signAndStoreMigrationSchedule()
+                // (the commit for the no-split path) so a crash before finalize is recoverable.
+                finalizeMigrationSchedule.persistPlan(sched, args.mode)
+                sched
             }
-            scheduleFromSplit
-        } else {
-            // Same write-ahead as the split branch: persist before signAndStoreMigrationSchedule()
-            // (the commit for the no-split path) so a crash before finalize is recoverable.
-            finalizeMigrationSchedule.persistPlan(sched, args.mode)
-            sched
-        }
         try {
             sdk.signAndStoreMigrationSchedule(scheduleToSign, zashiSpendingKeyDataSource.getZashiSpendingKey())
             finalizeMigrationSchedule(scheduleToSign, args.mode)
         } catch (e: RuntimeException) {
-            val retryable = e.message?.contains("StalePlan") == true ||
-                e.message?.contains("BoundaryCheckpointMissing") == true
+            val retryable =
+                e.message?.contains("StalePlan") == true ||
+                    e.message?.contains("BoundaryCheckpointMissing") == true
             if (!retryable) throw e
             // StalePlan: the plan is a planning-time snapshot of wallet note indices; any note
             // received or changed between this screen's propose and the commit (the bursty
@@ -386,6 +408,7 @@ class MigrationReviewVM(
 
     // Only ever called for AUTOMATIC (createImmediateState hardcodes its own single-row label
     // instead — a raw send-max Proposal carries no per-transfer schedule to derive one from).
+
     /** One-shot plan dump at propose time: absolute heights + wall-clock estimates. */
     private fun logProposedPlan(sched: MigrationSchedule) {
         // `anchorHeight` on a PROPOSED transfer is NOT a real commitment-tree anchor — the engine
@@ -422,6 +445,7 @@ class MigrationReviewVM(
         val secondsUntil = estimatedSecondsBetweenHeights(t.anchorHeight, t.nextExecutableAfterHeight, secondsPerBlock)
         return when {
             secondsUntil <= 0 -> stringRes("Ready now")
+
             // Shares formatMigrationDuration's resolution rules (minute-level on testnet).
             else -> stringRes(formatMigrationDuration(secondsUntil))
         }

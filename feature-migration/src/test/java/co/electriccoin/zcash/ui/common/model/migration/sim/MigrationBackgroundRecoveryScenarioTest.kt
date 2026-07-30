@@ -40,7 +40,6 @@ import kotlin.time.Duration.Companion.seconds
  * would need MigrationScheduler to become injectable.
  */
 class MigrationBackgroundRecoveryScenarioTest {
-
     @BeforeTest
     fun resetThrottle() {
         CheckMigrationRecoveryUseCase.resetRunThrottleForTests()
@@ -57,19 +56,25 @@ class MigrationBackgroundRecoveryScenarioTest {
     private fun inProgressDriver(): MigrationSimDriver {
         val driver = MigrationSimDriver()
         driver.seedPlan(
-            preparations = listOf(
-                MigrationSimDriver.SimPrep(id = PREP_ID, layer = 0, scheduledHeight = ANCHOR - 40L),
-            ),
-            transfers = listOf(
-                MigrationSimDriver.SimTransfer(
-                    id = TRANSFER_A, scheduledHeight = ANCHOR + 5L, anchorBoundary = ANCHOR,
-                    dependsOn = listOf(PREP_ID),
+            preparations =
+                listOf(
+                    MigrationSimDriver.SimPrep(id = PREP_ID, layer = 0, scheduledHeight = ANCHOR - 40L),
                 ),
-                MigrationSimDriver.SimTransfer(
-                    id = TRANSFER_B, scheduledHeight = ANCHOR + 15L, anchorBoundary = ANCHOR,
-                    dependsOn = listOf(PREP_ID),
+            transfers =
+                listOf(
+                    MigrationSimDriver.SimTransfer(
+                        id = TRANSFER_A,
+                        scheduledHeight = ANCHOR + 5L,
+                        anchorBoundary = ANCHOR,
+                        dependsOn = listOf(PREP_ID),
+                    ),
+                    MigrationSimDriver.SimTransfer(
+                        id = TRANSFER_B,
+                        scheduledHeight = ANCHOR + 15L,
+                        anchorBoundary = ANCHOR,
+                        dependsOn = listOf(PREP_ID),
+                    ),
                 ),
-            ),
             startTip = ANCHOR - 40L,
         )
         driver.mine(id = PREP_ID, height = ANCHOR - 2L)
@@ -84,18 +89,21 @@ class MigrationBackgroundRecoveryScenarioTest {
         pendingMigrationTorFailure: Boolean = false,
         isLaneAActive: suspend () -> Boolean = { true },
         isLaneBActive: suspend (String) -> Boolean = { true },
-        migrationPlanRepository: MigrationPlanRepository = mockk(relaxed = true) {
-            coEvery { load() } returns mockk(relaxed = true)
-        },
+        migrationPlanRepository: MigrationPlanRepository =
+            mockk(relaxed = true) {
+                coEvery { load() } returns mockk(relaxed = true)
+            },
     ) = CheckMigrationRecoveryUseCase(
-        getOrchardMigrationSdk = mockk<GetOrchardMigrationSdkUseCase> {
-            coEvery { this@mockk() } returns driver.sdk
-        },
+        getOrchardMigrationSdk =
+            mockk<GetOrchardMigrationSdkUseCase> {
+                coEvery { this@mockk() } returns driver.sdk
+            },
         navigationRouter = navigationRouter,
         migrationPlanRepository = migrationPlanRepository,
-        pendingMigrationTorFailureStorageProvider = mockk<PendingMigrationTorFailureStorageProvider> {
-            coEvery { get() } returns pendingMigrationTorFailure
-        },
+        pendingMigrationTorFailureStorageProvider =
+            mockk<PendingMigrationTorFailureStorageProvider> {
+                coEvery { get() } returns pendingMigrationTorFailure
+            },
         getSelectedWalletAccount = mockk<GetSelectedWalletAccountUseCase>(relaxed = true),
         migrationSyncScheduler = migrationSyncScheduler,
         context = mockk<Context>(relaxed = true),
@@ -104,71 +112,76 @@ class MigrationBackgroundRecoveryScenarioTest {
     )
 
     @Test
-    fun `healthy in-progress migration with Lane A absent re-arms Lane A and does not auto-navigate`() = runTest {
-        val driver = inProgressDriver()
-        // Precondition sanity: the fake really is InProgress (not Complete/RequiresAttention).
-        kotlin.test.assertTrue(driver.sdk.getMigrationState() is MigrationState.InProgress)
+    fun `healthy in-progress migration with Lane A absent re-arms Lane A and does not auto-navigate`() =
+        runTest {
+            val driver = inProgressDriver()
+            // Precondition sanity: the fake really is InProgress (not Complete/RequiresAttention).
+            kotlin.test.assertTrue(driver.sdk.getMigrationState() is MigrationState.InProgress)
 
-        val router = mockk<NavigationRouter>(relaxed = true)
-        val syncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
+            val router = mockk<NavigationRouter>(relaxed = true)
+            val syncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
 
-        useCase(
-            driver = driver,
-            navigationRouter = router,
-            migrationSyncScheduler = syncScheduler,
-            isLaneAActive = { false }, // worker absent → recovery must re-arm it
-            isLaneBActive = { true }, // keep the non-injectable Lane B path unreached (see kdoc)
-        ).invoke()
+            useCase(
+                driver = driver,
+                navigationRouter = router,
+                migrationSyncScheduler = syncScheduler,
+                isLaneAActive = { false }, // worker absent → recovery must re-arm it
+                isLaneBActive = { true }, // keep the non-injectable Lane B path unreached (see kdoc)
+            ).invoke()
 
-        // Lane A re-armed with the short flat first arm.
-        verify { syncScheduler.schedule(any(), 60.seconds) }
-        // A healthy in-progress migration must NOT hijack the screen on app-open (Task 6).
-        coVerify(exactly = 0) { router.replaceAll(any()) }
-    }
-
-    @Test
-    fun `in-progress migration with Lane A already active does not re-schedule Lane A`() = runTest {
-        val driver = inProgressDriver()
-        val router = mockk<NavigationRouter>(relaxed = true)
-        val syncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
-
-        useCase(
-            driver = driver,
-            navigationRouter = router,
-            migrationSyncScheduler = syncScheduler,
-            isLaneAActive = { true },
-            isLaneBActive = { true },
-        ).invoke()
-
-        verify(exactly = 0) { syncScheduler.schedule(any(), any()) }
-        coVerify(exactly = 0) { router.replaceAll(any()) }
-    }
+            // Lane A re-armed with the short flat first arm.
+            verify { syncScheduler.schedule(any(), 60.seconds) }
+            // A healthy in-progress migration must NOT hijack the screen on app-open (Task 6).
+            coVerify(exactly = 0) { router.replaceAll(any()) }
+        }
 
     @Test
-    fun `a completed migration keeps lanes alone and does not navigate`() = runTest {
-        // Drain the plan to Complete, then app-open: the engine is no longer InProgress, so with no
-        // saved plan there is nothing to reconcile and nothing to navigate.
-        val driver = inProgressDriver()
-        val opts = cash.z.ecc.android.sdk.NetworkPrivacyOptions(useTor = false)
-        driver.sdk.finalizeReadyTransfers()
-        driver.sdk.executeNextPendingTransfer(opts, useEstimatedTip = true)
-        driver.sdk.executeNextPendingTransfer(opts, useEstimatedTip = true)
-        kotlin.test.assertTrue(driver.sdk.getMigrationState() is MigrationState.Complete)
+    fun `in-progress migration with Lane A already active does not re-schedule Lane A`() =
+        runTest {
+            val driver = inProgressDriver()
+            val router = mockk<NavigationRouter>(relaxed = true)
+            val syncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
 
-        val router = mockk<NavigationRouter>(relaxed = true)
-        val syncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
+            useCase(
+                driver = driver,
+                navigationRouter = router,
+                migrationSyncScheduler = syncScheduler,
+                isLaneAActive = { true },
+                isLaneBActive = { true },
+            ).invoke()
 
-        useCase(
-            driver = driver,
-            navigationRouter = router,
-            migrationSyncScheduler = syncScheduler,
-            isLaneAActive = { false },
-            isLaneBActive = { true },
-            // No saved plan and engine not InProgress → the reconciliation block is skipped entirely.
-            migrationPlanRepository = mockk(relaxed = true) { coEvery { load() } returns null },
-        ).invoke()
+            verify(exactly = 0) { syncScheduler.schedule(any(), any()) }
+            coVerify(exactly = 0) { router.replaceAll(any()) }
+        }
 
-        verify(exactly = 0) { syncScheduler.schedule(any(), any()) }
-        coVerify(exactly = 0) { router.replaceAll(any()) }
-    }
+    @Test
+    fun `a completed migration keeps lanes alone and does not navigate`() =
+        runTest {
+            // Drain the plan to Complete, then app-open: the engine is no longer InProgress, so with no
+            // saved plan there is nothing to reconcile and nothing to navigate.
+            val driver = inProgressDriver()
+            val opts =
+                cash.z.ecc.android.sdk
+                    .NetworkPrivacyOptions(useTor = false)
+            driver.sdk.finalizeReadyTransfers()
+            driver.sdk.executeNextPendingTransfer(opts, useEstimatedTip = true)
+            driver.sdk.executeNextPendingTransfer(opts, useEstimatedTip = true)
+            kotlin.test.assertTrue(driver.sdk.getMigrationState() is MigrationState.Complete)
+
+            val router = mockk<NavigationRouter>(relaxed = true)
+            val syncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
+
+            useCase(
+                driver = driver,
+                navigationRouter = router,
+                migrationSyncScheduler = syncScheduler,
+                isLaneAActive = { false },
+                isLaneBActive = { true },
+                // No saved plan and engine not InProgress → the reconciliation block is skipped entirely.
+                migrationPlanRepository = mockk(relaxed = true) { coEvery { load() } returns null },
+            ).invoke()
+
+            verify(exactly = 0) { syncScheduler.schedule(any(), any()) }
+            coVerify(exactly = 0) { router.replaceAll(any()) }
+        }
 }

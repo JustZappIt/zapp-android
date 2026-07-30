@@ -102,14 +102,15 @@ private data class BadgeAppearance(
 @Composable
 private fun badgeChromeAppearance(chrome: WalletHeaderBadgeChrome): BadgeAppearance =
     when (chrome) {
-        WalletHeaderBadgeChrome.Neutral ->
+        WalletHeaderBadgeChrome.Neutral -> {
             BadgeAppearance(
                 background = SolidColor(ZashiColors.Surfaces.bgSecondary),
                 tint = ZashiColors.Text.textPrimary,
                 iconPadding = 14.dp,
             )
+        }
 
-        WalletHeaderBadgeChrome.Success ->
+        WalletHeaderBadgeChrome.Success -> {
             BadgeAppearance(
                 background =
                     Brush.verticalGradient(
@@ -121,4 +122,5 @@ private fun badgeChromeAppearance(chrome: WalletHeaderBadgeChrome): BadgeAppeara
                 tint = Color.Unspecified,
                 iconPadding = 12.dp,
             )
+        }
     }

@@ -8,8 +8,8 @@ import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import co.electriccoin.zcash.migration.BuildConfig
 import co.electriccoin.zcash.spackle.Twig
-import co.electriccoin.zcash.ui.BuildConfig
 import kotlin.time.Duration
 import kotlin.time.toJavaDuration
 
@@ -26,7 +26,9 @@ import kotlin.time.toJavaDuration
  * alarm is armed/cancelled alongside the WorkManager job below purely to surface a "ready to send"
  * notification (spec §6.4), never to run the transfer itself.
  */
-class MigrationScheduler(private val context: Context) {
+class MigrationScheduler(
+    private val context: Context
+) {
     // Armed/cancelled alongside the WorkManager job below rather than threaded through every call
     // site separately — see MigrationDueAlarmScheduler's kdoc for why this needs its own
     // AlarmManager alarm instead of relying on the WorkManager job itself.
@@ -64,7 +66,8 @@ class MigrationScheduler(private val context: Context) {
             if (BuildConfig.DEBUG) {
                 Constraints.NONE
             } else {
-                Constraints.Builder()
+                Constraints
+                    .Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)
                     .build()
             }

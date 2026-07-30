@@ -36,7 +36,9 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
 @Serializable
-data class MigrationCustomServerTorArgs(val mode: MigrationMode)
+data class MigrationCustomServerTorArgs(
+    val mode: MigrationMode
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,9 +59,10 @@ fun MigrationCustomServerTorView(
         sheetState = sheetState,
     ) { innerState, contentPadding ->
         Column(
-            modifier = Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(start = 24.dp, end = 24.dp, bottom = contentPadding.calculateBottomPadding()),
+            modifier =
+                Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 24.dp, end = 24.dp, bottom = contentPadding.calculateBottomPadding()),
         ) {
             Text(
                 text = "Your Server Doesn't Support Tor",
@@ -119,20 +122,24 @@ private fun RiskCard(title: String, body: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @PreviewScreens
 @Composable
-private fun Preview() = ZcashTheme {
-    MigrationCustomServerTorView(
-        state = MigrationCustomServerTorState(
-            body = stringRes(
-                "Migration transactions can't be broadcast over Tor when you're using a custom " +
-                    "server. If you continue, these transactions will be sent without Tor's IP protection."
-            ),
-            riskBody = stringRes(
-                "Without Tor, your IP address is exposed to the custom server and could be linked " +
-                    "to the migration amounts."
-            ),
-            onContinueWithoutTor = {},
-            onSwitchServer = {},
-            onBack = {},
+private fun Preview() =
+    ZcashTheme {
+        MigrationCustomServerTorView(
+            state =
+                MigrationCustomServerTorState(
+                    body =
+                        stringRes(
+                            "Migration transactions can't be broadcast over Tor when you're using a custom " +
+                                "server. If you continue, these transactions will be sent without Tor's IP protection."
+                        ),
+                    riskBody =
+                        stringRes(
+                            "Without Tor, your IP address is exposed to the custom server and could be linked " +
+                                "to the migration amounts."
+                        ),
+                    onContinueWithoutTor = {},
+                    onSwitchServer = {},
+                    onBack = {},
+                )
         )
-    )
-}
+    }

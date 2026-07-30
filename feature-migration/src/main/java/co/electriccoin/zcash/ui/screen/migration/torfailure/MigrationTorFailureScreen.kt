@@ -54,9 +54,10 @@ fun MigrationTorFailureView(
         sheetState = sheetState,
     ) { innerState, contentPadding ->
         Column(
-            modifier = Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(start = 24.dp, end = 24.dp, bottom = contentPadding.calculateBottomPadding()),
+            modifier =
+                Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 24.dp, end = 24.dp, bottom = contentPadding.calculateBottomPadding()),
         ) {
             Text(
                 text = "Couldn't Connect to Tor",
@@ -66,16 +67,18 @@ fun MigrationTorFailureView(
             )
             Spacer(4.dp)
             Text(
-                text = "We couldn't establish a Tor connection. You can proceed without Tor protection, " +
-                    "or cancel and try again.",
+                text =
+                    "We couldn't establish a Tor connection. You can proceed without Tor protection, " +
+                        "or cancel and try again.",
                 style = ZashiTypography.textSm,
                 color = ZashiColors.Text.textTertiary,
             )
             Spacer(24.dp)
             RiskCard(
                 title = "What are the risks?",
-                body = "Without Tor, your IP address is exposed to the server and could be linked to " +
-                    "the migration amounts.",
+                body =
+                    "Without Tor, your IP address is exposed to the server and could be linked to " +
+                        "the migration amounts.",
             )
             Spacer(32.dp)
             ZashiButton(
@@ -118,12 +121,14 @@ private fun RiskCard(title: String, body: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @PreviewScreens
 @Composable
-private fun Preview() = ZcashTheme {
-    MigrationTorFailureView(
-        state = MigrationTorFailureState(
-            onContinueWithoutTor = {},
-            onTryAgain = {},
-            onBack = {},
+private fun Preview() =
+    ZcashTheme {
+        MigrationTorFailureView(
+            state =
+                MigrationTorFailureState(
+                    onContinueWithoutTor = {},
+                    onTryAgain = {},
+                    onBack = {},
+                )
         )
-    )
-}
+    }

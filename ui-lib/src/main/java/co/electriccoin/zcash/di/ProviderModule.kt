@@ -16,10 +16,6 @@ import co.electriccoin.zcash.ui.common.provider.HasSeenHowToVoteKeystoneStorageP
 import co.electriccoin.zcash.ui.common.provider.HasSeenHowToVoteKeystoneStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.HasSeenHowToVoteStorageProvider
 import co.electriccoin.zcash.ui.common.provider.HasSeenHowToVoteStorageProviderImpl
-import co.electriccoin.zcash.ui.common.provider.HasLockedOrchardDustStorageProvider
-import co.electriccoin.zcash.ui.common.provider.HasLockedOrchardDustStorageProviderImpl
-import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
-import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.HttpClientProvider
 import co.electriccoin.zcash.ui.common.provider.HttpClientProviderImpl
 import co.electriccoin.zcash.ui.common.provider.HttpPirSnapshotResolver
@@ -28,8 +24,6 @@ import co.electriccoin.zcash.ui.common.provider.IsExchangeRateEnabledStorageProv
 import co.electriccoin.zcash.ui.common.provider.IsExchangeRateEnabledStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.IsKeepScreenOnDuringRestoreProvider
 import co.electriccoin.zcash.ui.common.provider.IsKeepScreenOnDuringRestoreProviderImpl
-import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
-import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.IsServerSelectionAutomaticProvider
 import co.electriccoin.zcash.ui.common.provider.IsServerSelectionAutomaticProviderImpl
 import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProvider
@@ -38,6 +32,8 @@ import co.electriccoin.zcash.ui.common.provider.KeystoneSDKProvider
 import co.electriccoin.zcash.ui.common.provider.KeystoneSDKProviderImpl
 import co.electriccoin.zcash.ui.common.provider.KtorNearApiProvider
 import co.electriccoin.zcash.ui.common.provider.KtorVotingApiProvider
+import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProvider
+import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.LightWalletEndpointProvider
 import co.electriccoin.zcash.ui.common.provider.NearApiProvider
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
@@ -74,17 +70,8 @@ import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeCountStorage
 import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeCountStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeTimestampStorageProvider
 import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeTimestampStorageProviderImpl
-import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProvider
-import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProviderImpl
-import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
-import co.electriccoin.zcash.ui.common.provider.MigrationShiftCounterStorageProvider
-import co.electriccoin.zcash.ui.common.provider.MigrationShiftCounterStorageProviderImpl
-import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
-import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.WalletRestoringStateProvider
 import co.electriccoin.zcash.ui.common.provider.WalletRestoringStateProviderImpl
-import co.electriccoin.zcash.work.MigrationScheduler
-import co.electriccoin.zcash.work.MigrationSyncScheduler
 import co.electriccoin.zcash.work.VotingShareTrackingScheduler
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
@@ -105,9 +92,7 @@ val providerModule =
                 walletCoordinator = get(),
                 persistableWalletProvider = get(),
                 // lazy {} breaks the AccountDataSource -> SynchronizerProvider resolution cycle
-                migrationPlanRepository = lazy { get() },
-                onMigrationSyncCompleted = lazy { get() },
-                getSelectedWalletAccount = lazy { get() },
+                migrationSyncedHook = lazy { get() },
             )
         } bind SynchronizerProvider::class
         singleOf(::ApplicationStateProviderImpl) bind ApplicationStateProvider::class
@@ -125,14 +110,7 @@ val providerModule =
         singleOf(::HasSeenHowToVoteStorageProviderImpl) bind HasSeenHowToVoteStorageProvider::class
         singleOf(::HasSeenHowToVoteKeystoneStorageProviderImpl) bind
             HasSeenHowToVoteKeystoneStorageProvider::class
-        singleOf(::HasSeenMigrationCompleteStorageProviderImpl) bind
-            HasSeenMigrationCompleteStorageProvider::class
-        singleOf(::HasLockedOrchardDustStorageProviderImpl) bind
-            HasLockedOrchardDustStorageProvider::class
         singleOf(::IsTorEnabledStorageProviderImpl) bind IsTorEnabledStorageProvider::class
-        singleOf(::IsMigrationTorEnabledStorageProviderImpl) bind IsMigrationTorEnabledStorageProvider::class
-        singleOf(::PendingMigrationTorFailureStorageProviderImpl) bind
-            PendingMigrationTorFailureStorageProvider::class
         singleOf(::BlockchainProviderImpl) bind BlockchainProvider::class
         singleOf(::TokenIconProviderImpl) bind TokenIconProvider::class
         singleOf(::TokenNameProviderImpl) bind TokenNameProvider::class
@@ -149,10 +127,6 @@ val providerModule =
         singleOf(::VotingHotkeySeedProviderImpl) bind VotingHotkeySeedProvider::class
         singleOf(::KtorVotingApiProvider) bind VotingApiProvider::class
         singleOf(::VotingShareTrackingScheduler)
-        singleOf(::MigrationNotifier)
         singleOf(::LastNetworkActivityStorageProviderImpl) bind LastNetworkActivityStorageProvider::class
-        singleOf(::MigrationShiftCounterStorageProviderImpl) bind MigrationShiftCounterStorageProvider::class
-        factoryOf(::MigrationScheduler)
-        factoryOf(::MigrationSyncScheduler)
         factoryOf(::IsBackgroundExecutionAvailableProvider)
     }

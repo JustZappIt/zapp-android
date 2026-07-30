@@ -118,5 +118,4 @@ class MigrationShiftCounterStorageProviderImpl(
             key = PreferenceKey("migration_shift_$accountKeyId"),
             defaultValue = "",
         )
-
 }

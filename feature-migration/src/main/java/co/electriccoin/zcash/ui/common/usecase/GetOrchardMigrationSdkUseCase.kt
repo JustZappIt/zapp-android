@@ -48,10 +48,11 @@ class GetOrchardMigrationSdkUseCase(
      * exists or there is no persisted wallet.
      */
     suspend operator fun invoke(accountKeyId: String): OrchardMigrationSdk? {
-        val account = accountDataSource.getAllAccounts().findByAccountKeyId(accountKeyId) ?: run {
-            Twig.warn { "MIGRATION_DIAG GetOrchardMigrationSdk: no account for keyId=$accountKeyId" }
-            return null
-        }
+        val account =
+            accountDataSource.getAllAccounts().findByAccountKeyId(accountKeyId) ?: run {
+                Twig.warn { "MIGRATION_DIAG GetOrchardMigrationSdk: no account for keyId=$accountKeyId" }
+                return null
+            }
         return buildFor(account)
     }
 

@@ -5,12 +5,12 @@ import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.ExactInputSwapTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.ExactOutputSwapTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.MigrationSweepTransactionProposal
+import co.electriccoin.zcash.ui.common.migration.MigrationNavigator
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.ZashiAccount
 import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepository
-import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewArgs
 import co.electriccoin.zcash.ui.screen.pay.PayArgs
 import co.electriccoin.zcash.ui.screen.send.Send
 import co.electriccoin.zcash.ui.screen.swap.SwapArgs
@@ -21,7 +21,8 @@ class CancelProposalFlowUseCase(
     private val navigationRouter: NavigationRouter,
     private val observeClearSend: ObserveClearSendUseCase,
     private val accountDataSource: AccountDataSource,
-    private val swapRepository: SwapRepository
+    private val swapRepository: SwapRepository,
+    private val migrationNavigator: MigrationNavigator,
 ) {
     suspend operator fun invoke(clearSendForm: Boolean = true) {
         val proposal =
@@ -49,7 +50,7 @@ class CancelProposalFlowUseCase(
                 // ordinary Send flow — Send was never on this back stack, so falling through to
                 // the `else` branch's `backTo(Send::class)` would silently no-op (no matching
                 // destination to pop to), leaving the user stuck on the Sign/reject sheet.
-                navigationRouter.backTo(MigrationReviewArgs::class)
+                migrationNavigator.backToMigrationReview()
             }
 
             else -> {

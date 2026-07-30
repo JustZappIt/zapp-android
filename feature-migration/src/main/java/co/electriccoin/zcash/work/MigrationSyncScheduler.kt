@@ -8,8 +8,8 @@ import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import co.electriccoin.zcash.migration.BuildConfig
 import co.electriccoin.zcash.spackle.Twig
-import co.electriccoin.zcash.ui.BuildConfig
 import kotlin.time.Duration
 import kotlin.time.toJavaDuration
 
@@ -21,8 +21,9 @@ import kotlin.time.toJavaDuration
  * Unlike [MigrationScheduler], this scheduler does NOT manage any AlarmManager alarm — Lane A is
  * a periodic sync heartbeat, not a user-visible "ready to send" signal, so no due-alarm is needed.
  */
-class MigrationSyncScheduler(private val context: Context) {
-
+class MigrationSyncScheduler(
+    private val context: Context
+) {
     fun schedule(accountKeyId: String, delay: Duration) {
         Twig.debug { "MIGRATION_DIAG MigrationSyncScheduler: scheduling next Lane A sync for $accountKeyId in $delay" }
         WorkManager.getInstance(context).enqueueUniqueWork(
@@ -49,7 +50,8 @@ class MigrationSyncScheduler(private val context: Context) {
             if (BuildConfig.DEBUG) {
                 Constraints.NONE
             } else {
-                Constraints.Builder()
+                Constraints
+                    .Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)
                     .build()
             }

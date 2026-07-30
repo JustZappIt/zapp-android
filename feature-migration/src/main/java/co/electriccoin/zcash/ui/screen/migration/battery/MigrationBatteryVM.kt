@@ -15,7 +15,6 @@ class MigrationBatteryVM(
     private val navigationRouter: NavigationRouter,
     private val errorStateMapper: ErrorMapperUseCase,
 ) : ViewModel() {
-
     private val lce = mutableLce<Unit>()
 
     val state: StateFlow<LceState<MigrationBatteryState>> =

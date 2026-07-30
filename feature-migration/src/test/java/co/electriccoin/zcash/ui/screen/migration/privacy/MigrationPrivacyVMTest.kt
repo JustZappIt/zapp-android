@@ -34,59 +34,78 @@ class MigrationPrivacyVMTest {
     // not the app's global Tor setting, and must not be persisted until the user actually commits
     // via Confirm.
     @Test
-    fun togglingCheckboxDoesNotPersistAnything() = runTest {
-        val torProvider = mockk<IsMigrationTorEnabledStorageProvider>(relaxed = true)
-        val vm = vm(torProvider = torProvider)
-        val collectJob = launch { vm.state.collect {} }
-        advanceUntilIdle()
+    fun togglingCheckboxDoesNotPersistAnything() =
+        runTest {
+            val torProvider = mockk<IsMigrationTorEnabledStorageProvider>(relaxed = true)
+            val vm = vm(torProvider = torProvider)
+            val collectJob = launch { vm.state.collect {} }
+            advanceUntilIdle()
 
-        vm.state.value?.checkbox?.onClick?.invoke()
-        advanceUntilIdle()
+            vm.state.value
+                ?.checkbox
+                ?.onClick
+                ?.invoke()
+            advanceUntilIdle()
 
-        coVerify(exactly = 0) { torProvider.store(any()) }
-        collectJob.cancel()
-    }
-
-    @Test
-    fun confirmPersistsTheCurrentToggleValueIntoTheMigrationScopedProvider() = runTest {
-        val torProvider = mockk<IsMigrationTorEnabledStorageProvider>(relaxed = true)
-        val vm = vm(torProvider = torProvider)
-        val collectJob = launch { vm.state.collect {} }
-        advanceUntilIdle()
-
-        // Default is true; toggle off, then confirm.
-        vm.state.value?.checkbox?.onClick?.invoke()
-        advanceUntilIdle()
-        vm.state.value?.onConfirm?.invoke()
-        advanceUntilIdle()
-
-        coVerify(exactly = 1) { torProvider.store(false) }
-        collectJob.cancel()
-    }
+            coVerify(exactly = 0) { torProvider.store(any()) }
+            collectJob.cancel()
+        }
 
     @Test
-    fun confirmWithoutTogglingPersistsDefaultTrue() = runTest {
-        val torProvider = mockk<IsMigrationTorEnabledStorageProvider>(relaxed = true)
-        val vm = vm(torProvider = torProvider)
-        val collectJob = launch { vm.state.collect {} }
-        advanceUntilIdle()
+    fun confirmPersistsTheCurrentToggleValueIntoTheMigrationScopedProvider() =
+        runTest {
+            val torProvider = mockk<IsMigrationTorEnabledStorageProvider>(relaxed = true)
+            val vm = vm(torProvider = torProvider)
+            val collectJob = launch { vm.state.collect {} }
+            advanceUntilIdle()
 
-        vm.state.value?.onConfirm?.invoke()
-        advanceUntilIdle()
+            // Default is true; toggle off, then confirm.
+            vm.state.value
+                ?.checkbox
+                ?.onClick
+                ?.invoke()
+            advanceUntilIdle()
+            vm.state.value
+                ?.onConfirm
+                ?.invoke()
+            advanceUntilIdle()
 
-        coVerify(exactly = 1) { torProvider.store(true) }
-        collectJob.cancel()
-    }
+            coVerify(exactly = 1) { torProvider.store(false) }
+            collectJob.cancel()
+        }
 
     @Test
-    fun checkboxDefaultsToCheckedRegardlessOfProviderState() = runTest {
-        val vm = vm()
-        val collectJob = launch { vm.state.collect {} }
-        advanceUntilIdle()
+    fun confirmWithoutTogglingPersistsDefaultTrue() =
+        runTest {
+            val torProvider = mockk<IsMigrationTorEnabledStorageProvider>(relaxed = true)
+            val vm = vm(torProvider = torProvider)
+            val collectJob = launch { vm.state.collect {} }
+            advanceUntilIdle()
 
-        assertEquals(true, vm.state.value?.checkbox?.isChecked)
-        collectJob.cancel()
-    }
+            vm.state.value
+                ?.onConfirm
+                ?.invoke()
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { torProvider.store(true) }
+            collectJob.cancel()
+        }
+
+    @Test
+    fun checkboxDefaultsToCheckedRegardlessOfProviderState() =
+        runTest {
+            val vm = vm()
+            val collectJob = launch { vm.state.collect {} }
+            advanceUntilIdle()
+
+            assertEquals(
+                true,
+                vm.state.value
+                    ?.checkbox
+                    ?.isChecked
+            )
+            collectJob.cancel()
+        }
 
     private fun vm(
         mode: MigrationMode = MigrationMode.AUTOMATIC,

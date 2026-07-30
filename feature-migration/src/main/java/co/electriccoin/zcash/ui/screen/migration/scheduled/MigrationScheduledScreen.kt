@@ -62,13 +62,15 @@ fun MigrationScheduledView(state: MigrationScheduledState) {
         endColor = ZashiColors.Surfaces.bgPrimary,
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .scaffoldPadding(padding),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .scaffoldPadding(padding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(Modifier.weight(1f),
+            Column(
+                Modifier.weight(1f),
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -94,11 +96,12 @@ fun MigrationScheduledView(state: MigrationScheduledState) {
                 )
                 Spacer(Modifier.height(24.dp))
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(ZashiColors.Surfaces.bgSecondary)
-                        .padding(20.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(ZashiColors.Surfaces.bgSecondary)
+                            .padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     SummaryRow(label = "Total to transfer", value = state.totalAmount.getValue())
@@ -146,14 +149,19 @@ private fun SummaryRow(label: String, value: String) {
 
 @PreviewScreens
 @Composable
-private fun Preview() = ZcashTheme {
-    MigrationScheduledView(
-        state = MigrationScheduledState(
-            totalAmount = stringRes("12.45800 ZEC"),
-            transfersProgress = stringRes("0 of 5"),
-            duration = stringRes("~24 hours"),
-            backgroundHint = stringRes("Transfers run when you open the app — enable background activity in Settings for automatic sending."),
-            onDone = {},
+private fun Preview() =
+    ZcashTheme {
+        MigrationScheduledView(
+            state =
+                MigrationScheduledState(
+                    totalAmount = stringRes("12.45800 ZEC"),
+                    transfersProgress = stringRes("0 of 5"),
+                    duration = stringRes("~24 hours"),
+                    backgroundHint =
+                        stringRes(
+                            "Transfers run when you open the app — enable background activity in Settings for automatic sending."
+                        ),
+                    onDone = {},
+                )
         )
-    )
-}
+    }

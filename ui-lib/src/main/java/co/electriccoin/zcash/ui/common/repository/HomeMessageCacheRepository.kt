@@ -3,7 +3,6 @@ package co.electriccoin.zcash.ui.common.repository
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.common.datasource.MessageAvailabilityDataSource
 import co.electriccoin.zcash.ui.common.model.SynchronizerError
-import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -80,23 +79,6 @@ sealed interface HomeMessageData {
         val zatoshi: Zatoshi
     ) : RuntimeMessage()
 
-    data class Migration(
-        val plan: co.electriccoin.zcash.ui.common.model.migration.MigrationPlan?,
-        val isComplete: Boolean = false,
-        // Spec §6.4 "Transfer Ready to Send": true when [plan]'s next pending transfer's scheduled
-        // time has arrived, background execution is unavailable, and the SDK doesn't yet count it
-        // as overdue — a narrower, earlier window than the general missed-transfer/overdue state.
-        // See migrationMessageFor() in GetHomeMessageUseCase.kt for the derivation.
-        val isReadyToSend: Boolean = false,
-        // Non-null exactly when the SDK's MigrationState is RequiresAttention (spec §6.2/§6.3) —
-        // see MigrationAttentionKind's doc for why the two causes must never collapse into one
-        // generic message again. attentionRangeText is only meaningful for TRANSFER_EXPIRED (the
-        // specific "Transfer 3–5" range that actually expired); null for PLAN_UPDATE, whose home
-        // message doesn't name a range (see design spec §6.2, no range mentioned there).
-        val attentionKind: MigrationAttentionKind? = null,
-        val attentionRangeText: String? = null,
-    ) : RuntimeMessage()
-
     data object EnableTor : Prioritized {
         override val priority: Int = 3
     }
@@ -120,6 +102,14 @@ sealed interface HomeMessageData {
 sealed class RuntimeMessage : HomeMessageData {
     override val priority: Int = Int.MAX_VALUE
 }
+
+/**
+ * Home-banner payload produced by the feature-migration module. A [RuntimeMessage] subclass so it
+ * keeps the always-shown priority the banner had when it lived in ui-lib; abstract (and declared
+ * here, in [RuntimeMessage]'s own package, per the sealed-subclassing rule) because the concrete
+ * data class lives in the feature module — see MigrationContracts.kt.
+ */
+abstract class MigrationHomeMessage : RuntimeMessage()
 
 /**
  * Message which always is displayed only if previous message was lower priority.

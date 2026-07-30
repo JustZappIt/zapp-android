@@ -54,238 +54,266 @@ class MigrationSendingVMTest {
     }
 
     @Test
-    fun invalidNoteShowsRetryableFailureSheetWithMappedMessage() = runTest {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
-        coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
-            TransferAttemptOutcome.Executed(TransferResult.InvalidNote)
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk = sdk, router = router)
-        val collectJob = launch { vm.state.collect {} }
+    fun invalidNoteShowsRetryableFailureSheetWithMappedMessage() =
+        runTest {
+            val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+            coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
+                TransferAttemptOutcome.Executed(TransferResult.InvalidNote)
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk = sdk, router = router)
+            val collectJob = launch { vm.state.collect {} }
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        val sheet = vm.state.value.content?.failureSheet
-        collectJob.cancel()
-        assertEquals(
-            "This transfer's note was already spent elsewhere. Reschedule to plan a new one.",
-            sheet?.message,
-        )
-        assertTrue(sheet != null)
-    }
-
-    @Test
-    fun persistentNothingDueRetriesThenShowsNotReadySheet() = runTest {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
-        coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns TransferAttemptOutcome.NothingDue
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk = sdk, router = router)
-        val collectJob = launch { vm.state.collect {} }
-
-        advanceUntilIdle()
-
-        coVerify(exactly = 3) { sdk.executeNextPendingTransfer(any(), any()) }
-        assertEquals(
-            "This transfer isn't ready to send yet. Please try again in a moment.",
-            vm.state.value.content?.failureSheet?.message,
-        )
-        collectJob.cancel()
-    }
-
-    @Test
-    fun persistentAwaitingProofRetriesThenShowsNotReadySheet() = runTest {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
-        coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
-            TransferAttemptOutcome.AwaitingProof(1L)
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk = sdk, router = router)
-        val collectJob = launch { vm.state.collect {} }
-
-        advanceUntilIdle()
-
-        coVerify(exactly = 3) { sdk.executeNextPendingTransfer(any(), any()) }
-        assertEquals(
-            "This transfer isn't ready to send yet. Please try again in a moment.",
-            vm.state.value.content?.failureSheet?.message,
-        )
-        collectJob.cancel()
-    }
-
-    @Test
-    fun successExecutedRoutsToSuccessScreen() = runTest {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
-        coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
-            TransferAttemptOutcome.Executed(TransferResult.Success("txid123"))
-        val router = FakeNavigationRouter()
-        val plans = mockk<MigrationPlanRepository> {
-            coEvery { load() } returns null
-        }
-        vm(sdk = sdk, router = router, plans = plans)
-
-        advanceUntilIdle()
-
-        assertEquals<List<Any>>(listOf(MigrationSuccessArgs("txid123")), router.forwardedRoutes)
-    }
-
-    @Test
-    fun sendIsTriggeredAutomaticallyOnConstructionWithoutAnExternalCall() = runTest {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
-        coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
-            TransferAttemptOutcome.Executed(TransferResult.Success("txid456"))
-        val router = FakeNavigationRouter()
-        val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
-
-        // No call to vm.send() anywhere in this test — construction alone must trigger it.
-        vm(sdk = sdk, router = router, plans = plans)
-        advanceUntilIdle()
-
-        coVerify(exactly = 1) { sdk.executeNextPendingTransfer(any(), any()) }
-    }
-
-    @Test
-    fun onBackNavigatesBackImmediately() = runTest {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
-        coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns TransferAttemptOutcome.NothingDue
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk = sdk, router = router)
-
-        vm.onBack()
-
-        assertEquals(1, router.backCount)
-    }
-
-    @Test
-    fun stateOnBackIsNoopWhileSendingIsInProgress() = runTest {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
-        // A delay that never resolves within this test: keeps sendOnce() suspended mid-flight, so
-        // the LCE stays loading and no failure sheet is ever shown, mirroring "actively sending".
-        coEvery { sdk.executeNextPendingTransfer(any(), any()) } coAnswers {
-            delay(Long.MAX_VALUE / 2)
-            TransferAttemptOutcome.Executed(TransferResult.Success("txid"))
-        }
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk = sdk, router = router)
-        val collectJob = launch { vm.state.collect {} }
-
-        // Don't advanceUntilIdle() — that fast-forwards virtual time and would resolve the huge
-        // delay above too, completing the send. runCurrent() only runs already-ready continuations
-        // (registering the in-flight job and emitting the first combine() value) without advancing
-        // the virtual clock.
-        runCurrent()
-
-        val content = vm.state.value.content
-        assertTrue(content != null)
-        assertTrue(content.failureSheet == null)
-        content.onBack()
-
-        assertEquals(0, router.backCount)
-        collectJob.cancel()
-    }
-
-    @Test
-    fun stateOnBackNavigatesBackOnceFailureSheetIsShowing() = runTest {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
-        coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
-            TransferAttemptOutcome.Executed(TransferResult.InvalidNote)
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk = sdk, router = router)
-        val collectJob = launch { vm.state.collect {} }
-
-        advanceUntilIdle()
-
-        assertTrue(vm.state.value.content?.failureSheet != null)
-        vm.state.value.content?.onBack?.invoke()
-
-        assertEquals(1, router.backCount)
-        collectJob.cancel()
-    }
-
-    @Test
-    fun pendingTorDecisionAtConstructionTimeIsUsedInsteadOfADuplicateDefaultSend() = runTest {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
-        coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
-            TransferAttemptOutcome.Executed(TransferResult.Success("txid"))
-        val router = FakeNavigationRouter()
-        val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
-        val decisionFlow = MutableStateFlow<Boolean?>(false)
-        val torDecisionRepository = mockk<PendingMigrationTorFailureDecisionRepository> {
-            every { decision } returns decisionFlow
-            every { clear() } answers { decisionFlow.value = null }
+            val sheet =
+                vm.state.value.content
+                    ?.failureSheet
+            collectJob.cancel()
+            assertEquals(
+                "This transfer's note was already spent elsewhere. Reschedule to plan a new one.",
+                sheet?.message,
+            )
+            assertTrue(sheet != null)
         }
 
-        vm(sdk = sdk, router = router, plans = plans, torDecisionRepository = torDecisionRepository)
-        advanceUntilIdle()
+    @Test
+    fun persistentNothingDueRetriesThenShowsNotReadySheet() =
+        runTest {
+            val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+            coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns TransferAttemptOutcome.NothingDue
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk = sdk, router = router)
+            val collectJob = launch { vm.state.collect {} }
 
-        coVerify(exactly = 1) {
-            sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = false), useEstimatedTip = true)
+            advanceUntilIdle()
+
+            coVerify(exactly = 3) { sdk.executeNextPendingTransfer(any(), any()) }
+            assertEquals(
+                "This transfer isn't ready to send yet. Please try again in a moment.",
+                vm.state.value.content
+                    ?.failureSheet
+                    ?.message,
+            )
+            collectJob.cancel()
         }
-    }
 
     @Test
-    fun successfulSendClearsPendingTorFailureFlag() = runTest {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
-        coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
-            TransferAttemptOutcome.Executed(TransferResult.Success("txid789"))
-        val router = FakeNavigationRouter()
-        val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
-        val pendingTorFailure = mockk<PendingMigrationTorFailureStorageProvider>(relaxed = true)
+    fun persistentAwaitingProofRetriesThenShowsNotReadySheet() =
+        runTest {
+            val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+            coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
+                TransferAttemptOutcome.AwaitingProof(1L)
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk = sdk, router = router)
+            val collectJob = launch { vm.state.collect {} }
 
-        vm(sdk = sdk, router = router, plans = plans, pendingMigrationTorFailureStorageProvider = pendingTorFailure)
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        coVerify(exactly = 1) { pendingTorFailure.store(false) }
-    }
-
-    @Test
-    fun networkErrorDoesNotClearPendingTorFailureFlag() = runTest {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
-        coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
-            TransferAttemptOutcome.Executed(TransferResult.NetworkError(retryable = false))
-        val router = FakeNavigationRouter()
-        val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
-        val pendingTorFailure = mockk<PendingMigrationTorFailureStorageProvider>(relaxed = true)
-
-        vm(sdk = sdk, router = router, plans = plans, pendingMigrationTorFailureStorageProvider = pendingTorFailure)
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { pendingTorFailure.store(any()) }
-    }
+            coVerify(exactly = 3) { sdk.executeNextPendingTransfer(any(), any()) }
+            assertEquals(
+                "This transfer isn't ready to send yet. Please try again in a moment.",
+                vm.state.value.content
+                    ?.failureSheet
+                    ?.message,
+            )
+            collectJob.cancel()
+        }
 
     @Test
-    fun networkErrorWithIsTorFailureRoutesToTorFailureScreenEvenWhenLocalUseTorFlagIsFalse() = runTest {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
-        // isTorFailure=true, but the vm() helper's isMigrationTorEnabledStorageProvider mock
-        // always returns false for the local useTor flag — proves routing now follows the
-        // result's own signal, not the interactive-attempt's local Tor setting.
-        coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
-            TransferAttemptOutcome.Executed(TransferResult.NetworkError(retryable = false, isTorFailure = true))
-        val router = FakeNavigationRouter()
-        val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
+    fun successExecutedRoutsToSuccessScreen() =
+        runTest {
+            val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+            coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
+                TransferAttemptOutcome.Executed(TransferResult.Success("txid123"))
+            val router = FakeNavigationRouter()
+            val plans =
+                mockk<MigrationPlanRepository> {
+                    coEvery { load() } returns null
+                }
+            vm(sdk = sdk, router = router, plans = plans)
 
-        vm(sdk = sdk, router = router, plans = plans)
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        assertTrue(router.forwardedRoutes.any { it is MigrationTorFailureArgs })
-    }
+            assertEquals<List<Any>>(listOf(MigrationSuccessArgs("txid123")), router.forwardedRoutes)
+        }
+
+    @Test
+    fun sendIsTriggeredAutomaticallyOnConstructionWithoutAnExternalCall() =
+        runTest {
+            val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+            coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
+                TransferAttemptOutcome.Executed(TransferResult.Success("txid456"))
+            val router = FakeNavigationRouter()
+            val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
+
+            // No call to vm.send() anywhere in this test — construction alone must trigger it.
+            vm(sdk = sdk, router = router, plans = plans)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { sdk.executeNextPendingTransfer(any(), any()) }
+        }
+
+    @Test
+    fun onBackNavigatesBackImmediately() =
+        runTest {
+            val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+            coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns TransferAttemptOutcome.NothingDue
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk = sdk, router = router)
+
+            vm.onBack()
+
+            assertEquals(1, router.backCount)
+        }
+
+    @Test
+    fun stateOnBackIsNoopWhileSendingIsInProgress() =
+        runTest {
+            val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+            // A delay that never resolves within this test: keeps sendOnce() suspended mid-flight, so
+            // the LCE stays loading and no failure sheet is ever shown, mirroring "actively sending".
+            coEvery { sdk.executeNextPendingTransfer(any(), any()) } coAnswers {
+                delay(Long.MAX_VALUE / 2)
+                TransferAttemptOutcome.Executed(TransferResult.Success("txid"))
+            }
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk = sdk, router = router)
+            val collectJob = launch { vm.state.collect {} }
+
+            // Don't advanceUntilIdle() — that fast-forwards virtual time and would resolve the huge
+            // delay above too, completing the send. runCurrent() only runs already-ready continuations
+            // (registering the in-flight job and emitting the first combine() value) without advancing
+            // the virtual clock.
+            runCurrent()
+
+            val content = vm.state.value.content
+            assertTrue(content != null)
+            assertTrue(content.failureSheet == null)
+            content.onBack()
+
+            assertEquals(0, router.backCount)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun stateOnBackNavigatesBackOnceFailureSheetIsShowing() =
+        runTest {
+            val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+            coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
+                TransferAttemptOutcome.Executed(TransferResult.InvalidNote)
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk = sdk, router = router)
+            val collectJob = launch { vm.state.collect {} }
+
+            advanceUntilIdle()
+
+            assertTrue(
+                vm.state.value.content
+                    ?.failureSheet != null
+            )
+            vm.state.value.content
+                ?.onBack
+                ?.invoke()
+
+            assertEquals(1, router.backCount)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun pendingTorDecisionAtConstructionTimeIsUsedInsteadOfADuplicateDefaultSend() =
+        runTest {
+            val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+            coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
+                TransferAttemptOutcome.Executed(TransferResult.Success("txid"))
+            val router = FakeNavigationRouter()
+            val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
+            val decisionFlow = MutableStateFlow<Boolean?>(false)
+            val torDecisionRepository =
+                mockk<PendingMigrationTorFailureDecisionRepository> {
+                    every { decision } returns decisionFlow
+                    every { clear() } answers { decisionFlow.value = null }
+                }
+
+            vm(sdk = sdk, router = router, plans = plans, torDecisionRepository = torDecisionRepository)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = false), useEstimatedTip = true)
+            }
+        }
+
+    @Test
+    fun successfulSendClearsPendingTorFailureFlag() =
+        runTest {
+            val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+            coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
+                TransferAttemptOutcome.Executed(TransferResult.Success("txid789"))
+            val router = FakeNavigationRouter()
+            val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
+            val pendingTorFailure = mockk<PendingMigrationTorFailureStorageProvider>(relaxed = true)
+
+            vm(sdk = sdk, router = router, plans = plans, pendingMigrationTorFailureStorageProvider = pendingTorFailure)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { pendingTorFailure.store(false) }
+        }
+
+    @Test
+    fun networkErrorDoesNotClearPendingTorFailureFlag() =
+        runTest {
+            val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+            coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
+                TransferAttemptOutcome.Executed(TransferResult.NetworkError(retryable = false))
+            val router = FakeNavigationRouter()
+            val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
+            val pendingTorFailure = mockk<PendingMigrationTorFailureStorageProvider>(relaxed = true)
+
+            vm(sdk = sdk, router = router, plans = plans, pendingMigrationTorFailureStorageProvider = pendingTorFailure)
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { pendingTorFailure.store(any()) }
+        }
+
+    @Test
+    fun networkErrorWithIsTorFailureRoutesToTorFailureScreenEvenWhenLocalUseTorFlagIsFalse() =
+        runTest {
+            val sdk = mockk<OrchardMigrationSdk>(relaxed = true)
+            // isTorFailure=true, but the vm() helper's isMigrationTorEnabledStorageProvider mock
+            // always returns false for the local useTor flag — proves routing now follows the
+            // result's own signal, not the interactive-attempt's local Tor setting.
+            coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
+                TransferAttemptOutcome.Executed(TransferResult.NetworkError(retryable = false, isTorFailure = true))
+            val router = FakeNavigationRouter()
+            val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
+
+            vm(sdk = sdk, router = router, plans = plans)
+            advanceUntilIdle()
+
+            assertTrue(router.forwardedRoutes.any { it is MigrationTorFailureArgs })
+        }
 
     private fun vm(
         sdk: OrchardMigrationSdk,
         router: FakeNavigationRouter,
         plans: MigrationPlanRepository = mockk(relaxed = true),
-        torDecisionRepository: PendingMigrationTorFailureDecisionRepository = mockk {
-            every { decision } returns MutableStateFlow(null)
-        },
+        torDecisionRepository: PendingMigrationTorFailureDecisionRepository =
+            mockk {
+                every { decision } returns MutableStateFlow(null)
+            },
         pendingMigrationTorFailureStorageProvider: PendingMigrationTorFailureStorageProvider = mockk(relaxed = true),
     ) = MigrationSendingVM(
-        getOrchardMigrationSdk = mockk<GetOrchardMigrationSdkUseCase> {
-            coEvery { this@mockk() } returns sdk
-        },
+        getOrchardMigrationSdk =
+            mockk<GetOrchardMigrationSdkUseCase> {
+                coEvery { this@mockk() } returns sdk
+            },
         migrationPlanRepository = plans,
         scheduleNextMigrationWindow = mockk<ScheduleNextMigrationWindowUseCase>(relaxed = true),
         navigationRouter = router,
         errorStateMapper = mockk<ErrorMapperUseCase>(relaxed = true),
-        isMigrationTorEnabledStorageProvider = mockk<IsMigrationTorEnabledStorageProvider> {
-            coEvery { get() } returns false
-        },
+        isMigrationTorEnabledStorageProvider =
+            mockk<IsMigrationTorEnabledStorageProvider> {
+                coEvery { get() } returns false
+            },
         pendingMigrationTorFailureDecisionRepository = torDecisionRepository,
         pendingMigrationTorFailureStorageProvider = pendingMigrationTorFailureStorageProvider,
     )
@@ -294,13 +322,24 @@ class MigrationSendingVMTest {
         val forwardedRoutes = mutableListOf<Any>()
         var backCount = 0
 
-        override fun forward(vararg routes: Any) { forwardedRoutes.addAll(routes.toList()) }
+        override fun forward(vararg routes: Any) {
+            forwardedRoutes.addAll(routes.toList())
+        }
+
         override fun replace(vararg routes: Any) = Unit
+
         override fun replaceAll(vararg routes: Any) = Unit
-        override fun back() { backCount++ }
+
+        override fun back() {
+            backCount++
+        }
+
         override fun backTo(route: KClass<*>) = Unit
+
         override fun custom(block: (NavBackStackEntry?) -> NavigationCommand?) = Unit
+
         override fun backToRoot() = Unit
+
         override fun observePipeline(): Flow<BaseNavigationCommand> = emptyFlow()
     }
 }

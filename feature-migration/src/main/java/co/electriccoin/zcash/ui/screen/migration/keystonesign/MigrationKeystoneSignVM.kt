@@ -5,10 +5,10 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPczts
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPcztsRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
-import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
@@ -36,7 +36,6 @@ class MigrationKeystoneSignVM(
     private val pendingKeystonePczts: PendingKeystoneMigrationPcztsRepository,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
-
     private val qrParts = MutableStateFlow<List<String>?>(null)
     private val qrFrameIndex = MutableStateFlow(0)
 
@@ -102,21 +101,23 @@ class MigrationKeystoneSignVM(
                     accumulatedTransferSigned = emptyList()
                 }
 
-                val slice = keystoneBatchRoundSlice(
-                    roundIndex = roundIndex,
-                    hasSplit = splitUnsignedPczt != null,
-                    transferCount = transferUnsignedPczts.size,
-                    maxItems = KEYSTONE_BATCH_MAX_ITEMS,
-                )
+                val slice =
+                    keystoneBatchRoundSlice(
+                        roundIndex = roundIndex,
+                        hasSplit = splitUnsignedPczt != null,
+                        transferCount = transferUnsignedPczts.size,
+                        maxItems = KEYSTONE_BATCH_MAX_ITEMS,
+                    )
                 val splitForRound = if (slice.includeSplit) splitUnsignedPczt else null
                 val transfersForRound = transferUnsignedPczts.slice(slice.transferRange)
                 val requestId = randomRequestId()
-                val parts = sdk.buildKeystoneSignBatchQrParts(
-                    requestId = requestId,
-                    splitUnsignedPczt = splitForRound,
-                    transferUnsignedPczts = transfersForRound.map { it.second },
-                    maxFragmentLen = MAX_FRAGMENT_LEN,
-                )
+                val parts =
+                    sdk.buildKeystoneSignBatchQrParts(
+                        requestId = requestId,
+                        splitUnsignedPczt = splitForRound,
+                        transferUnsignedPczts = transfersForRound.map { it.second },
+                        maxFragmentLen = MAX_FRAGMENT_LEN,
+                    )
                 pendingKeystonePczts.set(
                     accountKeyId,
                     PendingKeystoneMigrationPczts(
@@ -128,11 +129,12 @@ class MigrationKeystoneSignVM(
                         accumulatedTransferSigned = accumulatedTransferSigned,
                     )
                 )
-                val totalRounds = keystoneBatchTotalRounds(
-                    hasSplit = splitUnsignedPczt != null,
-                    transferCount = transferUnsignedPczts.size,
-                    maxItems = KEYSTONE_BATCH_MAX_ITEMS,
-                )
+                val totalRounds =
+                    keystoneBatchTotalRounds(
+                        hasSplit = splitUnsignedPczt != null,
+                        transferCount = transferUnsignedPczts.size,
+                        maxItems = KEYSTONE_BATCH_MAX_ITEMS,
+                    )
                 Triple(parts, roundIndex, totalRounds)
             }.onSuccess { result ->
                 if (result != null) {
@@ -145,8 +147,14 @@ class MigrationKeystoneSignVM(
                 failureSheet.update {
                     MigrationTransferFailureState(
                         message = "Couldn't prepare the migration for signing. Try again.",
-                        onRetry = { failureSheet.value = null; buildBatch() },
-                        onDismiss = { failureSheet.value = null; onReject() },
+                        onRetry = {
+                            failureSheet.value = null
+                            buildBatch()
+                        },
+                        onDismiss = {
+                            failureSheet.value = null
+                            onReject()
+                        },
                     )
                 }
             }
@@ -172,14 +180,16 @@ class MigrationKeystoneSignVM(
             SignKeystoneTransactionState(
                 barTitle = stringRes("Sign Transaction"),
                 title = stringRes("Scan with your Keystone wallet$roundSuffix"),
-                subtitle = stringRes(
-                    "After you have signed with Keystone, tap on the Get Signature button below."
-                ),
-                accountInfo = ZashiAccountInfoListItemState(
-                    icon = account.icon,
-                    title = account.name,
-                    subtitle = stringRes("${account.unified.address.address.take(ADDRESS_MAX_LENGTH)}..."),
-                ),
+                subtitle =
+                    stringRes(
+                        "After you have signed with Keystone, tap on the Get Signature button below."
+                    ),
+                accountInfo =
+                    ZashiAccountInfoListItemState(
+                        icon = account.icon,
+                        title = account.name,
+                        subtitle = stringRes("${account.unified.address.address.take(ADDRESS_MAX_LENGTH)}..."),
+                    ),
                 badgeText = stringRes("Hardware"),
                 generateNextQrCode = {
                     val size = parts?.size ?: 1
@@ -216,7 +226,8 @@ class MigrationKeystoneSignVM(
 
         private fun randomRequestId(): ByteArray {
             val uuid = UUID.randomUUID()
-            return ByteBuffer.allocate(16)
+            return ByteBuffer
+                .allocate(16)
                 .putLong(uuid.mostSignificantBits)
                 .putLong(uuid.leastSignificantBits)
                 .array()

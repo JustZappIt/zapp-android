@@ -52,9 +52,10 @@ fun MigrationLockExplainerView(
         sheetState = sheetState,
     ) { innerState, contentPadding ->
         Column(
-            modifier = Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(start = 24.dp, end = 24.dp, bottom = contentPadding.calculateBottomPadding()),
+            modifier =
+                Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 24.dp, end = 24.dp, bottom = contentPadding.calculateBottomPadding()),
         ) {
             Text(
                 text = "What does locking do?",
@@ -88,12 +89,13 @@ fun MigrationLockExplainerView(
             )
             Spacer(32.dp)
             ZashiButton(
-                state = ButtonState(
-                    text = stringRes(if (innerState.isLocking) "Locking balance…" else "Got it"),
-                    onClick = innerState.onGotIt,
-                    isEnabled = !innerState.isLocking,
-                    isLoading = innerState.isLocking,
-                ),
+                state =
+                    ButtonState(
+                        text = stringRes(if (innerState.isLocking) "Locking balance…" else "Got it"),
+                        onClick = innerState.onGotIt,
+                        isEnabled = !innerState.isLocking,
+                        isLoading = innerState.isLocking,
+                    ),
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -112,8 +114,9 @@ private fun LockExplainerBullet(text: androidx.compose.ui.text.AnnotatedString) 
 @OptIn(ExperimentalMaterial3Api::class)
 @PreviewScreens
 @Composable
-private fun Preview() = ZcashTheme {
-    MigrationLockExplainerView(
-        state = MigrationLockExplainerState(onGotIt = {}, onBack = {})
-    )
-}
+private fun Preview() =
+    ZcashTheme {
+        MigrationLockExplainerView(
+            state = MigrationLockExplainerState(onGotIt = {}, onBack = {})
+        )
+    }

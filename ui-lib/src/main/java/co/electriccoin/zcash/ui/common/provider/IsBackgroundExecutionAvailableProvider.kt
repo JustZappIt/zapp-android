@@ -34,7 +34,9 @@ import co.electriccoin.zcash.ui.BuildConfig
  * top-level function instead of a second constructor parameter (a raw `Int` default of
  * `Build.VERSION.SDK_INT` would otherwise have to be resolvable from the Koin graph too).
  */
-class IsBackgroundExecutionAvailableProvider(private val context: Context) {
+class IsBackgroundExecutionAvailableProvider(
+    private val context: Context
+) {
     fun isAvailable(): Boolean {
         if (BuildConfig.DEBUG && DebugForceBackgroundExecutionUnavailable.isForced(context)) return false
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager

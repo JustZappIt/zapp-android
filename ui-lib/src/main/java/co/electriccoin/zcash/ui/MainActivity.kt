@@ -76,8 +76,7 @@ class MainActivity : FragmentActivity() {
     val configurationOverrideFlow = MutableStateFlow<ConfigurationOverride?>(null)
 
     private val navigationRouter: NavigationRouter by inject()
-    private val checkMigrationRecovery: co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase by inject()
-    private val debugStartMigrationE2E: co.electriccoin.zcash.ui.common.usecase.DebugStartMigrationE2EUseCase by inject()
+    private val migrationAppHooks: co.electriccoin.zcash.ui.common.migration.MigrationAppHooks by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -107,33 +106,7 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun handleMigrationIntent(intent: Intent) {
-        if (BuildConfig.DEBUG &&
-            intent.getBooleanExtra(
-                co.electriccoin.zcash.ui.common.usecase.DebugStartMigrationE2EUseCase.EXTRA_START_MIGRATION,
-                false
-            )
-        ) {
-            // Debug-only E2E driver: reset + commit a fresh AUTOMATIC plan from adb, no UI taps.
-            lifecycleScope.launch { debugStartMigrationE2E() }
-        } else if (intent.getBooleanExtra(co.electriccoin.zcash.ui.common.provider.MigrationNotifier.EXTRA_OPEN_MIGRATION, false)) {
-            // replaceAll ensures Home is always on the back stack regardless of how the app was opened.
-            navigationRouter.replaceAll(
-                co.electriccoin.zcash.ui.screen.home.HomeArgs,
-                co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs,
-            )
-        } else if (intent.getBooleanExtra(
-                co.electriccoin.zcash.ui.common.provider.MigrationNotifier.EXTRA_OPEN_TRANSFER_READY,
-                false
-            )
-        ) {
-            // Distinct destination from EXTRA_OPEN_MIGRATION above — spec §6.4 "Transfer Ready to
-            // Send" is a lighter-weight review-and-send path, not the fuller Reschedule/Send-now
-            // recovery screen the overdue-transfer notification routes to.
-            navigationRouter.replaceAll(
-                co.electriccoin.zcash.ui.screen.home.HomeArgs,
-                co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs,
-            )
-        }
+        migrationAppHooks.handleIntent(intent, lifecycleScope)
     }
 
     override fun onStart() {
@@ -148,7 +121,7 @@ class MainActivity : FragmentActivity() {
     // unlocked." onStart() fires on every foreground transition and catches that case —
     // isSyncBlocked() has already stopped sync regardless, this is routing only.
     private fun checkMigrationRecoveryOnStart() {
-        lifecycleScope.launch { checkMigrationRecovery() }
+        lifecycleScope.launch { migrationAppHooks.checkRecovery() }
     }
 
     override fun onStop() {

@@ -34,10 +34,11 @@ fun DebugOrchardBalanceView(state: DebugOrchardBalanceState) {
         }
     ) { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .scaffoldPadding(paddingValues)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .scaffoldPadding(paddingValues)
         ) {
             Text(
                 text = "Current mock balance: ${state.currentBalance.getValue()}",
@@ -74,19 +75,23 @@ fun DebugOrchardBalanceView(state: DebugOrchardBalanceState) {
 
 @PreviewScreens
 @Composable
-private fun DebugOrchardBalancePreview() = ZcashTheme {
-    DebugOrchardBalanceView(
-        state = DebugOrchardBalanceState(
-            currentBalance = stringRes("10 ZEC"),
-            zecInput = co.electriccoin.zcash.ui.design.component.TextFieldState(
-                value = stringRes("123.23"),
-                onValueChange = {}
-            ),
-            setBalance = co.electriccoin.zcash.ui.design.component.ButtonState(
-                text = stringRes("Set Balance"),
-                onClick = {}
-            ),
-            onBack = {},
+private fun DebugOrchardBalancePreview() =
+    ZcashTheme {
+        DebugOrchardBalanceView(
+            state =
+                DebugOrchardBalanceState(
+                    currentBalance = stringRes("10 ZEC"),
+                    zecInput =
+                        co.electriccoin.zcash.ui.design.component.TextFieldState(
+                            value = stringRes("123.23"),
+                            onValueChange = {}
+                        ),
+                    setBalance =
+                        co.electriccoin.zcash.ui.design.component.ButtonState(
+                            text = stringRes("Set Balance"),
+                            onClick = {}
+                        ),
+                    onBack = {},
+                )
         )
-    )
-}
+    }

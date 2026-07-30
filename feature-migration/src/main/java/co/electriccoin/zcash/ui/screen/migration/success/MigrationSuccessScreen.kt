@@ -58,10 +58,11 @@ fun MigrationSuccessView(state: MigrationSuccessState) {
         endColor = ZashiColors.Surfaces.bgPrimary,
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .scaffoldPadding(padding),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .scaffoldPadding(padding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Column(
@@ -108,11 +109,13 @@ fun MigrationSuccessView(state: MigrationSuccessState) {
 
 @PreviewScreens
 @Composable
-private fun Preview() = ZcashTheme {
-    MigrationSuccessView(
-        state = MigrationSuccessState(
-            onViewTransaction = {},
-            onClose = {},
+private fun Preview() =
+    ZcashTheme {
+        MigrationSuccessView(
+            state =
+                MigrationSuccessState(
+                    onViewTransaction = {},
+                    onClose = {},
+                )
         )
-    )
-}
+    }

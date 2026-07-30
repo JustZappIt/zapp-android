@@ -41,8 +41,8 @@ import kotlin.time.Duration.Companion.seconds
 class MigrationWorker(
     context: Context,
     workerParameters: WorkerParameters,
-) : CoroutineWorker(context, workerParameters), KoinComponent {
-
+) : CoroutineWorker(context, workerParameters),
+    KoinComponent {
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase by inject()
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase by inject()
     private val migrationPlanRepository: MigrationPlanRepository by inject()
@@ -54,18 +54,22 @@ class MigrationWorker(
     private val shiftCounter: MigrationShiftCounterStorageProvider by inject()
 
     override suspend fun doWork(): Result {
-        val accountKeyId = inputData.getString(MigrationScheduler.KEY_ACCOUNT_KEY_ID)
-            ?: getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId().also {
-                Twig.warn { "MIGRATION_DIAG MigrationWorker: no accountKeyId in inputData — falling back to selected account $it (pre-upgrade job)" }
-            }
+        val accountKeyId =
+            inputData.getString(MigrationScheduler.KEY_ACCOUNT_KEY_ID)
+                ?: getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId().also {
+                    Twig.warn {
+                        "MIGRATION_DIAG MigrationWorker: no accountKeyId in inputData — falling back to selected account $it (pre-upgrade job)"
+                    }
+                }
 
-        val sdk = getOrchardMigrationSdk(accountKeyId) ?: run {
-            // Same reasoning as MigrationSyncWorker: a not-yet-initialized wallet right after an
-            // app update/reboot must not silently consume (and thereby kill) the self-rechaining
-            // lane — retry until the SDK is reachable.
-            Twig.debug { "MIGRATION_DIAG LaneB: SDK not ready — retrying via WorkManager backoff." }
-            return Result.retry()
-        }
+        val sdk =
+            getOrchardMigrationSdk(accountKeyId) ?: run {
+                // Same reasoning as MigrationSyncWorker: a not-yet-initialized wallet right after an
+                // app update/reboot must not silently consume (and thereby kill) the self-rechaining
+                // lane — retry until the SDK is reachable.
+                Twig.debug { "MIGRATION_DIAG LaneB: SDK not ready — retrying via WorkManager backoff." }
+                return Result.retry()
+            }
 
         // WorkManager batches jobs with similar due times, so both lanes routinely WAKE IN THE
         // SAME SECOND — a naive "Lane A is RUNNING → defer a full privacy buffer" then re-collides
@@ -84,18 +88,20 @@ class MigrationWorker(
 
         // status is a Flow<Status> — timeout if cold; null synchronizer is non-syncing.
         // timeout → assume SYNCING → defer (privacy-safe default; production status is a StateFlow and answers immediately).
-        val syncing = synchronizerProvider.synchronizer.value?.let { synchronizer ->
-            withTimeoutOrNull(STATUS_READ_TIMEOUT) { synchronizer.status.first() } ?: Synchronizer.Status.SYNCING
-        } == Synchronizer.Status.SYNCING
+        val syncing =
+            synchronizerProvider.synchronizer.value?.let { synchronizer ->
+                withTimeoutOrNull(STATUS_READ_TIMEOUT) { synchronizer.status.first() } ?: Synchronizer.Status.SYNCING
+            } == Synchronizer.Status.SYNCING
 
         val lastActivity = lastNetworkActivity.get()
-        val preflight = decideLaneBPreflight(
-            laneARunning = laneARunning,
-            synchronizerSyncing = syncing,
-            nowEpochSeconds = nowEpochSeconds(),
-            lastNetworkActivityEpochSeconds = lastActivity?.epochSecond,
-            privacyBufferSeconds = sdk.privacySyncBufferDuration().inWholeSeconds,
-        )
+        val preflight =
+            decideLaneBPreflight(
+                laneARunning = laneARunning,
+                synchronizerSyncing = syncing,
+                nowEpochSeconds = nowEpochSeconds(),
+                lastNetworkActivityEpochSeconds = lastActivity?.epochSecond,
+                privacyBufferSeconds = sdk.privacySyncBufferDuration().inWholeSeconds,
+            )
         Twig.debug {
             "MIGRATION_DIAG LaneB: run start account=$accountKeyId preflight=$preflight " +
                 "(laneARunning=$laneARunning, syncing=$syncing, lastNetworkActivity=$lastActivity)"
@@ -110,7 +116,10 @@ class MigrationWorker(
                 MigrationScheduler(applicationContext).schedule(accountKeyId, sdk.privacySyncBufferDuration())
                 return Result.success()
             }
-            LaneBAction.BROADCAST -> Unit // proceed below
+
+            LaneBAction.BROADCAST -> {
+                Unit
+            } // proceed below
         }
 
         val plan = migrationPlanRepository.load(accountKeyId)
@@ -131,13 +140,14 @@ class MigrationWorker(
         // native call may still complete detached — a re-submit of the same tx is safely
         // classified as a duplicate by the SDK (F2 classifier + mined-height probe), so
         // re-arming for another attempt is correct.
-        val outcome = withTimeoutOrNull(BROADCAST_ATTEMPT_TIMEOUT) {
-            executeWithRetries { sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor), useEstimatedTip = true) }
-        } ?: run {
-            Twig.debug { "MIGRATION_DIAG LaneB: broadcast attempt timed out after $BROADCAST_ATTEMPT_TIMEOUT — re-arming." }
-            scheduleForNextLiveWindow(accountKeyId, sdk, floor = AWAITING_PROOF_REARM_FLOOR)
-            return Result.success()
-        }
+        val outcome =
+            withTimeoutOrNull(BROADCAST_ATTEMPT_TIMEOUT) {
+                executeWithRetries { sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor), useEstimatedTip = true) }
+            } ?: run {
+                Twig.debug { "MIGRATION_DIAG LaneB: broadcast attempt timed out after $BROADCAST_ATTEMPT_TIMEOUT — re-arming." }
+                scheduleForNextLiveWindow(accountKeyId, sdk, floor = AWAITING_PROOF_REARM_FLOOR)
+                return Result.success()
+            }
         return when (outcome) {
             is TransferAttemptOutcome.NothingDue -> {
                 // Not due yet by estimate: re-arm for the live next window (states-based, like Lane A).
@@ -145,6 +155,7 @@ class MigrationWorker(
                 Twig.debug { "MIGRATION_DIAG LaneB: NothingDue — rescheduled for next live window." }
                 Result.success()
             }
+
             is TransferAttemptOutcome.AwaitingProof -> {
                 // The engine only serves proved transactions, so AwaitingProof means the due
                 // transaction has no proof yet — a race with the sync lane (Lane A's wake is
@@ -214,72 +225,82 @@ class MigrationWorker(
                 }
                 Result.success()
             }
-            is TransferAttemptOutcome.Executed -> when (val result = outcome.result) {
-                is TransferResult.Success -> {
-                    shiftCounter.reset(accountKeyId)
-                    Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer sent — txId=${result.txId}" }
-                    // Fold the SDK's authoritative "sent" status back into the persisted plan so the
-                    // cached completedCount/nextPending advance — the home banner and the notification
-                    // below both read the raw cached plan, so without this write-through they'd report a
-                    // stale count (stuck on the first transfer) forever. Keyed by the worker's own
-                    // account (inputData), not the currently-selected one.
-                    val updatedPlan = migrationPlanRepository.load(accountKeyId)
-                        ?.withLiveStatusOnly(sdk.getMigrationTransferStates())
-                        ?.also { migrationPlanRepository.save(accountKeyId, it) }
-                    if (updatedPlan?.nextPending != null) {
-                        val delay = nextDelay(updatedPlan)
-                        MigrationScheduler(applicationContext).schedule(accountKeyId, delay)
-                        migrationNotifier.notifyTransferComplete(accountKeyId, updatedPlan.completedCount, updatedPlan.totalCount)
-                        Twig.debug { "MIGRATION_DIAG MigrationWorker: next transfer scheduled in $delay" }
-                    } else {
-                        migrationNotifier.notifyMigrationComplete(accountKeyId)
-                        Twig.debug { "MIGRATION_DIAG MigrationWorker: migration complete!" }
+
+            is TransferAttemptOutcome.Executed -> {
+                when (val result = outcome.result) {
+                    is TransferResult.Success -> {
+                        shiftCounter.reset(accountKeyId)
+                        Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer sent — txId=${result.txId}" }
+                        // Fold the SDK's authoritative "sent" status back into the persisted plan so the
+                        // cached completedCount/nextPending advance — the home banner and the notification
+                        // below both read the raw cached plan, so without this write-through they'd report a
+                        // stale count (stuck on the first transfer) forever. Keyed by the worker's own
+                        // account (inputData), not the currently-selected one.
+                        val updatedPlan =
+                            migrationPlanRepository
+                                .load(accountKeyId)
+                                ?.withLiveStatusOnly(sdk.getMigrationTransferStates())
+                                ?.also { migrationPlanRepository.save(accountKeyId, it) }
+                        if (updatedPlan?.nextPending != null) {
+                            val delay = nextDelay(updatedPlan)
+                            MigrationScheduler(applicationContext).schedule(accountKeyId, delay)
+                            migrationNotifier.notifyTransferComplete(accountKeyId, updatedPlan.completedCount, updatedPlan.totalCount)
+                            Twig.debug { "MIGRATION_DIAG MigrationWorker: next transfer scheduled in $delay" }
+                        } else {
+                            migrationNotifier.notifyMigrationComplete(accountKeyId)
+                            Twig.debug { "MIGRATION_DIAG MigrationWorker: migration complete!" }
+                        }
+                        Result.success()
                     }
-                    Result.success()
-                }
-                is TransferResult.NetworkError -> {
-                    // Retries already exhausted (or the failure was non-retryable) inside
-                    // executeWithRetries above — settle into an error state now rather than asking
-                    // WorkManager for yet another attempt.
-                    Twig.debug {
-                        "MIGRATION_DIAG MigrationWorker: network error after retries, isTorFailure=${result.isTorFailure}"
+
+                    is TransferResult.NetworkError -> {
+                        // Retries already exhausted (or the failure was non-retryable) inside
+                        // executeWithRetries above — settle into an error state now rather than asking
+                        // WorkManager for yet another attempt.
+                        Twig.debug {
+                            "MIGRATION_DIAG MigrationWorker: network error after retries, isTorFailure=${result.isTorFailure}"
+                        }
+                        if (result.isTorFailure) {
+                            // Same reasoning as MigrationSendingVM.sendOnce()'s interactive NetworkError
+                            // branch. Persist a flag so app-open reconciliation
+                            // (CheckMigrationRecoveryUseCase) routes back through the Sending screen
+                            // instead of the generic manual-confirmation path, and surface a distinct
+                            // notification so this looks different from any other missed transfer.
+                            pendingMigrationTorFailureStorageProvider.store(accountKeyId, true)
+                            migrationNotifier.notifyMigrationTorFailure(accountKeyId)
+                        } else if (next != null) {
+                            // Nothing else re-arms a future attempt for a non-retryable failure — the
+                            // user must open the app and act, same as a missed/stalled window.
+                            migrationNotifier.notifyManualConfirmationRequired(accountKeyId, next.index + 1, plan.totalCount)
+                        }
+                        Result.failure()
                     }
-                    if (result.isTorFailure) {
-                        // Same reasoning as MigrationSendingVM.sendOnce()'s interactive NetworkError
-                        // branch. Persist a flag so app-open reconciliation
-                        // (CheckMigrationRecoveryUseCase) routes back through the Sending screen
-                        // instead of the generic manual-confirmation path, and surface a distinct
-                        // notification so this looks different from any other missed transfer.
-                        pendingMigrationTorFailureStorageProvider.store(accountKeyId, true)
-                        migrationNotifier.notifyMigrationTorFailure(accountKeyId)
-                    } else if (next != null) {
-                        // Nothing else re-arms a future attempt for a non-retryable failure — the
-                        // user must open the app and act, same as a missed/stalled window.
-                        migrationNotifier.notifyManualConfirmationRequired(accountKeyId, next.index + 1, plan.totalCount)
+
+                    TransferResult.InvalidNote -> {
+                        // State is now RequiresAttention(InvalidTransfer) — spec §6.2, notes were spent
+                        // outside the migration flow. On-launch reconciliation will surface the prompt, but
+                        // the user still needs telling since nothing else runs meanwhile.
+                        Twig.debug {
+                            "MIGRATION_DIAG MigrationWorker: transfer invalid (note spent externally) — user action required on next open."
+                        }
+                        migrationNotifier.notifyMigrationPlanInvalid(accountKeyId)
+                        // F5: this is a terminal migration state — cancel Lane A too (Lane B already
+                        // stops re-arming by returning without scheduling).
+                        MigrationSyncScheduler(applicationContext).cancel(accountKeyId)
+                        Result.success()
                     }
-                    Result.failure()
-                }
-                TransferResult.InvalidNote -> {
-                    // State is now RequiresAttention(InvalidTransfer) — spec §6.2, notes were spent
-                    // outside the migration flow. On-launch reconciliation will surface the prompt, but
-                    // the user still needs telling since nothing else runs meanwhile.
-                    Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer invalid (note spent externally) — user action required on next open." }
-                    migrationNotifier.notifyMigrationPlanInvalid(accountKeyId)
-                    // F5: this is a terminal migration state — cancel Lane A too (Lane B already
-                    // stops re-arming by returning without scheduling).
-                    MigrationSyncScheduler(applicationContext).cancel(accountKeyId)
-                    Result.success()
-                }
-                TransferResult.Expired -> {
-                    // State is now RequiresAttention(TransferExpired) — spec §6.3, the transfer's
-                    // anchor expired before it could broadcast (the app wasn't opened in time). Distinct
-                    // user-facing copy from InvalidNote above, even though both branches otherwise
-                    // handle identically (no further action possible from the background worker).
-                    Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer expired — user action required on next open." }
-                    migrationNotifier.notifyTransferExpired(accountKeyId)
-                    // F5: terminal migration state — cancel Lane A too (Lane B already stops re-arming).
-                    MigrationSyncScheduler(applicationContext).cancel(accountKeyId)
-                    Result.success()
+
+                    TransferResult.Expired -> {
+                        // State is now RequiresAttention(TransferExpired) — spec §6.3, the transfer's
+                        // anchor expired before it could broadcast (the app wasn't opened in time). Distinct
+                        // user-facing copy from InvalidNote above, even though both branches otherwise
+                        // handle identically (no further action possible from the background worker).
+                        Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer expired — user action required on next open." }
+                        migrationNotifier.notifyTransferExpired(accountKeyId)
+                        // F5: terminal migration state — cancel Lane A too (Lane B already stops re-arming).
+                        MigrationSyncScheduler(applicationContext).cancel(accountKeyId)
+                        Result.success()
+                    }
                 }
             }
         }
@@ -287,8 +308,10 @@ class MigrationWorker(
 
     private suspend fun isLaneARunning(): Boolean =
         withContext(Dispatchers.IO) {
-            WorkManager.getInstance(applicationContext)
-                .getWorkInfosForUniqueWork(WorkIds.WORK_ID_MIGRATION_SYNC).get()
+            WorkManager
+                .getInstance(applicationContext)
+                .getWorkInfosForUniqueWork(WorkIds.WORK_ID_MIGRATION_SYNC)
+                .get()
         }.any { it.state == WorkInfo.State.RUNNING }
 
     /**
@@ -306,20 +329,22 @@ class MigrationWorker(
     ) {
         val states = sdk.getMigrationTransferStates()
         val est = sdk.estimatedChainTip()
-        val delay: Duration = if (states != null && est >= 0L) {
-            val nextScheduledHeight = states.transfers
-                .filter { !it.isSent }
-                .minOfOrNull { it.scheduledHeight }
-            if (nextScheduledHeight != null) {
-                val blocksRemaining = (nextScheduledHeight - est).coerceAtLeast(1L)
-                (blocksRemaining * sdk.estimatedSecondsPerBlock()).seconds
+        val delay: Duration =
+            if (states != null && est >= 0L) {
+                val nextScheduledHeight =
+                    states.transfers
+                        .filter { !it.isSent }
+                        .minOfOrNull { it.scheduledHeight }
+                if (nextScheduledHeight != null) {
+                    val blocksRemaining = (nextScheduledHeight - est).coerceAtLeast(1L)
+                    (blocksRemaining * sdk.estimatedSecondsPerBlock()).seconds
+                } else {
+                    // All transfers sent — fall through to plan-repo fallback which will also be empty.
+                    planRepoDerivedDelay(accountKeyId)
+                }
             } else {
-                // All transfers sent — fall through to plan-repo fallback which will also be empty.
                 planRepoDerivedDelay(accountKeyId)
             }
-        } else {
-            planRepoDerivedDelay(accountKeyId)
-        }
         MigrationScheduler(applicationContext).schedule(accountKeyId, maxOf(delay, floor))
         Twig.debug { "MIGRATION_DIAG LaneB: scheduleForNextLiveWindow — delay=${maxOf(delay, floor)}" }
     }
@@ -387,9 +412,10 @@ internal suspend fun executeWithRetries(
         if (i > 0) delay(retryDelayMs)
         result = attempt()
         val current = result
-        val shouldRetry = current is TransferAttemptOutcome.Executed &&
-            current.result is TransferResult.NetworkError &&
-            (current.result as TransferResult.NetworkError).retryable
+        val shouldRetry =
+            current is TransferAttemptOutcome.Executed &&
+                current.result is TransferResult.NetworkError &&
+                (current.result as TransferResult.NetworkError).retryable
         if (!shouldRetry) break
     }
     return result

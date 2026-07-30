@@ -44,11 +44,12 @@ private fun isSyncBlocked(context: Context, persistableWalletProvider: Persistab
         if (wallet == null) {
             flowOf(false)
         } else {
-            OrchardMigrationSdk.new(
-                appContext = context,
-                zcashNetwork = wallet.network,
-                lightWalletEndpoint = wallet.endpoint,
-                account = null,
-            ).isSyncBlocked()
+            OrchardMigrationSdk
+                .new(
+                    appContext = context,
+                    zcashNetwork = wallet.network,
+                    lightWalletEndpoint = wallet.endpoint,
+                    account = null,
+                ).isSyncBlocked()
         }
     }

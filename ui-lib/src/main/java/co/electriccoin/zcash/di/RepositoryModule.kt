@@ -18,18 +18,8 @@ import co.electriccoin.zcash.ui.common.repository.HomeMessageCacheRepository
 import co.electriccoin.zcash.ui.common.repository.HomeMessageCacheRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
 import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepositoryImpl
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepository
 import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepositoryImpl
-import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPcztsRepository
-import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPcztsRepositoryImpl
-import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
-import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepositoryImpl
-import co.electriccoin.zcash.ui.common.repository.PendingMigrationTorFailureDecisionRepository
-import co.electriccoin.zcash.ui.common.repository.PendingMigrationTorFailureDecisionRepositoryImpl
-import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepository
-import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.repository.SwapRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.TransactionFilterRepository
@@ -89,11 +79,5 @@ val repositoryModule =
         }
         singleOf(::VotingKeystoneRepositoryImpl) bind VotingKeystoneRepository::class
         singleOf(::VotingSessionStoreImpl) bind VotingSessionStore::class
-        singleOf(::MigrationPlanRepositoryImpl) bind MigrationPlanRepository::class
-        singleOf(::PendingMigrationScheduleRepositoryImpl) bind PendingMigrationScheduleRepository::class
-        singleOf(::RestartMigrationScheduleRepositoryImpl) bind RestartMigrationScheduleRepository::class
-        singleOf(::PendingMigrationTorFailureDecisionRepositoryImpl) bind
-            PendingMigrationTorFailureDecisionRepository::class
-        singleOf(::PendingKeystoneMigrationPcztsRepositoryImpl) bind PendingKeystoneMigrationPcztsRepository::class
         singleOf(::MockOrchardBalanceRepositoryImpl) bind MockOrchardBalanceRepository::class
     }

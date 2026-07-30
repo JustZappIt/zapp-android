@@ -11,9 +11,9 @@ import androidx.work.WorkerParameters
 import cash.z.ecc.android.sdk.Synchronizer
 import cash.z.ecc.android.sdk.model.PercentDecimal
 import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.common.migration.MigrationGate
 import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
@@ -48,12 +48,12 @@ class SyncWorker(
 ) : CoroutineWorker(context, workerParameters),
     KoinComponent {
     private val synchronizerProvider: SynchronizerProvider by inject()
-    private val migrationPlanRepository: MigrationPlanRepository by inject()
+    private val migrationGate: MigrationGate by inject()
     private val lastNetworkActivity: LastNetworkActivityStorageProvider by inject()
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun doWork(): Result {
-        if (migrationPlanRepository.load() != null) {
+        if (migrationGate.isMigrationActive()) {
             Twig.debug { "BG Sync: migration active — Lane A supersedes, skipping." }
             return Result.success()
         }

@@ -71,11 +71,12 @@ fun MigrationNotificationScreen() {
                     s.onAllow()
                 }
             MigrationNotificationView(
-                state = s.copy(
-                    onAllow = {
-                        launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    }
-                )
+                state =
+                    s.copy(
+                        onAllow = {
+                            launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    )
             )
         }
     }
@@ -92,10 +93,11 @@ fun MigrationNotificationView(state: MigrationNotificationState) {
         }
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .scaffoldPadding(padding),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .scaffoldPadding(padding),
         ) {
             Text(
                 text = "Allow Notifications",
@@ -105,27 +107,28 @@ fun MigrationNotificationView(state: MigrationNotificationState) {
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "If we miss a window for a scheduled transfer or background transaction " +
-                    "submission fails, we can send you a local notification and prompt you to open " +
-                    "Zodl. Get notified about:",
+                text =
+                    "If we miss a window for a scheduled transfer or background transaction " +
+                        "submission fails, we can send you a local notification and prompt you to open " +
+                        "Zodl. Get notified about:",
                 style = ZashiTypography.textSm,
                 color = ZashiColors.Text.textTertiary,
             )
             Spacer(Modifier.height(24.dp))
             NotificationFeatureItem(
-                icon = co.electriccoin.zcash.ui.R.drawable.ic_migration_notif_annotation_check,
+                icon = co.electriccoin.zcash.migration.R.drawable.ic_migration_notif_annotation_check,
                 title = "Migration Status",
                 body = "We will inform you whenever your funds are fully migrated to Ironwood.",
             )
             Spacer(Modifier.height(16.dp))
             NotificationFeatureItem(
-                icon = co.electriccoin.zcash.ui.R.drawable.ic_migration_notif_bell_ringing,
+                icon = co.electriccoin.zcash.migration.R.drawable.ic_migration_notif_bell_ringing,
                 title = "Action Needed",
                 body = "If we miss a window, we will prompt you to open the app and send a transfer manually.",
             )
             Spacer(Modifier.height(16.dp))
             NotificationFeatureItem(
-                icon = co.electriccoin.zcash.ui.R.drawable.ic_migration_notif_announcement,
+                icon = co.electriccoin.zcash.migration.R.drawable.ic_migration_notif_announcement,
                 title = "Transfer Plan Changes",
                 body = "If allocated funds are spent or any pre-signed transfer expires, we will let you know.",
             )
@@ -139,8 +142,9 @@ fun MigrationNotificationView(state: MigrationNotificationState) {
                 )
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    text = "Without this permission, you'll need to open Zodl to view the migration " +
-                        "progress and approve any fall-back operations.",
+                    text =
+                        "Without this permission, you'll need to open Zodl to view the migration " +
+                            "progress and approve any fall-back operations.",
                     style = ZashiTypography.textXs,
                     color = ZashiColors.Text.textTertiary,
                 )
@@ -188,16 +192,18 @@ private fun NotificationFeatureItem(icon: Int, title: String, body: String) {
 
 @PreviewScreens
 @Composable
-private fun Preview() = ZcashTheme {
-    MigrationNotificationView(
-        state = MigrationNotificationState(onAllow = {}, onSkip = {}, onAutoSkip = {}, onBack = {})
-    )
-}
+private fun Preview() =
+    ZcashTheme {
+        MigrationNotificationView(
+            state = MigrationNotificationState(onAllow = {}, onSkip = {}, onAutoSkip = {}, onBack = {})
+        )
+    }
 
 @PreviewScreens
 @Composable
-private fun PreviewForceDark() = ZcashTheme(forceDarkMode = true) {
-    MigrationNotificationView(
-        state = MigrationNotificationState(onAllow = {}, onSkip = {}, onAutoSkip = {}, onBack = {})
-    )
-}
+private fun PreviewForceDark() =
+    ZcashTheme(forceDarkMode = true) {
+        MigrationNotificationView(
+            state = MigrationNotificationState(onAllow = {}, onSkip = {}, onAutoSkip = {}, onBack = {})
+        )
+    }

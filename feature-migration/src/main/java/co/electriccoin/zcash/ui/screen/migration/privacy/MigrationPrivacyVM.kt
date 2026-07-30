@@ -23,7 +23,6 @@ class MigrationPrivacyVM(
     private val navigationRouter: NavigationRouter,
     private val isMigrationTorEnabledStorageProvider: IsMigrationTorEnabledStorageProvider,
 ) : ViewModel() {
-
     // Always shown with Tor defaulted ON, independent of the global setting's actual current
     // value — the sheet is only ever reached when the global setting is off, but the migration's
     // own choice still starts from the privacy-preferred default rather than mirroring that off
@@ -34,27 +33,33 @@ class MigrationPrivacyVM(
         useTor
             .map { tor ->
                 MigrationPrivacyState(
-                    body = stringRes(
-                        when (args.mode) {
-                            MigrationMode.IMMEDIATE ->
-                                "If Tor is available in your region, we strongly recommend enabling it to " +
-                                    "prevent linking your balance to your IP address. You can also use a " +
-                                    "trusted VPN if Tor is unavailable in your region."
-                            MigrationMode.AUTOMATIC ->
-                                "If Tor is available in your region, we strongly recommend enabling it to " +
-                                    "prevent linking the migration amounts to your IP address. You can also " +
-                                    "use a trusted VPN if Tor is unavailable in your region."
-                        }
-                    ),
-                    checkbox = CheckboxState(
-                        title = stringRes("Enable Tor Protection"),
-                        subtitle = stringRes(
-                            "Routes your connection through the Tor network for enhanced anonymity and " +
-                                "privacy protection."
+                    body =
+                        stringRes(
+                            when (args.mode) {
+                                MigrationMode.IMMEDIATE -> {
+                                    "If Tor is available in your region, we strongly recommend enabling it to " +
+                                        "prevent linking your balance to your IP address. You can also use a " +
+                                        "trusted VPN if Tor is unavailable in your region."
+                                }
+
+                                MigrationMode.AUTOMATIC -> {
+                                    "If Tor is available in your region, we strongly recommend enabling it to " +
+                                        "prevent linking the migration amounts to your IP address. You can also " +
+                                        "use a trusted VPN if Tor is unavailable in your region."
+                                }
+                            }
                         ),
-                        isChecked = tor,
-                        onClick = { onTorToggle(!tor) },
-                    ),
+                    checkbox =
+                        CheckboxState(
+                            title = stringRes("Enable Tor Protection"),
+                            subtitle =
+                                stringRes(
+                                    "Routes your connection through the Tor network for enhanced anonymity and " +
+                                        "privacy protection."
+                                ),
+                            isChecked = tor,
+                            onClick = { onTorToggle(!tor) },
+                        ),
                     onConfirm = ::onConfirm,
                     onBack = ::onBack,
                 )

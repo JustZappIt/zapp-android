@@ -62,10 +62,11 @@ fun MigrationHowItWorksView(state: MigrationHowItWorksState) {
         }
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .scaffoldPadding(padding),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .scaffoldPadding(padding),
         ) {
             Text(
                 text = "How This Works",
@@ -75,8 +76,9 @@ fun MigrationHowItWorksView(state: MigrationHowItWorksState) {
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "Moving funds between Zcash pools reveals the amount of each transfer. Here's how we " +
-                    "protect your privacy during migration.",
+                text =
+                    "Moving funds between Zcash pools reveals the amount of each transfer. Here's how we " +
+                        "protect your privacy during migration.",
                 style = ZashiTypography.textSm,
                 color = ZashiColors.Text.textTertiary,
             )
@@ -84,28 +86,31 @@ fun MigrationHowItWorksView(state: MigrationHowItWorksState) {
             HowItWorksStep(
                 icon = co.electriccoin.zcash.ui.R.drawable.ic_migration_coins_swap,
                 title = "Split and schedule",
-                description = "Your balance is divided into smaller amounts and spaced out over time, so " +
-                    "they’re harder to link together.",
+                description =
+                    "Your balance is divided into smaller amounts and spaced out over time, so " +
+                        "they’re harder to link together.",
             )
             Spacer(Modifier.height(16.dp))
             HowItWorksStep(
-                icon = co.electriccoin.zcash.ui.R.drawable.ic_migration_check_square_broken,
+                icon = co.electriccoin.zcash.migration.R.drawable.ic_migration_check_square_broken,
                 title = "Approve once",
-                description = "Zodl handles the rest, sending each transfer automatically in its scheduled " +
-                    "window while the app runs in the background.",
+                description =
+                    "Zodl handles the rest, sending each transfer automatically in its scheduled " +
+                        "window while the app runs in the background.",
             )
             Spacer(Modifier.height(16.dp))
             HowItWorksStep(
-                icon = co.electriccoin.zcash.ui.R.drawable.ic_migration_notif_bell_ringing,
+                icon = co.electriccoin.zcash.migration.R.drawable.ic_migration_notif_bell_ringing,
                 title = "If something fails",
                 description = "We’ll notify you so you can complete it manually.",
             )
             Spacer(Modifier.height(16.dp))
             HowItWorksStep(
-                icon = co.electriccoin.zcash.ui.R.drawable.ic_migration_calendar,
+                icon = co.electriccoin.zcash.migration.R.drawable.ic_migration_calendar,
                 title = "Large balance",
-                description = "If your wallet holds large balance or many small notes, migration may run " +
-                    "across multiple scheduled rounds.",
+                description =
+                    "If your wallet holds large balance or many small notes, migration may run " +
+                        "across multiple scheduled rounds.",
             )
             Spacer(Modifier.weight(1f))
             Spacer(Modifier.height(32.dp))
@@ -118,8 +123,9 @@ fun MigrationHowItWorksView(state: MigrationHowItWorksState) {
                 )
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    text = "Choosing this option may require a small amount (less than 0.01 ZEC) to be " +
-                        "left in the Orchard pool, and which won’t be transferred.",
+                    text =
+                        "Choosing this option may require a small amount (less than 0.01 ZEC) to be " +
+                            "left in the Orchard pool, and which won’t be transferred.",
                     style = ZashiTypography.textXs,
                     color = ZashiColors.Text.textTertiary,
                 )
@@ -144,12 +150,13 @@ private fun HowItWorksStep(icon: Int, title: String, description: String) {
         )
         Spacer(Modifier.width(12.dp))
         Text(
-            text = buildAnnotatedString {
-                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
-                    append(title)
-                }
-                append(" — $description")
-            },
+            text =
+                buildAnnotatedString {
+                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
+                        append(title)
+                    }
+                    append(" — $description")
+                },
             style = ZashiTypography.textSm,
             color = ZashiColors.Text.textPrimary,
         )
@@ -158,8 +165,9 @@ private fun HowItWorksStep(icon: Int, title: String, description: String) {
 
 @PreviewScreens
 @Composable
-private fun Preview() = ZcashTheme {
-    MigrationHowItWorksView(
-        state = MigrationHowItWorksState(onContinue = {}, onBack = {})
-    )
-}
+private fun Preview() =
+    ZcashTheme {
+        MigrationHowItWorksView(
+            state = MigrationHowItWorksState(onContinue = {}, onBack = {})
+        )
+    }

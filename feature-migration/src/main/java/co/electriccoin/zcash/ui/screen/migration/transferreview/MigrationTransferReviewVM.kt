@@ -19,31 +19,33 @@ class MigrationTransferReviewVM(
     private val navigationRouter: NavigationRouter,
     private val errorStateMapper: ErrorMapperUseCase,
 ) : ViewModel() {
-
     private val loadLce = mutableLce<Unit>()
 
     val state: StateFlow<LceState<MigrationTransferReviewState>> =
-        migrationPlanRepository.observe().map { plan ->
-            val next = plan?.nextPending
-            if (next == null) {
-                // Nothing due right now (e.g. already confirmed from another entry point) —
-                // bounce back rather than show a stale/empty review.
-                navigationRouter.back()
-                return@map null
-            }
-            MigrationTransferReviewState(
-                title = stringRes("Review Transfer ${next.index + 1} of ${plan.totalCount}"),
-                body = stringRes(
-                    "This transfer sends part of your Orchard balance to Ironwood as part of " +
-                        "your scheduled migration.\n\nReview and confirm to send the " +
-                        "transaction. Once confirmed, this cannot be undone."
-                ),
-                amount = stringRes(Zatoshi(next.amountZatoshi)),
-                fee = stringRes(Zatoshi(TRANSFER_FEE_ESTIMATE_ZATOSHI)),
-                onConfirm = { navigationRouter.forward(MigrationSendingArgs) },
-                onBack = ::onBack,
-            )
-        }.withLce(loadLce, errorStateMapper::mapToState)
+        migrationPlanRepository
+            .observe()
+            .map { plan ->
+                val next = plan?.nextPending
+                if (next == null) {
+                    // Nothing due right now (e.g. already confirmed from another entry point) —
+                    // bounce back rather than show a stale/empty review.
+                    navigationRouter.back()
+                    return@map null
+                }
+                MigrationTransferReviewState(
+                    title = stringRes("Review Transfer ${next.index + 1} of ${plan.totalCount}"),
+                    body =
+                        stringRes(
+                            "This transfer sends part of your Orchard balance to Ironwood as part of " +
+                                "your scheduled migration.\n\nReview and confirm to send the " +
+                                "transaction. Once confirmed, this cannot be undone."
+                        ),
+                    amount = stringRes(Zatoshi(next.amountZatoshi)),
+                    fee = stringRes(Zatoshi(TRANSFER_FEE_ESTIMATE_ZATOSHI)),
+                    onConfirm = { navigationRouter.forward(MigrationSendingArgs) },
+                    onBack = ::onBack,
+                )
+            }.withLce(loadLce, errorStateMapper::mapToState)
             .stateIn(this)
 
     private fun onBack() = navigationRouter.back()

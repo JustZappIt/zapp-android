@@ -5,15 +5,26 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.sdk.MigrationTransferStates
 import cash.z.ecc.android.sdk.NetworkPrivacyOptions
+import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
 import cash.z.ecc.android.sdk.model.Zatoshi
+import co.electriccoin.zcash.migration.BuildConfig
+import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
+import co.electriccoin.zcash.ui.common.model.guardLoading
+import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
+import co.electriccoin.zcash.ui.common.model.migration.MigrationPreparation
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
+import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
+import co.electriccoin.zcash.ui.common.model.migration.withLiveState
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
-import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.model.toStorageKeyId
+import co.electriccoin.zcash.ui.common.model.withLce
+import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
+import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProvider
+import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
@@ -23,20 +34,9 @@ import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
-import co.electriccoin.zcash.ui.common.model.guardLoading
-import co.electriccoin.zcash.spackle.Twig
-import co.electriccoin.zcash.ui.BuildConfig
-import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
-import co.electriccoin.zcash.ui.common.model.migration.MigrationPreparation
-import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
-import co.electriccoin.zcash.ui.common.model.migration.withLiveState
-import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
-import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProvider
-import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
 import co.electriccoin.zcash.work.LANE_A_SYNC_TIMEOUT
 import co.electriccoin.zcash.work.MigrationScheduler
-import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -62,7 +62,6 @@ class MigrationProgressVM(
     private val isMigrationTorEnabledStorageProvider: IsMigrationTorEnabledStorageProvider,
     private val context: Context,
 ) : ViewModel() {
-
     private val sendLce = mutableLce<Unit>()
 
     val state: StateFlow<LceState<MigrationProgressState>> =
@@ -156,10 +155,11 @@ class MigrationProgressVM(
         // Pause the continuously-syncing foreground synchronizer so the broadcast never overlaps a
         // live sync (privacy). Cast mirrors ResetZashiUseCase — the runtime instance is always a
         // CloseableSynchronizer; a null/incompatible synchronizer simply skips this pass.
-        val closeable = synchronizer as? cash.z.ecc.android.sdk.CloseableSynchronizer ?: run {
-            Twig.debug { "MIGRATION_DIAG ProgressBroadcast: no pausable synchronizer — skipping foreground broadcast." }
-            return
-        }
+        val closeable =
+            synchronizer as? cash.z.ecc.android.sdk.CloseableSynchronizer ?: run {
+                Twig.debug { "MIGRATION_DIAG ProgressBroadcast: no pausable synchronizer — skipping foreground broadcast." }
+                return
+            }
         closeable.pause()
         // Stamp "network activity" at the moment of pause so the quiet gap below is measured from
         // when THIS sync stopped — not from the last SYNCED transition. In the exact state this
@@ -215,15 +215,25 @@ class MigrationProgressVM(
         val isResume = hasOverdue && plan.completedCount > 0
         val overdueH = if (next != null) overdueHours(next, now) else 0L
 
-        val span = (plan.transfers.maxOfOrNull { it.scheduledAtEpochSeconds } ?: plan.createdAtEpochSeconds) -
-            plan.createdAtEpochSeconds
-        val subtitle = when {
-            plan.isComplete -> "All ${plan.totalCount} transfers are complete."
-            isResume -> "Transfer ${plan.completedCount + 1} of ${plan.totalCount} was scheduled ${overdueH}h ago but wasn't sent. Send now or reschedule."
-            else -> "Your balance splits into ${plan.totalCount} transfers over " +
-                "${formatMigrationDuration(span)}. There are " +
-                "${plan.totalCount - plan.completedCount} remaining transfers."
-        }
+        val span =
+            (plan.transfers.maxOfOrNull { it.scheduledAtEpochSeconds } ?: plan.createdAtEpochSeconds) -
+                plan.createdAtEpochSeconds
+        val subtitle =
+            when {
+                plan.isComplete -> {
+                    "All ${plan.totalCount} transfers are complete."
+                }
+
+                isResume -> {
+                    "Transfer ${plan.completedCount + 1} of ${plan.totalCount} was scheduled ${overdueH}h ago but wasn't sent. Send now or reschedule."
+                }
+
+                else -> {
+                    "Your balance splits into ${plan.totalCount} transfers over " +
+                        "${formatMigrationDuration(span)}. There are " +
+                        "${plan.totalCount - plan.completedCount} remaining transfers."
+                }
+            }
 
         val totalZatoshi = plan.transfers.sumOf { it.amountZatoshi }
         // Sort preparations by their scheduled time to get a stable broadcast/display order.
@@ -233,35 +243,42 @@ class MigrationProgressVM(
             subtitle = stringRes(subtitle),
             totalAmount = stringRes(Zatoshi(totalZatoshi)),
             totalFiatAmount = fiatAmount(Zatoshi(totalZatoshi), exchangeRateState),
-            preparations = sortedPreps.mapIndexed { i, p ->
-                MigrationProgressPreparationState(
-                    number = i + 1,
-                    statusLabel = preparationStatusLabel(p, now),
-                    isSent = p.status == MigrationTransferStatus.SENT,
-                    // BuildConfig.DEBUG read inline (matching the codebase's other VMs) rather than
-                    // injected — a `Boolean` constructor param breaks Koin's `viewModelOf` reflective
-                    // resolution (NoDefinitionFoundException at screen open). The unit test covers both
-                    // branches via the standalone `mapPreparationsToState(..., debugSyncEnabled)` helper.
-                    syncLabel = if (BuildConfig.DEBUG) preparationSyncLabel(p, now) else null,
-                )
-            },
-            transfers = plan.transfers.map { t ->
-                MigrationProgressTransferState(
-                    index = t.index + 1,
-                    amount = stringRes(Zatoshi(t.amountZatoshi)),
-                    fiatAmount = fiatAmount(Zatoshi(t.amountZatoshi), exchangeRateState),
-                    statusLabel = transferLabel(t, now),
-                    isOverdue = t.status == MigrationTransferStatus.PENDING && t.isProved && t.scheduledAt <= now,
-                    isSent = t.status == MigrationTransferStatus.SENT,
-                    syncLabel = if (BuildConfig.DEBUG) transferSyncLabel(t, now) else null,
-                )
-            },
+            preparations =
+                sortedPreps.mapIndexed { i, p ->
+                    MigrationProgressPreparationState(
+                        number = i + 1,
+                        statusLabel = preparationStatusLabel(p, now),
+                        isSent = p.status == MigrationTransferStatus.SENT,
+                        // BuildConfig.DEBUG read inline (matching the codebase's other VMs) rather than
+                        // injected — a `Boolean` constructor param breaks Koin's `viewModelOf` reflective
+                        // resolution (NoDefinitionFoundException at screen open). The unit test covers both
+                        // branches via the standalone `mapPreparationsToState(..., debugSyncEnabled)` helper.
+                        syncLabel = if (BuildConfig.DEBUG) preparationSyncLabel(p, now) else null,
+                    )
+                },
+            transfers =
+                plan.transfers.map { t ->
+                    MigrationProgressTransferState(
+                        index = t.index + 1,
+                        amount = stringRes(Zatoshi(t.amountZatoshi)),
+                        fiatAmount = fiatAmount(Zatoshi(t.amountZatoshi), exchangeRateState),
+                        statusLabel = transferLabel(t, now),
+                        isOverdue = t.status == MigrationTransferStatus.PENDING && t.isProved && t.scheduledAt <= now,
+                        isSent = t.status == MigrationTransferStatus.SENT,
+                        syncLabel = if (BuildConfig.DEBUG) transferSyncLabel(t, now) else null,
+                    )
+                },
             isComplete = plan.isComplete,
             hasOverdue = hasOverdue,
             onBack = ::onBack,
             // Figma B4 (Updated Migration Plan — normal in-progress) has no Send Now button at
             // all; it only appears on B8 (Resume Migration) when a transfer is actually overdue.
-            onSendNow = if (hasOverdue) { { onSendNow(plan) } } else null,
+            onSendNow =
+                if (hasOverdue) {
+                    { onSendNow(plan) }
+                } else {
+                    null
+                },
             onReschedule = if (hasOverdue) ::onReschedule else null,
             onDone = if (plan.isComplete) ::onDone else null,
         )
@@ -293,27 +310,28 @@ class MigrationProgressVM(
     // truth). New semantics: SYNC NOW — run the same sync + finalizeReadyTransfers pass Lane A
     // does, in the foreground, so the missing proof falls out immediately — then let the transfer
     // go out in the next live window (background worker, or next app open).
-    private fun onReschedule() = sendLce.execute {
-        val sdk = getOrchardMigrationSdk() ?: error("MigrationProgressVM: no wallet available to sync")
-        val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
-        if (sdk.isSyncBlocked().first()) {
-            // Post-broadcast privacy gate — same guard Lane A honours; the re-arm below still
-            // gives the transfer its next window once the gate lifts.
-            Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: privacy gate active — skipping the foreground sync." }
-        } else {
-            val burst = synchronizerProvider.getSynchronizerOrNull()?.syncToTip(timeout = LANE_A_SYNC_TIMEOUT)
-            Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: syncToTip result=$burst" }
-            val proved = sdk.finalizeReadyTransfers()
-            Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: proved=$proved" }
-            lastNetworkActivity.stampNow()
+    private fun onReschedule() =
+        sendLce.execute {
+            val sdk = getOrchardMigrationSdk() ?: error("MigrationProgressVM: no wallet available to sync")
+            val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
+            if (sdk.isSyncBlocked().first()) {
+                // Post-broadcast privacy gate — same guard Lane A honours; the re-arm below still
+                // gives the transfer its next window once the gate lifts.
+                Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: privacy gate active — skipping the foreground sync." }
+            } else {
+                val burst = synchronizerProvider.getSynchronizerOrNull()?.syncToTip(timeout = LANE_A_SYNC_TIMEOUT)
+                Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: syncToTip result=$burst" }
+                val proved = sdk.finalizeReadyTransfers()
+                Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: proved=$proved" }
+                lastNetworkActivity.stampNow()
+            }
+            // Re-arm Lane B for the next live window: after the privacy quiet gap from the sync just
+            // performed (Lane B's own preflight re-checks the gap from the fresh stamp regardless).
+            val reArm = sdk.privacySyncBufferDuration()
+            MigrationScheduler(context).schedule(accountKeyId, reArm)
+            Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: Lane B re-armed in $reArm" }
+            navigationRouter.back()
         }
-        // Re-arm Lane B for the next live window: after the privacy quiet gap from the sync just
-        // performed (Lane B's own preflight re-checks the gap from the fresh stamp regardless).
-        val reArm = sdk.privacySyncBufferDuration()
-        MigrationScheduler(context).schedule(accountKeyId, reArm)
-        Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: Lane B re-armed in $reArm" }
-        navigationRouter.back()
-    }
 
     private fun onDone() = navigationRouter.backToRoot()
 
@@ -399,11 +417,18 @@ internal fun transferLabel(t: MigrationTransfer, now: Instant): StringResource =
                 else -> stringRes("Sent ${agoMinutes / 60}h ago")
             }
         }
+
         MigrationTransferStatus.PENDING -> {
             val scheduled = t.scheduledAt
             when {
-                scheduled <= now && t.isProved -> stringRes("Overdue · ${overdueHours(t, now)}h ago")
-                scheduled <= now -> stringRes("Awaiting proof")
+                scheduled <= now && t.isProved -> {
+                    stringRes("Overdue · ${overdueHours(t, now)}h ago")
+                }
+
+                scheduled <= now -> {
+                    stringRes("Awaiting proof")
+                }
+
                 else -> {
                     // Use the shared formatter (Issue 2) so this screen and the Review screen
                     // format identically ("~1 h 15 min") — the old inline branch bucketed to
@@ -434,9 +459,13 @@ internal fun preparationStatusLabel(p: MigrationPreparation, now: Instant): Stri
                 else -> stringRes("Sent ${agoMinutes / 60}h ago")
             }
         }
+
         MigrationTransferStatus.PENDING -> {
             when {
-                scheduledAt <= now -> stringRes("Pending")
+                scheduledAt <= now -> {
+                    stringRes("Pending")
+                }
+
                 else -> {
                     val secondsLeft = (scheduledAt - now).inWholeSeconds
                     stringRes(formatMigrationDuration(secondsLeft))
@@ -456,7 +485,10 @@ internal fun preparationSyncLabel(p: MigrationPreparation, now: Instant): String
     if (p.isProved) return stringRes("proved")
     val scheduledAt = Instant.fromEpochSeconds(p.scheduledAtEpochSeconds)
     return when {
-        scheduledAt <= now -> stringRes("pending")
+        scheduledAt <= now -> {
+            stringRes("pending")
+        }
+
         else -> {
             val secondsLeft = (scheduledAt - now).inWholeSeconds
             stringRes(formatMigrationDuration(secondsLeft))
@@ -473,7 +505,10 @@ internal fun transferSyncLabel(t: MigrationTransfer, now: Instant): StringResour
     if (t.isProved) return stringRes("proved")
     val scheduledAt = t.scheduledAt
     return when {
-        scheduledAt <= now -> stringRes("pending")
+        scheduledAt <= now -> {
+            stringRes("pending")
+        }
+
         else -> {
             val secondsLeft = (scheduledAt - now).inWholeSeconds
             stringRes(formatMigrationDuration(secondsLeft))

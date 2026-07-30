@@ -18,21 +18,23 @@ import kotlin.test.assertTrue
 class IsBackgroundExecutionAvailableProviderTest {
     @Test
     fun exemptAndNotRestrictedIsAvailable() {
-        val result = isBackgroundExecutionAvailable(
-            isIgnoringBatteryOptimizations = true,
-            isBackgroundRestricted = false,
-            sdkInt = 28,
-        )
+        val result =
+            isBackgroundExecutionAvailable(
+                isIgnoringBatteryOptimizations = true,
+                isBackgroundRestricted = false,
+                sdkInt = 28,
+            )
         assertTrue(result)
     }
 
     @Test
     fun notExemptIsUnavailable() {
-        val result = isBackgroundExecutionAvailable(
-            isIgnoringBatteryOptimizations = false,
-            isBackgroundRestricted = false,
-            sdkInt = 28,
-        )
+        val result =
+            isBackgroundExecutionAvailable(
+                isIgnoringBatteryOptimizations = false,
+                isBackgroundRestricted = false,
+                sdkInt = 28,
+            )
         assertFalse(result)
     }
 
@@ -40,21 +42,23 @@ class IsBackgroundExecutionAvailableProviderTest {
     fun exemptButBackgroundRestrictedIsUnavailable() {
         // A device can be Doze-exempt yet still be OS/OEM background-restricted — that stronger
         // restriction must still make this unavailable.
-        val result = isBackgroundExecutionAvailable(
-            isIgnoringBatteryOptimizations = true,
-            isBackgroundRestricted = true,
-            sdkInt = 28,
-        )
+        val result =
+            isBackgroundExecutionAvailable(
+                isIgnoringBatteryOptimizations = true,
+                isBackgroundRestricted = true,
+                sdkInt = 28,
+            )
         assertFalse(result)
     }
 
     @Test
     fun neitherIsUnavailable() {
-        val result = isBackgroundExecutionAvailable(
-            isIgnoringBatteryOptimizations = false,
-            isBackgroundRestricted = true,
-            sdkInt = 28,
-        )
+        val result =
+            isBackgroundExecutionAvailable(
+                isIgnoringBatteryOptimizations = false,
+                isBackgroundRestricted = true,
+                sdkInt = 28,
+            )
         assertFalse(result)
     }
 
@@ -62,29 +66,33 @@ class IsBackgroundExecutionAvailableProviderTest {
     fun belowApi28IgnoresBackgroundRestrictedFlag() {
         // Below API 28, isBackgroundRestricted() doesn't exist on the platform — the signal must be
         // ignored entirely rather than (incorrectly) treated as restricted.
-        val result = isBackgroundExecutionAvailable(
-            isIgnoringBatteryOptimizations = true,
-            isBackgroundRestricted = true,
-            sdkInt = 26,
-        )
+        val result =
+            isBackgroundExecutionAvailable(
+                isIgnoringBatteryOptimizations = true,
+                isBackgroundRestricted = true,
+                sdkInt = 26,
+            )
         assertTrue(result)
     }
 
     @Test
     fun providerDelegatesToPowerManagerAndActivityManager() {
-        val powerManager = mockk<PowerManager> {
-            every { isIgnoringBatteryOptimizations(any()) } returns true
-        }
-        val activityManager = mockk<ActivityManager> {
-            every { isBackgroundRestricted } returns false
-        }
+        val powerManager =
+            mockk<PowerManager> {
+                every { isIgnoringBatteryOptimizations(any()) } returns true
+            }
+        val activityManager =
+            mockk<ActivityManager> {
+                every { isBackgroundRestricted } returns false
+            }
         // Relaxed so the unrelated getSharedPreferences() call made by the DEBUG-only
         // DebugForceBackgroundExecutionUnavailable override check doesn't need its own stub here.
-        val context = mockk<Context>(relaxed = true) {
-            every { packageName } returns "co.electriccoin.zcash.test"
-            every { getSystemService(Context.POWER_SERVICE) } returns powerManager
-            every { getSystemService(Context.ACTIVITY_SERVICE) } returns activityManager
-        }
+        val context =
+            mockk<Context>(relaxed = true) {
+                every { packageName } returns "co.electriccoin.zcash.test"
+                every { getSystemService(Context.POWER_SERVICE) } returns powerManager
+                every { getSystemService(Context.ACTIVITY_SERVICE) } returns activityManager
+            }
 
         val result = IsBackgroundExecutionAvailableProvider(context).isAvailable()
 

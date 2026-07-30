@@ -1,15 +1,15 @@
 package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.MigrationSchedule
-import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.spackle.Twig
-import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
+import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.migration.MigrationKeystoneRound
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.estimatedSecondsBetweenHeights
 import co.electriccoin.zcash.ui.common.model.migration.toMigrationPlan
 import co.electriccoin.zcash.ui.common.model.toStorageKeyId
+import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.screen.migration.scheduled.MigrationScheduledArgs
 import co.electriccoin.zcash.work.MigrationScheduler
@@ -47,8 +47,9 @@ class FinalizeMigrationScheduleUseCase(
         persistPlan(sched, mode, secondsPerBlock)
         val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
         logCommittedBoundaries()
-        val tipHeight = sched.transfers.minOfOrNull { it.anchorHeight }
-            ?: (sched.preparations.minOfOrNull { it.broadcastHeight } ?: 0L)
+        val tipHeight =
+            sched.transfers.minOfOrNull { it.anchorHeight }
+                ?: (sched.preparations.minOfOrNull { it.broadcastHeight } ?: 0L)
         migrationScheduler.schedule(accountKeyId, delayUntilFirstStep(sched, secondsPerBlock, tipHeight))
         // Lane A first arm is a short flat delay: the schedule object carries no anchor
         // boundaries, so the worker's FIRST run reads the freshly committed engine states and
@@ -85,11 +86,17 @@ class FinalizeMigrationScheduleUseCase(
         // Stateless preview, computed fresh here rather than threaded through from Review — see
         // MigrationKeystoneRound's kdoc. Never persisted as a running campaign counter: "current" is
         // always 1 ("this round, from here"), "total" is whatever the estimate says right now.
-        val keystoneRound = if (getSelectedWalletAccount() is KeystoneAccount) {
-            getOrchardMigrationSdk()?.estimateMigrationRunCount()?.takeIf { it > 1 }?.let { MigrationKeystoneRound(current = 1, total = it) }
-        } else {
-            null
-        }
+        val keystoneRound =
+            if (getSelectedWalletAccount() is KeystoneAccount) {
+                getOrchardMigrationSdk()?.estimateMigrationRunCount()?.takeIf { it > 1 }?.let {
+                    MigrationKeystoneRound(
+                        current = 1,
+                        total = it
+                    )
+                }
+            } else {
+                null
+            }
         migrationPlanRepository.save(sched.toMigrationPlan(mode, keystoneRound, secondsPerBlock))
     }
 
@@ -146,9 +153,12 @@ class FinalizeMigrationScheduleUseCase(
     // one origin, so the delay to a preparation's broadcastHeight and the delay to a transfer's
     // nextExecutableAfterHeight are comparable block-count deltas from the same point.
     internal fun delayUntilFirstStep(sched: MigrationSchedule, secondsPerBlock: Long, tipHeight: Long): Duration {
-        val earliest = (sched.preparations.map { it.broadcastHeight } +
-            sched.transfers.map { it.nextExecutableAfterHeight }).minOrNull()
-            ?: return 0.seconds
+        val earliest =
+            (
+                sched.preparations.map { it.broadcastHeight } +
+                    sched.transfers.map { it.nextExecutableAfterHeight }
+            ).minOrNull()
+                ?: return 0.seconds
         val remaining = estimatedSecondsBetweenHeights(tipHeight, earliest, secondsPerBlock)
         return if (remaining <= 0) 0.seconds else remaining.seconds
     }

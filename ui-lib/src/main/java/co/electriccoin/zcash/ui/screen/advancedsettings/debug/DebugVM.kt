@@ -5,22 +5,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
+import co.electriccoin.zcash.ui.common.migration.MigrationAppHooks
+import co.electriccoin.zcash.ui.common.migration.MigrationDebugActions
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.ZashiAccount
 import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.DebugForceBackgroundExecutionUnavailable
-import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
-import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
-import co.electriccoin.zcash.ui.common.provider.MigrationShiftCounterStorageProvider
 import co.electriccoin.zcash.ui.common.repository.EphemeralAddressRepository
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
-import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepository
-import co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
-import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.design.component.listitem.ListItemState
-import co.electriccoin.zcash.work.MigrationScheduler
-import co.electriccoin.zcash.work.MigrationSyncScheduler
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceArgs
@@ -35,13 +28,8 @@ class DebugVM(
     private val copyToClipboardUseCase: CopyToClipboardUseCase,
     private val ephemeralAddressRepository: EphemeralAddressRepository,
     private val accountDataSource: AccountDataSource,
-    private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
-    private val migrationPlanRepository: MigrationPlanRepository,
-    private val pendingMigrationTorFailureStorageProvider: PendingMigrationTorFailureStorageProvider,
-    private val migrationShiftCounterStorageProvider: MigrationShiftCounterStorageProvider,
-    private val restartMigrationScheduleRepository: RestartMigrationScheduleRepository,
-    private val migrationNotifier: MigrationNotifier,
-    private val checkMigrationRecovery: CheckMigrationRecoveryUseCase,
+    private val migrationDebugActions: MigrationDebugActions,
+    private val migrationAppHooks: MigrationAppHooks,
     private val context: Context,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
@@ -157,32 +145,11 @@ class DebugVM(
     // waiting out or resuming whatever migration is already in progress.
     private fun onMigrationRestartClick() =
         viewModelScope.launch {
-            val accountKeyId = accountDataSource.getSelectedAccount().sdkAccount.accountUuid.toStorageKeyId()
-            getOrchardMigrationSdk()?.clearMigration()
-            // Cancel both background lanes so they don't fire for a migration that no longer exists.
-            MigrationScheduler(context).cancel(accountKeyId)
-            MigrationSyncScheduler(context).cancel(accountKeyId)
-            // Without this, GetHomeMessageUseCase.migrationMessageFor's `plan == null` fallback
-            // never fires: the stale app-side plan blocks the home banner even though the SDK's
-            // migration state is back to NotStarted, so no "start a new migration" message shows.
-            migrationPlanRepository.clear()
-            // A leftover Tor-failure flag would keep routing every app launch into the Sending
-            // recovery screen for a migration that no longer exists.
-            pendingMigrationTorFailureStorageProvider.store(accountKeyId, false)
-            // Transfer ids restart from the same values on a fresh plan, so a stale counter
-            // could resume mid-count and escalate the new plan's first shift prematurely.
-            migrationShiftCounterStorageProvider.reset(accountKeyId)
-            // An unconsumed restart schedule (invalid-screen Continue → debug restart instead of
-            // Review) would otherwise be silently used by the next Review entry in place of a
-            // fresh proposal over the post-clear balance.
-            restartMigrationScheduleRepository.consume(accountKeyId)
-            // Dismiss whatever migration notification is still showing — its tap routes into
-            // the migration that was just cleared.
-            migrationNotifier.cancel(accountKeyId)
+            val text = migrationDebugActions.restartMigration()
             navigationRouter.forward(
                 DebugTextArgs(
                     title = "Migration restart",
-                    text = "Migration cleared. Propose a new migration to test."
+                    text = text
                 )
             )
         }
@@ -194,15 +161,11 @@ class DebugVM(
     // instead of only on the next app relaunch/foreground.
     private fun onSimulateMigrationTorFailureClick() =
         viewModelScope.launch {
-            val accountKeyId = accountDataSource.getSelectedAccount().sdkAccount.accountUuid.toStorageKeyId()
-            pendingMigrationTorFailureStorageProvider.store(true)
-            migrationNotifier.notifyMigrationTorFailure(accountKeyId)
-            checkMigrationRecovery()
+            val text = migrationDebugActions.simulateTorFailure()
             navigationRouter.forward(
                 DebugTextArgs(
                     title = "Migration: simulate Tor background failure",
-                    text = "Pending Tor failure flag set. Routing to the Sending screen now " +
-                        "(same routing HomeVM triggers on every launch/foreground)."
+                    text = text
                 )
             )
         }
@@ -216,17 +179,18 @@ class DebugVM(
         viewModelScope.launch {
             val nowForced = !DebugForceBackgroundExecutionUnavailable.isForced(context)
             DebugForceBackgroundExecutionUnavailable.set(context, nowForced)
-            checkMigrationRecovery()
+            migrationAppHooks.checkRecovery()
             navigationRouter.forward(
                 DebugTextArgs(
                     title = "Migration: toggle 'no background execution'",
-                    text = if (nowForced) {
-                        "Background execution now forced UNAVAILABLE. On testnet a committed " +
-                            "transfer becomes due within ~15 min (12-block anchor bucket); once " +
-                            "due, the Transfer Ready to Send banner/screen appears."
-                    } else {
-                        "Background execution restored to the device's real state."
-                    }
+                    text =
+                        if (nowForced) {
+                            "Background execution now forced UNAVAILABLE. On testnet a committed " +
+                                "transfer becomes due within ~15 min (12-block anchor bucket); once " +
+                                "due, the Transfer Ready to Send banner/screen appears."
+                        } else {
+                            "Background execution restored to the device's real state."
+                        }
                 )
             )
         }

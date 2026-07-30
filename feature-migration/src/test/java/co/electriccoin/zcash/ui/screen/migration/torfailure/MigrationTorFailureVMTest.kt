@@ -42,53 +42,62 @@ class MigrationTorFailureVMTest {
     // it dismisses the sheet and sends the user to the standard overdue/missed-transfer
     // resolution screen, without recording any decision on the in-memory retry repository.
     @Test
-    fun tryAgainNavigatesToProgressScreenWithoutRecordingADecision() = runTest {
-        val router = mockk<NavigationRouter>(relaxed = true)
-        val decisionRepository = mockk<PendingMigrationTorFailureDecisionRepository>(relaxed = true)
-        val vm = vm(router = router, decisionRepository = decisionRepository)
-        val collectJob = launch { vm.state.collect {} }
-        advanceUntilIdle()
+    fun tryAgainNavigatesToProgressScreenWithoutRecordingADecision() =
+        runTest {
+            val router = mockk<NavigationRouter>(relaxed = true)
+            val decisionRepository = mockk<PendingMigrationTorFailureDecisionRepository>(relaxed = true)
+            val vm = vm(router = router, decisionRepository = decisionRepository)
+            val collectJob = launch { vm.state.collect {} }
+            advanceUntilIdle()
 
-        vm.state.value?.onTryAgain?.invoke()
-        advanceUntilIdle()
+            vm.state.value
+                ?.onTryAgain
+                ?.invoke()
+            advanceUntilIdle()
 
-        verify(exactly = 1) { router.replaceAll(HomeArgs, MigrationProgressArgs) }
-        verify(exactly = 0) { decisionRepository.set(any(), any()) }
-        collectJob.cancel()
-    }
+            verify(exactly = 1) { router.replaceAll(HomeArgs, MigrationProgressArgs) }
+            verify(exactly = 0) { decisionRepository.set(any(), any()) }
+            collectJob.cancel()
+        }
 
     @Test
-    fun continueWithoutTorPersistsMigrationScopedSettingAndRecordsDecision() = runTest {
-        val router = mockk<NavigationRouter>(relaxed = true)
-        val decisionRepository = mockk<PendingMigrationTorFailureDecisionRepository>(relaxed = true)
-        val torProvider = mockk<IsMigrationTorEnabledStorageProvider>(relaxed = true)
-        val vm = vm(router = router, decisionRepository = decisionRepository, torProvider = torProvider)
-        val collectJob = launch { vm.state.collect {} }
-        advanceUntilIdle()
+    fun continueWithoutTorPersistsMigrationScopedSettingAndRecordsDecision() =
+        runTest {
+            val router = mockk<NavigationRouter>(relaxed = true)
+            val decisionRepository = mockk<PendingMigrationTorFailureDecisionRepository>(relaxed = true)
+            val torProvider = mockk<IsMigrationTorEnabledStorageProvider>(relaxed = true)
+            val vm = vm(router = router, decisionRepository = decisionRepository, torProvider = torProvider)
+            val collectJob = launch { vm.state.collect {} }
+            advanceUntilIdle()
 
-        vm.state.value?.onContinueWithoutTor?.invoke()
-        advanceUntilIdle()
+            vm.state.value
+                ?.onContinueWithoutTor
+                ?.invoke()
+            advanceUntilIdle()
 
-        coVerify(exactly = 1) { torProvider.store(false) }
-        verify(exactly = 1) { decisionRepository.set(any(), useTor = false) }
-        verify(exactly = 1) { router.back() }
-        collectJob.cancel()
-    }
+            coVerify(exactly = 1) { torProvider.store(false) }
+            verify(exactly = 1) { decisionRepository.set(any(), useTor = false) }
+            verify(exactly = 1) { router.back() }
+            collectJob.cancel()
+        }
 
     private fun vm(
         router: NavigationRouter,
         decisionRepository: PendingMigrationTorFailureDecisionRepository,
         torProvider: IsMigrationTorEnabledStorageProvider = mockk(relaxed = true),
     ): MigrationTorFailureVM {
-        val fakeAccount = AccountFixture.new(
-            accountUuid = UUID.fromString("00000000-0000-0000-0000-000000000001")
-        )
-        val walletAccount: WalletAccount = mockk(relaxed = true) {
-            every { sdkAccount } returns fakeAccount
-        }
-        val getSelectedWalletAccount = mockk<GetSelectedWalletAccountUseCase> {
-            coEvery { this@mockk() } returns walletAccount
-        }
+        val fakeAccount =
+            AccountFixture.new(
+                accountUuid = UUID.fromString("00000000-0000-0000-0000-000000000001")
+            )
+        val walletAccount: WalletAccount =
+            mockk(relaxed = true) {
+                every { sdkAccount } returns fakeAccount
+            }
+        val getSelectedWalletAccount =
+            mockk<GetSelectedWalletAccountUseCase> {
+                coEvery { this@mockk() } returns walletAccount
+            }
         return MigrationTorFailureVM(
             navigationRouter = router,
             getSelectedWalletAccount = getSelectedWalletAccount,

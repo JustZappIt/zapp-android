@@ -826,8 +826,7 @@ class VotingCryptoClientImpl : VotingCryptoClient {
                     hotkeySeed,
                     roundName,
                     senderSeed
-                )
-                .toAppModel()
+                ).toAppModel()
         }
 
     override suspend fun getDelegationSubmissionWithKeystoneSignature(

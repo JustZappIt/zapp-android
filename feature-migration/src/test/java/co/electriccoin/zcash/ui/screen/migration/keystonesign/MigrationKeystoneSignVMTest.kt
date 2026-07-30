@@ -50,19 +50,21 @@ import kotlin.test.assertTrue
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MigrationKeystoneSignVMTest {
-
     // Fixed account shared across all tests — same UUID → same storage key → repo guards pass.
-    private val testSdkAccount = AccountFixture.new(
-        accountUuid = UUID.fromString("00000000-0000-0000-0000-000000000002")
-    )
+    private val testSdkAccount =
+        AccountFixture.new(
+            accountUuid = UUID.fromString("00000000-0000-0000-0000-000000000002")
+        )
     private val testAccountKeyId = testSdkAccount.accountUuid.toStorageKeyId()
-    private val testWalletAccount: WalletAccount = mockk(relaxed = true) {
-        every { sdkAccount } returns testSdkAccount
-    }
-    private val testGetSelectedWalletAccount: GetSelectedWalletAccountUseCase = mockk {
-        coEvery { this@mockk() } returns testWalletAccount
-        every { observe() } returns flowOf(testWalletAccount)
-    }
+    private val testWalletAccount: WalletAccount =
+        mockk(relaxed = true) {
+            every { sdkAccount } returns testSdkAccount
+        }
+    private val testGetSelectedWalletAccount: GetSelectedWalletAccountUseCase =
+        mockk {
+            coEvery { this@mockk() } returns testWalletAccount
+            every { observe() } returns flowOf(testWalletAccount)
+        }
 
     @BeforeTest
     fun setUp() {
@@ -79,449 +81,522 @@ class MigrationKeystoneSignVMTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun successfulBuildPopulatesQrPartsAndState() = runTest {
-        val sdk = fakeSdk(qrParts = listOf("frame0", "frame1"))
-        val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-            .apply { set(testAccountKeyId, schedule()) }
-        val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk, pendingSchedule, pendingPczts, router)
-        val collectJob = launch { vm.state.collect {} }
+    fun successfulBuildPopulatesQrPartsAndState() =
+        runTest {
+            val sdk = fakeSdk(qrParts = listOf("frame0", "frame1"))
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk, pendingSchedule, pendingPczts, router)
+            val collectJob = launch { vm.state.collect {} }
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        // State is non-null once the batch is built.
-        assertNotNull(vm.state.value)
-        // No failure sheet on success.
-        assertNull(vm.failureSheet.value)
-        // QR parts were stored in PendingKeystoneMigrationPczts so the scan screen can use them.
-        assertNotNull(pendingPczts.get(testAccountKeyId))
+            // State is non-null once the batch is built.
+            assertNotNull(vm.state.value)
+            // No failure sheet on success.
+            assertNull(vm.failureSheet.value)
+            // QR parts were stored in PendingKeystoneMigrationPczts so the scan screen can use them.
+            assertNotNull(pendingPczts.get(testAccountKeyId))
 
-        collectJob.cancel()
-    }
-
-    @Test
-    fun successfulBuildStateContainsExpectedButtonLabels() = runTest {
-        val sdk = fakeSdk()
-        val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-            .apply { set(testAccountKeyId, schedule()) }
-        val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk, pendingSchedule, pendingPczts, router)
-        val collectJob = launch { vm.state.collect {} }
-
-        advanceUntilIdle()
-
-        val state = vm.state.value
-        assertNotNull(state)
-        // Positive button says "Get Signature".
-        assertTrue(state.positiveButton.text.toString().contains("Get Signature"))
-        // Negative button says "Reject".
-        assertTrue(state.negativeButton.text.toString().contains("Reject"))
-
-        collectJob.cancel()
-    }
+            collectJob.cancel()
+        }
 
     @Test
-    fun singleRoundBatchHasNoRoundSuffixInTitle() = runTest {
-        // A single transfer never exceeds KEYSTONE_BATCH_MAX_ITEMS → one round, no "(1 of 1)" suffix.
-        val sdk = fakeSdk()
-        val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-            .apply { set(testAccountKeyId, schedule()) }
-        val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk, pendingSchedule, pendingPczts, router)
-        val collectJob = launch { vm.state.collect {} }
+    fun successfulBuildStateContainsExpectedButtonLabels() =
+        runTest {
+            val sdk = fakeSdk()
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk, pendingSchedule, pendingPczts, router)
+            val collectJob = launch { vm.state.collect {} }
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        val title = vm.state.value?.title?.toString() ?: ""
-        assertTrue(!title.contains(" of "), "Single-round title should not contain a round suffix, got: $title")
+            val state = vm.state.value
+            assertNotNull(state)
+            // Positive button says "Get Signature".
+            assertTrue(
+                state.positiveButton.text
+                    .toString()
+                    .contains("Get Signature")
+            )
+            // Negative button says "Reject".
+            assertTrue(
+                state.negativeButton.text
+                    .toString()
+                    .contains("Reject")
+            )
 
-        collectJob.cancel()
-    }
-
-    @Test
-    fun multiRoundBatchAppendsSuffixForRoundZero() = runTest {
-        // Simulate a resumed round-0 for a batch whose total round count > 1.
-        // We do this by pre-populating pendingKeystonePczts with roundIndex=0 and enough
-        // transferUnsignedPczts that totalRounds > 1. The VM reads "existing" and skips the
-        // SDK build path, so the SDK's createUnsignedTransferPczts won't be called.
-        val transferCount = KEYSTONE_BATCH_MAX_ITEMS + 1  // forces totalRounds = 2
-        val existingPczts = PendingKeystoneMigrationPczts(
-            requestId = byteArrayOf(0x01, 0x02),
-            splitUnsignedPczt = null,
-            transferUnsignedPczts = (0 until transferCount).map { it.toLong() to byteArrayOf(it.toByte()) },
-            roundIndex = 0,
-        )
-        val sdk = fakeSdk()
-        val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-            .apply { set(testAccountKeyId, schedule()) }
-        val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-            .apply { set(testAccountKeyId, existingPczts) }
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk, pendingSchedule, pendingPczts, router)
-        val collectJob = launch { vm.state.collect {} }
-
-        advanceUntilIdle()
-
-        // Title should contain "(1 of 2)" since roundIndex=0, totalRounds=2.
-        val title = vm.state.value?.title?.toString() ?: ""
-        assertTrue(title.contains("(1 of 2)"), "Multi-round title should contain round suffix, got: $title")
-
-        collectJob.cancel()
-    }
+            collectJob.cancel()
+        }
 
     @Test
-    fun multiRoundBatchRoundIndexOneAppendsSuffix() = runTest {
-        // Simulate being on round 1 (0-based index 1) of a 2-round batch.
-        val transferCount = KEYSTONE_BATCH_MAX_ITEMS + 1
-        val existingPczts = PendingKeystoneMigrationPczts(
-            requestId = byteArrayOf(0x01, 0x02),
-            splitUnsignedPczt = null,
-            transferUnsignedPczts = (0 until transferCount).map { it.toLong() to byteArrayOf(it.toByte()) },
-            roundIndex = 1,
-            accumulatedTransferSigned = (0 until KEYSTONE_BATCH_MAX_ITEMS).map { it.toLong() to byteArrayOf(it.toByte()) },
-        )
-        val sdk = fakeSdk()
-        val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-            .apply { set(testAccountKeyId, schedule()) }
-        val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-            .apply { set(testAccountKeyId, existingPczts) }
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk, pendingSchedule, pendingPczts, router)
-        val collectJob = launch { vm.state.collect {} }
+    fun singleRoundBatchHasNoRoundSuffixInTitle() =
+        runTest {
+            // A single transfer never exceeds KEYSTONE_BATCH_MAX_ITEMS → one round, no "(1 of 1)" suffix.
+            val sdk = fakeSdk()
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk, pendingSchedule, pendingPczts, router)
+            val collectJob = launch { vm.state.collect {} }
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        val title = vm.state.value?.title?.toString() ?: ""
-        assertTrue(title.contains("(2 of 2)"), "Round-1 title should say '(2 of 2)', got: $title")
+            val title =
+                vm.state.value
+                    ?.title
+                    ?.toString() ?: ""
+            assertTrue(!title.contains(" of "), "Single-round title should not contain a round suffix, got: $title")
 
-        collectJob.cancel()
-    }
+            collectJob.cancel()
+        }
+
+    @Test
+    fun multiRoundBatchAppendsSuffixForRoundZero() =
+        runTest {
+            // Simulate a resumed round-0 for a batch whose total round count > 1.
+            // We do this by pre-populating pendingKeystonePczts with roundIndex=0 and enough
+            // transferUnsignedPczts that totalRounds > 1. The VM reads "existing" and skips the
+            // SDK build path, so the SDK's createUnsignedTransferPczts won't be called.
+            val transferCount = KEYSTONE_BATCH_MAX_ITEMS + 1 // forces totalRounds = 2
+            val existingPczts =
+                PendingKeystoneMigrationPczts(
+                    requestId = byteArrayOf(0x01, 0x02),
+                    splitUnsignedPczt = null,
+                    transferUnsignedPczts = (0 until transferCount).map { it.toLong() to byteArrayOf(it.toByte()) },
+                    roundIndex = 0,
+                )
+            val sdk = fakeSdk()
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts =
+                PendingKeystoneMigrationPcztsRepositoryImpl()
+                    .apply { set(testAccountKeyId, existingPczts) }
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk, pendingSchedule, pendingPczts, router)
+            val collectJob = launch { vm.state.collect {} }
+
+            advanceUntilIdle()
+
+            // Title should contain "(1 of 2)" since roundIndex=0, totalRounds=2.
+            val title =
+                vm.state.value
+                    ?.title
+                    ?.toString() ?: ""
+            assertTrue(title.contains("(1 of 2)"), "Multi-round title should contain round suffix, got: $title")
+
+            collectJob.cancel()
+        }
+
+    @Test
+    fun multiRoundBatchRoundIndexOneAppendsSuffix() =
+        runTest {
+            // Simulate being on round 1 (0-based index 1) of a 2-round batch.
+            val transferCount = KEYSTONE_BATCH_MAX_ITEMS + 1
+            val existingPczts =
+                PendingKeystoneMigrationPczts(
+                    requestId = byteArrayOf(0x01, 0x02),
+                    splitUnsignedPczt = null,
+                    transferUnsignedPczts = (0 until transferCount).map { it.toLong() to byteArrayOf(it.toByte()) },
+                    roundIndex = 1,
+                    accumulatedTransferSigned = (0 until KEYSTONE_BATCH_MAX_ITEMS).map { it.toLong() to byteArrayOf(it.toByte()) },
+                )
+            val sdk = fakeSdk()
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts =
+                PendingKeystoneMigrationPcztsRepositoryImpl()
+                    .apply { set(testAccountKeyId, existingPczts) }
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk, pendingSchedule, pendingPczts, router)
+            val collectJob = launch { vm.state.collect {} }
+
+            advanceUntilIdle()
+
+            val title =
+                vm.state.value
+                    ?.title
+                    ?.toString() ?: ""
+            assertTrue(title.contains("(2 of 2)"), "Round-1 title should say '(2 of 2)', got: $title")
+
+            collectJob.cancel()
+        }
 
     // -------------------------------------------------------------------------
     // Failure / error arm in buildBatch
     // -------------------------------------------------------------------------
 
     @Test
-    fun sdkFailureOnBuildBatchShowsFailureSheet() = runTest {
-        // SDK throws during createUnsignedTransferPczts (or any other suspension point).
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { isNoteSplitNeeded() } returns false
-            coEvery { createUnsignedTransferPczts(any()) } throws RuntimeException("PCZT build failed")
+    fun sdkFailureOnBuildBatchShowsFailureSheet() =
+        runTest {
+            // SDK throws during createUnsignedTransferPczts (or any other suspension point).
+            val sdk =
+                mockk<OrchardMigrationSdk>(relaxed = true) {
+                    coEvery { isNoteSplitNeeded() } returns false
+                    coEvery { createUnsignedTransferPczts(any()) } throws RuntimeException("PCZT build failed")
+                }
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk, pendingSchedule, pendingPczts, router)
+
+            advanceUntilIdle()
+
+            val sheet = vm.failureSheet.value
+            assertNotNull(sheet, "Failure sheet must appear when buildBatch throws")
+            assertTrue(sheet.message.isNotBlank())
+            // A retry callback must exist (the sheet re-runs buildBatch on retry).
+            assertNotNull(sheet.onRetry)
         }
-        val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-            .apply { set(testAccountKeyId, schedule()) }
-        val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk, pendingSchedule, pendingPczts, router)
-
-        advanceUntilIdle()
-
-        val sheet = vm.failureSheet.value
-        assertNotNull(sheet, "Failure sheet must appear when buildBatch throws")
-        assertTrue(sheet.message.isNotBlank())
-        // A retry callback must exist (the sheet re-runs buildBatch on retry).
-        assertNotNull(sheet.onRetry)
-    }
 
     @Test
-    fun failureSheetRetryDismissesSheetAndRetriesBuild() = runTest {
-        var callCount = 0
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { isNoteSplitNeeded() } returns false
-            coEvery { createUnsignedTransferPczts(any()) } answers {
-                callCount++
-                if (callCount == 1) throw RuntimeException("first attempt fails")
-                listOf(1L to byteArrayOf(0x01))
-            }
-            coEvery { buildKeystoneSignBatchQrParts(any(), any(), any(), any()) } returns listOf("frame0")
+    fun failureSheetRetryDismissesSheetAndRetriesBuild() =
+        runTest {
+            var callCount = 0
+            val sdk =
+                mockk<OrchardMigrationSdk>(relaxed = true) {
+                    coEvery { isNoteSplitNeeded() } returns false
+                    coEvery { createUnsignedTransferPczts(any()) } answers {
+                        callCount++
+                        if (callCount == 1) throw RuntimeException("first attempt fails")
+                        listOf(1L to byteArrayOf(0x01))
+                    }
+                    coEvery { buildKeystoneSignBatchQrParts(any(), any(), any(), any()) } returns listOf("frame0")
+                }
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk, pendingSchedule, pendingPczts, router)
+            val collectJob = launch { vm.state.collect {} }
+
+            advanceUntilIdle()
+
+            // First build failed → sheet visible.
+            assertNotNull(vm.failureSheet.value)
+            // Retry: re-triggers buildBatch with a fresh schedule.
+            pendingSchedule.set(testAccountKeyId, schedule()) // re-arm so second build can read it
+            vm.failureSheet.value!!
+                .onRetry!!
+                .invoke()
+            advanceUntilIdle()
+
+            // After successful retry the sheet clears.
+            assertNull(vm.failureSheet.value)
+
+            collectJob.cancel()
         }
-        val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-            .apply { set(testAccountKeyId, schedule()) }
-        val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk, pendingSchedule, pendingPczts, router)
-        val collectJob = launch { vm.state.collect {} }
-
-        advanceUntilIdle()
-
-        // First build failed → sheet visible.
-        assertNotNull(vm.failureSheet.value)
-        // Retry: re-triggers buildBatch with a fresh schedule.
-        pendingSchedule.set(testAccountKeyId, schedule())  // re-arm so second build can read it
-        vm.failureSheet.value!!.onRetry!!.invoke()
-        advanceUntilIdle()
-
-        // After successful retry the sheet clears.
-        assertNull(vm.failureSheet.value)
-
-        collectJob.cancel()
-    }
 
     @Test
-    fun failureSheetDismissNavigatesBack() = runTest {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { isNoteSplitNeeded() } returns false
-            coEvery { createUnsignedTransferPczts(any()) } throws RuntimeException("SDK error")
+    fun failureSheetDismissNavigatesBack() =
+        runTest {
+            val sdk =
+                mockk<OrchardMigrationSdk>(relaxed = true) {
+                    coEvery { isNoteSplitNeeded() } returns false
+                    coEvery { createUnsignedTransferPczts(any()) } throws RuntimeException("SDK error")
+                }
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk, pendingSchedule, pendingPczts, router)
+
+            advanceUntilIdle()
+
+            assertNotNull(vm.failureSheet.value)
+            // onDismiss must call onReject → back() + clear repos.
+            vm.failureSheet.value!!
+                .onDismiss
+                .invoke()
+
+            assertEquals(1, router.backCount)
+            assertNull(vm.failureSheet.value)
         }
-        val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-            .apply { set(testAccountKeyId, schedule()) }
-        val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk, pendingSchedule, pendingPczts, router)
-
-        advanceUntilIdle()
-
-        assertNotNull(vm.failureSheet.value)
-        // onDismiss must call onReject → back() + clear repos.
-        vm.failureSheet.value!!.onDismiss.invoke()
-
-        assertEquals(1, router.backCount)
-        assertNull(vm.failureSheet.value)
-    }
 
     @Test
-    fun sdkBuildBatchSkippedWhenScheduleIsAbsent() = runTest {
-        // No schedule stored → buildBatch returns null early, no failure sheet, state stays null.
-        val sdk = fakeSdk()
-        val pendingSchedule = PendingMigrationScheduleRepositoryImpl()  // empty — no schedule set
-        val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk, pendingSchedule, pendingPczts, router)
-        val collectJob = launch { vm.state.collect {} }
+    fun sdkBuildBatchSkippedWhenScheduleIsAbsent() =
+        runTest {
+            // No schedule stored → buildBatch returns null early, no failure sheet, state stays null.
+            val sdk = fakeSdk()
+            val pendingSchedule = PendingMigrationScheduleRepositoryImpl() // empty — no schedule set
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk, pendingSchedule, pendingPczts, router)
+            val collectJob = launch { vm.state.collect {} }
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        // Schedule was absent → buildBatch returned early; state is null (no QR loaded),
-        // but no failure sheet either (this is the "early return null" path, not the onFailure path).
-        assertNull(vm.failureSheet.value)
-        // State depends on combine which bounces back when schedule is missing via navigationRouter.back().
-        // The back() call happens from the combine block when pendingSchedule.peek() is null.
-        // Characterization: router.backCount >= 1 because combine fires with the account present
-        // but the schedule absent.
-        assertTrue(router.backCount >= 1, "Missing schedule should trigger navigationRouter.back()")
+            // Schedule was absent → buildBatch returned early; state is null (no QR loaded),
+            // but no failure sheet either (this is the "early return null" path, not the onFailure path).
+            assertNull(vm.failureSheet.value)
+            // State depends on combine which bounces back when schedule is missing via navigationRouter.back().
+            // The back() call happens from the combine block when pendingSchedule.peek() is null.
+            // Characterization: router.backCount >= 1 because combine fires with the account present
+            // but the schedule absent.
+            assertTrue(router.backCount >= 1, "Missing schedule should trigger navigationRouter.back()")
 
-        collectJob.cancel()
-    }
+            collectJob.cancel()
+        }
 
     // -------------------------------------------------------------------------
     // onGetSignature (positive button / "Get Signature")
     // -------------------------------------------------------------------------
 
     @Test
-    fun onGetSignatureNavigatesForwardToScanScreenWithCorrectArgs() = runTest {
-        val sdk = fakeSdk()
-        val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-            .apply { set(testAccountKeyId, schedule()) }
-        val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-        val router = FakeNavigationRouter()
-        val mode = MigrationMode.AUTOMATIC
-        val vm = vm(sdk, pendingSchedule, pendingPczts, router, mode = mode)
-        val collectJob = launch { vm.state.collect {} }
+    fun onGetSignatureNavigatesForwardToScanScreenWithCorrectArgs() =
+        runTest {
+            val sdk = fakeSdk()
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+            val router = FakeNavigationRouter()
+            val mode = MigrationMode.AUTOMATIC
+            val vm = vm(sdk, pendingSchedule, pendingPczts, router, mode = mode)
+            val collectJob = launch { vm.state.collect {} }
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        assertNotNull(vm.state.value)
-        vm.state.value!!.positiveButton.onClick.invoke()
+            assertNotNull(vm.state.value)
+            vm.state.value!!
+                .positiveButton.onClick
+                .invoke()
 
-        assertEquals(1, router.forwardedRoutes.size)
-        val forwarded = router.forwardedRoutes.first()
-        assertTrue(forwarded is MigrationKeystoneScanArgs)
-        assertEquals(mode, forwarded.mode)
+            assertEquals(1, router.forwardedRoutes.size)
+            val forwarded = router.forwardedRoutes.first()
+            assertTrue(forwarded is MigrationKeystoneScanArgs)
+            assertEquals(mode, forwarded.mode)
 
-        collectJob.cancel()
-    }
+            collectJob.cancel()
+        }
 
     @Test
-    fun onGetSignatureWithImmediateModeForwardsImmediateArgs() = runTest {
-        val sdk = fakeSdk()
-        val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-            .apply { set(testAccountKeyId, schedule()) }
-        val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk, pendingSchedule, pendingPczts, router, mode = MigrationMode.IMMEDIATE)
-        val collectJob = launch { vm.state.collect {} }
+    fun onGetSignatureWithImmediateModeForwardsImmediateArgs() =
+        runTest {
+            val sdk = fakeSdk()
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk, pendingSchedule, pendingPczts, router, mode = MigrationMode.IMMEDIATE)
+            val collectJob = launch { vm.state.collect {} }
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        vm.state.value!!.positiveButton.onClick.invoke()
+            vm.state.value!!
+                .positiveButton.onClick
+                .invoke()
 
-        val forwarded = router.forwardedRoutes.firstOrNull()
-        assertTrue(forwarded is MigrationKeystoneScanArgs)
-        assertEquals(MigrationMode.IMMEDIATE, forwarded.mode)
+            val forwarded = router.forwardedRoutes.firstOrNull()
+            assertTrue(forwarded is MigrationKeystoneScanArgs)
+            assertEquals(MigrationMode.IMMEDIATE, forwarded.mode)
 
-        collectJob.cancel()
-    }
+            collectJob.cancel()
+        }
 
     // -------------------------------------------------------------------------
     // onReject / back / cancel behavior
     // -------------------------------------------------------------------------
 
     @Test
-    fun onRejectNavigatesBackAndClearsBothRepositories() = runTest {
-        val sdk = fakeSdk()
-        val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-            .apply { set(testAccountKeyId, schedule()) }
-        val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk, pendingSchedule, pendingPczts, router)
-        val collectJob = launch { vm.state.collect {} }
+    fun onRejectNavigatesBackAndClearsBothRepositories() =
+        runTest {
+            val sdk = fakeSdk()
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk, pendingSchedule, pendingPczts, router)
+            val collectJob = launch { vm.state.collect {} }
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        assertNotNull(vm.state.value)
-        // Invoke onBack on the state — which calls onReject.
-        vm.state.value!!.onBack.invoke()
+            assertNotNull(vm.state.value)
+            // Invoke onBack on the state — which calls onReject.
+            vm.state.value!!
+                .onBack
+                .invoke()
 
-        assertEquals(1, router.backCount)
-        // Characterization: onReject clears schedule AND pczts repos.
-        assertNull(pendingSchedule.peek(testAccountKeyId))
-        assertNull(pendingPczts.get(testAccountKeyId))
+            assertEquals(1, router.backCount)
+            // Characterization: onReject clears schedule AND pczts repos.
+            assertNull(pendingSchedule.peek(testAccountKeyId))
+            assertNull(pendingPczts.get(testAccountKeyId))
 
-        collectJob.cancel()
-    }
+            collectJob.cancel()
+        }
 
     @Test
-    fun negativeButtonClickAlsoCallsOnReject() = runTest {
-        val sdk = fakeSdk()
-        val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-            .apply { set(testAccountKeyId, schedule()) }
-        val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk, pendingSchedule, pendingPczts, router)
-        val collectJob = launch { vm.state.collect {} }
+    fun negativeButtonClickAlsoCallsOnReject() =
+        runTest {
+            val sdk = fakeSdk()
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk, pendingSchedule, pendingPczts, router)
+            val collectJob = launch { vm.state.collect {} }
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        val state = vm.state.value
-        assertNotNull(state)
-        assertNotNull(state.negativeButton)
-        state.negativeButton.onClick.invoke()
+            val state = vm.state.value
+            assertNotNull(state)
+            assertNotNull(state.negativeButton)
+            state.negativeButton.onClick.invoke()
 
-        assertEquals(1, router.backCount)
+            assertEquals(1, router.backCount)
 
-        collectJob.cancel()
-    }
+            collectJob.cancel()
+        }
 
     // -------------------------------------------------------------------------
     // generateNextQrCode cycling
     // -------------------------------------------------------------------------
 
     @Test
-    fun generateNextQrCodeCyclesFrameIndexForMultiPartQr() = runTest {
-        // Provide two QR frames — clicking generateNextQrCode should advance the displayed frame.
-        val sdk = fakeSdk(qrParts = listOf("frame0", "frame1"))
-        val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-            .apply { set(testAccountKeyId, schedule()) }
-        val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk, pendingSchedule, pendingPczts, router)
-        val collectJob = launch { vm.state.collect {} }
+    fun generateNextQrCodeCyclesFrameIndexForMultiPartQr() =
+        runTest {
+            // Provide two QR frames — clicking generateNextQrCode should advance the displayed frame.
+            val sdk = fakeSdk(qrParts = listOf("frame0", "frame1"))
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk, pendingSchedule, pendingPczts, router)
+            val collectJob = launch { vm.state.collect {} }
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        val stateBefore = vm.state.value
-        assertNotNull(stateBefore)
-        // Frame 0 should be showing first (index 0 → "frame0").
-        assertEquals("frame0", stateBefore.qrData)
+            val stateBefore = vm.state.value
+            assertNotNull(stateBefore)
+            // Frame 0 should be showing first (index 0 → "frame0").
+            assertEquals("frame0", stateBefore.qrData)
 
-        // Advance to frame 1.
-        stateBefore.generateNextQrCode.invoke()
-        advanceUntilIdle()
+            // Advance to frame 1.
+            stateBefore.generateNextQrCode.invoke()
+            advanceUntilIdle()
 
-        assertEquals("frame1", vm.state.value?.qrData)
+            assertEquals("frame1", vm.state.value?.qrData)
 
-        // Wraps around back to frame 0.
-        vm.state.value!!.generateNextQrCode.invoke()
-        advanceUntilIdle()
+            // Wraps around back to frame 0.
+            vm.state.value!!
+                .generateNextQrCode
+                .invoke()
+            advanceUntilIdle()
 
-        assertEquals("frame0", vm.state.value?.qrData)
+            assertEquals("frame0", vm.state.value?.qrData)
 
-        collectJob.cancel()
-    }
+            collectJob.cancel()
+        }
 
     // -------------------------------------------------------------------------
     // Note-split path
     // -------------------------------------------------------------------------
 
     @Test
-    fun whenNoteSplitNeededSdkBuildPathIsFollowed() = runTest {
-        // When isNoteSplitNeeded() = true, buildBatch calls:
-        //   prepareNoteSplit() → proposeMigrationTransfersFromSplit(proposal) →
-        //   createUnsignedNoteSplitPczt(proposal) → createUnsignedTransferPczts(scheduleFromSplit)
-        // Stub all four so the happy path completes; assert failureSheet == null.
-        val fakeProposal = cash.z.ecc.android.sdk.NoteSplitProposal(
-            outputNotes = listOf(50_000L, 50_000L),
-            fee = 1_000L,
-            proposalHandle = 42L,
-        )
-        val fakeScheduleFromSplit = schedule()
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { isNoteSplitNeeded() } returns true
-            coEvery { prepareNoteSplit() } returns fakeProposal
-            coEvery { proposeMigrationTransfersFromSplit(fakeProposal) } returns fakeScheduleFromSplit
-            coEvery { createUnsignedNoteSplitPczt(fakeProposal) } returns byteArrayOf(0x02)
-            coEvery { createUnsignedTransferPczts(fakeScheduleFromSplit) } returns listOf(1L to byteArrayOf(0x01))
-            coEvery { buildKeystoneSignBatchQrParts(any(), any(), any(), any()) } returns listOf("frame0")
+    fun whenNoteSplitNeededSdkBuildPathIsFollowed() =
+        runTest {
+            // When isNoteSplitNeeded() = true, buildBatch calls:
+            //   prepareNoteSplit() → proposeMigrationTransfersFromSplit(proposal) →
+            //   createUnsignedNoteSplitPczt(proposal) → createUnsignedTransferPczts(scheduleFromSplit)
+            // Stub all four so the happy path completes; assert failureSheet == null.
+            val fakeProposal =
+                cash.z.ecc.android.sdk.NoteSplitProposal(
+                    outputNotes = listOf(50_000L, 50_000L),
+                    fee = 1_000L,
+                    proposalHandle = 42L,
+                )
+            val fakeScheduleFromSplit = schedule()
+            val sdk =
+                mockk<OrchardMigrationSdk>(relaxed = true) {
+                    coEvery { isNoteSplitNeeded() } returns true
+                    coEvery { prepareNoteSplit() } returns fakeProposal
+                    coEvery { proposeMigrationTransfersFromSplit(fakeProposal) } returns fakeScheduleFromSplit
+                    coEvery { createUnsignedNoteSplitPczt(fakeProposal) } returns byteArrayOf(0x02)
+                    coEvery { createUnsignedTransferPczts(fakeScheduleFromSplit) } returns listOf(1L to byteArrayOf(0x01))
+                    coEvery { buildKeystoneSignBatchQrParts(any(), any(), any(), any()) } returns listOf("frame0")
+                }
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk, pendingSchedule, pendingPczts, router)
+            val collectJob = launch { vm.state.collect {} }
+
+            advanceUntilIdle()
+
+            // No failure sheet → the split path completed without error.
+            assertNull(vm.failureSheet.value)
+
+            collectJob.cancel()
         }
-        val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-            .apply { set(testAccountKeyId, schedule()) }
-        val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk, pendingSchedule, pendingPczts, router)
-        val collectJob = launch { vm.state.collect {} }
-
-        advanceUntilIdle()
-
-        // No failure sheet → the split path completed without error.
-        assertNull(vm.failureSheet.value)
-
-        collectJob.cancel()
-    }
 
     @Test
-    fun whenNoteSplitNeededAndSdkFailsShowsFailureSheet() = runTest {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { isNoteSplitNeeded() } returns true
-            coEvery { prepareNoteSplit() } throws RuntimeException("split failed")
+    fun whenNoteSplitNeededAndSdkFailsShowsFailureSheet() =
+        runTest {
+            val sdk =
+                mockk<OrchardMigrationSdk>(relaxed = true) {
+                    coEvery { isNoteSplitNeeded() } returns true
+                    coEvery { prepareNoteSplit() } throws RuntimeException("split failed")
+                }
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+            val router = FakeNavigationRouter()
+            val vm = vm(sdk, pendingSchedule, pendingPczts, router)
+
+            advanceUntilIdle()
+
+            assertNotNull(vm.failureSheet.value)
         }
-        val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-            .apply { set(testAccountKeyId, schedule()) }
-        val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-        val router = FakeNavigationRouter()
-        val vm = vm(sdk, pendingSchedule, pendingPczts, router)
-
-        advanceUntilIdle()
-
-        assertNotNull(vm.failureSheet.value)
-    }
 
     // -------------------------------------------------------------------------
     // No SDK available (null from GetOrchardMigrationSdkUseCase)
     // -------------------------------------------------------------------------
 
     @Test
-    fun noSdkAvailableShowsFailureSheet() = runTest {
-        // SDK unavailable (returns null) → VM error("no wallet available") → onFailure → sheet.
-        val pendingSchedule = PendingMigrationScheduleRepositoryImpl()
-            .apply { set(testAccountKeyId, schedule()) }
-        val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
-        val router = FakeNavigationRouter()
-        val vm = MigrationKeystoneSignVM(
-            args = MigrationKeystoneSignArgs(mode = MigrationMode.AUTOMATIC),
-            getSelectedWalletAccount = testGetSelectedWalletAccount,
-            getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns null },
-            pendingSchedule = pendingSchedule,
-            pendingKeystonePczts = pendingPczts,
-            navigationRouter = router,
-        )
+    fun noSdkAvailableShowsFailureSheet() =
+        runTest {
+            // SDK unavailable (returns null) → VM error("no wallet available") → onFailure → sheet.
+            val pendingSchedule =
+                PendingMigrationScheduleRepositoryImpl()
+                    .apply { set(testAccountKeyId, schedule()) }
+            val pendingPczts = PendingKeystoneMigrationPcztsRepositoryImpl()
+            val router = FakeNavigationRouter()
+            val vm =
+                MigrationKeystoneSignVM(
+                    args = MigrationKeystoneSignArgs(mode = MigrationMode.AUTOMATIC),
+                    getSelectedWalletAccount = testGetSelectedWalletAccount,
+                    getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns null },
+                    pendingSchedule = pendingSchedule,
+                    pendingKeystonePczts = pendingPczts,
+                    navigationRouter = router,
+                )
 
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        assertNotNull(vm.failureSheet.value)
-    }
+            assertNotNull(vm.failureSheet.value)
+        }
 
     // -------------------------------------------------------------------------
     // Helpers
@@ -536,15 +611,16 @@ class MigrationKeystoneSignVMTest {
 
     private fun schedule(): MigrationSchedule =
         MigrationSchedule(
-            transfers = listOf(
-                TransferProposal(
-                    id = 11L,
-                    amountZatoshi = 100_000L,
-                    anchorHeight = 100L,
-                    nextExecutableAfterHeight = 200L,
-                    expiryHeight = 300L,
-                )
-            ),
+            transfers =
+                listOf(
+                    TransferProposal(
+                        id = 11L,
+                        amountZatoshi = 100_000L,
+                        anchorHeight = 100L,
+                        nextExecutableAfterHeight = 200L,
+                        expiryHeight = 300L,
+                    )
+                ),
             estimatedDurationHours = 1,
             proposalHandle = 0L,
         )
@@ -558,9 +634,10 @@ class MigrationKeystoneSignVMTest {
     ) = MigrationKeystoneSignVM(
         args = MigrationKeystoneSignArgs(mode = mode),
         getSelectedWalletAccount = testGetSelectedWalletAccount,
-        getOrchardMigrationSdk = mockk<GetOrchardMigrationSdkUseCase> {
-            coEvery { this@mockk() } returns sdk
-        },
+        getOrchardMigrationSdk =
+            mockk<GetOrchardMigrationSdkUseCase> {
+                coEvery { this@mockk() } returns sdk
+            },
         pendingSchedule = pendingSchedule,
         pendingKeystonePczts = pendingPczts,
         navigationRouter = router,
@@ -571,13 +648,24 @@ class MigrationKeystoneSignVMTest {
         var backCount = 0
             private set
 
-        override fun forward(vararg routes: Any) { forwardedRoutes.addAll(routes.toList()) }
+        override fun forward(vararg routes: Any) {
+            forwardedRoutes.addAll(routes.toList())
+        }
+
         override fun replace(vararg routes: Any) = Unit
+
         override fun replaceAll(vararg routes: Any) = Unit
-        override fun back() { backCount++ }
+
+        override fun back() {
+            backCount++
+        }
+
         override fun backTo(route: KClass<*>) = Unit
+
         override fun custom(block: (NavBackStackEntry?) -> NavigationCommand?) = Unit
+
         override fun backToRoot() = Unit
+
         override fun observePipeline(): Flow<BaseNavigationCommand> = emptyFlow()
     }
 }

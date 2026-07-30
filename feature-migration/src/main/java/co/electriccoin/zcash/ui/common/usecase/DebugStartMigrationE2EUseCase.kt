@@ -44,13 +44,18 @@ class DebugStartMigrationE2EUseCase(
 ) {
     suspend operator fun invoke() {
         Twig.debug { "MIGRATION_DIAG E2E: start requested — waiting for the SDK" }
-        val sdk = waitForSdk() ?: run {
-            Twig.warn { "MIGRATION_DIAG E2E: SDK never became available — aborting" }
-            return
-        }
+        val sdk =
+            waitForSdk() ?: run {
+                Twig.warn { "MIGRATION_DIAG E2E: SDK never became available — aborting" }
+                return
+            }
 
         // ── Reset (mirror of DebugVM.onMigrationRestartClick) ──
-        val accountKeyId = accountDataSource.getSelectedAccount().sdkAccount.accountUuid.toStorageKeyId()
+        val accountKeyId =
+            accountDataSource
+                .getSelectedAccount()
+                .sdkAccount.accountUuid
+                .toStorageKeyId()
         sdk.clearMigration()
         MigrationScheduler(context).cancel(accountKeyId)
         MigrationSyncScheduler(context).cancel(accountKeyId)
@@ -65,36 +70,38 @@ class DebugStartMigrationE2EUseCase(
         var sched: MigrationSchedule? = null
         repeat(PROPOSE_ATTEMPTS) { attempt ->
             if (sched != null) return@repeat
-            sched = runCatching { sdk.proposeMigrationTransfers() }
-                .onFailure {
-                    Twig.debug {
-                        "MIGRATION_DIAG E2E: propose attempt ${attempt + 1}/$PROPOSE_ATTEMPTS failed " +
-                            "(${it.message}) — retrying in $PROPOSE_RETRY_DELAY"
-                    }
-                }
-                .getOrNull()
+            sched =
+                runCatching { sdk.proposeMigrationTransfers() }
+                    .onFailure {
+                        Twig.debug {
+                            "MIGRATION_DIAG E2E: propose attempt ${attempt + 1}/$PROPOSE_ATTEMPTS failed " +
+                                "(${it.message}) — retrying in $PROPOSE_RETRY_DELAY"
+                        }
+                    }.getOrNull()
             if (sched == null) delay(PROPOSE_RETRY_DELAY)
         }
-        val proposed = sched ?: run {
-            Twig.warn { "MIGRATION_DIAG E2E: propose never succeeded — aborting" }
-            return
-        }
-
-        // ── Commit (mirror of MigrationReviewVM.confirmAutomatic, biometrics skipped) ──
-        val scheduleToSign = if (sdk.isNoteSplitNeeded()) {
-            val proposal = sdk.prepareNoteSplit()
-            val scheduleFromSplit = sdk.proposeMigrationTransfersFromSplit(proposal)
-            finalizeMigrationSchedule.persistPlan(scheduleFromSplit, MigrationMode.AUTOMATIC)
-            val splitResult = sdk.submitNoteSplit(proposal, zashiSpendingKeyDataSource.getZashiSpendingKey())
-            if (splitResult !is TransferResult.Success) {
-                Twig.warn { "MIGRATION_DIAG E2E: note split failed ($splitResult) — aborting" }
+        val proposed =
+            sched ?: run {
+                Twig.warn { "MIGRATION_DIAG E2E: propose never succeeded — aborting" }
                 return
             }
-            scheduleFromSplit
-        } else {
-            finalizeMigrationSchedule.persistPlan(proposed, MigrationMode.AUTOMATIC)
-            proposed
-        }
+
+        // ── Commit (mirror of MigrationReviewVM.confirmAutomatic, biometrics skipped) ──
+        val scheduleToSign =
+            if (sdk.isNoteSplitNeeded()) {
+                val proposal = sdk.prepareNoteSplit()
+                val scheduleFromSplit = sdk.proposeMigrationTransfersFromSplit(proposal)
+                finalizeMigrationSchedule.persistPlan(scheduleFromSplit, MigrationMode.AUTOMATIC)
+                val splitResult = sdk.submitNoteSplit(proposal, zashiSpendingKeyDataSource.getZashiSpendingKey())
+                if (splitResult !is TransferResult.Success) {
+                    Twig.warn { "MIGRATION_DIAG E2E: note split failed ($splitResult) — aborting" }
+                    return
+                }
+                scheduleFromSplit
+            } else {
+                finalizeMigrationSchedule.persistPlan(proposed, MigrationMode.AUTOMATIC)
+                proposed
+            }
         signAndFinalizeWithStaleRetry(sdk, scheduleToSign)
         Twig.debug { "MIGRATION_DIAG E2E: plan committed — background lanes armed" }
     }
@@ -111,8 +118,9 @@ class DebugStartMigrationE2EUseCase(
                 finalizeMigrationSchedule(toSign, MigrationMode.AUTOMATIC)
                 return
             } catch (e: RuntimeException) {
-                val retryable = e.message?.contains("StalePlan") == true ||
-                    e.message?.contains("BoundaryCheckpointMissing") == true
+                val retryable =
+                    e.message?.contains("StalePlan") == true ||
+                        e.message?.contains("BoundaryCheckpointMissing") == true
                 if (!retryable || attempt == COMMIT_ATTEMPTS - 1) throw e
                 Twig.debug {
                     "MIGRATION_DIAG E2E: commit attempt ${attempt + 1} failed retryably " +
@@ -141,6 +149,7 @@ class DebugStartMigrationE2EUseCase(
         private val SDK_WAIT_DELAY = 5.seconds
         private const val PROPOSE_ATTEMPTS = 8
         private val PROPOSE_RETRY_DELAY = 15.seconds
+
         // Draws are geometric over a 16-bucket window; right after (re)install only the buckets
         // scanned since always-on retention activated have checkpoints, so several re-draw
         // rounds may be needed before all 9 transfers land on retained boundaries.

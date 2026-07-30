@@ -20,38 +20,41 @@ class MigrationPlanReconcileTest {
         id = id,
     )
 
-    private fun plan(transfers: List<MigrationTransfer>) = MigrationPlan(
-        id = "p1",
-        createdAtEpochSeconds = 0L,
-        transfers = transfers,
-        mode = MigrationMode.AUTOMATIC,
-    )
+    private fun plan(transfers: List<MigrationTransfer>) =
+        MigrationPlan(
+            id = "p1",
+            createdAtEpochSeconds = 0L,
+            transfers = transfers,
+            mode = MigrationMode.AUTOMATIC,
+        )
 
     private fun live(vararg sent: Pair<Long, Boolean>, tipHeight: Long = 100L) =
         MigrationTransferStates(
-            transfers = sent.map { (id, isSent) ->
-                MigrationTransferState(
-                    id = id,
-                    isTransfer = true,
-                    isSent = isSent,
-                    isProved = isSent,
-                    scheduledHeight = 50L,
-                    anchorBoundaryHeight = null,
-                )
-            },
+            transfers =
+                sent.map { (id, isSent) ->
+                    MigrationTransferState(
+                        id = id,
+                        isTransfer = true,
+                        isSent = isSent,
+                        isProved = isSent,
+                        scheduledHeight = 50L,
+                        anchorBoundaryHeight = null,
+                    )
+                },
             tipHeight = tipHeight,
         )
 
     @Test
     fun marksMatchingPendingTransferSentByIdNotIndex() {
         // Ids out of index order (ZIP 318 shuffle): the live-sent id 11 is at index 2, not index 1.
-        val plan = plan(
-            listOf(
-                transfer(index = 0, id = 10L),
-                transfer(index = 1, id = 12L),
-                transfer(index = 2, id = 11L),
+        val plan =
+            plan(
+                listOf(
+                    transfer(index = 0, id = 10L),
+                    transfer(index = 1, id = 12L),
+                    transfer(index = 2, id = 11L),
+                )
             )
-        )
         val result = plan.withLiveStatusOnly(live(11L to true))
         assertEquals(MigrationTransferStatus.PENDING, result.transfers[1].status)
         assertEquals(MigrationTransferStatus.SENT, result.transfers[2].status)
@@ -69,12 +72,13 @@ class MigrationPlanReconcileTest {
 
     @Test
     fun leavesTransfersWithNoLiveMatchUntouched() {
-        val plan = plan(
-            listOf(
-                transfer(index = 0, id = 10L),
-                transfer(index = 1, id = 11L),
+        val plan =
+            plan(
+                listOf(
+                    transfer(index = 0, id = 10L),
+                    transfer(index = 1, id = 11L),
+                )
             )
-        )
         val result = plan.withLiveStatusOnly(live(10L to true))
         assertEquals(MigrationTransferStatus.SENT, result.transfers[0].status)
         assertEquals(MigrationTransferStatus.PENDING, result.transfers[1].status)
@@ -82,12 +86,13 @@ class MigrationPlanReconcileTest {
 
     @Test
     fun onlyUpgradesNeverDowngradesAlreadySentTransfer() {
-        val plan = plan(
-            listOf(
-                transfer(index = 0, id = 10L, status = MigrationTransferStatus.SENT),
-                transfer(index = 1, id = 11L),
+        val plan =
+            plan(
+                listOf(
+                    transfer(index = 0, id = 10L, status = MigrationTransferStatus.SENT),
+                    transfer(index = 1, id = 11L),
+                )
             )
-        )
         // Live reports t0 not-sent (never actually happens, but must not clobber a cache-advanced SENT).
         val result = plan.withLiveStatusOnly(live(10L to false, 11L to true))
         assertEquals(MigrationTransferStatus.SENT, result.transfers[0].status)
@@ -102,12 +107,13 @@ class MigrationPlanReconcileTest {
 
     @Test
     fun advancesIsCompleteWhenLiveReportsAllSent() {
-        val plan = plan(
-            listOf(
-                transfer(index = 0, id = 10L),
-                transfer(index = 1, id = 11L),
+        val plan =
+            plan(
+                listOf(
+                    transfer(index = 0, id = 10L),
+                    transfer(index = 1, id = 11L),
+                )
             )
-        )
         val result = plan.withLiveStatusOnly(live(10L to true, 11L to true))
         assertEquals(true, result.isComplete)
         assertEquals(null, result.nextPending)

@@ -28,10 +28,13 @@ class GetMigrationPrivacyOrReviewDestinationUseCase(
         if (!automaticServerRepository.isServerAutomatic()) return MigrationCustomServerTorArgs(mode = mode)
         val torAlreadyOn = isTorEnabledStorageProvider.get() == true
         return when (mode) {
-            MigrationMode.IMMEDIATE ->
+            MigrationMode.IMMEDIATE -> {
                 if (torAlreadyOn) MigrationReviewArgs(mode = mode) else MigrationPrivacyArgs(mode = mode)
-            MigrationMode.AUTOMATIC ->
+            }
+
+            MigrationMode.AUTOMATIC -> {
                 if (torAlreadyOn) MigrationBatteryArgs else MigrationPrivacyArgs(mode = mode)
+            }
         }
     }
 }

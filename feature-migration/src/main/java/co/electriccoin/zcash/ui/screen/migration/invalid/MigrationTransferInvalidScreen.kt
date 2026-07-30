@@ -64,35 +64,40 @@ fun MigrationTransferInvalidView(state: MigrationTransferInvalidState) {
         }
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .scaffoldPadding(padding),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .scaffoldPadding(padding),
         ) {
             // Same layout for both causes (spec §6.2/§6.3), only the title/body/first step differ:
             // PLAN_UPDATE (§6.2) explains notes spent outside the migration flow invalidated the
             // plan; TRANSFER_EXPIRED (§6.3) explains transfer(s) expired without executing (the app
             // wasn't opened in time), naming the specific affected range.
-            val (title, body, firstStep) = when (state.kind) {
-                MigrationAttentionKind.PLAN_UPDATE ->
-                    Triple(
-                        "Update Migration Plan",
-                        "Some Orchard notes were spent outside the migration flow, which invalidated " +
-                            "the pre-signed transfer plan. The plan needs to be re-created for the " +
-                            "remaining balance. No funds are lost — only the pre-signed transactions " +
-                            "are discarded.",
-                        "The invalidated transfer is discarded",
-                    )
-                MigrationAttentionKind.TRANSFER_EXPIRED ->
-                    Triple(
-                        "Transfer No Longer Valid",
-                        "Transfer ${state.invalidRange.getValue()} expired without being sent — the app " +
-                            "wasn't opened in time to broadcast ${if (state.remainingCount > 1) "them" else "it"}. " +
-                            "The migration plan needs to be re-created for the remaining balance. No " +
-                            "funds are lost — only the pre-signed transactions are discarded.",
-                        "Expired transfer${if (state.remainingCount > 1) "s are" else " is"} discarded",
-                    )
-            }
+            val (title, body, firstStep) =
+                when (state.kind) {
+                    MigrationAttentionKind.PLAN_UPDATE -> {
+                        Triple(
+                            "Update Migration Plan",
+                            "Some Orchard notes were spent outside the migration flow, which invalidated " +
+                                "the pre-signed transfer plan. The plan needs to be re-created for the " +
+                                "remaining balance. No funds are lost — only the pre-signed transactions " +
+                                "are discarded.",
+                            "The invalidated transfer is discarded",
+                        )
+                    }
+
+                    MigrationAttentionKind.TRANSFER_EXPIRED -> {
+                        Triple(
+                            "Transfer No Longer Valid",
+                            "Transfer ${state.invalidRange.getValue()} expired without being sent — the app " +
+                                "wasn't opened in time to broadcast ${if (state.remainingCount > 1) "them" else "it"}. " +
+                                "The migration plan needs to be re-created for the remaining balance. No " +
+                                "funds are lost — only the pre-signed transactions are discarded.",
+                            "Expired transfer${if (state.remainingCount > 1) "s are" else " is"} discarded",
+                        )
+                    }
+                }
             Text(
                 text = title,
                 style = ZashiTypography.header6,
@@ -137,15 +142,17 @@ fun MigrationTransferInvalidView(state: MigrationTransferInvalidState) {
 @Composable
 private fun WhatHappensNextItem(number: Int, text: String) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Box(
-            modifier = Modifier
-                .size(24.dp)
-                .background(ZashiColors.Surfaces.bgSecondary, CircleShape),
+            modifier =
+                Modifier
+                    .size(24.dp)
+                    .background(ZashiColors.Surfaces.bgSecondary, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -167,32 +174,36 @@ private fun WhatHappensNextItem(number: Int, text: String) {
 
 @PreviewScreens
 @Composable
-private fun PreviewTransferExpired() = ZcashTheme {
-    MigrationTransferInvalidView(
-        state = MigrationTransferInvalidState(
-            kind = MigrationAttentionKind.TRANSFER_EXPIRED,
-            completedCount = 2,
-            totalCount = 5,
-            remainingCount = 3,
-            invalidRange = stringRes("3–5"),
-            onContinue = {},
-            onBack = {},
+private fun PreviewTransferExpired() =
+    ZcashTheme {
+        MigrationTransferInvalidView(
+            state =
+                MigrationTransferInvalidState(
+                    kind = MigrationAttentionKind.TRANSFER_EXPIRED,
+                    completedCount = 2,
+                    totalCount = 5,
+                    remainingCount = 3,
+                    invalidRange = stringRes("3–5"),
+                    onContinue = {},
+                    onBack = {},
+                )
         )
-    )
-}
+    }
 
 @PreviewScreens
 @Composable
-private fun PreviewPlanUpdate() = ZcashTheme {
-    MigrationTransferInvalidView(
-        state = MigrationTransferInvalidState(
-            kind = MigrationAttentionKind.PLAN_UPDATE,
-            completedCount = 2,
-            totalCount = 5,
-            remainingCount = 1,
-            invalidRange = stringRes("3"),
-            onContinue = {},
-            onBack = {},
+private fun PreviewPlanUpdate() =
+    ZcashTheme {
+        MigrationTransferInvalidView(
+            state =
+                MigrationTransferInvalidState(
+                    kind = MigrationAttentionKind.PLAN_UPDATE,
+                    completedCount = 2,
+                    totalCount = 5,
+                    remainingCount = 1,
+                    invalidRange = stringRes("3"),
+                    onContinue = {},
+                    onBack = {},
+                )
         )
-    )
-}
+    }

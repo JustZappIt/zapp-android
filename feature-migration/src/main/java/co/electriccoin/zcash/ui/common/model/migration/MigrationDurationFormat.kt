@@ -1,7 +1,7 @@
 package co.electriccoin.zcash.ui.common.model.migration
 
 import cash.z.ecc.android.sdk.ext.ZcashSdk
-import co.electriccoin.zcash.ui.BuildConfig
+import co.electriccoin.zcash.migration.BuildConfig
 
 /**
  * Formats a migration plan's total span so it reflects whatever interval the current

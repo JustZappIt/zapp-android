@@ -5,20 +5,18 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
-import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
+import co.electriccoin.zcash.ui.common.migration.MigrationHomeMessageSource
 import co.electriccoin.zcash.ui.common.model.voting.VotingRound
 import co.electriccoin.zcash.ui.common.model.voting.VotingSession
-import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
 import co.electriccoin.zcash.ui.common.provider.ShieldFundsInfoProvider
 import co.electriccoin.zcash.ui.common.repository.HomeMessageData
+import co.electriccoin.zcash.ui.common.repository.MigrationHomeMessage
 import co.electriccoin.zcash.ui.common.repository.VotingApiRepository
 import co.electriccoin.zcash.ui.common.repository.VotingKeystoneRouteStage
 import co.electriccoin.zcash.ui.common.repository.VotingRecoveryRepository
 import co.electriccoin.zcash.ui.common.repository.VotingRecoverySnapshot
 import co.electriccoin.zcash.ui.common.repository.VotingSessionStore
 import co.electriccoin.zcash.ui.common.repository.toVotingAccountScopeId
-import co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetHomeMessageUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.IsRestoreSuccessDialogVisibleUseCase
@@ -36,12 +34,6 @@ import co.electriccoin.zcash.ui.screen.error.ErrorArgs
 import co.electriccoin.zcash.ui.screen.error.NavigateToErrorUseCase
 import co.electriccoin.zcash.ui.screen.exchangerate.optin.ExchangeRateOptInArgs
 import co.electriccoin.zcash.ui.screen.home.backup.SeedBackupInfo
-import co.electriccoin.zcash.ui.screen.home.migration.MigrationBannerPhase
-import co.electriccoin.zcash.ui.screen.home.migration.MigrationMessageState
-import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteArgs
-import co.electriccoin.zcash.ui.screen.migration.invalid.MigrationTransferInvalidArgs
-import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
-import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupArgs
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupDetail
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupMessageState
 import co.electriccoin.zcash.ui.screen.home.currency.EnableCurrencyConversionMessageState
@@ -102,8 +94,7 @@ class HomeVM(
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
     private val refreshActiveVotingSession: RefreshActiveVotingSessionUseCase,
     private val votingShareTrackingScheduler: VotingShareTrackingScheduler,
-    private val checkMigrationRecovery: CheckMigrationRecoveryUseCase,
-    private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
+    private val migrationHomeMessageSource: MigrationHomeMessageSource,
 ) : ViewModel() {
     private var hasSyncErrorBeenShown = false
     private var hasRestoreSuccessBeenShown = false
@@ -393,105 +384,14 @@ class HomeVM(
                 )
             }
 
-            is HomeMessageData.Migration -> {
-                val plan = data.plan
-                val percent = if (plan != null && plan.totalCount > 0) {
-                    (plan.completedCount * 100) / plan.totalCount
-                } else {
-                    0
-                }
-                // See MigrationKeystoneRound's kdoc — only ever non-null for a Keystone account's
-                // plan, prefixed onto the in-progress subtitle when present.
-                val roundPrefix = plan?.keystoneRound?.let { "Round ${it.current} of ${it.total} · " }.orEmpty()
-                // Spec §6.2/§6.3 — takes priority over the ordinary phases below: a plan needing
-                // re-confirmation is more actionable than its last-known progress/completion state.
-                // Title carries the exact required copy ("Update migration plan." / "Transfer 3–5
-                // expired.") since that IS the home message per spec, not just a phase label.
-                val (phase, title, subtitle) = when (data.attentionKind) {
-                    MigrationAttentionKind.PLAN_UPDATE ->
-                        Triple(MigrationBannerPhase.ATTENTION, "Update migration plan", "Tap to review the details")
-                    MigrationAttentionKind.TRANSFER_EXPIRED -> {
-                        val range = data.attentionRangeText
-                        Triple(
-                            MigrationBannerPhase.ATTENTION,
-                            if (range != null) "Transfer $range expired" else "A transfer expired",
-                            "Tap to review the details",
-                        )
-                    }
-                    null -> when {
-                        data.isComplete -> Triple(MigrationBannerPhase.COMPLETE, null, "Tap to review the details")
-                        // Spec §6.4: numbered per the due transfer, matching the convention used
-                        // elsewhere (e.g. MigrationProgressVM's "Transfer ${completedCount + 1}").
-                        data.isReadyToSend ->
-                            Triple(
-                                MigrationBannerPhase.READY_TO_SEND,
-                                null,
-                                "Transfer ${(plan?.completedCount ?: 0) + 1} is ready to send",
-                            )
-                        plan == null -> Triple(MigrationBannerPhase.REQUIRED, null, null)
-                        plan.completedCount == 0 ->
-                            Triple(MigrationBannerPhase.IN_PROGRESS, null, "${roundPrefix}First transfer sending…")
-                        else ->
-                            Triple(
-                                MigrationBannerPhase.IN_PROGRESS,
-                                null,
-                                "$roundPrefix${plan.completedCount} of ${plan.totalCount} transfers done ~ $percent% complete",
-                            )
-                    }
-                }
-                MigrationMessageState(
-                    phase = phase,
-                    title = title,
-                    progressLabel = subtitle,
-                    progressPercent = percent.toFloat(),
-                    onClick = {
-                        onMigrationMessageClick(
-                            plan = plan,
-                            isComplete = data.isComplete,
-                            isReadyToSend = data.isReadyToSend,
-                            hasAttention = data.attentionKind != null,
-                        )
-                    },
-                    onButtonClick = {
-                        onMigrationMessageClick(
-                            plan = plan,
-                            isComplete = data.isComplete,
-                            isReadyToSend = data.isReadyToSend,
-                            hasAttention = data.attentionKind != null,
-                        )
-                    },
-                )
+            is MigrationHomeMessage -> {
+                migrationHomeMessageSource.createMessageState(data)
             }
 
             null -> {
                 null
             }
         }
-
-    private fun onMigrationMessageClick(
-        plan: MigrationPlan?,
-        isComplete: Boolean,
-        isReadyToSend: Boolean = false,
-        hasAttention: Boolean = false,
-    ) = viewModelScope.launch {
-        when {
-            // A plan needing re-confirmation (spec §6.2/§6.3) always routes to the Transfer Invalid
-            // info screen, regardless of its last-known progress/completion state.
-            hasAttention -> navigationRouter.forward(MigrationTransferInvalidArgs)
-            // Tapping the widget just opens the celebration screen now — MigrationCompleteVM.onDone()
-            // owns the seen-flag decision, since it needs to know whether residual Orchard balance
-            // still requires another Keystone round before deciding whether this is truly "seen".
-            isComplete -> navigationRouter.forward(MigrationCompleteArgs)
-            // Spec §6.4: a distinct, lighter-weight review-and-send path — not the fuller
-            // Reschedule/Send-now recovery screen MigrationProgressArgs offers for a genuinely
-            // overdue transfer.
-            isReadyToSend -> navigationRouter.forward(
-                co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs
-            )
-            plan != null -> navigationRouter.forward(MigrationProgressArgs)
-            else -> navigationRouter.forward(MigrationSetupArgs)
-        }
-    }
 
     private fun onCrashReportMessageClick() = navigationRouter.forward(CrashReportOptIn)
 

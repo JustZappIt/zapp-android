@@ -41,11 +41,12 @@ class DebugOrchardBalanceVM(
         err: String?,
     ) = DebugOrchardBalanceState(
         currentBalance = stringRes(Zatoshi(balanceZatoshi)),
-        zecInput = TextFieldState(
-            value = stringRes(input),
-            error = err?.let { stringRes(it) },
-            onValueChange = ::onZecInputChanged,
-        ),
+        zecInput =
+            TextFieldState(
+                value = stringRes(input),
+                error = err?.let { stringRes(it) },
+                onValueChange = ::onZecInputChanged,
+            ),
         setBalance = ButtonState(text = stringRes("Set Balance"), onClick = ::onSetBalanceClick),
         onBack = ::onBack,
     )

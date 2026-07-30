@@ -14,13 +14,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlin.reflect.KClass
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -41,46 +41,55 @@ class MigrationScheduledVMTest {
     }
 
     @Test
-    fun backgroundNotAvailableShowsHint() = runTest {
-        val backgroundAvailable = mockk<IsBackgroundExecutionAvailableProvider> {
-            every { isAvailable() } returns false
-        }
-        val plans = mockk<MigrationPlanRepository> {
-            coEvery { observe() } returns flowOf(null)
-        }
-        val vm = vm(
-            plans = plans,
-            isBackgroundExecutionAvailable = backgroundAvailable,
-        )
+    fun backgroundNotAvailableShowsHint() =
+        runTest {
+            val backgroundAvailable =
+                mockk<IsBackgroundExecutionAvailableProvider> {
+                    every { isAvailable() } returns false
+                }
+            val plans =
+                mockk<MigrationPlanRepository> {
+                    coEvery { observe() } returns flowOf(null)
+                }
+            val vm =
+                vm(
+                    plans = plans,
+                    isBackgroundExecutionAvailable = backgroundAvailable,
+                )
 
-        advanceUntilIdle()
-        val state = vm.state.first { !it.isLoading }
-        assertNotNull(state.content?.backgroundHint, "backgroundHint should not be null when background execution is unavailable")
-    }
+            advanceUntilIdle()
+            val state = vm.state.first { !it.isLoading }
+            assertNotNull(state.content?.backgroundHint, "backgroundHint should not be null when background execution is unavailable")
+        }
 
     @Test
-    fun backgroundAvailableHidesHint() = runTest {
-        val backgroundAvailable = mockk<IsBackgroundExecutionAvailableProvider> {
-            every { isAvailable() } returns true
-        }
-        val plans = mockk<MigrationPlanRepository> {
-            coEvery { observe() } returns flowOf(null)
-        }
-        val vm = vm(
-            plans = plans,
-            isBackgroundExecutionAvailable = backgroundAvailable,
-        )
+    fun backgroundAvailableHidesHint() =
+        runTest {
+            val backgroundAvailable =
+                mockk<IsBackgroundExecutionAvailableProvider> {
+                    every { isAvailable() } returns true
+                }
+            val plans =
+                mockk<MigrationPlanRepository> {
+                    coEvery { observe() } returns flowOf(null)
+                }
+            val vm =
+                vm(
+                    plans = plans,
+                    isBackgroundExecutionAvailable = backgroundAvailable,
+                )
 
-        advanceUntilIdle()
-        val state = vm.state.first { !it.isLoading }
-        assertNull(state.content?.backgroundHint, "backgroundHint should be null when background execution is available")
-    }
+            advanceUntilIdle()
+            val state = vm.state.first { !it.isLoading }
+            assertNull(state.content?.backgroundHint, "backgroundHint should be null when background execution is available")
+        }
 
     @Suppress("LongParameterList")
     private fun vm(
-        plans: MigrationPlanRepository = mockk {
-            coEvery { observe() } returns flowOf(null)
-        },
+        plans: MigrationPlanRepository =
+            mockk {
+                coEvery { observe() } returns flowOf(null)
+            },
         isBackgroundExecutionAvailable: IsBackgroundExecutionAvailableProvider = mockk(relaxed = true),
         navigationRouter: NavigationRouter = FakeNavigationRouter(),
         errorStateMapper: ErrorMapperUseCase = mockk(relaxed = true),
@@ -93,12 +102,19 @@ class MigrationScheduledVMTest {
 
     private class FakeNavigationRouter : NavigationRouter {
         override fun forward(vararg routes: Any) = Unit
+
         override fun replace(vararg routes: Any) = Unit
+
         override fun replaceAll(vararg routes: Any) = Unit
+
         override fun back() = Unit
+
         override fun backTo(route: KClass<*>) = Unit
+
         override fun custom(block: (NavBackStackEntry?) -> NavigationCommand?) = Unit
+
         override fun backToRoot() = Unit
+
         override fun observePipeline(): Flow<BaseNavigationCommand> = emptyFlow()
     }
 }

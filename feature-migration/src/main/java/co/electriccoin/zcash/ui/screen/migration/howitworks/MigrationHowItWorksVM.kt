@@ -19,7 +19,6 @@ class MigrationHowItWorksVM(
     private val errorStateMapper: ErrorMapperUseCase,
     private val getMigrationPrivacyOrReviewDestination: GetMigrationPrivacyOrReviewDestinationUseCase,
 ) : ViewModel() {
-
     private val lce = mutableLce<Unit>()
 
     val state: StateFlow<LceState<MigrationHowItWorksState>> =
@@ -31,9 +30,10 @@ class MigrationHowItWorksVM(
         ).withLce(lce, errorStateMapper::mapToState)
             .stateIn(this)
 
-    private fun onContinue() = viewModelScope.launch {
-        navigationRouter.forward(getMigrationPrivacyOrReviewDestination(MigrationMode.AUTOMATIC))
-    }
+    private fun onContinue() =
+        viewModelScope.launch {
+            navigationRouter.forward(getMigrationPrivacyOrReviewDestination(MigrationMode.AUTOMATIC))
+        }
 
     private fun onBack() = navigationRouter.back()
 }

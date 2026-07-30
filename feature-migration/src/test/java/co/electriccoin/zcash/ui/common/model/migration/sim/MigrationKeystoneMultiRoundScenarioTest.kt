@@ -46,15 +46,19 @@ class MigrationKeystoneMultiRoundScenarioTest {
     private fun round1Driver(): MigrationSimDriver {
         val driver = MigrationSimDriver()
         driver.seedPlan(
-            preparations = listOf(
-                MigrationSimDriver.SimPrep(id = PREP_ID, layer = 0, scheduledHeight = ANCHOR - 20L),
-            ),
-            transfers = listOf(
-                MigrationSimDriver.SimTransfer(
-                    id = TRANSFER_ID, scheduledHeight = ANCHOR + 5L, anchorBoundary = ANCHOR,
-                    dependsOn = listOf(PREP_ID),
+            preparations =
+                listOf(
+                    MigrationSimDriver.SimPrep(id = PREP_ID, layer = 0, scheduledHeight = ANCHOR - 20L),
                 ),
-            ),
+            transfers =
+                listOf(
+                    MigrationSimDriver.SimTransfer(
+                        id = TRANSFER_ID,
+                        scheduledHeight = ANCHOR + 5L,
+                        anchorBoundary = ANCHOR,
+                        dependsOn = listOf(PREP_ID),
+                    ),
+                ),
             startTip = ANCHOR - 20L,
         )
         driver.mine(id = PREP_ID, height = ANCHOR - 2L)
@@ -66,51 +70,52 @@ class MigrationKeystoneMultiRoundScenarioTest {
     }
 
     @Test
-    fun `residual above the per-run reach and above dust indicates another round, dust ends the campaign`() = runTest {
-        val driver = round1Driver()
-        val sdk = driver.sdk
-        val opts = NetworkPrivacyOptions(useTor = false)
+    fun `residual above the per-run reach and above dust indicates another round, dust ends the campaign`() =
+        runTest {
+            val driver = round1Driver()
+            val sdk = driver.sdk
+            val opts = NetworkPrivacyOptions(useTor = false)
 
-        // Baseline: the stateless preview sees a balance needing THREE runs.
-        assertEquals(3, sdk.estimateMigrationRunCount(), "2_500_000 / 1_000_000 = 3 runs.")
-        assertEquals(DUST, sdk.migrationDustThresholdZatoshi())
+            // Baseline: the stateless preview sees a balance needing THREE runs.
+            assertEquals(3, sdk.estimateMigrationRunCount(), "2_500_000 / 1_000_000 = 3 runs.")
+            assertEquals(DUST, sdk.migrationDustThresholdZatoshi())
 
-        // ── Round 1 completes: prove + broadcast the round's single transfer. ──
-        sdk.finalizeReadyTransfers()
-        val exec = sdk.executeNextPendingTransfer(opts, useEstimatedTip = true)
-        assertTrue(exec is cash.z.ecc.android.sdk.TransferAttemptOutcome.Executed)
-        // The engine reports this run's transfers all sent → Complete-with-residual: the RUN is
-        // complete, but a migratable balance remains (the multi-round distinction the app keys on).
-        assertTrue(sdk.getMigrationState() is MigrationState.Complete, "round 1's run finished.")
+            // ── Round 1 completes: prove + broadcast the round's single transfer. ──
+            sdk.finalizeReadyTransfers()
+            val exec = sdk.executeNextPendingTransfer(opts, useEstimatedTip = true)
+            assertTrue(exec is cash.z.ecc.android.sdk.TransferAttemptOutcome.Executed)
+            // The engine reports this run's transfers all sent → Complete-with-residual: the RUN is
+            // complete, but a migratable balance remains (the multi-round distinction the app keys on).
+            assertTrue(sdk.getMigrationState() is MigrationState.Complete, "round 1's run finished.")
 
-        // Continuation decision after round 1: one run's worth was consumed by round 1's transfer.
-        driver.setMigratableResidual(zatoshi = INITIAL_RESIDUAL - PER_RUN_CAP) // 1_500_000
-        val afterRound1 = sdk.estimateMigrationRunCount()!!
-        assertEquals(2, afterRound1, "1_500_000 / 1_000_000 = 2 runs still to go.")
-        assertTrue(
-            anotherRoundNeeded(sdk),
-            "residual 1_500_000 > dust 100_000 and needs >0 further runs — round 2 expected.",
-        )
+            // Continuation decision after round 1: one run's worth was consumed by round 1's transfer.
+            driver.setMigratableResidual(zatoshi = INITIAL_RESIDUAL - PER_RUN_CAP) // 1_500_000
+            val afterRound1 = sdk.estimateMigrationRunCount()!!
+            assertEquals(2, afterRound1, "1_500_000 / 1_000_000 = 2 runs still to go.")
+            assertTrue(
+                anotherRoundNeeded(sdk),
+                "residual 1_500_000 > dust 100_000 and needs >0 further runs — round 2 expected.",
+            )
 
-        // ── Round 2 completes: another run's worth clears. ──
-        driver.setMigratableResidual(zatoshi = INITIAL_RESIDUAL - 2 * PER_RUN_CAP) // 500_000
-        val afterRound2 = sdk.estimateMigrationRunCount()!!
-        assertEquals(1, afterRound2, "500_000 still needs one more run.")
-        assertTrue(anotherRoundNeeded(sdk), "500_000 > dust — round 3 expected.")
+            // ── Round 2 completes: another run's worth clears. ──
+            driver.setMigratableResidual(zatoshi = INITIAL_RESIDUAL - 2 * PER_RUN_CAP) // 500_000
+            val afterRound2 = sdk.estimateMigrationRunCount()!!
+            assertEquals(1, afterRound2, "500_000 still needs one more run.")
+            assertTrue(anotherRoundNeeded(sdk), "500_000 > dust — round 3 expected.")
 
-        // ── Round 3 clears all but dust. ──
-        driver.setMigratableResidual(zatoshi = DUST - 1L) // 99_999 — below the dust threshold
-        assertEquals(1, sdk.estimateMigrationRunCount(), "a sub-dust residual still counts as 1 run to the raw estimate…")
-        assertFalse(
-            anotherRoundNeeded(sdk),
-            "…but the app gates on the dust threshold: 99_999 < 100_000 is negligible — campaign ends.",
-        )
+            // ── Round 3 clears all but dust. ──
+            driver.setMigratableResidual(zatoshi = DUST - 1L) // 99_999 — below the dust threshold
+            assertEquals(1, sdk.estimateMigrationRunCount(), "a sub-dust residual still counts as 1 run to the raw estimate…")
+            assertFalse(
+                anotherRoundNeeded(sdk),
+                "…but the app gates on the dust threshold: 99_999 < 100_000 is negligible — campaign ends.",
+            )
 
-        // Exactly-zero residual is unambiguously done.
-        driver.setMigratableResidual(zatoshi = 0L)
-        assertEquals(0, sdk.estimateMigrationRunCount())
-        assertFalse(anotherRoundNeeded(sdk))
-    }
+            // Exactly-zero residual is unambiguously done.
+            driver.setMigratableResidual(zatoshi = 0L)
+            assertEquals(0, sdk.estimateMigrationRunCount())
+            assertFalse(anotherRoundNeeded(sdk))
+        }
 
     /**
      * The continuation decision the app makes between Keystone rounds: another round is needed only

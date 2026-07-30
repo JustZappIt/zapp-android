@@ -8,8 +8,8 @@ import cash.z.ecc.android.sdk.AttentionReason
 import cash.z.ecc.android.sdk.MigrationState
 import cash.z.ecc.android.sdk.MigrationTransferState
 import cash.z.ecc.android.sdk.MigrationTransferStates
+import co.electriccoin.zcash.migration.BuildConfig
 import co.electriccoin.zcash.spackle.Twig
-import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProvider
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
@@ -47,27 +47,29 @@ import kotlin.time.Duration.Companion.seconds
 class MigrationSyncWorker(
     context: Context,
     params: WorkerParameters,
-) : CoroutineWorker(context, params), KoinComponent {
-
+) : CoroutineWorker(context, params),
+    KoinComponent {
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase by inject()
     private val synchronizerProvider: SynchronizerProvider by inject()
     private val lastNetworkActivity: LastNetworkActivityStorageProvider by inject()
     private val migrationNotifier: MigrationNotifier by inject()
 
     override suspend fun doWork(): Result {
-        val accountKeyId = inputData.getString(MigrationScheduler.KEY_ACCOUNT_KEY_ID)
-            ?: return Result.success()
+        val accountKeyId =
+            inputData.getString(MigrationScheduler.KEY_ACCOUNT_KEY_ID)
+                ?: return Result.success()
 
-        val sdk = getOrchardMigrationSdk(accountKeyId) ?: run {
-            // The wallet isn't up yet — happens deterministically right after an app
-            // update/reboot, when WorkManager greedily re-runs the restored job before the
-            // synchronizer initializes. Returning success here silently BREAKS the
-            // self-rechaining lane (no re-arm ever happens again — observed live: both lanes
-            // dead after a reinstall). Retry lets WorkManager back off and re-run until the
-            // SDK is reachable, at which point the normal run re-arms the chain.
-            Twig.debug { "MIGRATION_DIAG LaneA: SDK not ready — retrying via WorkManager backoff." }
-            return Result.retry()
-        }
+        val sdk =
+            getOrchardMigrationSdk(accountKeyId) ?: run {
+                // The wallet isn't up yet — happens deterministically right after an app
+                // update/reboot, when WorkManager greedily re-runs the restored job before the
+                // synchronizer initializes. Returning success here silently BREAKS the
+                // self-rechaining lane (no re-arm ever happens again — observed live: both lanes
+                // dead after a reinstall). Retry lets WorkManager back off and re-run until the
+                // SDK is reachable, at which point the normal run re-arms the chain.
+                Twig.debug { "MIGRATION_DIAG LaneA: SDK not ready — retrying via WorkManager backoff." }
+                return Result.retry()
+            }
 
         // F3: Lane A must terminate once the migration reaches a terminal state. Unlike Lane B,
         // whose only stop signal is states==null, migrationTransferStates() keeps returning rows
@@ -101,12 +103,13 @@ class MigrationSyncWorker(
         val nowSec = nowEpochSeconds()
         val secondsPerBlock = sdk.estimatedSecondsPerBlock()
         val nextProvedDue = nextProvedDueEpochSeconds(states, est, nowSec, secondsPerBlock)
-        val decision = decideLaneARun(
-            nowEpochSeconds = nowSec,
-            nextProvedDueEpochSeconds = nextProvedDue,
-            privacyBufferSeconds = privacyBufferSeconds,
-            isGateBlocked = sdk.isSyncBlocked().first(),
-        )
+        val decision =
+            decideLaneARun(
+                nowEpochSeconds = nowSec,
+                nextProvedDueEpochSeconds = nextProvedDue,
+                privacyBufferSeconds = privacyBufferSeconds,
+                isGateBlocked = sdk.isSyncBlocked().first(),
+            )
 
         Twig.debug {
             val unproven = states.transfers.filter { !it.isSent && !it.isProved }
@@ -144,41 +147,48 @@ class MigrationSyncWorker(
         // work remains, a single completion sweep is armed at the LAST unsent scheduled height +
         // privacy buffer: the run-start terminal check then stops Lane A after the final mine.
         // Cadence remains only for the states-unavailable fallback.
-        val reArmDelay: Duration = when (decision) {
-            LaneARunDecision.SKIP_GATE_BLOCKED, LaneARunDecision.SKIP_NEAR_DUE ->
-                laneASkipReArmDelay(
-                    decision = decision,
-                    nowEpochSeconds = nowEpochSeconds(),
-                    nextProvedDueEpochSeconds = nextProvedDue,
-                    privacyBufferSeconds = privacyBufferSeconds,
-                )
-            LaneARunDecision.RUN -> {
-                val postRunStates = sdk.getMigrationTransferStates()
-                val postRunEst = sdk.estimatedChainTip()
-                val wake = postRunStates?.let { nextBoundaryWake(it, postRunEst, secondsPerBlock) }
-                when {
-                    wake != null -> {
-                        Twig.debug {
-                            "MIGRATION_DIAG LaneA: next wake from boundary — tx=${wake.txId} " +
-                                "wakeHeight=${wake.wakeHeight} (estimatedTip=$postRunEst) in ${wake.delay}"
+        val reArmDelay: Duration =
+            when (decision) {
+                LaneARunDecision.SKIP_GATE_BLOCKED, LaneARunDecision.SKIP_NEAR_DUE -> {
+                    laneASkipReArmDelay(
+                        decision = decision,
+                        nowEpochSeconds = nowEpochSeconds(),
+                        nextProvedDueEpochSeconds = nextProvedDue,
+                        privacyBufferSeconds = privacyBufferSeconds,
+                    )
+                }
+
+                LaneARunDecision.RUN -> {
+                    val postRunStates = sdk.getMigrationTransferStates()
+                    val postRunEst = sdk.estimatedChainTip()
+                    val wake = postRunStates?.let { nextBoundaryWake(it, postRunEst, secondsPerBlock) }
+                    when {
+                        wake != null -> {
+                            Twig.debug {
+                                "MIGRATION_DIAG LaneA: next wake from boundary — tx=${wake.txId} " +
+                                    "wakeHeight=${wake.wakeHeight} (estimatedTip=$postRunEst) in ${wake.delay}"
+                            }
+                            wake.delay
                         }
-                        wake.delay
-                    }
-                    postRunStates != null -> {
-                        val sweep = completionSweepDelay(postRunStates, postRunEst, secondsPerBlock, privacyBufferSeconds)
-                        if (sweep != null) {
-                            Twig.debug { "MIGRATION_DIAG LaneA: nothing left to prove — completion sweep in $sweep" }
-                            sweep
-                        } else {
-                            // All transactions sent (awaiting mining) or no estimate — cadence
-                            // fallback until the run-start terminal check stops the lane.
+
+                        postRunStates != null -> {
+                            val sweep = completionSweepDelay(postRunStates, postRunEst, secondsPerBlock, privacyBufferSeconds)
+                            if (sweep != null) {
+                                Twig.debug { "MIGRATION_DIAG LaneA: nothing left to prove — completion sweep in $sweep" }
+                                sweep
+                            } else {
+                                // All transactions sent (awaiting mining) or no estimate — cadence
+                                // fallback until the run-start terminal check stops the lane.
+                                laneACadence()
+                            }
+                        }
+
+                        else -> {
                             laneACadence()
-                        }
+                        } // states unavailable — the only cadence left
                     }
-                    else -> laneACadence() // states unavailable — the only cadence left
                 }
             }
-        }
         MigrationSyncScheduler(applicationContext).schedule(accountKeyId, reArmDelay)
         Twig.debug { "MIGRATION_DIAG LaneA: decision=$decision, re-arming in $reArmDelay" }
 
@@ -221,13 +231,20 @@ internal fun nowEpochSeconds(): Long = Clock.System.now().epochSeconds
  */
 internal fun shouldLaneAStop(state: MigrationState): Boolean =
     when (state) {
-        is MigrationState.Complete -> true
-        is MigrationState.RequiresAttention ->
+        is MigrationState.Complete -> {
+            true
+        }
+
+        is MigrationState.RequiresAttention -> {
             when (state.reason) {
                 is AttentionReason.InvalidTransfer, is AttentionReason.TransferExpired -> true
                 is AttentionReason.SyncRequiredBeforeNext -> false
             }
-        else -> false
+        }
+
+        else -> {
+            false
+        }
     }
 
 internal enum class LaneARunDecision { RUN, SKIP_NEAR_DUE, SKIP_GATE_BLOCKED }
@@ -252,11 +269,18 @@ internal fun decideLaneARun(
     isGateBlocked: Boolean,
 ): LaneARunDecision =
     when {
-        isGateBlocked -> LaneARunDecision.SKIP_GATE_BLOCKED
+        isGateBlocked -> {
+            LaneARunDecision.SKIP_GATE_BLOCKED
+        }
+
         nextProvedDueEpochSeconds != null &&
-            nowEpochSeconds >= nextProvedDueEpochSeconds - privacyBufferSeconds ->
+            nowEpochSeconds >= nextProvedDueEpochSeconds - privacyBufferSeconds -> {
             LaneARunDecision.SKIP_NEAR_DUE
-        else -> LaneARunDecision.RUN
+        }
+
+        else -> {
+            LaneARunDecision.RUN
+        }
     }
 
 /**
@@ -300,10 +324,11 @@ internal fun nextBoundaryWake(
     secondsPerBlock: Long,
 ): LaneABoundaryWake? {
     if (est < 0L) return null
-    val next = states.transfers
-        .filter { !it.isSent && !it.isProved }
-        .minByOrNull { provableAtHeight(it) }
-        ?: return null
+    val next =
+        states.transfers
+            .filter { !it.isSent && !it.isProved }
+            .minByOrNull { provableAtHeight(it) }
+            ?: return null
     val wakeHeight = provableAtHeight(next)
     val delaySeconds = ((wakeHeight - est) * secondsPerBlock).coerceAtLeast(MIN_LANE_A_BACKOFF_SECONDS)
     return LaneABoundaryWake(delaySeconds.seconds, next.id, wakeHeight)
@@ -342,12 +367,14 @@ internal fun completionSweepDelay(
     privacyBufferSeconds: Long,
 ): Duration? {
     if (est < 0L) return null
-    val lastUnsentHeight = states.transfers
-        .filter { !it.isSent }
-        .maxOfOrNull { it.scheduledHeight }
-        ?: return null
-    val delaySeconds = ((lastUnsentHeight - est).coerceAtLeast(0L) * secondsPerBlock + privacyBufferSeconds)
-        .coerceAtLeast(MIN_LANE_A_BACKOFF_SECONDS)
+    val lastUnsentHeight =
+        states.transfers
+            .filter { !it.isSent }
+            .maxOfOrNull { it.scheduledHeight }
+            ?: return null
+    val delaySeconds =
+        ((lastUnsentHeight - est).coerceAtLeast(0L) * secondsPerBlock + privacyBufferSeconds)
+            .coerceAtLeast(MIN_LANE_A_BACKOFF_SECONDS)
     return delaySeconds.seconds
 }
 
@@ -366,7 +393,8 @@ internal fun laneASkipReArmDelay(
 ): Duration =
     if (decision == LaneARunDecision.SKIP_NEAR_DUE && nextProvedDueEpochSeconds != null) {
         (nextProvedDueEpochSeconds + privacyBufferSeconds - nowEpochSeconds)
-            .coerceAtLeast(MIN_LANE_A_BACKOFF_SECONDS).seconds
+            .coerceAtLeast(MIN_LANE_A_BACKOFF_SECONDS)
+            .seconds
     } else {
         privacyBufferSeconds.coerceAtLeast(MIN_LANE_A_BACKOFF_SECONDS).seconds
     }

@@ -131,8 +131,9 @@ class FakeOrchardMigrationSdk : OrchardMigrationSdk {
     }
 
     internal fun mineTx(id: Long, height: Long) {
-        val tx = txs.firstOrNull { it.id == id }
-            ?: error("No sim tx with id $id to mine")
+        val tx =
+            txs.firstOrNull { it.id == id }
+                ?: error("No sim tx with id $id to mine")
         tx.minedHeight = height
         if (height > tip) tip = height
     }
@@ -157,11 +158,12 @@ class FakeOrchardMigrationSdk : OrchardMigrationSdk {
         val anchor = tx.anchorBoundary
         // Preparations (natural anchor) prove as soon as their deps are mined and tip has advanced
         // past their scheduled height; transfers gate on their committed anchor boundary.
-        val depsMinedInTime = tx.dependsOn.all { depId ->
-            val dep = txs.firstOrNull { it.id == depId }
-            val minedAt = dep?.minedHeight
-            minedAt != null && (anchor == null || minedAt <= anchor)
-        }
+        val depsMinedInTime =
+            tx.dependsOn.all { depId ->
+                val dep = txs.firstOrNull { it.id == depId }
+                val minedAt = dep?.minedHeight
+                minedAt != null && (anchor == null || minedAt <= anchor)
+            }
         if (!depsMinedInTime) return false
         val effectiveAnchor = anchor ?: tx.scheduledHeight
         // anchor + 1 < tip + 1  ⇔  anchor < tip
@@ -197,16 +199,17 @@ class FakeOrchardMigrationSdk : OrchardMigrationSdk {
     override suspend fun getMigrationTransferStates(): MigrationTransferStates? {
         if (txs.isEmpty()) return null
         return MigrationTransferStates(
-            transfers = txs.map {
-                MigrationTransferState(
-                    id = it.id,
-                    isTransfer = it.isTransfer,
-                    isSent = it.sent,
-                    isProved = it.proved,
-                    scheduledHeight = it.scheduledHeight,
-                    anchorBoundaryHeight = it.anchorBoundary,
-                )
-            },
+            transfers =
+                txs.map {
+                    MigrationTransferState(
+                        id = it.id,
+                        isTransfer = it.isTransfer,
+                        isSent = it.sent,
+                        isProved = it.proved,
+                        scheduledHeight = it.scheduledHeight,
+                        anchorBoundaryHeight = it.anchorBoundary,
+                    )
+                },
             tipHeight = tip,
         )
     }
@@ -250,15 +253,17 @@ class FakeOrchardMigrationSdk : OrchardMigrationSdk {
         options: NetworkPrivacyOptions,
         useEstimatedTip: Boolean,
     ): TransferAttemptOutcome {
-        val due = txs
-            .filter { it.isTransfer && !it.sent && isDue(it) }
-            .sortedWith(compareBy({ it.scheduledHeight }, { it.id }))
+        val due =
+            txs
+                .filter { it.isTransfer && !it.sent && isDue(it) }
+                .sortedWith(compareBy({ it.scheduledHeight }, { it.id }))
 
         if (due.isEmpty()) return TransferAttemptOutcome.NothingDue
 
         // Prefer the earliest proved+due transfer; only fall back to AwaitingProof if none exists.
-        val candidate = due.firstOrNull { it.proved }
-            ?: return TransferAttemptOutcome.AwaitingProof(due.first().id)
+        val candidate =
+            due.firstOrNull { it.proved }
+                ?: return TransferAttemptOutcome.AwaitingProof(due.first().id)
 
         // Injected broadcast failure (e.g. a Tor circuit-bootstrap failure): the attempt reached
         // the broadcast stage — the transfer was proved and due — but the network step failed. The

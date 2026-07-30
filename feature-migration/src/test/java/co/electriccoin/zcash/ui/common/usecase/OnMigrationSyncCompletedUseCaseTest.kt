@@ -14,7 +14,6 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
 class OnMigrationSyncCompletedUseCaseTest {
-
     private fun useCase(
         sdk: OrchardMigrationSdk,
         lastNetworkActivity: LastNetworkActivityStorageProvider = mockk(relaxed = true),
@@ -22,72 +21,78 @@ class OnMigrationSyncCompletedUseCaseTest {
         migrationScheduler: MigrationScheduler = mockk(relaxed = true),
         migrationSyncScheduler: MigrationSyncScheduler = mockk(relaxed = true),
     ) = OnMigrationSyncCompletedUseCase(
-        getOrchardMigrationSdk = mockk<GetOrchardMigrationSdkUseCase> {
-            coEvery { this@mockk(any()) } returns sdk
-        },
+        getOrchardMigrationSdk =
+            mockk<GetOrchardMigrationSdkUseCase> {
+                coEvery { this@mockk(any()) } returns sdk
+            },
         lastNetworkActivity = lastNetworkActivity,
         migrationNotifier = migrationNotifier,
         migrationScheduler = migrationScheduler,
         migrationSyncScheduler = migrationSyncScheduler,
         // Explicit null plan: skips the lane-revival branch (which would touch WorkManager via a
         // real Context) in these unit tests — a relaxed mock would return a mock plan instead.
-        migrationPlanRepository = mockk {
-            coEvery { load(any()) } returns null
-        },
+        migrationPlanRepository =
+            mockk {
+                coEvery { load(any()) } returns null
+            },
         context = mockk(relaxed = true),
     )
 
     @Test
-    fun happyPathCallsFinalizeThenReconcileThenStamp() = runTest {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { finalizeReadyTransfers() } returns 0
-            coEvery { reconcileInvalidations() } returns false
-        }
-        val lastNetworkActivity = mockk<LastNetworkActivityStorageProvider>(relaxed = true)
-        val migrationNotifier = mockk<MigrationNotifier>(relaxed = true)
-        val migrationScheduler = mockk<MigrationScheduler>(relaxed = true)
-        val migrationSyncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
+    fun happyPathCallsFinalizeThenReconcileThenStamp() =
+        runTest {
+            val sdk =
+                mockk<OrchardMigrationSdk>(relaxed = true) {
+                    coEvery { finalizeReadyTransfers() } returns 0
+                    coEvery { reconcileInvalidations() } returns false
+                }
+            val lastNetworkActivity = mockk<LastNetworkActivityStorageProvider>(relaxed = true)
+            val migrationNotifier = mockk<MigrationNotifier>(relaxed = true)
+            val migrationScheduler = mockk<MigrationScheduler>(relaxed = true)
+            val migrationSyncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
 
-        useCase(
-            sdk = sdk,
-            lastNetworkActivity = lastNetworkActivity,
-            migrationNotifier = migrationNotifier,
-            migrationScheduler = migrationScheduler,
-            migrationSyncScheduler = migrationSyncScheduler,
-        ).invoke("account-key-1")
+            useCase(
+                sdk = sdk,
+                lastNetworkActivity = lastNetworkActivity,
+                migrationNotifier = migrationNotifier,
+                migrationScheduler = migrationScheduler,
+                migrationSyncScheduler = migrationSyncScheduler,
+            ).invoke("account-key-1")
 
-        coVerifyOrder {
-            sdk.finalizeReadyTransfers()
-            sdk.reconcileInvalidations()
-            lastNetworkActivity.stampNow()
+            coVerifyOrder {
+                sdk.finalizeReadyTransfers()
+                sdk.reconcileInvalidations()
+                lastNetworkActivity.stampNow()
+            }
+            coVerify(exactly = 0) { migrationNotifier.notifyMigrationPlanInvalid(any()) }
+            verify(exactly = 0) { migrationScheduler.cancel(any()) }
+            verify(exactly = 0) { migrationSyncScheduler.cancel(any()) }
         }
-        coVerify(exactly = 0) { migrationNotifier.notifyMigrationPlanInvalid(any()) }
-        verify(exactly = 0) { migrationScheduler.cancel(any()) }
-        verify(exactly = 0) { migrationSyncScheduler.cancel(any()) }
-    }
 
     @Test
-    fun invalidationPathNotifiesCancelsBothLanesAndStillStamps() = runTest {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { finalizeReadyTransfers() } returns 0
-            coEvery { reconcileInvalidations() } returns true
+    fun invalidationPathNotifiesCancelsBothLanesAndStillStamps() =
+        runTest {
+            val sdk =
+                mockk<OrchardMigrationSdk>(relaxed = true) {
+                    coEvery { finalizeReadyTransfers() } returns 0
+                    coEvery { reconcileInvalidations() } returns true
+                }
+            val lastNetworkActivity = mockk<LastNetworkActivityStorageProvider>(relaxed = true)
+            val migrationNotifier = mockk<MigrationNotifier>(relaxed = true)
+            val migrationScheduler = mockk<MigrationScheduler>(relaxed = true)
+            val migrationSyncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
+
+            useCase(
+                sdk = sdk,
+                lastNetworkActivity = lastNetworkActivity,
+                migrationNotifier = migrationNotifier,
+                migrationScheduler = migrationScheduler,
+                migrationSyncScheduler = migrationSyncScheduler,
+            ).invoke("account-key-2")
+
+            coVerify(exactly = 1) { migrationNotifier.notifyMigrationPlanInvalid("account-key-2") }
+            verify(exactly = 1) { migrationScheduler.cancel("account-key-2") }
+            verify(exactly = 1) { migrationSyncScheduler.cancel("account-key-2") }
+            coVerify(exactly = 1) { lastNetworkActivity.stampNow() }
         }
-        val lastNetworkActivity = mockk<LastNetworkActivityStorageProvider>(relaxed = true)
-        val migrationNotifier = mockk<MigrationNotifier>(relaxed = true)
-        val migrationScheduler = mockk<MigrationScheduler>(relaxed = true)
-        val migrationSyncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
-
-        useCase(
-            sdk = sdk,
-            lastNetworkActivity = lastNetworkActivity,
-            migrationNotifier = migrationNotifier,
-            migrationScheduler = migrationScheduler,
-            migrationSyncScheduler = migrationSyncScheduler,
-        ).invoke("account-key-2")
-
-        coVerify(exactly = 1) { migrationNotifier.notifyMigrationPlanInvalid("account-key-2") }
-        verify(exactly = 1) { migrationScheduler.cancel("account-key-2") }
-        verify(exactly = 1) { migrationSyncScheduler.cancel("account-key-2") }
-        coVerify(exactly = 1) { lastNetworkActivity.stampNow() }
-    }
 }

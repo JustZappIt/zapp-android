@@ -3,11 +3,8 @@ package co.electriccoin.zcash.ui.common.provider
 import cash.z.ecc.android.sdk.Synchronizer
 import cash.z.ecc.android.sdk.WalletCoordinator
 import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.common.migration.MigrationSyncedHook
 import co.electriccoin.zcash.ui.common.model.SynchronizerError
-import co.electriccoin.zcash.ui.common.model.toStorageKeyId
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
-import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
-import co.electriccoin.zcash.ui.common.usecase.OnMigrationSyncCompletedUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -53,13 +50,11 @@ interface SynchronizerProvider {
 class SynchronizerProviderImpl(
     private val walletCoordinator: WalletCoordinator,
     private val persistableWalletProvider: PersistableWalletProvider,
-    // Lazy on purpose: all three resolve (via AccountDataSource) back to
+    // Lazy on purpose: the hook's implementation resolves (via AccountDataSource) back to
     // SynchronizerProvider — eager constructor injection forms a Koin resolution cycle that
     // crashes startup with a StackOverflowError (caught on-emulator 2026-07-28). Resolved at
     // first hook fire instead, when the graph is fully built.
-    private val migrationPlanRepository: Lazy<MigrationPlanRepository>,
-    private val onMigrationSyncCompleted: Lazy<OnMigrationSyncCompletedUseCase>,
-    private val getSelectedWalletAccount: Lazy<GetSelectedWalletAccountUseCase>,
+    private val migrationSyncedHook: Lazy<MigrationSyncedHook>,
 ) : SynchronizerProvider {
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
@@ -101,12 +96,9 @@ class SynchronizerProviderImpl(
                 .flatMapLatest { s -> s?.status ?: emptyFlow() }
                 .distinctUntilChanged()
                 .collect { status ->
-                    if (status == Synchronizer.Status.SYNCED && migrationPlanRepository.value.load() != null) {
-                        runCatching {
-                            val accountKeyId =
-                                getSelectedWalletAccount.value().sdkAccount.accountUuid.toStorageKeyId()
-                            onMigrationSyncCompleted.value(accountKeyId)
-                        }.onFailure { Twig.warn { "MIGRATION_DIAG foreground SYNCED hook: ${it.message}" } }
+                    if (status == Synchronizer.Status.SYNCED) {
+                        runCatching { migrationSyncedHook.value.onSynced() }
+                            .onFailure { Twig.warn { "MIGRATION_DIAG foreground SYNCED hook: ${it.message}" } }
                     }
                 }
         }

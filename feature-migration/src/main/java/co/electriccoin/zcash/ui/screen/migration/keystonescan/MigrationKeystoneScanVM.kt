@@ -42,15 +42,15 @@ class MigrationKeystoneScanVM(
     private val isMigrationTorEnabledStorageProvider: IsMigrationTorEnabledStorageProvider,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
-
     val validationState = MutableStateFlow(ScanValidationState.NONE)
 
-    val state = MutableStateFlow(
-        ScanKeystoneState(
-            progress = null,
-            message = stringRes("Scan the QR code shown on your Keystone device after signing."),
+    val state =
+        MutableStateFlow(
+            ScanKeystoneState(
+                progress = null,
+                message = stringRes("Scan the QR code shown on your Keystone device after signing."),
+            )
         )
-    )
 
     val failureSheet = MutableStateFlow<MigrationTransferFailureState?>(null)
 
@@ -88,11 +88,12 @@ class MigrationKeystoneScanVM(
                 sdk.resetKeystoneSignBatchDecoder()
                 hasResetDecoder = true
             }
-            val decoded = runCatching { sdk.decodeKeystoneSignBatchPart(result, pending.requestId) }
-                .getOrElse {
-                    isProcessing = false
-                    return@launch
-                }
+            val decoded =
+                runCatching { sdk.decodeKeystoneSignBatchPart(result, pending.requestId) }
+                    .getOrElse {
+                        isProcessing = false
+                        return@launch
+                    }
             state.update { it.copy(progress = decoded.progress) }
             val data = decoded.data
             if (!decoded.complete || data == null) {
@@ -114,12 +115,19 @@ class MigrationKeystoneScanVM(
                     isProcessing = false
                     failureSheet.update {
                         MigrationTransferFailureState(
-                            message = "Your Keystone firmware doesn't support migration yet. " +
-                                "Update your Keystone device, then come back to retry.",
+                            message =
+                                "Your Keystone firmware doesn't support migration yet. " +
+                                    "Update your Keystone device, then come back to retry.",
                             // Nothing to retry without a physical firmware update — both actions
                             // just dismiss and back out, unlike the network-failure sheet below.
-                            onRetry = { failureSheet.value = null; navigationRouter.back() },
-                            onDismiss = { failureSheet.value = null; navigationRouter.back() },
+                            onRetry = {
+                                failureSheet.value = null
+                                navigationRouter.back()
+                            },
+                            onDismiss = {
+                                failureSheet.value = null
+                                navigationRouter.back()
+                            },
                         )
                     }
                     return@launch
@@ -128,30 +136,34 @@ class MigrationKeystoneScanVM(
 
             // This round's slice only — the scanned response covers exactly what buildBatch()
             // built for pending.roundIndex, not the whole (possibly multi-round) batch.
-            val slice = keystoneBatchRoundSlice(
-                roundIndex = pending.roundIndex,
-                hasSplit = pending.splitUnsignedPczt != null,
-                transferCount = pending.transferUnsignedPczts.size,
-                maxItems = KEYSTONE_BATCH_MAX_ITEMS,
-            )
+            val slice =
+                keystoneBatchRoundSlice(
+                    roundIndex = pending.roundIndex,
+                    hasSplit = pending.splitUnsignedPczt != null,
+                    transferCount = pending.transferUnsignedPczts.size,
+                    maxItems = KEYSTONE_BATCH_MAX_ITEMS,
+                )
             val transfersForRound = pending.transferUnsignedPczts.slice(slice.transferRange)
             val splitForRound = if (slice.includeSplit) pending.splitUnsignedPczt else null
 
-            val signed = sdk.applyKeystoneBatchSignatures(
-                splitUnsignedPczt = splitForRound,
-                transferUnsignedPczts = transfersForRound.map { it.second },
-                batchSignResponse = data,
-            )
+            val signed =
+                sdk.applyKeystoneBatchSignatures(
+                    splitUnsignedPczt = splitForRound,
+                    transferUnsignedPczts = transfersForRound.map { it.second },
+                    batchSignResponse = data,
+                )
 
             val accumulatedSplitSigned = signed.splitSignedPczt ?: pending.accumulatedSplitSigned
-            val accumulatedTransferSigned = pending.accumulatedTransferSigned +
-                transfersForRound.map { it.first }.zip(signed.transferSignedPczts)
+            val accumulatedTransferSigned =
+                pending.accumulatedTransferSigned +
+                    transfersForRound.map { it.first }.zip(signed.transferSignedPczts)
 
-            val totalRounds = keystoneBatchTotalRounds(
-                hasSplit = pending.splitUnsignedPczt != null,
-                transferCount = pending.transferUnsignedPczts.size,
-                maxItems = KEYSTONE_BATCH_MAX_ITEMS,
-            )
+            val totalRounds =
+                keystoneBatchTotalRounds(
+                    hasSplit = pending.splitUnsignedPczt != null,
+                    transferCount = pending.transferUnsignedPczts.size,
+                    maxItems = KEYSTONE_BATCH_MAX_ITEMS,
+                )
             if (pending.roundIndex + 1 < totalRounds) {
                 // More rounds remain — carry the accumulated signatures forward and hand off to a
                 // fresh sign-screen instance for the next round. replace() keeps the back stack at
@@ -178,15 +190,19 @@ class MigrationKeystoneScanVM(
                 val splitSignedPczt = accumulatedSplitSigned
                 if (splitSignedPczt != null) {
                     val useTor = isMigrationTorEnabledStorageProvider.get()
-                    val splitResult = sdk.storeSignedNoteSplitPczt(
-                        splitSignedPczt,
-                        NetworkPrivacyOptions(useTor = useTor),
-                    )
+                    val splitResult =
+                        sdk.storeSignedNoteSplitPczt(
+                            splitSignedPczt,
+                            NetworkPrivacyOptions(useTor = useTor),
+                        )
                     if (splitResult !is TransferResult.Success) {
                         failureSheet.update {
                             MigrationTransferFailureState(
                                 message = migrationFailureMessage(splitResult),
-                                onRetry = { failureSheet.value = null; onScanned(result) },
+                                onRetry = {
+                                    failureSheet.value = null
+                                    onScanned(result)
+                                },
                                 onDismiss = { failureSheet.value = null },
                             )
                         }

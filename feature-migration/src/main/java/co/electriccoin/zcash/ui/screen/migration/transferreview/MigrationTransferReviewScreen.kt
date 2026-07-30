@@ -65,10 +65,11 @@ fun MigrationTransferReviewView(state: MigrationTransferReviewState) {
         }
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .scaffoldPadding(padding),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .scaffoldPadding(padding),
         ) {
             Text(
                 text = state.title.getValue(),
@@ -98,19 +99,22 @@ fun MigrationTransferReviewView(state: MigrationTransferReviewState) {
 
 @PreviewScreens
 @Composable
-private fun Preview() = ZcashTheme {
-    MigrationTransferReviewView(
-        state = MigrationTransferReviewState(
-            title = stringRes("Review Transfer 3 of 5"),
-            body = stringRes(
-                "This transfer sends part of your Orchard balance to Ironwood as part of your " +
-                    "scheduled migration.\n\nReview and confirm to send the transaction. Once " +
-                    "confirmed, this cannot be undone."
-            ),
-            amount = stringRes("2.43100 ZEC"),
-            fee = stringRes("0.001 ZEC"),
-            onConfirm = {},
-            onBack = {},
+private fun Preview() =
+    ZcashTheme {
+        MigrationTransferReviewView(
+            state =
+                MigrationTransferReviewState(
+                    title = stringRes("Review Transfer 3 of 5"),
+                    body =
+                        stringRes(
+                            "This transfer sends part of your Orchard balance to Ironwood as part of your " +
+                                "scheduled migration.\n\nReview and confirm to send the transaction. Once " +
+                                "confirmed, this cannot be undone."
+                        ),
+                    amount = stringRes("2.43100 ZEC"),
+                    fee = stringRes("0.001 ZEC"),
+                    onConfirm = {},
+                    onBack = {},
+                )
         )
-    )
-}
+    }

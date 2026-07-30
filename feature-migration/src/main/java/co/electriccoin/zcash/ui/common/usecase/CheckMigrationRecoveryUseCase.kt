@@ -68,11 +68,12 @@ class CheckMigrationRecoveryUseCase(
         // (observed live: 1st call = SDK null + throttle stamped, 2nd call 3s later = throttled;
         // both lanes stayed dead after a reinstall). Un-stamp the throttle so the next trigger
         // (foreground/unlock/onStart all re-fire) gets a real attempt once the wallet is up.
-        val sdk = getOrchardMigrationSdk() ?: run {
-            synchronized(CheckMigrationRecoveryUseCase) { lastRunElapsedMs = 0L }
-            Twig.debug { "MIGRATION_DIAG MigrationRecovery: SDK not ready — will retry on next trigger." }
-            return
-        }
+        val sdk =
+            getOrchardMigrationSdk() ?: run {
+                synchronized(CheckMigrationRecoveryUseCase) { lastRunElapsedMs = 0L }
+                Twig.debug { "MIGRATION_DIAG MigrationRecovery: SDK not ready — will retry on next trigger." }
+                return
+            }
 
         // (a) Lane A reconciliation — if a plan exists but the Lane A unique work is absent
         // (ENQUEUED or RUNNING), re-schedule it. This self-heals after process kill, device
@@ -99,7 +100,9 @@ class CheckMigrationRecoveryUseCase(
             // may not reach for minutes).
             if (!isLaneBActive(accountKeyId)) {
                 Twig.debug { "MIGRATION_DIAG MigrationRecovery: Lane B absent, re-scheduling." }
-                co.electriccoin.zcash.work.MigrationScheduler(context).schedule(accountKeyId, 60.seconds)
+                co.electriccoin.zcash.work
+                    .MigrationScheduler(context)
+                    .schedule(accountKeyId, 60.seconds)
             }
         }
 
@@ -150,7 +153,8 @@ class CheckMigrationRecoveryUseCase(
  */
 internal suspend fun isLaneAActiveInWorkManager(context: Context): Boolean =
     withContext(Dispatchers.IO) {
-        WorkManager.getInstance(context)
+        WorkManager
+            .getInstance(context)
             .getWorkInfosForUniqueWork(WorkIds.WORK_ID_MIGRATION_SYNC)
             .get()
     }.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
@@ -158,7 +162,10 @@ internal suspend fun isLaneAActiveInWorkManager(context: Context): Boolean =
 /** Lane B (broadcast) twin of [isLaneAActiveInWorkManager] — per-account unique work name. */
 internal suspend fun isLaneBActiveInWorkManager(context: Context, accountKeyId: String): Boolean =
     withContext(Dispatchers.IO) {
-        WorkManager.getInstance(context)
-            .getWorkInfosForUniqueWork(co.electriccoin.zcash.work.MigrationScheduler.workId(accountKeyId))
-            .get()
+        WorkManager
+            .getInstance(context)
+            .getWorkInfosForUniqueWork(
+                co.electriccoin.zcash.work.MigrationScheduler
+                    .workId(accountKeyId)
+            ).get()
     }.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }

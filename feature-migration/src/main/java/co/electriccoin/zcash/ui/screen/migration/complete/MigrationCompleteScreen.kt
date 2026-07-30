@@ -15,14 +15,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -87,10 +87,11 @@ fun MigrationCompleteView(state: MigrationCompleteState) {
                 regularActions = {
                     if (state.remainingDust != null && !state.isDustLocked) {
                         ZashiIconButton(
-                            state = IconButtonState(
-                                icon = R.drawable.ic_help,
-                                onClick = state.onHelp,
-                            ),
+                            state =
+                                IconButtonState(
+                                    icon = R.drawable.ic_help,
+                                    onClick = state.onHelp,
+                                ),
                             modifier = Modifier.size(40.dp),
                         )
                         Spacer(Modifier.width(20.dp))
@@ -100,10 +101,11 @@ fun MigrationCompleteView(state: MigrationCompleteState) {
         },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .scaffoldPadding(padding),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .scaffoldPadding(padding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Column(
@@ -112,7 +114,7 @@ fun MigrationCompleteView(state: MigrationCompleteState) {
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Image(
-                    painter = painterResource(R.drawable.ic_migration_complete),
+                    painter = painterResource(co.electriccoin.zcash.migration.R.drawable.ic_migration_complete),
                     contentDescription = null,
                     modifier = Modifier.size(52.dp),
                 )
@@ -133,11 +135,12 @@ fun MigrationCompleteView(state: MigrationCompleteState) {
                 )
                 Spacer(Modifier.height(24.dp))
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(ZashiColors.Surfaces.bgSecondary)
-                        .padding(20.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(ZashiColors.Surfaces.bgSecondary)
+                            .padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     SummaryRow(label = "Total transferred", value = state.totalTransferred.getValue())
@@ -155,6 +158,7 @@ fun MigrationCompleteView(state: MigrationCompleteState) {
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
+
                 state.isDustLocked -> {
                     Spacer(Modifier.height(20.dp))
                     LockedDisclaimer(dustAmount = state.remainingDust.getValue())
@@ -164,36 +168,41 @@ fun MigrationCompleteView(state: MigrationCompleteState) {
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
+
                 else -> {
                     Spacer(Modifier.height(20.dp))
                     PrivacyDisclaimerCard(
                         title = "Orchard balance remaining",
-                        body = "${state.remainingDust.getValue()} stayed in Orchard. An amount this " +
-                            "specific can identify you on the network. To protect your privacy, we " +
-                            "recommend locking this balance rather than migrating it.",
+                        body =
+                            "${state.remainingDust.getValue()} stayed in Orchard. An amount this " +
+                                "specific can identify you on the network. To protect your privacy, we " +
+                                "recommend locking this balance rather than migrating it.",
                     )
                     Spacer(Modifier.height(20.dp))
                     ZashiButton(
-                        state = ButtonState(
-                            text = stringRes(if (state.isMigrating) "Migrating…" else "Migrate anyway"),
-                            onClick = state.onMigrateAnyway,
-                            isEnabled = !state.isMigrating && !state.isLocking,
-                            isLoading = state.isMigrating,
-                        ),
+                        state =
+                            ButtonState(
+                                text = stringRes(if (state.isMigrating) "Migrating…" else "Migrate anyway"),
+                                onClick = state.onMigrateAnyway,
+                                isEnabled = !state.isMigrating && !state.isLocking,
+                                isLoading = state.isMigrating,
+                            ),
                         modifier = Modifier.fillMaxWidth(),
-                        defaultPrimaryColors = ZashiButtonDefaults.secondaryColors(
-                            contentColor = ZashiColors.Utility.WarningYellow.utilityOrange700,
-                            borderColor = ZashiColors.Utility.WarningYellow.utilityOrange300,
-                        ),
+                        defaultPrimaryColors =
+                            ZashiButtonDefaults.secondaryColors(
+                                contentColor = ZashiColors.Utility.WarningYellow.utilityOrange700,
+                                borderColor = ZashiColors.Utility.WarningYellow.utilityOrange300,
+                            ),
                     )
                     Spacer(Modifier.height(8.dp))
                     ZashiButton(
-                        state = ButtonState(
-                            text = stringRes(if (state.isLocking) "Locking balance…" else "Lock balance"),
-                            onClick = state.onLockBalance,
-                            isEnabled = !state.isMigrating && !state.isLocking,
-                            isLoading = state.isLocking,
-                        ),
+                        state =
+                            ButtonState(
+                                text = stringRes(if (state.isLocking) "Locking balance…" else "Lock balance"),
+                                onClick = state.onLockBalance,
+                                isEnabled = !state.isMigrating && !state.isLocking,
+                                isLoading = state.isLocking,
+                            ),
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -227,11 +236,12 @@ private fun SummaryRow(label: String, value: String) {
 @Composable
 private fun LockedDisclaimer(dustAmount: String) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(ZashiColors.Surfaces.bgSecondary)
-            .padding(16.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(ZashiColors.Surfaces.bgSecondary)
+                .padding(16.dp),
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -242,8 +252,9 @@ private fun LockedDisclaimer(dustAmount: String) {
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "$dustAmount is now locked in Orchard. Locking keeps this amount unspendable to " +
-                    "protect your privacy.",
+                text =
+                    "$dustAmount is now locked in Orchard. Locking keeps this amount unspendable to " +
+                        "protect your privacy.",
                 style = ZashiTypography.textSm,
                 color = ZashiColors.Text.textTertiary,
             )
@@ -260,54 +271,60 @@ private fun LockedDisclaimer(dustAmount: String) {
 
 @PreviewScreens
 @Composable
-private fun PreviewWithDust() = ZcashTheme {
-    MigrationCompleteView(
-        state = MigrationCompleteState(
-            totalTransferred = stringRes("12.458 ZEC"),
-            remainingDust = stringRes("0.00031 ZEC"),
-            isDustLocked = false,
-            transfersProgress = stringRes("5 of 5 sent"),
-            duration = stringRes("~24 hours"),
-            onDone = {},
-            onMigrateAnyway = {},
-            onLockBalance = {},
-            onHelp = {},
+private fun PreviewWithDust() =
+    ZcashTheme {
+        MigrationCompleteView(
+            state =
+                MigrationCompleteState(
+                    totalTransferred = stringRes("12.458 ZEC"),
+                    remainingDust = stringRes("0.00031 ZEC"),
+                    isDustLocked = false,
+                    transfersProgress = stringRes("5 of 5 sent"),
+                    duration = stringRes("~24 hours"),
+                    onDone = {},
+                    onMigrateAnyway = {},
+                    onLockBalance = {},
+                    onHelp = {},
+                )
         )
-    )
-}
+    }
 
 @PreviewScreens
 @Composable
-private fun PreviewWithLockedDust() = ZcashTheme {
-    MigrationCompleteView(
-        state = MigrationCompleteState(
-            totalTransferred = stringRes("12.458 ZEC"),
-            remainingDust = stringRes("0.00031 ZEC"),
-            isDustLocked = true,
-            transfersProgress = stringRes("5 of 5 sent"),
-            duration = stringRes("~24 hours"),
-            onDone = {},
-            onMigrateAnyway = {},
-            onLockBalance = {},
-            onHelp = {},
+private fun PreviewWithLockedDust() =
+    ZcashTheme {
+        MigrationCompleteView(
+            state =
+                MigrationCompleteState(
+                    totalTransferred = stringRes("12.458 ZEC"),
+                    remainingDust = stringRes("0.00031 ZEC"),
+                    isDustLocked = true,
+                    transfersProgress = stringRes("5 of 5 sent"),
+                    duration = stringRes("~24 hours"),
+                    onDone = {},
+                    onMigrateAnyway = {},
+                    onLockBalance = {},
+                    onHelp = {},
+                )
         )
-    )
-}
+    }
 
 @PreviewScreens
 @Composable
-private fun PreviewNoDust() = ZcashTheme {
-    MigrationCompleteView(
-        state = MigrationCompleteState(
-            totalTransferred = stringRes("12.458 ZEC"),
-            remainingDust = null,
-            isDustLocked = false,
-            transfersProgress = stringRes("5 of 5 sent"),
-            duration = stringRes("~24 hours"),
-            onDone = {},
-            onMigrateAnyway = {},
-            onLockBalance = {},
-            onHelp = {},
+private fun PreviewNoDust() =
+    ZcashTheme {
+        MigrationCompleteView(
+            state =
+                MigrationCompleteState(
+                    totalTransferred = stringRes("12.458 ZEC"),
+                    remainingDust = null,
+                    isDustLocked = false,
+                    transfersProgress = stringRes("5 of 5 sent"),
+                    duration = stringRes("~24 hours"),
+                    onDone = {},
+                    onMigrateAnyway = {},
+                    onLockBalance = {},
+                    onHelp = {},
+                )
         )
-    )
-}
+    }

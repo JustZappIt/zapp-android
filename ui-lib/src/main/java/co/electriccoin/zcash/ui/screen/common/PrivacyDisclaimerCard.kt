@@ -18,9 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import co.electriccoin.zcash.ui.design.R as DesignR
 import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
 import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
+import co.electriccoin.zcash.ui.design.R as DesignR
 
 @Composable
 fun PrivacyDisclaimerCard(
@@ -31,10 +31,11 @@ fun PrivacyDisclaimerCard(
     val warningBg = ZashiColors.Utility.WarningYellow.utilityOrange50
     val warningText = ZashiColors.Utility.WarningYellow.utilityOrange700
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(warningBg, RoundedCornerShape(16.dp))
-            .padding(16.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .background(warningBg, RoundedCornerShape(16.dp))
+                .padding(16.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Column(modifier = Modifier.weight(1f)) {

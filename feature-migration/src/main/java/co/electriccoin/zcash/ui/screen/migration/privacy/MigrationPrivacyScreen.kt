@@ -51,7 +51,9 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
 @Serializable
-data class MigrationPrivacyArgs(val mode: MigrationMode)
+data class MigrationPrivacyArgs(
+    val mode: MigrationMode
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,9 +74,10 @@ fun MigrationPrivacyView(
         sheetState = sheetState,
     ) { innerState, contentPadding ->
         Column(
-            modifier = Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(start = 24.dp, end = 24.dp, bottom = contentPadding.calculateBottomPadding()),
+            modifier =
+                Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 24.dp, end = 24.dp, bottom = contentPadding.calculateBottomPadding()),
         ) {
             Image(
                 painter = painterResource(co.electriccoin.zcash.ui.R.drawable.ic_tor_settings),
@@ -126,9 +129,10 @@ private fun TorToggleCard(state: CheckboxState) {
         onClick = state.onClick,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -156,20 +160,22 @@ private fun TorToggleCard(state: CheckboxState) {
             )
             val offset by animateDpAsState(if (state.isChecked) 21.dp else 0.dp)
             Surface(
-                modifier = Modifier
-                    .width(64.dp)
-                    .height(28.dp),
+                modifier =
+                    Modifier
+                        .width(64.dp)
+                        .height(28.dp),
                 color = switchColor,
                 shape = CircleShape,
             ) {
                 Box(modifier = Modifier.padding(2.dp)) {
                     Box(
-                        modifier = Modifier
-                            .offset(x = offset)
-                            .width(39.dp)
-                            .height(24.dp)
-                            .clip(CircleShape)
-                            .background(ZashiLightColors.Surfaces.bgPrimary)
+                        modifier =
+                            Modifier
+                                .offset(x = offset)
+                                .width(39.dp)
+                                .height(24.dp)
+                                .clip(CircleShape)
+                                .background(ZashiLightColors.Surfaces.bgPrimary)
                     )
                 }
             }
@@ -180,25 +186,30 @@ private fun TorToggleCard(state: CheckboxState) {
 @OptIn(ExperimentalMaterial3Api::class)
 @PreviewScreens
 @Composable
-private fun Preview() = ZcashTheme {
-    MigrationPrivacyView(
-        state = MigrationPrivacyState(
-            body = stringRes(
-                "If Tor is available in your region, we strongly recommend enabling it to prevent " +
-                    "linking the migration amounts to your IP address. You can also use a trusted VPN " +
-                    "if Tor is unavailable in your region."
-            ),
-            checkbox = CheckboxState(
-                title = stringRes("Enable Tor Protection"),
-                subtitle = stringRes(
-                    "Routes your connection through the Tor network for enhanced anonymity and " +
-                        "privacy protection."
-                ),
-                isChecked = true,
-                onClick = {},
-            ),
-            onConfirm = {},
-            onBack = {},
+private fun Preview() =
+    ZcashTheme {
+        MigrationPrivacyView(
+            state =
+                MigrationPrivacyState(
+                    body =
+                        stringRes(
+                            "If Tor is available in your region, we strongly recommend enabling it to prevent " +
+                                "linking the migration amounts to your IP address. You can also use a trusted VPN " +
+                                "if Tor is unavailable in your region."
+                        ),
+                    checkbox =
+                        CheckboxState(
+                            title = stringRes("Enable Tor Protection"),
+                            subtitle =
+                                stringRes(
+                                    "Routes your connection through the Tor network for enhanced anonymity and " +
+                                        "privacy protection."
+                                ),
+                            isChecked = true,
+                            onClick = {},
+                        ),
+                    onConfirm = {},
+                    onBack = {},
+                )
         )
-    )
-}
+    }

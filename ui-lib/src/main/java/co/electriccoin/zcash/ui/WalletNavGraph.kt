@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import androidx.navigation.toRoute
+import co.electriccoin.zcash.ui.common.migration.MigrationNavContributor
 import co.electriccoin.zcash.ui.screen.about.AboutArgs
 import co.electriccoin.zcash.ui.screen.about.AboutScreen
 import co.electriccoin.zcash.ui.screen.accountlist.AccountListArgs
@@ -212,42 +213,6 @@ import co.electriccoin.zcash.ui.screen.voting.results.VoteResultsArgs
 import co.electriccoin.zcash.ui.screen.voting.results.VoteResultsScreen
 import co.electriccoin.zcash.ui.screen.voting.scankeystone.ScanKeystoneVotingPCZTRequest
 import co.electriccoin.zcash.ui.screen.voting.scankeystone.WrapScanKeystoneVotingPCZTRequest
-import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
-import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressScreen
-import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs
-import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewScreen
-import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupArgs
-import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupScreen
-import co.electriccoin.zcash.ui.screen.migration.howitworks.MigrationHowItWorksArgs
-import co.electriccoin.zcash.ui.screen.migration.howitworks.MigrationHowItWorksScreen
-import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewArgs
-import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewScreen
-import co.electriccoin.zcash.ui.screen.migration.keystonesign.MigrationKeystoneSignArgs
-import co.electriccoin.zcash.ui.screen.migration.keystonesign.MigrationKeystoneSignScreen
-import co.electriccoin.zcash.ui.screen.migration.keystonescan.MigrationKeystoneScanArgs
-import co.electriccoin.zcash.ui.screen.migration.keystonescan.MigrationKeystoneScanScreen
-import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
-import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingScreen
-import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
-import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessScreen
-import co.electriccoin.zcash.ui.screen.migration.scheduled.MigrationScheduledArgs
-import co.electriccoin.zcash.ui.screen.migration.scheduled.MigrationScheduledScreen
-import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteArgs
-import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteScreen
-import co.electriccoin.zcash.ui.screen.migration.battery.MigrationBatteryArgs
-import co.electriccoin.zcash.ui.screen.migration.battery.MigrationBatteryScreen
-import co.electriccoin.zcash.ui.screen.migration.notification.MigrationNotificationArgs
-import co.electriccoin.zcash.ui.screen.migration.notification.MigrationNotificationScreen
-import co.electriccoin.zcash.ui.screen.migration.privacy.MigrationPrivacyArgs
-import co.electriccoin.zcash.ui.screen.migration.privacy.MigrationPrivacyScreen
-import co.electriccoin.zcash.ui.screen.migration.customservertor.MigrationCustomServerTorArgs
-import co.electriccoin.zcash.ui.screen.migration.customservertor.MigrationCustomServerTorScreen
-import co.electriccoin.zcash.ui.screen.migration.torfailure.MigrationTorFailureArgs
-import co.electriccoin.zcash.ui.screen.migration.torfailure.MigrationTorFailureScreen
-import co.electriccoin.zcash.ui.screen.migration.lockexplainer.MigrationLockExplainerArgs
-import co.electriccoin.zcash.ui.screen.migration.lockexplainer.MigrationLockExplainerScreen
-import co.electriccoin.zcash.ui.screen.migration.invalid.MigrationTransferInvalidArgs
-import co.electriccoin.zcash.ui.screen.migration.invalid.MigrationTransferInvalidScreen
 import co.electriccoin.zcash.ui.screen.voting.signkeystone.SignKeystoneVotingArgs
 import co.electriccoin.zcash.ui.screen.voting.signkeystone.SignKeystoneVotingScreen
 import co.electriccoin.zcash.ui.screen.voting.tallying.VoteTallyingArgs
@@ -390,23 +355,10 @@ fun NavGraphBuilder.walletNavGraph(
         composable<VoteConfirmSubmissionArgs> { VoteConfirmSubmissionScreen(it.toRoute()) }
         composable<VoteTallyingArgs> { VoteTallyingScreen(it.toRoute()) }
         composable<VoteResultsArgs> { VoteResultsScreen(it.toRoute()) }
-        composable<MigrationSetupArgs> { MigrationSetupScreen() }
-        composable<MigrationHowItWorksArgs> { MigrationHowItWorksScreen() }
-        composable<MigrationReviewArgs> { MigrationReviewScreen(it.toRoute()) }
-        composable<MigrationKeystoneSignArgs> { MigrationKeystoneSignScreen(it.toRoute()) }
-        composable<MigrationKeystoneScanArgs> { MigrationKeystoneScanScreen(it.toRoute()) }
-        composable<MigrationBatteryArgs> { MigrationBatteryScreen() }
-        composable<MigrationNotificationArgs> { MigrationNotificationScreen() }
-        dialogComposable<MigrationPrivacyArgs> { MigrationPrivacyScreen(it.toRoute()) }
-        dialogComposable<MigrationCustomServerTorArgs> { MigrationCustomServerTorScreen(it.toRoute()) }
-        dialogComposable<MigrationTorFailureArgs> { MigrationTorFailureScreen() }
-        dialogComposable<MigrationLockExplainerArgs> { MigrationLockExplainerScreen() }
-        composable<MigrationSendingArgs> { MigrationSendingScreen() }
-        composable<MigrationSuccessArgs> { MigrationSuccessScreen(it.toRoute()) }
-        composable<MigrationScheduledArgs> { MigrationScheduledScreen() }
-        composable<MigrationCompleteArgs> { MigrationCompleteScreen() }
-        composable<MigrationProgressArgs> { MigrationProgressScreen() }
-        composable<MigrationTransferReviewArgs> { MigrationTransferReviewScreen() }
-        composable<MigrationTransferInvalidArgs> { MigrationTransferInvalidScreen() }
+        // Migration destinations are contributed by the feature-migration module — see
+        // MigrationNavContributor in MigrationContracts.kt (wired via Koin in the app module).
+        org.koin.mp.KoinPlatform.getKoin().getAll<MigrationNavContributor>().forEach {
+            it.contribute(this)
+        }
     }
 }

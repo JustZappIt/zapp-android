@@ -1,9 +1,9 @@
 package co.electriccoin.zcash.ui.screen.migration.review
 
 import androidx.activity.compose.BackHandler
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import co.electriccoin.zcash.ui.screen.common.LceRenderer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.annotation.DrawableRes
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -53,6 +52,7 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.scaffoldPadding
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.common.LceRenderer
 import co.electriccoin.zcash.ui.screen.common.WalletHeaderIcons
 import co.electriccoin.zcash.ui.screen.common.WalletHeaderIconsState
 import co.electriccoin.zcash.ui.screen.migration.component.MigrationFailureBottomSheet
@@ -79,9 +79,10 @@ fun MigrationReviewView(state: MigrationReviewState) {
         }
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .scaffoldPadding(padding),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .scaffoldPadding(padding),
         ) {
             when (state.mode) {
                 MigrationMode.IMMEDIATE -> ImmediateReviewContent(state)
@@ -99,15 +100,17 @@ private fun ImmediateReviewContent(state: MigrationReviewState) {
         // of the screen (matching PrivacyReviewContent), rather than floating right under the short
         // details card.
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState()),
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
         ) {
             WalletHeaderIcons(
-                state = WalletHeaderIconsState(
-                    isKeystone = state.isKeystone,
-                    badgeIcon = R.drawable.ic_migration_coins_swap,
-                )
+                state =
+                    WalletHeaderIconsState(
+                        isKeystone = state.isKeystone,
+                        badgeIcon = R.drawable.ic_migration_coins_swap,
+                    )
             )
             Spacer(Modifier.height(16.dp))
             Text(
@@ -118,8 +121,9 @@ private fun ImmediateReviewContent(state: MigrationReviewState) {
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "Your full Orchard balance will be transferred to Ironwood in a single on-chain transfer. " +
-                    "Once confirmed, this transfer cannot be cancelled.",
+                text =
+                    "Your full Orchard balance will be transferred to Ironwood in a single on-chain transfer. " +
+                        "Once confirmed, this transfer cannot be cancelled.",
                 style = ZashiTypography.textSm,
                 color = ZashiColors.Text.textTertiary,
             )
@@ -128,12 +132,13 @@ private fun ImmediateReviewContent(state: MigrationReviewState) {
         }
         Spacer(Modifier.height(24.dp))
         ZashiButton(
-            state = ButtonState(
-                text = stringRes(if (state.isConfirming) "Signing..." else "Confirm"),
-                isEnabled = !state.isConfirming,
-                isLoading = state.isConfirming,
-                onClick = state.onConfirm,
-            ),
+            state =
+                ButtonState(
+                    text = stringRes(if (state.isConfirming) "Signing..." else "Confirm"),
+                    isEnabled = !state.isConfirming,
+                    isLoading = state.isConfirming,
+                    onClick = state.onConfirm,
+                ),
             modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -149,16 +154,18 @@ internal fun ImmediateDetailsCard(
     feeLabel: String = "Fee",
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(ZashiColors.Surfaces.bgSecondary, RoundedCornerShape(16.dp)),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(ZashiColors.Surfaces.bgSecondary, RoundedCornerShape(16.dp)),
     ) {
         ImmediateDetailsRow(label = "Amount", value = amount.getValue())
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(ZashiColors.Surfaces.bgPrimary),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(ZashiColors.Surfaces.bgPrimary),
         )
         ImmediateDetailsRow(label = feeLabel, value = fee?.getValue().orEmpty())
     }
@@ -167,9 +174,10 @@ internal fun ImmediateDetailsCard(
 @Composable
 internal fun ImmediateDetailsRow(label: String, value: String) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -198,10 +206,11 @@ private fun PrivacyReviewContent(state: MigrationReviewState) {
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "Your balance splits into ${state.transfers.size} transfers over " +
-                "${state.estimatedDuration.getValue()}. Approve once and " +
-                "we'll handle the rest — just keep the app running in the background. Amounts are randomized " +
-                "for privacy. If we miss a window, Zodl will prompt you on next open.",
+            text =
+                "Your balance splits into ${state.transfers.size} transfers over " +
+                    "${state.estimatedDuration.getValue()}. Approve once and " +
+                    "we'll handle the rest — just keep the app running in the background. Amounts are randomized " +
+                    "for privacy. If we miss a window, Zodl will prompt you on next open.",
             style = ZashiTypography.textSm,
             color = ZashiColors.Text.textTertiary,
         )
@@ -228,7 +237,7 @@ private fun PrivacyReviewContent(state: MigrationReviewState) {
                         fiatAmount = null,
                         // Figma PR App Designs Q3'26, node 4207-7450: a checkmark, not the
                         // coins-swap glyph — Split Balance is a same-device self-send.
-                        icon = R.drawable.ic_migration_check,
+                        icon = co.electriccoin.zcash.migration.R.drawable.ic_migration_check,
                         isFirst = prep.number == 1,
                         isLast = false,
                     )
@@ -242,7 +251,7 @@ private fun PrivacyReviewContent(state: MigrationReviewState) {
                         subtitle = stringRes("Ready now"),
                         amount = state.totalAmount,
                         fiatAmount = state.totalFiatAmount,
-                        icon = R.drawable.ic_migration_check,
+                        icon = co.electriccoin.zcash.migration.R.drawable.ic_migration_check,
                         isFirst = true,
                         isLast = state.transfers.isEmpty(),
                     )
@@ -262,12 +271,13 @@ private fun PrivacyReviewContent(state: MigrationReviewState) {
         }
         Spacer(Modifier.height(24.dp))
         ZashiButton(
-            state = ButtonState(
-                text = stringRes(if (state.isConfirming) "Signing..." else "Confirm"),
-                isEnabled = !state.isConfirming,
-                isLoading = state.isConfirming,
-                onClick = state.onConfirm,
-            ),
+            state =
+                ButtonState(
+                    text = stringRes(if (state.isConfirming) "Signing..." else "Confirm"),
+                    isEnabled = !state.isConfirming,
+                    isLoading = state.isConfirming,
+                    onClick = state.onConfirm,
+                ),
             modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -286,15 +296,17 @@ private fun TransferTimelineRow(
     @DrawableRes icon: Int? = null,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min)
-            .padding(bottom = if (isLast) 0.dp else 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+                .padding(bottom = if (isLast) 0.dp else 12.dp),
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(24.dp),
+            modifier =
+                Modifier
+                    .fillMaxHeight()
+                    .width(24.dp),
             contentAlignment = Alignment.TopCenter,
         ) {
             if (!isLast) {
@@ -308,40 +320,42 @@ private fun TransferTimelineRow(
                     val activeColor = ZashiColors.Btns.Primary.btnPrimaryBg
                     val inactiveColor = ZashiColors.Surfaces.strokePrimary
                     Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .padding(top = 24.dp)
-                            .width(2.dp)
-                            .drawBehind {
-                                val activeHeight = 10.dp.toPx().coerceAtMost(size.height)
-                                drawRect(color = activeColor, size = Size(size.width, activeHeight))
-                                if (size.height > activeHeight) {
-                                    drawRect(
-                                        color = inactiveColor,
-                                        topLeft = Offset(0f, activeHeight),
-                                        size = Size(size.width, size.height - activeHeight),
-                                    )
+                        modifier =
+                            Modifier
+                                .fillMaxHeight()
+                                .padding(top = 24.dp)
+                                .width(2.dp)
+                                .drawBehind {
+                                    val activeHeight = 10.dp.toPx().coerceAtMost(size.height)
+                                    drawRect(color = activeColor, size = Size(size.width, activeHeight))
+                                    if (size.height > activeHeight) {
+                                        drawRect(
+                                            color = inactiveColor,
+                                            topLeft = Offset(0f, activeHeight),
+                                            size = Size(size.width, size.height - activeHeight),
+                                        )
+                                    }
                                 }
-                            }
                     )
                 } else {
                     Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .padding(top = 24.dp)
-                            .width(2.dp)
-                            .background(ZashiColors.Surfaces.strokePrimary)
+                        modifier =
+                            Modifier
+                                .fillMaxHeight()
+                                .padding(top = 24.dp)
+                                .width(2.dp)
+                                .background(ZashiColors.Surfaces.strokePrimary)
                     )
                 }
             }
             Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .background(
-                        if (isFirst) ZashiColors.Btns.Primary.btnPrimaryBg else ZashiColors.Surfaces.bgTertiary,
-                        CircleShape
-                    )
-                    .border(2.dp, ZashiColors.Surfaces.bgPrimary, CircleShape),
+                modifier =
+                    Modifier
+                        .size(24.dp)
+                        .background(
+                            if (isFirst) ZashiColors.Btns.Primary.btnPrimaryBg else ZashiColors.Surfaces.bgTertiary,
+                            CircleShape
+                        ).border(2.dp, ZashiColors.Surfaces.bgPrimary, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 if (icon != null) {
@@ -397,90 +411,107 @@ private fun TransferTimelineRow(
 
 @PreviewScreens
 @Composable
-private fun PreviewImmediate() = ZcashTheme {
-    MigrationReviewView(
-        state = MigrationReviewState(
-            mode = MigrationMode.IMMEDIATE,
-            totalAmount = stringRes("12.458 ZEC"),
-            estimatedDuration = stringRes("~1 min"),
-            transfers = listOf(
-                MigrationReviewTransferState(
-                    1, 1, stringRes("12.458 ZEC"), stringRes("$4,832.86"), stringRes("Send immediately")
-                ),
-            ),
-            isKeystone = false,
-            fee = stringRes("0.0003 ZEC"),
-            onConfirm = {},
-            onBack = {},
+private fun PreviewImmediate() =
+    ZcashTheme {
+        MigrationReviewView(
+            state =
+                MigrationReviewState(
+                    mode = MigrationMode.IMMEDIATE,
+                    totalAmount = stringRes("12.458 ZEC"),
+                    estimatedDuration = stringRes("~1 min"),
+                    transfers =
+                        listOf(
+                            MigrationReviewTransferState(
+                                1,
+                                1,
+                                stringRes("12.458 ZEC"),
+                                stringRes("$4,832.86"),
+                                stringRes("Send immediately")
+                            ),
+                        ),
+                    isKeystone = false,
+                    fee = stringRes("0.0003 ZEC"),
+                    onConfirm = {},
+                    onBack = {},
+                )
         )
-    )
-}
+    }
 
 @PreviewScreens
 @Composable
-private fun PreviewPrivacy() = ZcashTheme {
-    MigrationReviewView(
-        state = MigrationReviewState(
-            mode = MigrationMode.AUTOMATIC,
-            totalAmount = stringRes("12.458 ZEC"),
-            estimatedDuration = stringRes("~8 min"),
-            transfers = listOf(
-                MigrationReviewTransferState(1, 5, stringRes("1.348 ZEC"), stringRes("$521.30"), stringRes("~10 mins")),
-                MigrationReviewTransferState(2, 5, stringRes("1.052 ZEC"), stringRes("$406.86"), stringRes("~6 hours")),
-                MigrationReviewTransferState(3, 5, stringRes("2.105 ZEC"), stringRes("$813.74"), stringRes("~12 hours")),
-                MigrationReviewTransferState(4, 5, stringRes("1.897 ZEC"), stringRes("$733.51"), stringRes("~18 hours")),
-                MigrationReviewTransferState(5, 5, stringRes("4.456 ZEC"), stringRes("$1,723.53"), stringRes("~24 hours")),
-            ),
-            onConfirm = {},
-            onBack = {},
+private fun PreviewPrivacy() =
+    ZcashTheme {
+        MigrationReviewView(
+            state =
+                MigrationReviewState(
+                    mode = MigrationMode.AUTOMATIC,
+                    totalAmount = stringRes("12.458 ZEC"),
+                    estimatedDuration = stringRes("~8 min"),
+                    transfers =
+                        listOf(
+                            MigrationReviewTransferState(1, 5, stringRes("1.348 ZEC"), stringRes("$521.30"), stringRes("~10 mins")),
+                            MigrationReviewTransferState(2, 5, stringRes("1.052 ZEC"), stringRes("$406.86"), stringRes("~6 hours")),
+                            MigrationReviewTransferState(3, 5, stringRes("2.105 ZEC"), stringRes("$813.74"), stringRes("~12 hours")),
+                            MigrationReviewTransferState(4, 5, stringRes("1.897 ZEC"), stringRes("$733.51"), stringRes("~18 hours")),
+                            MigrationReviewTransferState(5, 5, stringRes("4.456 ZEC"), stringRes("$1,723.53"), stringRes("~24 hours")),
+                        ),
+                    onConfirm = {},
+                    onBack = {},
+                )
         )
-    )
-}
+    }
 
 @PreviewScreens
 @Composable
-private fun PreviewPrivacyWithKeystoneRound() = ZcashTheme {
-    MigrationReviewView(
-        state = MigrationReviewState(
-            mode = MigrationMode.AUTOMATIC,
-            totalAmount = stringRes("12.458 ZEC"),
-            estimatedDuration = stringRes("~8 min"),
-            transfers = listOf(
-                MigrationReviewTransferState(1, 5, stringRes("1.348 ZEC"), stringRes("$521.30"), stringRes("~10 mins")),
-                MigrationReviewTransferState(2, 5, stringRes("1.052 ZEC"), stringRes("$406.86"), stringRes("~6 hours")),
-                MigrationReviewTransferState(3, 5, stringRes("2.105 ZEC"), stringRes("$813.74"), stringRes("~12 hours")),
-                MigrationReviewTransferState(4, 5, stringRes("1.897 ZEC"), stringRes("$733.51"), stringRes("~18 hours")),
-                MigrationReviewTransferState(5, 5, stringRes("4.456 ZEC"), stringRes("$1,723.53"), stringRes("~24 hours")),
-            ),
-            isKeystone = true,
-            keystoneRound = MigrationKeystoneRound(current = 1, total = 4),
-            onConfirm = {},
-            onBack = {},
+private fun PreviewPrivacyWithKeystoneRound() =
+    ZcashTheme {
+        MigrationReviewView(
+            state =
+                MigrationReviewState(
+                    mode = MigrationMode.AUTOMATIC,
+                    totalAmount = stringRes("12.458 ZEC"),
+                    estimatedDuration = stringRes("~8 min"),
+                    transfers =
+                        listOf(
+                            MigrationReviewTransferState(1, 5, stringRes("1.348 ZEC"), stringRes("$521.30"), stringRes("~10 mins")),
+                            MigrationReviewTransferState(2, 5, stringRes("1.052 ZEC"), stringRes("$406.86"), stringRes("~6 hours")),
+                            MigrationReviewTransferState(3, 5, stringRes("2.105 ZEC"), stringRes("$813.74"), stringRes("~12 hours")),
+                            MigrationReviewTransferState(4, 5, stringRes("1.897 ZEC"), stringRes("$733.51"), stringRes("~18 hours")),
+                            MigrationReviewTransferState(5, 5, stringRes("4.456 ZEC"), stringRes("$1,723.53"), stringRes("~24 hours")),
+                        ),
+                    isKeystone = true,
+                    keystoneRound = MigrationKeystoneRound(current = 1, total = 4),
+                    onConfirm = {},
+                    onBack = {},
+                )
         )
-    )
-}
+    }
 
 @PreviewScreens
 @Composable
-private fun PreviewPrivacyWithPreparations() = ZcashTheme {
-    MigrationReviewView(
-        state = MigrationReviewState(
-            mode = MigrationMode.AUTOMATIC,
-            totalAmount = stringRes("12.458 ZEC"),
-            estimatedDuration = stringRes("~8 min"),
-            preparations = listOf(
-                MigrationReviewPreparationState(1, stringRes("Ready now")),
-                MigrationReviewPreparationState(2, stringRes("Ready now")),
-            ),
-            transfers = listOf(
-                MigrationReviewTransferState(1, 5, stringRes("1.348 ZEC"), stringRes("$521.30"), stringRes("~10 mins")),
-                MigrationReviewTransferState(2, 5, stringRes("1.052 ZEC"), stringRes("$406.86"), stringRes("~6 hours")),
-                MigrationReviewTransferState(3, 5, stringRes("2.105 ZEC"), stringRes("$813.74"), stringRes("~12 hours")),
-                MigrationReviewTransferState(4, 5, stringRes("1.897 ZEC"), stringRes("$733.51"), stringRes("~18 hours")),
-                MigrationReviewTransferState(5, 5, stringRes("4.456 ZEC"), stringRes("$1,723.53"), stringRes("~24 hours")),
-            ),
-            onConfirm = {},
-            onBack = {},
+private fun PreviewPrivacyWithPreparations() =
+    ZcashTheme {
+        MigrationReviewView(
+            state =
+                MigrationReviewState(
+                    mode = MigrationMode.AUTOMATIC,
+                    totalAmount = stringRes("12.458 ZEC"),
+                    estimatedDuration = stringRes("~8 min"),
+                    preparations =
+                        listOf(
+                            MigrationReviewPreparationState(1, stringRes("Ready now")),
+                            MigrationReviewPreparationState(2, stringRes("Ready now")),
+                        ),
+                    transfers =
+                        listOf(
+                            MigrationReviewTransferState(1, 5, stringRes("1.348 ZEC"), stringRes("$521.30"), stringRes("~10 mins")),
+                            MigrationReviewTransferState(2, 5, stringRes("1.052 ZEC"), stringRes("$406.86"), stringRes("~6 hours")),
+                            MigrationReviewTransferState(3, 5, stringRes("2.105 ZEC"), stringRes("$813.74"), stringRes("~12 hours")),
+                            MigrationReviewTransferState(4, 5, stringRes("1.897 ZEC"), stringRes("$733.51"), stringRes("~18 hours")),
+                            MigrationReviewTransferState(5, 5, stringRes("4.456 ZEC"), stringRes("$1,723.53"), stringRes("~24 hours")),
+                        ),
+                    onConfirm = {},
+                    onBack = {},
+                )
         )
-    )
-}
+    }

@@ -1,8 +1,8 @@
 package co.electriccoin.zcash.ui.screen.migration.torfailure
 
-import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
@@ -23,7 +23,6 @@ class MigrationTorFailureVM(
     private val pendingMigrationTorFailureDecisionRepository: PendingMigrationTorFailureDecisionRepository,
     private val isMigrationTorEnabledStorageProvider: IsMigrationTorEnabledStorageProvider,
 ) : ViewModel() {
-
     val state: StateFlow<MigrationTorFailureState?> =
         flowOf(
             MigrationTorFailureState(

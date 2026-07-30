@@ -67,9 +67,10 @@ fun MigrationProgressView(state: MigrationProgressState) {
         }
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .scaffoldPadding(padding),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .scaffoldPadding(padding),
         ) {
             Text(
                 text = state.title.getValue(),
@@ -97,11 +98,12 @@ fun MigrationProgressView(state: MigrationProgressState) {
                 state.preparations.forEachIndexed { i, prep ->
                     // When the debug syncLabel is present, append it as "· sync <label>" so the
                     // row composable needs no new parameter — statusLabel is plain text.
-                    val rowStatusLabel = if (prep.syncLabel != null) {
-                        prep.statusLabel + stringRes(" · sync ") + prep.syncLabel
-                    } else {
-                        prep.statusLabel
-                    }
+                    val rowStatusLabel =
+                        if (prep.syncLabel != null) {
+                            prep.statusLabel + stringRes(" · sync ") + prep.syncLabel
+                        } else {
+                            prep.statusLabel
+                        }
                     TransferProgressTimelineRow(
                         title = "Split balance ${prep.number}",
                         statusLabel = rowStatusLabel,
@@ -117,11 +119,12 @@ fun MigrationProgressView(state: MigrationProgressState) {
                 state.transfers.forEachIndexed { i, transfer ->
                     // When the debug syncLabel is present, append it as "· sync <label>" so the
                     // row composable needs no new parameter — statusLabel is plain text.
-                    val rowStatus = if (transfer.syncLabel != null) {
-                        transfer.statusLabel + stringRes(" · sync ") + transfer.syncLabel
-                    } else {
-                        transfer.statusLabel
-                    }
+                    val rowStatus =
+                        if (transfer.syncLabel != null) {
+                            transfer.statusLabel + stringRes(" · sync ") + transfer.syncLabel
+                        } else {
+                            transfer.statusLabel
+                        }
                     TransferProgressTimelineRow(
                         title = "Transfer ${transfer.index}",
                         statusLabel = rowStatus,
@@ -139,7 +142,9 @@ fun MigrationProgressView(state: MigrationProgressState) {
             if (state.hasOverdue) {
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    text = "Sending now will delay your wallet's sync about 10 mins. To protect your privacy, we need to decouple syncing and transaction broadcasting.",
+                    text =
+                        "Sending now will delay your wallet's sync about 10 mins. To protect " +
+                            "your privacy, we need to decouple syncing and transaction broadcasting.",
                     style = ZashiTypography.textXs,
                     color = ZashiColors.Text.textTertiary,
                 )
@@ -170,7 +175,6 @@ fun MigrationProgressView(state: MigrationProgressState) {
                     )
                 }
             }
-
         }
     }
 }
@@ -190,66 +194,78 @@ private fun TransferProgressTimelineRow(
     @DrawableRes icon: Int? = null,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min)
-            .padding(bottom = if (isLast) 0.dp else 12.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+                .padding(bottom = if (isLast) 0.dp else 12.dp),
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(24.dp),
+            modifier =
+                Modifier
+                    .fillMaxHeight()
+                    .width(24.dp),
             contentAlignment = Alignment.TopCenter,
         ) {
             if (!isLast) {
                 val connectorColor =
                     if (isDone) ZashiColors.Utility.SuccessGreen.utilitySuccess500 else ZashiColors.Surfaces.strokePrimary
                 Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .padding(top = 24.dp)
-                        .width(2.dp)
-                        .background(connectorColor)
+                    modifier =
+                        Modifier
+                            .fillMaxHeight()
+                            .padding(top = 24.dp)
+                            .width(2.dp)
+                            .background(connectorColor)
                 )
             }
-            val bgColor = when {
-                isDone -> ZashiColors.Utility.SuccessGreen.utilitySuccess500
-                isOverdue -> ZashiColors.Utility.WarningYellow.utilityOrange500
-                isActive -> ZashiColors.Btns.Primary.btnPrimaryBg
-                else -> ZashiColors.Surfaces.bgTertiary
-            }
-            val textColor = when {
-                isOverdue || isActive -> ZashiColors.Btns.Primary.btnPrimaryFg
-                else -> ZashiColors.Utility.Gray.utilityGray400
-            }
+            val bgColor =
+                when {
+                    isDone -> ZashiColors.Utility.SuccessGreen.utilitySuccess500
+                    isOverdue -> ZashiColors.Utility.WarningYellow.utilityOrange500
+                    isActive -> ZashiColors.Btns.Primary.btnPrimaryBg
+                    else -> ZashiColors.Surfaces.bgTertiary
+                }
+            val textColor =
+                when {
+                    isOverdue || isActive -> ZashiColors.Btns.Primary.btnPrimaryFg
+                    else -> ZashiColors.Utility.Gray.utilityGray400
+                }
             Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .background(bgColor, CircleShape)
-                    .border(2.dp, ZashiColors.Surfaces.bgPrimary, CircleShape),
+                modifier =
+                    Modifier
+                        .size(24.dp)
+                        .background(bgColor, CircleShape)
+                        .border(2.dp, ZashiColors.Surfaces.bgPrimary, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 when {
-                    isDone -> Icon(
-                        painter = painterResource(R.drawable.ic_migration_check),
-                        contentDescription = null,
-                        tint = ZashiColors.Btns.Primary.btnPrimaryFg,
-                        modifier = Modifier.size(16.dp),
-                    )
+                    isDone -> {
+                        Icon(
+                            painter = painterResource(co.electriccoin.zcash.migration.R.drawable.ic_migration_check),
+                            contentDescription = null,
+                            tint = ZashiColors.Btns.Primary.btnPrimaryFg,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
 
-                    icon != null -> Icon(
-                        painter = painterResource(icon),
-                        contentDescription = null,
-                        tint = textColor,
-                        modifier = Modifier.size(14.dp),
-                    )
+                    icon != null -> {
+                        Icon(
+                            painter = painterResource(icon),
+                            contentDescription = null,
+                            tint = textColor,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
 
-                    else -> Text(
-                        text = "$index",
-                        style = ZashiTypography.textXs,
-                        fontWeight = FontWeight.SemiBold,
-                        color = textColor,
-                    )
+                    else -> {
+                        Text(
+                            text = "$index",
+                            style = ZashiTypography.textXs,
+                            fontWeight = FontWeight.SemiBold,
+                            color = textColor,
+                        )
+                    }
                 }
             }
         }
@@ -289,56 +305,181 @@ private fun TransferProgressTimelineRow(
 
 @PreviewScreens
 @Composable
-private fun PreviewResume() = ZcashTheme {
-    MigrationProgressView(
-        state = MigrationProgressState(
-            title = stringRes("Resume Migration"),
-            subtitle = stringRes("Transfer 3 of 5 was scheduled 6 hours ago but wasn't sent. Send now or reschedule."),
-            totalAmount = stringRes("10.458 ZEC"),
-            totalFiatAmount = stringRes("$4,053.46"),
-            transfers = listOf(
-                MigrationProgressTransferState(1, stringRes("1.348 ZEC"), stringRes("Sent 6h ago"), false, true, stringRes("$521.30")),
-                MigrationProgressTransferState(2, stringRes("1.052 ZEC"), stringRes("Sent 18 min ago"), false, true, stringRes("$406.86")),
-                MigrationProgressTransferState(3, stringRes("2.105 ZEC"), stringRes("Overdue · 6h ago"), true, false, stringRes("$813.74")),
-                MigrationProgressTransferState(4, stringRes("1.897 ZEC"), stringRes("~10 hours"), false, false, stringRes("$733.51")),
-                MigrationProgressTransferState(5, stringRes("4.056 ZEC"), stringRes("~16 hours"), false, false, stringRes("$1,568.05")),
-                MigrationProgressTransferState(5, stringRes("4.056 ZEC"), stringRes("~16 hours"), false, false, stringRes("$1,568.05")),
-                MigrationProgressTransferState(5, stringRes("4.056 ZEC"), stringRes("~16 hours"), false, false, stringRes("$1,568.05")),
-                MigrationProgressTransferState(5, stringRes("4.056 ZEC"), stringRes("~16 hours"), false, false, stringRes("$1,568.05")),
-                MigrationProgressTransferState(5, stringRes("4.056 ZEC"), stringRes("~16 hours"), false, false, stringRes("$1,568.05")),
-                MigrationProgressTransferState(5, stringRes("4.056 ZEC"), stringRes("~16 hours"), false, false, stringRes("$1,568.05")),
-                MigrationProgressTransferState(5, stringRes("4.056 ZEC"), stringRes("~16 hours"), false, false, stringRes("$1,568.05")),
-                MigrationProgressTransferState(5, stringRes("4.056 ZEC"), stringRes("~16 hours"), false, false, stringRes("$1,568.05")),
-            ),
-            isComplete = false,
-            hasOverdue = true,
-            onBack = {},
-            onSendNow = {},
-            onReschedule = {},
+private fun PreviewResume() =
+    ZcashTheme {
+        MigrationProgressView(
+            state =
+                MigrationProgressState(
+                    title = stringRes("Resume Migration"),
+                    subtitle = stringRes("Transfer 3 of 5 was scheduled 6 hours ago but wasn't sent. Send now or reschedule."),
+                    totalAmount = stringRes("10.458 ZEC"),
+                    totalFiatAmount = stringRes("$4,053.46"),
+                    transfers =
+                        listOf(
+                            MigrationProgressTransferState(
+                                1,
+                                stringRes("1.348 ZEC"),
+                                stringRes("Sent 6h ago"),
+                                false,
+                                true,
+                                stringRes("$521.30")
+                            ),
+                            MigrationProgressTransferState(
+                                2,
+                                stringRes("1.052 ZEC"),
+                                stringRes("Sent 18 min ago"),
+                                false,
+                                true,
+                                stringRes("$406.86")
+                            ),
+                            MigrationProgressTransferState(
+                                3,
+                                stringRes("2.105 ZEC"),
+                                stringRes("Overdue · 6h ago"),
+                                true,
+                                false,
+                                stringRes("$813.74")
+                            ),
+                            MigrationProgressTransferState(
+                                4,
+                                stringRes("1.897 ZEC"),
+                                stringRes("~10 hours"),
+                                false,
+                                false,
+                                stringRes("$733.51")
+                            ),
+                            MigrationProgressTransferState(
+                                5,
+                                stringRes("4.056 ZEC"),
+                                stringRes("~16 hours"),
+                                false,
+                                false,
+                                stringRes("$1,568.05")
+                            ),
+                            MigrationProgressTransferState(
+                                5,
+                                stringRes("4.056 ZEC"),
+                                stringRes("~16 hours"),
+                                false,
+                                false,
+                                stringRes("$1,568.05")
+                            ),
+                            MigrationProgressTransferState(
+                                5,
+                                stringRes("4.056 ZEC"),
+                                stringRes("~16 hours"),
+                                false,
+                                false,
+                                stringRes("$1,568.05")
+                            ),
+                            MigrationProgressTransferState(
+                                5,
+                                stringRes("4.056 ZEC"),
+                                stringRes("~16 hours"),
+                                false,
+                                false,
+                                stringRes("$1,568.05")
+                            ),
+                            MigrationProgressTransferState(
+                                5,
+                                stringRes("4.056 ZEC"),
+                                stringRes("~16 hours"),
+                                false,
+                                false,
+                                stringRes("$1,568.05")
+                            ),
+                            MigrationProgressTransferState(
+                                5,
+                                stringRes("4.056 ZEC"),
+                                stringRes("~16 hours"),
+                                false,
+                                false,
+                                stringRes("$1,568.05")
+                            ),
+                            MigrationProgressTransferState(
+                                5,
+                                stringRes("4.056 ZEC"),
+                                stringRes("~16 hours"),
+                                false,
+                                false,
+                                stringRes("$1,568.05")
+                            ),
+                            MigrationProgressTransferState(
+                                5,
+                                stringRes("4.056 ZEC"),
+                                stringRes("~16 hours"),
+                                false,
+                                false,
+                                stringRes("$1,568.05")
+                            ),
+                        ),
+                    isComplete = false,
+                    hasOverdue = true,
+                    onBack = {},
+                    onSendNow = {},
+                    onReschedule = {},
+                )
         )
-    )
-}
+    }
 
 @PreviewScreens
 @Composable
-private fun PreviewComplete() = ZcashTheme {
-    MigrationProgressView(
-        state = MigrationProgressState(
-            title = stringRes("Migration Progress"),
-            subtitle = stringRes("Your balance splits into 5 transfers over 24 hours. All transfers complete."),
-            totalAmount = stringRes("10.458 ZEC"),
-            totalFiatAmount = stringRes("$4,053.46"),
-            transfers = listOf(
-                MigrationProgressTransferState(1, stringRes("1.348 ZEC"), stringRes("Sent 24h ago"), false, true, stringRes("$521.30")),
-                MigrationProgressTransferState(2, stringRes("1.052 ZEC"), stringRes("Sent 18h ago"), false, true, stringRes("$406.86")),
-                MigrationProgressTransferState(3, stringRes("2.105 ZEC"), stringRes("Sent 12h ago"), false, true, stringRes("$813.74")),
-                MigrationProgressTransferState(4, stringRes("1.897 ZEC"), stringRes("Sent 6h ago"), false, true, stringRes("$733.51")),
-                MigrationProgressTransferState(5, stringRes("4.056 ZEC"), stringRes("Sent 18 min ago"), false, true, stringRes("$1,568.05")),
-            ),
-            isComplete = true,
-            hasOverdue = false,
-            onBack = {},
-            onDone = {},
+private fun PreviewComplete() =
+    ZcashTheme {
+        MigrationProgressView(
+            state =
+                MigrationProgressState(
+                    title = stringRes("Migration Progress"),
+                    subtitle = stringRes("Your balance splits into 5 transfers over 24 hours. All transfers complete."),
+                    totalAmount = stringRes("10.458 ZEC"),
+                    totalFiatAmount = stringRes("$4,053.46"),
+                    transfers =
+                        listOf(
+                            MigrationProgressTransferState(
+                                1,
+                                stringRes("1.348 ZEC"),
+                                stringRes("Sent 24h ago"),
+                                false,
+                                true,
+                                stringRes("$521.30")
+                            ),
+                            MigrationProgressTransferState(
+                                2,
+                                stringRes("1.052 ZEC"),
+                                stringRes("Sent 18h ago"),
+                                false,
+                                true,
+                                stringRes("$406.86")
+                            ),
+                            MigrationProgressTransferState(
+                                3,
+                                stringRes("2.105 ZEC"),
+                                stringRes("Sent 12h ago"),
+                                false,
+                                true,
+                                stringRes("$813.74")
+                            ),
+                            MigrationProgressTransferState(
+                                4,
+                                stringRes("1.897 ZEC"),
+                                stringRes("Sent 6h ago"),
+                                false,
+                                true,
+                                stringRes("$733.51")
+                            ),
+                            MigrationProgressTransferState(
+                                5,
+                                stringRes("4.056 ZEC"),
+                                stringRes("Sent 18 min ago"),
+                                false,
+                                true,
+                                stringRes("$1,568.05")
+                            ),
+                        ),
+                    isComplete = true,
+                    hasOverdue = false,
+                    onBack = {},
+                    onDone = {},
+                )
         )
-    )
-}
+    }

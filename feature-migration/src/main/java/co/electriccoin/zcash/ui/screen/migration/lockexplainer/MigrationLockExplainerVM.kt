@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.asStateFlow
 class MigrationLockExplainerVM(
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
-
     val state: StateFlow<MigrationLockExplainerState?> =
         MutableStateFlow(
             MigrationLockExplainerState(

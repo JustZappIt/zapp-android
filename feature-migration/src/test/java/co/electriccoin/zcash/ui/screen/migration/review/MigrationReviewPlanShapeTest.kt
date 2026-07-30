@@ -61,7 +61,6 @@ import kotlin.test.assertTrue
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MigrationReviewPlanShapeTest {
-
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(StandardTestDispatcher())
@@ -82,88 +81,94 @@ class MigrationReviewPlanShapeTest {
      * a non-null scheduledLabel, and every transfer must carry a non-zero amount.
      */
     @Test
-    fun nPrepPlan_preparationsAndTransfersMappedCorrectly() = runTest {
-        val anchorHeight = 4_000_000L
+    fun nPrepPlan_preparationsAndTransfersMappedCorrectly() =
+        runTest {
+            val anchorHeight = 4_000_000L
 
-        // Layer 0: two independent root splits (broadcastHeight = anchorHeight).
-        val prep0 = PreparationStep(id = 10L, layer = 0, index = 0, broadcastHeight = anchorHeight, dependsOn = emptyList())
-        val prep1 = PreparationStep(id = 11L, layer = 0, index = 1, broadcastHeight = anchorHeight, dependsOn = emptyList())
-        // Layer 1: one split that depends on both layer-0 outputs.
-        val prep2 = PreparationStep(id = 20L, layer = 1, index = 0, broadcastHeight = anchorHeight + 10L, dependsOn = listOf(10L, 11L))
-        // Layer 2: a final split combining everything.
-        val prep3 = PreparationStep(id = 30L, layer = 2, index = 0, broadcastHeight = anchorHeight + 25L, dependsOn = listOf(20L))
+            // Layer 0: two independent root splits (broadcastHeight = anchorHeight).
+            val prep0 = PreparationStep(id = 10L, layer = 0, index = 0, broadcastHeight = anchorHeight, dependsOn = emptyList())
+            val prep1 = PreparationStep(id = 11L, layer = 0, index = 1, broadcastHeight = anchorHeight, dependsOn = emptyList())
+            // Layer 1: one split that depends on both layer-0 outputs.
+            val prep2 = PreparationStep(id = 20L, layer = 1, index = 0, broadcastHeight = anchorHeight + 10L, dependsOn = listOf(10L, 11L))
+            // Layer 2: a final split combining everything.
+            val prep3 = PreparationStep(id = 30L, layer = 2, index = 0, broadcastHeight = anchorHeight + 25L, dependsOn = listOf(20L))
 
-        val transfers = (1..11).map { i ->
-            TransferProposal(
-                id = (100 + i).toLong(),
-                amountZatoshi = 500_000L * i,
-                anchorHeight = anchorHeight,
-                nextExecutableAfterHeight = anchorHeight + 50L + (i * 10L),
-                expiryHeight = anchorHeight + 200L + (i * 10L),
-            )
+            val transfers =
+                (1..11).map { i ->
+                    TransferProposal(
+                        id = (100 + i).toLong(),
+                        amountZatoshi = 500_000L * i,
+                        anchorHeight = anchorHeight,
+                        nextExecutableAfterHeight = anchorHeight + 50L + (i * 10L),
+                        expiryHeight = anchorHeight + 200L + (i * 10L),
+                    )
+                }
+
+            val schedule =
+                MigrationSchedule(
+                    transfers = transfers,
+                    preparations = listOf(prep0, prep1, prep2, prep3),
+                    estimatedDurationHours = 4,
+                    proposalHandle = 99L,
+                )
+
+            val vm = vmWithSchedule(schedule)
+            val collectJob = launch { vm.state.collect {} }
+            advanceUntilIdle()
+
+            val state = assertNotNull(vm.state.value.content, "state must be loaded")
+
+            // ── preparations ──────────────────────────────────────────────────────────────────────────
+
+            assertEquals(4, state.preparations.size, "must have exactly 4 preparation rows")
+
+            // Numbers must be 1-indexed and monotonically increasing (iteration order = list order).
+            assertEquals(listOf(1, 2, 3, 4), state.preparations.map { it.number })
+
+            // Every preparation must carry a non-null, non-empty scheduledLabel.
+            state.preparations.forEach { prep ->
+                val label = prep.scheduledLabel
+                assertTrue(
+                    label is StringResource.ByString && label.value.isNotEmpty(),
+                    "preparation #${prep.number} must have a non-empty ByString scheduledLabel, got $label",
+                )
+            }
+
+            // ── transfers ─────────────────────────────────────────────────────────────────────────────
+
+            assertEquals(11, state.transfers.size, "must have exactly 11 transfer rows")
+
+            // The headline count (totalCount field shared by all rows) must reflect the 11 crossings,
+            // not any preparation count.
+            state.transfers.forEach { t ->
+                assertEquals(11, t.totalCount, "every transfer row must report totalCount=11")
+            }
+
+            // Transfer 1-indexes must run 1..11.
+            assertEquals((1..11).toList(), state.transfers.map { it.index })
+
+            // Every transfer must carry a non-null amount (ExchangeRate is OptedOut so fiatAmount is null).
+            state.transfers.forEach { t ->
+                assertNotNull(t.amount, "transfer #${t.index} must carry an amount")
+                assertNull(t.fiatAmount, "fiatAmount must be null when exchange rate is opted out")
+            }
+
+            // The amount values must differ (they were built with distinct amountZatoshi values above).
+            val distinctAmounts = state.transfers.map { it.amount }.toSet()
+            assertEquals(11, distinctAmounts.size, "each transfer must have a unique amount value")
+
+            // ── preparations carry no amount ───────────────────────────────────────────────────────────
+            // MigrationReviewPreparationState has no amount field — the compiler enforces this, but we
+            // verify the absence structurally by confirming the data class only exposes number + label.
+            val prepFields =
+                MigrationReviewPreparationState::class.java.declaredFields
+                    .map { it.name }
+                    .toSet()
+            assertTrue("number" in prepFields && "scheduledLabel" in prepFields, "preparation state must have number + scheduledLabel")
+            assertTrue("amount" !in prepFields && "fiatAmount" !in prepFields, "preparation state must NOT have amount/fiatAmount")
+
+            collectJob.cancel()
         }
-
-        val schedule = MigrationSchedule(
-            transfers = transfers,
-            preparations = listOf(prep0, prep1, prep2, prep3),
-            estimatedDurationHours = 4,
-            proposalHandle = 99L,
-        )
-
-        val vm = vmWithSchedule(schedule)
-        val collectJob = launch { vm.state.collect {} }
-        advanceUntilIdle()
-
-        val state = assertNotNull(vm.state.value.content, "state must be loaded")
-
-        // ── preparations ──────────────────────────────────────────────────────────────────────────
-
-        assertEquals(4, state.preparations.size, "must have exactly 4 preparation rows")
-
-        // Numbers must be 1-indexed and monotonically increasing (iteration order = list order).
-        assertEquals(listOf(1, 2, 3, 4), state.preparations.map { it.number })
-
-        // Every preparation must carry a non-null, non-empty scheduledLabel.
-        state.preparations.forEach { prep ->
-            val label = prep.scheduledLabel
-            assertTrue(
-                label is StringResource.ByString && label.value.isNotEmpty(),
-                "preparation #${prep.number} must have a non-empty ByString scheduledLabel, got $label",
-            )
-        }
-
-        // ── transfers ─────────────────────────────────────────────────────────────────────────────
-
-        assertEquals(11, state.transfers.size, "must have exactly 11 transfer rows")
-
-        // The headline count (totalCount field shared by all rows) must reflect the 11 crossings,
-        // not any preparation count.
-        state.transfers.forEach { t ->
-            assertEquals(11, t.totalCount, "every transfer row must report totalCount=11")
-        }
-
-        // Transfer 1-indexes must run 1..11.
-        assertEquals((1..11).toList(), state.transfers.map { it.index })
-
-        // Every transfer must carry a non-null amount (ExchangeRate is OptedOut so fiatAmount is null).
-        state.transfers.forEach { t ->
-            assertNotNull(t.amount, "transfer #${t.index} must carry an amount")
-            assertNull(t.fiatAmount, "fiatAmount must be null when exchange rate is opted out")
-        }
-
-        // The amount values must differ (they were built with distinct amountZatoshi values above).
-        val distinctAmounts = state.transfers.map { it.amount }.toSet()
-        assertEquals(11, distinctAmounts.size, "each transfer must have a unique amount value")
-
-        // ── preparations carry no amount ───────────────────────────────────────────────────────────
-        // MigrationReviewPreparationState has no amount field — the compiler enforces this, but we
-        // verify the absence structurally by confirming the data class only exposes number + label.
-        val prepFields = MigrationReviewPreparationState::class.java.declaredFields.map { it.name }.toSet()
-        assertTrue("number" in prepFields && "scheduledLabel" in prepFields, "preparation state must have number + scheduledLabel")
-        assertTrue("amount" !in prepFields && "fiatAmount" !in prepFields, "preparation state must NOT have amount/fiatAmount")
-
-        collectJob.cancel()
-    }
 
     // ──────────────────────────────────────────────────────────────────────────────────────────────
     // Shape 2 — 0-prep plan (single-note direct funding: no note-split needed, 1 transfer)
@@ -175,42 +180,45 @@ class MigrationReviewPlanShapeTest {
      * can trigger. The single transfer must still carry its amount.
      */
     @Test
-    fun zeroPrepPlan_preparationsListIsEmptyAndSingleTransferCarriesAmount() = runTest {
-        val anchorHeight = 4_100_000L
+    fun zeroPrepPlan_preparationsListIsEmptyAndSingleTransferCarriesAmount() =
+        runTest {
+            val anchorHeight = 4_100_000L
 
-        val schedule = MigrationSchedule(
-            transfers = listOf(
-                TransferProposal(
-                    id = 1L,
-                    amountZatoshi = 1_000_000L,
-                    anchorHeight = anchorHeight,
-                    nextExecutableAfterHeight = anchorHeight + 10L,
-                    expiryHeight = anchorHeight + 100L,
+            val schedule =
+                MigrationSchedule(
+                    transfers =
+                        listOf(
+                            TransferProposal(
+                                id = 1L,
+                                amountZatoshi = 1_000_000L,
+                                anchorHeight = anchorHeight,
+                                nextExecutableAfterHeight = anchorHeight + 10L,
+                                expiryHeight = anchorHeight + 100L,
+                            )
+                        ),
+                    preparations = emptyList(),
+                    estimatedDurationHours = 0,
+                    proposalHandle = 1L,
                 )
-            ),
-            preparations = emptyList(),
-            estimatedDurationHours = 0,
-            proposalHandle = 1L,
-        )
 
-        val vm = vmWithSchedule(schedule)
-        val collectJob = launch { vm.state.collect {} }
-        advanceUntilIdle()
+            val vm = vmWithSchedule(schedule)
+            val collectJob = launch { vm.state.collect {} }
+            advanceUntilIdle()
 
-        val state = assertNotNull(vm.state.value.content, "state must be loaded")
+            val state = assertNotNull(vm.state.value.content, "state must be loaded")
 
-        // ── preparations must be empty ─────────────────────────────────────────────────────────────
-        assertTrue(state.preparations.isEmpty(), "preparations must be empty for a no-split wallet")
+            // ── preparations must be empty ─────────────────────────────────────────────────────────────
+            assertTrue(state.preparations.isEmpty(), "preparations must be empty for a no-split wallet")
 
-        // ── single transfer must be present and carry its amount ───────────────────────────────────
-        assertEquals(1, state.transfers.size)
-        val transfer = state.transfers.single()
-        assertEquals(1, transfer.index)
-        assertEquals(1, transfer.totalCount)
-        assertNotNull(transfer.amount, "the lone transfer must carry an amount")
+            // ── single transfer must be present and carry its amount ───────────────────────────────────
+            assertEquals(1, state.transfers.size)
+            val transfer = state.transfers.single()
+            assertEquals(1, transfer.index)
+            assertEquals(1, transfer.totalCount)
+            assertNotNull(transfer.amount, "the lone transfer must carry an amount")
 
-        collectJob.cancel()
-    }
+            collectJob.cancel()
+        }
 
     // ──────────────────────────────────────────────────────────────────────────────────────────────
     // Shape 3 — 1-prep plan (one note-split preparation + 2 transfers)
@@ -222,68 +230,72 @@ class MigrationReviewPlanShapeTest {
      * numbered 1 and 2 with totalCount=2.
      */
     @Test
-    fun onePrepPlan_singlePreparationAndTwoTransfersMappedCorrectly() = runTest {
-        val anchorHeight = 4_200_000L
+    fun onePrepPlan_singlePreparationAndTwoTransfersMappedCorrectly() =
+        runTest {
+            val anchorHeight = 4_200_000L
 
-        val schedule = MigrationSchedule(
-            transfers = listOf(
-                TransferProposal(
-                    id = 1L,
-                    amountZatoshi = 400_000L,
-                    anchorHeight = anchorHeight,
-                    nextExecutableAfterHeight = anchorHeight + 15L,
-                    expiryHeight = anchorHeight + 150L,
-                ),
-                TransferProposal(
-                    id = 2L,
-                    amountZatoshi = 600_000L,
-                    anchorHeight = anchorHeight,
-                    nextExecutableAfterHeight = anchorHeight + 30L,
-                    expiryHeight = anchorHeight + 200L,
-                ),
-            ),
-            preparations = listOf(
-                PreparationStep(
-                    id = 50L,
-                    layer = 0,
-                    index = 0,
-                    broadcastHeight = anchorHeight,
-                    dependsOn = emptyList(),
+            val schedule =
+                MigrationSchedule(
+                    transfers =
+                        listOf(
+                            TransferProposal(
+                                id = 1L,
+                                amountZatoshi = 400_000L,
+                                anchorHeight = anchorHeight,
+                                nextExecutableAfterHeight = anchorHeight + 15L,
+                                expiryHeight = anchorHeight + 150L,
+                            ),
+                            TransferProposal(
+                                id = 2L,
+                                amountZatoshi = 600_000L,
+                                anchorHeight = anchorHeight,
+                                nextExecutableAfterHeight = anchorHeight + 30L,
+                                expiryHeight = anchorHeight + 200L,
+                            ),
+                        ),
+                    preparations =
+                        listOf(
+                            PreparationStep(
+                                id = 50L,
+                                layer = 0,
+                                index = 0,
+                                broadcastHeight = anchorHeight,
+                                dependsOn = emptyList(),
+                            )
+                        ),
+                    estimatedDurationHours = 1,
+                    proposalHandle = 2L,
                 )
-            ),
-            estimatedDurationHours = 1,
-            proposalHandle = 2L,
-        )
 
-        val vm = vmWithSchedule(schedule)
-        val collectJob = launch { vm.state.collect {} }
-        advanceUntilIdle()
+            val vm = vmWithSchedule(schedule)
+            val collectJob = launch { vm.state.collect {} }
+            advanceUntilIdle()
 
-        val state = assertNotNull(vm.state.value.content, "state must be loaded")
+            val state = assertNotNull(vm.state.value.content, "state must be loaded")
 
-        // ── preparations ──────────────────────────────────────────────────────────────────────────
-        assertEquals(1, state.preparations.size, "must have exactly 1 preparation row")
-        val prep = state.preparations.single()
-        assertEquals(1, prep.number, "the single preparation must be numbered 1")
-        assertTrue(
-            prep.scheduledLabel is StringResource.ByString && prep.scheduledLabel.value.isNotEmpty(),
-            "preparation scheduledLabel must be a non-empty ByString, got ${prep.scheduledLabel}",
-        )
+            // ── preparations ──────────────────────────────────────────────────────────────────────────
+            assertEquals(1, state.preparations.size, "must have exactly 1 preparation row")
+            val prep = state.preparations.single()
+            assertEquals(1, prep.number, "the single preparation must be numbered 1")
+            assertTrue(
+                prep.scheduledLabel is StringResource.ByString && prep.scheduledLabel.value.isNotEmpty(),
+                "preparation scheduledLabel must be a non-empty ByString, got ${prep.scheduledLabel}",
+            )
 
-        // ── transfers ─────────────────────────────────────────────────────────────────────────────
-        assertEquals(2, state.transfers.size, "must have exactly 2 transfer rows")
-        assertEquals(listOf(1, 2), state.transfers.map { it.index })
-        state.transfers.forEach { t ->
-            assertEquals(2, t.totalCount, "every transfer row must report totalCount=2")
-            assertNotNull(t.amount, "transfer #${t.index} must carry an amount")
+            // ── transfers ─────────────────────────────────────────────────────────────────────────────
+            assertEquals(2, state.transfers.size, "must have exactly 2 transfer rows")
+            assertEquals(listOf(1, 2), state.transfers.map { it.index })
+            state.transfers.forEach { t ->
+                assertEquals(2, t.totalCount, "every transfer row must report totalCount=2")
+                assertNotNull(t.amount, "transfer #${t.index} must carry an amount")
+            }
+
+            // The two transfers must have distinct amounts (400 000 vs 600 000 zatoshi).
+            val amounts = state.transfers.map { it.amount }.toSet()
+            assertEquals(2, amounts.size, "the two transfer rows must have different amount values")
+
+            collectJob.cancel()
         }
-
-        // The two transfers must have distinct amounts (400 000 vs 600 000 zatoshi).
-        val amounts = state.transfers.map { it.amount }.toSet()
-        assertEquals(2, amounts.size, "the two transfer rows must have different amount values")
-
-        collectJob.cancel()
-    }
 
     // ──────────────────────────────────────────────────────────────────────────────────────────────
     // Helpers
@@ -291,30 +303,35 @@ class MigrationReviewPlanShapeTest {
 
     /** Build a VM whose [GetOrchardMigrationSdkUseCase] returns an SDK stub that proposes [schedule]. */
     private fun vmWithSchedule(schedule: MigrationSchedule): MigrationReviewVM {
-        val sdk = mockk<OrchardMigrationSdk>(relaxed = true) {
-            coEvery { proposeMigrationTransfers(any()) } returns schedule
-            coEvery { estimateMigrationRunCount() } returns 1
-            coEvery { estimatedSecondsPerBlock() } returns 75L
-        }
+        val sdk =
+            mockk<OrchardMigrationSdk>(relaxed = true) {
+                coEvery { proposeMigrationTransfers(any()) } returns schedule
+                coEvery { estimateMigrationRunCount() } returns 1
+                coEvery { estimatedSecondsPerBlock() } returns 75L
+            }
         return MigrationReviewVM(
             args = MigrationReviewArgs(mode = MigrationMode.AUTOMATIC),
             getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
             pendingMigrationScheduleRepository = mockk<PendingMigrationScheduleRepository>(relaxed = true),
-            restartMigrationScheduleRepository = mockk<RestartMigrationScheduleRepository>(relaxed = true) {
-                every { consume(any()) } returns null
-            },
+            restartMigrationScheduleRepository =
+                mockk<RestartMigrationScheduleRepository>(relaxed = true) {
+                    every { consume(any()) } returns null
+                },
             finalizeMigrationSchedule = mockk<FinalizeMigrationScheduleUseCase>(relaxed = true),
             navigationRouter = mockk<NavigationRouter>(relaxed = true),
-            exchangeRateRepository = mockk<ExchangeRateRepository>(relaxed = true) {
-                every { state } returns MutableStateFlow(ExchangeRateState.OptedOut)
-            },
-            getSelectedWalletAccount = mockk<GetSelectedWalletAccountUseCase> {
-                coEvery { this@mockk() } returns mockk<ZashiAccount>(relaxed = true)
-                every { observe() } returns flowOf(mockk<ZashiAccount>(relaxed = true))
-            },
-            getOrchardBalance = mockk<GetOrchardBalanceUseCase> {
-                coEvery { this@mockk() } returns Zatoshi(500_000L)
-            },
+            exchangeRateRepository =
+                mockk<ExchangeRateRepository>(relaxed = true) {
+                    every { state } returns MutableStateFlow(ExchangeRateState.OptedOut)
+                },
+            getSelectedWalletAccount =
+                mockk<GetSelectedWalletAccountUseCase> {
+                    coEvery { this@mockk() } returns mockk<ZashiAccount>(relaxed = true)
+                    every { observe() } returns flowOf(mockk<ZashiAccount>(relaxed = true))
+                },
+            getOrchardBalance =
+                mockk<GetOrchardBalanceUseCase> {
+                    coEvery { this@mockk() } returns Zatoshi(500_000L)
+                },
             errorStateMapper = mockk<ErrorMapperUseCase>(relaxed = true),
             zashiSpendingKeyDataSource = mockk<ZashiSpendingKeyDataSource>(relaxed = true),
             biometricRepository = mockk<BiometricRepository>(relaxed = true),

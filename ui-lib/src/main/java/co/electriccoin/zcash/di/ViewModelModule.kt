@@ -35,24 +35,6 @@ import co.electriccoin.zcash.ui.screen.exchangerateunavailable.ExchangeRateUnava
 import co.electriccoin.zcash.ui.screen.feedback.FeedbackVM
 import co.electriccoin.zcash.ui.screen.flexa.FlexaViewModel
 import co.electriccoin.zcash.ui.screen.home.HomeVM
-import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressVM
-import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewVM
-import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupVM
-import co.electriccoin.zcash.ui.screen.migration.howitworks.MigrationHowItWorksVM
-import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewVM
-import co.electriccoin.zcash.ui.screen.migration.keystonesign.MigrationKeystoneSignVM
-import co.electriccoin.zcash.ui.screen.migration.keystonescan.MigrationKeystoneScanVM
-import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingVM
-import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessVM
-import co.electriccoin.zcash.ui.screen.migration.scheduled.MigrationScheduledVM
-import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteVM
-import co.electriccoin.zcash.ui.screen.migration.battery.MigrationBatteryVM
-import co.electriccoin.zcash.ui.screen.migration.notification.MigrationNotificationVM
-import co.electriccoin.zcash.ui.screen.migration.privacy.MigrationPrivacyVM
-import co.electriccoin.zcash.ui.screen.migration.lockexplainer.MigrationLockExplainerVM
-import co.electriccoin.zcash.ui.screen.migration.customservertor.MigrationCustomServerTorVM
-import co.electriccoin.zcash.ui.screen.migration.torfailure.MigrationTorFailureVM
-import co.electriccoin.zcash.ui.screen.migration.invalid.MigrationTransferInvalidVM
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupDetailViewModel
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupInfoViewModel
 import co.electriccoin.zcash.ui.screen.home.reporting.CrashReportOptInViewModel
@@ -231,22 +213,4 @@ val viewModelModule =
         viewModelOf(::KeystoneEstimationVM)
         viewModelOf(::KeystoneHeightVM)
         viewModelOf(::KeepOpenVM)
-        viewModelOf(::MigrationSetupVM)
-        viewModelOf(::MigrationHowItWorksVM)
-        viewModelOf(::MigrationProgressVM)
-        viewModelOf(::MigrationTransferReviewVM)
-        viewModelOf(::MigrationReviewVM)
-        viewModelOf(::MigrationKeystoneSignVM)
-        viewModelOf(::MigrationKeystoneScanVM)
-        viewModelOf(::MigrationSendingVM)
-        viewModelOf(::MigrationSuccessVM)
-        viewModelOf(::MigrationScheduledVM)
-        viewModelOf(::MigrationCompleteVM)
-        viewModelOf(::MigrationBatteryVM)
-        viewModelOf(::MigrationNotificationVM)
-        viewModelOf(::MigrationPrivacyVM)
-        viewModelOf(::MigrationLockExplainerVM)
-        viewModelOf(::MigrationCustomServerTorVM)
-        viewModelOf(::MigrationTorFailureVM)
-        viewModelOf(::MigrationTransferInvalidVM)
     }

@@ -26,7 +26,9 @@ import kotlin.time.Duration
  * through every WorkManager call site separately — every place that currently arms or cancels the
  * background worker already goes through that one class.
  */
-class MigrationDueAlarmScheduler(private val context: Context) {
+class MigrationDueAlarmScheduler(
+    private val context: Context
+) {
     fun schedule(accountKeyId: String, delay: Duration) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
         if (alarmManager == null) {
@@ -44,9 +46,10 @@ class MigrationDueAlarmScheduler(private val context: Context) {
     }
 
     private fun pendingIntent(accountKeyId: String): PendingIntent {
-        val intent = Intent(context, MigrationTransferDueReceiver::class.java).apply {
-            putExtra(EXTRA_ACCOUNT_KEY_ID, accountKeyId)
-        }
+        val intent =
+            Intent(context, MigrationTransferDueReceiver::class.java).apply {
+                putExtra(EXTRA_ACCOUNT_KEY_ID, accountKeyId)
+            }
         return PendingIntent.getBroadcast(
             context,
             ALARM_REQUEST_CODE_BASE + accountIdOffset(accountKeyId),

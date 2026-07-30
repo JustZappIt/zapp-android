@@ -38,10 +38,11 @@ fun MigrationMessage(
     // from ZashiLightColors rather than the theme-reactive ZashiColors — otherwise in dark mode the
     // gradient collapses to Shark 200 -> Shark 25 (light gray -> white), which reads as a flat,
     // barely-there card instead of a visible gradient.
-    val bannerBackgroundBrush = Brush.verticalGradient(
-        0f to ZashiLightColors.Utility.Gray.utilityGray700,
-        1f to ZashiLightColors.Utility.Gray.utilityGray950,
-    )
+    val bannerBackgroundBrush =
+        Brush.verticalGradient(
+            0f to ZashiLightColors.Utility.Gray.utilityGray700,
+            1f to ZashiLightColors.Utility.Gray.utilityGray950,
+        )
     val bannerContentColor = ZashiLightColors.Btns.Ghost.btnGhostBg
     HomeMessageWrapper(
         innerModifier = innerModifier,
@@ -62,6 +63,7 @@ fun MigrationMessage(
                         progressPercent = state.progressPercent ?: 0f,
                     )
                 }
+
                 MigrationBannerPhase.COMPLETE -> {
                     Image(
                         painter = painterResource(co.electriccoin.zcash.ui.design.R.drawable.ic_info),
@@ -69,6 +71,7 @@ fun MigrationMessage(
                         colorFilter = ColorFilter.tint(LocalContentColor.current)
                     )
                 }
+
                 MigrationBannerPhase.REQUIRED -> {
                     Image(
                         painter = painterResource(R.drawable.ic_migration_coins_swap),
@@ -76,6 +79,7 @@ fun MigrationMessage(
                         colorFilter = ColorFilter.tint(LocalContentColor.current)
                     )
                 }
+
                 MigrationBannerPhase.READY_TO_SEND -> {
                     Image(
                         painter = painterResource(co.electriccoin.zcash.ui.design.R.drawable.ic_info),
@@ -83,6 +87,7 @@ fun MigrationMessage(
                         colorFilter = ColorFilter.tint(LocalContentColor.current)
                     )
                 }
+
                 MigrationBannerPhase.ATTENTION -> {
                     Image(
                         painter = painterResource(R.drawable.ic_alert_circle),
@@ -126,12 +131,13 @@ private fun PreviewRequired() =
         BlankSurface {
             MigrationMessage(
                 contentPadding = PaddingValues(),
-                state = MigrationMessageState(
-                    phase = MigrationBannerPhase.REQUIRED,
-                    progressLabel = null,
-                    onClick = {},
-                    onButtonClick = {},
-                ),
+                state =
+                    MigrationMessageState(
+                        phase = MigrationBannerPhase.REQUIRED,
+                        progressLabel = null,
+                        onClick = {},
+                        onButtonClick = {},
+                    ),
             )
         }
     }
@@ -143,13 +149,14 @@ private fun PreviewInProgress() =
         BlankSurface {
             MigrationMessage(
                 contentPadding = PaddingValues(),
-                state = MigrationMessageState(
-                    phase = MigrationBannerPhase.IN_PROGRESS,
-                    progressLabel = "2 of 5 transfers done ~ 40% complete",
-                    progressPercent = 40f,
-                    onClick = {},
-                    onButtonClick = {},
-                ),
+                state =
+                    MigrationMessageState(
+                        phase = MigrationBannerPhase.IN_PROGRESS,
+                        progressLabel = "2 of 5 transfers done ~ 40% complete",
+                        progressPercent = 40f,
+                        onClick = {},
+                        onButtonClick = {},
+                    ),
             )
         }
     }
@@ -161,12 +168,13 @@ private fun PreviewComplete() =
         BlankSurface {
             MigrationMessage(
                 contentPadding = PaddingValues(),
-                state = MigrationMessageState(
-                    phase = MigrationBannerPhase.COMPLETE,
-                    progressLabel = "Tap to review the details",
-                    onClick = {},
-                    onButtonClick = {},
-                ),
+                state =
+                    MigrationMessageState(
+                        phase = MigrationBannerPhase.COMPLETE,
+                        progressLabel = "Tap to review the details",
+                        onClick = {},
+                        onButtonClick = {},
+                    ),
             )
         }
     }
@@ -178,12 +186,13 @@ private fun PreviewReadyToSend() =
         BlankSurface {
             MigrationMessage(
                 contentPadding = PaddingValues(),
-                state = MigrationMessageState(
-                    phase = MigrationBannerPhase.READY_TO_SEND,
-                    progressLabel = "Transfer 3 is ready to send",
-                    onClick = {},
-                    onButtonClick = {},
-                ),
+                state =
+                    MigrationMessageState(
+                        phase = MigrationBannerPhase.READY_TO_SEND,
+                        progressLabel = "Transfer 3 is ready to send",
+                        onClick = {},
+                        onButtonClick = {},
+                    ),
             )
         }
     }
@@ -195,13 +204,14 @@ private fun PreviewAttentionTransferExpired() =
         BlankSurface {
             MigrationMessage(
                 contentPadding = PaddingValues(),
-                state = MigrationMessageState(
-                    phase = MigrationBannerPhase.ATTENTION,
-                    title = "Transfer 3–5 expired",
-                    progressLabel = "Tap to review the details",
-                    onClick = {},
-                    onButtonClick = {},
-                ),
+                state =
+                    MigrationMessageState(
+                        phase = MigrationBannerPhase.ATTENTION,
+                        title = "Transfer 3–5 expired",
+                        progressLabel = "Tap to review the details",
+                        onClick = {},
+                        onButtonClick = {},
+                    ),
             )
         }
     }
@@ -213,13 +223,14 @@ private fun PreviewAttentionPlanUpdate() =
         BlankSurface {
             MigrationMessage(
                 contentPadding = PaddingValues(),
-                state = MigrationMessageState(
-                    phase = MigrationBannerPhase.ATTENTION,
-                    title = "Update migration plan",
-                    progressLabel = "Tap to review the details",
-                    onClick = {},
-                    onButtonClick = {},
-                ),
+                state =
+                    MigrationMessageState(
+                        phase = MigrationBannerPhase.ATTENTION,
+                        title = "Update migration plan",
+                        progressLabel = "Tap to review the details",
+                        onClick = {},
+                        onButtonClick = {},
+                    ),
             )
         }
     }

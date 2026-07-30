@@ -11,88 +11,99 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class MigrationWorkerTest {
-
     // ── executeWithRetries ────────────────────────────────────────────────────
 
     @Test
-    fun `a Success on the first attempt does not retry`() = runTest {
-        var callCount = 0
-        val result = executeWithRetries(retryDelayMs = 0) {
-            callCount++
-            TransferAttemptOutcome.Executed(TransferResult.Success("txid"))
-        }
+    fun `a Success on the first attempt does not retry`() =
+        runTest {
+            var callCount = 0
+            val result =
+                executeWithRetries(retryDelayMs = 0) {
+                    callCount++
+                    TransferAttemptOutcome.Executed(TransferResult.Success("txid"))
+                }
 
-        assertIs<TransferAttemptOutcome.Executed>(result)
-        assertIs<TransferResult.Success>(result.result)
-        assertEquals(1, callCount)
-    }
+            assertIs<TransferAttemptOutcome.Executed>(result)
+            assertIs<TransferResult.Success>(result.result)
+            assertEquals(1, callCount)
+        }
 
     @Test
-    fun `a retryable NetworkError retries up to maxAttempts then stops`() = runTest {
-        var callCount = 0
-        val result = executeWithRetries(maxAttempts = 3, retryDelayMs = 0) {
-            callCount++
-            TransferAttemptOutcome.Executed(TransferResult.NetworkError(retryable = true))
-        }
+    fun `a retryable NetworkError retries up to maxAttempts then stops`() =
+        runTest {
+            var callCount = 0
+            val result =
+                executeWithRetries(maxAttempts = 3, retryDelayMs = 0) {
+                    callCount++
+                    TransferAttemptOutcome.Executed(TransferResult.NetworkError(retryable = true))
+                }
 
-        assertIs<TransferAttemptOutcome.Executed>(result)
-        assertIs<TransferResult.NetworkError>(result.result)
-        assertEquals(3, callCount)
-    }
+            assertIs<TransferAttemptOutcome.Executed>(result)
+            assertIs<TransferResult.NetworkError>(result.result)
+            assertEquals(3, callCount)
+        }
 
     @Test
-    fun `a non-retryable NetworkError stops immediately without exhausting maxAttempts`() = runTest {
-        var callCount = 0
-        val result = executeWithRetries(maxAttempts = 3, retryDelayMs = 0) {
-            callCount++
-            TransferAttemptOutcome.Executed(TransferResult.NetworkError(retryable = false))
-        }
+    fun `a non-retryable NetworkError stops immediately without exhausting maxAttempts`() =
+        runTest {
+            var callCount = 0
+            val result =
+                executeWithRetries(maxAttempts = 3, retryDelayMs = 0) {
+                    callCount++
+                    TransferAttemptOutcome.Executed(TransferResult.NetworkError(retryable = false))
+                }
 
-        assertIs<TransferAttemptOutcome.Executed>(result)
-        assertIs<TransferResult.NetworkError>(result.result)
-        assertEquals(1, callCount)
-    }
+            assertIs<TransferAttemptOutcome.Executed>(result)
+            assertIs<TransferResult.NetworkError>(result.result)
+            assertEquals(1, callCount)
+        }
 
     @Test
-    fun `a NothingDue result stops immediately without retrying`() = runTest {
-        var callCount = 0
-        val result = executeWithRetries(maxAttempts = 3, retryDelayMs = 0) {
-            callCount++
-            TransferAttemptOutcome.NothingDue
-        }
+    fun `a NothingDue result stops immediately without retrying`() =
+        runTest {
+            var callCount = 0
+            val result =
+                executeWithRetries(maxAttempts = 3, retryDelayMs = 0) {
+                    callCount++
+                    TransferAttemptOutcome.NothingDue
+                }
 
-        assertIs<TransferAttemptOutcome.NothingDue>(result)
-        assertEquals(1, callCount)
-    }
+            assertIs<TransferAttemptOutcome.NothingDue>(result)
+            assertEquals(1, callCount)
+        }
 
     @Test
-    fun `an AwaitingProof result stops immediately without retrying`() = runTest {
-        var callCount = 0
-        val result = executeWithRetries(maxAttempts = 3, retryDelayMs = 0) {
-            callCount++
-            TransferAttemptOutcome.AwaitingProof(1L)
-        }
+    fun `an AwaitingProof result stops immediately without retrying`() =
+        runTest {
+            var callCount = 0
+            val result =
+                executeWithRetries(maxAttempts = 3, retryDelayMs = 0) {
+                    callCount++
+                    TransferAttemptOutcome.AwaitingProof(1L)
+                }
 
-        assertIs<TransferAttemptOutcome.AwaitingProof>(result)
-        assertEquals(1, callCount)
-    }
+            assertIs<TransferAttemptOutcome.AwaitingProof>(result)
+            assertEquals(1, callCount)
+        }
 
     @Test
-    fun `a retryable NetworkError that later succeeds stops as soon as it succeeds`() = runTest {
-        var callCount = 0
-        val result = executeWithRetries(maxAttempts = 3, retryDelayMs = 0) {
-            callCount++
-            if (callCount < 2) {
-                TransferAttemptOutcome.Executed(TransferResult.NetworkError(retryable = true))
-            } else {
-                TransferAttemptOutcome.Executed(TransferResult.Success("txid"))
-            }
-        }
+    fun `a retryable NetworkError that later succeeds stops as soon as it succeeds`() =
+        runTest {
+            var callCount = 0
+            val result =
+                executeWithRetries(maxAttempts = 3, retryDelayMs = 0) {
+                    callCount++
+                    if (callCount < 2) {
+                        TransferAttemptOutcome.Executed(TransferResult.NetworkError(retryable = true))
+                    } else {
+                        TransferAttemptOutcome.Executed(TransferResult.Success("txid"))
+                    }
+                }
 
-        assertIs<TransferAttemptOutcome.Executed>(result)
-        assertIs<TransferResult.Success>(result.result)
-        assertEquals(2, callCount)
-    }
+            assertIs<TransferAttemptOutcome.Executed>(result)
+            assertIs<TransferResult.Success>(result.result)
+            assertEquals(2, callCount)
+        }
 
     // ── decideLaneBPreflight ──────────────────────────────────────────────────
 

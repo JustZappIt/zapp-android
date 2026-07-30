@@ -14,7 +14,6 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 class MigrationSyncWorkerTest {
-
     private fun tx(
         id: Long,
         scheduledHeight: Long,
@@ -136,12 +135,13 @@ class MigrationSyncWorkerTest {
 
     @Test
     fun `boundary wake targets the minimum provable-at height over unproven unsent transactions`() {
-        val s = states(
-            tx(11L, scheduledHeight = 500L, anchorBoundaryHeight = 288L),
-            tx(12L, scheduledHeight = 400L, anchorBoundaryHeight = 144L),
-            tx(13L, scheduledHeight = 300L, anchorBoundaryHeight = 100L, isProved = true),
-            tx(14L, scheduledHeight = 200L, anchorBoundaryHeight = 50L, isSent = true),
-        )
+        val s =
+            states(
+                tx(11L, scheduledHeight = 500L, anchorBoundaryHeight = 288L),
+                tx(12L, scheduledHeight = 400L, anchorBoundaryHeight = 144L),
+                tx(13L, scheduledHeight = 300L, anchorBoundaryHeight = 100L, isProved = true),
+                tx(14L, scheduledHeight = 200L, anchorBoundaryHeight = 50L, isSent = true),
+            )
         // est=100, secondsPerBlock=10: t2 provable at 146 → (146-100)*10 = 460s.
         // t3 (proved) and t4 (sent) must not drive the wake despite lower boundaries.
         val wake = nextBoundaryWake(s, est = 100L, secondsPerBlock = 10L)
@@ -177,19 +177,21 @@ class MigrationSyncWorkerTest {
 
     @Test
     fun `boundary wake is null when no unproven unsent work remains`() {
-        val s = states(
-            tx(11L, scheduledHeight = 500L, anchorBoundaryHeight = 144L, isProved = true),
-            tx(12L, scheduledHeight = 400L, anchorBoundaryHeight = 100L, isSent = true),
-        )
+        val s =
+            states(
+                tx(11L, scheduledHeight = 500L, anchorBoundaryHeight = 144L, isProved = true),
+                tx(12L, scheduledHeight = 400L, anchorBoundaryHeight = 100L, isSent = true),
+            )
         assertNull(nextBoundaryWake(s, est = 100L, secondsPerBlock = 75L))
     }
 
     @Test
     fun `boundary wake covers preparations via their natural anchor`() {
-        val s = states(
-            tx(21L, scheduledHeight = 200L, anchorBoundaryHeight = null, isTransfer = false),
-            tx(11L, scheduledHeight = 500L, anchorBoundaryHeight = 288L),
-        )
+        val s =
+            states(
+                tx(21L, scheduledHeight = 200L, anchorBoundaryHeight = null, isTransfer = false),
+                tx(11L, scheduledHeight = 500L, anchorBoundaryHeight = 288L),
+            )
         val wake = nextBoundaryWake(s, est = 100L, secondsPerBlock = 10L)
         assertNotNull(wake)
         assertEquals(21L, wake.txId)
@@ -202,11 +204,12 @@ class MigrationSyncWorkerTest {
     fun `proved due filters to proved and unsent only`() {
         val now = 1_000_000L
         val est = 800_000L
-        val s = states(
-            tx(11L, scheduledHeight = 800_005L),                                  // unproven — ignored
-            tx(12L, scheduledHeight = 800_010L, isProved = true),                 // 10 blocks out
-            tx(13L, scheduledHeight = 800_001L, isProved = true, isSent = true),  // sent — ignored
-        )
+        val s =
+            states(
+                tx(11L, scheduledHeight = 800_005L), // unproven — ignored
+                tx(12L, scheduledHeight = 800_010L, isProved = true), // 10 blocks out
+                tx(13L, scheduledHeight = 800_001L, isProved = true, isSent = true), // sent — ignored
+            )
         val result = nextProvedDueEpochSeconds(s, est, now, secondsPerBlock = 75L)
         assertEquals(now + 10L * 75L, result)
     }
@@ -234,11 +237,12 @@ class MigrationSyncWorkerTest {
 
     @Test
     fun `completion sweep targets the last unsent scheduled height plus buffer`() {
-        val s = states(
-            tx(11L, scheduledHeight = 800_010L, isProved = true),
-            tx(12L, scheduledHeight = 800_050L, isProved = true),
-            tx(13L, scheduledHeight = 800_100L, isSent = true, isProved = true),
-        )
+        val s =
+            states(
+                tx(11L, scheduledHeight = 800_010L, isProved = true),
+                tx(12L, scheduledHeight = 800_050L, isProved = true),
+                tx(13L, scheduledHeight = 800_100L, isSent = true, isProved = true),
+            )
         // est=800_000, 10s/block, buffer=180 → (800_050-800_000)*10 + 180 = 680s
         assertEquals(
             680.seconds,
@@ -285,12 +289,13 @@ class MigrationSyncWorkerTest {
 
     @Test
     fun `near-due skip re-arm never goes below the 60s floor`() {
-        val d = laneASkipReArmDelay(
-            decision = LaneARunDecision.SKIP_NEAR_DUE,
-            nowEpochSeconds = 5000,
-            nextProvedDueEpochSeconds = 1500,
-            privacyBufferSeconds = 300,
-        )
+        val d =
+            laneASkipReArmDelay(
+                decision = LaneARunDecision.SKIP_NEAR_DUE,
+                nowEpochSeconds = 5000,
+                nextProvedDueEpochSeconds = 1500,
+                privacyBufferSeconds = 300,
+            )
         assertEquals(MIN_LANE_A_BACKOFF_SECONDS.seconds, d)
     }
 
@@ -332,11 +337,12 @@ class MigrationSyncWorkerTest {
         val now = 1_000_000L
         val est = 800_000L
         // t1: 10 blocks remaining → 750s; t2: 100 blocks → 7500s; min = now + 750
-        val s = states(
-            tx(11L, scheduledHeight = 800_010L),
-            tx(12L, scheduledHeight = 800_100L),
-            tipHeight = est,
-        )
+        val s =
+            states(
+                tx(11L, scheduledHeight = 800_010L),
+                tx(12L, scheduledHeight = 800_100L),
+                tipHeight = est,
+            )
         assertEquals(now + 750L, nextEstimatedDueEpochSeconds(s, est = est, nowEpochSeconds = now))
     }
 
@@ -346,11 +352,12 @@ class MigrationSyncWorkerTest {
         // a due prep (the engine serves preps for broadcast too), so no window can sleep past it.
         val now = 1_000_000L
         val est = 800_000L
-        val s = states(
-            tx(21L, scheduledHeight = 800_004L, isTransfer = false),
-            tx(11L, scheduledHeight = 800_100L),
-            tipHeight = est,
-        )
+        val s =
+            states(
+                tx(21L, scheduledHeight = 800_004L, isTransfer = false),
+                tx(11L, scheduledHeight = 800_100L),
+                tipHeight = est,
+            )
         assertEquals(now + 4L * 75L, nextEstimatedDueEpochSeconds(s, est = est, nowEpochSeconds = now))
     }
 
@@ -366,11 +373,12 @@ class MigrationSyncWorkerTest {
     fun `nextEstimatedDue ignores already-sent transfers`() {
         val now = 1_000_000L
         val est = 800_000L
-        val s = states(
-            tx(11L, scheduledHeight = 800_001L, isSent = true),
-            tx(12L, scheduledHeight = 800_020L),
-            tipHeight = est,
-        )
+        val s =
+            states(
+                tx(11L, scheduledHeight = 800_001L, isSent = true),
+                tx(12L, scheduledHeight = 800_020L),
+                tipHeight = est,
+            )
         assertEquals(now + 1500L, nextEstimatedDueEpochSeconds(s, est = est, nowEpochSeconds = now))
     }
 

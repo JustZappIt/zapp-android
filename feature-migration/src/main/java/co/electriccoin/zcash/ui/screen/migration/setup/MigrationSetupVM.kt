@@ -38,7 +38,6 @@ class MigrationSetupVM(
     private val errorStateMapper: ErrorMapperUseCase,
     private val getMigrationPrivacyOrReviewDestination: GetMigrationPrivacyOrReviewDestinationUseCase,
 ) : ViewModel() {
-
     private val accountLce = mutableLce<Zatoshi>()
     private val selectedMode = MutableStateFlow(MigrationMode.AUTOMATIC)
     private val isKeystoneAccount = getSelectedWalletAccount.observe().map { it is KeystoneAccount }
@@ -51,7 +50,10 @@ class MigrationSetupVM(
 
     val state: StateFlow<LceState<MigrationSetupState>> =
         combine(
-            accountLce.state, selectedMode, isKeystoneAccount, exchangeRateRepository.state
+            accountLce.state,
+            selectedMode,
+            isKeystoneAccount,
+            exchangeRateRepository.state
         ) { lce, mode, isKeystone, rate ->
             lce.success?.let { balance -> createState(balance, mode, isKeystone, rate) }
         }.withLce(accountLce, errorStateMapper::mapToState)
@@ -88,14 +90,20 @@ class MigrationSetupVM(
     private fun onFindOutMore() =
         navigationRouter.forward(ExternalUrl("https://support.zodl.com/article/42-moving-your-funds-to-ironwood"))
 
-    private fun onConfirm() = when (selectedMode.value) {
-        MigrationMode.IMMEDIATE -> viewModelScope.launch {
-            navigationRouter.forward(
-                getMigrationPrivacyOrReviewDestination(mode = MigrationMode.IMMEDIATE)
-            )
+    private fun onConfirm() =
+        when (selectedMode.value) {
+            MigrationMode.IMMEDIATE -> {
+                viewModelScope.launch {
+                    navigationRouter.forward(
+                        getMigrationPrivacyOrReviewDestination(mode = MigrationMode.IMMEDIATE)
+                    )
+                }
+            }
+
+            MigrationMode.AUTOMATIC -> {
+                navigationRouter.forward(MigrationHowItWorksArgs)
+            }
         }
-        MigrationMode.AUTOMATIC -> navigationRouter.forward(MigrationHowItWorksArgs)
-    }
 
     private fun onBack() = navigationRouter.back()
 }

@@ -47,7 +47,10 @@ class HasSeenMigrationCompleteStorageProviderImpl(
     override suspend fun flip() = store(!get())
 
     private suspend fun currentAccountUuid(): String =
-        accountDataSource.getSelectedAccount().sdkAccount.accountUuid.toStorageKeyId()
+        accountDataSource
+            .getSelectedAccount()
+            .sdkAccount.accountUuid
+            .toStorageKeyId()
 
     private fun default(accountUuid: String) =
         BooleanPreferenceDefault(key = PreferenceKey("has_seen_migration_complete_$accountUuid"), defaultValue = false)

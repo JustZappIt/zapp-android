@@ -37,14 +37,14 @@ import androidx.compose.ui.zIndex
 import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupMessage
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupMessageState
-import co.electriccoin.zcash.ui.screen.home.migration.MigrationMessage
-import co.electriccoin.zcash.ui.screen.home.migration.MigrationMessageState
 import co.electriccoin.zcash.ui.screen.home.currency.EnableCurrencyConversionMessage
 import co.electriccoin.zcash.ui.screen.home.currency.EnableCurrencyConversionMessageState
 import co.electriccoin.zcash.ui.screen.home.disconnected.WalletDisconnectedMessage
 import co.electriccoin.zcash.ui.screen.home.disconnected.WalletDisconnectedMessageState
 import co.electriccoin.zcash.ui.screen.home.error.WalletErrorMessage
 import co.electriccoin.zcash.ui.screen.home.error.WalletErrorMessageState
+import co.electriccoin.zcash.ui.screen.home.migration.MigrationMessage
+import co.electriccoin.zcash.ui.screen.home.migration.MigrationMessageState
 import co.electriccoin.zcash.ui.screen.home.orswap.ORSwapMessage
 import co.electriccoin.zcash.ui.screen.home.orswap.ORSwapMessageState
 import co.electriccoin.zcash.ui.screen.home.reporting.CrashReportMessage

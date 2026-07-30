@@ -63,7 +63,6 @@ class MigrationCompleteVM(
     private val migrationScheduler: MigrationScheduler,
     private val migrationSyncScheduler: MigrationSyncScheduler,
 ) : ViewModel() {
-
     private data class Summary(
         val totalTransferred: Long,
         val totalCount: Int,
@@ -76,11 +75,16 @@ class MigrationCompleteVM(
     // immediateSubmitFailureMessage's kdoc in MigrationReviewVM, the reference implementation this
     // mirrors) resubmits the exact same already-built/signed Proposal instead of re-proposing (which
     // could pick different notes) or re-prompting biometrics.
-    private data class MigrateAnywayProposal(val proposal: Proposal, val amountZatoshi: Long)
+    private data class MigrateAnywayProposal(
+        val proposal: Proposal,
+        val amountZatoshi: Long
+    )
+
     private var pendingMigrateAnywayProposal: MigrateAnywayProposal? = null
 
     private val loadLce = mutableLce<Summary>()
     private val migrateAnywayLce = mutableLce<Unit>()
+
     // Locking runs inline on this screen (the "Lock balance" button) rather than in the explainer
     // sheet, so its loading/error state is kept OUT of groupLce below — a lock in progress shows a
     // spinner on the button, it must never blank the whole success screen behind a full-screen
@@ -141,31 +145,34 @@ class MigrationCompleteVM(
             onMigrateAnyway = { migrateAnywayLce.guardLoading(::onMigrateAnyway) },
             onLockBalance = { lockLce.guardLoading(::onLockBalance) },
             onHelp = ::onHelp,
-            failureSheet = failure?.let {
-                MigrationTransferFailureState(
-                    message = migrateAnywaySubmitFailureMessage(it),
-                    // Only a GrpcFailure is safely resubmittable — see MigrationReviewVM's
-                    // identical reasoning for onRetry there.
-                    onRetry = if (it is SubmitResult.GrpcFailure) {
-                        {
-                            migrateAnywayFailure.value = null
-                            migrateAnywayLce.execute { retryMigrateAnyway() }
-                        }
-                    } else {
-                        null
-                    },
-                    onDismiss = { migrateAnywayFailure.value = null },
-                )
-            },
+            failureSheet =
+                failure?.let {
+                    MigrationTransferFailureState(
+                        message = migrateAnywaySubmitFailureMessage(it),
+                        // Only a GrpcFailure is safely resubmittable — see MigrationReviewVM's
+                        // identical reasoning for onRetry there.
+                        onRetry =
+                            if (it is SubmitResult.GrpcFailure) {
+                                {
+                                    migrateAnywayFailure.value = null
+                                    migrateAnywayLce.execute { retryMigrateAnyway() }
+                                }
+                            } else {
+                                null
+                            },
+                        onDismiss = { migrateAnywayFailure.value = null },
+                    )
+                },
         )
 
-    private fun migrateAnywaySubmitFailureMessage(result: SubmitResult): String = when (result) {
-        is SubmitResult.GrpcFailure -> "Couldn't reach the network. Check your connection and try again."
-        is SubmitResult.Failure -> "The network rejected this transaction. Please contact support."
-        is SubmitResult.Error -> "Something went wrong while sending. Please contact support."
-        is SubmitResult.Partial -> "Some but not all of this transaction's parts were sent. Please contact support."
-        is SubmitResult.Success -> error("migrateAnywaySubmitFailureMessage called with a Success result")
-    }
+    private fun migrateAnywaySubmitFailureMessage(result: SubmitResult): String =
+        when (result) {
+            is SubmitResult.GrpcFailure -> "Couldn't reach the network. Check your connection and try again."
+            is SubmitResult.Failure -> "The network rejected this transaction. Please contact support."
+            is SubmitResult.Error -> "Something went wrong while sending. Please contact support."
+            is SubmitResult.Partial -> "Some but not all of this transaction's parts were sent. Please contact support."
+            is SubmitResult.Success -> error("migrateAnywaySubmitFailureMessage called with a Success result")
+        }
 
     private fun onDone() {
         viewModelScope.launch {
@@ -178,8 +185,9 @@ class MigrationCompleteVM(
                 // migrationMessageFor() then naturally re-evaluates to REQUIRED (plan == null) even
                 // though the SDK's own MigrationState is still Complete (it only advances once the
                 // next round is actually committed).
-                val dustThreshold = getOrchardMigrationSdk()?.migrationDustThresholdZatoshi()
-                    ?: MIGRATION_DUST_THRESHOLD_ZATOSHI
+                val dustThreshold =
+                    getOrchardMigrationSdk()?.migrationDustThresholdZatoshi()
+                        ?: MIGRATION_DUST_THRESHOLD_ZATOSHI
                 val moreRoundsNeeded =
                     getSelectedWalletAccount() is KeystoneAccount &&
                         getOrchardBalance().value > dustThreshold
@@ -211,10 +219,11 @@ class MigrationCompleteVM(
     // MigrationSdk.lockRemainingOrchardBalance → lockRemainingOrchardBalanceNative), then flips the
     // persisted flag that re-renders this screen into its "Orchard balance locked" state. No
     // navigation: the user stays on this screen and confirms the result inline.
-    private fun onLockBalance() = lockLce.execute {
-        lockOrchardBalance()
-        hasLockedOrchardDustStorageProvider.store(true)
-    }
+    private fun onLockBalance() =
+        lockLce.execute {
+            lockOrchardBalance()
+            hasLockedOrchardDustStorageProvider.store(true)
+        }
 
     // The "?" in the top bar opens the lock explainer purely as information about what locking does.
     private fun onHelp() = navigationRouter.forward(MigrationLockExplainerArgs)
@@ -223,29 +232,30 @@ class MigrationCompleteVM(
     // sweeping a residual balance via the IMMEDIATE-mode send-max Proposal. Unlike Review, there's
     // no separate propose-then-confirm split here: propose and submit both happen in this single
     // user-triggered action, since this screen never shows a review step of its own for it.
-    private fun onMigrateAnyway() = migrateAnywayLce.execute {
-        try {
-            biometricRepository.requestBiometrics(
-                request =
-                    BiometricRequest(
-                        message =
-                            stringRes(
-                                R.string.authentication_system_ui_subtitle,
-                                stringRes(R.string.authentication_use_case_send_funds)
-                            )
-                    )
-            )
-        } catch (_: BiometricsFailureException) {
-            return@execute
-        } catch (_: BiometricsCancelledException) {
-            return@execute
+    private fun onMigrateAnyway() =
+        migrateAnywayLce.execute {
+            try {
+                biometricRepository.requestBiometrics(
+                    request =
+                        BiometricRequest(
+                            message =
+                                stringRes(
+                                    R.string.authentication_system_ui_subtitle,
+                                    stringRes(R.string.authentication_use_case_send_funds)
+                                )
+                        )
+                )
+            } catch (_: BiometricsFailureException) {
+                return@execute
+            } catch (_: BiometricsCancelledException) {
+                return@execute
+            }
+            val sdk = getOrchardMigrationSdk() ?: error("MigrationCompleteVM: no wallet available to propose")
+            val amount = getOrchardBalance().value
+            val proposal = sdk.proposeImmediateMigration()
+            pendingMigrateAnywayProposal = MigrateAnywayProposal(proposal, amount)
+            submitMigrateAnyway(proposal, amount)
         }
-        val sdk = getOrchardMigrationSdk() ?: error("MigrationCompleteVM: no wallet available to propose")
-        val amount = getOrchardBalance().value
-        val proposal = sdk.proposeImmediateMigration()
-        pendingMigrateAnywayProposal = MigrateAnywayProposal(proposal, amount)
-        submitMigrateAnyway(proposal, amount)
-    }
 
     private suspend fun retryMigrateAnyway() {
         val cached = pendingMigrateAnywayProposal ?: return
@@ -267,9 +277,10 @@ class MigrationCompleteVM(
             return
         }
         val usk = zashiSpendingKeyDataSource.getZashiSpendingKey()
-        val result = withContext(NonCancellable) {
-            proposalDataSource.submitTransaction(proposal, usk)
-        }
+        val result =
+            withContext(NonCancellable) {
+                proposalDataSource.submitTransaction(proposal, usk)
+            }
         when (result) {
             is SubmitResult.Success -> navigationRouter.forward(MigrationSuccessArgs(result.txIds.lastOrNull()))
             else -> migrateAnywayFailure.value = result

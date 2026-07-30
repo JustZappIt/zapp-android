@@ -61,29 +61,32 @@ class MigrationProgressOverdueTest {
     @Test
     fun overdue_excludes_preparations_even_when_far_past_grace() {
         // A preparation past its scheduled height must NOT light the recovery buttons.
-        val s = states(
-            transfer(isTransfer = false, scheduledHeight = 1_000L),
-            tipHeight = 1_000L + grace + 100L,
-        )
+        val s =
+            states(
+                transfer(isTransfer = false, scheduledHeight = 1_000L),
+                tipHeight = 1_000L + grace + 100L,
+            )
         assertFalse(hasGenuinelyOverdueTransfer(s))
     }
 
     @Test
     fun overdue_excludes_already_sent_transfers() {
-        val s = states(
-            transfer(isSent = true, scheduledHeight = 1_000L),
-            tipHeight = 1_000L + grace + 50L,
-        )
+        val s =
+            states(
+                transfer(isSent = true, scheduledHeight = 1_000L),
+                tipHeight = 1_000L + grace + 50L,
+            )
         assertFalse(hasGenuinelyOverdueTransfer(s))
     }
 
     @Test
     fun overdue_is_true_when_any_transfer_is_genuinely_overdue() {
-        val s = states(
-            transfer(id = 1L, isSent = true, scheduledHeight = 900L),
-            transfer(id = 2L, scheduledHeight = 1_000L),
-            tipHeight = 1_000L + grace,
-        )
+        val s =
+            states(
+                transfer(id = 1L, isSent = true, scheduledHeight = 900L),
+                transfer(id = 2L, scheduledHeight = 1_000L),
+                tipHeight = 1_000L + grace,
+            )
         assertTrue(hasGenuinelyOverdueTransfer(s))
     }
 

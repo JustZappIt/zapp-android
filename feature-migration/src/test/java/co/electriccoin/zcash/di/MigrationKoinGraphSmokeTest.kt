@@ -1,6 +1,6 @@
 package co.electriccoin.zcash.di
 
-/**
+/*
  * Koin graph smoke-test for all migration ViewModels.
  *
  * WHY THIS TEST EXISTS
@@ -17,7 +17,7 @@ package co.electriccoin.zcash.di
  *
  * HOW IT WORKS
  * ------------
- * Each test builds a [koinApplication] containing ONLY the [viewModelModule] (the module under
+ * Each test builds a [koinApplication] containing ONLY the [featureMigrationModule] (the module under
  * test) plus a [stubsModule] that provides mockk stubs for every type the migration VMs need.
  * It then resolves each migration VM via [org.koin.core.Koin.get], which triggers the same
  * reflective constructor-argument resolution that [viewModelOf] uses at runtime. A missing
@@ -28,6 +28,8 @@ package co.electriccoin.zcash.di
  */
 
 import android.content.Context
+import co.electriccoin.zcash.migration.di.featureMigrationModule
+import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.datasource.ProposalDataSource
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
@@ -38,6 +40,7 @@ import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProv
 import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProvider
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
+import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
 import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
@@ -56,8 +59,6 @@ import co.electriccoin.zcash.ui.common.usecase.LockOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.common.usecase.ScheduleNextMigrationWindowUseCase
 import co.electriccoin.zcash.ui.common.usecase.SubmitProposalUseCase
 import co.electriccoin.zcash.ui.common.usecase.ViewTransactionDetailAfterSuccessfulProposalUseCase
-import co.electriccoin.zcash.ui.NavigationRouter
-import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.screen.migration.battery.MigrationBatteryVM
 import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteVM
 import co.electriccoin.zcash.ui.screen.migration.customservertor.MigrationCustomServerTorArgs
@@ -93,8 +94,8 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
- * Smoke-tests that every migration ViewModel can be resolved through the Koin [viewModelModule]
- * without a [org.koin.core.error.NoDefinitionFoundException]. Covers (in [viewModelModule]
+ * Smoke-tests that every migration ViewModel can be resolved through the Koin [featureMigrationModule]
+ * without a [org.koin.core.error.NoDefinitionFoundException]. Covers (in [featureMigrationModule]
  * registration order):
  *
  *   MigrationSetupVM, MigrationHowItWorksVM, MigrationProgressVM, MigrationTransferReviewVM,
@@ -104,7 +105,6 @@ import kotlin.test.Test
  *   MigrationCustomServerTorVM, MigrationTorFailureVM, MigrationTransferInvalidVM
  */
 class MigrationKoinGraphSmokeTest {
-
     private lateinit var koin: KoinApplication
 
     @BeforeTest
@@ -113,67 +113,69 @@ class MigrationKoinGraphSmokeTest {
         // Concrete arg data-classes (MigrationReviewArgs, etc.) are provided as real instances
         // since data classes cannot be created lazily by Koin without additional factory setup.
         // Context is mocked because viewModelModule contains MigrationProgressVM which injects it.
-        val stubsModule = module {
-            // Framework
-            single<Context> { mockk(relaxed = true) }
+        val stubsModule =
+            module {
+                // Framework
+                single<Context> { mockk(relaxed = true) }
 
-            // NavigationRouter
-            single<NavigationRouter> { mockk(relaxed = true) }
+                // NavigationRouter
+                single<NavigationRouter> { mockk(relaxed = true) }
 
-            // UseCases
-            factory { mockk<ErrorMapperUseCase>(relaxed = true) }
-            factory { mockk<GetOrchardMigrationSdkUseCase>(relaxed = true) }
-            factory { mockk<GetSelectedWalletAccountUseCase>(relaxed = true) }
-            factory { mockk<GetOrchardBalanceUseCase>(relaxed = true) }
-            factory { mockk<LockOrchardBalanceUseCase>(relaxed = true) }
-            factory { mockk<FinalizeMigrationScheduleUseCase>(relaxed = true) }
-            factory { mockk<ScheduleNextMigrationWindowUseCase>(relaxed = true) }
-            factory { mockk<ViewTransactionDetailAfterSuccessfulProposalUseCase>(relaxed = true) }
-            factory { mockk<SubmitProposalUseCase>(relaxed = true) }
-            factory { mockk<GetMigrationPrivacyOrReviewDestinationUseCase>(relaxed = true) }
+                // UseCases
+                factory { mockk<ErrorMapperUseCase>(relaxed = true) }
+                factory { mockk<GetOrchardMigrationSdkUseCase>(relaxed = true) }
+                factory { mockk<GetSelectedWalletAccountUseCase>(relaxed = true) }
+                factory { mockk<GetOrchardBalanceUseCase>(relaxed = true) }
+                factory { mockk<LockOrchardBalanceUseCase>(relaxed = true) }
+                factory { mockk<FinalizeMigrationScheduleUseCase>(relaxed = true) }
+                factory { mockk<ScheduleNextMigrationWindowUseCase>(relaxed = true) }
+                factory { mockk<ViewTransactionDetailAfterSuccessfulProposalUseCase>(relaxed = true) }
+                factory { mockk<SubmitProposalUseCase>(relaxed = true) }
+                factory { mockk<GetMigrationPrivacyOrReviewDestinationUseCase>(relaxed = true) }
 
-            // Repositories
-            single<MigrationPlanRepository> { mockk(relaxed = true) }
-            single<ExchangeRateRepository> { mockk(relaxed = true) }
-            single<PendingMigrationScheduleRepository> { mockk(relaxed = true) }
-            single<RestartMigrationScheduleRepository> { mockk(relaxed = true) }
-            single<PendingMigrationTorFailureDecisionRepository> { mockk(relaxed = true) }
-            single<PendingKeystoneMigrationPcztsRepository> { mockk(relaxed = true) }
-            single<ZashiProposalRepository> { mockk(relaxed = true) }
-            single<KeystoneProposalRepository> { mockk(relaxed = true) }
-            single<BiometricRepository> { mockk(relaxed = true) }
+                // Repositories
+                single<MigrationPlanRepository> { mockk(relaxed = true) }
+                single<ExchangeRateRepository> { mockk(relaxed = true) }
+                single<PendingMigrationScheduleRepository> { mockk(relaxed = true) }
+                single<RestartMigrationScheduleRepository> { mockk(relaxed = true) }
+                single<PendingMigrationTorFailureDecisionRepository> { mockk(relaxed = true) }
+                single<PendingKeystoneMigrationPcztsRepository> { mockk(relaxed = true) }
+                single<ZashiProposalRepository> { mockk(relaxed = true) }
+                single<KeystoneProposalRepository> { mockk(relaxed = true) }
+                single<BiometricRepository> { mockk(relaxed = true) }
 
-            // DataSources
-            single<ZashiSpendingKeyDataSource> { mockk(relaxed = true) }
-            single<ProposalDataSource> { mockk(relaxed = true) }
+                // DataSources
+                single<ZashiSpendingKeyDataSource> { mockk(relaxed = true) }
+                single<ProposalDataSource> { mockk(relaxed = true) }
 
-            // Providers
-            single<SynchronizerProvider> { mockk(relaxed = true) }
-            single<LastNetworkActivityStorageProvider> { mockk(relaxed = true) }
-            single<IsMigrationTorEnabledStorageProvider> { mockk(relaxed = true) }
-            single<PendingMigrationTorFailureStorageProvider> { mockk(relaxed = true) }
-            single<HasSeenMigrationCompleteStorageProvider> { mockk(relaxed = true) }
-            single<HasLockedOrchardDustStorageProvider> { mockk(relaxed = true) }
-            single<IsBackgroundExecutionAvailableProvider> { mockk(relaxed = true) }
+                // Providers
+                single<SynchronizerProvider> { mockk(relaxed = true) }
+                single<LastNetworkActivityStorageProvider> { mockk(relaxed = true) }
+                single<IsMigrationTorEnabledStorageProvider> { mockk(relaxed = true) }
+                single<PendingMigrationTorFailureStorageProvider> { mockk(relaxed = true) }
+                single<HasSeenMigrationCompleteStorageProvider> { mockk(relaxed = true) }
+                single<HasLockedOrchardDustStorageProvider> { mockk(relaxed = true) }
+                single<IsBackgroundExecutionAvailableProvider> { mockk(relaxed = true) }
 
-            // Concrete scheduler classes (registered as factoryOf in providerModule; migration VMs
-            // inject them directly, not via an interface).
-            factory { mockk<MigrationScheduler>(relaxed = true) }
-            factory { mockk<MigrationSyncScheduler>(relaxed = true) }
+                // Concrete scheduler classes (registered as factoryOf in providerModule; migration VMs
+                // inject them directly, not via an interface).
+                factory { mockk<MigrationScheduler>(relaxed = true) }
+                factory { mockk<MigrationSyncScheduler>(relaxed = true) }
 
-            // Args data-classes (carried as constructor params for VMs that accept navigation args).
-            // Providing a canonical instance is the simplest way to satisfy the Koin type lookup.
-            factory { MigrationCustomServerTorArgs(mode = MigrationMode.AUTOMATIC) }
-            factory { MigrationKeystoneScanArgs(mode = MigrationMode.AUTOMATIC) }
-            factory { MigrationKeystoneSignArgs(mode = MigrationMode.AUTOMATIC) }
-            factory { MigrationPrivacyArgs(mode = MigrationMode.AUTOMATIC) }
-            factory { MigrationReviewArgs(mode = MigrationMode.AUTOMATIC) }
-            factory { MigrationSuccessArgs(txId = null) }
-        }
+                // Args data-classes (carried as constructor params for VMs that accept navigation args).
+                // Providing a canonical instance is the simplest way to satisfy the Koin type lookup.
+                factory { MigrationCustomServerTorArgs(mode = MigrationMode.AUTOMATIC) }
+                factory { MigrationKeystoneScanArgs(mode = MigrationMode.AUTOMATIC) }
+                factory { MigrationKeystoneSignArgs(mode = MigrationMode.AUTOMATIC) }
+                factory { MigrationPrivacyArgs(mode = MigrationMode.AUTOMATIC) }
+                factory { MigrationReviewArgs(mode = MigrationMode.AUTOMATIC) }
+                factory { MigrationSuccessArgs(txId = null) }
+            }
 
-        koin = koinApplication {
-            modules(viewModelModule, stubsModule)
-        }
+        koin =
+            koinApplication {
+                modules(featureMigrationModule, stubsModule)
+            }
     }
 
     @AfterTest

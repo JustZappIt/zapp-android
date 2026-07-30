@@ -36,11 +36,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlin.reflect.KClass
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -60,212 +60,231 @@ class MigrationCompleteVMTest {
     }
 
     @Test
-    fun keystoneAccountWithResidualBalanceClearsPlanInsteadOfMarkingSeen() = runTest {
-        val plans = mockk<MigrationPlanRepository>(relaxed = true)
-        val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
-        val router = FakeNavigationRouter()
-        val vm = vm(
-            plans = plans,
-            seen = seen,
-            account = mockk<KeystoneAccount>(relaxed = true),
-            orchardBalanceZatoshi = 500_000L,
-            router = router,
-        )
+    fun keystoneAccountWithResidualBalanceClearsPlanInsteadOfMarkingSeen() =
+        runTest {
+            val plans = mockk<MigrationPlanRepository>(relaxed = true)
+            val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
+            val router = FakeNavigationRouter()
+            val vm =
+                vm(
+                    plans = plans,
+                    seen = seen,
+                    account = mockk<KeystoneAccount>(relaxed = true),
+                    orchardBalanceZatoshi = 500_000L,
+                    router = router,
+                )
 
-        vm.state.value // force lazy init to run (StateFlow combine below reads loadLce)
-        advanceUntilIdle()
-        invokeOnDone(vm)
-        advanceUntilIdle()
+            vm.state.value // force lazy init to run (StateFlow combine below reads loadLce)
+            advanceUntilIdle()
+            invokeOnDone(vm)
+            advanceUntilIdle()
 
-        coVerify(exactly = 1) { plans.clear() }
-        coVerify(exactly = 0) { seen.store(true) }
-        assertEquals(1, router.backToRootCount)
-    }
-
-    @Test
-    fun keystoneAccountWithZeroResidualBalanceMarksSeenInsteadOfClearing() = runTest {
-        val plans = mockk<MigrationPlanRepository>(relaxed = true)
-        val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
-        val router = FakeNavigationRouter()
-        val vm = vm(
-            plans = plans,
-            seen = seen,
-            account = mockk<KeystoneAccount>(relaxed = true),
-            orchardBalanceZatoshi = 0L,
-            router = router,
-        )
-
-        advanceUntilIdle()
-        invokeOnDone(vm)
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { plans.clear() }
-        coVerify(exactly = 1) { seen.store(true) }
-        assertEquals(1, router.backToRootCount)
-    }
-
-    @Test
-    fun nonKeystoneAccountWithResidualBalanceMarksSeenInsteadOfClearing() = runTest {
-        // Scope: hot-wallet multi-round continuation is deferred, so a non-Keystone account always
-        // takes the terminal path regardless of residual balance.
-        val plans = mockk<MigrationPlanRepository>(relaxed = true)
-        val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
-        val router = FakeNavigationRouter()
-        val vm = vm(
-            plans = plans,
-            seen = seen,
-            account = mockk<ZashiAccount>(relaxed = true),
-            orchardBalanceZatoshi = 500_000L,
-            router = router,
-        )
-
-        advanceUntilIdle()
-        invokeOnDone(vm)
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { plans.clear() }
-        coVerify(exactly = 1) { seen.store(true) }
-        assertEquals(1, router.backToRootCount)
-    }
-
-    @Test
-    fun keystoneAccountWithDustResidualBelowThresholdMarksSeenInsteadOfClearing() = runTest {
-        // Pins the fix for Task 3's bug: a bare `> 0L` check used to treat *any* nonzero residual
-        // as "more rounds needed", incorrectly clearing the plan even for a genuinely-dust residual
-        // well below the real completion threshold.
-        val plans = mockk<MigrationPlanRepository>(relaxed = true)
-        val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
-        val router = FakeNavigationRouter()
-        val vm = vm(
-            plans = plans,
-            seen = seen,
-            account = mockk<KeystoneAccount>(relaxed = true),
-            orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI - 1L,
-            router = router,
-        )
-
-        advanceUntilIdle()
-        invokeOnDone(vm)
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { plans.clear() }
-        coVerify(exactly = 1) { seen.store(true) }
-        assertEquals(1, router.backToRootCount)
-    }
-
-    @Test
-    fun keystoneAccountWithResidualExactlyAtThresholdMarksSeenInsteadOfClearing() = runTest {
-        // Boundary check: exactly-at-threshold is still "done" (comparison is strictly `>`).
-        val plans = mockk<MigrationPlanRepository>(relaxed = true)
-        val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
-        val router = FakeNavigationRouter()
-        val vm = vm(
-            plans = plans,
-            seen = seen,
-            account = mockk<KeystoneAccount>(relaxed = true),
-            orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI,
-            router = router,
-        )
-
-        advanceUntilIdle()
-        invokeOnDone(vm)
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { plans.clear() }
-        coVerify(exactly = 1) { seen.store(true) }
-        assertEquals(1, router.backToRootCount)
-    }
-
-    @Test
-    fun migrateAnywayForZashiAccountSignsAndSubmitsProposalDirectly() = runTest {
-        val router = FakeNavigationRouter()
-        val proposalDataSource = mockk<ProposalDataSource>(relaxed = true)
-        val proposal = mockk<Proposal>(relaxed = true)
-        val usk = mockk<UnifiedSpendingKey>(relaxed = true)
-        val sdk = mockk<OrchardMigrationSdk> {
-            coEvery { proposeImmediateMigration() } returns proposal
-            coEvery { getMigrationSummary() } returns null
+            coVerify(exactly = 1) { plans.clear() }
+            coVerify(exactly = 0) { seen.store(true) }
+            assertEquals(1, router.backToRootCount)
         }
-        coEvery { proposalDataSource.submitTransaction(proposal, usk) } returns SubmitResult.Success(listOf("txid"))
-
-        val vm = vm(
-            account = mockk<ZashiAccount>(relaxed = true),
-            orchardBalanceZatoshi = 500_000L,
-            router = router,
-            getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
-            zashiSpendingKeyDataSource = mockk { coEvery { getZashiSpendingKey() } returns usk },
-            proposalDataSource = proposalDataSource,
-        )
-
-        advanceUntilIdle()
-        invokeOnMigrateAnyway(vm)
-        advanceUntilIdle()
-
-        coVerify(exactly = 1) { proposalDataSource.submitTransaction(proposal, usk) }
-        assertEquals(listOf<Any>(MigrationSuccessArgs("txid")), router.forwardedRoutes)
-    }
 
     @Test
-    fun migrateAnywayForKeystoneAccountBuildsPcztAndNavigatesToSign() = runTest {
-        val router = FakeNavigationRouter()
-        val proposal = mockk<Proposal>(relaxed = true)
-        val sdk = mockk<OrchardMigrationSdk> {
-            coEvery { proposeImmediateMigration() } returns proposal
-            coEvery { getMigrationSummary() } returns null
+    fun keystoneAccountWithZeroResidualBalanceMarksSeenInsteadOfClearing() =
+        runTest {
+            val plans = mockk<MigrationPlanRepository>(relaxed = true)
+            val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
+            val router = FakeNavigationRouter()
+            val vm =
+                vm(
+                    plans = plans,
+                    seen = seen,
+                    account = mockk<KeystoneAccount>(relaxed = true),
+                    orchardBalanceZatoshi = 0L,
+                    router = router,
+                )
+
+            advanceUntilIdle()
+            invokeOnDone(vm)
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { plans.clear() }
+            coVerify(exactly = 1) { seen.store(true) }
+            assertEquals(1, router.backToRootCount)
         }
-        val keystoneProposalRepository = mockk<KeystoneProposalRepository>(relaxed = true)
-        val proposalDataSource = mockk<ProposalDataSource>(relaxed = true)
-
-        val vm = vm(
-            account = mockk<KeystoneAccount>(relaxed = true),
-            orchardBalanceZatoshi = 500_000L,
-            router = router,
-            getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
-            keystoneProposalRepository = keystoneProposalRepository,
-            proposalDataSource = proposalDataSource,
-        )
-
-        advanceUntilIdle()
-        invokeOnMigrateAnyway(vm)
-        advanceUntilIdle()
-
-        coVerify(exactly = 1) { keystoneProposalRepository.setMigrationSweepProposal(proposal, Zatoshi(500_000L)) }
-        coVerify(exactly = 1) { keystoneProposalRepository.createPCZTFromProposal() }
-        coVerify(exactly = 0) { proposalDataSource.submitTransaction(any<Proposal>(), any<UnifiedSpendingKey>()) }
-        assertEquals(1, router.forwardedRoutes.count { it == SignKeystoneTransactionArgs })
-    }
 
     @Test
-    fun summaryIsReadFromEngineSdkNotTheAppSidePlan() = runTest {
-        // The Migration Complete summary (amount migrated / transfer count / duration) must come
-        // from the engine's persisted migration data via the SDK, not the app-side plan (cleared on
-        // completion). Pins that the VM queries the SDK's getMigrationSummary() and never reads the
-        // now-obsolete plan for the summary.
-        val plans = mockk<MigrationPlanRepository>(relaxed = true)
-        val summary =
-            MigrationSummary(
-                totalMigratedZatoshi = 9_779_000_000L,
-                transferCount = 10,
-                firstMinedEpochSeconds = 1_785_281_502L,
-                lastMinedEpochSeconds = 1_785_283_542L,
-            )
-        val sdk = mockk<OrchardMigrationSdk> {
-            coEvery { getMigrationSummary() } returns summary
+    fun nonKeystoneAccountWithResidualBalanceMarksSeenInsteadOfClearing() =
+        runTest {
+            // Scope: hot-wallet multi-round continuation is deferred, so a non-Keystone account always
+            // takes the terminal path regardless of residual balance.
+            val plans = mockk<MigrationPlanRepository>(relaxed = true)
+            val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
+            val router = FakeNavigationRouter()
+            val vm =
+                vm(
+                    plans = plans,
+                    seen = seen,
+                    account = mockk<ZashiAccount>(relaxed = true),
+                    orchardBalanceZatoshi = 500_000L,
+                    router = router,
+                )
+
+            advanceUntilIdle()
+            invokeOnDone(vm)
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { plans.clear() }
+            coVerify(exactly = 1) { seen.store(true) }
+            assertEquals(1, router.backToRootCount)
         }
-        val vm = vm(
-            plans = plans,
-            account = mockk<KeystoneAccount>(relaxed = true),
-            orchardBalanceZatoshi = 500_000L,
-            router = FakeNavigationRouter(),
-            getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
-        )
 
-        vm.state.value // force lazy init to run (loadLce.execute reads the SDK summary)
-        advanceUntilIdle()
+    @Test
+    fun keystoneAccountWithDustResidualBelowThresholdMarksSeenInsteadOfClearing() =
+        runTest {
+            // Pins the fix for Task 3's bug: a bare `> 0L` check used to treat *any* nonzero residual
+            // as "more rounds needed", incorrectly clearing the plan even for a genuinely-dust residual
+            // well below the real completion threshold.
+            val plans = mockk<MigrationPlanRepository>(relaxed = true)
+            val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
+            val router = FakeNavigationRouter()
+            val vm =
+                vm(
+                    plans = plans,
+                    seen = seen,
+                    account = mockk<KeystoneAccount>(relaxed = true),
+                    orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI - 1L,
+                    router = router,
+                )
 
-        coVerify(exactly = 1) { sdk.getMigrationSummary() }
-        coVerify(exactly = 0) { plans.load() }
-    }
+            advanceUntilIdle()
+            invokeOnDone(vm)
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { plans.clear() }
+            coVerify(exactly = 1) { seen.store(true) }
+            assertEquals(1, router.backToRootCount)
+        }
+
+    @Test
+    fun keystoneAccountWithResidualExactlyAtThresholdMarksSeenInsteadOfClearing() =
+        runTest {
+            // Boundary check: exactly-at-threshold is still "done" (comparison is strictly `>`).
+            val plans = mockk<MigrationPlanRepository>(relaxed = true)
+            val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
+            val router = FakeNavigationRouter()
+            val vm =
+                vm(
+                    plans = plans,
+                    seen = seen,
+                    account = mockk<KeystoneAccount>(relaxed = true),
+                    orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI,
+                    router = router,
+                )
+
+            advanceUntilIdle()
+            invokeOnDone(vm)
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { plans.clear() }
+            coVerify(exactly = 1) { seen.store(true) }
+            assertEquals(1, router.backToRootCount)
+        }
+
+    @Test
+    fun migrateAnywayForZashiAccountSignsAndSubmitsProposalDirectly() =
+        runTest {
+            val router = FakeNavigationRouter()
+            val proposalDataSource = mockk<ProposalDataSource>(relaxed = true)
+            val proposal = mockk<Proposal>(relaxed = true)
+            val usk = mockk<UnifiedSpendingKey>(relaxed = true)
+            val sdk =
+                mockk<OrchardMigrationSdk> {
+                    coEvery { proposeImmediateMigration() } returns proposal
+                    coEvery { getMigrationSummary() } returns null
+                }
+            coEvery { proposalDataSource.submitTransaction(proposal, usk) } returns SubmitResult.Success(listOf("txid"))
+
+            val vm =
+                vm(
+                    account = mockk<ZashiAccount>(relaxed = true),
+                    orchardBalanceZatoshi = 500_000L,
+                    router = router,
+                    getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
+                    zashiSpendingKeyDataSource = mockk { coEvery { getZashiSpendingKey() } returns usk },
+                    proposalDataSource = proposalDataSource,
+                )
+
+            advanceUntilIdle()
+            invokeOnMigrateAnyway(vm)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { proposalDataSource.submitTransaction(proposal, usk) }
+            assertEquals(listOf<Any>(MigrationSuccessArgs("txid")), router.forwardedRoutes)
+        }
+
+    @Test
+    fun migrateAnywayForKeystoneAccountBuildsPcztAndNavigatesToSign() =
+        runTest {
+            val router = FakeNavigationRouter()
+            val proposal = mockk<Proposal>(relaxed = true)
+            val sdk =
+                mockk<OrchardMigrationSdk> {
+                    coEvery { proposeImmediateMigration() } returns proposal
+                    coEvery { getMigrationSummary() } returns null
+                }
+            val keystoneProposalRepository = mockk<KeystoneProposalRepository>(relaxed = true)
+            val proposalDataSource = mockk<ProposalDataSource>(relaxed = true)
+
+            val vm =
+                vm(
+                    account = mockk<KeystoneAccount>(relaxed = true),
+                    orchardBalanceZatoshi = 500_000L,
+                    router = router,
+                    getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
+                    keystoneProposalRepository = keystoneProposalRepository,
+                    proposalDataSource = proposalDataSource,
+                )
+
+            advanceUntilIdle()
+            invokeOnMigrateAnyway(vm)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { keystoneProposalRepository.setMigrationSweepProposal(proposal, Zatoshi(500_000L)) }
+            coVerify(exactly = 1) { keystoneProposalRepository.createPCZTFromProposal() }
+            coVerify(exactly = 0) { proposalDataSource.submitTransaction(any<Proposal>(), any<UnifiedSpendingKey>()) }
+            assertEquals(1, router.forwardedRoutes.count { it == SignKeystoneTransactionArgs })
+        }
+
+    @Test
+    fun summaryIsReadFromEngineSdkNotTheAppSidePlan() =
+        runTest {
+            // The Migration Complete summary (amount migrated / transfer count / duration) must come
+            // from the engine's persisted migration data via the SDK, not the app-side plan (cleared on
+            // completion). Pins that the VM queries the SDK's getMigrationSummary() and never reads the
+            // now-obsolete plan for the summary.
+            val plans = mockk<MigrationPlanRepository>(relaxed = true)
+            val summary =
+                MigrationSummary(
+                    totalMigratedZatoshi = 9_779_000_000L,
+                    transferCount = 10,
+                    firstMinedEpochSeconds = 1_785_281_502L,
+                    lastMinedEpochSeconds = 1_785_283_542L,
+                )
+            val sdk =
+                mockk<OrchardMigrationSdk> {
+                    coEvery { getMigrationSummary() } returns summary
+                }
+            val vm =
+                vm(
+                    plans = plans,
+                    account = mockk<KeystoneAccount>(relaxed = true),
+                    orchardBalanceZatoshi = 500_000L,
+                    router = FakeNavigationRouter(),
+                    getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
+                )
+
+            vm.state.value // force lazy init to run (loadLce.execute reads the SDK summary)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { sdk.getMigrationSummary() }
+            coVerify(exactly = 0) { plans.load() }
+        }
 
     private fun invokeOnDone(vm: MigrationCompleteVM) {
         val onDone = MigrationCompleteVM::class.java.getDeclaredMethod("onDone")
@@ -299,14 +318,16 @@ class MigrationCompleteVMTest {
         migrationSyncScheduler: MigrationSyncScheduler = mockk(relaxed = true),
     ) = MigrationCompleteVM(
         migrationPlanRepository = plans,
-        getOrchardBalance = mockk<GetOrchardBalanceUseCase> {
-            coEvery { this@mockk() } returns Zatoshi(orchardBalanceZatoshi)
-        },
+        getOrchardBalance =
+            mockk<GetOrchardBalanceUseCase> {
+                coEvery { this@mockk() } returns Zatoshi(orchardBalanceZatoshi)
+            },
         hasSeenMigrationCompleteStorageProvider = seen,
         hasLockedOrchardDustStorageProvider = mockk<HasLockedOrchardDustStorageProvider>(relaxed = true),
-        getSelectedWalletAccount = mockk<GetSelectedWalletAccountUseCase> {
-            coEvery { this@mockk() } returns account
-        },
+        getSelectedWalletAccount =
+            mockk<GetSelectedWalletAccountUseCase> {
+                coEvery { this@mockk() } returns account
+            },
         navigationRouter = router,
         errorStateMapper = mockk<ErrorMapperUseCase>(relaxed = true),
         getOrchardMigrationSdk = getOrchardMigrationSdk,
@@ -326,10 +347,15 @@ class MigrationCompleteVMTest {
         override fun forward(vararg routes: Any) {
             forwardedRoutes.addAll(routes)
         }
+
         override fun replace(vararg routes: Any) = Unit
+
         override fun replaceAll(vararg routes: Any) = Unit
+
         override fun back() = Unit
+
         override fun backTo(route: KClass<*>) = Unit
+
         override fun custom(block: (NavBackStackEntry?) -> NavigationCommand?) = Unit
 
         override fun backToRoot() {
