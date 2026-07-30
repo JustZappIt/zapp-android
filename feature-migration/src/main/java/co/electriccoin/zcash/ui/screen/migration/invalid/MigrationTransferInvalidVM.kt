@@ -3,13 +3,12 @@ package co.electriccoin.zcash.ui.screen.migration.invalid
 import androidx.lifecycle.ViewModel
 import cash.z.ecc.android.sdk.AttentionReason
 import cash.z.ecc.android.sdk.MigrationState
-import cash.z.ecc.android.sdk.MigrationTransferStates
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.groupLce
+import co.electriccoin.zcash.ui.common.model.migration.LiveMigrationSnapshot
 import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
-import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.model.migration.affectedTransferIndices
 import co.electriccoin.zcash.ui.common.model.migration.toMigrationRangeText
 import co.electriccoin.zcash.ui.common.model.migration.toUiKind
@@ -17,22 +16,22 @@ import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.model.withLce
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetMigrationSnapshotUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewArgs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlin.time.Clock
 
 class MigrationTransferInvalidVM(
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
-    private val migrationPlanRepository: MigrationPlanRepository,
+    private val getMigrationSnapshot: GetMigrationSnapshotUseCase,
     private val restartMigrationScheduleRepository: RestartMigrationScheduleRepository,
     private val navigationRouter: NavigationRouter,
     private val errorStateMapper: ErrorMapperUseCase,
@@ -42,12 +41,12 @@ class MigrationTransferInvalidVM(
 
     // Populated once at load from the SDK's actual MigrationState.RequiresAttention.reason — the
     // real distinction between spec §6.2 (InvalidTransfer) and §6.3 (TransferExpired), replacing
-    // the old hasInvalidTransfers()-only boolean that could never tell the two apart. liveStates is
-    // read alongside it (same load pass) so affectedTransferIndices() can correlate by the
-    // transfer's stable id rather than assuming every not-yet-completed cached transfer is invalid.
+    // the old hasInvalidTransfers()-only boolean that could never tell the two apart. The live
+    // snapshot is read alongside it (same load pass) so affectedTransferIndices() correlates by
+    // the transfer's stable engine id.
     private data class RecoveryInfo(
         val reason: AttentionReason?,
-        val liveStates: MigrationTransferStates?
+        val snapshot: LiveMigrationSnapshot?
     )
 
     private val recoveryInfo = MutableStateFlow(RecoveryInfo(null, null))
@@ -56,30 +55,30 @@ class MigrationTransferInvalidVM(
         loadLce.execute {
             val sdk = getOrchardMigrationSdk()
             val reason = (sdk?.getMigrationState() as? MigrationState.RequiresAttention)?.reason
-            val liveStates = sdk?.getMigrationTransferStates()
-            recoveryInfo.value = RecoveryInfo(reason, liveStates)
+            recoveryInfo.value = RecoveryInfo(reason, getMigrationSnapshot())
         }
     }
 
     val state: StateFlow<LceState<MigrationTransferInvalidState>> =
-        combine(migrationPlanRepository.observe(), recoveryInfo) { plan, info -> buildState(plan, info) }
+        recoveryInfo
+            .map { info -> buildState(info) }
             .withLce(groupLce(loadLce, restartLce), errorStateMapper::mapToState)
             .stateIn(this)
 
-    private fun buildState(plan: MigrationPlan?, info: RecoveryInfo): MigrationTransferInvalidState {
-        val completed = plan?.completedCount ?: 0
-        val total = plan?.totalCount ?: 0
+    private fun buildState(info: RecoveryInfo): MigrationTransferInvalidState {
+        val snapshot = info.snapshot
+        val completed = snapshot?.completedCount ?: 0
+        val total = snapshot?.totalCount ?: 0
         val reason = info.reason
         val kind = reason?.toUiKind() ?: MigrationAttentionKind.TRANSFER_EXPIRED
         val affectedIndices =
-            if (plan != null && reason != null) {
-                reason.affectedTransferIndices(plan, info.liveStates, Clock.System.now().epochSeconds)
+            if (snapshot != null && reason != null) {
+                reason.affectedTransferIndices(snapshot, Clock.System.now())
             } else {
                 emptyList()
             }
         // Falls back to the old "everything after the last completed transfer" guess only when the
-        // real affected set couldn't be determined (reason not yet loaded, or a stale cache with no
-        // matching id) — never silently blank.
+        // real affected set couldn't be determined (reason not yet loaded) — never silently blank.
         val rangeText =
             affectedIndices.toMigrationRangeText() ?: run {
                 val firstInvalid = completed + 1

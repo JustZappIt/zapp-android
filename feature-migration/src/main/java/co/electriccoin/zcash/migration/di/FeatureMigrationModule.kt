@@ -20,12 +20,8 @@ import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageP
 import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
-import co.electriccoin.zcash.ui.common.provider.MigrationShiftCounterStorageProvider
-import co.electriccoin.zcash.ui.common.provider.MigrationShiftCounterStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProviderImpl
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPcztsRepository
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPcztsRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
@@ -38,6 +34,7 @@ import co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase
 import co.electriccoin.zcash.ui.common.usecase.DebugStartMigrationE2EUseCase
 import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetMigrationPrivacyOrReviewDestinationUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetMigrationSnapshotUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.LockOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.common.usecase.MigrationHomeMessageSourceImpl
@@ -60,9 +57,7 @@ import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingVM
 import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupVM
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessVM
 import co.electriccoin.zcash.ui.screen.migration.torfailure.MigrationTorFailureVM
-import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewVM
 import co.electriccoin.zcash.work.MigrationScheduler
-import co.electriccoin.zcash.work.MigrationSyncScheduler
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModelOf
@@ -95,12 +90,9 @@ val featureMigrationModule =
         singleOf(::PendingMigrationTorFailureStorageProviderImpl) bind
             PendingMigrationTorFailureStorageProvider::class
         singleOf(::MigrationNotifier)
-        singleOf(::MigrationShiftCounterStorageProviderImpl) bind MigrationShiftCounterStorageProvider::class
         factoryOf(::MigrationScheduler)
-        factoryOf(::MigrationSyncScheduler)
 
         // Repositories
-        singleOf(::MigrationPlanRepositoryImpl) bind MigrationPlanRepository::class
         singleOf(::PendingMigrationScheduleRepositoryImpl) bind PendingMigrationScheduleRepository::class
         singleOf(::RestartMigrationScheduleRepositoryImpl) bind RestartMigrationScheduleRepository::class
         singleOf(::PendingMigrationTorFailureDecisionRepositoryImpl) bind
@@ -109,19 +101,18 @@ val featureMigrationModule =
 
         // Use cases
         factoryOf(::GetOrchardMigrationSdkUseCase)
+        factoryOf(::GetMigrationSnapshotUseCase)
         factoryOf(::LockOrchardBalanceUseCase)
         factoryOf(::GetMigrationPrivacyOrReviewDestinationUseCase)
-        // Explicit factory: the defaulted isLaneAActive lambda must use its Kotlin default —
+        // Explicit factory: the defaulted isWorkerActive lambda must use its Kotlin default —
         // factoryOf resolves ALL constructor params via Koin and dies on the Function1
         // (NoDefinitionFoundException at startup, caught on-emulator 2026-07-28).
         factory {
             CheckMigrationRecoveryUseCase(
                 getOrchardMigrationSdk = get(),
                 navigationRouter = get(),
-                migrationPlanRepository = get(),
                 pendingMigrationTorFailureStorageProvider = get(),
                 getSelectedWalletAccount = get(),
-                migrationSyncScheduler = get(),
                 context = get(),
             )
         }
@@ -134,7 +125,6 @@ val featureMigrationModule =
         viewModelOf(::MigrationSetupVM)
         viewModelOf(::MigrationHowItWorksVM)
         viewModelOf(::MigrationProgressVM)
-        viewModelOf(::MigrationTransferReviewVM)
         viewModelOf(::MigrationReviewVM)
         viewModelOf(::MigrationKeystoneSignVM)
         viewModelOf(::MigrationKeystoneScanVM)

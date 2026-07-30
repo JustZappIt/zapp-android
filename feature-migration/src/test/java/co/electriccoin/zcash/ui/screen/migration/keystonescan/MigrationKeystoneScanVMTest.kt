@@ -195,6 +195,9 @@ class MigrationKeystoneScanVMTest {
 
     private fun fakeSdk(firmwareVersion: ByteArray?): OrchardMigrationSdk =
         mockk(relaxed = true) {
+            coEvery { keystoneSigningRoundBudget() } returns
+                cash.z.ecc.android.sdk
+                    .KeystoneSigningRoundBudget(96, 16, 3)
             coEvery { decodeKeystoneSignBatchPart(any(), any()) } returns
                 KeystoneBatchDecodeResult(
                     complete = true,

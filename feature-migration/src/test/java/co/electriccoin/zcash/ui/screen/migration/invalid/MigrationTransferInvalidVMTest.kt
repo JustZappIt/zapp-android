@@ -4,8 +4,6 @@ import androidx.navigation.NavBackStackEntry
 import cash.z.ecc.android.sdk.AttentionReason
 import cash.z.ecc.android.sdk.MigrationSchedule
 import cash.z.ecc.android.sdk.MigrationState
-import cash.z.ecc.android.sdk.MigrationTransferState
-import cash.z.ecc.android.sdk.MigrationTransferStates
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferProposal
 import cash.z.ecc.android.sdk.fixture.AccountFixture
@@ -13,14 +11,12 @@ import co.electriccoin.zcash.ui.BaseNavigationCommand
 import co.electriccoin.zcash.ui.NavigationCommand
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.WalletAccount
+import co.electriccoin.zcash.ui.common.model.migration.LiveMigrationSnapshot
+import co.electriccoin.zcash.ui.common.model.migration.LiveMigrationTransfer
 import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
-import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
-import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
-import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
-import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetMigrationSnapshotUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -32,7 +28,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -45,6 +40,8 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MigrationTransferInvalidVMTest {
@@ -58,42 +55,41 @@ class MigrationTransferInvalidVMTest {
         Dispatchers.resetMain()
     }
 
-    private fun transfer(index: Int, id: Long, status: MigrationTransferStatus, expiryAtEpochSeconds: Long) =
-        MigrationTransfer(
+    private fun transfer(index: Int, id: Long, isSent: Boolean, expiryAtEpochSeconds: Long?) =
+        LiveMigrationTransfer(
+            id = id,
             index = index,
             amountZatoshi = 100_000L,
-            scheduledAtEpochSeconds = 0L,
-            status = status,
-            expiryAtEpochSeconds = expiryAtEpochSeconds,
-            id = id,
+            scheduledHeight = 1_000L + index,
+            scheduledAt = Instant.fromEpochSeconds(0),
+            isSent = isSent,
+            isProved = true,
+            action = null,
+            blocker = null,
+            expiryAt = expiryAtEpochSeconds?.let { Instant.fromEpochSeconds(it) },
+            minedHeight = null,
         )
 
-    private fun plan(transfers: List<MigrationTransfer>) =
-        MigrationPlan(
-            id = "p1",
-            createdAtEpochSeconds = 0L,
-            transfers = transfers,
-            mode = MigrationMode.AUTOMATIC,
-        )
+    private fun snapshot(transfers: List<LiveMigrationTransfer>) =
+        LiveMigrationSnapshot(transfers = transfers, preparations = emptyList(), tipHeight = 1_000L)
 
     @Test
     fun invalidTransferReasonShowsPlanUpdateKindAndTheOneNamedTransfer() =
         runTest {
-            val plan =
-                plan(
+            val snap =
+                snapshot(
                     listOf(
-                        transfer(0, 10L, MigrationTransferStatus.SENT, 100L),
-                        transfer(1, 11L, MigrationTransferStatus.PENDING, 200L),
+                        transfer(0, 10L, isSent = true, expiryAtEpochSeconds = 100L),
+                        transfer(1, 11L, isSent = false, expiryAtEpochSeconds = 200L),
                     )
                 )
             val sdk =
                 mockk<OrchardMigrationSdk>(relaxed = true) {
                     coEvery { getMigrationState() } returns MigrationState.RequiresAttention(AttentionReason.InvalidTransfer(11L))
-                    coEvery { getMigrationTransferStates() } returns null
                 }
             val vm =
                 vm(
-                    plans = mockk(relaxed = true) { every { observe() } returns flowOf(plan) },
+                    snapshot = snap,
                     getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
                 )
             val collectJob = launch { vm.state.collect {} }
@@ -108,59 +104,25 @@ class MigrationTransferInvalidVMTest {
     @Test
     fun transferExpiredReasonShowsTransferExpiredKindAndTheRealExpiredRangeNotEveryRemainingTransfer() =
         runTest {
-            // t1 is PENDING but not yet expired at "now" (the VM compares against the real wall clock)
-            // — the old cached-count logic would have wrongly included it (everything after the
-            // completed count). Only t2 (already past its expiry) should show up.
-            val now =
-                kotlin.time.Clock.System
-                    .now()
-                    .epochSeconds
-            val plan =
-                plan(
+            // t1 is unsent but not yet expired at "now" (the VM compares against the real wall
+            // clock) — the old cached-count logic would have wrongly included it (everything after
+            // the completed count). Only t2 (already past its expiry) should show up.
+            val now = Clock.System.now().epochSeconds
+            val snap =
+                snapshot(
                     listOf(
-                        transfer(0, 10L, MigrationTransferStatus.SENT, now - 1_000L),
-                        transfer(1, 11L, MigrationTransferStatus.PENDING, now + 10_000L),
-                        transfer(2, 12L, MigrationTransferStatus.PENDING, now - 100L),
+                        transfer(0, 10L, isSent = true, expiryAtEpochSeconds = now - 1_000L),
+                        transfer(1, 11L, isSent = false, expiryAtEpochSeconds = now + 10_000L),
+                        transfer(2, 12L, isSent = false, expiryAtEpochSeconds = now - 100L),
                     )
                 )
             val sdk =
                 mockk<OrchardMigrationSdk>(relaxed = true) {
                     coEvery { getMigrationState() } returns MigrationState.RequiresAttention(AttentionReason.TransferExpired)
-                    coEvery { getMigrationTransferStates() } returns
-                        MigrationTransferStates(
-                            transfers =
-                                listOf(
-                                    MigrationTransferState(
-                                        id = 10L,
-                                        isTransfer = true,
-                                        isSent = true,
-                                        isProved = true,
-                                        scheduledHeight = 1L,
-                                        anchorBoundaryHeight = null,
-                                    ),
-                                    MigrationTransferState(
-                                        id = 11L,
-                                        isTransfer = true,
-                                        isSent = false,
-                                        isProved = false,
-                                        scheduledHeight = 2L,
-                                        anchorBoundaryHeight = null,
-                                    ),
-                                    MigrationTransferState(
-                                        id = 12L,
-                                        isTransfer = true,
-                                        isSent = false,
-                                        isProved = false,
-                                        scheduledHeight = 3L,
-                                        anchorBoundaryHeight = null,
-                                    ),
-                                ),
-                            tipHeight = 3L,
-                        )
                 }
             val vm =
                 vm(
-                    plans = mockk(relaxed = true) { every { observe() } returns flowOf(plan) },
+                    snapshot = snap,
                     getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
                 )
             val collectJob = launch { vm.state.collect {} }
@@ -194,14 +156,13 @@ class MigrationTransferInvalidVMTest {
             val sdk =
                 mockk<OrchardMigrationSdk>(relaxed = true) {
                     coEvery { getMigrationState() } returns MigrationState.RequiresAttention(AttentionReason.TransferExpired)
-                    coEvery { getMigrationTransferStates() } returns null
                     coEvery { restartCurrentMigrationStep() } returns restartedSchedule
                 }
             val restartRepo = mockk<RestartMigrationScheduleRepository>(relaxed = true)
             val router = FakeNavigationRouter()
             val vm =
                 vm(
-                    plans = mockk(relaxed = true) { every { observe() } returns flowOf(plan(emptyList())) },
+                    snapshot = snapshot(emptyList()),
                     getOrchardMigrationSdk = mockk { coEvery { this@mockk() } returns sdk },
                     restartMigrationScheduleRepository = restartRepo,
                     router = router,
@@ -224,7 +185,7 @@ class MigrationTransferInvalidVMTest {
     }
 
     private fun vm(
-        plans: MigrationPlanRepository,
+        snapshot: LiveMigrationSnapshot?,
         getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
         restartMigrationScheduleRepository: RestartMigrationScheduleRepository = mockk(relaxed = true),
         router: NavigationRouter = FakeNavigationRouter(),
@@ -244,7 +205,10 @@ class MigrationTransferInvalidVMTest {
         return MigrationTransferInvalidVM(
             getOrchardMigrationSdk = getOrchardMigrationSdk,
             getSelectedWalletAccount = getSelectedWalletAccount,
-            migrationPlanRepository = plans,
+            getMigrationSnapshot =
+                mockk<GetMigrationSnapshotUseCase> {
+                    coEvery { this@mockk(null) } returns snapshot
+                },
             restartMigrationScheduleRepository = restartMigrationScheduleRepository,
             navigationRouter = router,
             errorStateMapper = mockk<ErrorMapperUseCase>(relaxed = true),

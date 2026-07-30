@@ -16,9 +16,7 @@ import co.electriccoin.zcash.ui.common.migration.MigrationNavigator
 import co.electriccoin.zcash.ui.common.migration.MigrationSyncedHook
 import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
-import co.electriccoin.zcash.ui.common.provider.MigrationShiftCounterStorageProvider
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase
 import co.electriccoin.zcash.ui.common.usecase.DebugStartMigrationE2EUseCase
@@ -61,26 +59,28 @@ import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessScreen
 import co.electriccoin.zcash.ui.screen.migration.torfailure.MigrationTorFailureArgs
 import co.electriccoin.zcash.ui.screen.migration.torfailure.MigrationTorFailureScreen
-import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs
-import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewScreen
 import co.electriccoin.zcash.work.MigrationScheduler
-import co.electriccoin.zcash.work.MigrationSyncScheduler
+import co.electriccoin.zcash.work.MigrationWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 class MigrationGateImpl(
-    private val migrationPlanRepository: MigrationPlanRepository,
+    private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
 ) : MigrationGate {
-    override suspend fun isMigrationActive(): Boolean = migrationPlanRepository.load() != null
+    // Engine state IS the gate now — no app-side plan marker exists. Selected-account scoped
+    // (matches the sync it gates); see post-adoption TODO C2 for the any-account variant.
+    override suspend fun isMigrationActive(): Boolean =
+        getOrchardMigrationSdk()?.getMigrationState() is cash.z.ecc.android.sdk.MigrationState.InProgress
 }
 
 class MigrationSyncedHookImpl(
-    private val migrationPlanRepository: MigrationPlanRepository,
+    private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val onMigrationSyncCompleted: OnMigrationSyncCompletedUseCase,
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
 ) : MigrationSyncedHook {
     override suspend fun onSynced() {
-        if (migrationPlanRepository.load() == null) return
+        // Engine state is the only "migration active" signal — no plan cache exists anymore.
+        if (getOrchardMigrationSdk()?.getMigrationState() !is cash.z.ecc.android.sdk.MigrationState.InProgress) return
         val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
         onMigrationSyncCompleted(accountKeyId)
     }
@@ -90,6 +90,9 @@ class MigrationAppHooksImpl(
     private val checkMigrationRecovery: CheckMigrationRecoveryUseCase,
     private val debugStartMigrationE2E: DebugStartMigrationE2EUseCase,
     private val navigationRouter: NavigationRouter,
+    private val accountDataSource: AccountDataSource,
+    private val migrationNotifier: MigrationNotifier,
+    private val context: Context,
 ) : MigrationAppHooks {
     override fun handleIntent(
         intent: Intent,
@@ -105,16 +108,29 @@ class MigrationAppHooksImpl(
 
             intent.getBooleanExtra(MigrationNotifier.EXTRA_OPEN_MIGRATION, false) -> {
                 // replaceAll ensures Home is always on the back stack regardless of how the app
-                // was opened.
-                navigationRouter.replaceAll(HomeArgs, MigrationProgressArgs)
+                // was opened. Account selection first — the migration screens read the SELECTED
+                // account, so a Keystone notification tapped with Zodl selected must switch.
+                scope.launch {
+                    selectNotificationAccount(intent)
+                    navigationRouter.replaceAll(HomeArgs, MigrationProgressArgs)
+                }
                 true
             }
 
-            intent.getBooleanExtra(MigrationNotifier.EXTRA_OPEN_TRANSFER_READY, false) -> {
-                // Distinct destination from EXTRA_OPEN_MIGRATION above — spec §6.4 "Transfer Ready
-                // to Send" is a lighter-weight review-and-send path, not the fuller
-                // Reschedule/Send-now recovery screen the overdue-transfer notification routes to.
-                navigationRouter.replaceAll(HomeArgs, MigrationTransferReviewArgs)
+            intent.getBooleanExtra(MigrationNotifier.EXTRA_RUN_STEP, false) -> {
+                // Dead-man's-switch tap: everything is pre-signed, so no review UI exists — the
+                // app open exists purely to give the OS a live process. RE-KICK the worker
+                // immediately (it runs fine while the app is foreground) and land on Progress so
+                // the user watches the step happen; the worker's run start clears the
+                // notification.
+                scope.launch {
+                    selectNotificationAccount(intent)
+                    intent.getStringExtra(MigrationNotifier.EXTRA_ACCOUNT_KEY_ID)?.let { key ->
+                        migrationLog("AppHooks: step-due tap — kicking the worker for $key")
+                        MigrationScheduler(context).schedule(key, kotlin.time.Duration.ZERO)
+                    }
+                    navigationRouter.replaceAll(HomeArgs, MigrationProgressArgs)
+                }
                 true
             }
 
@@ -123,7 +139,55 @@ class MigrationAppHooksImpl(
             }
         }
 
+    /**
+     * Selects the account the tapped notification belongs to (its storage-key id travels in
+     * [MigrationNotifier.EXTRA_ACCOUNT_KEY_ID]) before the migration screens — which all read the
+     * SELECTED account — are pushed. No-op when the extra is absent (pre-upgrade notification),
+     * the account no longer exists (deleted/disconnected — the kill switch already cancelled its
+     * notifications; navigation then just shows the selected account, same as before), or it is
+     * already selected. Best-effort: a failure here must never block the navigation itself.
+     */
+    private suspend fun selectNotificationAccount(intent: Intent) {
+        val accountKeyId = intent.getStringExtra(MigrationNotifier.EXTRA_ACCOUNT_KEY_ID) ?: return
+        runCatching {
+            val target =
+                accountDataSource
+                    .getAllAccounts()
+                    .firstOrNull { it.sdkAccount.accountUuid.toStorageKeyId() == accountKeyId }
+                    ?: return
+            if (accountDataSource
+                    .getSelectedAccount()
+                    .sdkAccount.accountUuid
+                    .toStorageKeyId() != accountKeyId
+            ) {
+                migrationLog("AppHooks: notification tap — switching to account $accountKeyId")
+                accountDataSource.selectAccount(target)
+            }
+        }.onFailure {
+            migrationLog("AppHooks: notification account switch failed (${it.message}) — navigating on the selected account.")
+        }
+    }
+
     override suspend fun checkRecovery() = checkMigrationRecovery()
+
+    override suspend fun cancelMigrationWork(accountKeyId: String?) {
+        val keys =
+            accountKeyId?.let { listOf(it) }
+                ?: runCatching {
+                    accountDataSource.getAllAccounts().map { it.sdkAccount.accountUuid.toStorageKeyId() }
+                }.getOrDefault(emptyList())
+        keys.forEach { key ->
+            MigrationScheduler(context).cancel(key)
+            migrationNotifier.cancel(key)
+        }
+        // Belt-and-braces (wallet reset): WorkManager auto-tags every request with its worker
+        // class name, so a tag sweep also catches jobs whose account key we can no longer resolve.
+        if (accountKeyId == null) {
+            val wm = androidx.work.WorkManager.getInstance(context)
+            wm.cancelAllWorkByTag(MigrationWorker::class.java.name)
+        }
+        migrationLog("AppHooks: cancelled migration work (accounts=${keys.size}, sweep=${accountKeyId == null})")
+    }
 }
 
 class MigrationNavigatorImpl(
@@ -151,7 +215,6 @@ class MigrationNavContributorImpl : MigrationNavContributor {
             composable<MigrationScheduledArgs> { MigrationScheduledScreen() }
             composable<MigrationCompleteArgs> { MigrationCompleteScreen() }
             composable<MigrationProgressArgs> { MigrationProgressScreen() }
-            composable<MigrationTransferReviewArgs> { MigrationTransferReviewScreen() }
             composable<MigrationTransferInvalidArgs> { MigrationTransferInvalidScreen() }
         }
     }
@@ -160,9 +223,7 @@ class MigrationNavContributorImpl : MigrationNavContributor {
 class MigrationDebugActionsImpl(
     private val accountDataSource: AccountDataSource,
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
-    private val migrationPlanRepository: MigrationPlanRepository,
     private val pendingMigrationTorFailureStorageProvider: PendingMigrationTorFailureStorageProvider,
-    private val migrationShiftCounterStorageProvider: MigrationShiftCounterStorageProvider,
     private val restartMigrationScheduleRepository: RestartMigrationScheduleRepository,
     private val migrationNotifier: MigrationNotifier,
     private val checkMigrationRecovery: CheckMigrationRecoveryUseCase,
@@ -178,19 +239,12 @@ class MigrationDebugActionsImpl(
                 .sdkAccount.accountUuid
                 .toStorageKeyId()
         getOrchardMigrationSdk()?.clearMigration()
-        // Cancel both background lanes so they don't fire for a migration that no longer exists.
+        // Cancel the background worker chain so it doesn't fire for a migration that no longer
+        // exists.
         MigrationScheduler(context).cancel(accountKeyId)
-        MigrationSyncScheduler(context).cancel(accountKeyId)
-        // Without this, migrationMessageFor's `plan == null` fallback never fires: the stale
-        // app-side plan blocks the home banner even though the SDK's migration state is back to
-        // NotStarted, so no "start a new migration" message shows.
-        migrationPlanRepository.clear()
         // A leftover Tor-failure flag would keep routing every app launch into the Sending
         // recovery screen for a migration that no longer exists.
         pendingMigrationTorFailureStorageProvider.store(accountKeyId, false)
-        // Transfer ids restart from the same values on a fresh plan, so a stale counter
-        // could resume mid-count and escalate the new plan's first shift prematurely.
-        migrationShiftCounterStorageProvider.reset(accountKeyId)
         // An unconsumed restart schedule (invalid-screen Continue → debug restart instead of
         // Review) would otherwise be silently used by the next Review entry in place of a
         // fresh proposal over the post-clear balance.

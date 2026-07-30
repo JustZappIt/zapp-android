@@ -20,8 +20,16 @@ data class PendingKeystoneMigrationPczts(
     val requestId: ByteArray,
     val splitUnsignedPczt: ByteArray?,
     val transferUnsignedPczts: List<Pair<Long, ByteArray>>,
+    /**
+     * Preparation transactions BEYOND the first layer-0 split (engine id order) — the rest of the
+     * note-split tree, all built (and pre-signable) at commit. Their signed results go through the
+     * kind-agnostic storeSignedSchedulePczts alongside the transfers; only the first split keeps
+     * the immediate-broadcast storeSignedNoteSplitPczt path.
+     */
+    val prepUnsignedPczts: List<Pair<Long, ByteArray>> = emptyList(),
     val roundIndex: Int = 0,
     val accumulatedSplitSigned: ByteArray? = null,
+    val accumulatedPrepSigned: List<Pair<Long, ByteArray>> = emptyList(),
     val accumulatedTransferSigned: List<Pair<Long, ByteArray>> = emptyList(),
 )
 

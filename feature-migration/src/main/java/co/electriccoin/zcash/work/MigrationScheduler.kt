@@ -9,8 +9,9 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import co.electriccoin.zcash.migration.BuildConfig
-import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.migration.migrationLog
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.toJavaDuration
 
 /**
@@ -35,21 +36,38 @@ class MigrationScheduler(
     private val migrationDueAlarmScheduler = MigrationDueAlarmScheduler(context)
 
     fun schedule(accountKeyId: String, delay: Duration) {
-        Twig.debug { "MIGRATION_DIAG MigrationScheduler: scheduling next migration transfer for $accountKeyId in $delay" }
+        migrationLog("MigrationScheduler: scheduling next migration transfer for $accountKeyId in $delay")
         WorkManager.getInstance(context).enqueueUniqueWork(
             workId(accountKeyId),
             ExistingWorkPolicy.REPLACE,
             newWorkRequest(accountKeyId, delay)
         )
-        migrationDueAlarmScheduler.schedule(accountKeyId, delay)
+        // Dead-man's switch: record when this run is EXPECTED, and arm the fallback alarm a late
+        // margin past it — the alarm firing means the worker had its chance and did not run
+        // (Doze/OEM kill/background restriction); MigrationTransferDueReceiver then raises the
+        // step-due notification whose tap re-kicks the worker through the app.
+        MigrationWorkerHeartbeat.stampScheduled(
+            context,
+            accountKeyId,
+            System.currentTimeMillis() + delay.inWholeMilliseconds,
+        )
+        migrationDueAlarmScheduler.schedule(accountKeyId, delay + WORKER_LATE_MARGIN)
     }
 
     fun cancel(accountKeyId: String) {
+        migrationLog("MigrationScheduler: cancelling the migration work chain for $accountKeyId")
         WorkManager.getInstance(context).cancelUniqueWork(workId(accountKeyId))
         migrationDueAlarmScheduler.cancel(accountKeyId)
+        MigrationWorkerHeartbeat.clear(context, accountKeyId)
     }
 
     companion object {
+        /**
+         * How long past the expected worker run the fallback alarm waits before concluding the
+         * worker is dead — absorbs ordinary WorkManager dispatch slack without false alarms.
+         */
+        val WORKER_LATE_MARGIN = 2.minutes
+
         const val WORK_ID_PREFIX = "co.electriccoin.zcash.migration_transfer"
         const val KEY_ACCOUNT_KEY_ID = "co.electriccoin.zcash.migration.work_account_key_id"
 

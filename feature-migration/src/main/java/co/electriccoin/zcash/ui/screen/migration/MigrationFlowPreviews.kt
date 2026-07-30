@@ -46,8 +46,6 @@ import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupState
 import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupView
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessState
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessView
-import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewState
-import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewView
 import co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionState
 import co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionView
 import co.electriccoin.zcash.ui.screen.signkeystonetransaction.ZashiAccountInfoListItemState
@@ -104,7 +102,6 @@ private fun ManualResumeFlowPreview() =
             modifier = Modifier.padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            FlowStep("1 · Review Transfer N") { MigrationTransferReviewView(previewTransferReviewState()) }
             FlowStep("2 · Sending") { MigrationSendingView(MigrationSendingState(failureSheet = null)) }
             FlowStep("3 · Success") { MigrationSuccessView(previewSuccessState()) }
         }
@@ -124,7 +121,7 @@ private fun ScheduledRecoveryFlowPreview() =
             modifier = Modifier.padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            FlowStep("1 · B8 Resume Migration") { MigrationProgressView(previewProgressStateOverdue()) }
+            FlowStep("1 · Progress (in progress)") { MigrationProgressView(previewProgressStateInProgress()) }
             FlowStep("2 · Sending") { MigrationSendingView(MigrationSendingState(failureSheet = null)) }
             FlowStep("3 · Success") { MigrationSuccessView(previewSuccessState()) }
         }
@@ -302,39 +299,33 @@ private fun previewCompleteStateWithDust() =
         onHelp = {},
     )
 
-private fun previewTransferReviewState() =
-    MigrationTransferReviewState(
-        title = stringRes("Review Transfer 3 of 5"),
-        body =
-            stringRes(
-                "This transfer sends part of your Orchard balance to Ironwood as part of your " +
-                    "scheduled migration.\n\nReview and confirm to send the transaction. Once " +
-                    "confirmed, this cannot be undone."
-            ),
-        amount = stringRes("2.43100 ZEC"),
-        fee = stringRes("0.001 ZEC"),
-        onConfirm = {},
-        onBack = {},
-    )
-
-private fun previewProgressStateOverdue() =
+private fun previewProgressStateInProgress() =
     MigrationProgressState(
-        title = stringRes("Resume Migration"),
-        subtitle = stringRes("Transfer 3 of 5 was scheduled 2h ago but wasn't sent. Send now or reschedule."),
+        title = stringRes("Migration Progress"),
+        subtitle = stringRes("Your balance splits into 5 transfers over ~24 h. There are 3 remaining transfers."),
         totalAmount = stringRes("10.858 ZEC"),
         transfers =
             listOf(
-                MigrationProgressTransferState(1, stringRes("1.348 ZEC"), stringRes("Sent 6h ago"), isOverdue = false, isSent = true),
-                MigrationProgressTransferState(2, stringRes("1.052 ZEC"), stringRes("Sent 2h ago"), isOverdue = false, isSent = true),
-                MigrationProgressTransferState(3, stringRes("2.105 ZEC"), stringRes("Overdue · 2h ago"), isOverdue = true, isSent = false),
-                MigrationProgressTransferState(4, stringRes("1.897 ZEC"), stringRes("~18 hours"), isOverdue = false, isSent = false),
-                MigrationProgressTransferState(5, stringRes("4.456 ZEC"), stringRes("~24 hours"), isOverdue = false, isSent = false),
+                MigrationProgressTransferState(1, stringRes("1.348 ZEC"), stringRes("Sent"), isAttention = false, isSent = true),
+                MigrationProgressTransferState(2, stringRes("1.052 ZEC"), stringRes("Sending soon"), isAttention = false, isSent = false),
+                MigrationProgressTransferState(3, stringRes("2.105 ZEC"), stringRes("Scheduled"), isAttention = false, isSent = false),
+                MigrationProgressTransferState(
+                    4,
+                    stringRes("1.897 ZEC"),
+                    stringRes("Waiting for anchor window"),
+                    isAttention = false,
+                    isSent = false
+                ),
+                MigrationProgressTransferState(
+                    5,
+                    stringRes("4.456 ZEC"),
+                    stringRes("Needs reschedule"),
+                    isAttention = true,
+                    isSent = false
+                ),
             ),
         isComplete = false,
-        hasOverdue = true,
         onBack = {},
-        onSendNow = {},
-        onReschedule = {},
     )
 
 private fun previewTransferInvalidState() =

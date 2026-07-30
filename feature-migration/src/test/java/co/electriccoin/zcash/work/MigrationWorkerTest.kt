@@ -1,14 +1,19 @@
 package co.electriccoin.zcash.work
 
+import cash.z.ecc.android.sdk.MigrationBlocker
+import cash.z.ecc.android.sdk.MigrationSyncWakeup
+import cash.z.ecc.android.sdk.MigrationTransferState
+import cash.z.ecc.android.sdk.MigrationTransferStates
 import cash.z.ecc.android.sdk.TransferAttemptOutcome
 import cash.z.ecc.android.sdk.TransferResult
 import kotlinx.coroutines.test.runTest
-import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 class MigrationWorkerTest {
     // ── executeWithRetries ────────────────────────────────────────────────────
@@ -105,28 +110,13 @@ class MigrationWorkerTest {
             assertEquals(2, callCount)
         }
 
-    // ── decideLaneBPreflight ──────────────────────────────────────────────────
+    // ── decideBroadcastPreflight ──────────────────────────────────────────────
 
     @Test
-    fun `lane B defers while lane A is running`() {
+    fun `a broadcast run defers inside the quiet gap`() {
         assertEquals(
-            LaneBAction.DEFER_OVERLAP,
-            decideLaneBPreflight(
-                laneARunning = true,
-                synchronizerSyncing = false,
-                nowEpochSeconds = 1000,
-                lastNetworkActivityEpochSeconds = 0,
-                privacyBufferSeconds = 600,
-            )
-        )
-    }
-
-    @Test
-    fun `lane B defers inside the quiet gap`() {
-        assertEquals(
-            LaneBAction.DEFER_OVERLAP,
-            decideLaneBPreflight(
-                laneARunning = false,
+            BroadcastPreflight.DEFER,
+            decideBroadcastPreflight(
                 synchronizerSyncing = false,
                 nowEpochSeconds = 1000,
                 lastNetworkActivityEpochSeconds = 700,
@@ -136,27 +126,26 @@ class MigrationWorkerTest {
     }
 
     @Test
-    fun `lane B proceeds when all sources quiet past the gap`() {
+    fun `a broadcast run proceeds when all sources quiet past the gap`() {
         assertEquals(
-            LaneBAction.BROADCAST,
-            decideLaneBPreflight(false, false, 1000, 100, 600)
+            BroadcastPreflight.BROADCAST,
+            decideBroadcastPreflight(false, 1000, 100, 600)
         )
     }
 
     @Test
-    fun `lane B proceeds when no sync ever happened`() {
+    fun `a broadcast run proceeds when no sync ever happened`() {
         assertEquals(
-            LaneBAction.BROADCAST,
-            decideLaneBPreflight(false, false, 1000, null, 600)
+            BroadcastPreflight.BROADCAST,
+            decideBroadcastPreflight(false, 1000, null, 600)
         )
     }
 
     @Test
-    fun `lane B defers when synchronizer is syncing even if lane A is not running`() {
+    fun `a broadcast run defers while the synchronizer is syncing`() {
         assertEquals(
-            LaneBAction.DEFER_OVERLAP,
-            decideLaneBPreflight(
-                laneARunning = false,
+            BroadcastPreflight.DEFER,
+            decideBroadcastPreflight(
                 synchronizerSyncing = true,
                 nowEpochSeconds = 1000,
                 lastNetworkActivityEpochSeconds = null,
@@ -166,83 +155,141 @@ class MigrationWorkerTest {
     }
 
     @Test
-    fun `lane B proceeds when gap exactly elapsed`() {
+    fun `a broadcast run proceeds when the gap exactly elapsed`() {
         // now=1000, last=400, buffer=600 → gap=600, exactly elapsed → BROADCAST
         assertEquals(
-            LaneBAction.BROADCAST,
-            decideLaneBPreflight(false, false, 1000, 400, 600)
+            BroadcastPreflight.BROADCAST,
+            decideBroadcastPreflight(false, 1000, 400, 600)
         )
     }
 
-    // ── syncCompletedSince ────────────────────────────────────────────────────
+    // ── broadcastDueByEstimate (estimated-tip acceleration) ───────────────────
+
+    private fun tx(
+        id: Long,
+        scheduled: Long,
+        isProved: Boolean = true,
+        isSent: Boolean = false,
+        blocker: MigrationBlocker? = null,
+    ) = MigrationTransferState(
+        id = id,
+        isTransfer = true,
+        isSent = isSent,
+        isProved = isProved,
+        scheduledHeight = scheduled,
+        anchorBoundaryHeight = scheduled - 10,
+        blocker = blocker,
+    )
+
+    private fun states(vararg transfers: MigrationTransferState) =
+        MigrationTransferStates(transfers = transfers.toList(), tipHeight = 100L)
 
     @Test
-    fun `syncCompletedSince returns false when lastActivity is null`() {
-        assertFalse(syncCompletedSince(lastActivity = null, lastShift = null))
-        assertFalse(syncCompletedSince(lastActivity = null, lastShift = Instant.ofEpochSecond(500)))
+    fun `a proved unsent transfer due by estimate accelerates the broadcast`() {
+        assertTrue(broadcastDueByEstimate(states(tx(1, scheduled = 150)), estimatedTip = 150))
     }
 
     @Test
-    fun `syncCompletedSince returns true when lastActivity is non-null and lastShift is null`() {
-        // Null shift → treat as EPOCH; any activity is "since" then.
-        assertTrue(syncCompletedSince(lastActivity = Instant.ofEpochSecond(1000), lastShift = null))
+    fun `an unproved transfer never accelerates`() {
+        assertFalse(broadcastDueByEstimate(states(tx(1, scheduled = 150, isProved = false)), estimatedTip = 200))
     }
 
     @Test
-    fun `syncCompletedSince returns true when lastActivity is after lastShift`() {
-        assertTrue(
-            syncCompletedSince(
-                lastActivity = Instant.ofEpochSecond(1000),
-                lastShift = Instant.ofEpochSecond(500),
-            )
-        )
+    fun `a not-yet-due transfer never accelerates`() {
+        assertFalse(broadcastDueByEstimate(states(tx(1, scheduled = 150)), estimatedTip = 149))
     }
 
     @Test
-    fun `syncCompletedSince returns false when lastActivity is before lastShift`() {
+    fun `an unprovable-anchor transfer never accelerates`() {
         assertFalse(
-            syncCompletedSince(
-                lastActivity = Instant.ofEpochSecond(400),
-                lastShift = Instant.ofEpochSecond(500),
+            broadcastDueByEstimate(
+                states(tx(1, scheduled = 150, blocker = MigrationBlocker.UNPROVABLE_ANCHOR)),
+                estimatedTip = 200,
             )
         )
     }
 
     @Test
-    fun `syncCompletedSince returns false when lastActivity equals lastShift`() {
-        // Strictly after — equal timestamps mean no NEW activity since the shift.
-        assertFalse(
-            syncCompletedSince(
-                lastActivity = Instant.ofEpochSecond(500),
-                lastShift = Instant.ofEpochSecond(500),
+    fun `an unavailable estimate never accelerates`() {
+        assertFalse(broadcastDueByEstimate(states(tx(1, scheduled = 150)), estimatedTip = -1))
+    }
+
+    // ── computeNextWakeDelay (the "when?" projection) ─────────────────────────
+
+    @Test
+    fun `the earliest of wakeup and due height wins`() {
+        val delay =
+            computeNextWakeDelay(
+                states = states(tx(1, scheduled = 300, isProved = false, blocker = MigrationBlocker.ANCHOR_BOUNDARY)),
+                wakeups = listOf(MigrationSyncWakeup(height = 250, covers = listOf(1L))),
+                est = 100,
+                secondsPerBlock = 10,
+            )
+        // Wakeup at 250 beats the due height 300: (250-100)*10 = 1500s.
+        assertEquals(1500.seconds, delay)
+    }
+
+    @Test
+    fun `a past target floors at the minimum re-arm`() {
+        val delay =
+            computeNextWakeDelay(
+                states = states(tx(1, scheduled = 90)),
+                wakeups = emptyList(),
+                est = 100,
+                secondsPerBlock = 10,
+            )
+        assertEquals(MIN_REARM_SECONDS.seconds, delay)
+    }
+
+    @Test
+    fun `wakeups covering only unprovable transactions are ignored`() {
+        val stuck = tx(9, scheduled = 90, isProved = false, blocker = MigrationBlocker.UNPROVABLE_ANCHOR)
+        val delay =
+            computeNextWakeDelay(
+                states = states(stuck),
+                wakeups = listOf(MigrationSyncWakeup(height = 100, covers = listOf(9L))),
+                est = 100,
+                secondsPerBlock = 10,
+            )
+        // The stuck tx is the ONLY pending work → nothing relevant → cadence fallback (null).
+        assertNull(delay)
+    }
+
+    @Test
+    fun `a wakeup covering a healthy transaction alongside a stuck one is honored`() {
+        val stuck = tx(9, scheduled = 90, isProved = false, blocker = MigrationBlocker.UNPROVABLE_ANCHOR)
+        val healthy = tx(10, scheduled = 300, isProved = false, blocker = MigrationBlocker.ANCHOR_BOUNDARY)
+        val delay =
+            computeNextWakeDelay(
+                states = states(stuck, healthy),
+                wakeups = listOf(MigrationSyncWakeup(height = 250, covers = listOf(9L, 10L))),
+                est = 100,
+                secondsPerBlock = 10,
+            )
+        assertEquals(1500.seconds, delay)
+    }
+
+    @Test
+    fun `an unavailable estimate falls back to the cadence`() {
+        assertNull(
+            computeNextWakeDelay(
+                states = states(tx(1, scheduled = 300)),
+                wakeups = emptyList(),
+                est = -1,
+                secondsPerBlock = 10,
             )
         )
     }
 
-    // ── shouldEscalateShift (F4) ──────────────────────────────────────────────
-    // Escalation fires only on the TRANSITION to the 3rd counted shift: syncSince && count == 3.
-
     @Test
-    fun `escalation fires only on the counted 3rd shift with a completed sync`() {
-        // count < threshold → never, regardless of syncSince.
-        assertFalse(shouldEscalateShift(syncSince = true, count = 1))
-        assertFalse(shouldEscalateShift(syncSince = true, count = 2))
-        assertFalse(shouldEscalateShift(syncSince = false, count = 2))
-
-        // The exact transition — sync completed AND count reached the threshold.
-        assertTrue(shouldEscalateShift(syncSince = true, count = SHIFT_ESCALATION_THRESHOLD))
-    }
-
-    @Test
-    fun `escalation does not re-fire on a no-sync shift that leaves count at threshold`() {
-        // count stays at 3 on subsequent no-sync shifts; without the syncSince gate this would
-        // re-fire the once-only notification every run. The gate blocks it.
-        assertFalse(shouldEscalateShift(syncSince = false, count = SHIFT_ESCALATION_THRESHOLD))
-    }
-
-    @Test
-    fun `escalation does not fire past the threshold`() {
-        // Counter never exceeds 3 in practice, but guard the equality boundary anyway.
-        assertFalse(shouldEscalateShift(syncSince = true, count = SHIFT_ESCALATION_THRESHOLD + 1))
+    fun `nothing pending falls back to the cadence`() {
+        assertNull(
+            computeNextWakeDelay(
+                states = states(tx(1, scheduled = 90, isSent = true)),
+                wakeups = emptyList(),
+                est = 100,
+                secondsPerBlock = 10,
+            )
+        )
     }
 }

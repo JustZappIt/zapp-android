@@ -44,6 +44,14 @@ interface MigrationAppHooks {
 
     /** App-open / foreground migration catch-up (recovery routing + lane revival). */
     suspend fun checkRecovery()
+
+    /**
+     * Cancels all scheduled migration work — both lanes, the due alarm and any shown migration
+     * notification. [accountKeyId] targets one account (Keystone disconnect); null cancels for
+     * every account (wallet reset). Safe to call when nothing is scheduled. The workers' own
+     * account-gone kill switch backs this up for anything already in flight.
+     */
+    suspend fun cancelMigrationWork(accountKeyId: String? = null)
 }
 
 /** Installs the migration destinations into the wallet nav graph. */

@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.TransferResult
-import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.migration.migrationLog
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.KeystoneFirmwarePolicy
 import co.electriccoin.zcash.ui.common.model.KeystoneFirmwareVersion
@@ -21,7 +21,6 @@ import co.electriccoin.zcash.ui.common.usecase.FinalizeMigrationScheduleUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.screen.migration.keystonesign.KEYSTONE_BATCH_MAX_ITEMS
 import co.electriccoin.zcash.ui.screen.migration.keystonesign.MigrationKeystoneSignArgs
 import co.electriccoin.zcash.ui.screen.migration.keystonesign.keystoneBatchRoundSlice
 import co.electriccoin.zcash.ui.screen.migration.keystonesign.keystoneBatchTotalRounds
@@ -107,10 +106,10 @@ class MigrationKeystoneScanVM(
             if (pending.roundIndex == 0) {
                 val detected = decoded.firmwareVersion?.toKeystoneFwVersion()
                 val outcome = KeystoneFirmwarePolicy.evaluate(detected, requiredFirmware)
-                Twig.debug {
+                migrationLog(
                     "MigrationKeystoneScanVM: detected Keystone firmware " +
                         "${detected ?: "none"} (required $requiredFirmware) -> $outcome"
-                }
+                )
                 if (outcome != KeystoneFirmwarePolicy.Outcome.OK) {
                     isProcessing = false
                     failureSheet.update {
@@ -136,33 +135,49 @@ class MigrationKeystoneScanVM(
 
             // This round's slice only — the scanned response covers exactly what buildBatch()
             // built for pending.roundIndex, not the whole (possibly multi-round) batch.
+            val roundBudget = sdk.keystoneSigningRoundBudget()
             val slice =
                 keystoneBatchRoundSlice(
                     roundIndex = pending.roundIndex,
                     hasSplit = pending.splitUnsignedPczt != null,
+                    prepCount = pending.prepUnsignedPczts.size,
                     transferCount = pending.transferUnsignedPczts.size,
-                    maxItems = KEYSTONE_BATCH_MAX_ITEMS,
+                    budget = roundBudget,
                 )
+            val prepsForRound = pending.prepUnsignedPczts.slice(slice.prepRange)
             val transfersForRound = pending.transferUnsignedPczts.slice(slice.transferRange)
             val splitForRound = if (slice.includeSplit) pending.splitUnsignedPczt else null
 
             val signed =
                 sdk.applyKeystoneBatchSignatures(
                     splitUnsignedPczt = splitForRound,
-                    transferUnsignedPczts = transfersForRound.map { it.second },
+                    // Same [preps..., transfers...] order the sign screen built the QR with — the
+                    // response list aligns positionally, split back by the same counts below.
+                    transferUnsignedPczts = (prepsForRound + transfersForRound).map { it.second },
                     batchSignResponse = data,
                 )
+            migrationLog(
+                "KeystoneScan: round ${pending.roundIndex} signatures applied " +
+                    "(split=${signed.splitSignedPczt != null}, preps=${prepsForRound.size}, " +
+                    "transfers=${transfersForRound.size})"
+            )
 
             val accumulatedSplitSigned = signed.splitSignedPczt ?: pending.accumulatedSplitSigned
+            val signedPreps = signed.transferSignedPczts.take(prepsForRound.size)
+            val signedTransfers = signed.transferSignedPczts.drop(prepsForRound.size)
+            val accumulatedPrepSigned =
+                pending.accumulatedPrepSigned +
+                    prepsForRound.map { it.first }.zip(signedPreps)
             val accumulatedTransferSigned =
                 pending.accumulatedTransferSigned +
-                    transfersForRound.map { it.first }.zip(signed.transferSignedPczts)
+                    transfersForRound.map { it.first }.zip(signedTransfers)
 
             val totalRounds =
                 keystoneBatchTotalRounds(
                     hasSplit = pending.splitUnsignedPczt != null,
+                    prepCount = pending.prepUnsignedPczts.size,
                     transferCount = pending.transferUnsignedPczts.size,
-                    maxItems = KEYSTONE_BATCH_MAX_ITEMS,
+                    budget = roundBudget,
                 )
             if (pending.roundIndex + 1 < totalRounds) {
                 // More rounds remain — carry the accumulated signatures forward and hand off to a
@@ -173,10 +188,14 @@ class MigrationKeystoneScanVM(
                     pending.copy(
                         roundIndex = pending.roundIndex + 1,
                         accumulatedSplitSigned = accumulatedSplitSigned,
+                        accumulatedPrepSigned = accumulatedPrepSigned,
                         accumulatedTransferSigned = accumulatedTransferSigned,
                     )
                 )
                 isProcessing = false
+                migrationLog(
+                    "KeystoneScan: round ${pending.roundIndex} done — handing off to round ${pending.roundIndex + 1} of $totalRounds"
+                )
                 navigationRouter.replace(MigrationKeystoneSignArgs(args.mode))
                 return@launch
             }
@@ -209,7 +228,14 @@ class MigrationKeystoneScanVM(
                         return@execute
                     }
                 }
-                sdk.storeSignedSchedulePczts(accumulatedTransferSigned)
+                // Kind-agnostic per-id signature application — extra PREPARATIONS of the
+                // note-split tree go through the same call as the transfers.
+                sdk.storeSignedSchedulePczts(accumulatedPrepSigned + accumulatedTransferSigned)
+                migrationLog(
+                    "KeystoneScan: stored ${accumulatedPrepSigned.size} signed prep + " +
+                        "${accumulatedTransferSigned.size} signed transfer PCZT(s) " +
+                        "(split=${splitSignedPczt != null}) — finalizing the schedule"
+                )
                 finalizeMigrationSchedule(sched, args.mode)
                 pendingSchedule.clear()
                 pendingKeystonePczts.clear()

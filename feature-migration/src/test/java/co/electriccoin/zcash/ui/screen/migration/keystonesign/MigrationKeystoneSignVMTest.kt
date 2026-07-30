@@ -139,7 +139,7 @@ class MigrationKeystoneSignVMTest {
     @Test
     fun singleRoundBatchHasNoRoundSuffixInTitle() =
         runTest {
-            // A single transfer never exceeds KEYSTONE_BATCH_MAX_ITEMS → one round, no "(1 of 1)" suffix.
+            // A single transfer never exceeds the 96-action round budget → one round, no "(1 of 1)" suffix.
             val sdk = fakeSdk()
             val pendingSchedule =
                 PendingMigrationScheduleRepositoryImpl()
@@ -167,7 +167,7 @@ class MigrationKeystoneSignVMTest {
             // We do this by pre-populating pendingKeystonePczts with roundIndex=0 and enough
             // transferUnsignedPczts that totalRounds > 1. The VM reads "existing" and skips the
             // SDK build path, so the SDK's createUnsignedTransferPczts won't be called.
-            val transferCount = KEYSTONE_BATCH_MAX_ITEMS + 1 // forces totalRounds = 2
+            val transferCount = NO_SPLIT_ROUND_CAPACITY + 1 // 33 transfers = 99 actions → totalRounds = 2
             val existingPczts =
                 PendingKeystoneMigrationPczts(
                     requestId = byteArrayOf(0x01, 0x02),
@@ -202,14 +202,14 @@ class MigrationKeystoneSignVMTest {
     fun multiRoundBatchRoundIndexOneAppendsSuffix() =
         runTest {
             // Simulate being on round 1 (0-based index 1) of a 2-round batch.
-            val transferCount = KEYSTONE_BATCH_MAX_ITEMS + 1
+            val transferCount = NO_SPLIT_ROUND_CAPACITY + 1
             val existingPczts =
                 PendingKeystoneMigrationPczts(
                     requestId = byteArrayOf(0x01, 0x02),
                     splitUnsignedPczt = null,
                     transferUnsignedPczts = (0 until transferCount).map { it.toLong() to byteArrayOf(it.toByte()) },
                     roundIndex = 1,
-                    accumulatedTransferSigned = (0 until KEYSTONE_BATCH_MAX_ITEMS).map { it.toLong() to byteArrayOf(it.toByte()) },
+                    accumulatedTransferSigned = (0 until NO_SPLIT_ROUND_CAPACITY).map { it.toLong() to byteArrayOf(it.toByte()) },
                 )
             val sdk = fakeSdk()
             val pendingSchedule =
@@ -243,6 +243,9 @@ class MigrationKeystoneSignVMTest {
             // SDK throws during createUnsignedTransferPczts (or any other suspension point).
             val sdk =
                 mockk<OrchardMigrationSdk>(relaxed = true) {
+                    coEvery { keystoneSigningRoundBudget() } returns
+                        cash.z.ecc.android.sdk
+                            .KeystoneSigningRoundBudget(96, 16, 3)
                     coEvery { isNoteSplitNeeded() } returns false
                     coEvery { createUnsignedTransferPczts(any()) } throws RuntimeException("PCZT build failed")
                 }
@@ -268,6 +271,9 @@ class MigrationKeystoneSignVMTest {
             var callCount = 0
             val sdk =
                 mockk<OrchardMigrationSdk>(relaxed = true) {
+                    coEvery { keystoneSigningRoundBudget() } returns
+                        cash.z.ecc.android.sdk
+                            .KeystoneSigningRoundBudget(96, 16, 3)
                     coEvery { isNoteSplitNeeded() } returns false
                     coEvery { createUnsignedTransferPczts(any()) } answers {
                         callCount++
@@ -306,6 +312,9 @@ class MigrationKeystoneSignVMTest {
         runTest {
             val sdk =
                 mockk<OrchardMigrationSdk>(relaxed = true) {
+                    coEvery { keystoneSigningRoundBudget() } returns
+                        cash.z.ecc.android.sdk
+                            .KeystoneSigningRoundBudget(96, 16, 3)
                     coEvery { isNoteSplitNeeded() } returns false
                     coEvery { createUnsignedTransferPczts(any()) } throws RuntimeException("SDK error")
                 }
@@ -527,6 +536,9 @@ class MigrationKeystoneSignVMTest {
             val fakeScheduleFromSplit = schedule()
             val sdk =
                 mockk<OrchardMigrationSdk>(relaxed = true) {
+                    coEvery { keystoneSigningRoundBudget() } returns
+                        cash.z.ecc.android.sdk
+                            .KeystoneSigningRoundBudget(96, 16, 3)
                     coEvery { isNoteSplitNeeded() } returns true
                     coEvery { prepareNoteSplit() } returns fakeProposal
                     coEvery { proposeMigrationTransfersFromSplit(fakeProposal) } returns fakeScheduleFromSplit
@@ -555,6 +567,9 @@ class MigrationKeystoneSignVMTest {
         runTest {
             val sdk =
                 mockk<OrchardMigrationSdk>(relaxed = true) {
+                    coEvery { keystoneSigningRoundBudget() } returns
+                        cash.z.ecc.android.sdk
+                            .KeystoneSigningRoundBudget(96, 16, 3)
                     coEvery { isNoteSplitNeeded() } returns true
                     coEvery { prepareNoteSplit() } throws RuntimeException("split failed")
                 }
@@ -607,6 +622,10 @@ class MigrationKeystoneSignVMTest {
             coEvery { isNoteSplitNeeded() } returns false
             coEvery { createUnsignedTransferPczts(any()) } returns listOf(1L to byteArrayOf(0x01))
             coEvery { buildKeystoneSignBatchQrParts(any(), any(), any(), any()) } returns qrParts
+            // The engine's real signing-round constants (signing_rounds.rs).
+            coEvery { keystoneSigningRoundBudget() } returns
+                cash.z.ecc.android.sdk
+                    .KeystoneSigningRoundBudget(maxActions = 96, preparationActions = 16, transferActions = 3)
         }
 
     private fun schedule(): MigrationSchedule =
@@ -669,3 +688,6 @@ class MigrationKeystoneSignVMTest {
         override fun observePipeline(): Flow<BaseNavigationCommand> = emptyFlow()
     }
 }
+
+// 96 actions / 3 actions-per-transfer with no split in the round (engine signing_rounds constants).
+private const val NO_SPLIT_ROUND_CAPACITY = 32

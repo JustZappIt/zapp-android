@@ -5,8 +5,8 @@ import co.electriccoin.zcash.ui.BaseNavigationCommand
 import co.electriccoin.zcash.ui.NavigationCommand
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.provider.IsBackgroundExecutionAvailableProvider
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetMigrationSnapshotUseCase
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -15,7 +15,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -47,15 +46,7 @@ class MigrationScheduledVMTest {
                 mockk<IsBackgroundExecutionAvailableProvider> {
                     every { isAvailable() } returns false
                 }
-            val plans =
-                mockk<MigrationPlanRepository> {
-                    coEvery { observe() } returns flowOf(null)
-                }
-            val vm =
-                vm(
-                    plans = plans,
-                    isBackgroundExecutionAvailable = backgroundAvailable,
-                )
+            val vm = vm(isBackgroundExecutionAvailable = backgroundAvailable)
 
             advanceUntilIdle()
             val state = vm.state.first { !it.isLoading }
@@ -69,15 +60,7 @@ class MigrationScheduledVMTest {
                 mockk<IsBackgroundExecutionAvailableProvider> {
                     every { isAvailable() } returns true
                 }
-            val plans =
-                mockk<MigrationPlanRepository> {
-                    coEvery { observe() } returns flowOf(null)
-                }
-            val vm =
-                vm(
-                    plans = plans,
-                    isBackgroundExecutionAvailable = backgroundAvailable,
-                )
+            val vm = vm(isBackgroundExecutionAvailable = backgroundAvailable)
 
             advanceUntilIdle()
             val state = vm.state.first { !it.isLoading }
@@ -86,15 +69,19 @@ class MigrationScheduledVMTest {
 
     @Suppress("LongParameterList")
     private fun vm(
-        plans: MigrationPlanRepository =
+        getMigrationSnapshot: GetMigrationSnapshotUseCase =
             mockk {
-                coEvery { observe() } returns flowOf(null)
+                // A REAL (empty) snapshot: a null return now means "SDK not ready yet" and keeps
+                // the LCE loading (review L3) — these tests assert on the rendered state.
+                coEvery { this@mockk(null) } returns
+                    co.electriccoin.zcash.ui.common.model.migration
+                        .LiveMigrationSnapshot(transfers = emptyList(), preparations = emptyList(), tipHeight = 0L)
             },
         isBackgroundExecutionAvailable: IsBackgroundExecutionAvailableProvider = mockk(relaxed = true),
         navigationRouter: NavigationRouter = FakeNavigationRouter(),
         errorStateMapper: ErrorMapperUseCase = mockk(relaxed = true),
     ) = MigrationScheduledVM(
-        migrationPlanRepository = plans,
+        getMigrationSnapshot = getMigrationSnapshot,
         navigationRouter = navigationRouter,
         errorStateMapper = errorStateMapper,
         isBackgroundExecutionAvailableProvider = isBackgroundExecutionAvailable,

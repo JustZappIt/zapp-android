@@ -12,10 +12,7 @@ data class MigrationProgressState(
     val preparations: List<MigrationProgressPreparationState> = emptyList(),
     val transfers: List<MigrationProgressTransferState>,
     val isComplete: Boolean,
-    val hasOverdue: Boolean,
     val onBack: () -> Unit,
-    val onSendNow: (() -> Unit)? = null,
-    val onReschedule: (() -> Unit)? = null,
     val onDone: (() -> Unit)? = null,
 )
 
@@ -38,7 +35,9 @@ data class MigrationProgressTransferState(
     val index: Int,
     val amount: StringResource,
     val statusLabel: StringResource,
-    val isOverdue: Boolean,
+    // Attention paint (orange) — genuine cannot-heal states only (expired / unprovable anchor),
+    // never a merely-late-but-healthy transfer.
+    val isAttention: Boolean,
     val isSent: Boolean,
     val fiatAmount: StringResource? = null,
     // Non-null only in DEBUG builds — shows the prove state ("proved" / relative time / "pending"),

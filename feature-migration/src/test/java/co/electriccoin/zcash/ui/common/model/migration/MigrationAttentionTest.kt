@@ -1,34 +1,39 @@
 package co.electriccoin.zcash.ui.common.model.migration
 
 import cash.z.ecc.android.sdk.AttentionReason
-import cash.z.ecc.android.sdk.MigrationTransferState
-import cash.z.ecc.android.sdk.MigrationTransferStates
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.time.Instant
 
 class MigrationAttentionTest {
     private fun transfer(
         index: Int,
         id: Long,
-        status: MigrationTransferStatus = MigrationTransferStatus.PENDING,
-        expiryAtEpochSeconds: Long = 1_000L,
-    ) = MigrationTransfer(
+        isSent: Boolean = false,
+        expiryAtEpochSeconds: Long? = 1_000L,
+    ) = LiveMigrationTransfer(
+        id = id,
         index = index,
         amountZatoshi = 100_000L,
-        scheduledAtEpochSeconds = 0L,
-        status = status,
-        expiryAtEpochSeconds = expiryAtEpochSeconds,
-        id = id,
+        scheduledHeight = 1_000L + index,
+        scheduledAt = Instant.fromEpochSeconds(0),
+        isSent = isSent,
+        isProved = true,
+        action = null,
+        blocker = null,
+        expiryAt = expiryAtEpochSeconds?.let { Instant.fromEpochSeconds(it) },
+        minedHeight = null,
     )
 
-    private fun plan(transfers: List<MigrationTransfer>) =
-        MigrationPlan(
-            id = "p1",
-            createdAtEpochSeconds = 0L,
+    private fun snapshot(transfers: List<LiveMigrationTransfer>) =
+        LiveMigrationSnapshot(
             transfers = transfers,
-            mode = MigrationMode.AUTOMATIC,
+            preparations = emptyList(),
+            tipHeight = 1_000L,
         )
+
+    private val now = Instant.fromEpochSeconds(1_000L)
 
     @Test
     fun toUiKindMapsInvalidTransferToPlanUpdate() {
@@ -41,79 +46,63 @@ class MigrationAttentionTest {
     }
 
     @Test
-    fun invalidTransferFindsExactlyTheNamedTransferByIdNotIndex() {
+    fun invalidTransferFindsExactlyTheNamedTransferByIdNotPosition() {
         // Ids deliberately out of index order (ZIP 318 shuffles funding-note order away from
         // broadcast-height order) — this must still find id 11 at index 2, not index 1.
-        val plan =
-            plan(
+        val snapshot =
+            snapshot(
                 listOf(
                     transfer(index = 0, id = 10L),
                     transfer(index = 1, id = 12L),
                     transfer(index = 2, id = 11L),
                 )
             )
-        val indices = AttentionReason.InvalidTransfer(11L).affectedTransferIndices(plan, liveStates = null, nowEpochSeconds = 0L)
+        val indices = AttentionReason.InvalidTransfer(11L).affectedTransferIndices(snapshot, now)
         assertEquals(listOf(2), indices)
     }
 
     @Test
     fun invalidTransferWithNoMatchingIdIsEmpty() {
-        val plan = plan(listOf(transfer(index = 0, id = 10L)))
-        val indices = AttentionReason.InvalidTransfer(99L).affectedTransferIndices(plan, liveStates = null, nowEpochSeconds = 0L)
+        val snapshot = snapshot(listOf(transfer(index = 0, id = 10L)))
+        val indices = AttentionReason.InvalidTransfer(99L).affectedTransferIndices(snapshot, now)
         assertEquals(emptyList(), indices)
     }
 
     @Test
-    fun transferExpiredFindsEveryPendingTransferPastItsOwnExpiry() {
-        val plan =
-            plan(
+    fun transferExpiredFindsEveryUnsentTransferPastItsOwnExpiry() {
+        val snapshot =
+            snapshot(
                 listOf(
-                    transfer(index = 0, id = 10L, status = MigrationTransferStatus.SENT, expiryAtEpochSeconds = 100L),
-                    transfer(index = 1, id = 11L, status = MigrationTransferStatus.PENDING, expiryAtEpochSeconds = 500L),
-                    transfer(index = 2, id = 12L, status = MigrationTransferStatus.PENDING, expiryAtEpochSeconds = 2_000L),
+                    transfer(index = 0, id = 10L, isSent = true, expiryAtEpochSeconds = 100L),
+                    transfer(index = 1, id = 11L, expiryAtEpochSeconds = 500L),
+                    transfer(index = 2, id = 12L, expiryAtEpochSeconds = 2_000L),
                 )
             )
-        // now=1000: t0 is SENT (excluded regardless of expiry), t1 is PENDING and past its expiry
-        // (included), t2 is PENDING but not yet expired (excluded) — NOT "everything after the
+        // now=1000: t0 is SENT (excluded regardless of expiry), t1 is unsent and past its expiry
+        // (included), t2 is unsent but not yet expired (excluded) — NOT "everything after the
         // last completed transfer" (the old, wrong behavior would have included both t1 and t2).
-        val indices = AttentionReason.TransferExpired.affectedTransferIndices(plan, liveStates = null, nowEpochSeconds = 1_000L)
+        val indices = AttentionReason.TransferExpired.affectedTransferIndices(snapshot, now)
         assertEquals(listOf(1), indices)
     }
 
     @Test
-    fun transferExpiredCorrelatesLiveSentStatusByIdBeforeCheckingExpiry() {
-        // The cached plan still thinks index 1 is PENDING, but the live SDK state says it was
-        // actually already sent — it must be excluded even though its cached expiry has passed.
-        val plan =
-            plan(
+    fun transferExpiredExcludesNeverExpiringTransfers() {
+        // expiryAt == null means the engine reports "never expires" (ZIP 203 height 0).
+        val snapshot =
+            snapshot(
                 listOf(
-                    transfer(index = 0, id = 10L, status = MigrationTransferStatus.PENDING, expiryAtEpochSeconds = 500L),
-                    transfer(index = 1, id = 11L, status = MigrationTransferStatus.PENDING, expiryAtEpochSeconds = 500L),
+                    transfer(index = 0, id = 10L, expiryAtEpochSeconds = null),
+                    transfer(index = 1, id = 11L, expiryAtEpochSeconds = 500L),
                 )
             )
-        val liveStates =
-            MigrationTransferStates(
-                transfers =
-                    listOf(
-                        MigrationTransferState(
-                            id = 11L,
-                            isTransfer = true,
-                            isSent = true,
-                            isProved = true,
-                            scheduledHeight = 10L,
-                            anchorBoundaryHeight = null,
-                        ),
-                    ),
-                tipHeight = 10L,
-            )
-        val indices = AttentionReason.TransferExpired.affectedTransferIndices(plan, liveStates, nowEpochSeconds = 1_000L)
-        assertEquals(listOf(0), indices)
+        val indices = AttentionReason.TransferExpired.affectedTransferIndices(snapshot, now)
+        assertEquals(listOf(1), indices)
     }
 
     @Test
     fun syncRequiredBeforeNextHasNoAffectedTransfers() {
-        val plan = plan(listOf(transfer(index = 0, id = 10L)))
-        val indices = AttentionReason.SyncRequiredBeforeNext.affectedTransferIndices(plan, liveStates = null, nowEpochSeconds = 0L)
+        val snapshot = snapshot(listOf(transfer(index = 0, id = 10L)))
+        val indices = AttentionReason.SyncRequiredBeforeNext.affectedTransferIndices(snapshot, now)
         assertEquals(emptyList(), indices)
     }
 

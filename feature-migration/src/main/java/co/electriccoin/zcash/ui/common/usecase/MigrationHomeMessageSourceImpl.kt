@@ -1,16 +1,15 @@
 package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.AttentionReason
+import cash.z.ecc.android.sdk.MigrationBlocker
 import cash.z.ecc.android.sdk.MigrationState
-import cash.z.ecc.android.sdk.MigrationTransferStates
-import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.migration.MigrationHomeMessageSource
+import co.electriccoin.zcash.ui.common.model.migration.LiveMigrationSnapshot
 import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_DUST_THRESHOLD_ZATOSHI
 import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_RESIDUAL_MIN_ZATOSHI
 import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
-import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 import co.electriccoin.zcash.ui.common.model.migration.affectedTransferIndices
 import co.electriccoin.zcash.ui.common.model.migration.toMigrationRangeText
 import co.electriccoin.zcash.ui.common.model.migration.toUiKind
@@ -18,7 +17,6 @@ import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageP
 import co.electriccoin.zcash.ui.common.provider.IsBackgroundExecutionAvailableProvider
 import co.electriccoin.zcash.ui.common.repository.MigrationHomeMessage
 import co.electriccoin.zcash.ui.common.repository.MigrationHomeMessageData
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.screen.home.HomeMessageState
 import co.electriccoin.zcash.ui.screen.home.migration.MigrationBannerPhase
 import co.electriccoin.zcash.ui.screen.home.migration.MigrationMessageState
@@ -26,7 +24,6 @@ import co.electriccoin.zcash.ui.screen.migration.complete.MigrationCompleteArgs
 import co.electriccoin.zcash.ui.screen.migration.invalid.MigrationTransferInvalidArgs
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupArgs
-import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewArgs
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -38,10 +35,16 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
+/**
+ * The home-banner source, fully LIVE off the engine — no plan cache anywhere (see
+ * `spec/2026-07-30-plan-cache-elimination-proposal.md`): counts come from the engine's transfer
+ * states (crossings-only, sent = done), phase decisions from the engine's [MigrationState] × the
+ * live Orchard balance. The only persisted inputs are genuine UX flags (hasSeenComplete).
+ */
 class MigrationHomeMessageSourceImpl(
     private val accountDataSource: AccountDataSource,
-    private val migrationPlanRepository: MigrationPlanRepository,
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
+    private val getMigrationSnapshot: GetMigrationSnapshotUseCase,
     private val getOrchardBalance: GetOrchardBalanceUseCase,
     private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
     private val isBackgroundExecutionAvailableProvider: IsBackgroundExecutionAvailableProvider,
@@ -52,29 +55,42 @@ class MigrationHomeMessageSourceImpl(
         accountDataSource.selectedAccount.flatMapLatest { account ->
             if (account == null) return@flatMapLatest flowOf(null)
             combine(
-                migrationPlanRepository.observe(),
                 hasSeenMigrationCompleteStorageProvider.observe(),
                 observeReadyToSendSignal(),
-                // Observed, not a one-shot getOrchardBalance().value read: an IMMEDIATE migration
-                // never touches the plan or the SDK's MigrationState (it bypasses the migration
-                // engine — a plain send-max sweep), so the balance is the *only* input that can hide
-                // the "Migrate required" banner once its Orchard funds are spent. Reading it one-shot
-                // left the combine re-firing solely on the 15s readyToSendSignal poll, so the stale
-                // Required banner lingered over the whole in-flight transfer even though the balance
-                // had already dropped to (and the setup screen showed) 0.
+                // Observed, not one-shot: after an IMMEDIATE migration (a plain send-max sweep that
+                // never touches the engine) the balance is the only input that can hide the
+                // "Migrate required" banner once the Orchard funds are spent.
                 getOrchardBalance.observe(),
-            ) { plan, hasSeenComplete, readyToSendSignal, orchardBalance ->
+            ) { hasSeenComplete, readyToSendSignal, orchardBalance ->
                 val sdk = getOrchardMigrationSdk()
                 val sdkState = sdk?.getMigrationState()
-                // Only computed when actually needed (RequiresAttention) — an extra
-                // getMigrationTransferStates() read on every other state would be wasted work.
+                val snapshot = getMigrationSnapshot()
+                // UNPROVABLE ANCHOR → immediate, deterministic "Update migration plan" attention
+                // banner (decision 2026-07-30: user-driven — the user must SEE the bad state as
+                // soon as it is known). The SDK synthesizes MigrationBlocker.UNPROVABLE_ANCHOR
+                // from the engine's late-dependency guard (TODO(remove: engine UnprovableAnchor)).
+                val hasUnprovable =
+                    sdk
+                        ?.getMigrationTransferStates()
+                        ?.transfers
+                        ?.any { it.blocker == MigrationBlocker.UNPROVABLE_ANCHOR } == true
+                if (snapshot != null && hasUnprovable) {
+                    return@combine MigrationHomeMessageData(
+                        isRunActive = true,
+                        completedCount = snapshot.completedCount,
+                        totalCount = snapshot.totalCount,
+                        attentionKind = MigrationAttentionKind.PLAN_UPDATE,
+                    )
+                }
+                // Only computed when actually needed (RequiresAttention) — an extra snapshot
+                // read on every other state would be wasted work.
                 val (attentionKind, attentionRangeText) =
                     (sdkState as? MigrationState.RequiresAttention)?.let { requiresAttention ->
-                        attentionInfoFor(sdk, requiresAttention.reason, plan)
+                        attentionInfoFor(requiresAttention.reason, snapshot)
                     } ?: (null to null)
                 migrationMessageFor(
                     sdkState = sdkState,
-                    plan = plan,
+                    snapshot = snapshot,
                     hasSeenComplete = hasSeenComplete,
                     orchardBalanceZatoshi = orchardBalance?.value ?: 0L,
                     dustThresholdZatoshi = sdk?.migrationDustThresholdZatoshi() ?: MIGRATION_DUST_THRESHOLD_ZATOSHI,
@@ -88,20 +104,14 @@ class MigrationHomeMessageSourceImpl(
 
     override fun createMessageState(data: MigrationHomeMessage): HomeMessageState {
         data as MigrationHomeMessageData
-        val plan = data.plan
         val percent =
-            if (plan != null && plan.totalCount > 0) {
-                (plan.completedCount * 100) / plan.totalCount
+            if (data.totalCount > 0) {
+                (data.completedCount * 100) / data.totalCount
             } else {
                 0
             }
-        // See MigrationKeystoneRound's kdoc — only ever non-null for a Keystone account's
-        // plan, prefixed onto the in-progress subtitle when present.
-        val roundPrefix = plan?.keystoneRound?.let { "Round ${it.current} of ${it.total} · " }.orEmpty()
         // Spec §6.2/§6.3 — takes priority over the ordinary phases below: a plan needing
         // re-confirmation is more actionable than its last-known progress/completion state.
-        // Title carries the exact required copy ("Update migration plan." / "Transfer 3–5
-        // expired.") since that IS the home message per spec, not just a phase label.
         val (phase, title, subtitle) =
             when (data.attentionKind) {
                 MigrationAttentionKind.PLAN_UPDATE -> {
@@ -124,28 +134,28 @@ class MigrationHomeMessageSourceImpl(
                         }
 
                         // Spec §6.4: numbered per the due transfer, matching the convention used
-                        // elsewhere (e.g. MigrationProgressVM's "Transfer ${completedCount + 1}").
+                        // elsewhere (e.g. Progress's "Transfer ${completedCount + 1}").
                         data.isReadyToSend -> {
                             Triple(
                                 MigrationBannerPhase.READY_TO_SEND,
                                 null,
-                                "Transfer ${(plan?.completedCount ?: 0) + 1} is ready to send",
+                                "Transfer ${data.completedCount + 1} is ready to send",
                             )
                         }
 
-                        plan == null -> {
+                        !data.isRunActive -> {
                             Triple(MigrationBannerPhase.REQUIRED, null, null)
                         }
 
-                        plan.completedCount == 0 -> {
-                            Triple(MigrationBannerPhase.IN_PROGRESS, null, "${roundPrefix}First transfer sending…")
+                        data.completedCount == 0 -> {
+                            Triple(MigrationBannerPhase.IN_PROGRESS, null, "First transfer sending…")
                         }
 
                         else -> {
                             Triple(
                                 MigrationBannerPhase.IN_PROGRESS,
                                 null,
-                                "$roundPrefix${plan.completedCount} of ${plan.totalCount} transfers done" +
+                                "${data.completedCount} of ${data.totalCount} transfers done" +
                                     " ~ $percent% complete",
                             )
                         }
@@ -159,7 +169,7 @@ class MigrationHomeMessageSourceImpl(
             progressPercent = percent.toFloat(),
             onClick = {
                 onMigrationMessageClick(
-                    plan = plan,
+                    isRunActive = data.isRunActive,
                     isComplete = data.isComplete,
                     isReadyToSend = data.isReadyToSend,
                     hasAttention = data.attentionKind != null,
@@ -167,7 +177,7 @@ class MigrationHomeMessageSourceImpl(
             },
             onButtonClick = {
                 onMigrationMessageClick(
-                    plan = plan,
+                    isRunActive = data.isRunActive,
                     isComplete = data.isComplete,
                     isReadyToSend = data.isReadyToSend,
                     hasAttention = data.attentionKind != null,
@@ -177,7 +187,7 @@ class MigrationHomeMessageSourceImpl(
     }
 
     private fun onMigrationMessageClick(
-        plan: MigrationPlan?,
+        isRunActive: Boolean,
         isComplete: Boolean,
         isReadyToSend: Boolean = false,
         hasAttention: Boolean = false,
@@ -187,17 +197,16 @@ class MigrationHomeMessageSourceImpl(
             // info screen, regardless of its last-known progress/completion state.
             hasAttention -> navigationRouter.forward(MigrationTransferInvalidArgs)
 
-            // Tapping the widget just opens the celebration screen now — MigrationCompleteVM.onDone()
-            // owns the seen-flag decision, since it needs to know whether residual Orchard balance
-            // still requires another Keystone round before deciding whether this is truly "seen".
+            // Tapping the widget just opens the celebration screen — MigrationCompleteVM.onDone()
+            // owns the seen-flag decision.
             isComplete -> navigationRouter.forward(MigrationCompleteArgs)
 
-            // Spec §6.4: a distinct, lighter-weight review-and-send path — not the fuller
-            // Reschedule/Send-now recovery screen MigrationProgressArgs offers for a genuinely
-            // overdue transfer.
-            isReadyToSend -> navigationRouter.forward(MigrationTransferReviewArgs)
+            // Ready-to-send routes to Progress too — everything is pre-signed, there is nothing
+            // to review; Progress's foreground broadcast loop executes the step silently while
+            // the user watches (TransferReview screen deleted 2026-07-30).
+            isReadyToSend -> navigationRouter.forward(MigrationProgressArgs)
 
-            plan != null -> navigationRouter.forward(MigrationProgressArgs)
+            isRunActive -> navigationRouter.forward(MigrationProgressArgs)
 
             else -> navigationRouter.forward(MigrationSetupArgs)
         }
@@ -208,10 +217,10 @@ class MigrationHomeMessageSourceImpl(
         val hasOverdueTransfers: Boolean,
     )
 
-    // Neither signal here is itself observable, so this polls on the same cadence
-    // MigrationProgressVM.reallyOverdueFlow() already uses for hasOverdueTransfers() — cheap local
-    // checks (no network), just re-evaluated periodically since wall-clock "has this transfer's due
-    // time arrived yet" can't otherwise be recomputed reactively.
+    // Neither signal here is itself observable, so this polls — cheap local checks (no network),
+    // re-evaluated periodically since wall-clock "has this transfer's due time arrived yet" can't
+    // otherwise be recomputed reactively. This poll is also what re-fires the whole combine, so
+    // the engine-derived snapshot refreshes on the same cadence.
     private fun observeReadyToSendSignal(): Flow<ReadyToSendSignal> =
         flow {
             while (true) {
@@ -229,20 +238,17 @@ class MigrationHomeMessageSourceImpl(
             }
         }
 
-    // Spec §6.2/§6.3 home-banner support — see MigrationAttentionKind's doc. Correlates the
-    // reason's affected transfer(s) by stable id (never array index, same as MigrationProgressVM's
-    // withLiveState) rather than assuming every not-yet-completed cached transfer is affected.
-    private suspend fun attentionInfoFor(
-        sdk: OrchardMigrationSdk?,
+    // Spec §6.2/§6.3 home-banner support — the affected transfers correlate by stable engine id
+    // ON the live snapshot (display index and engine id live on the same row now).
+    private fun attentionInfoFor(
         reason: AttentionReason,
-        plan: MigrationPlan?,
+        snapshot: LiveMigrationSnapshot?,
     ): Pair<MigrationAttentionKind, String?> {
         val kind = reason.toUiKind()
-        if (plan == null) return kind to null
-        val liveStates: MigrationTransferStates? = sdk?.getMigrationTransferStates()
+        if (snapshot == null) return kind to null
         val rangeText =
             reason
-                .affectedTransferIndices(plan, liveStates, Clock.System.now().epochSeconds)
+                .affectedTransferIndices(snapshot, Clock.System.now())
                 .toMigrationRangeText()
         return kind to rangeText
     }
@@ -253,57 +259,50 @@ class MigrationHomeMessageSourceImpl(
 }
 
 /**
- * The migration home-banner decision, extracted as a pure function so it's directly testable
- * without mocking the whole reactive [MigrationHomeMessageSourceImpl.observe] pipeline.
+ * The migration home-banner decision — a pure function over LIVE inputs only (engine state,
+ * engine-derived snapshot, live balance, UX seen-flag). The old plan-cache inputs are gone; every
+ * branch maps onto the live-conditions table in
+ * `spec/2026-07-30-plan-cache-elimination-proposal.md` §3:
  *
- * [plan] takes priority over [sdkState] for choosing between the Complete banner and a fresh
- * REQUIRED-equivalent: the SDK's own [MigrationState] stays [MigrationState.Complete] until the
- * *next* round is actually committed (see the engine's `commit_preparation`/`build_preparation_unsigned`
- * docs), so it alone cannot distinguish "round just finished, more residual balance needs another
- * round" from "campaign genuinely done" — both look identical to the SDK. The app-side [plan] can:
- * `MigrationCompleteVM.onDone()` clears it (without setting [hasSeenComplete]) exactly when more
- * rounds are needed, so `plan == null` here means "treat this as if nothing has run yet."
+ * - round running                → engine InProgress (counts from [snapshot])
+ * - celebration (campaign done)  → engine Complete && balance < RESIDUAL_MIN && !hasSeenComplete
+ * - residue (lock/migrate-anyway)→ dust < balance < RESIDUAL_MIN && not running
+ * - next round / never migrated  → balance ≥ RESIDUAL_MIN && not running → "Migrate now"
  *
- * [isBackgroundExecutionAvailable] and [hasOverdueTransfers] together drive spec §6.4 "Transfer
- * Ready to Send": a narrower, *earlier* window than the general overdue/missed-transfer state
- * (`MigrationProgressVM`'s `hasOverdue`) — the next pending transfer's scheduled time has arrived,
- * background execution can't run it, but the SDK doesn't (yet) count it as overdue. Both default to
- * "don't show this banner" (available/not-overdue) so existing callers/tests that don't pass them
- * keep behaving exactly as before.
+ * The "Complete && balance ≥ min ⇒ Migrate now" mapping is deliberately identical whether the
+ * balance is a next Keystone round's residual or newly received funds — both need a migration, so
+ * the ambiguity the old cleared-plan marker guarded against does not exist.
  */
+@Suppress("CyclomaticComplexMethod")
 internal fun migrationMessageFor(
     sdkState: MigrationState?,
-    plan: MigrationPlan?,
+    snapshot: LiveMigrationSnapshot?,
     hasSeenComplete: Boolean,
     orchardBalanceZatoshi: Long,
     dustThresholdZatoshi: Long = MIGRATION_DUST_THRESHOLD_ZATOSHI,
     isBackgroundExecutionAvailable: Boolean = true,
     hasOverdueTransfers: Boolean = false,
     now: Instant = Clock.System.now(),
-    // Additive — see MigrationHomeMessageData's doc. Both null unless sdkState is
-    // RequiresAttention; callers precompute these (MigrationHomeMessageSourceImpl.attentionInfoFor())
-    // so this function stays a pure, synchronous decision with no SDK access of its own.
     attentionKind: MigrationAttentionKind? = null,
     attentionRangeText: String? = null,
 ): MigrationHomeMessageData? {
-    val next = plan?.nextPending
+    val next = snapshot?.nextPending
+    // A RequiresAttention state WITH live run statuses is still a mid-run condition (e.g. the
+    // transient SyncRequiredBeforeNext) — the balance-driven residue/required branches below must
+    // not fire over it (the old plan-cache equivalent was their `plan == null` guard). With no
+    // statuses (defensive: attention without a run) they stay reachable.
+    val midRunAttention = sdkState is MigrationState.RequiresAttention && snapshot != null
     return when {
-        // Spec §6.2/§6.3 — takes priority over InProgress/Complete below: a plan needing
-        // re-confirmation is more actionable than its last-known progress snapshot. Falls through
-        // to the ordinary branches below when plan is null (a defensive case — RequiresAttention in
-        // practice always implies a plan/schedule already existed).
-        //
-        // SyncRequiredBeforeNext is explicitly excluded here (see MigrationAttentionKind's doc: it is
-        // out of scope for toUiKind(), which otherwise collapses it onto TRANSFER_EXPIRED and would
-        // surface a wrong "Transfer expired" attention banner). It is a transient "keep syncing"
-        // condition — not a user-action-required expiry — so it must not raise an attention banner;
-        // falling through lets the ordinary InProgress / no-message branches decide. This mirrors
-        // CheckMigrationRecoveryUseCase, which likewise does not route on this reason.
+        // Spec §6.2/§6.3 — takes priority over InProgress/Complete below.
+        // SyncRequiredBeforeNext is explicitly excluded (a transient "keep syncing" condition,
+        // not a user-action-required expiry) — falls through to the ordinary branches.
         sdkState is MigrationState.RequiresAttention &&
             sdkState.reason != AttentionReason.SyncRequiredBeforeNext &&
-            plan != null -> {
+            snapshot != null -> {
             MigrationHomeMessageData(
-                plan,
+                isRunActive = true,
+                completedCount = snapshot.completedCount,
+                totalCount = snapshot.totalCount,
                 attentionKind = attentionKind ?: sdkState.reason.toUiKind(),
                 attentionRangeText = attentionRangeText,
             )
@@ -314,55 +313,52 @@ internal fun migrationMessageFor(
             !isBackgroundExecutionAvailable &&
             !hasOverdueTransfers &&
             next.scheduledAt <= now -> {
-            MigrationHomeMessageData(plan, isReadyToSend = true)
+            MigrationHomeMessageData(
+                isRunActive = true,
+                completedCount = snapshot.completedCount,
+                totalCount = snapshot.totalCount,
+                isReadyToSend = true,
+            )
         }
 
         sdkState is MigrationState.InProgress -> {
-            MigrationHomeMessageData(plan)
+            MigrationHomeMessageData(
+                isRunActive = true,
+                completedCount = snapshot?.completedCount ?: 0,
+                totalCount = snapshot?.totalCount ?: 0,
+            )
         }
 
-        // Gated on the migratable minimum, not just the SDK's per-round Complete state — a
-        // multi-round Keystone migration reports Complete as soon as the *current* round's
-        // transfers are all mined, even with a large residual balance still needing another
-        // round. Without this, finishing an earlier round would incorrectly show the one-time
-        // completion banner. A sub-migratable residue (below MIGRATION_RESIDUAL_MIN_ZATOSHI, which
-        // the engine can't migrate — proposeMigrationTransfers would return NothingToMigrate) still
-        // counts as "complete": there is no further round to run, so the completion/residue screen
-        // (lock / migrate-anyway) is the correct destination.
+        // Celebration: the campaign is genuinely done (nothing migratable left) and the user
+        // hasn't engaged with the completion screen yet. Stays visible until MigrationCompleteVM
+        // .onDone() marks it seen.
         sdkState == MigrationState.Complete &&
-            plan != null &&
             !hasSeenComplete &&
             orchardBalanceZatoshi < MIGRATION_RESIDUAL_MIN_ZATOSHI -> {
-            // Stays visible until the user actually engages with it — marked seen in
-            // MigrationCompleteVM.onDone(), not just for having been displayed.
-            MigrationHomeMessageData(plan, isComplete = true)
+            MigrationHomeMessageData(
+                isRunActive = false,
+                completedCount = snapshot?.completedCount ?: 0,
+                totalCount = snapshot?.totalCount ?: 0,
+                isComplete = true,
+            )
         }
 
-        // RESIDUE (plan == null, post-completion cleared plan): a leftover Orchard balance above the
-        // dust threshold but below the migratable minimum. The engine cannot migrate it
-        // (proposeMigrationTransfers returns NothingToMigrate), so a "Migrate now" prompt here would
-        // tap into a guaranteed failure. Present it as "migration completed" instead and route to
-        // MigrationCompleteScreen, whose residue flow lets the user LOCK it or MIGRATE it anyway.
-        // Real Orchard-only balance (not the combined Sapling+Orchard spendableShieldedBalance).
-        // The reported Orchard balance is the *spendable* balance, which excludes locked notes
-        // (librustzcash get_wallet_summary buckets a spendable-but-locked note into locked_value,
-        // not spendable_value), so once the user locks the residue this branch stops firing on its
-        // own — no separate locked-state signal is needed to make the prompt go away.
-        plan == null &&
+        // RESIDUE: a leftover Orchard balance above dust but below the migratable minimum. The
+        // engine cannot migrate it (proposeMigrationTransfers → NothingToMigrate), so present it
+        // as "migration completed" and route to MigrationCompleteScreen, whose residue flow lets
+        // the user LOCK it or MIGRATE it anyway. The reported balance is the *spendable* Orchard
+        // balance (locked notes excluded), so locking makes this stop firing on its own.
+        !midRunAttention &&
             orchardBalanceZatoshi > dustThresholdZatoshi &&
             orchardBalanceZatoshi < MIGRATION_RESIDUAL_MIN_ZATOSHI -> {
-            MigrationHomeMessageData(plan = null, isComplete = true)
+            MigrationHomeMessageData(isRunActive = false, isComplete = true)
         }
 
-        // Real Orchard-only balance (not the combined Sapling+Orchard spendableShieldedBalance —
-        // this must never fire for a wallet whose Orchard balance is 0, even with real Sapling
-        // funds). Falls through here regardless of what sdkState says once plan is null — covers
-        // both "never migrated" and "a round finished, more residual balance needs another round."
-        // Gated on the migratable minimum, not the dust threshold: only fire "Migrate now" when the
-        // balance is genuinely migratable (>= MIGRATION_RESIDUAL_MIN_ZATOSHI). Anything in the
-        // [dust, min) gap is a residue and was already handled by the RESIDUE branch above.
-        orchardBalanceZatoshi >= MIGRATION_RESIDUAL_MIN_ZATOSHI && plan == null -> {
-            MigrationHomeMessageData(null)
+        // Migratable balance with no run in progress — covers "never migrated", "a Keystone round
+        // finished, residual needs another round" (engine still reports Complete), and "campaign
+        // done but new funds arrived". All three correctly say "Migrate now".
+        !midRunAttention && orchardBalanceZatoshi >= MIGRATION_RESIDUAL_MIN_ZATOSHI -> {
+            MigrationHomeMessageData(isRunActive = false)
         }
 
         else -> {

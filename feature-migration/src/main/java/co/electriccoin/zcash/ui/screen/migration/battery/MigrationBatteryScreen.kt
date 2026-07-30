@@ -76,9 +76,22 @@ fun MigrationBatteryScreen() {
                     s.copy(
                         onAllow = {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                // Three-state battery setting: the one-tap exemption dialog only
+                                // lifts OPTIMIZED. A RESTRICTED app cannot be un-restricted by any
+                                // dialog — send the user to App Info instead, where the Battery
+                                // entry offers the change; the result-launcher re-check below
+                                // handles both paths identically.
                                 val intent =
-                                    Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                                        data = Uri.parse("package:${context.packageName}")
+                                    if (isBackgroundExecutionAvailableProvider.state() ==
+                                        co.electriccoin.zcash.ui.common.provider.BackgroundExecutionState.RESTRICTED
+                                    ) {
+                                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                            data = Uri.parse("package:${context.packageName}")
+                                        }
+                                    } else {
+                                        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                            data = Uri.parse("package:${context.packageName}")
+                                        }
                                     }
                                 launcher.launch(intent)
                             } else {

@@ -10,9 +10,9 @@ import co.electriccoin.zcash.ui.NavigationCommand
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationTorFailureDecisionRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetMigrationSnapshotUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.ScheduleNextMigrationWindowUseCase
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
@@ -126,11 +126,7 @@ class MigrationSendingVMTest {
             coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
                 TransferAttemptOutcome.Executed(TransferResult.Success("txid123"))
             val router = FakeNavigationRouter()
-            val plans =
-                mockk<MigrationPlanRepository> {
-                    coEvery { load() } returns null
-                }
-            vm(sdk = sdk, router = router, plans = plans)
+            vm(sdk = sdk, router = router)
 
             advanceUntilIdle()
 
@@ -144,10 +140,9 @@ class MigrationSendingVMTest {
             coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
                 TransferAttemptOutcome.Executed(TransferResult.Success("txid456"))
             val router = FakeNavigationRouter()
-            val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
 
             // No call to vm.send() anywhere in this test — construction alone must trigger it.
-            vm(sdk = sdk, router = router, plans = plans)
+            vm(sdk = sdk, router = router)
             advanceUntilIdle()
 
             coVerify(exactly = 1) { sdk.executeNextPendingTransfer(any(), any()) }
@@ -226,7 +221,6 @@ class MigrationSendingVMTest {
             coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
                 TransferAttemptOutcome.Executed(TransferResult.Success("txid"))
             val router = FakeNavigationRouter()
-            val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
             val decisionFlow = MutableStateFlow<Boolean?>(false)
             val torDecisionRepository =
                 mockk<PendingMigrationTorFailureDecisionRepository> {
@@ -234,7 +228,7 @@ class MigrationSendingVMTest {
                     every { clear() } answers { decisionFlow.value = null }
                 }
 
-            vm(sdk = sdk, router = router, plans = plans, torDecisionRepository = torDecisionRepository)
+            vm(sdk = sdk, router = router, torDecisionRepository = torDecisionRepository)
             advanceUntilIdle()
 
             coVerify(exactly = 1) {
@@ -249,10 +243,9 @@ class MigrationSendingVMTest {
             coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
                 TransferAttemptOutcome.Executed(TransferResult.Success("txid789"))
             val router = FakeNavigationRouter()
-            val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
             val pendingTorFailure = mockk<PendingMigrationTorFailureStorageProvider>(relaxed = true)
 
-            vm(sdk = sdk, router = router, plans = plans, pendingMigrationTorFailureStorageProvider = pendingTorFailure)
+            vm(sdk = sdk, router = router, pendingMigrationTorFailureStorageProvider = pendingTorFailure)
             advanceUntilIdle()
 
             coVerify(exactly = 1) { pendingTorFailure.store(false) }
@@ -265,10 +258,9 @@ class MigrationSendingVMTest {
             coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
                 TransferAttemptOutcome.Executed(TransferResult.NetworkError(retryable = false))
             val router = FakeNavigationRouter()
-            val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
             val pendingTorFailure = mockk<PendingMigrationTorFailureStorageProvider>(relaxed = true)
 
-            vm(sdk = sdk, router = router, plans = plans, pendingMigrationTorFailureStorageProvider = pendingTorFailure)
+            vm(sdk = sdk, router = router, pendingMigrationTorFailureStorageProvider = pendingTorFailure)
             advanceUntilIdle()
 
             coVerify(exactly = 0) { pendingTorFailure.store(any()) }
@@ -284,9 +276,8 @@ class MigrationSendingVMTest {
             coEvery { sdk.executeNextPendingTransfer(any(), any()) } returns
                 TransferAttemptOutcome.Executed(TransferResult.NetworkError(retryable = false, isTorFailure = true))
             val router = FakeNavigationRouter()
-            val plans = mockk<MigrationPlanRepository> { coEvery { load() } returns null }
 
-            vm(sdk = sdk, router = router, plans = plans)
+            vm(sdk = sdk, router = router)
             advanceUntilIdle()
 
             assertTrue(router.forwardedRoutes.any { it is MigrationTorFailureArgs })
@@ -295,7 +286,10 @@ class MigrationSendingVMTest {
     private fun vm(
         sdk: OrchardMigrationSdk,
         router: FakeNavigationRouter,
-        plans: MigrationPlanRepository = mockk(relaxed = true),
+        getMigrationSnapshot: GetMigrationSnapshotUseCase =
+            mockk {
+                coEvery { this@mockk(null) } returns null
+            },
         torDecisionRepository: PendingMigrationTorFailureDecisionRepository =
             mockk {
                 every { decision } returns MutableStateFlow(null)
@@ -306,7 +300,7 @@ class MigrationSendingVMTest {
             mockk<GetOrchardMigrationSdkUseCase> {
                 coEvery { this@mockk() } returns sdk
             },
-        migrationPlanRepository = plans,
+        getMigrationSnapshot = getMigrationSnapshot,
         scheduleNextMigrationWindow = mockk<ScheduleNextMigrationWindowUseCase>(relaxed = true),
         navigationRouter = router,
         errorStateMapper = mockk<ErrorMapperUseCase>(relaxed = true),

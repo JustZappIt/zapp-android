@@ -1,7 +1,7 @@
 package co.electriccoin.zcash.ui.common.model.migration
 
 import cash.z.ecc.android.sdk.AttentionReason
-import cash.z.ecc.android.sdk.MigrationTransferStates
+import kotlin.time.Instant
 
 /**
  * UI-facing classification of [AttentionReason], mirroring the SDK's own two distinct causes for a
@@ -25,36 +25,27 @@ fun AttentionReason.toUiKind(): MigrationAttentionKind =
     }
 
 /**
- * The specific 1-based "Transfer N" indices this [AttentionReason] concerns, correlated by the
- * transfer's stable [MigrationTransfer.id] — never by array position (see [withLiveState]'s doc for
- * why ZIP 318 makes that unsafe). Replaces the old "everything not yet completed in the cached plan
- * is invalid" guess, which was wrong for [AttentionReason.InvalidTransfer] (that names exactly one
- * transfer, not a whole tail range) and only accidentally right for [AttentionReason.TransferExpired]
- * when every remaining transfer happened to be expired.
+ * The specific 1-based "Transfer N" indices this [AttentionReason] concerns, read from the live
+ * [LiveMigrationSnapshot] (engine-derived — the display index and the stable engine id live on the
+ * same row, so no id↔index correlation against a cache is needed anymore).
  *
  * For [AttentionReason.InvalidTransfer], this is exactly the one transfer the SDK named — empty if
- * [plan] has no transfer with that id (e.g. a stale cache).
+ * the snapshot has no transfer with that id.
  *
  * For [AttentionReason.TransferExpired], the SDK doesn't name a specific transfer, so this derives
- * the affected set as every transfer still PENDING (per [liveStates] when available, else the
- * cached [plan] status) whose own expiry has already passed [nowEpochSeconds] — i.e. the set
- * [cash.z.ecc.android.sdk.OrchardMigrationSdk.restartCurrentMigrationStep] will actually discard,
- * not merely "everything after the last completed one."
+ * the affected set as every still-unsent transfer whose ZIP 203 expiry has already passed [now] —
+ * i.e. the set [cash.z.ecc.android.sdk.OrchardMigrationSdk.restartCurrentMigrationStep] will
+ * actually discard, not merely "everything after the last completed one."
  */
-fun AttentionReason.affectedTransferIndices(
-    plan: MigrationPlan,
-    liveStates: MigrationTransferStates?,
-    nowEpochSeconds: Long,
-): List<Int> {
-    val merged = plan.withLiveState(liveStates)
-    return when (this) {
+fun AttentionReason.affectedTransferIndices(snapshot: LiveMigrationSnapshot, now: Instant): List<Int> =
+    when (this) {
         is AttentionReason.InvalidTransfer -> {
-            merged.transfers.filter { it.id == transferId }.map { it.index }
+            snapshot.transfers.filter { it.id == transferId }.map { it.index }
         }
 
         AttentionReason.TransferExpired -> {
-            merged.transfers
-                .filter { it.status == MigrationTransferStatus.PENDING && it.expiryAtEpochSeconds <= nowEpochSeconds }
+            snapshot.transfers
+                .filter { !it.isSent && it.expiryAt != null && it.expiryAt <= now }
                 .map { it.index }
         }
 
@@ -62,7 +53,6 @@ fun AttentionReason.affectedTransferIndices(
             emptyList()
         }
     }
-}
 
 /**
  * Renders 1-based transfer indices (as produced by [affectedTransferIndices]) into the spec's

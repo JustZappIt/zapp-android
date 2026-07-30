@@ -27,7 +27,6 @@ import co.electriccoin.zcash.ui.common.repository.BiometricRequest
 import co.electriccoin.zcash.ui.common.repository.BiometricsCancelledException
 import co.electriccoin.zcash.ui.common.repository.BiometricsFailureException
 import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
@@ -38,7 +37,6 @@ import co.electriccoin.zcash.ui.screen.migration.lockexplainer.MigrationLockExpl
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
 import co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionArgs
 import co.electriccoin.zcash.work.MigrationScheduler
-import co.electriccoin.zcash.work.MigrationSyncScheduler
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -47,7 +45,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MigrationCompleteVM(
-    private val migrationPlanRepository: MigrationPlanRepository,
     private val getOrchardBalance: GetOrchardBalanceUseCase,
     private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
     private val hasLockedOrchardDustStorageProvider: HasLockedOrchardDustStorageProvider,
@@ -61,7 +58,6 @@ class MigrationCompleteVM(
     private val proposalDataSource: ProposalDataSource,
     private val keystoneProposalRepository: KeystoneProposalRepository,
     private val migrationScheduler: MigrationScheduler,
-    private val migrationSyncScheduler: MigrationSyncScheduler,
 ) : ViewModel() {
     private data class Summary(
         val totalTransferred: Long,
@@ -191,16 +187,18 @@ class MigrationCompleteVM(
                 val moreRoundsNeeded =
                     getSelectedWalletAccount() is KeystoneAccount &&
                         getOrchardBalance().value > dustThreshold
-                // F3: the current committed migration has reached Complete, so BOTH background
-                // lanes are stale and must be cancelled. Lane A self-cancels on its next run (its
-                // terminal-state guard), but cancelling here is immediate and covers the case where
-                // no further Lane A run is scheduled. A subsequent Keystone round re-arms fresh
-                // lanes at its own commit, so cancelling now is safe in both branches below.
+                // F3: the current committed migration has reached Complete, so the background
+                // worker chain is stale and must be cancelled. The worker self-cancels on its next
+                // run (its Complete step), but cancelling here is immediate and covers the case
+                // where no further run is scheduled. A subsequent Keystone round re-arms a fresh
+                // chain at its own commit, so cancelling now is safe in both branches below.
                 val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
                 migrationScheduler.cancel(accountKeyId)
-                migrationSyncScheduler.cancel(accountKeyId)
                 if (moreRoundsNeeded) {
-                    migrationPlanRepository.clear()
+                    // Nothing to clear anymore — the home banner derives "another round needed"
+                    // live from engine Complete × the residual balance (proposal §3); leaving
+                    // hasSeenComplete unset keeps the celebration for the true campaign end.
+                    Unit
                 } else {
                     // Marks the *banner's* seen-flag too, not a separate one — a user who's already
                     // been shown (and dismissed) this dedicated celebration screen doesn't also need

@@ -43,7 +43,6 @@ import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.PendingKeystoneMigrationPcztsRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationTorFailureDecisionRepository
@@ -82,9 +81,7 @@ import co.electriccoin.zcash.ui.screen.migration.setup.MigrationSetupVM
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessVM
 import co.electriccoin.zcash.ui.screen.migration.torfailure.MigrationTorFailureVM
-import co.electriccoin.zcash.ui.screen.migration.transferreview.MigrationTransferReviewVM
 import co.electriccoin.zcash.work.MigrationScheduler
-import co.electriccoin.zcash.work.MigrationSyncScheduler
 import io.mockk.mockk
 import org.koin.core.KoinApplication
 import org.koin.dsl.koinApplication
@@ -134,7 +131,6 @@ class MigrationKoinGraphSmokeTest {
                 factory { mockk<GetMigrationPrivacyOrReviewDestinationUseCase>(relaxed = true) }
 
                 // Repositories
-                single<MigrationPlanRepository> { mockk(relaxed = true) }
                 single<ExchangeRateRepository> { mockk(relaxed = true) }
                 single<PendingMigrationScheduleRepository> { mockk(relaxed = true) }
                 single<RestartMigrationScheduleRepository> { mockk(relaxed = true) }
@@ -160,7 +156,6 @@ class MigrationKoinGraphSmokeTest {
                 // Concrete scheduler classes (registered as factoryOf in providerModule; migration VMs
                 // inject them directly, not via an interface).
                 factory { mockk<MigrationScheduler>(relaxed = true) }
-                factory { mockk<MigrationSyncScheduler>(relaxed = true) }
 
                 // Args data-classes (carried as constructor params for VMs that accept navigation args).
                 // Providing a canonical instance is the simplest way to satisfy the Koin type lookup.
@@ -207,11 +202,6 @@ class MigrationKoinGraphSmokeTest {
     @Test
     fun migrationProgressVM_resolvesFromKoin() {
         koin.koin.get<MigrationProgressVM>()
-    }
-
-    @Test
-    fun migrationTransferReviewVM_resolvesFromKoin() {
-        koin.koin.get<MigrationTransferReviewVM>()
     }
 
     @Test

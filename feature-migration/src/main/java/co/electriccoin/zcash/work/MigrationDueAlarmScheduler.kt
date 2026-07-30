@@ -4,7 +4,7 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.migration.migrationLog
 import co.electriccoin.zcash.ui.common.model.accountIdOffset
 import kotlin.time.Duration
 
@@ -32,11 +32,11 @@ class MigrationDueAlarmScheduler(
     fun schedule(accountKeyId: String, delay: Duration) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
         if (alarmManager == null) {
-            Twig.warn { "MIGRATION_DIAG MigrationDueAlarmScheduler: AlarmManager unavailable — skipping." }
+            migrationLog("MigrationDueAlarmScheduler: AlarmManager unavailable — skipping.")
             return
         }
         val triggerAtMillis = System.currentTimeMillis() + delay.inWholeMilliseconds
-        Twig.debug { "MIGRATION_DIAG MigrationDueAlarmScheduler: arming ready-to-send alarm for $accountKeyId in $delay" }
+        migrationLog("MigrationDueAlarmScheduler: arming ready-to-send alarm for $accountKeyId in $delay")
         alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent(accountKeyId))
     }
 

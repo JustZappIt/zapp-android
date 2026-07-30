@@ -9,14 +9,15 @@ import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.provider.IsBackgroundExecutionAvailableProvider
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetMigrationSnapshotUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 
 class MigrationScheduledVM(
-    private val migrationPlanRepository: MigrationPlanRepository,
+    private val getMigrationSnapshot: GetMigrationSnapshotUseCase,
     private val navigationRouter: NavigationRouter,
     private val errorStateMapper: ErrorMapperUseCase,
     private val isBackgroundExecutionAvailableProvider: IsBackgroundExecutionAvailableProvider,
@@ -24,13 +25,20 @@ class MigrationScheduledVM(
     private val loadLce = mutableLce<Unit>()
 
     val state: StateFlow<LceState<MigrationScheduledState>> =
-        migrationPlanRepository
-            .observe()
-            .map { plan ->
-                val total = plan?.transfers?.sumOf { it.amountZatoshi } ?: 0L
-                val count = plan?.totalCount ?: 0
-                val lastScheduledAt = plan?.transfers?.maxOfOrNull { it.scheduledAtEpochSeconds } ?: 0L
-                val span = lastScheduledAt - (plan?.createdAtEpochSeconds ?: lastScheduledAt)
+        flow { emit(getMigrationSnapshot()) }
+            .map { snapshot ->
+                // Transient null (SDK not resolved yet) keeps the LCE loading instead of
+                // rendering zeroed stats (review L3).
+                if (snapshot == null) return@map null
+                val total = snapshot.transfers.sumOf { it.amountZatoshi }
+                val count = snapshot.totalCount
+                val allScheduled =
+                    (snapshot.transfers.map { it.scheduledAt } + snapshot.preparations.map { it.scheduledAt })
+                val span =
+                    (
+                        (allScheduled.maxOrNull() ?: kotlin.time.Instant.DISTANT_PAST) -
+                            (allScheduled.minOrNull() ?: kotlin.time.Instant.DISTANT_PAST)
+                    ).inWholeSeconds
                 val backgroundHint =
                     if (!isBackgroundExecutionAvailableProvider.isAvailable()) {
                         stringRes("Transfers run when you open the app — enable background activity in Settings for automatic sending.")

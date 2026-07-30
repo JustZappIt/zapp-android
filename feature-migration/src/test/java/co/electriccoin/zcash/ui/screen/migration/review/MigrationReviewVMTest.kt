@@ -279,11 +279,10 @@ class MigrationReviewVMTest {
             invokeOnConfirmAutomatic(vm, scheduleFromSplit)
             advanceUntilIdle()
 
-            // Schedule is derived from the split before the split is submitted, and the app-side plan is
-            // written (write-ahead) before that same irreversible submit.
+            // Schedule is derived from the split before the split is submitted (the engine's own
+            // committed state is the recovery signal — no app-side write-ahead exists anymore).
             coVerifyOrder {
                 sdk.proposeMigrationTransfersFromSplit(splitProposal)
-                finalizeMigrationSchedule.persistPlan(scheduleFromSplit, MigrationMode.AUTOMATIC)
                 sdk.submitNoteSplit(splitProposal, usk)
             }
         }

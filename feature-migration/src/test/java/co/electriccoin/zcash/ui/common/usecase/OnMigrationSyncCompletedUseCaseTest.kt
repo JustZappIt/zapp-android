@@ -4,7 +4,6 @@ import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProvider
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
 import co.electriccoin.zcash.work.MigrationScheduler
-import co.electriccoin.zcash.work.MigrationSyncScheduler
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.coVerifyOrder
@@ -19,7 +18,6 @@ class OnMigrationSyncCompletedUseCaseTest {
         lastNetworkActivity: LastNetworkActivityStorageProvider = mockk(relaxed = true),
         migrationNotifier: MigrationNotifier = mockk(relaxed = true),
         migrationScheduler: MigrationScheduler = mockk(relaxed = true),
-        migrationSyncScheduler: MigrationSyncScheduler = mockk(relaxed = true),
     ) = OnMigrationSyncCompletedUseCase(
         getOrchardMigrationSdk =
             mockk<GetOrchardMigrationSdkUseCase> {
@@ -28,13 +26,6 @@ class OnMigrationSyncCompletedUseCaseTest {
         lastNetworkActivity = lastNetworkActivity,
         migrationNotifier = migrationNotifier,
         migrationScheduler = migrationScheduler,
-        migrationSyncScheduler = migrationSyncScheduler,
-        // Explicit null plan: skips the lane-revival branch (which would touch WorkManager via a
-        // real Context) in these unit tests — a relaxed mock would return a mock plan instead.
-        migrationPlanRepository =
-            mockk {
-                coEvery { load(any()) } returns null
-            },
         context = mockk(relaxed = true),
     )
 
@@ -49,14 +40,12 @@ class OnMigrationSyncCompletedUseCaseTest {
             val lastNetworkActivity = mockk<LastNetworkActivityStorageProvider>(relaxed = true)
             val migrationNotifier = mockk<MigrationNotifier>(relaxed = true)
             val migrationScheduler = mockk<MigrationScheduler>(relaxed = true)
-            val migrationSyncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
 
             useCase(
                 sdk = sdk,
                 lastNetworkActivity = lastNetworkActivity,
                 migrationNotifier = migrationNotifier,
                 migrationScheduler = migrationScheduler,
-                migrationSyncScheduler = migrationSyncScheduler,
             ).invoke("account-key-1")
 
             coVerifyOrder {
@@ -66,7 +55,6 @@ class OnMigrationSyncCompletedUseCaseTest {
             }
             coVerify(exactly = 0) { migrationNotifier.notifyMigrationPlanInvalid(any()) }
             verify(exactly = 0) { migrationScheduler.cancel(any()) }
-            verify(exactly = 0) { migrationSyncScheduler.cancel(any()) }
         }
 
     @Test
@@ -80,19 +68,16 @@ class OnMigrationSyncCompletedUseCaseTest {
             val lastNetworkActivity = mockk<LastNetworkActivityStorageProvider>(relaxed = true)
             val migrationNotifier = mockk<MigrationNotifier>(relaxed = true)
             val migrationScheduler = mockk<MigrationScheduler>(relaxed = true)
-            val migrationSyncScheduler = mockk<MigrationSyncScheduler>(relaxed = true)
 
             useCase(
                 sdk = sdk,
                 lastNetworkActivity = lastNetworkActivity,
                 migrationNotifier = migrationNotifier,
                 migrationScheduler = migrationScheduler,
-                migrationSyncScheduler = migrationSyncScheduler,
             ).invoke("account-key-2")
 
             coVerify(exactly = 1) { migrationNotifier.notifyMigrationPlanInvalid("account-key-2") }
             verify(exactly = 1) { migrationScheduler.cancel("account-key-2") }
-            verify(exactly = 1) { migrationSyncScheduler.cancel("account-key-2") }
             coVerify(exactly = 1) { lastNetworkActivity.stampNow() }
         }
 }

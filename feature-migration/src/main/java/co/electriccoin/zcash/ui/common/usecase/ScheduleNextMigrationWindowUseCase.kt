@@ -1,7 +1,6 @@
 package co.electriccoin.zcash.ui.common.usecase
 
 import co.electriccoin.zcash.ui.common.model.toStorageKeyId
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.work.MigrationScheduler
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -15,15 +14,14 @@ import kotlin.time.Duration.Companion.seconds
  * [FinalizeMigrationScheduleUseCase] for why this no longer depends on a delivery-mode flag.
  */
 class ScheduleNextMigrationWindowUseCase(
-    private val migrationPlanRepository: MigrationPlanRepository,
+    private val getMigrationSnapshot: GetMigrationSnapshotUseCase,
     private val migrationScheduler: MigrationScheduler,
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
 ) {
     suspend operator fun invoke() {
-        val plan = migrationPlanRepository.load() ?: return
-        val next = plan.nextPending ?: return
+        val next = getMigrationSnapshot()?.nextPending ?: return
         val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
-        val delay = delayUntil(next.scheduledAtEpochSeconds)
+        val delay = delayUntil(next.scheduledAt.epochSeconds)
         migrationScheduler.schedule(accountKeyId, delay)
     }
 

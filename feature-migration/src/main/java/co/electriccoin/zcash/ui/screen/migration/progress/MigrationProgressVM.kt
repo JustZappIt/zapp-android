@@ -8,16 +8,17 @@ import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.migration.BuildConfig
-import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.migration.migrationLog
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.guardLoading
-import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
-import co.electriccoin.zcash.ui.common.model.migration.MigrationPreparation
-import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
-import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
+import co.electriccoin.zcash.ui.common.model.migration.LiveMigrationPreparation
+import co.electriccoin.zcash.ui.common.model.migration.LiveMigrationSnapshot
+import co.electriccoin.zcash.ui.common.model.migration.LiveMigrationTransfer
+import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferAction
+import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferBlocker
 import co.electriccoin.zcash.ui.common.model.migration.formatMigrationDuration
-import co.electriccoin.zcash.ui.common.model.migration.withLiveState
+import co.electriccoin.zcash.ui.common.model.migration.toSnapshot
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.toStorageKeyId
@@ -26,8 +27,8 @@ import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProv
 import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetMigrationSnapshotUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
@@ -35,8 +36,8 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
-import co.electriccoin.zcash.work.LANE_A_SYNC_TIMEOUT
 import co.electriccoin.zcash.work.MigrationScheduler
+import co.electriccoin.zcash.work.SYNC_TIMEOUT
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,7 +54,6 @@ import kotlin.time.Instant
 class MigrationProgressVM(
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
-    private val migrationPlanRepository: MigrationPlanRepository,
     private val navigationRouter: NavigationRouter,
     private val exchangeRateRepository: ExchangeRateRepository,
     private val errorStateMapper: ErrorMapperUseCase,
@@ -66,20 +66,21 @@ class MigrationProgressVM(
 
     val state: StateFlow<LceState<MigrationProgressState>> =
         combine(
-            migrationPlanRepository.observe(),
             exchangeRateRepository.state,
             liveTransferStatesFlow(),
-        ) { plan, rate, liveStates ->
-            // Measured block rate for the height->wall-clock re-projection — the 75s default
-            // turned minute-scale testnet schedules into "~1 hour" rows (caught live 28.7.).
+        ) { rate, liveStates ->
+            // Everything on this screen derives LIVE from the engine's persisted states — no plan
+            // cache to diverge, and no app-side "overdue"/countdown: each row renders purely from
+            // the engine's per-transaction status (decision with Dominik 2026-07-31). The measured
+            // block rate is still used for the rough total-duration estimate in the header only.
             val secondsPerBlock = getOrchardMigrationSdk()?.estimatedSecondsPerBlock() ?: 75L
-            // Issue 3a: gate the recovery buttons on a GRACED, transfers-only overdue check
-            // computed app-side from the live states' SCANNED tip — NOT the raw SDK
-            // hasOverdueTransfers() (Rust any_overdue), which is un-graced and includes
-            // preparations, so it flashed the buttons the instant a proved tx passed its
-            // scheduled height during otherwise-normal execution.
-            val reallyOverdue = hasGenuinelyOverdueTransfer(liveStates)
-            plan?.let { createState(it.withLiveState(liveStates, secondsPerBlock), rate, reallyOverdue) }
+            val est = getOrchardMigrationSdk()?.estimatedChainTip() ?: -1L
+            liveStates
+                ?.toSnapshot(
+                    estimatedTip = if (est >= 0) est else liveStates.tipHeight,
+                    secondsPerBlock = secondsPerBlock,
+                    nowEpochSeconds = Clock.System.now().epochSeconds,
+                )?.let { createState(it, rate) }
         }.withLce(sendLce, errorStateMapper::mapToState)
             .stateIn(this)
 
@@ -122,7 +123,14 @@ class MigrationProgressVM(
         viewModelScope.launch {
             while (true) {
                 runCatching { attemptForegroundBroadcast() }
-                    .onFailure { Twig.warn(it) { "MIGRATION_DIAG ProgressBroadcast: pass failed (transient) — retrying next tick" } }
+                    .onFailure {
+                        // Swallowing a CancellationException would fight structured concurrency —
+                        // the VM scope is going away (navigation), the loop must die with it
+                        // (observed live 2026-07-30: navigation churn logged these as "transient"
+                        // failures and the pass never completed its quiet-gap wait).
+                        if (it is kotlinx.coroutines.CancellationException) throw it
+                        migrationLog("ProgressBroadcast: pass failed (transient) — retrying next tick", it)
+                    }
                 delay(FOREGROUND_BROADCAST_INTERVAL)
             }
         }
@@ -144,11 +152,16 @@ class MigrationProgressVM(
     private suspend fun attemptForegroundBroadcast() {
         val sdk = getOrchardMigrationSdk() ?: return
         val states = sdk.getMigrationTransferStates() ?: return
-        if (!hasBroadcastableTransfer(states)) {
+        // Only bother when the ENGINE would actually serve a broadcast: a proved, unsent,
+        // non-stuck transaction due at the scanned tip (executeNextPendingTransfer re-verifies
+        // and picks the exact transaction itself — decision vs action).
+        if (!co.electriccoin.zcash.work
+                .broadcastDueByEstimate(states, states.tipHeight)
+        ) {
             return
         }
         if (sdk.isSyncBlocked().first()) {
-            Twig.debug { "MIGRATION_DIAG ProgressBroadcast: privacy gate active (isSyncBlocked) — deferring foreground broadcast." }
+            migrationLog("ProgressBroadcast: privacy gate active (isSyncBlocked) — deferring foreground broadcast.")
             return
         }
         val synchronizer = synchronizerProvider.getSynchronizerOrNull()
@@ -157,7 +170,7 @@ class MigrationProgressVM(
         // CloseableSynchronizer; a null/incompatible synchronizer simply skips this pass.
         val closeable =
             synchronizer as? cash.z.ecc.android.sdk.CloseableSynchronizer ?: run {
-                Twig.debug { "MIGRATION_DIAG ProgressBroadcast: no pausable synchronizer — skipping foreground broadcast." }
+                migrationLog("ProgressBroadcast: no pausable synchronizer — skipping foreground broadcast.")
                 return
             }
         closeable.pause()
@@ -170,25 +183,25 @@ class MigrationProgressVM(
         // Stamping here forces the full privacy buffer to elapse after the sync actually stopped,
         // covering the async stop and giving real decorrelation.
         lastNetworkActivity.stampNow()
-        Twig.debug { "MIGRATION_DIAG ProgressBroadcast: paused foreground sync to open a broadcast window." }
+        migrationLog("ProgressBroadcast: paused foreground sync to open a broadcast window.")
         try {
             // Wait out the privacy quiet gap since the pause stamp above (same buffer Lane B's
             // preflight enforces) so an observer can't correlate the just-stopped sync with the
             // broadcast. The pause above already removed the live-sync source; this covers the gap.
             val gap = quietGapRemaining(sdk.privacySyncBufferDuration())
             if (gap.isPositive()) {
-                Twig.debug { "MIGRATION_DIAG ProgressBroadcast: waiting privacy quiet gap $gap before broadcast." }
+                migrationLog("ProgressBroadcast: waiting privacy quiet gap $gap before broadcast.")
                 delay(gap)
             }
             val useTor = isMigrationTorEnabledStorageProvider.get()
             val outcome = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor), useEstimatedTip = false)
-            Twig.debug { "MIGRATION_DIAG ProgressBroadcast: foreground broadcast outcome=$outcome" }
+            migrationLog("ProgressBroadcast: foreground broadcast outcome=$outcome")
             lastNetworkActivity.stampNow()
         } finally {
             // Hand sync governance back to the SDK-owned isSyncBlocked gate (which, after a
             // successful overdue broadcast, keeps sync paused for the post-broadcast buffer).
             closeable.resume()
-            Twig.debug { "MIGRATION_DIAG ProgressBroadcast: resumed foreground sync (SDK gate now governs)." }
+            migrationLog("ProgressBroadcast: resumed foreground sync (SDK gate now governs).")
         }
     }
 
@@ -199,88 +212,66 @@ class MigrationProgressVM(
         return if (remaining.isPositive()) remaining else kotlin.time.Duration.ZERO
     }
 
-    // withLiveState() (correlating by stable transfer id, never array index — see its doc) now
-    // lives in MigrationPlan.kt, shared with MigrationAttention.kt's affectedTransferIndices().
-
     fun navigateBack() = navigationRouter.back()
 
     private fun createState(
-        plan: MigrationPlan,
+        snapshot: LiveMigrationSnapshot,
         exchangeRateState: ExchangeRateState,
-        reallyOverdue: Boolean,
     ): MigrationProgressState {
         val now = Clock.System.now()
-        val next = plan.nextPending
-        val hasOverdue = next != null && reallyOverdue
-        val isResume = hasOverdue && plan.completedCount > 0
-        val overdueH = if (next != null) overdueHours(next, now) else 0L
-
+        // Rough total-duration estimate for the header only (first→last scheduled moment across
+        // preparations AND transfers) — a "the whole thing takes about X" hint, never a per-row
+        // deadline.
+        val allScheduled = (snapshot.transfers.map { it.scheduledAt } + snapshot.preparations.map { it.scheduledAt })
         val span =
-            (plan.transfers.maxOfOrNull { it.scheduledAtEpochSeconds } ?: plan.createdAtEpochSeconds) -
-                plan.createdAtEpochSeconds
+            ((allScheduled.maxOrNull() ?: now) - (allScheduled.minOrNull() ?: now)).inWholeSeconds
         val subtitle =
-            when {
-                plan.isComplete -> {
-                    "All ${plan.totalCount} transfers are complete."
-                }
-
-                isResume -> {
-                    "Transfer ${plan.completedCount + 1} of ${plan.totalCount} was scheduled ${overdueH}h ago but wasn't sent. Send now or reschedule."
-                }
-
-                else -> {
-                    "Your balance splits into ${plan.totalCount} transfers over " +
-                        "${formatMigrationDuration(span)}. There are " +
-                        "${plan.totalCount - plan.completedCount} remaining transfers."
-                }
+            if (snapshot.isComplete) {
+                "All ${snapshot.totalCount} transfers are complete."
+            } else {
+                "Your balance splits into ${snapshot.totalCount} transfers over " +
+                    "${formatMigrationDuration(span)}. There are " +
+                    "${snapshot.totalCount - snapshot.completedCount} remaining transfers."
             }
 
-        val totalZatoshi = plan.transfers.sumOf { it.amountZatoshi }
-        // Sort preparations by their scheduled time to get a stable broadcast/display order.
-        val sortedPreps = plan.preparations.sortedBy { it.scheduledAtEpochSeconds }
+        val totalZatoshi = snapshot.transfers.sumOf { it.amountZatoshi }
         return MigrationProgressState(
-            title = stringRes(if (isResume) "Resume Migration" else "Migration Progress"),
+            title = stringRes("Migration Progress"),
             subtitle = stringRes(subtitle),
             totalAmount = stringRes(Zatoshi(totalZatoshi)),
             totalFiatAmount = fiatAmount(Zatoshi(totalZatoshi), exchangeRateState),
             preparations =
-                sortedPreps.mapIndexed { i, p ->
+                snapshot.preparations.mapIndexed { i, p ->
                     MigrationProgressPreparationState(
                         number = i + 1,
-                        statusLabel = preparationStatusLabel(p, now),
-                        isSent = p.status == MigrationTransferStatus.SENT,
+                        statusLabel = preparationStatusLabel(p),
+                        isSent = p.isSent,
                         // BuildConfig.DEBUG read inline (matching the codebase's other VMs) rather than
                         // injected — a `Boolean` constructor param breaks Koin's `viewModelOf` reflective
-                        // resolution (NoDefinitionFoundException at screen open). The unit test covers both
-                        // branches via the standalone `mapPreparationsToState(..., debugSyncEnabled)` helper.
+                        // resolution (NoDefinitionFoundException at screen open).
                         syncLabel = if (BuildConfig.DEBUG) preparationSyncLabel(p, now) else null,
                     )
                 },
             transfers =
-                plan.transfers.map { t ->
+                snapshot.transfers.map { t ->
                     MigrationProgressTransferState(
                         index = t.index + 1,
                         amount = stringRes(Zatoshi(t.amountZatoshi)),
                         fiatAmount = fiatAmount(Zatoshi(t.amountZatoshi), exchangeRateState),
-                        statusLabel = transferLabel(t, now),
-                        isOverdue = t.status == MigrationTransferStatus.PENDING && t.isProved && t.scheduledAt <= now,
-                        isSent = t.status == MigrationTransferStatus.SENT,
+                        statusLabel = transferLabel(t),
+                        // Attention paint (orange) ONLY for genuine, cannot-heal-on-its-own states —
+                        // never for a merely-late-but-healthy transfer (the old "overdue" false
+                        // alarm). Expired and the synthetic unprovable-anchor are the only two.
+                        isAttention =
+                            t.blocker == MigrationTransferBlocker.UNPROVABLE_ANCHOR ||
+                                t.blocker == MigrationTransferBlocker.EXPIRED,
+                        isSent = t.isSent,
                         syncLabel = if (BuildConfig.DEBUG) transferSyncLabel(t, now) else null,
                     )
                 },
-            isComplete = plan.isComplete,
-            hasOverdue = hasOverdue,
+            isComplete = snapshot.isComplete,
             onBack = ::onBack,
-            // Figma B4 (Updated Migration Plan — normal in-progress) has no Send Now button at
-            // all; it only appears on B8 (Resume Migration) when a transfer is actually overdue.
-            onSendNow =
-                if (hasOverdue) {
-                    { onSendNow(plan) }
-                } else {
-                    null
-                },
-            onReschedule = if (hasOverdue) ::onReschedule else null,
-            onDone = if (plan.isComplete) ::onDone else null,
+            onDone = if (snapshot.isComplete) ::onDone else null,
         )
     }
 
@@ -302,37 +293,11 @@ class MigrationProgressVM(
     // SDK notices this transfer was overdue and sets it internally. The actual broadcast, its
     // failure/retry sheet, and re-arming the next window all live on the Sending screen now
     // (see MigrationSendingVM), reused instead of duplicated here.
-    private fun onSendNow(plan: MigrationPlan) = navigationRouter.forward(MigrationSendingArgs)
+    private fun onSendNow() = navigationRouter.forward(MigrationSendingArgs)
 
     // "Reschedule" no longer mutates the plan — a missed-but-unexpired transfer needs NO plan
     // change by design (ZIP 374: the signature does not cover the anchor, so it proves late
     // against its committed boundary and broadcasts late; the engine is the single source of
-    // truth). New semantics: SYNC NOW — run the same sync + finalizeReadyTransfers pass Lane A
-    // does, in the foreground, so the missing proof falls out immediately — then let the transfer
-    // go out in the next live window (background worker, or next app open).
-    private fun onReschedule() =
-        sendLce.execute {
-            val sdk = getOrchardMigrationSdk() ?: error("MigrationProgressVM: no wallet available to sync")
-            val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
-            if (sdk.isSyncBlocked().first()) {
-                // Post-broadcast privacy gate — same guard Lane A honours; the re-arm below still
-                // gives the transfer its next window once the gate lifts.
-                Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: privacy gate active — skipping the foreground sync." }
-            } else {
-                val burst = synchronizerProvider.getSynchronizerOrNull()?.syncToTip(timeout = LANE_A_SYNC_TIMEOUT)
-                Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: syncToTip result=$burst" }
-                val proved = sdk.finalizeReadyTransfers()
-                Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: proved=$proved" }
-                lastNetworkActivity.stampNow()
-            }
-            // Re-arm Lane B for the next live window: after the privacy quiet gap from the sync just
-            // performed (Lane B's own preflight re-checks the gap from the fresh stamp regardless).
-            val reArm = sdk.privacySyncBufferDuration()
-            MigrationScheduler(context).schedule(accountKeyId, reArm)
-            Twig.debug { "MIGRATION_DIAG MigrationProgressVM.onReschedule: Lane B re-armed in $reArm" }
-            navigationRouter.back()
-        }
-
     private fun onDone() = navigationRouter.backToRoot()
 
     companion object {
@@ -342,138 +307,49 @@ class MigrationProgressVM(
         // Short enough to advance the migration responsively while watched, long enough not to
         // churn; the SDK's own gates make redundant passes cheap no-ops.
         internal val FOREGROUND_BROADCAST_INTERVAL = 20.seconds
-
-        /**
-         * Issue 3a — blocks a genuinely-overdue transfer must be past its scheduled height (at the
-         * SCANNED tip) before the Send-now/Reschedule recovery buttons appear.
-         *
-         * Derivation: the buttons must NOT flash during normal execution, where a proved transfer
-         * legitimately sits a few blocks past its scheduled height waiting for the next quiet
-         * broadcast window (the privacy buffer). The privacy buffer is 3 min testnet / 10 min
-         * mainnet; at the observed ~75 s/block that is ~2–8 blocks. A safe constant of 12 blocks
-         * clears the mainnet worst case (~8) plus a small margin for proof/scan jitter, so the
-         * buttons only appear when a transfer is overdue BEYOND the normal proof→broadcast latency
-         * — i.e. genuinely missed, not merely mid-execution.
-         */
-        internal const val OVERDUE_GRACE_BLOCKS = 12L
     }
 }
 
 /**
- * Issue 3a — the graced, transfers-only overdue predicate that gates the Send-now/Reschedule
- * recovery buttons. A transfer counts as GENUINELY overdue only when it is a real transfer (NOT a
- * preparation — those are internal plumbing the user never reasons about), not yet sent, and its
- * scheduled height plus [MigrationProgressVM.OVERDUE_GRACE_BLOCKS] has been reached at the SCANNED
- * tip ([MigrationTransferStates.tipHeight] — never an estimated tip, which would trip the buttons
- * before a sync could confirm the miss).
- *
- * Top-level and internal so it is unit-testable without Koin/Android — mirrors MigrationSyncWorker's
- * pure decision functions.
- */
-internal fun hasGenuinelyOverdueTransfer(states: MigrationTransferStates?): Boolean {
-    if (states == null) return false
-    return states.transfers.any { t ->
-        t.isTransfer && !t.isSent && t.isProved &&
-            t.scheduledHeight + MigrationProgressVM.OVERDUE_GRACE_BLOCKS <= states.tipHeight
-    }
-}
-
-/**
- * Issue 3b — whether the engine currently holds a transaction the foreground pass may broadcast:
- * a PROVED, unsent transaction whose scheduled height has been reached at the SCANNED tip. Proved
- * is load-bearing — an unproven due transfer can only be made broadcastable by Lane A's sync, never
- * force-broadcast here. Kind-agnostic (transfers AND preparations), matching the engine's own
- * next-due serving, so the pass never sleeps past a due preparation layer. Top-level and internal
- * for the same testability reason as [hasGenuinelyOverdueTransfer].
- */
-internal fun hasBroadcastableTransfer(states: MigrationTransferStates?): Boolean {
-    if (states == null) return false
-    return states.transfers.any { t ->
-        t.isProved && !t.isSent && t.scheduledHeight <= states.tipHeight
-    }
-}
-
-/** Elapsed hours since a transfer's scheduled time (floored to 0). */
-internal fun overdueHours(t: MigrationTransfer, now: Instant) =
-    (now - t.scheduledAt).inWholeHours.coerceAtLeast(0)
-
-/**
- * Status label for a crossing transfer row.
- *
- * PENDING splits into three sub-cases:
- * - proved + past-due  → "Overdue · Xh ago"  (the recovery UI is for this state only)
- * - unproved + past-due → "Awaiting proof"    (calm; Lane A's sync will prove it soon)
- * - future scheduled   → relative "~X min" / "~X h Y min" label
+ * Status label for a crossing transfer row, rendered PURELY from the engine's per-transaction
+ * status (`ready`/`action`/`blocker` from `transaction_statuses`) — NO wall-clock, NO "overdue",
+ * NO countdown. The engine has no notion of "overdue": a proved transfer waiting for the engine
+ * to reach its broadcast (proving is prioritised) is a normal state, not a failure. Showing a
+ * projected countdown that we then don't strictly honour — and painting late-but-healthy rows
+ * "Overdue" — made correct engine execution look broken (decision with Dominik 2026-07-31), so
+ * both are gone. Every branch maps 1:1 onto `state.rs::transaction_statuses`.
  *
  * Top-level and internal for unit-testability without Android or Koin.
  */
-internal fun transferLabel(t: MigrationTransfer, now: Instant): StringResource =
-    when (t.status) {
-        MigrationTransferStatus.SENT -> {
-            val agoMinutes = (now - t.scheduledAt).inWholeMinutes
-            when {
-                agoMinutes < 1 -> stringRes("Sent recently")
-                agoMinutes < 60 -> stringRes("Sent $agoMinutes min ago")
-                else -> stringRes("Sent ${agoMinutes / 60}h ago")
-            }
-        }
-
-        MigrationTransferStatus.PENDING -> {
-            val scheduled = t.scheduledAt
-            when {
-                scheduled <= now && t.isProved -> {
-                    stringRes("Overdue · ${overdueHours(t, now)}h ago")
-                }
-
-                scheduled <= now -> {
-                    stringRes("Awaiting proof")
-                }
-
-                else -> {
-                    // Use the shared formatter (Issue 2) so this screen and the Review screen
-                    // format identically ("~1 h 15 min") — the old inline branch bucketed to
-                    // coarse integer hours ("~1 hours") and dropped the minutes, so 75 min and
-                    // 119 min both rendered the same. fineGrained defaults to testnet=true.
-                    val secondsLeft = (scheduled - now).inWholeSeconds
-                    stringRes(formatMigrationDuration(secondsLeft))
-                }
-            }
-        }
+internal fun transferLabel(t: LiveMigrationTransfer): StringResource =
+    when {
+        t.isSent && t.minedHeight != null -> stringRes("Confirmed")
+        t.isSent -> stringRes("Sent")
+        t.blocker == MigrationTransferBlocker.EXPIRED -> stringRes("Expired")
+        t.blocker == MigrationTransferBlocker.UNPROVABLE_ANCHOR -> stringRes("Needs reschedule")
+        t.blocker == MigrationTransferBlocker.SIGNATURE -> stringRes("Awaiting signature")
+        t.blocker == MigrationTransferBlocker.DEPENDENCIES -> stringRes("Waiting for note split")
+        t.blocker == MigrationTransferBlocker.ANCHOR_BOUNDARY -> stringRes("Waiting for anchor window")
+        t.blocker == MigrationTransferBlocker.SCHEDULE -> stringRes("Scheduled")
+        t.action == MigrationTransferAction.PROVE -> stringRes("Preparing")
+        t.action == MigrationTransferAction.BROADCAST -> stringRes("Sending soon")
+        else -> stringRes("Waiting")
     }
 
 /**
- * Status label for a preparation row. Mirrors [transferLabel]'s Sent and future-relative arms
- * ("Sent recently" / "Sent X min ago" / "Sent Xh ago" / "~X min"), but deliberately does NOT
- * surface an "Overdue" label: preparations are internal note-split plumbing and the
- * overdue/recovery affordance is transfers-only, so a past-due unsent preparation reads simply
- * "Pending". Top-level and internal for unit-testability without Android or Koin.
+ * Status label for a preparation row — same pure-status mapping as [transferLabel]. Preparations
+ * are internal note-split plumbing, so the copy is deliberately plain ("Preparing" / "Sending
+ * soon" / "Waiting" / "Sent"). No wall-clock, no overdue. Top-level and internal for testability.
  */
-internal fun preparationStatusLabel(p: MigrationPreparation, now: Instant): StringResource {
-    val scheduledAt = Instant.fromEpochSeconds(p.scheduledAtEpochSeconds)
-    return when (p.status) {
-        MigrationTransferStatus.SENT -> {
-            val agoMinutes = (now - scheduledAt).inWholeMinutes
-            when {
-                agoMinutes < 1 -> stringRes("Sent recently")
-                agoMinutes < 60 -> stringRes("Sent $agoMinutes min ago")
-                else -> stringRes("Sent ${agoMinutes / 60}h ago")
-            }
-        }
-
-        MigrationTransferStatus.PENDING -> {
-            when {
-                scheduledAt <= now -> {
-                    stringRes("Pending")
-                }
-
-                else -> {
-                    val secondsLeft = (scheduledAt - now).inWholeSeconds
-                    stringRes(formatMigrationDuration(secondsLeft))
-                }
-            }
-        }
+internal fun preparationStatusLabel(p: LiveMigrationPreparation): StringResource =
+    when {
+        p.isSent -> stringRes("Sent")
+        p.blocker == MigrationTransferBlocker.SIGNATURE -> stringRes("Awaiting signature")
+        p.blocker == MigrationTransferBlocker.DEPENDENCIES -> stringRes("Waiting for previous split")
+        p.action == MigrationTransferAction.PROVE -> stringRes("Preparing")
+        p.action == MigrationTransferAction.BROADCAST -> stringRes("Sending soon")
+        else -> stringRes("Waiting")
     }
-}
 
 /**
  * DEBUG-only prove-state label for a preparation row, formatted with the same relative formatter
@@ -481,9 +357,9 @@ internal fun preparationStatusLabel(p: MigrationPreparation, now: Instant): Stri
  * the preparation already has a proof, otherwise a relative scheduled time or "pending".
  * Top-level and internal for unit-testability.
  */
-internal fun preparationSyncLabel(p: MigrationPreparation, now: Instant): StringResource {
+internal fun preparationSyncLabel(p: LiveMigrationPreparation, now: Instant): StringResource {
     if (p.isProved) return stringRes("proved")
-    val scheduledAt = Instant.fromEpochSeconds(p.scheduledAtEpochSeconds)
+    val scheduledAt = p.scheduledAt
     return when {
         scheduledAt <= now -> {
             stringRes("pending")
@@ -501,7 +377,7 @@ internal fun preparationSyncLabel(p: MigrationPreparation, now: Instant): String
  * "proved" when the transfer already has a proof, otherwise a relative scheduled time or "pending".
  * Top-level and internal for unit-testability.
  */
-internal fun transferSyncLabel(t: MigrationTransfer, now: Instant): StringResource {
+internal fun transferSyncLabel(t: LiveMigrationTransfer, now: Instant): StringResource {
     if (t.isProved) return stringRes("proved")
     val scheduledAt = t.scheduledAt
     return when {

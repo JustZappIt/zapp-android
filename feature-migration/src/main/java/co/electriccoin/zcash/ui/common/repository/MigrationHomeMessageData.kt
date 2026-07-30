@@ -1,25 +1,28 @@
 package co.electriccoin.zcash.ui.common.repository
 
 import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
-import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
 
 /**
  * The migration home-banner payload (formerly ui-lib's `HomeMessageData.Migration`) — the concrete
  * [MigrationHomeMessage] the feature module emits through `MigrationHomeMessageSource`.
+ *
+ * Carries only DERIVED live data (crossings-only counts from the engine's transfer states) — the
+ * app persists nothing about the plan (see `spec/2026-07-30-plan-cache-elimination-proposal.md`).
+ * [isRunActive] is true when the engine holds a committed, not-yet-finished run (drives the
+ * Progress-vs-Setup routing the old `plan != null` check used to).
  */
 data class MigrationHomeMessageData(
-    val plan: MigrationPlan?,
+    val isRunActive: Boolean,
+    val completedCount: Int = 0,
+    val totalCount: Int = 0,
     val isComplete: Boolean = false,
-    // Spec §6.4 "Transfer Ready to Send": true when [plan]'s next pending transfer's scheduled
-    // time has arrived, background execution is unavailable, and the SDK doesn't yet count it
-    // as overdue — a narrower, earlier window than the general missed-transfer/overdue state.
-    // See migrationMessageFor() in MigrationHomeMessageSourceImpl.kt for the derivation.
+    // Spec §6.4 "Transfer Ready to Send": true when the next pending transfer's scheduled time
+    // has arrived, background execution is unavailable, and the SDK doesn't yet count it as
+    // overdue — a narrower, earlier window than the general missed-transfer/overdue state.
     val isReadyToSend: Boolean = false,
     // Non-null exactly when the SDK's MigrationState is RequiresAttention (spec §6.2/§6.3) —
     // see MigrationAttentionKind's doc for why the two causes must never collapse into one
-    // generic message again. attentionRangeText is only meaningful for TRANSFER_EXPIRED (the
-    // specific "Transfer 3–5" range that actually expired); null for PLAN_UPDATE, whose home
-    // message doesn't name a range (see design spec §6.2, no range mentioned there).
+    // generic message again. attentionRangeText is only meaningful for TRANSFER_EXPIRED.
     val attentionKind: MigrationAttentionKind? = null,
     val attentionRangeText: String? = null,
 ) : MigrationHomeMessage()

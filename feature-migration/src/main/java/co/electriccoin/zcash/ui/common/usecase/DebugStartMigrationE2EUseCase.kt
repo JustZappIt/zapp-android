@@ -4,18 +4,15 @@ import android.content.Context
 import cash.z.ecc.android.sdk.MigrationSchedule
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.TransferResult
-import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.migration.migrationLog
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
-import co.electriccoin.zcash.ui.common.provider.MigrationShiftCounterStorageProvider
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepository
 import co.electriccoin.zcash.work.MigrationScheduler
-import co.electriccoin.zcash.work.MigrationSyncScheduler
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.seconds
 
@@ -33,9 +30,7 @@ import kotlin.time.Duration.Companion.seconds
 class DebugStartMigrationE2EUseCase(
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val accountDataSource: AccountDataSource,
-    private val migrationPlanRepository: MigrationPlanRepository,
     private val pendingMigrationTorFailureStorageProvider: PendingMigrationTorFailureStorageProvider,
-    private val migrationShiftCounterStorageProvider: MigrationShiftCounterStorageProvider,
     private val restartMigrationScheduleRepository: RestartMigrationScheduleRepository,
     private val migrationNotifier: MigrationNotifier,
     private val finalizeMigrationSchedule: FinalizeMigrationScheduleUseCase,
@@ -43,10 +38,10 @@ class DebugStartMigrationE2EUseCase(
     private val context: Context,
 ) {
     suspend operator fun invoke() {
-        Twig.debug { "MIGRATION_DIAG E2E: start requested — waiting for the SDK" }
+        migrationLog("E2E: start requested — waiting for the SDK")
         val sdk =
             waitForSdk() ?: run {
-                Twig.warn { "MIGRATION_DIAG E2E: SDK never became available — aborting" }
+                migrationLog("E2E: SDK never became available — aborting")
                 return
             }
 
@@ -58,13 +53,10 @@ class DebugStartMigrationE2EUseCase(
                 .toStorageKeyId()
         sdk.clearMigration()
         MigrationScheduler(context).cancel(accountKeyId)
-        MigrationSyncScheduler(context).cancel(accountKeyId)
-        migrationPlanRepository.clear()
         pendingMigrationTorFailureStorageProvider.store(accountKeyId, false)
-        migrationShiftCounterStorageProvider.reset(accountKeyId)
         restartMigrationScheduleRepository.consume(accountKeyId)
         migrationNotifier.cancel(accountKeyId)
-        Twig.debug { "MIGRATION_DIAG E2E: reset done — proposing a fresh AUTOMATIC plan" }
+        migrationLog("E2E: reset done — proposing a fresh AUTOMATIC plan")
 
         // ── Propose (retry: right after launch the wallet may still be syncing to spendability) ──
         var sched: MigrationSchedule? = null
@@ -73,16 +65,16 @@ class DebugStartMigrationE2EUseCase(
             sched =
                 runCatching { sdk.proposeMigrationTransfers() }
                     .onFailure {
-                        Twig.debug {
-                            "MIGRATION_DIAG E2E: propose attempt ${attempt + 1}/$PROPOSE_ATTEMPTS failed " +
+                        migrationLog(
+                            "E2E: propose attempt ${attempt + 1}/$PROPOSE_ATTEMPTS failed " +
                                 "(${it.message}) — retrying in $PROPOSE_RETRY_DELAY"
-                        }
+                        )
                     }.getOrNull()
             if (sched == null) delay(PROPOSE_RETRY_DELAY)
         }
         val proposed =
             sched ?: run {
-                Twig.warn { "MIGRATION_DIAG E2E: propose never succeeded — aborting" }
+                migrationLog("E2E: propose never succeeded — aborting")
                 return
             }
 
@@ -91,19 +83,17 @@ class DebugStartMigrationE2EUseCase(
             if (sdk.isNoteSplitNeeded()) {
                 val proposal = sdk.prepareNoteSplit()
                 val scheduleFromSplit = sdk.proposeMigrationTransfersFromSplit(proposal)
-                finalizeMigrationSchedule.persistPlan(scheduleFromSplit, MigrationMode.AUTOMATIC)
                 val splitResult = sdk.submitNoteSplit(proposal, zashiSpendingKeyDataSource.getZashiSpendingKey())
                 if (splitResult !is TransferResult.Success) {
-                    Twig.warn { "MIGRATION_DIAG E2E: note split failed ($splitResult) — aborting" }
+                    migrationLog("E2E: note split failed ($splitResult) — aborting")
                     return
                 }
                 scheduleFromSplit
             } else {
-                finalizeMigrationSchedule.persistPlan(proposed, MigrationMode.AUTOMATIC)
                 proposed
             }
         signAndFinalizeWithStaleRetry(sdk, scheduleToSign)
-        Twig.debug { "MIGRATION_DIAG E2E: plan committed — background lanes armed" }
+        migrationLog("E2E: plan committed — worker chain armed")
     }
 
     private suspend fun signAndFinalizeWithStaleRetry(sdk: OrchardMigrationSdk, schedule: MigrationSchedule) {
@@ -122,13 +112,12 @@ class DebugStartMigrationE2EUseCase(
                     e.message?.contains("StalePlan") == true ||
                         e.message?.contains("BoundaryCheckpointMissing") == true
                 if (!retryable || attempt == COMMIT_ATTEMPTS - 1) throw e
-                Twig.debug {
-                    "MIGRATION_DIAG E2E: commit attempt ${attempt + 1} failed retryably " +
+                migrationLog(
+                    "E2E: commit attempt ${attempt + 1} failed retryably " +
                         "(${e.message?.take(120)}) — re-proposing"
-                }
+                )
                 delay(COMMIT_RETRY_DELAY)
                 toSign = sdk.proposeMigrationTransfers()
-                finalizeMigrationSchedule.persistPlan(toSign, MigrationMode.AUTOMATIC)
             }
         }
     }

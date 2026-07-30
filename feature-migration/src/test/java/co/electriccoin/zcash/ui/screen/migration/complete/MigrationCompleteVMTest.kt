@@ -20,7 +20,6 @@ import co.electriccoin.zcash.ui.common.provider.HasLockedOrchardDustStorageProvi
 import co.electriccoin.zcash.ui.common.provider.HasSeenMigrationCompleteStorageProvider
 import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
@@ -28,7 +27,6 @@ import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.screen.migration.success.MigrationSuccessArgs
 import co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionArgs
 import co.electriccoin.zcash.work.MigrationScheduler
-import co.electriccoin.zcash.work.MigrationSyncScheduler
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -62,12 +60,10 @@ class MigrationCompleteVMTest {
     @Test
     fun keystoneAccountWithResidualBalanceClearsPlanInsteadOfMarkingSeen() =
         runTest {
-            val plans = mockk<MigrationPlanRepository>(relaxed = true)
             val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
             val router = FakeNavigationRouter()
             val vm =
                 vm(
-                    plans = plans,
                     seen = seen,
                     account = mockk<KeystoneAccount>(relaxed = true),
                     orchardBalanceZatoshi = 500_000L,
@@ -79,7 +75,6 @@ class MigrationCompleteVMTest {
             invokeOnDone(vm)
             advanceUntilIdle()
 
-            coVerify(exactly = 1) { plans.clear() }
             coVerify(exactly = 0) { seen.store(true) }
             assertEquals(1, router.backToRootCount)
         }
@@ -87,12 +82,10 @@ class MigrationCompleteVMTest {
     @Test
     fun keystoneAccountWithZeroResidualBalanceMarksSeenInsteadOfClearing() =
         runTest {
-            val plans = mockk<MigrationPlanRepository>(relaxed = true)
             val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
             val router = FakeNavigationRouter()
             val vm =
                 vm(
-                    plans = plans,
                     seen = seen,
                     account = mockk<KeystoneAccount>(relaxed = true),
                     orchardBalanceZatoshi = 0L,
@@ -103,7 +96,6 @@ class MigrationCompleteVMTest {
             invokeOnDone(vm)
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { plans.clear() }
             coVerify(exactly = 1) { seen.store(true) }
             assertEquals(1, router.backToRootCount)
         }
@@ -113,12 +105,10 @@ class MigrationCompleteVMTest {
         runTest {
             // Scope: hot-wallet multi-round continuation is deferred, so a non-Keystone account always
             // takes the terminal path regardless of residual balance.
-            val plans = mockk<MigrationPlanRepository>(relaxed = true)
             val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
             val router = FakeNavigationRouter()
             val vm =
                 vm(
-                    plans = plans,
                     seen = seen,
                     account = mockk<ZashiAccount>(relaxed = true),
                     orchardBalanceZatoshi = 500_000L,
@@ -129,7 +119,6 @@ class MigrationCompleteVMTest {
             invokeOnDone(vm)
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { plans.clear() }
             coVerify(exactly = 1) { seen.store(true) }
             assertEquals(1, router.backToRootCount)
         }
@@ -140,12 +129,10 @@ class MigrationCompleteVMTest {
             // Pins the fix for Task 3's bug: a bare `> 0L` check used to treat *any* nonzero residual
             // as "more rounds needed", incorrectly clearing the plan even for a genuinely-dust residual
             // well below the real completion threshold.
-            val plans = mockk<MigrationPlanRepository>(relaxed = true)
             val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
             val router = FakeNavigationRouter()
             val vm =
                 vm(
-                    plans = plans,
                     seen = seen,
                     account = mockk<KeystoneAccount>(relaxed = true),
                     orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI - 1L,
@@ -156,7 +143,6 @@ class MigrationCompleteVMTest {
             invokeOnDone(vm)
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { plans.clear() }
             coVerify(exactly = 1) { seen.store(true) }
             assertEquals(1, router.backToRootCount)
         }
@@ -165,12 +151,10 @@ class MigrationCompleteVMTest {
     fun keystoneAccountWithResidualExactlyAtThresholdMarksSeenInsteadOfClearing() =
         runTest {
             // Boundary check: exactly-at-threshold is still "done" (comparison is strictly `>`).
-            val plans = mockk<MigrationPlanRepository>(relaxed = true)
             val seen = mockk<HasSeenMigrationCompleteStorageProvider>(relaxed = true)
             val router = FakeNavigationRouter()
             val vm =
                 vm(
-                    plans = plans,
                     seen = seen,
                     account = mockk<KeystoneAccount>(relaxed = true),
                     orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI,
@@ -181,7 +165,6 @@ class MigrationCompleteVMTest {
             invokeOnDone(vm)
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { plans.clear() }
             coVerify(exactly = 1) { seen.store(true) }
             assertEquals(1, router.backToRootCount)
         }
@@ -258,7 +241,6 @@ class MigrationCompleteVMTest {
             // from the engine's persisted migration data via the SDK, not the app-side plan (cleared on
             // completion). Pins that the VM queries the SDK's getMigrationSummary() and never reads the
             // now-obsolete plan for the summary.
-            val plans = mockk<MigrationPlanRepository>(relaxed = true)
             val summary =
                 MigrationSummary(
                     totalMigratedZatoshi = 9_779_000_000L,
@@ -272,7 +254,6 @@ class MigrationCompleteVMTest {
                 }
             val vm =
                 vm(
-                    plans = plans,
                     account = mockk<KeystoneAccount>(relaxed = true),
                     orchardBalanceZatoshi = 500_000L,
                     router = FakeNavigationRouter(),
@@ -283,7 +264,6 @@ class MigrationCompleteVMTest {
             advanceUntilIdle()
 
             coVerify(exactly = 1) { sdk.getMigrationSummary() }
-            coVerify(exactly = 0) { plans.load() }
         }
 
     private fun invokeOnDone(vm: MigrationCompleteVM) {
@@ -300,7 +280,6 @@ class MigrationCompleteVMTest {
 
     @Suppress("LongParameterList")
     private fun vm(
-        plans: MigrationPlanRepository = mockk(relaxed = true),
         seen: HasSeenMigrationCompleteStorageProvider = mockk(relaxed = true),
         account: WalletAccount,
         orchardBalanceZatoshi: Long,
@@ -315,9 +294,7 @@ class MigrationCompleteVMTest {
         proposalDataSource: ProposalDataSource = mockk(relaxed = true),
         keystoneProposalRepository: KeystoneProposalRepository = mockk(relaxed = true),
         migrationScheduler: MigrationScheduler = mockk(relaxed = true),
-        migrationSyncScheduler: MigrationSyncScheduler = mockk(relaxed = true),
     ) = MigrationCompleteVM(
-        migrationPlanRepository = plans,
         getOrchardBalance =
             mockk<GetOrchardBalanceUseCase> {
                 coEvery { this@mockk() } returns Zatoshi(orchardBalanceZatoshi)
@@ -337,7 +314,6 @@ class MigrationCompleteVMTest {
         proposalDataSource = proposalDataSource,
         keystoneProposalRepository = keystoneProposalRepository,
         migrationScheduler = migrationScheduler,
-        migrationSyncScheduler = migrationSyncScheduler,
     )
 
     private class FakeNavigationRouter : NavigationRouter {

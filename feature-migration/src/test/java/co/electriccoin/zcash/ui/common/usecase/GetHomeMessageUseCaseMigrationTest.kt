@@ -3,51 +3,58 @@ package co.electriccoin.zcash.ui.common.usecase
 import cash.z.ecc.android.sdk.AttentionReason
 import cash.z.ecc.android.sdk.MigrationProgress
 import cash.z.ecc.android.sdk.MigrationState
+import co.electriccoin.zcash.ui.common.model.migration.LiveMigrationSnapshot
+import co.electriccoin.zcash.ui.common.model.migration.LiveMigrationTransfer
 import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_DUST_THRESHOLD_ZATOSHI
 import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_RESIDUAL_MIN_ZATOSHI
 import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
-import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
-import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
-import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
-import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
 import co.electriccoin.zcash.ui.common.repository.MigrationHomeMessageData
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 
 class GetHomeMessageUseCaseMigrationTest {
-    private fun plan(id: String = "p1") =
-        MigrationPlan(
-            id = id,
-            createdAtEpochSeconds = 0L,
-            transfers = emptyList(),
-            mode = MigrationMode.AUTOMATIC,
-        )
+    private fun transfer(
+        id: Long,
+        index: Int,
+        scheduledAt: Instant,
+        isSent: Boolean = false,
+    ) = LiveMigrationTransfer(
+        id = id,
+        index = index,
+        amountZatoshi = 100_000L,
+        scheduledHeight = 1_000L + index,
+        scheduledAt = scheduledAt,
+        isSent = isSent,
+        isProved = true,
+        action = null,
+        blocker = null,
+        expiryAt = null,
+        minedHeight = null,
+    )
 
-    private fun planWithPendingTransfer(scheduledAtEpochSeconds: Long) =
-        MigrationPlan(
-            id = "p-ready",
-            createdAtEpochSeconds = 0L,
+    /** A live snapshot with one sent and two pending transfers — counts (1, 3). */
+    private fun snapshot(nextScheduledAt: Instant = Instant.fromEpochSeconds(0)) =
+        LiveMigrationSnapshot(
             transfers =
                 listOf(
-                    MigrationTransfer(
-                        index = 2,
-                        amountZatoshi = 100_000L,
-                        scheduledAtEpochSeconds = scheduledAtEpochSeconds,
-                        status = MigrationTransferStatus.PENDING,
-                    )
+                    transfer(id = 10, index = 0, scheduledAt = Instant.fromEpochSeconds(0), isSent = true),
+                    transfer(id = 11, index = 1, scheduledAt = nextScheduledAt),
+                    transfer(id = 12, index = 2, scheduledAt = nextScheduledAt),
                 ),
-            mode = MigrationMode.AUTOMATIC,
+            preparations = emptyList(),
+            tipHeight = 1_000L,
         )
 
     @Test
-    fun freshWalletWithNoPlanAndNoBalanceShowsNothing() {
+    fun freshWalletWithNoRunAndNoBalanceShowsNothing() {
         val result =
             migrationMessageFor(
                 sdkState = null,
-                plan = null,
+                snapshot = null,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = 0L,
             )
@@ -55,81 +62,81 @@ class GetHomeMessageUseCaseMigrationTest {
     }
 
     @Test
-    fun freshWalletWithMigratableBalanceAndNoPlanShowsRequired() {
+    fun freshWalletWithMigratableBalanceAndNoRunShowsRequired() {
         // A balance at or above the migratable minimum (0.01 ZEC) is genuinely migratable, so the
         // "Migrate now" prompt is correct — tapping it will produce a real proposal, not
         // NothingToMigrate.
         val result =
             migrationMessageFor(
                 sdkState = null,
-                plan = null,
+                snapshot = null,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI,
             )
-        assertEquals(MigrationHomeMessageData(null), result)
+        assertEquals(MigrationHomeMessageData(isRunActive = false), result)
     }
 
     @Test
-    fun freshWalletWithLargeBalanceAndNoPlanShowsRequired() {
+    fun freshWalletWithLargeBalanceAndNoRunShowsRequired() {
         val result =
             migrationMessageFor(
                 sdkState = null,
-                plan = null,
+                snapshot = null,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI + 500_000L,
             )
-        assertEquals(MigrationHomeMessageData(null), result)
+        assertEquals(MigrationHomeMessageData(isRunActive = false), result)
     }
 
     @Test
-    fun residueInGapWithNoPlanShowsCompletedNotRequired() {
-        // The bug this fixes: a leftover Orchard balance above the dust threshold but below the
-        // migratable minimum (here 500_000 zat = 0.005 ZEC, the live-observed residue) is
-        // un-migratable — proposeMigrationTransfers would return NothingToMigrate. It must be
-        // evaluated as "migration completed" and route to the residue flow (lock / migrate-anyway),
-        // NOT shown as "Migrate now".
+    fun residueInGapWithNoRunShowsCompletedNotRequired() {
+        // A leftover Orchard balance above the dust threshold but below the migratable minimum
+        // (here 500_000 zat = 0.005 ZEC, the live-observed residue) is un-migratable —
+        // proposeMigrationTransfers would return NothingToMigrate. It must be evaluated as
+        // "migration completed" and route to the residue flow (lock / migrate-anyway), NOT shown
+        // as "Migrate now".
         val result =
             migrationMessageFor(
                 sdkState = null,
-                plan = null,
+                snapshot = null,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = 500_000L,
             )
-        assertEquals(MigrationHomeMessageData(plan = null, isComplete = true), result)
+        assertEquals(MigrationHomeMessageData(isRunActive = false, isComplete = true), result)
     }
 
     @Test
-    fun residueJustBelowMinWithNoPlanShowsCompleted() {
+    fun residueJustBelowMinWithNoRunShowsCompleted() {
         val result =
             migrationMessageFor(
                 sdkState = null,
-                plan = null,
+                snapshot = null,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI - 1L,
             )
-        assertEquals(MigrationHomeMessageData(plan = null, isComplete = true), result)
+        assertEquals(MigrationHomeMessageData(isRunActive = false, isComplete = true), result)
     }
 
     @Test
-    fun residueJustAboveDustWithNoPlanShowsCompleted() {
+    fun residueJustAboveDustWithNoRunShowsCompleted() {
         val result =
             migrationMessageFor(
                 sdkState = null,
-                plan = null,
+                snapshot = null,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI + 1L,
             )
-        assertEquals(MigrationHomeMessageData(plan = null, isComplete = true), result)
+        assertEquals(MigrationHomeMessageData(isRunActive = false, isComplete = true), result)
     }
 
     @Test
-    fun freshWalletWithDustBalanceAndNoPlanShowsNothing() {
+    fun freshWalletWithDustBalanceAndNoRunShowsNothing() {
         // Entry-banner gating uses the same dust threshold as completion gating (spec §9.9) — a
         // balance at or below it never needs a migration prompt of its own.
         val result =
             migrationMessageFor(
                 sdkState = null,
-                plan = null,
+                snapshot = null,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI,
             )
@@ -137,7 +144,7 @@ class GetHomeMessageUseCaseMigrationTest {
     }
 
     @Test
-    fun inProgressShowsInProgressBannerRegardlessOfBalance() {
+    fun inProgressShowsInProgressBannerWithLiveCountsRegardlessOfBalance() {
         val migrationProgress =
             MigrationProgress(
                 completedTransfers = 1,
@@ -147,106 +154,80 @@ class GetHomeMessageUseCaseMigrationTest {
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.InProgress(migrationProgress),
-                plan = plan(),
+                snapshot = snapshot(nextScheduledAt = Clock.System.now() + 30.minutes),
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = 500_000L,
             )
-        assertEquals(MigrationHomeMessageData(plan()), result)
+        assertEquals(
+            MigrationHomeMessageData(isRunActive = true, completedCount = 1, totalCount = 3),
+            result,
+        )
     }
 
     @Test
-    fun completeWithUnacknowledgedPlanShowsCompleteBanner() {
+    fun completeUnseenWithSubMigratableBalanceShowsCompleteBanner() {
+        val snap = snapshot()
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.Complete,
-                plan = plan(),
+                snapshot = snap,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI - 1L,
             )
-        assertEquals(MigrationHomeMessageData(plan(), isComplete = true), result)
+        assertEquals(
+            MigrationHomeMessageData(isRunActive = false, completedCount = 1, totalCount = 3, isComplete = true),
+            result,
+        )
     }
 
     @Test
-    fun completeWithUnacknowledgedPlanButMigratableResidualDoesNotShowCompleteBanner() {
-        // Pins the fix for the multi-round Keystone bug: the SDK's own MigrationState reports
-        // Complete as soon as the *current* round's transfers are all mined, even with a still
-        // migratable residual balance (at or above the migratable minimum) needing another round.
-        // Showing the one-time completion banner (and its "Lock balance" option) at that point would
-        // be wrong. Gated on the migratable minimum now, not the dust threshold: a sub-migratable
-        // residue genuinely IS complete (there's no further round to run) — see
-        // completeWithUnacknowledgedPlanAndSubMigratableResidueShowsCompleteBanner below.
+    fun completeWithMigratableResidualShowsRequiredNotComplete() {
+        // The multi-round Keystone case, now fully live: the SDK's MigrationState reports Complete
+        // as soon as the current round's transfers are all mined, even with a still-migratable
+        // residual balance needing another round. The balance decides — "Migrate now" fires
+        // directly (the old cleared-plan marker is gone; proposal §3: this mapping is correct
+        // whether the balance is a next round's residual or newly received funds).
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.Complete,
-                plan = plan(),
+                snapshot = snapshot(),
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI + 500_000L,
             )
-        assertNull(result)
+        assertEquals(MigrationHomeMessageData(isRunActive = false), result)
     }
 
     @Test
-    fun completeWithUnacknowledgedPlanAndSubMigratableResidueShowsCompleteBanner() {
+    fun completeWithSubMigratableResidueShowsCompleteBanner() {
         // A residual left after the final round that is above the dust threshold but below the
-        // migratable minimum (500_000 zat here) still counts as complete: the engine cannot migrate
-        // it, so the completion/residue screen (lock / migrate-anyway) is the correct destination.
+        // migratable minimum still counts as complete: the engine cannot migrate it, so the
+        // completion/residue screen (lock / migrate-anyway) is the correct destination.
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.Complete,
-                plan = plan(),
+                snapshot = snapshot(),
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = 500_000L,
             )
-        assertEquals(MigrationHomeMessageData(plan(), isComplete = true), result)
+        assertEquals(
+            MigrationHomeMessageData(isRunActive = false, completedCount = 1, totalCount = 3, isComplete = true),
+            result,
+        )
     }
 
     @Test
-    fun completeWithClearedPlanAndMigratableResidualBalanceReEvaluatesToRequired() {
-        // Simulates the auto-continuation case: the plan is cleared (without setting
-        // hasSeenComplete) when a round finishes but a still-migratable residual balance (>= the
-        // migratable minimum) needs another round. The SDK's own MigrationState is still Complete at
-        // this point (it only advances once the next round is actually committed) — the plan==null
-        // check must take priority over it and show "Migrate now" again.
+    fun completeWithZeroBalanceUnseenShowsCompleteBanner() {
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.Complete,
-                plan = null,
-                hasSeenComplete = false,
-                orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI + 200_000L,
-            )
-        assertEquals(MigrationHomeMessageData(null), result)
-    }
-
-    @Test
-    fun completeWithClearedPlanAndSubMigratableResidueShowsCompletedNotRequired() {
-        // The other half of the cleared-plan case: the residual left after a round is below the
-        // migratable minimum (0.005 ZEC here), so there is no further round to run. It must present
-        // as the completed/residue banner (lock / migrate-anyway), not "Migrate now" — which would
-        // tap into a NothingToMigrate failure.
-        val result =
-            migrationMessageFor(
-                sdkState = MigrationState.Complete,
-                plan = null,
-                hasSeenComplete = false,
-                orchardBalanceZatoshi = 500_000L,
-            )
-        assertEquals(MigrationHomeMessageData(plan = null, isComplete = true), result)
-    }
-
-    @Test
-    fun completeWithClearedPlanAndZeroBalanceShowsNothing() {
-        // Simulates the terminal case: Task 7 clears the plan and leaves hasSeenComplete false only
-        // when there's still balance to migrate — if balance is genuinely zero, the seen flag would
-        // have been set instead (see completeAcknowledgedShowsNothing below), but this pins down
-        // that even an unacknowledged, cleared-plan state shows nothing once balance is zero.
-        val result =
-            migrationMessageFor(
-                sdkState = MigrationState.Complete,
-                plan = null,
+                snapshot = snapshot(),
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = 0L,
             )
-        assertNull(result)
+        assertEquals(
+            MigrationHomeMessageData(isRunActive = false, completedCount = 1, totalCount = 3, isComplete = true),
+            result,
+        )
     }
 
     @Test
@@ -254,7 +235,7 @@ class GetHomeMessageUseCaseMigrationTest {
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.Complete,
-                plan = plan(),
+                snapshot = snapshot(),
                 hasSeenComplete = true,
                 orchardBalanceZatoshi = 0L,
             )
@@ -266,13 +247,13 @@ class GetHomeMessageUseCaseMigrationTest {
     @Test
     fun dueTransferWithoutBackgroundExecutionAndNotOverdueShowsReadyToSend() {
         val now = Clock.System.now()
-        val readyPlan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
+        val readySnapshot = snapshot(nextScheduledAt = now - 1.minutes)
         val migrationProgress = MigrationProgress(1, 3, null)
 
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.InProgress(migrationProgress),
-                plan = readyPlan,
+                snapshot = readySnapshot,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = 100_000L,
                 isBackgroundExecutionAvailable = false,
@@ -280,7 +261,10 @@ class GetHomeMessageUseCaseMigrationTest {
                 now = now,
             )
 
-        assertEquals(MigrationHomeMessageData(readyPlan, isReadyToSend = true), result)
+        assertEquals(
+            MigrationHomeMessageData(isRunActive = true, completedCount = 1, totalCount = 3, isReadyToSend = true),
+            result,
+        )
     }
 
     @Test
@@ -288,13 +272,12 @@ class GetHomeMessageUseCaseMigrationTest {
         // Background execution can run the WorkManager job itself — no need for the fallback
         // ready-to-send banner in that case.
         val now = Clock.System.now()
-        val readyPlan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
         val migrationProgress = MigrationProgress(1, 3, null)
 
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.InProgress(migrationProgress),
-                plan = readyPlan,
+                snapshot = snapshot(nextScheduledAt = now - 1.minutes),
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = 100_000L,
                 isBackgroundExecutionAvailable = true,
@@ -302,22 +285,24 @@ class GetHomeMessageUseCaseMigrationTest {
                 now = now,
             )
 
-        assertEquals(MigrationHomeMessageData(readyPlan), result)
+        assertEquals(
+            MigrationHomeMessageData(isRunActive = true, completedCount = 1, totalCount = 3),
+            result,
+        )
     }
 
     @Test
     fun dueTransferAlreadyOverdueShowsRegularInProgressNotReadyToSend() {
-        // Once the SDK counts it as overdue, MigrationProgressVM's Reschedule/Send-now flow takes
+        // Once the SDK counts it as overdue, the Progress screen's Reschedule/Send-now flow takes
         // over — the ready-to-send banner is only for the narrower "just became due" window before
         // that.
         val now = Clock.System.now()
-        val readyPlan = planWithPendingTransfer((now - 1.minutes).epochSeconds)
         val migrationProgress = MigrationProgress(1, 3, null)
 
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.InProgress(migrationProgress),
-                plan = readyPlan,
+                snapshot = snapshot(nextScheduledAt = now - 1.minutes),
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = 100_000L,
                 isBackgroundExecutionAvailable = false,
@@ -325,19 +310,21 @@ class GetHomeMessageUseCaseMigrationTest {
                 now = now,
             )
 
-        assertEquals(MigrationHomeMessageData(readyPlan), result)
+        assertEquals(
+            MigrationHomeMessageData(isRunActive = true, completedCount = 1, totalCount = 3),
+            result,
+        )
     }
 
     @Test
     fun notYetDueTransferWithoutBackgroundExecutionShowsRegularInProgress() {
         val now = Clock.System.now()
-        val notYetDuePlan = planWithPendingTransfer((now + 30.minutes).epochSeconds)
         val migrationProgress = MigrationProgress(1, 3, null)
 
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.InProgress(migrationProgress),
-                plan = notYetDuePlan,
+                snapshot = snapshot(nextScheduledAt = now + 30.minutes),
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = 100_000L,
                 isBackgroundExecutionAvailable = false,
@@ -345,7 +332,10 @@ class GetHomeMessageUseCaseMigrationTest {
                 now = now,
             )
 
-        assertEquals(MigrationHomeMessageData(notYetDuePlan), result)
+        assertEquals(
+            MigrationHomeMessageData(isRunActive = true, completedCount = 1, totalCount = 3),
+            result,
+        )
     }
 
     // Spec §6.2/§6.3 — the home banner must distinguish the two RequiresAttention causes instead
@@ -357,12 +347,18 @@ class GetHomeMessageUseCaseMigrationTest {
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.RequiresAttention(AttentionReason.InvalidTransfer(11L)),
-                plan = plan(),
+                snapshot = snapshot(),
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = 300_000L,
             )
         assertEquals(
-            MigrationHomeMessageData(plan(), attentionKind = MigrationAttentionKind.PLAN_UPDATE, attentionRangeText = null),
+            MigrationHomeMessageData(
+                isRunActive = true,
+                completedCount = 1,
+                totalCount = 3,
+                attentionKind = MigrationAttentionKind.PLAN_UPDATE,
+                attentionRangeText = null,
+            ),
             result,
         )
     }
@@ -372,29 +368,35 @@ class GetHomeMessageUseCaseMigrationTest {
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.RequiresAttention(AttentionReason.TransferExpired),
-                plan = plan(),
+                snapshot = snapshot(),
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = 300_000L,
                 attentionKind = MigrationAttentionKind.TRANSFER_EXPIRED,
                 attentionRangeText = "3–5",
             )
         assertEquals(
-            MigrationHomeMessageData(plan(), attentionKind = MigrationAttentionKind.TRANSFER_EXPIRED, attentionRangeText = "3–5"),
+            MigrationHomeMessageData(
+                isRunActive = true,
+                completedCount = 1,
+                totalCount = 3,
+                attentionKind = MigrationAttentionKind.TRANSFER_EXPIRED,
+                attentionRangeText = "3–5",
+            ),
             result,
         )
     }
 
     @Test
-    fun requiresAttentionWithNoPlanFallsThroughToOrdinaryLogicInsteadOfCrashing() {
-        // Defensive case — RequiresAttention in practice always implies a plan/schedule already
-        // existed, but must not NPE or otherwise misbehave if it's somehow null.
+    fun requiresAttentionWithNoSnapshotFallsThroughToOrdinaryLogicInsteadOfCrashing() {
+        // Defensive case — RequiresAttention in practice always implies a committed run, but must
+        // not NPE or otherwise misbehave if the statuses are somehow unavailable.
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.RequiresAttention(AttentionReason.TransferExpired),
-                plan = null,
+                snapshot = null,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI + 200_000L,
             )
-        assertEquals(MigrationHomeMessageData(null), result)
+        assertEquals(MigrationHomeMessageData(isRunActive = false), result)
     }
 }

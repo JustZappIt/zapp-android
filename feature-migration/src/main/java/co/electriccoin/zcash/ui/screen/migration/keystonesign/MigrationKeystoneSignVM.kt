@@ -66,15 +66,19 @@ class MigrationKeystoneSignVM(
                 val sdk = getOrchardMigrationSdk() ?: error("MigrationKeystoneSignVM: no wallet available to sign")
                 val existing = pendingKeystonePczts.get(accountKeyId)
                 val splitUnsignedPczt: ByteArray?
+                val prepUnsignedPczts: List<Pair<Long, ByteArray>>
                 val transferUnsignedPczts: List<Pair<Long, ByteArray>>
                 val roundIndex: Int
                 val accumulatedSplitSigned: ByteArray?
+                val accumulatedPrepSigned: List<Pair<Long, ByteArray>>
                 val accumulatedTransferSigned: List<Pair<Long, ByteArray>>
                 if (existing != null) {
                     splitUnsignedPczt = existing.splitUnsignedPczt
+                    prepUnsignedPczts = existing.prepUnsignedPczts
                     transferUnsignedPczts = existing.transferUnsignedPczts
                     roundIndex = existing.roundIndex
                     accumulatedSplitSigned = existing.accumulatedSplitSigned
+                    accumulatedPrepSigned = existing.accumulatedPrepSigned
                     accumulatedTransferSigned = existing.accumulatedTransferSigned
                 } else {
                     // Opaque-handle contract (SDK 2.6.5+): createUnsignedNoteSplitPczt(proposal)
@@ -90,32 +94,49 @@ class MigrationKeystoneSignVM(
                         val splitProposal = sdk.prepareNoteSplit()
                         val scheduleFromSplit = sdk.proposeMigrationTransfersFromSplit(splitProposal)
                         splitUnsignedPczt = sdk.createUnsignedNoteSplitPczt(splitProposal)
+                        // The WHOLE note-split tree is built (and pre-signable) at commit — every
+                        // preparation beyond the first layer-0 split joins the batch here; only
+                        // that first split keeps the immediate-broadcast storeSignedNoteSplitPczt
+                        // path (2026-07-30 finding: these used to be silently dropped and stayed
+                        // AwaitingSignature forever).
+                        prepUnsignedPczts =
+                            sdk
+                                .createUnsignedPreparationPczts(scheduleFromSplit)
+                                .filterNot { it.layer == 0 && it.index == 0 }
+                                .map { it.id to it.pcztBytes }
                         transferUnsignedPczts = sdk.createUnsignedTransferPczts(scheduleFromSplit)
                         pendingSchedule.set(accountKeyId, scheduleFromSplit)
                     } else {
                         splitUnsignedPczt = null
+                        prepUnsignedPczts = sdk.createUnsignedPreparationPczts(sched).map { it.id to it.pcztBytes }
                         transferUnsignedPczts = sdk.createUnsignedTransferPczts(sched)
                     }
                     roundIndex = 0
                     accumulatedSplitSigned = null
+                    accumulatedPrepSigned = emptyList()
                     accumulatedTransferSigned = emptyList()
                 }
 
+                val roundBudget = sdk.keystoneSigningRoundBudget()
                 val slice =
                     keystoneBatchRoundSlice(
                         roundIndex = roundIndex,
                         hasSplit = splitUnsignedPczt != null,
+                        prepCount = prepUnsignedPczts.size,
                         transferCount = transferUnsignedPczts.size,
-                        maxItems = KEYSTONE_BATCH_MAX_ITEMS,
+                        budget = roundBudget,
                     )
                 val splitForRound = if (slice.includeSplit) splitUnsignedPczt else null
+                val prepsForRound = prepUnsignedPczts.slice(slice.prepRange)
                 val transfersForRound = transferUnsignedPczts.slice(slice.transferRange)
                 val requestId = randomRequestId()
                 val parts =
                     sdk.buildKeystoneSignBatchQrParts(
                         requestId = requestId,
                         splitUnsignedPczt = splitForRound,
-                        transferUnsignedPczts = transfersForRound.map { it.second },
+                        // Extra preparations ride ahead of the transfers — the device signs PCZTs
+                        // kind-agnostically; ScanVM splits the response back by the same counts.
+                        transferUnsignedPczts = (prepsForRound + transfersForRound).map { it.second },
                         maxFragmentLen = MAX_FRAGMENT_LEN,
                     )
                 pendingKeystonePczts.set(
@@ -123,17 +144,20 @@ class MigrationKeystoneSignVM(
                     PendingKeystoneMigrationPczts(
                         requestId = requestId,
                         splitUnsignedPczt = splitUnsignedPczt,
+                        prepUnsignedPczts = prepUnsignedPczts,
                         transferUnsignedPczts = transferUnsignedPczts,
                         roundIndex = roundIndex,
                         accumulatedSplitSigned = accumulatedSplitSigned,
+                        accumulatedPrepSigned = accumulatedPrepSigned,
                         accumulatedTransferSigned = accumulatedTransferSigned,
                     )
                 )
                 val totalRounds =
                     keystoneBatchTotalRounds(
                         hasSplit = splitUnsignedPczt != null,
+                        prepCount = prepUnsignedPczts.size,
                         transferCount = transferUnsignedPczts.size,
-                        maxItems = KEYSTONE_BATCH_MAX_ITEMS,
+                        budget = roundBudget,
                     )
                 Triple(parts, roundIndex, totalRounds)
             }.onSuccess { result ->

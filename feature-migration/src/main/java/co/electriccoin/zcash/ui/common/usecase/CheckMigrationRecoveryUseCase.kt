@@ -5,15 +5,12 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import cash.z.ecc.android.sdk.MigrationState
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
-import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.migration.migrationLog
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.screen.home.HomeArgs
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
-import co.electriccoin.zcash.work.MigrationSyncScheduler
-import co.electriccoin.zcash.work.WorkIds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.seconds
@@ -29,25 +26,22 @@ import kotlin.time.Duration.Companion.seconds
  * MigrationSendingVM's init{} reproduces the exact condition, using its own existing routing to
  * resolve or re-surface the failure.
  *
- * All other migration states (RequiresAttention, ReadyToSend, Overdue, Complete) are now reachable
- * exclusively via the home banner + button (HomeVM.onMigrationMessageClick), preventing the
- * repeated screen hijacking on every launch during a healthy migration.
+ * All other migration states (RequiresAttention, ReadyToSend, Overdue, Complete, the
+ * unprovable-anchor attention state) are reachable exclusively via the home banner + button
+ * (HomeVM.onMigrationMessageClick), preventing repeated screen hijacking on every launch during a
+ * healthy migration.
  *
- * The Lane A/B revival block and the stale-write-ahead-plan clear are NOT navigation — they are
+ * The worker-revival block and the stale-write-ahead-plan clear are NOT navigation — they are
  * retained unchanged.
  */
 class CheckMigrationRecoveryUseCase(
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val navigationRouter: NavigationRouter,
-    private val migrationPlanRepository: MigrationPlanRepository,
     private val pendingMigrationTorFailureStorageProvider: PendingMigrationTorFailureStorageProvider,
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
-    private val migrationSyncScheduler: MigrationSyncScheduler,
     private val context: Context,
     /** Extracted for testability — production default checks WorkManager. */
-    private val isLaneAActive: suspend () -> Boolean = { isLaneAActiveInWorkManager(context) },
-    /** Lane B twin, same testability rationale. */
-    private val isLaneBActive: suspend (String) -> Boolean = { isLaneBActiveInWorkManager(context, it) },
+    private val isWorkerActive: suspend (String) -> Boolean = { isMigrationWorkerActiveInWorkManager(context, it) },
 ) {
     suspend operator fun invoke() {
         // Three independent triggers exist (MainActivity.onStart, RootNavGraph unlock, and any
@@ -58,7 +52,7 @@ class CheckMigrationRecoveryUseCase(
         val nowMs = android.os.SystemClock.elapsedRealtime()
         synchronized(CheckMigrationRecoveryUseCase) {
             if (nowMs - lastRunElapsedMs < RUN_THROTTLE_MS) {
-                Twig.debug { "MIGRATION_DIAG MigrationRecovery: throttled (ran ${nowMs - lastRunElapsedMs}ms ago)" }
+                migrationLog("MigrationRecovery: throttled (ran ${nowMs - lastRunElapsedMs}ms ago)")
                 return
             }
             lastRunElapsedMs = nowMs
@@ -71,35 +65,26 @@ class CheckMigrationRecoveryUseCase(
         val sdk =
             getOrchardMigrationSdk() ?: run {
                 synchronized(CheckMigrationRecoveryUseCase) { lastRunElapsedMs = 0L }
-                Twig.debug { "MIGRATION_DIAG MigrationRecovery: SDK not ready — will retry on next trigger." }
+                migrationLog("MigrationRecovery: SDK not ready — will retry on next trigger.")
                 return
             }
 
-        // (a) Lane A reconciliation — if a plan exists but the Lane A unique work is absent
-        // (ENQUEUED or RUNNING), re-schedule it. This self-heals after process kill, device
+        // Worker reconciliation — if a plan exists but the migration worker's unique work is
+        // absent (ENQUEUED or RUNNING), re-schedule it. This self-heals after process kill, device
         // reboot, or an app upgrade that cleared WorkManager state, without requiring the user to
-        // re-enter the migration flow.
+        // re-enter the migration flow (the worker's re-arm only happens at the end of its own run
+        // and its due alarms don't survive a package update — see OnMigrationSyncCompletedUseCase;
+        // duplicated here because the SYNCED hook needs a synced foreground synchronizer, which a
+        // freshly relaunched app may not reach for minutes).
         // Gate on the ENGINE's state, not only the app-side plan cache: the cache can be lost
         // (observed live: repository empty while the engine held a run with 8/9 broadcast and the
         // last transfer proved) and the engine is the single source of truth — a live in-progress
-        // migration must always have its lanes running.
+        // migration must always have its worker chain running.
         val engineInProgress = sdk.getMigrationState() is MigrationState.InProgress
-        if (migrationPlanRepository.load() != null || engineInProgress) {
+        if (engineInProgress) {
             val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
-            if (!isLaneAActive()) {
-                Twig.debug { "MIGRATION_DIAG MigrationRecovery: Lane A absent, re-scheduling." }
-                // A short flat first arm: the schedule object carries no plan knowledge — the
-                // worker's first run reads the live engine states and computes the precise
-                // boundary-driven wake itself (see MigrationSyncWorker).
-                migrationSyncScheduler.schedule(accountKeyId, 60.seconds)
-            }
-            // Lane B revival too — its re-arm only happens at the end of its own run and its due
-            // alarms don't survive a package update, so an update mid-plan otherwise kills every
-            // future broadcast (see OnMigrationSyncCompletedUseCase; duplicated here because the
-            // SYNCED hook needs a synced foreground synchronizer, which a freshly relaunched app
-            // may not reach for minutes).
-            if (!isLaneBActive(accountKeyId)) {
-                Twig.debug { "MIGRATION_DIAG MigrationRecovery: Lane B absent, re-scheduling." }
+            if (!isWorkerActive(accountKeyId)) {
+                migrationLog("MigrationRecovery: migration worker absent, re-scheduling.")
                 co.electriccoin.zcash.work
                     .MigrationScheduler(context)
                     .schedule(accountKeyId, 60.seconds)
@@ -114,23 +99,12 @@ class CheckMigrationRecoveryUseCase(
             // migration Tor setting. If it fails again, MigrationSendingVM's own existing
             // sendOnce() logic already forwards to MigrationTorFailureArgs — no need to duplicate
             // that routing here.
-            Twig.debug { "MIGRATION_DIAG MigrationRecovery: pending background Tor failure — redirecting to Sending." }
+            migrationLog("MigrationRecovery: pending background Tor failure — redirecting to Sending.")
             navigationRouter.replaceAll(HomeArgs, MigrationSendingArgs)
-        } else {
-            val migrationState = sdk.getMigrationState()
-            if (migrationState == MigrationState.NotStarted && migrationPlanRepository.load() != null) {
-                // A stale write-ahead plan: MigrationReviewVM.confirmAutomatic persists the plan just
-                // before the irreversible SDK commit (see FinalizeMigrationScheduleUseCase.persistPlan),
-                // so if that commit never actually happened — submitNoteSplit()/signAndStoreMigrationSchedule()
-                // threw before commit_preparation, leaving the SDK NotStarted — the plan is left behind
-                // pointing at a migration that doesn't exist. The SDK state is authoritative, so discard
-                // it rather than letting the home banner offer to "resume" a phantom migration. (An
-                // actually-committed migration reports InProgress here, not NotStarted, and is left
-                // untouched — its saved plan is real and drives the progress screen.)
-                Twig.debug { "MIGRATION_DIAG MigrationRecovery: stale write-ahead plan, SDK NotStarted — clearing." }
-                migrationPlanRepository.clear()
-            }
         }
+        // No stale write-ahead plan clearing anymore: nothing plan-shaped is persisted app-side —
+        // the engine's own state is the single, authoritative record (a commit that never happened
+        // simply leaves the engine NotStarted, and every screen renders that live).
     }
 
     companion object {
@@ -147,20 +121,12 @@ class CheckMigrationRecoveryUseCase(
 }
 
 /**
- * Production implementation of the Lane A active check — reads WorkManager unique work state.
- * Extracted so [CheckMigrationRecoveryUseCase] tests can supply a lambda stub instead of
- * needing a real WorkManager context (unit tests can't initialise WorkManager).
+ * Production implementation of the migration-worker active check — reads WorkManager unique work
+ * state (per-account unique work name). Extracted so [CheckMigrationRecoveryUseCase] tests can
+ * supply a lambda stub instead of needing a real WorkManager context (unit tests can't
+ * initialise WorkManager).
  */
-internal suspend fun isLaneAActiveInWorkManager(context: Context): Boolean =
-    withContext(Dispatchers.IO) {
-        WorkManager
-            .getInstance(context)
-            .getWorkInfosForUniqueWork(WorkIds.WORK_ID_MIGRATION_SYNC)
-            .get()
-    }.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
-
-/** Lane B (broadcast) twin of [isLaneAActiveInWorkManager] — per-account unique work name. */
-internal suspend fun isLaneBActiveInWorkManager(context: Context, accountKeyId: String): Boolean =
+internal suspend fun isMigrationWorkerActiveInWorkManager(context: Context, accountKeyId: String): Boolean =
     withContext(Dispatchers.IO) {
         WorkManager
             .getInstance(context)

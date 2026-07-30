@@ -7,7 +7,7 @@ import cash.z.ecc.android.sdk.TransferResult
 import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
 import cash.z.ecc.android.sdk.model.Proposal
 import cash.z.ecc.android.sdk.model.Zatoshi
-import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.migration.migrationLog
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
@@ -322,11 +322,9 @@ class MigrationReviewVM(
                 // prepareNoteSplit()) mirrors MigrationKeystoneSignVM, which likewise derives the
                 // from-split schedule before its first commit.
                 val scheduleFromSplit = sdk.proposeMigrationTransfersFromSplit(proposal)
-                // Write-ahead: persist the plan BEFORE the irreversible submitNoteSplit() (which commits
-                // AND broadcasts the split). If the app dies between here and finalizeMigrationSchedule
-                // below, re-entry then sees InProgress + a saved plan and resumes (see the guard above),
-                // instead of mistaking the committed migration for a fresh start and re-running the split.
-                finalizeMigrationSchedule.persistPlan(scheduleFromSplit, args.mode)
+                // No write-ahead persistence needed anymore: the engine's own committed state IS
+                // the recovery signal — if the app dies between the commit below and finalize,
+                // re-entry sees engine InProgress and every screen renders live from it.
                 val splitResult = sdk.submitNoteSplit(proposal, zashiSpendingKeyDataSource.getZashiSpendingKey())
                 if (splitResult !is TransferResult.Success) {
                     failure.value = splitResult
@@ -334,9 +332,6 @@ class MigrationReviewVM(
                 }
                 scheduleFromSplit
             } else {
-                // Same write-ahead as the split branch: persist before signAndStoreMigrationSchedule()
-                // (the commit for the no-split path) so a crash before finalize is recoverable.
-                finalizeMigrationSchedule.persistPlan(sched, args.mode)
                 sched
             }
         try {
@@ -355,9 +350,8 @@ class MigrationReviewVM(
             // StalePlan failures from the retry button). BoundaryCheckpointMissing: the commit
             // drew an anchor boundary onto a grid height with no retained checkpoint (pre-
             // always-on-retention scan history) — a fresh draw lands on retained boundaries.
-            Twig.debug { "MIGRATION_DIAG MigrationReview: StalePlan on commit — re-proposing once and retrying" }
+            migrationLog("MigrationReview: StalePlan on commit — re-proposing once and retrying")
             val fresh = sdk.proposeMigrationTransfers()
-            finalizeMigrationSchedule.persistPlan(fresh, args.mode)
             sdk.signAndStoreMigrationSchedule(fresh, zashiSpendingKeyDataSource.getZashiSpendingKey())
             finalizeMigrationSchedule(fresh, args.mode)
         }
@@ -418,10 +412,10 @@ class MigrationReviewVM(
         // boundary and was misleading). The real per-transfer boundaries are logged post-commit by
         // the Rust `committedPlan:` dump (boundary=Some(...)).
         val referenceTip = sched.transfers.minOfOrNull { it.anchorHeight } ?: return
-        Twig.debug {
+        migrationLog(
             buildString {
                 appendLine(
-                    "MIGRATION_DIAG Plan: ${sched.transfers.size} transfer(s), referenceTip=$referenceTip " +
+                    "Plan: ${sched.transfers.size} transfer(s), referenceTip=$referenceTip " +
                         "(anchors are drawn at commit — see committedPlan; times estimated at measured " +
                         "${secondsPerBlock}s/block from the reference tip)"
                 )
@@ -438,7 +432,7 @@ class MigrationReviewVM(
                     )
                 }
             }.trimEnd()
-        }
+        )
     }
 
     private fun scheduledLabel(t: TransferProposal): StringResource {

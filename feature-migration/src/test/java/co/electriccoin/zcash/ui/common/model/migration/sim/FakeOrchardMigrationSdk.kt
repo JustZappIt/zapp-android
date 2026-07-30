@@ -2,10 +2,14 @@ package co.electriccoin.zcash.ui.common.model.migration.sim
 
 import cash.z.ecc.android.sdk.KeystoneBatchDecodeResult
 import cash.z.ecc.android.sdk.KeystoneBatchSignedPczts
+import cash.z.ecc.android.sdk.MigrationAdvanceStep
+import cash.z.ecc.android.sdk.MigrationBlocker
+import cash.z.ecc.android.sdk.MigrationNextAction
 import cash.z.ecc.android.sdk.MigrationProgress
 import cash.z.ecc.android.sdk.MigrationSchedule
 import cash.z.ecc.android.sdk.MigrationState
 import cash.z.ecc.android.sdk.MigrationSummary
+import cash.z.ecc.android.sdk.MigrationSyncWakeup
 import cash.z.ecc.android.sdk.MigrationTransferState
 import cash.z.ecc.android.sdk.MigrationTransferStates
 import cash.z.ecc.android.sdk.NetworkPrivacyOptions
@@ -65,6 +69,12 @@ class FakeOrchardMigrationSdk : OrchardMigrationSdk {
         var minedHeight: Long? = null,
         var proved: Boolean = false,
         var sent: Boolean = false,
+        /** Crossing value; ignored for preparations (the engine reports null there). */
+        val amountZatoshi: Long = 100_000L,
+        /** Preparation index within its layer; ignored for transfers. */
+        val index: Int = 0,
+        /** ZIP 203 expiry height; 0 = never expires (the engine's own sentinel). */
+        val expiryHeight: Long = 0L,
     )
 
     /** The mock chain. Ordered by insertion; correlate by [SimTx.id], never by index. */
@@ -110,6 +120,14 @@ class FakeOrchardMigrationSdk : OrchardMigrationSdk {
      * `isTorFailure = true`) or any other injected [TransferResult] variant.
      */
     var nextBroadcastFailure: TransferResult? = null
+
+    /**
+     * When false, [executeNextPendingTransfer] marks a transaction SENT without mining it — the
+     * "broadcast but not yet mined" window the real chain always has (review M3: instant
+     * auto-mining made the sent≠mined and inter-layer-gap states unreachable in simulation).
+     * Tests then mine explicitly via the driver.
+     */
+    var autoMineOnBroadcast: Boolean = true
 
     private val syncBlocked = MutableStateFlow(false)
 
@@ -172,6 +190,54 @@ class FakeOrchardMigrationSdk : OrchardMigrationSdk {
 
     private fun isDue(tx: SimTx): Boolean = tx.scheduledHeight <= tip
 
+    /**
+     * The late-dependency guard, mirroring the backend's `is_unprovable_anchor`: a dependency
+     * that MINED past this tx's committed anchor boundary can never be witnessed under that
+     * anchor — the tx is permanently unprovable (until rebuilt).
+     */
+    private fun isUnprovableAnchor(tx: SimTx): Boolean {
+        val anchor = tx.anchorBoundary ?: return false
+        if (tx.proved || tx.sent) return false
+        return tx.dependsOn.any { depId ->
+            val minedAt = txs.firstOrNull { it.id == depId }?.minedHeight
+            minedAt != null && minedAt > anchor
+        }
+    }
+
+    /**
+     * Ready/action/blocker triple for one tx, in parity with the SDK's extended
+     * `migrationTransferStatesNative` (which zips the engine's `transaction_statuses` with the
+     * synthetic UNPROVABLE_ANCHOR guard override).
+     */
+    private fun statusFor(tx: SimTx): Triple<Boolean, MigrationNextAction?, MigrationBlocker?> =
+        when {
+            tx.sent -> {
+                Triple(false, null, null)
+            }
+
+            isUnprovableAnchor(tx) -> {
+                Triple(false, null, MigrationBlocker.UNPROVABLE_ANCHOR)
+            }
+
+            !tx.proved -> {
+                val depsMined =
+                    tx.dependsOn.all { depId -> txs.firstOrNull { it.id == depId }?.minedHeight != null }
+                when {
+                    !depsMined -> Triple(false, null, MigrationBlocker.DEPENDENCIES)
+                    !isProvable(tx) -> Triple(false, null, MigrationBlocker.ANCHOR_BOUNDARY)
+                    else -> Triple(true, MigrationNextAction.PROVE, null)
+                }
+            }
+
+            !isDue(tx) -> {
+                Triple(false, null, MigrationBlocker.SCHEDULE)
+            }
+
+            else -> {
+                Triple(true, MigrationNextAction.BROADCAST, null)
+            }
+        }
+
     private fun buildState(): MigrationState {
         if (invalidTransfersPresent) return MigrationState.RequiresAttention(attentionReason)
         if (txs.isEmpty()) return MigrationState.NotStarted
@@ -201,6 +267,7 @@ class FakeOrchardMigrationSdk : OrchardMigrationSdk {
         return MigrationTransferStates(
             transfers =
                 txs.map {
+                    val (ready, action, blocker) = statusFor(it)
                     MigrationTransferState(
                         id = it.id,
                         isTransfer = it.isTransfer,
@@ -208,11 +275,67 @@ class FakeOrchardMigrationSdk : OrchardMigrationSdk {
                         isProved = it.proved,
                         scheduledHeight = it.scheduledHeight,
                         anchorBoundaryHeight = it.anchorBoundary,
+                        ready = ready,
+                        action = action,
+                        blocker = blocker,
+                        amountZatoshi = it.amountZatoshi.takeIf { _ -> it.isTransfer },
+                        prepLayer = it.layer.takeIf { _ -> !it.isTransfer },
+                        prepIndex = it.index.takeIf { _ -> !it.isTransfer },
+                        dependsOn = it.dependsOn,
+                        expiryHeight = it.expiryHeight.takeIf { h -> h > 0 },
+                        minedHeight = it.minedHeight,
                     )
                 },
             tipHeight = tip,
         )
     }
+
+    // ── OrchardMigrationSdk: implemented (engine driver surface) ────────────────
+
+    /**
+     * Kept in parity with the SDK's `guarded_next_step` (asserted against the Rust golden traces
+     * in backend-lib's `state_machine_trace_tests`): terminal → Complete; first provable
+     * (guard-filtered) → Prove; earliest broadcastable → Broadcast; all mined → Complete, else
+     * Waiting. No expiry model in the sim yet, so Rebuild is never emitted here.
+     */
+    override suspend fun nextStep(): MigrationAdvanceStep? {
+        if (txs.isEmpty()) return null
+        if (invalidTransfersPresent) return MigrationAdvanceStep.Waiting
+        // VEC (id) order for prove, matching the engine's iteration order.
+        txs.sortedBy { it.id }.firstOrNull { isProvable(it) && !isUnprovableAnchor(it) }?.let {
+            return MigrationAdvanceStep.Prove(it.id)
+        }
+        // VEC (id) order among proved+due — the engine's next_broadcastable iterates its
+        // transactions vector, NOT the schedule (engine change request §3; golden-trace parity).
+        txs
+            .filter { it.proved && !it.sent && it.minedHeight == null && isDue(it) }
+            .minByOrNull { it.id }
+            ?.let { return MigrationAdvanceStep.Broadcast(it.id) }
+        if (txs.all { it.minedHeight != null }) return MigrationAdvanceStep.Complete
+        return MigrationAdvanceStep.Waiting
+    }
+
+    /**
+     * One wake-up per unproven, unsent tx at the first height past its (effective) anchor
+     * boundary. Deliberately INCLUDES unprovable-anchor txs — the real engine keeps emitting
+     * wake-ups for them forever (engine change request, GAP 2), and the app layer is the one
+     * that must filter them; the fake must not be kinder than the engine.
+     */
+    override suspend fun syncWakeupSchedule(): List<MigrationSyncWakeup>? {
+        if (txs.isEmpty()) return null
+        return txs
+            .filter { !it.proved && !it.sent }
+            .map { MigrationSyncWakeup(height = (it.anchorBoundary ?: it.scheduledHeight) + 1, covers = listOf(it.id)) }
+            .sortedBy { it.height }
+    }
+
+    override suspend fun applySignature(transferId: Long, signedPczt: ByteArray): Boolean =
+        notImpl("applySignature — add when a Keystone per-transfer signature scenario needs it")
+
+    /** The engine's real constants (signing_rounds.rs): 96 actions/round, prep=16, transfer=3. */
+    override suspend fun keystoneSigningRoundBudget(): cash.z.ecc.android.sdk.KeystoneSigningRoundBudget =
+        cash.z.ecc.android.sdk
+            .KeystoneSigningRoundBudget(maxActions = 96, preparationActions = 16, transferActions = 3)
 
     // ── OrchardMigrationSdk: implemented (background execution) ─────────────────
 
@@ -255,8 +378,13 @@ class FakeOrchardMigrationSdk : OrchardMigrationSdk {
     ): TransferAttemptOutcome {
         val due =
             txs
-                .filter { it.isTransfer && !it.sent && isDue(it) }
-                .sortedWith(compareBy({ it.scheduledHeight }, { it.id }))
+                // Kind-AGNOSTIC, matching the real engine's next_broadcastable (invariant 4:
+                // multi-transaction preparation layers broadcast through the same loop — the fake's
+                // former Transfer-only filter was exactly the deadlock-prone iOS filter). Mined
+                // transactions are on-chain already and never pending. VEC (id) order — the engine
+                // iterates its transactions vector, not the schedule.
+                .filter { !it.sent && it.minedHeight == null && isDue(it) }
+                .sortedBy { it.id }
 
         if (due.isEmpty()) return TransferAttemptOutcome.NothingDue
 
@@ -275,10 +403,12 @@ class FakeOrchardMigrationSdk : OrchardMigrationSdk {
         }
 
         candidate.sent = true
-        // Mine it shortly after broadcast so confirmation-dependent state settles.
-        val minedAt = maxOf(candidate.scheduledHeight, tip) + 2L
-        candidate.minedHeight = minedAt
-        if (minedAt > tip) tip = minedAt
+        if (autoMineOnBroadcast) {
+            // Mine it shortly after broadcast so confirmation-dependent state settles.
+            val minedAt = maxOf(candidate.scheduledHeight, tip) + 2L
+            candidate.minedHeight = minedAt
+            if (minedAt > tip) tip = minedAt
+        }
         return TransferAttemptOutcome.Executed(
             TransferResult.Success(txId = "sim-tx-${candidate.id}")
         )
@@ -347,6 +477,10 @@ class FakeOrchardMigrationSdk : OrchardMigrationSdk {
     override suspend fun createUnsignedTransferPczts(
         schedule: MigrationSchedule,
     ): List<Pair<Long, ByteArray>> = notImpl("createUnsignedTransferPczts — Keystone path")
+
+    override suspend fun createUnsignedPreparationPczts(
+        schedule: MigrationSchedule,
+    ): List<cash.z.ecc.android.sdk.UnsignedPreparationPczt> = notImpl("createUnsignedPreparationPczts — Keystone path")
 
     override suspend fun storeSignedSchedulePczts(signed: List<Pair<Long, ByteArray>>): Unit =
         notImpl("storeSignedSchedulePczts — Keystone path")

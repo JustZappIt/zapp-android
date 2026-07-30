@@ -3,13 +3,11 @@ package co.electriccoin.zcash.ui.common.usecase
 import cash.z.ecc.android.sdk.AttentionReason
 import cash.z.ecc.android.sdk.MigrationProgress
 import cash.z.ecc.android.sdk.MigrationState
+import co.electriccoin.zcash.ui.common.model.migration.LiveMigrationSnapshot
+import co.electriccoin.zcash.ui.common.model.migration.LiveMigrationTransfer
 import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_DUST_THRESHOLD_ZATOSHI
 import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_RESIDUAL_MIN_ZATOSHI
 import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
-import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
-import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
-import co.electriccoin.zcash.ui.common.model.migration.MigrationTransfer
-import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferStatus
 import co.electriccoin.zcash.ui.common.repository.MigrationHomeMessageData
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -29,7 +27,7 @@ import kotlin.test.assertNull
  * 2. In-flight IMMEDIATE staleness — while a send-max IMMEDIATE sweep is in flight (broadcast but
  *    not yet confirmed) the banner still reads "Migrate required" because [migrationMessageFor] sees
  *    the pre-confirmation orchardBalance (still ≥ MIGRATION_RESIDUAL_MIN_ZATOSHI) combined with
- *    plan==null, and fires the REQUIRED branch. The reactive [getOrchardBalance.observe()] fix
+ *    no-run, and fires the REQUIRED branch. The reactive [getOrchardBalance.observe()] fix
  *    (committed in the observeMigrationMessage() comment) only removes the *one-shot* problem;
  *    it does not remove the gap that exists between broadcast and first confirmation, during which
  *    balance is non-zero and the IMMEDIATE is invisible to [migrationMessageFor] (it bypasses the
@@ -39,28 +37,39 @@ import kotlin.test.assertNull
 class MigrationBannerStateTest {
     // ─── helpers shared with GetHomeMessageUseCaseMigrationTest ──────────────
 
-    private fun plan(id: String = "p1") =
-        MigrationPlan(
-            id = id,
-            createdAtEpochSeconds = 0L,
-            transfers = emptyList(),
-            mode = MigrationMode.AUTOMATIC,
-        )
-
-    private fun planWithPendingTransfer(scheduledAtEpochSeconds: Long) =
-        MigrationPlan(
-            id = "p-ready",
-            createdAtEpochSeconds = 0L,
+    private fun snapshot() =
+        LiveMigrationSnapshot(
             transfers =
                 listOf(
-                    MigrationTransfer(
+                    LiveMigrationTransfer(
+                        id = 10,
                         index = 0,
-                        amountZatoshi = 500_000_000L, // 5 ZEC
-                        scheduledAtEpochSeconds = scheduledAtEpochSeconds,
-                        status = MigrationTransferStatus.PENDING,
-                    )
+                        amountZatoshi = 500_000_000L,
+                        scheduledHeight = 1_000L,
+                        scheduledAt = kotlin.time.Instant.fromEpochSeconds(0),
+                        isSent = true,
+                        isProved = true,
+                        action = null,
+                        blocker = null,
+                        expiryAt = null,
+                        minedHeight = 1_005L,
+                    ),
+                    LiveMigrationTransfer(
+                        id = 11,
+                        index = 1,
+                        amountZatoshi = 500_000_000L,
+                        scheduledHeight = 2_000L,
+                        scheduledAt = kotlin.time.Instant.fromEpochSeconds(4_000_000_000L),
+                        isSent = false,
+                        isProved = true,
+                        action = null,
+                        blocker = null,
+                        expiryAt = null,
+                        minedHeight = null,
+                    ),
                 ),
-            mode = MigrationMode.AUTOMATIC,
+            preparations = emptyList(),
+            tipHeight = 1_000L,
         )
 
     // ─── §1 SyncRequiredBeforeNext ────────────────────────────────────────────
@@ -76,8 +85,8 @@ class MigrationBannerStateTest {
      * RequiresAttention branch (see [MigrationAttention.kt]'s doc marking it out of scope for
      * toUiKind, and CheckMigrationRecoveryUseCase which likewise does not route on this reason).
      *
-     * With the fix it falls through: not InProgress, not Complete, and plan != null so the
-     * residue/required branches (both gated on plan == null) don't fire — the result is null (no
+     * With the fix it falls through: not InProgress, not Complete, and run active so the
+     * residue/required branches (both gated on no-run) don't fire — the result is null (no
      * banner). Sync-required is transient: the engine keeps syncing and the ordinary in-progress /
      * no-message branches take over on the next read.
      */
@@ -86,7 +95,7 @@ class MigrationBannerStateTest {
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.RequiresAttention(AttentionReason.SyncRequiredBeforeNext),
-                plan = plan(),
+                snapshot = snapshot(),
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI + 100_000L,
             )
@@ -100,7 +109,7 @@ class MigrationBannerStateTest {
 
     /**
      * Defensive path: [AttentionReason.SyncRequiredBeforeNext] with a null plan bypasses the
-     * RequiresAttention branch (which gates on `plan != null`) and falls through to the ordinary
+     * RequiresAttention branch (which gates on `run active`) and falls through to the ordinary
      * orchardBalance decision. With a migratable balance this produces "Migrate required" — not an
      * attention banner.
      */
@@ -109,12 +118,12 @@ class MigrationBannerStateTest {
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.RequiresAttention(AttentionReason.SyncRequiredBeforeNext),
-                plan = null,
+                snapshot = null,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI + 200_000L,
             )
-        // Falls through to the "orchardBalance >= min && plan==null → Migrate required" branch.
-        assertEquals(MigrationHomeMessageData(null), result)
+        // Falls through to the "orchardBalance >= min && no-run → Migrate required" branch.
+        assertEquals(MigrationHomeMessageData(isRunActive = false), result)
     }
 
     /**
@@ -126,11 +135,11 @@ class MigrationBannerStateTest {
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.RequiresAttention(AttentionReason.SyncRequiredBeforeNext),
-                plan = null,
+                snapshot = null,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = 500_000L, // in the (dust, min) gap — residue
             )
-        assertEquals(MigrationHomeMessageData(plan = null, isComplete = true), result)
+        assertEquals(MigrationHomeMessageData(isRunActive = false, isComplete = true), result)
     }
 
     /**
@@ -141,7 +150,7 @@ class MigrationBannerStateTest {
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.RequiresAttention(AttentionReason.SyncRequiredBeforeNext),
-                plan = null,
+                snapshot = null,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = 0L,
             )
@@ -160,8 +169,8 @@ class MigrationBannerStateTest {
      *
      * While the sweep is in-flight (broadcast but not yet confirmed):
      *   - orchardBalanceZatoshi is still the PRE-broadcast value (≥ MIGRATION_RESIDUAL_MIN_ZATOSHI).
-     *   - sdkState == null (or NotStarted), plan == null.
-     *   - → [migrationMessageFor] fires the "orchardBalance >= min && plan==null" branch: "Migrate required".
+     *   - sdkState == null (or NotStarted), no-run.
+     *   - → [migrationMessageFor] fires the "orchardBalance >= min && no-run" branch: "Migrate required".
      *
      * The reactive [getOrchardBalance.observe()] fix (see observeMigrationMessage()) eliminated the
      * one-shot stale problem where the balance was read once and never updated. But it does NOT
@@ -184,7 +193,7 @@ class MigrationBannerStateTest {
         val result =
             migrationMessageFor(
                 sdkState = null,
-                plan = null,
+                snapshot = null,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = inFlightOrchardBalance,
             )
@@ -192,7 +201,7 @@ class MigrationBannerStateTest {
         // BUG: Banner fires "Migrate required" even though the sweep is already broadcast.
         // Expected (once fixed): null — no banner should show while IMMEDIATE is in flight.
         assertEquals(
-            MigrationHomeMessageData(null),
+            MigrationHomeMessageData(isRunActive = false),
             result,
             "BUG: 'Migrate required' banner fires for in-flight IMMEDIATE. " +
                 "Expected null (no banner) — fix must track in-flight IMMEDIATE state.",
@@ -208,12 +217,12 @@ class MigrationBannerStateTest {
         val result =
             migrationMessageFor(
                 sdkState = null,
-                plan = null,
+                snapshot = null,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI,
             )
         // BUG — same as above, boundary case.
-        assertEquals(MigrationHomeMessageData(null), result)
+        assertEquals(MigrationHomeMessageData(isRunActive = false), result)
     }
 
     /**
@@ -226,7 +235,7 @@ class MigrationBannerStateTest {
         val result =
             migrationMessageFor(
                 sdkState = null,
-                plan = null,
+                snapshot = null,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = 0L,
             )
@@ -242,7 +251,7 @@ class MigrationBannerStateTest {
         val result =
             migrationMessageFor(
                 sdkState = null,
-                plan = null,
+                snapshot = null,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI, // exactly at threshold — shows nothing
             )
@@ -259,11 +268,11 @@ class MigrationBannerStateTest {
         val result =
             migrationMessageFor(
                 sdkState = null,
-                plan = null,
+                snapshot = null,
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = 500_000L, // in (dust, min) gap — residue, un-migratable
             )
-        assertEquals(MigrationHomeMessageData(plan = null, isComplete = true), result)
+        assertEquals(MigrationHomeMessageData(isRunActive = false, isComplete = true), result)
     }
 
     // ─── §3 Cross-branch: SyncRequiredBeforeNext during InProgress ────────────
@@ -280,7 +289,7 @@ class MigrationBannerStateTest {
         val result =
             migrationMessageFor(
                 sdkState = MigrationState.InProgress(progress),
-                plan = plan(),
+                snapshot = snapshot(),
                 hasSeenComplete = false,
                 orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI + 1_000_000L,
                 // attentionKind/attentionRangeText are only populated by the caller when sdkState is
@@ -289,7 +298,7 @@ class MigrationBannerStateTest {
                 attentionRangeText = "1",
             )
         // Must be a plain InProgress banner with no attention fields.
-        assertEquals(MigrationHomeMessageData(plan()), result)
+        assertEquals(MigrationHomeMessageData(isRunActive = true, completedCount = 1, totalCount = 2), result)
         assertNull(result?.attentionKind)
         assertNull(result?.attentionRangeText)
     }

@@ -2,7 +2,7 @@ package co.electriccoin.zcash.ui.common.usecase
 
 import android.content.Context
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
-import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.migration.migrationLog
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.model.toStorageKeyId
@@ -43,6 +43,21 @@ class GetOrchardMigrationSdkUseCase(
         buildFor(getSelectedWalletAccount())
 
     /**
+     * Like [invoke], but distinguishes WHY the SDK is unavailable so self-rechaining workers can
+     * tell a boot race (retry) from a deleted wallet / disconnected account (kill the chain —
+     * a worker retrying forever for an account that no longer exists is a zombie).
+     */
+    suspend fun lookup(accountKeyId: String): MigrationSdkLookup {
+        persistableWalletProvider.getPersistableWallet()
+            ?: return MigrationSdkLookup.Gone // the wallet itself was deleted
+        val accounts = runCatching { accountDataSource.getAllAccounts() }.getOrNull()
+        if (accounts.isNullOrEmpty()) return MigrationSdkLookup.NotReady // boot race — accounts not loaded yet
+        val account = accounts.findByAccountKeyId(accountKeyId) ?: return MigrationSdkLookup.Gone
+        val sdk = buildFor(account) ?: return MigrationSdkLookup.NotReady
+        return MigrationSdkLookup.Ready(sdk)
+    }
+
+    /**
      * Resolves the SDK for the account identified by [accountKeyId] (its
      * [co.electriccoin.zcash.ui.common.model.toStorageKeyId] value), or `null` if no such account
      * exists or there is no persisted wallet.
@@ -50,7 +65,7 @@ class GetOrchardMigrationSdkUseCase(
     suspend operator fun invoke(accountKeyId: String): OrchardMigrationSdk? {
         val account =
             accountDataSource.getAllAccounts().findByAccountKeyId(accountKeyId) ?: run {
-                Twig.warn { "MIGRATION_DIAG GetOrchardMigrationSdk: no account for keyId=$accountKeyId" }
+                migrationLog("GetOrchardMigrationSdk: no account for keyId=$accountKeyId")
                 return null
             }
         return buildFor(account)
@@ -74,3 +89,16 @@ class GetOrchardMigrationSdkUseCase(
  */
 internal fun List<WalletAccount>.findByAccountKeyId(accountKeyId: String): WalletAccount? =
     firstOrNull { it.sdkAccount.accountUuid.toStorageKeyId() == accountKeyId }
+
+/** Result of [GetOrchardMigrationSdkUseCase.lookup] — see its kdoc. */
+sealed interface MigrationSdkLookup {
+    data class Ready(
+        val sdk: OrchardMigrationSdk
+    ) : MigrationSdkLookup
+
+    /** The wallet or this account no longer exists — migration work must cancel itself. */
+    data object Gone : MigrationSdkLookup
+
+    /** Persistence/SDK not reachable yet (typically right after an app update/reboot) — retry. */
+    data object NotReady : MigrationSdkLookup
+}

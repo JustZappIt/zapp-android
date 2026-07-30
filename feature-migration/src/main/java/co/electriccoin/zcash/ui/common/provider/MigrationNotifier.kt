@@ -19,6 +19,7 @@ class MigrationNotifier(
             Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                 putExtra(EXTRA_OPEN_MIGRATION, true)
+                putExtra(EXTRA_ACCOUNT_KEY_ID, accountKeyId)
             }
         return PendingIntent.getActivity(
             context,
@@ -29,15 +30,15 @@ class MigrationNotifier(
     }
 
     // Distinct request code AND a distinct intent extra from mainActivityIntent()'s
-    // EXTRA_OPEN_MIGRATION — MainActivity.handleMigrationIntent() hard-routes that existing extra
-    // to MigrationProgressArgs (the missed-transfer screen), but this notification needs to land on
-    // MigrationTransferReviewArgs instead (spec §6.4 is deliberately a distinct, lighter-weight
-    // path from the overdue/missed-transfer recovery flow).
-    private fun transferReadyToSendIntent(accountKeyId: String): PendingIntent {
+    // EXTRA_OPEN_MIGRATION: the step-due tap must RE-KICK the worker (handleIntent schedules an
+    // immediate run) besides opening Progress — background execution needs no UI, the app open
+    // exists only to give the OS a live process to run the worker in.
+    private fun runStepIntent(accountKeyId: String): PendingIntent {
         val intent =
             Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra(EXTRA_OPEN_TRANSFER_READY, true)
+                putExtra(EXTRA_RUN_STEP, true)
+                putExtra(EXTRA_ACCOUNT_KEY_ID, accountKeyId)
             }
         return PendingIntent.getActivity(
             context,
@@ -46,6 +47,9 @@ class MigrationNotifier(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }
+
+    private fun stepDueNotificationId(accountKeyId: String): Int =
+        NOTIFICATION_ID_STEP_DUE_BASE + accountIdOffset(accountKeyId)
 
     private fun progressNotificationId(accountKeyId: String): Int =
         NOTIFICATION_ID_PROGRESS_BASE + accountIdOffset(accountKeyId)
@@ -63,6 +67,32 @@ class MigrationNotifier(
         manager.createNotificationChannel(channel)
     }
 
+    /**
+     * Progress of the note-split (preparation) phase — splits are internal plumbing, so they never
+     * announce crossing counts ("Transfer 0 of 11 complete" read as zero progress); they announce
+     * their own.
+     */
+    fun notifyNoteSplitProgress(accountKeyId: String, completedSplits: Int, totalSplits: Int) {
+        val contentText =
+            if (totalSplits > 0) {
+                "Note split $completedSplits of $totalSplits"
+            } else {
+                "Preparing your balance for migration"
+            }
+        val notification =
+            NotificationCompat
+                .Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_alert_circle)
+                .setContentTitle("Ironwood Migration")
+                .setContentText(contentText)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setContentIntent(mainActivityIntent(accountKeyId))
+                .setAutoCancel(true)
+                .build()
+
+        NotificationManagerCompat.from(context).notify(progressNotificationId(accountKeyId), notification)
+    }
+
     fun notifyTransferComplete(accountKeyId: String, completed: Int, total: Int) {
         val notification =
             NotificationCompat
@@ -71,6 +101,32 @@ class MigrationNotifier(
                 .setContentTitle("Ironwood Migration")
                 .setContentText("Transfer $completed of $total complete")
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setContentIntent(mainActivityIntent(accountKeyId))
+                .setAutoCancel(true)
+                .build()
+
+        NotificationManagerCompat.from(context).notify(progressNotificationId(accountKeyId), notification)
+    }
+
+    /**
+     * Strict-order escalation: the plan's head transfer stayed unprovable across a completed sync
+     * — with strict ordering everything behind it is blocked, so the user must reschedule (the
+     * app-open recovery routes to the invalid/reschedule screen).
+     */
+    fun notifyRescheduleRequired(accountKeyId: String, transferIndex: Int, total: Int) {
+        val contentText =
+            if (total > 0 && transferIndex > 0) {
+                "Transfer $transferIndex of $total can't be sent — tap to reschedule the migration."
+            } else {
+                "The migration is blocked — tap to reschedule."
+            }
+        val notification =
+            NotificationCompat
+                .Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_alert_circle)
+                .setContentTitle("Ironwood Migration")
+                .setContentText(contentText)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(mainActivityIntent(accountKeyId))
                 .setAutoCancel(true)
                 .build()
@@ -118,27 +174,29 @@ class MigrationNotifier(
     }
 
     /**
-     * Spec §6.4 "Transfer Ready to Send": posted the moment a scheduled transfer becomes due while
-     * background execution is unavailable (see [co.electriccoin.zcash.ui.common.provider
-     * .IsBackgroundExecutionAvailableProvider] and [co.electriccoin.zcash.work
-     * .MigrationTransferDueReceiver]) — distinct from [notifyManualConfirmationRequired], which is
-     * for a background broadcast that was actually attempted and failed. Tapping this routes to the
-     * lighter-weight review-and-send screen ([EXTRA_OPEN_TRANSFER_READY]), not the fuller
-     * Reschedule/Send-now recovery screen.
+     * Dead-man's-switch fallback (design 2026-07-30): the worker missed its expected run — a
+     * migration STEP (prove or broadcast; everything is pre-signed, no user review exists) is due
+     * and nothing is executing it. Tapping opens the app, which silently re-kicks the worker; the
+     * worker's own next run start cancels this via [cancelStepDue].
      */
-    fun notifyTransferReadyToSend(accountKeyId: String, transferIndex: Int, total: Int) {
+    fun notifyMigrationStepDue(accountKeyId: String) {
         val notification =
             NotificationCompat
                 .Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_alert_circle)
                 .setContentTitle("Ironwood Migration")
-                .setContentText("Transfer $transferIndex of $total is ready to send. Tap to review and send.")
+                .setContentText("Your migration is ready to continue — tap to run the next step.")
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setContentIntent(transferReadyToSendIntent(accountKeyId))
+                .setContentIntent(runStepIntent(accountKeyId))
                 .setAutoCancel(true)
                 .build()
 
-        NotificationManagerCompat.from(context).notify(progressNotificationId(accountKeyId), notification)
+        NotificationManagerCompat.from(context).notify(stepDueNotificationId(accountKeyId), notification)
+    }
+
+    /** The worker ran — the step-due fallback (if showing) is obsolete. */
+    fun cancelStepDue(accountKeyId: String) {
+        NotificationManagerCompat.from(context).cancel(stepDueNotificationId(accountKeyId))
     }
 
     // Spec §6.2 (Migration Plan Update) — notes were spent outside the migration flow, invalidating
@@ -207,12 +265,21 @@ class MigrationNotifier(
     companion object {
         const val CHANNEL_ID = "migration_channel"
         const val EXTRA_OPEN_MIGRATION = "co.electriccoin.zcash.migration.open_progress"
-        const val EXTRA_OPEN_TRANSFER_READY = "co.electriccoin.zcash.migration.open_transfer_ready"
+        const val EXTRA_RUN_STEP = "co.electriccoin.zcash.migration.run_step"
+
+        /**
+         * The storage-key id ([co.electriccoin.zcash.ui.common.model.toStorageKeyId]) of the
+         * account this notification belongs to. `handleIntent` selects that account before
+         * navigating, so tapping a Keystone account's migration notification while the Zodl
+         * account is selected lands on the RIGHT account's migration screens.
+         */
+        const val EXTRA_ACCOUNT_KEY_ID = "co.electriccoin.zcash.migration.account_key_id"
 
         // Notification-id namespace (NotificationManager ids). Independent of the PendingIntent
         // request-code namespace below — sharing the same numeric base value across the two namespaces
         // does not collide. Per-account via `+ accountIdOffset(...)` (range 0..0xFFFF).
         private const val NOTIFICATION_ID_PROGRESS_BASE = 0x10_0000
+        private const val NOTIFICATION_ID_STEP_DUE_BASE = 0x40_0000
 
         // PendingIntent request-code namespace. The two bases are spaced 0x10_0000 apart — far more than
         // accountIdOffset's 0..0xFFFF range — so per-account request-code ranges can never overlap.

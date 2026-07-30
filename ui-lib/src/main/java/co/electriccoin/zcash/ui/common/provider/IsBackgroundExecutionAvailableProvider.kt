@@ -37,17 +37,43 @@ import co.electriccoin.zcash.ui.BuildConfig
 class IsBackgroundExecutionAvailableProvider(
     private val context: Context
 ) {
-    fun isAvailable(): Boolean {
-        if (BuildConfig.DEBUG && DebugForceBackgroundExecutionUnavailable.isForced(context)) return false
+    fun isAvailable(): Boolean = state() == BackgroundExecutionState.UNRESTRICTED
+
+    /**
+     * The three-state battery setting as modern Android presents it (App Info → Battery:
+     * Unrestricted / Optimized / Restricted). The remedies differ per state:
+     * - [BackgroundExecutionState.OPTIMIZED] → the one-tap
+     *   [android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS] system dialog works.
+     * - [BackgroundExecutionState.RESTRICTED] → NO dialog can lift it; the user must change it in
+     *   App Info themselves (deep-link via ACTION_APPLICATION_DETAILS_SETTINGS).
+     */
+    fun state(): BackgroundExecutionState {
+        if (BuildConfig.DEBUG && DebugForceBackgroundExecutionUnavailable.isForced(context)) {
+            return BackgroundExecutionState.RESTRICTED
+        }
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
-        return isBackgroundExecutionAvailable(
+        return backgroundExecutionState(
             isIgnoringBatteryOptimizations = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true,
             isBackgroundRestricted = activityManager?.isBackgroundRestricted == true,
             sdkInt = Build.VERSION.SDK_INT,
         )
     }
 }
+
+enum class BackgroundExecutionState { UNRESTRICTED, OPTIMIZED, RESTRICTED }
+
+/** Pure three-state twin of [isBackgroundExecutionAvailable] — see [IsBackgroundExecutionAvailableProvider.state]. */
+internal fun backgroundExecutionState(
+    isIgnoringBatteryOptimizations: Boolean,
+    isBackgroundRestricted: Boolean,
+    sdkInt: Int,
+): BackgroundExecutionState =
+    when {
+        sdkInt >= Build.VERSION_CODES.P && isBackgroundRestricted -> BackgroundExecutionState.RESTRICTED
+        isIgnoringBatteryOptimizations -> BackgroundExecutionState.UNRESTRICTED
+        else -> BackgroundExecutionState.OPTIMIZED
+    }
 
 /**
  * Pure decision function extracted from [IsBackgroundExecutionAvailableProvider.isAvailable] so it's

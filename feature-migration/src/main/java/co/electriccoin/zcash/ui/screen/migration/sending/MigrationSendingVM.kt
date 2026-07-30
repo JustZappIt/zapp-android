@@ -5,19 +5,16 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.TransferAttemptOutcome
 import cash.z.ecc.android.sdk.TransferResult
-import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.migration.migrationLog
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.LceState
-import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.common.model.migration.migrationFailureMessage
-import co.electriccoin.zcash.ui.common.model.migration.withLiveStatusOnly
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.repository.PendingMigrationTorFailureDecisionRepository
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
@@ -37,7 +34,7 @@ import kotlinx.coroutines.withContext
 
 class MigrationSendingVM(
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
-    private val migrationPlanRepository: MigrationPlanRepository,
+    private val getMigrationSnapshot: co.electriccoin.zcash.ui.common.usecase.GetMigrationSnapshotUseCase,
     private val scheduleNextMigrationWindow: ScheduleNextMigrationWindowUseCase,
     private val navigationRouter: NavigationRouter,
     private val errorStateMapper: ErrorMapperUseCase,
@@ -125,7 +122,7 @@ class MigrationSendingVM(
             if (attempt > 0) delay(SEND_RETRY_DELAY_MS)
             withContext(NonCancellable) {
                 outcome = sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor), useEstimatedTip = true)
-                Twig.debug { "MIGRATION_DIAG SendingVM: attempt=${attempt + 1} outcome=$outcome" }
+                migrationLog("SendingVM: attempt=${attempt + 1} outcome=$outcome")
             }
             attempt++
         }
@@ -142,16 +139,10 @@ class MigrationSendingVM(
                         // Re-arms the next window for a resumed/manually-confirmed transfer in a
                         // multi-transfer AUTOMATIC plan; no-ops once the plan is already complete.
                         scheduleNextMigrationWindow()
-                        // Write the SDK's authoritative "sent" status back into the persisted plan, so the
-                        // home banner's raw cached completedCount/isComplete actually advance (without this
-                        // it stays stuck on "First transfer sending…" even though the send landed). The
-                        // isComplete check just below then reads the reconciled plan, not the stale one.
-                        val plan =
-                            migrationPlanRepository
-                                .load()
-                                ?.withLiveStatusOnly(sdk.getMigrationTransferStates())
-                                ?.also { migrationPlanRepository.save(it) }
-                        if (plan?.mode == MigrationMode.AUTOMATIC && plan.isComplete) {
+                        // Completion straight from the engine — no cache write-through needed, the
+                        // banner reads the same live states.
+                        val snapshot = getMigrationSnapshot()
+                        if (snapshot?.isComplete == true) {
                             // This was the plan's last transfer — one Migration Complete screen covers
                             // both this (foreground, just confirmed) and the background-completion case
                             // (CheckMigrationRecoveryUseCase, on next app open), rather than two.

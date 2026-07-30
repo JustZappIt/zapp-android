@@ -3,40 +3,58 @@ package co.electriccoin.zcash.work
 import android.content.Context
 import androidx.annotation.Keep
 import androidx.work.CoroutineWorker
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import cash.z.ecc.android.sdk.MigrationAdvanceStep
+import cash.z.ecc.android.sdk.MigrationBlocker
+import cash.z.ecc.android.sdk.MigrationSyncWakeup
+import cash.z.ecc.android.sdk.MigrationTransferState
+import cash.z.ecc.android.sdk.MigrationTransferStates
 import cash.z.ecc.android.sdk.NetworkPrivacyOptions
 import cash.z.ecc.android.sdk.OrchardMigrationSdk
 import cash.z.ecc.android.sdk.Synchronizer
 import cash.z.ecc.android.sdk.TransferAttemptOutcome
 import cash.z.ecc.android.sdk.TransferResult
-import co.electriccoin.zcash.spackle.Twig
-import co.electriccoin.zcash.ui.common.model.migration.MigrationPlan
-import co.electriccoin.zcash.ui.common.model.migration.withLiveStatusOnly
+import co.electriccoin.zcash.migration.BuildConfig
+import co.electriccoin.zcash.migration.migrationLog
+import co.electriccoin.zcash.ui.common.model.migration.LiveMigrationSnapshot
+import co.electriccoin.zcash.ui.common.model.migration.toSnapshot
 import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.IsMigrationTorEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProvider
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
-import co.electriccoin.zcash.ui.common.provider.MigrationShiftCounterStorageProvider
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
-import co.electriccoin.zcash.ui.common.repository.MigrationPlanRepository
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
-import kotlinx.coroutines.Dispatchers
+import co.electriccoin.zcash.ui.common.usecase.MigrationSdkLookup
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
-import java.time.Instant
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * The single migration execution worker — the app-side half of the engine-driven loop
+ * (spec: 2026-07-30-engine-state-machine-adoption-design.md).
+ *
+ * The `zcash_pool_migration` state machine decides WHAT to do and WHEN
+ * ([OrchardMigrationSdk.nextStep] + [OrchardMigrationSdk.syncWakeupSchedule]); this worker supplies
+ * only what the engine cannot know:
+ *  - privacy timing — the quiet gap before a crossing broadcast, sync-XOR-broadcast per worker
+ *    execution (ZIP 318 de-correlation), crossing send pacing, and the preparation fast-track
+ *    exception (in-pool note splits leak nothing, so they go back-to-back with no gaps);
+ *  - OS plumbing — WorkManager re-arming, height→wall-clock projection, the kill switch;
+ *  - I/O — sync bursts, (Tor) broadcasts, retries and timeouts;
+ *  - user surfacing — notifications; the home banner reads the same engine statuses reactively.
+ *
+ * Exactly ONE engine action happens per execution: a run either syncs (proves) or broadcasts,
+ * never both. The loop is: run → ask `nextStep` ("what?") → do it → ask `syncWakeupSchedule` +
+ * statuses ("when?") → re-arm ONE future run → repeat.
+ */
 @Keep
 class MigrationWorker(
     context: Context,
@@ -45,95 +63,188 @@ class MigrationWorker(
     KoinComponent {
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase by inject()
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase by inject()
-    private val migrationPlanRepository: MigrationPlanRepository by inject()
     private val migrationNotifier: MigrationNotifier by inject()
     private val isMigrationTorEnabledStorageProvider: IsMigrationTorEnabledStorageProvider by inject()
     private val pendingMigrationTorFailureStorageProvider: PendingMigrationTorFailureStorageProvider by inject()
     private val synchronizerProvider: SynchronizerProvider by inject()
     private val lastNetworkActivity: LastNetworkActivityStorageProvider by inject()
-    private val shiftCounter: MigrationShiftCounterStorageProvider by inject()
 
     override suspend fun doWork(): Result {
         val accountKeyId =
             inputData.getString(MigrationScheduler.KEY_ACCOUNT_KEY_ID)
                 ?: getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId().also {
-                    Twig.warn {
-                        "MIGRATION_DIAG MigrationWorker: no accountKeyId in inputData — falling back to selected account $it (pre-upgrade job)"
-                    }
+                    migrationLog("Worker: no accountKeyId in inputData — falling back to selected account $it (pre-upgrade job)")
                 }
 
+        // Dead-man's switch heartbeat: the run STARTED — the fallback alarm's late check passes,
+        // and any step-due fallback notification is now obsolete.
+        MigrationWorkerHeartbeat.stampRun(applicationContext, accountKeyId)
+        migrationNotifier.cancelStepDue(accountKeyId)
+
         val sdk =
-            getOrchardMigrationSdk(accountKeyId) ?: run {
-                // Same reasoning as MigrationSyncWorker: a not-yet-initialized wallet right after an
-                // app update/reboot must not silently consume (and thereby kill) the self-rechaining
-                // lane — retry until the SDK is reachable.
-                Twig.debug { "MIGRATION_DIAG LaneB: SDK not ready — retrying via WorkManager backoff." }
-                return Result.retry()
+            when (val lookup = getOrchardMigrationSdk.lookup(accountKeyId)) {
+                is MigrationSdkLookup.Ready -> {
+                    lookup.sdk
+                }
+
+                MigrationSdkLookup.NotReady -> {
+                    // A not-yet-initialized wallet right after an app update/reboot must not
+                    // silently consume (and thereby kill) the self-rechaining loop — retry until
+                    // the SDK is reachable.
+                    migrationLog("Worker: SDK not ready — retrying via WorkManager backoff.")
+                    return Result.retry()
+                }
+
+                MigrationSdkLookup.Gone -> {
+                    // Kill switch: the wallet was deleted or this (Keystone) account disconnected.
+                    // Retrying would zombie-loop forever for an owner that no longer exists.
+                    migrationLog("Worker: account/wallet gone — cancelling the migration work chain.")
+                    MigrationScheduler(applicationContext).cancel(accountKeyId)
+                    migrationNotifier.cancel(accountKeyId)
+                    return Result.success()
+                }
             }
 
-        // WorkManager batches jobs with similar due times, so both lanes routinely WAKE IN THE
-        // SAME SECOND — a naive "Lane A is RUNNING → defer a full privacy buffer" then re-collides
-        // every cycle forever (observed live: five proved, due transfers deferred for 17+ minutes
-        // across perfectly synchronized wakes). Lane A's runs take seconds (and a step-aside run
-        // does no network work at all), so wait it out briefly and re-check; the quiet-gap check
-        // below still guards the case where Lane A actually synced just now.
-        var laneARunning = isLaneARunning()
-        if (laneARunning) {
-            repeat(LANE_A_WAIT_CHECKS) {
-                delay(LANE_A_WAIT_STEP)
-                laneARunning = isLaneARunning()
-                if (!laneARunning) return@repeat
+        val step = sdk.nextStep()
+        if (step == null) {
+            migrationLog("Worker: no migration in progress — stopping the work chain.")
+            return Result.success()
+        }
+        migrationLog("Worker: run start account=$accountKeyId step=$step")
+        return when (step) {
+            MigrationAdvanceStep.Complete -> completeRun(accountKeyId)
+            is MigrationAdvanceStep.Rebuild -> rebuildRun(sdk, accountKeyId, step.transferId)
+            is MigrationAdvanceStep.Prove -> syncRun(sdk, accountKeyId)
+            is MigrationAdvanceStep.Broadcast -> broadcastRun(sdk, accountKeyId)
+            MigrationAdvanceStep.Waiting -> waitingRun(sdk, accountKeyId)
+        }
+    }
+
+    /**
+     * The engine answers `nextStep` at the SCANNED tip, which can lag wall clock by hours in a
+     * backgrounded wallet — so a `Waiting` verdict is re-checked against the estimated tip: if a
+     * proved, unsent transaction is already due by estimate, run the broadcast attempt now.
+     * `executeNextPendingTransfer` re-verifies with the engine (decision vs action), so a wrong
+     * estimate degrades to NothingDue, never a bad send.
+     */
+    private suspend fun waitingRun(sdk: OrchardMigrationSdk, accountKeyId: String): Result {
+        val states = sdk.getMigrationTransferStates()
+        val est = sdk.estimatedChainTip()
+        if (states != null && broadcastDueByEstimate(states, est)) {
+            migrationLog("Worker: Waiting at the scanned tip but due by estimate ($est) — attempting broadcast.")
+            return broadcastRun(sdk, accountKeyId)
+        }
+        // Completion sweep: everything broadcast, awaiting mining. Mining is only observed by a
+        // scan-driven reconcile, so the sweep must be a REAL sync run — a passive wait would
+        // never let the engine reach Complete in the background (review M2).
+        if (states != null && states.transfers.isNotEmpty() && states.transfers.all { it.isSent }) {
+            migrationLog("Worker: all transactions sent — completion sweep sync run.")
+            return syncRun(sdk, accountKeyId)
+        }
+        surfaceUnprovableBlocker(sdk, accountKeyId, states)
+        reArm(sdk, accountKeyId)
+        return Result.success()
+    }
+
+    /**
+     * A sync (prove) run: syncToTip + finalizeReadyTransfers + reconcile, gated by the
+     * post-broadcast privacy buffer. Nothing broadcasts in this run — sync XOR broadcast per
+     * execution. Afterwards the engine is asked again: a ready preparation chains immediately
+     * (fast-track), a crossing waits out the quiet gap this sync just opened.
+     */
+    private suspend fun syncRun(sdk: OrchardMigrationSdk, accountKeyId: String): Result {
+        if (sdk.isSyncBlocked().first()) {
+            migrationLog("Worker: sync run blocked by the post-broadcast privacy gate — deferring.")
+            reArm(sdk, accountKeyId, floor = sdk.privacySyncBufferDuration())
+            return Result.success()
+        }
+        val burst = synchronizerProvider.getSynchronizerOrNull()?.syncToTip(timeout = SYNC_TIMEOUT)
+        migrationLog("Worker: syncToTip result=$burst")
+        val proved = sdk.finalizeReadyTransfers()
+        migrationLog("Worker: proved=$proved")
+        if (sdk.reconcileInvalidations()) {
+            // The plan is invalid (input notes spent externally) — notify and do NOT re-arm; the
+            // app-open router (CheckMigrationRecoveryUseCase) takes over from here.
+            migrationNotifier.notifyMigrationPlanInvalid(accountKeyId)
+            MigrationScheduler(applicationContext).cancel(accountKeyId)
+            migrationLog("Worker: reconcile found an invalidation — stopping the work chain.")
+            return Result.success()
+        }
+        lastNetworkActivity.stampNow()
+
+        return when (val next = sdk.nextStep()) {
+            is MigrationAdvanceStep.Broadcast -> {
+                val prep = nextDueUnsentIsPreparation(sdk.getMigrationTransferStates(), sdk.estimatedChainTip())
+                val chainDelay = if (prep) PREP_FAST_TRACK_REARM else sdk.privacySyncBufferDuration()
+                MigrationScheduler(applicationContext).schedule(accountKeyId, chainDelay)
+                migrationLog("Worker: sync done, next=$next — broadcast run in $chainDelay")
+                Result.success()
+            }
+
+            MigrationAdvanceStep.Complete -> {
+                completeRun(accountKeyId)
+            }
+
+            is MigrationAdvanceStep.Rebuild -> {
+                rebuildRun(sdk, accountKeyId, next.transferId)
+            }
+
+            else -> {
+                // Prove again (boundary not yet settled at the new tip) or Waiting.
+                migrationLog("Worker: sync done, next=$next — re-arming.")
+                surfaceUnprovableBlocker(sdk, accountKeyId, sdk.getMigrationTransferStates())
+                reArm(sdk, accountKeyId)
+                Result.success()
             }
         }
+    }
+
+    @Suppress("ReturnCount", "LongMethod", "CyclomaticComplexMethod")
+    private suspend fun broadcastRun(sdk: OrchardMigrationSdk, accountKeyId: String): Result {
+        val states = sdk.getMigrationTransferStates()
+        val est = sdk.estimatedChainTip()
+        // Capture the transaction the ENGINE will actually serve (vec/id order among proved+due —
+        // review L2), falling back to schedule order when nothing is broadcastable yet, so the
+        // fast-track preflight AND the post-send notification attribute the right kind.
+        val nextCandidate = engineBroadcastCandidate(states, est) ?: earliestUnsent(states)
+        val prepFastTrack =
+            nextCandidate != null &&
+                !nextCandidate.isTransfer &&
+                nextCandidate.isProved &&
+                nextCandidate.scheduledHeight <= est
 
         // status is a Flow<Status> — timeout if cold; null synchronizer is non-syncing.
-        // timeout → assume SYNCING → defer (privacy-safe default; production status is a StateFlow and answers immediately).
+        // timeout → assume SYNCING → defer (privacy-safe default; production status is a StateFlow
+        // and answers immediately).
         val syncing =
             synchronizerProvider.synchronizer.value?.let { synchronizer ->
                 withTimeoutOrNull(STATUS_READ_TIMEOUT) { synchronizer.status.first() } ?: Synchronizer.Status.SYNCING
             } == Synchronizer.Status.SYNCING
-
         val lastActivity = lastNetworkActivity.get()
         val preflight =
-            decideLaneBPreflight(
-                laneARunning = laneARunning,
+            decideBroadcastPreflight(
                 synchronizerSyncing = syncing,
                 nowEpochSeconds = nowEpochSeconds(),
                 lastNetworkActivityEpochSeconds = lastActivity?.epochSecond,
                 privacyBufferSeconds = sdk.privacySyncBufferDuration().inWholeSeconds,
+                prepFastTrack = prepFastTrack,
             )
-        Twig.debug {
-            "MIGRATION_DIAG LaneB: run start account=$accountKeyId preflight=$preflight " +
-                "(laneARunning=$laneARunning, syncing=$syncing, lastNetworkActivity=$lastActivity)"
-        }
-        when (preflight) {
-            LaneBAction.DEFER_OVERLAP -> {
-                // Local delay (spec §5): engine untouched.
-                Twig.debug {
-                    "MIGRATION_DIAG LaneB: deferring broadcast ${sdk.privacySyncBufferDuration()} — " +
-                        "a sync source is live or the quiet gap is unmet."
-                }
-                MigrationScheduler(applicationContext).schedule(accountKeyId, sdk.privacySyncBufferDuration())
-                return Result.success()
-            }
-
-            LaneBAction.BROADCAST -> {
-                Unit
-            } // proceed below
+        migrationLog(
+            "Worker: broadcast preflight=$preflight " +
+                "(syncing=$syncing, prepFastTrack=$prepFastTrack, lastNetworkActivity=$lastActivity)"
+        )
+        if (preflight == BroadcastPreflight.DEFER) {
+            // Local delay: engine untouched. A fast-tracked preparation only ever defers on a live
+            // sync overlap — re-arm short instead of a full privacy buffer.
+            val deferDelay = if (prepFastTrack) PREP_FAST_TRACK_REARM else sdk.privacySyncBufferDuration()
+            MigrationScheduler(applicationContext).schedule(accountKeyId, deferDelay)
+            migrationLog("Worker: deferring broadcast $deferDelay — a sync source is live or the quiet gap is unmet.")
+            return Result.success()
         }
 
-        val plan = migrationPlanRepository.load(accountKeyId)
-        val next = plan?.nextPending
+        val snapshotBefore = sdk.snapshot()
         val useTor = isMigrationTorEnabledStorageProvider.get(accountKeyId)
 
-        // Retries within this single worker invocation, same attempt count (3) as
-        // MigrationSendingVM.sendOnce()'s foreground loop — but a different trigger: sendOnce()
-        // retries while the result is null (still polling for readiness) and stops on any
-        // non-null result, while this retries only on a retryable NetworkError and stops
-        // immediately on null. So a persistent network error settles into an error state after 3
-        // attempts instead of retrying via WorkManager's Result.retry() indefinitely (previously
-        // observed: dumpsys jobscheduler showed the same worker restarting and running for the
-        // full ~10-minute execution ceiling, repeatedly, for hours).
         // Hard timeout around the whole broadcast attempt: a cold-bootstrapping Tor client can
         // hang the submit indefinitely (observed live: tx stuck in-flight 10+ minutes until the
         // WorkManager execution ceiling killed the worker and nothing re-armed). On timeout the
@@ -142,248 +253,239 @@ class MigrationWorker(
         // re-arming for another attempt is correct.
         val outcome =
             withTimeoutOrNull(BROADCAST_ATTEMPT_TIMEOUT) {
-                executeWithRetries { sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor), useEstimatedTip = true) }
+                executeWithRetries {
+                    sdk.executeNextPendingTransfer(NetworkPrivacyOptions(useTor = useTor), useEstimatedTip = true)
+                }
             } ?: run {
-                Twig.debug { "MIGRATION_DIAG LaneB: broadcast attempt timed out after $BROADCAST_ATTEMPT_TIMEOUT — re-arming." }
-                scheduleForNextLiveWindow(accountKeyId, sdk, floor = AWAITING_PROOF_REARM_FLOOR)
+                migrationLog("Worker: broadcast attempt timed out after $BROADCAST_ATTEMPT_TIMEOUT — re-arming.")
+                reArm(sdk, accountKeyId, floor = REARM_FLOOR)
                 return Result.success()
             }
         return when (outcome) {
             is TransferAttemptOutcome.NothingDue -> {
-                // Not due yet by estimate: re-arm for the live next window (states-based, like Lane A).
-                scheduleForNextLiveWindow(accountKeyId, sdk)
-                Twig.debug { "MIGRATION_DIAG LaneB: NothingDue — rescheduled for next live window." }
+                // The estimate raced ahead of the engine's own due check — re-arm normally.
+                reArm(sdk, accountKeyId)
+                migrationLog("Worker: NothingDue — re-armed for the next window.")
                 Result.success()
             }
 
             is TransferAttemptOutcome.AwaitingProof -> {
-                // The engine only serves proved transactions, so AwaitingProof means the due
-                // transaction has no proof yet — a race with the sync lane (Lane A's wake is
-                // pending or late), never a plan state. The plan itself stays exactly as the
-                // engine committed it (the engine is the single source of truth; missed-but-
-                // unexpired transfers need no shift — ZIP 374's signature does not cover the
-                // anchor, so they prove late against their committed boundary and broadcast late).
-                //
-                // Strike counter: counts consecutive awaiting-proof STRIKES on the same transfer
-                // with a completed sync in between (storage keys unchanged — historically named
-                // "shift" after the deleted reschedule stack).
-                val lastActivity: Instant? = lastNetworkActivity.get()
-                val lastStrike: Instant? = shiftCounter.lastShiftAt(accountKeyId)
-                val syncSince = syncCompletedSince(lastActivity, lastStrike)
-                val count = shiftCounter.incrementIfSameTransfer(accountKeyId, outcome.transferId, syncCompletedSinceLastShift = syncSince)
-                Twig.debug {
-                    "MIGRATION_DIAG LaneB: AwaitingProof for ${outcome.transferId} " +
-                        "(strike=$count, syncSinceLastStrike=$syncSince) — converting this run into a sync run"
-                }
-
-                // Convert THIS run into a Lane A run: sync + finalize + reconcile, under the same
-                // privacy guard Lane A honours (the post-broadcast gate). Sync XOR broadcast per
-                // execution — the broadcast already did not happen (nothing proved), and it is
-                // re-armed for the next live window below, never attempted in this same run.
-                if (sdk.isSyncBlocked().first()) {
-                    Twig.debug { "MIGRATION_DIAG LaneB: sync-fallback skipped — post-broadcast privacy gate is active." }
-                } else {
-                    val burst = synchronizerProvider.getSynchronizerOrNull()?.syncToTip(timeout = LANE_A_SYNC_TIMEOUT)
-                    Twig.debug { "MIGRATION_DIAG LaneB: sync-fallback syncToTip result=$burst" }
-                    val proved = sdk.finalizeReadyTransfers()
-                    Twig.debug { "MIGRATION_DIAG LaneB: sync-fallback proved=$proved" }
-                    if (sdk.reconcileInvalidations()) {
-                        // F5: the plan is invalid — notify, cancel BOTH lanes, and do NOT re-arm.
-                        // The app-open router (CheckMigrationRecoveryUseCase) takes over from here.
-                        migrationNotifier.notifyMigrationPlanInvalid(accountKeyId)
-                        MigrationScheduler(applicationContext).cancel(accountKeyId)
-                        MigrationSyncScheduler(applicationContext).cancel(accountKeyId)
-                        Twig.debug { "MIGRATION_DIAG LaneB: sync-fallback reconcile found invalidation — cancelling both lanes." }
-                        return Result.success()
-                    }
-                    lastNetworkActivity.stampNow()
-                }
-
-                // F4: escalate only on the TRANSITION to the 3rd counted strike — the counter
-                // stays at 3 on subsequent no-sync strikes (nextShiftCount doesn't increment
-                // without a sync), so gating on `count == THRESHOLD` alone would re-fire every
-                // strike. Requiring `syncSince` means we only escalate the run that actually
-                // reached the 3rd counted (sync-completed) strike: even Lane B's own sync
-                // repeatedly failed to make the transaction provable — the "sync ran but proof
-                // still impossible" alarm.
-                if (shouldEscalateShift(syncSince, count)) {
-                    // Once only — count == 3 exact equality ensures single notification.
-                    // F7: render real "Transfer X of Y" values from the plan instead of 0 of 0.
-                    migrationNotifier.notifyManualConfirmationRequired(
-                        accountKeyId,
-                        (plan?.nextPending?.index?.plus(1)) ?: 1,
-                        plan?.totalCount ?: 0,
-                    )
-                }
-                // Floor the re-arm: the unproven transaction is typically due immediately, which
-                // otherwise collapses the delay to seconds and hammers the engine (observed live:
-                // one run every 5 s). 60 s keeps the loop responsive without the churn.
-                scheduleForNextLiveWindow(accountKeyId, sdk, floor = AWAITING_PROOF_REARM_FLOOR)
-                Twig.debug {
-                    "MIGRATION_DIAG LaneB: awaiting proof for ${outcome.transferId} — " +
-                        "broadcast re-armed for the next live window (strike=$count)"
-                }
+                // Defensive: nextStep said Broadcast, so the engine had a proved transaction — a
+                // proof can only have vanished through a concurrent reorg/rescan. Re-arm floored;
+                // the next run re-asks the engine from scratch.
+                migrationLog("Worker: AwaitingProof for ${outcome.transferId} despite a Broadcast step — re-arming.")
+                reArm(sdk, accountKeyId, floor = REARM_FLOOR)
                 Result.success()
             }
 
             is TransferAttemptOutcome.Executed -> {
-                when (val result = outcome.result) {
-                    is TransferResult.Success -> {
-                        shiftCounter.reset(accountKeyId)
-                        Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer sent — txId=${result.txId}" }
-                        // Fold the SDK's authoritative "sent" status back into the persisted plan so the
-                        // cached completedCount/nextPending advance — the home banner and the notification
-                        // below both read the raw cached plan, so without this write-through they'd report a
-                        // stale count (stuck on the first transfer) forever. Keyed by the worker's own
-                        // account (inputData), not the currently-selected one.
-                        val updatedPlan =
-                            migrationPlanRepository
-                                .load(accountKeyId)
-                                ?.withLiveStatusOnly(sdk.getMigrationTransferStates())
-                                ?.also { migrationPlanRepository.save(accountKeyId, it) }
-                        if (updatedPlan?.nextPending != null) {
-                            val delay = nextDelay(updatedPlan)
-                            MigrationScheduler(applicationContext).schedule(accountKeyId, delay)
-                            migrationNotifier.notifyTransferComplete(accountKeyId, updatedPlan.completedCount, updatedPlan.totalCount)
-                            Twig.debug { "MIGRATION_DIAG MigrationWorker: next transfer scheduled in $delay" }
-                        } else {
-                            migrationNotifier.notifyMigrationComplete(accountKeyId)
-                            Twig.debug { "MIGRATION_DIAG MigrationWorker: migration complete!" }
-                        }
-                        Result.success()
-                    }
-
-                    is TransferResult.NetworkError -> {
-                        // Retries already exhausted (or the failure was non-retryable) inside
-                        // executeWithRetries above — settle into an error state now rather than asking
-                        // WorkManager for yet another attempt.
-                        Twig.debug {
-                            "MIGRATION_DIAG MigrationWorker: network error after retries, isTorFailure=${result.isTorFailure}"
-                        }
-                        if (result.isTorFailure) {
-                            // Same reasoning as MigrationSendingVM.sendOnce()'s interactive NetworkError
-                            // branch. Persist a flag so app-open reconciliation
-                            // (CheckMigrationRecoveryUseCase) routes back through the Sending screen
-                            // instead of the generic manual-confirmation path, and surface a distinct
-                            // notification so this looks different from any other missed transfer.
-                            pendingMigrationTorFailureStorageProvider.store(accountKeyId, true)
-                            migrationNotifier.notifyMigrationTorFailure(accountKeyId)
-                        } else if (next != null) {
-                            // Nothing else re-arms a future attempt for a non-retryable failure — the
-                            // user must open the app and act, same as a missed/stalled window.
-                            migrationNotifier.notifyManualConfirmationRequired(accountKeyId, next.index + 1, plan.totalCount)
-                        }
-                        Result.failure()
-                    }
-
-                    TransferResult.InvalidNote -> {
-                        // State is now RequiresAttention(InvalidTransfer) — spec §6.2, notes were spent
-                        // outside the migration flow. On-launch reconciliation will surface the prompt, but
-                        // the user still needs telling since nothing else runs meanwhile.
-                        Twig.debug {
-                            "MIGRATION_DIAG MigrationWorker: transfer invalid (note spent externally) — user action required on next open."
-                        }
-                        migrationNotifier.notifyMigrationPlanInvalid(accountKeyId)
-                        // F5: this is a terminal migration state — cancel Lane A too (Lane B already
-                        // stops re-arming by returning without scheduling).
-                        MigrationSyncScheduler(applicationContext).cancel(accountKeyId)
-                        Result.success()
-                    }
-
-                    TransferResult.Expired -> {
-                        // State is now RequiresAttention(TransferExpired) — spec §6.3, the transfer's
-                        // anchor expired before it could broadcast (the app wasn't opened in time). Distinct
-                        // user-facing copy from InvalidNote above, even though both branches otherwise
-                        // handle identically (no further action possible from the background worker).
-                        Twig.debug { "MIGRATION_DIAG MigrationWorker: transfer expired — user action required on next open." }
-                        migrationNotifier.notifyTransferExpired(accountKeyId)
-                        // F5: terminal migration state — cancel Lane A too (Lane B already stops re-arming).
-                        MigrationSyncScheduler(applicationContext).cancel(accountKeyId)
-                        Result.success()
-                    }
-                }
+                handleExecuted(sdk, accountKeyId, outcome.result, snapshotBefore, sentWasPrep = nextCandidate?.isTransfer == false)
             }
         }
     }
 
-    private suspend fun isLaneARunning(): Boolean =
-        withContext(Dispatchers.IO) {
-            WorkManager
-                .getInstance(applicationContext)
-                .getWorkInfosForUniqueWork(WorkIds.WORK_ID_MIGRATION_SYNC)
-                .get()
-        }.any { it.state == WorkInfo.State.RUNNING }
+    @Suppress("ReturnCount")
+    private suspend fun handleExecuted(
+        sdk: OrchardMigrationSdk,
+        accountKeyId: String,
+        result: TransferResult,
+        snapshotBefore: LiveMigrationSnapshot?,
+        sentWasPrep: Boolean,
+    ): Result =
+        when (result) {
+            is TransferResult.Success -> {
+                migrationLog("Worker: sent — txId=${result.txId}")
+                // Everything below reads the engine's post-send state live — there is no cache to
+                // write through anymore (the banner reads the same live states).
+                val snapshot = sdk.snapshot()
+                if (sentWasPrep) {
+                    // "Transfer 0 of 11 complete" after a note split confused users (the crossing
+                    // count ignores splits) — splits announce their own progress.
+                    migrationNotifier.notifyNoteSplitProgress(
+                        accountKeyId,
+                        completedSplits = snapshot?.preparations?.count { it.isSent } ?: 0,
+                        totalSplits = snapshot?.preparations?.size ?: 0,
+                    )
+                }
+                // Single post-send engine read for every decision below (review L5).
+                val postStates = sdk.getMigrationTransferStates()
+                val anyUnsent = postStates?.transfers?.any { !it.isSent } == true
+                if (anyUnsent) {
+                    // Prep fast-track: whole ready prep batches go back-to-back — no send spacing
+                    // between preparations (one logical tree, in-pool, nothing to de-correlate).
+                    // CROSSINGS take the opposite rule: never two sends closer than the privacy
+                    // buffer, even in catch-up (a starved worker once fired 5 overdue crossings in
+                    // ~51 s — grid spacing means nothing if catch-up collapses it into one
+                    // network-timing cluster). The non-fast-track case delegates to reArm — it
+                    // targets the EARLIEST relevant moment across engine wake-ups and ALL unsent
+                    // heights INCLUDING preparations; an ad-hoc crossing-only delay here used to
+                    // sleep past inter-layer prep windows and compress the serial prep tail toward
+                    // the crossings' anchor boundaries — the exact tx9 latency condition (review H1).
+                    if (nextDueUnsentIsPreparation(postStates, sdk.estimatedChainTip())) {
+                        MigrationScheduler(applicationContext).schedule(accountKeyId, PREP_FAST_TRACK_REARM)
+                        migrationLog("Worker: ready preparation next — chaining in $PREP_FAST_TRACK_REARM")
+                    } else {
+                        reArm(sdk, accountKeyId, floor = sdk.privacySyncBufferDuration())
+                    }
+                    if (!sentWasPrep && snapshot != null) {
+                        migrationNotifier.notifyTransferComplete(accountKeyId, snapshot.completedCount, snapshot.totalCount)
+                    }
+                } else {
+                    migrationNotifier.notifyMigrationComplete(accountKeyId)
+                    // Everything sent — keep observing until the engine reports Complete (the
+                    // completeRun stop). The next wake lands in waitingRun's completion-sweep
+                    // branch, which runs a REAL sync so mining is actually observed (review M2).
+                    reArm(sdk, accountKeyId, floor = sdk.privacySyncBufferDuration())
+                    migrationLog("Worker: all transfers sent — completion sweep armed.")
+                }
+                Result.success()
+            }
+
+            is TransferResult.NetworkError -> {
+                // Retries already exhausted (or the failure was non-retryable) inside
+                // executeWithRetries — settle into an error state now rather than asking
+                // WorkManager for yet another attempt.
+                migrationLog("Worker: network error after retries, isTorFailure=${result.isTorFailure}")
+                if (result.isTorFailure) {
+                    // Persist a flag so app-open reconciliation (CheckMigrationRecoveryUseCase)
+                    // routes back through the Sending screen instead of the generic
+                    // manual-confirmation path, and surface a distinct notification.
+                    pendingMigrationTorFailureStorageProvider.store(accountKeyId, true)
+                    migrationNotifier.notifyMigrationTorFailure(accountKeyId)
+                } else if (snapshotBefore?.nextPending != null) {
+                    // Nothing else re-arms a future attempt for a non-retryable failure — the
+                    // user must open the app and act, same as a missed/stalled window.
+                    migrationNotifier.notifyManualConfirmationRequired(
+                        accountKeyId,
+                        snapshotBefore.nextPending!!.index + 1,
+                        snapshotBefore.totalCount,
+                    )
+                }
+                Result.failure()
+            }
+
+            TransferResult.InvalidNote -> {
+                // State is now RequiresAttention(InvalidTransfer) — notes were spent outside the
+                // migration flow. On-launch reconciliation surfaces the prompt, but the user still
+                // needs telling since nothing else runs meanwhile. No re-arm — terminal until the
+                // user acts.
+                migrationLog("Worker: transfer invalid (note spent externally) — user action required on next open.")
+                migrationNotifier.notifyMigrationPlanInvalid(accountKeyId)
+                Result.success()
+            }
+
+            TransferResult.Expired -> {
+                // State is now RequiresAttention(TransferExpired) — the anchor expired before the
+                // broadcast could happen. Distinct copy from InvalidNote, same terminal handling.
+                migrationLog("Worker: transfer expired — user action required on next open.")
+                migrationNotifier.notifyTransferExpired(accountKeyId)
+                Result.success()
+            }
+        }
 
     /**
-     * Schedules the next Lane B run based on live SDK transfer states. Reads the next pending
-     * transaction's scheduledHeight from the SDK and computes a block-time-based delay; falls back
-     * to the plan-repo scheduledAt estimate when the SDK has no pending states. The states include
-     * preparations (kind-agnostic min over `!isSent`) — deliberately matching the engine's own
-     * `nextDueTransferNative`, which serves due preparations for broadcast exactly like transfers,
-     * so Lane B can never sleep past a due preparation layer.
+     * The engine wants [transferId] rebuilt (expired today; unprovable-anchor too once the engine
+     * change request ships). A rebuild needs a fresh signature, so it is user-driven: surface the
+     * attention notification and stop re-arming — the home banner and the app-open router route
+     * the user into the invalid/reschedule screen, and recovery re-arms the chain afterwards.
      */
-    private suspend fun scheduleForNextLiveWindow(
-        accountKeyId: String,
-        sdk: OrchardMigrationSdk,
-        floor: Duration = Duration.ZERO,
-    ) {
+    private suspend fun rebuildRun(sdk: OrchardMigrationSdk, accountKeyId: String, transferId: Long): Result {
+        val snapshot = sdk.snapshot()
+        migrationLog("Worker: engine requests Rebuild{$transferId} — user-driven reschedule required.")
+        migrationNotifier.notifyRescheduleRequired(
+            accountKeyId,
+            (snapshot?.nextPending?.index?.plus(1)) ?: 1,
+            snapshot?.totalCount ?: 0,
+        )
+        return Result.success()
+    }
+
+    /** All transactions mined — nothing left to fold anywhere; just stop the chain. */
+    private suspend fun completeRun(accountKeyId: String): Result {
+        migrationLog("Worker: migration complete — stopping the work chain. (account=$accountKeyId)")
+        return Result.success()
+    }
+
+    /**
+     * TODO(remove: engine UnprovableAnchor): the SDK synthesizes
+     * [MigrationBlocker.UNPROVABLE_ANCHOR] from the backend's late-dependency guard until the
+     * engine change request ships — the engine will then emit `Rebuild` for it and this surfacing
+     * collapses into [rebuildRun]. Until then, notify here so the user learns the plan needs a
+     * reschedule without waiting for an app open (the home banner shows the same attention state).
+     */
+    private suspend fun surfaceUnprovableBlocker(sdk: OrchardMigrationSdk, accountKeyId: String, states: MigrationTransferStates?) {
+        val stuck = states?.transfers?.firstOrNull { it.blocker == MigrationBlocker.UNPROVABLE_ANCHOR } ?: return
+        val snapshot = sdk.snapshot()
+        migrationLog("Worker: transfer ${stuck.id} blocked on an unprovable anchor — user-driven reschedule required.")
+        migrationNotifier.notifyRescheduleRequired(
+            accountKeyId,
+            (snapshot?.nextPending?.index?.plus(1)) ?: 1,
+            snapshot?.totalCount ?: 0,
+        )
+    }
+
+    /**
+     * The "when?" half of the loop: one future run at the earliest relevant moment — the engine's
+     * next sync wake-up ([OrchardMigrationSdk.syncWakeupSchedule]) or the next unsent
+     * transaction's scheduled height, whichever comes first, projected height→wall-clock at the
+     * measured block rate. Falls back to a flat cadence when neither is available.
+     */
+    private suspend fun reArm(sdk: OrchardMigrationSdk, accountKeyId: String, floor: Duration = Duration.ZERO) {
         val states = sdk.getMigrationTransferStates()
+        val wakeups = sdk.syncWakeupSchedule()
         val est = sdk.estimatedChainTip()
-        val delay: Duration =
-            if (states != null && est >= 0L) {
-                val nextScheduledHeight =
-                    states.transfers
-                        .filter { !it.isSent }
-                        .minOfOrNull { it.scheduledHeight }
-                if (nextScheduledHeight != null) {
-                    val blocksRemaining = (nextScheduledHeight - est).coerceAtLeast(1L)
-                    (blocksRemaining * sdk.estimatedSecondsPerBlock()).seconds
-                } else {
-                    // All transfers sent — fall through to plan-repo fallback which will also be empty.
-                    planRepoDerivedDelay(accountKeyId)
-                }
-            } else {
-                planRepoDerivedDelay(accountKeyId)
-            }
-        MigrationScheduler(applicationContext).schedule(accountKeyId, maxOf(delay, floor))
-        Twig.debug { "MIGRATION_DIAG LaneB: scheduleForNextLiveWindow — delay=${maxOf(delay, floor)}" }
-    }
-
-    private suspend fun planRepoDerivedDelay(accountKeyId: String): Duration {
-        val plan = migrationPlanRepository.load(accountKeyId)
-        val next = plan?.nextPending ?: return 60.seconds
-        val remaining = next.scheduledAt - Clock.System.now()
-        return if (remaining.isNegative() || remaining < 60.seconds) 60.seconds else remaining
-    }
-
-    private fun nextDelay(plan: MigrationPlan): Duration {
-        val next = plan.nextPending ?: return 0.seconds
-        val remaining = next.scheduledAt - Clock.System.now()
-        return if (remaining.isNegative()) 0.seconds else remaining
+        val delay = computeNextWakeDelay(states, wakeups, est, sdk.estimatedSecondsPerBlock())
+        MigrationScheduler(applicationContext).schedule(accountKeyId, maxOf(delay ?: migrationCadence(), floor))
+        // The full "why" of the chosen wake, so timing is diagnosable from logs alone: every
+        // engine wake-up height, the next unsent due height, the tip estimate, and the floor.
+        migrationLog(
+            "Worker: re-armed in ${maxOf(delay ?: migrationCadence(), floor)} " +
+                "(engineWakeups=${wakeups?.map { "${it.height}->${it.covers}" }}, " +
+                "nextDue=${states?.transfers?.filter { !it.isSent }?.minOfOrNull { it.scheduledHeight }}, " +
+                "estimatedTip=$est, floor=$floor" +
+                if (delay == null) ", cadence fallback)" else ")"
+        )
     }
 }
 
+/** Live snapshot of this SDK's engine states — the worker's plan view (never cached). */
+private suspend fun OrchardMigrationSdk.snapshot(): LiveMigrationSnapshot? =
+    getMigrationTransferStates()?.let {
+        val est = estimatedChainTip()
+        it.toSnapshot(
+            estimatedTip = if (est >= 0) est else it.tipHeight,
+            secondsPerBlock = estimatedSecondsPerBlock(),
+            nowEpochSeconds = nowEpochSeconds(),
+        )
+    }
+
 private val STATUS_READ_TIMEOUT = 2.seconds
-internal val AWAITING_PROOF_REARM_FLOOR = 60.seconds
-private val LANE_A_WAIT_STEP = 5.seconds
+internal val SYNC_TIMEOUT = 3.minutes
+internal val REARM_FLOOR = 60.seconds
 private val BROADCAST_ATTEMPT_TIMEOUT = 3.minutes
-private const val LANE_A_WAIT_CHECKS = 6
-internal const val SHIFT_ESCALATION_THRESHOLD = 3
 
 /**
- * F4: whether an AWAITING_PROOF strike should escalate (notify for manual confirmation).
- *
- * Escalation must fire ONLY on the transition to the [SHIFT_ESCALATION_THRESHOLD]th COUNTED
- * strike. The strike counter only increments when a sync completed since the last strike (spec
- * §2.B.4 case c); on a no-sync strike the counter stays at 3, so gating on `count == THRESHOLD`
- * alone would re-fire the escalation (and its once-only notification) on every subsequent no-sync
- * strike. Requiring [syncSince] restricts firing to the run that actually reached the 3rd counted
- * strike — i.e. "a sync ran between strikes and the transaction STILL cannot be proved" repeated
- * three times. (The name says "shift" for historical reasons — the counter and its storage keys
- * predate the deletion of the reschedule/shift stack.)
+ * Re-arm delay for the preparation fast-track: back-to-back scheduling for ready prep batches
+ * (WorkManager dispatch latency is the only real gap) and the short retry when a fast-tracked
+ * prep only lost its window to a live sync overlap.
  */
-internal fun shouldEscalateShift(syncSince: Boolean, count: Int): Boolean =
-    syncSince && count == SHIFT_ESCALATION_THRESHOLD
+internal val PREP_FAST_TRACK_REARM = 1.seconds
+
+internal const val MIN_REARM_SECONDS = 60L
+
+/** Returns the current wall-clock time as epoch seconds. Extracted for testability. */
+internal fun nowEpochSeconds(): Long = Clock.System.now().epochSeconds
+
+/**
+ * Fallback-only cadence: 5 min on testnet, 60 min on mainnet. Used ONLY when neither the engine's
+ * wake-up schedule nor live transfer states (or the tip estimate) are available — every regular
+ * wake is computed from the engine's own schedule instead (see [computeNextWakeDelay]).
+ *
+ * Uses [BuildConfig.FLAVOR] because the SDK's network id is not cheaply reachable from a static
+ * context without a full OrchardMigrationSdk instance.
+ */
+internal fun migrationCadence(): Duration =
+    if (BuildConfig.FLAVOR.contains("testnet", ignoreCase = true)) 5.minutes else 60.minutes
 
 // Same attempt count (3) as MigrationSendingVM.sendOnce()'s foreground retry loop — but not the
 // same retry trigger: sendOnce() retries while polling for readiness (result == null) and stops
@@ -422,57 +524,129 @@ internal suspend fun executeWithRetries(
 }
 
 /**
- * What Lane B should do before calling the SDK's executeNextPendingTransfer.
+ * What a broadcast run should do before calling the SDK's executeNextPendingTransfer.
  *
- * - [LaneBAction.DEFER_OVERLAP] — Lane A is running, OR the privacy quiet gap since the last
- *   network activity has not yet elapsed. Engine untouched; schedule re-arm after the buffer.
- * - [LaneBAction.BROADCAST] — all sources are quiet and the gap has elapsed; proceed to the SDK.
+ * - [BroadcastPreflight.DEFER] — the foreground synchronizer is actively syncing, OR the privacy
+ *   quiet gap since the last network activity has not yet elapsed. Engine untouched.
+ * - [BroadcastPreflight.BROADCAST] — all sources are quiet and the gap has elapsed.
  */
-internal enum class LaneBAction { BROADCAST, DEFER_OVERLAP }
+internal enum class BroadcastPreflight { BROADCAST, DEFER }
 
 /**
- * Pure preflight decision for Lane B.
+ * Pure preflight decision for a broadcast run — takes pre-computed scalars so it is unit-testable
+ * without Koin, WorkManager or a real SDK.
  *
- * Takes pre-computed scalars so it is unit-testable without Koin, WorkManager or a real SDK.
- *
- * [lastNetworkActivityEpochSeconds] is null when no broadcast has ever been stamped (first run);
+ * [lastNetworkActivityEpochSeconds] is null when no activity has ever been stamped (first run);
  * in that case the gap check is skipped and BROADCAST is returned.
  */
-internal fun decideLaneBPreflight(
-    laneARunning: Boolean,
+internal fun decideBroadcastPreflight(
     synchronizerSyncing: Boolean,
     nowEpochSeconds: Long,
     lastNetworkActivityEpochSeconds: Long?,
     privacyBufferSeconds: Long,
-): LaneBAction {
-    if (laneARunning || synchronizerSyncing) return LaneBAction.DEFER_OVERLAP
+    prepFastTrack: Boolean = false,
+): BroadcastPreflight {
+    // Preparation fast-track (security split, 2026-07-30): note-split preparations are fully
+    // shielded IN-POOL transactions — amounts and spend links hidden, natural recent anchor with
+    // the same anonymity set as all ordinary Orchard traffic. The sync/broadcast de-correlation
+    // ceremony exists for CROSSINGS (public amount + tiny migration-anchor anonymity set), and
+    // during the prep phase no crossing exists to correlate against. So when the next due pending
+    // transaction is a preparation, skip the quiet-gap and active-sync defers entirely; the
+    // per-execution sync-XOR-broadcast rule still holds (this run never syncs).
+    if (prepFastTrack) return BroadcastPreflight.BROADCAST
+    if (synchronizerSyncing) return BroadcastPreflight.DEFER
     if (lastNetworkActivityEpochSeconds != null &&
         nowEpochSeconds - lastNetworkActivityEpochSeconds < privacyBufferSeconds
     ) {
-        return LaneBAction.DEFER_OVERLAP
+        return BroadcastPreflight.DEFER
     }
-    return LaneBAction.BROADCAST
+    return BroadcastPreflight.BROADCAST
 }
 
 /**
- * Returns true if a completed sync has been observed since the last awaiting-proof strike for
- * this account.
- *
- * A sync is considered "completed since the last strike" when [lastActivity] is non-null (meaning
- * network activity has been stamped) AND it is strictly after [lastShift] (the timestamp of the
- * most recent strike for this transfer — "shift" in the name/storage for historical reasons).
- * If either is null the function returns false:
- * - [lastActivity] null  → no network activity ever recorded → no completed sync observed
- * - [lastShift] null     → no previous strike → treat as "before all time"; if lastActivity is
- *   non-null a sync HAS completed since the beginning, so return true in that case.
- *
- * Exposed as a top-level function so it can be unit-tested in isolation (both providers return
- * [java.time.Instant] which is easy to construct without Android infrastructure).
+ * The transaction the engine's `next_broadcastable` will actually serve: the first proved, unsent,
+ * due transaction in VEC (id) order — the engine iterates its transactions vector, not the
+ * schedule (documented in the engine change request §3). Null when nothing is broadcastable yet.
  */
-internal fun syncCompletedSince(lastActivity: Instant?, lastShift: Instant?): Boolean {
-    if (lastActivity == null) return false
-    // No previous shift means we treat shift time as the epoch (beginning of time) — any
-    // recorded activity is "since" then.
-    val shiftEpoch = lastShift ?: Instant.EPOCH
-    return lastActivity > shiftEpoch
+internal fun engineBroadcastCandidate(states: MigrationTransferStates?, estimatedTip: Long): MigrationTransferState? =
+    states
+        ?.transfers
+        ?.filter { !it.isSent && it.isProved && it.scheduledHeight <= estimatedTip }
+        ?.minByOrNull { it.id }
+
+/**
+ * The earliest unsent transaction in schedule order (id as tiebreak) — the "what comes next"
+ * display/pacing candidate when nothing is broadcastable yet.
+ */
+internal fun earliestUnsent(states: MigrationTransferStates?): MigrationTransferState? =
+    states
+        ?.transfers
+        ?.filter { !it.isSent }
+        ?.sortedWith(compareBy({ it.scheduledHeight }, { it.id }))
+        ?.firstOrNull()
+
+/**
+ * True when the earliest unsent transaction is a PREPARATION that is already proved and due by
+ * the estimated tip — the trigger for the preparation fast-track (see [decideBroadcastPreflight])
+ * and for immediate re-chaining after a prep broadcast (no send spacing: the prep tree is one
+ * logical unit; within a layer there is no one-at-a-time requirement).
+ */
+internal fun nextDueUnsentIsPreparation(states: MigrationTransferStates?, estimatedTip: Long): Boolean {
+    val next = earliestUnsent(states) ?: return false
+    return !next.isTransfer && next.isProved && next.scheduledHeight <= estimatedTip
+}
+
+/**
+ * Estimated-tip broadcast acceleration predicate: a proved, unsent, non-stuck transaction whose
+ * scheduled height the estimated tip has already crossed. The engine's own `nextStep` cannot see
+ * past the scanned tip; this is the app-side bridge that keeps a backgrounded wallet broadcasting
+ * on time (the actual send still re-verifies through the engine).
+ */
+internal fun broadcastDueByEstimate(states: MigrationTransferStates, estimatedTip: Long): Boolean {
+    if (estimatedTip < 0L) return false
+    return states.transfers.any {
+        !it.isSent &&
+            it.isProved &&
+            it.blocker != MigrationBlocker.UNPROVABLE_ANCHOR &&
+            it.scheduledHeight <= estimatedTip
+    }
+}
+
+/**
+ * The "when?" projection: the earliest relevant future height — the engine's next sync wake-up or
+ * the next unsent transaction's scheduled height — converted to a wall-clock delay at the measured
+ * block rate, floored at [MIN_REARM_SECONDS] (WorkManager slack / hot-loop guard).
+ *
+ * Wake-ups covering ONLY unprovable-anchor transactions are excluded: the engine keeps emitting
+ * immediate wake-ups for them forever (engine change request, GAP 2) and syncing can never produce
+ * their proof — honoring them would hot-loop the worker at the floor delay. Returns `null` (cadence
+ * fallback) when the tip estimate is unavailable or nothing relevant remains.
+ */
+internal fun computeNextWakeDelay(
+    states: MigrationTransferStates?,
+    wakeups: List<MigrationSyncWakeup>?,
+    est: Long,
+    secondsPerBlock: Long,
+): Duration? {
+    if (est < 0L) return null
+    val unprovable =
+        states
+            ?.transfers
+            ?.filter { it.blocker == MigrationBlocker.UNPROVABLE_ANCHOR }
+            ?.map { it.id }
+            ?.toSet()
+            .orEmpty()
+    val nextWakeHeight =
+        wakeups
+            ?.filter { wakeup -> wakeup.covers.any { it !in unprovable } }
+            ?.minOfOrNull { it.height }
+    val nextDueHeight =
+        states
+            ?.transfers
+            ?.filter { !it.isSent && it.id !in unprovable }
+            ?.minOfOrNull { it.scheduledHeight }
+    val target = listOfNotNull(nextWakeHeight, nextDueHeight).minOrNull() ?: return null
+    return ((target - est).coerceAtLeast(0L) * secondsPerBlock)
+        .coerceAtLeast(MIN_REARM_SECONDS)
+        .seconds
 }
