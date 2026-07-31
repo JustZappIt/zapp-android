@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="insufficient_funds_title">Saldo Tidak Cukup</string>
+    <string name="insufficient_funds_description">Kami tidak dapat membuat transaksi ini untuk Anda. Saldo dompet Anda tidak cukup untuk menutupi jumlah transaksi sekaligus biaya transaksi. Silakan kurangi jumlah transaksi agar mencakup biayanya.</string>
+    <string name="insufficient_funds_add_zec_button">Tambah ZEC dengan Venmo</string>
+    <string name="insufficient_funds_cancel">Batal</string>
+</resources>

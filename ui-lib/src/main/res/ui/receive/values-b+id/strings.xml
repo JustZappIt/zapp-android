@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="receive_title">Terima</string>
+    <string name="receive_prioritize_shielded">Demi privasi, selalu gunakan alamat terlindungi.</string>
+    <string name="receive_wallet_address_shielded">Alamat Terlindungi Zcash</string>
+    <string name="receive_wallet_address_sapling">Alamat Sapling Zcash</string>
+    <string name="receive_wallet_address_transparent">Alamat Transparan Zcash</string>
+    <string name="receive_copy">Salin</string>
+    <string name="receive_qr_code">Kode QR</string>
+    <string name="receive_request">Minta</string>
+    <string name="receive_share">Bagikan</string>
+    <string name="receive_tip_label">TIPS</string>
+    <string name="receive_tab_shielded">Terlindungi</string>
+    <string name="receive_tab_transparent">Transparan</string>
+    <string name="receive_back_content_description">Kembali</string>
+    <string name="receive_clipboard_tag">Alamat Dompet Zcash</string>
+    <string name="receive_wallet_address_shielded_keystone">Alamat Terlindungi Zcash</string>
+    <string name="receive_wallet_address_sapling_keystone">Alamat Sapling Zcash</string>
+    <string name="receive_wallet_address_transparent_keystone">Alamat Transparan Zcash</string>
+    <string name="receive_wallet_address_unified_subtitle">Berganti setiap kali Anda menggunakannya</string>
+
+    <string name="receive_info_shielded_title">Alamat Terlindungi Zcash (Berganti)</string>
+    <string name="receive_info_shielded_bullet_1">Gunakan alamat ini untuk menerima dan menyimpan %1$s Anda secara privat. %2$s transparan dan terlindungi yang dikirim ke alamat ini akan diterima dan disimpan sebagai %3$s terlindungi.</string>
+    <string name="receive_info_shielded_bullet_2">Alamat Terlindungi Zcash baru dibuat setiap kali Anda membuka layar Terima.</string>
+    <string name="receive_info_shielded_bullet_3">Semua transaksi yang dikirim ke berbagai Alamat Terlindungi Anda yang berganti-ganti akan tetap menjadi bagian dari satu saldo dompet di bawah frasa pemulihan yang sama.</string>
+    <string name="receive_info_shielded_bullet_4">Meskipun kami menyarankan penggunaan alamat baru setiap kali, setiap alamat unik dapat digunakan kembali.</string>
+
+    <string name="receive_info_transparent_title">Alamat Transparan Zcash (Statis)</string>
+    <string name="receive_info_transparent_bullet_1">Jenis alamat ini bekerja persis seperti alamat Bitcoin dan TIDAK MEMBERIKAN PRIVASI. Detail transaksi yang dikirim ke alamat ini akan bersifat publik dan terlihat di blockchain.</string>
+    <string name="receive_info_transparent_bullet_2">Kami tidak menyarankan penggunaan jenis alamat ini kecuali dompet atau bursa tempat %s dikirim tidak mendukung pengiriman dana ke alamat Zcash terlindungi.</string>
+    <string name="receive_info_transparent_bullet_3">Untuk melindungi privasi Anda, Zapp akan memandu Anda melindungi %s transparan apa pun yang Anda terima hanya dengan satu klik.</string>
+    <string name="receive_info_transparent_bullet_4">Anda tidak dapat membelanjakan %s transparan Anda sampai Anda melindunginya.</string>
+</resources>

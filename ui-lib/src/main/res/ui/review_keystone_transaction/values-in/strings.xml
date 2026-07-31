@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="review_keystone_transaction_title">Tinjau</string>
+    <string name="review_keystone_transaction_positive">Konfirmasi dengan Keystone</string>
+    <string name="review_keystone_transaction_negative">Batal</string>
+</resources>

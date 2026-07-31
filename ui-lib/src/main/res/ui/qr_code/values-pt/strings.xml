@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="qr_code_close_content_description">Fechar</string>
+    <string name="qr_code_receive_title">Receber</string>
+    <string name="qr_code_unified_content_description">Código QR do endereço unificado</string>
+    <string name="qr_code_sapling_content_description">Código QR do endereço Sapling</string>
+    <string name="qr_code_transparent_content_description">Código QR do endereço transparente</string>
+    <string name="qr_code_wallet_address_shielded">Endereço blindado Zcash</string>
+    <string name="qr_code_wallet_address_sapling">Endereço Sapling Zcash</string>
+    <string name="qr_code_wallet_address_transparent">Endereço transparente Zcash</string>
+    <string name="qr_code_privacy_level_shielded">Privado</string>
+    <string name="qr_code_privacy_level_transparent">Não privado</string>
+    <string name="qr_code_share_btn">Compartilhar código QR</string>
+    <string name="qr_code_copy_btn">Copiar endereço</string>
+    <string name="qr_code_clipboard_tag">Endereço da carteira Zcash</string>
+    <string name="qr_code_data_unable_to_share">Não foi possível encontrar um aplicativo para compartilhar o código QR.</string>
+    <string name="qr_code_share_chooser_title">Meu endereço %s no Zapp</string>
+    <string name="qr_code_share_chooser_text">Olá, escaneie este código QR para me enviar um pagamento em %s! Link para download:
+        https://play.google.com/store/apps/details?id=xyz.justzappit.zapp</string>
+    <string name="qr_code_wallet_address_shielded_keystone">Endereço blindado Keystone</string>
+    <string name="qr_code_wallet_address_sapling_keystone">Endereço Sapling Keystone</string>
+    <string name="qr_code_wallet_address_transparent_keystone">Endereço transparente Keystone</string>
+</resources>

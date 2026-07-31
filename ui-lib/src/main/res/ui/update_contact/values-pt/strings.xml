@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="update_contact_title">Contato</string>
+    <string name="update_contact_primary_btn">Salvar</string>
+    <string name="update_contact_secondary_btn">Excluir</string>
+    <string name="delete_contact_confirmation_title">Tem certeza?</string>
+    <string name="delete_contact_confirmation_message">Você está prestes a excluir este contato. Isso não pode ser desfeito.</string>
+    <string name="delete_contact_confirmation_confirm">Confirmar</string>
+    <string name="delete_contact_confirmation_cancel">Cancelar</string>
+</resources>

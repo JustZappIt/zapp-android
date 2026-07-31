@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="restore_title">Pulihkan</string>
+    <string name="restore_subtitle">Frasa Pemulihan</string>
+    <string name="restore_message">Silakan ketik frasa pemulihan rahasia 24 kata Anda dalam urutan yang benar.</string>
+    <string name="restore_button">Lanjut</string>
+
+    <string name="restore_dialog_title">Perlu tahu lebih banyak?</string>
+    <string name="restore_dialog_message_1_bold_part">Frasa Pemulihan Rahasia</string>
+    <string name="restore_dialog_message_1">adalah kumpulan unik berisi 24 kata yang muncul dalam
+        urutan yang tepat. Frasa ini dapat digunakan untuk mendapatkan kendali penuh atas dana Anda dari perangkat mana pun melalui aplikasi dompet Zcash mana pun.
+        Anggap saja sebagai kunci utama dompet Anda. Frasa ini tersimpan di Pengaturan Lanjutan Zapp.</string>
+    <string name="restore_dialog_message_2_bold_part">Tinggi Kelahiran Dompet</string>
+    <string name="restore_dialog_message_2">adalah tinggi blok (nomor blok di
+        blockchain) saat dompet Anda dibuat. Jika suatu saat Anda kehilangan akses ke aplikasi Zapp dan perlu memulihkan
+        dana Anda, memberikan tinggi blok bersama frasa pemulihan Anda dapat mempercepat prosesnya secara signifikan.
+    </string>
+    <string name="restore_dialog_button">Mengerti!</string>
+
+    <string name="restore_bd_height_btn">Perkirakan tinggi blok saya</string>
+    <string name="restore_bd_restore_btn">Pulihkan</string>
+
+    <string name="restore_bd_subtitle">Tinggi Kelahiran Dompet</string>
+    <string name="restore_bd_message">Memasukkan Tinggi Kelahiran Dompet Anda membantu mempercepat proses pemulihan.</string>
+    <string name="restore_bd_text_field_title">Tinggi Blok</string>
+    <string name="restore_bd_text_field_hint">Masukkan angka</string>
+    <string name="restore_bd_text_field_note">Tinggi Kelahiran Dompet adalah titik waktu saat dompet Anda dibuat.</string>
+
+    <string name="restore_bd_date_message">Tentukan seberapa jauh Zapp harus memindai. Masukkan tanggal sebelum transaksi pertama yang Anda terima. Jika ragu, pilih tanggal yang lebih awal.</string>
+
+    <string name="restore_bd_estimation_subtitle">Perkiraan Tinggi Blok</string>
+    <string name="restore_bd_estimation_message">Zapp akan memindai dan memulihkan semua transaksi yang dilakukan setelah nomor blok berikut.</string>
+    <string name="restore_bd_estimation_copy">Salin</string>
+    <string name="restore_bd_estimation_restore">Pulihkan</string>
+
+    <string name="restore_seed_warning_suggestions">Kata ini tidak ada dalam kamus frasa pemulihan.  Silakan pilih yang benar dari saran yang tersedia.</string>
+
+
+    <string name="resync_title">Sinkronkan Ulang Dompet</string>
+    <string name="resync_bd_date_subtitle">Transaksi Dompet Pertama</string>
+    <string name="resync_bd_date_message">Tentukan seberapa jauh Zapp harus menyinkronkan ulang. Masukkan tanggal sebelum transaksi pertama yang Anda terima.</string>
+    <string name="resync_bd_date_note">Jika ragu, pilih tanggal yang lebih awal.</string>
+
+    <string name="resync_bd_estimation_subtitle">Perkiraan Tinggi Blok</string>
+    <string name="resync_bd_estimation_message">Dompet Anda akan disinkronkan ulang dari %1$s (%2$s blok). Zapp akan memindai dan memulihkan semua transaksi yang dilakukan setelah nomor blok berikut.</string>
+    <string name="resync_bd_estimation_btn">Tetapkan tinggi ini</string>
+
+    <string name="confirm_resync_title">Konfirmasi Sinkronisasi Ulang</string>
+    <string name="confirm_resync_subtitle">Sinkronkan ulang dompet saat ini tanpa mengatur ulang aplikasi. Ini dapat digunakan untuk
+        mengatasi masalah yang biasanya memerlukan pemulihan dompet, seperti memperbaiki saldo Keystone Anda
+        .\n\nKecuali Anda menentukan lain di bawah ini, Zapp akan menyinkronkan ulang dari tanggal yang ditampilkan. </string>
+    <string name="confirm_resync_message">Kecuali Anda menentukan lain di bawah ini, Zapp akan menyinkronkan ulang dari tanggal yang ditampilkan.</string>
+    <string name="confirm_resync_info">Dompet Anda akan disinkronkan ulang dari %1$s (%2$s blok). Gunakan tombol di bawah ini jika Anda ingin mengubahnya.</string>
+    <string name="confirm_resync_change">Ubah</string>
+    <string name="confirm_resync_confirm">Konfirmasi</string>
+    <string name="resync_wbh_confirm_button">Konfirmasi</string>
+    <string name="resync_confirm_failed_title">Sinkronisasi Ulang Gagal</string>
+    <string name="resync_confirm_failed_message">Sinkronisasi ulang dompet tidak dapat diselesaikan. Silakan coba lagi atau laporkan masalah.</string>
+
+</resources>

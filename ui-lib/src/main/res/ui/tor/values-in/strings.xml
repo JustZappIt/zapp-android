@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tor_settings_title">Perlindungan Tor</string>
+    <string name="tor_settings_subtitle">Tor memberikan perlindungan tambahan untuk alamat IP Anda. Fitur ini menggunakan
+        jaringan Tor untuk mengambil nilai tukar, mengirim transaksi, mengambil data transaksi, dan terhubung ke API
+        pihak ketiga.\n\nJika Tor diizinkan di wilayah Anda, kami sarankan untuk mengaktifkannya.</string>
+    <string name="tor_settings_section_control">Kontrol</string>
+    <string name="tor_settings_toggle_title">Aktifkan Perlindungan Tor</string>
+    <string name="tor_settings_toggle_subtitle">Arahkan permintaan jaringan aplikasi yang didukung melalui Tor</string>
+
+    <string name="tor_settings_item_subtitle_1">Terhubung melalui Tor</string>
+    <string name="tor_settings_item_subtitle_2">Jangan terhubung melalui Tor.</string>
+
+    <string name="tor_opt_in_item_title_1">Konversi Mata Uang</string>
+    <string name="tor_opt_in_item_subtitle_1">Ambil nilai tukar dari server pihak ketiga tanpa mengungkap alamat IP Anda. (Hanya tersedia saat Tor diaktifkan.)</string>
+
+    <string name="tor_opt_in_item_title_2">Transaksi</string>
+    <string name="tor_opt_in_item_subtitle_2">Kirim dan ambil data transaksi melalui Tor untuk privasi tambahan.</string>
+
+    <string name="tor_opt_in_item_title_3">Integrasi</string>
+    <string name="tor_opt_in_item_subtitle_3">Akses API pihak ketiga (mis. NEAR) melalui Tor untuk privasi tambahan.</string>
+
+    <string name="tor_opt_in_btn">Aktifkan</string>
+    <string name="tor_opt_out_btn">Nonaktifkan</string>
+    <string name="tor_settings_share_feedback">Bagikan masukan</string>
+</resources>

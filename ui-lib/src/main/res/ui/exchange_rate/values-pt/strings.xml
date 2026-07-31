@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="exchange_rate_info_title_1">Proteção do endereço IP</string>
+    <string name="exchange_rate_info_subtitle_1">Se a Proteção Tor estiver ativada (Configurações Avançadas), o Zapp protege o seu endereço IP.</string>
+    <string name="exchange_rate_info_subtitle_1_no_cmc">As taxas de câmbio são obtidas via Tor para proteger o seu endereço IP. Verifique se o uso do Tor é permitido na sua região.</string>
+    <string name="exchange_rate_info_title_2">Atualização da taxa</string>
+    <string name="exchange_rate_info_subtitle_2">A taxa é atualizada automaticamente e também pode ser atualizada manualmente.</string>
+
+    <string name="exchange_rate_unavailable_title">Taxa de câmbio indisponível</string>
+    <string name="exchange_rate_unavailable_subtitle">Tentamos, mas não conseguimos atualizar a taxa de câmbio
+        para você. Verifique a sua conexão, reabra o app e tentaremos novamente.</string>
+    <string name="exchange_rate_opt_in_title">Novo recurso</string>
+    <string name="exchange_rate_opt_in_subtitle">Conversão de moeda</string>
+    <string name="exchange_rate_opt_in_primary_btn">Revisar</string>
+
+    <string name="exchange_rate_opt_in_enable">Ativar</string>
+    <string name="exchange_rate_opt_in_save">Salvar alterações</string>
+    <string name="exchange_rate_opt_in_skip">Pular</string>
+    <string name="exchange_rate_opt_in_note">Nota para quem é extremamente preocupado com a privacidade: como obtemos a taxa de conversão
+        de casas de câmbio, uma casa de câmbio pode conseguir ver que a taxa de câmbio foi consultada antes de uma transação ocorrer.</string>
+
+    <string name="exchange_rate_opt_in_option_title">Ativar</string>
+    <string name="exchange_rate_opt_in_option_subtitle">Mostrar a conversão de moeda.</string>
+    <string name="exchange_rate_opt_out_option_title">Desativar</string>
+    <string name="exchange_rate_opt_out_option_subtitle">Não mostrar a conversão de moeda.</string>
+    <string name="exchange_rate_opt_in_description">Exiba o seu saldo e os valores de pagamento em USD.\nVocê pode gerenciar
+        este recurso nas Configurações Avançadas.</string>
+    <string name="exchange_rate_opt_in_description_settings">Veja o seu saldo e os valores de pagamento em USD com mais
+        privacidade. As taxas de câmbio são obtidas via Tor para proteger o seu endereço IP.\n\nVerifique se o uso do Tor é permitido na
+        sua região antes de ativar.</string>
+
+    <string name="exchange_rate_tor_opt_in_title">Tor necessário para a conversão de moeda</string>
+    <string name="exchange_rate_tor_opt_in_description">A Proteção Tor é um recurso beta que oferece proteções adicionais
+        para o seu endereço IP. As taxas de câmbio em USD só estão disponíveis quando ela está ativada.\n\nSe o Tor for permitido na sua região, recomendamos ativá-lo. Você pode gerenciá-lo nas Configurações Avançadas.</string>
+    <string name="exchange_rate_tor_opt_in_positive">Ativar</string>
+    <string name="exchange_rate_tor_opt_in_negative">Fazer isso depois</string>
+
+    <string name="exchange_rate_tor_enabled_footer">Desativar a Proteção Tor também desativará o recurso de Conversão de Moeda até que seja reativado.</string>
+    <string name="exchange_rate_tor_disabled_footer">Se você quiser proteger o seu endereço IP, ative a Proteção Tor nas Configurações Avançadas.</string>
+
+    <string name="exchange_rate_currency_picker_title">Selecionar moeda</string>
+    <string name="exchange_rate_currency_picker_save">Salvar seleção</string>
+
+</resources>

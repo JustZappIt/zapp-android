@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="unified_send_sentence_i_want_to_send">Saya ingin mengirim</string>
+    <string name="unified_send_sentence_who_will_receive">yang akan menerima</string>
+    <string name="unified_send_sentence_ill_pay">Saya akan bayar</string>
+    <string name="unified_send_address_placeholder">alamat seseorang…</string>
+    <string name="unified_send_memo_hint">Tambahkan catatan (opsional)</string>
+    <string name="unified_send_they_receive_approx">Mereka menerima ≈</string>
+    <string name="unified_send_top_up">Isi Saldo</string>
+    <string name="unified_send_title">Kirim</string>
+    <string name="unified_send_available_balance">Saldo tersedia</string>
+    <string name="unified_send_swap_amounts">Tukar kolom ZEC dan mata uang</string>
+    <string name="unified_send_toggle_balance_currency">Ganti mata uang utama saldo</string>
+</resources>

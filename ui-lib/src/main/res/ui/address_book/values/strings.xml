@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="address_book_title">Address Book</string>
+    <string name="address_book_add">Add New Contact</string>
+    <string name="address_book_empty">Your address book is empty</string>
+    <string name="address_book_version">Version <xliff:g example="1" id="version">%s</xliff:g></string>
+    <string name="address_book_scan_btn">Scan QR code</string>
+    <string name="address_book_manual_btn">Manual entry</string>
+    <string name="address_book_multiple_wallets_title">Your Wallets</string>
+    <string name="address_book_multiple_wallets_contacts_title">Address Book Contacts</string>
+    <string name="address_book_select_recipient_title">Select recipient</string>
+    <string name="address_book_edit_contact_title">Edit Contact</string>
+    <string name="address_book_edit_save_btn">Save Changes</string>
+    <string name="address_book_edit_delete_btn">Delete Contact</string>
+    <string name="address_book_edit_save_content_description">Save changes</string>
+    <string name="address_book_edit_delete_content_description">Delete contact</string>
+    <string name="address_book_edit_delete_confirm_title">Delete contact?</string>
+    <string name="address_book_edit_delete_confirm_message">This cannot be undone.</string>
+    <string name="address_book_edit_delete_confirm_yes">Delete</string>
+    <string name="address_book_edit_delete_confirm_no">Cancel</string>
+
+    <string name="address_book_additional_addresses">Additional Addresses</string>
+    <string name="address_book_addr_unified">Unified Address (Zcash)</string>
+    <string name="address_book_addr_unified_hint">Enter unified address…</string>
+    <string name="address_book_addr_transparent">Transparent Address (Zcash)</string>
+    <string name="address_book_addr_transparent_hint">Enter transparent address…</string>
+    <string name="address_book_addr_evm">EVM Address (ETH, Polygon, etc.)</string>
+    <string name="address_book_addr_evm_hint">Enter 0x address…</string>
+    <string name="address_book_addr_solana">Solana Address</string>
+    <string name="address_book_addr_solana_hint">Enter Solana address…</string>
+
+    <string name="address_book_messaging_key_hint">Messaging Key (64 hex chars)</string>
+    <string name="address_book_contact_name_required">Name is required</string>
+    <string name="address_book_add_contact_content_description">Add Contact</string>
+    <string name="address_book_scan_messaging_key_content_description">Scan messaging key QR</string>
+    <string name="address_book_scan_wallet_address_content_description">Scan wallet address QR</string>
+    <string name="address_book_scan_addr_qr_content_description">Scan <xliff:g example="EVM Address" id="label">%1$s</xliff:g> QR</string>
+    <string name="address_book_edit_cancel_delete_content_description">Cancel delete</string>
+    <string name="address_book_edit_confirm_delete_content_description">Confirm delete contact</string>
+</resources>

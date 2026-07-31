@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="scan_keystone_failure">Kode QR ini bukan dompet Keystone yang valid.</string>
+    <string name="scan_keystone_preview_content_description">Kamera</string>
+    <string name="scan_keystone_cancel_button">Batal</string>
+    <string name="scan_keystone_settings_button">Buka Pengaturan</string>
+    <string name="scan_keystone_settings_open_failed">Tidak dapat membuka aplikasi Pengaturan.</string>
+    <string name="scan_keystone_state_permission">Kamera tidak diizinkan. Silakan buka pengaturan sistem
+        Zapp dan aktifkan.</string>
+    <string name="scan_keystone_state_failed">Inisialisasi kamera gagal. Silakan coba lagi.</string>
+    <string name="scan_keystone_address_validation_failed">Kode QR ini bukan alamat Zcash yang valid.</string>
+    <string name="scan_keystone_torch_content_description">Alihkan senter kamera</string>
+    <string name="scan_keystone_gallery_content_description">Galeri</string>
+    <string name="scan_keystone_info">Pindai dompet Keystone Anda untuk terhubung</string>
+    <string name="scan_keystone_info_transaction">Pindai kode QR Keystone Anda untuk menandatangani transaksi</string>
+</resources>

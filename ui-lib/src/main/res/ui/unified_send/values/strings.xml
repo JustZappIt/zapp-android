@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="unified_send_sentence_i_want_to_send">I want to send</string>
+    <string name="unified_send_sentence_who_will_receive">who will receive</string>
+    <string name="unified_send_asset">Asset</string>
+    <string name="unified_send_estimated_equivalent">≈ %1$s %2$s</string>
+    <string name="unified_send_sentence_ill_pay">I\'ll pay</string>
+    <string name="unified_send_address_placeholder">someone\'s address…</string>
+    <string name="unified_send_memo_hint">Add a note (optional)</string>
+    <string name="unified_send_they_receive_approx">They receive ≈</string>
+    <string name="unified_send_top_up">Top Up</string>
+    <string name="unified_send_title">Send</string>
+    <string name="unified_send_available_balance">Available balance</string>
+    <string name="unified_send_swap_amounts">Swap ZEC and currency inputs</string>
+    <string name="unified_send_toggle_balance_currency">Toggle primary balance currency</string>
+</resources>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="contact_name_label">Nome do contato</string>
+    <string name="contact_name_hint">Digite o nome do contato…</string>
+    <string name="contact_address_label">Endereço da carteira</string>
+    <string name="contact_address_hint">Digite o Unified Address…</string>
+
+    <string name="contact_name_error_not_unique">Este nome de contato já está em uso. Escolha um nome diferente.</string>
+    <string name="contact_name_error_too_long">Este nome de contato excede o limite de 32 caracteres. Encurte o nome.</string>
+    <string name="contact_address_error_not_unique">Este endereço de carteira já está no seu catálogo de endereços.</string>
+    <string name="contact_chain_address_error_not_unique">Já existe um endereço com esta rede no seu catálogo de endereços.</string>
+    <string name="contact_address_error_invalid">Endereço inválido</string>
+    <string name="contact_select_chain">Selecionar rede</string>
+</resources>

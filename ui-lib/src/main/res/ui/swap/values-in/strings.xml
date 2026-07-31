@@ -1,0 +1,286 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="swap_info_message">Tukar %1$s dengan token apa pun yang didukung NEAR.\n\nJika menukar KE %2$s, Anda akan mengirim dana dari dompet pihak ketiga dan memberikan alamat tujuan pengembalian kembalian.\n\nJika menukar DARI %3$s, Anda harus memberikan alamat yang valid untuk aset yang dituju.</string>
+    <string name="swap_info_title">Tukar dengan</string>
+    <string name="swap_select_token">Pilih Token</string>
+    <string name="swap_select_chain">Pilih Jaringan</string>
+    <string name="swap_search_hint">Cari berdasarkan nama atau ticker…</string>
+    <string name="swap_slippage_title">Slippage</string>
+    <string name="swap_slippage_subtitle">Pengaturan ini menentukan selisih maksimum yang diizinkan antara harga swap yang diharapkan dan harga sebenarnya yang Anda bayar, yang berada di luar kendali Zapp.</string>
+    <string name="swap_slippage_max_threshold">Masukkan slippage maksimum 30%%.</string>
+    <string name="swap_slippage_info">Anda mungkin menerima hingga %s lebih sedikit dari penawaran.</string>
+    <string name="swap_slippage_low_warning">%1$s Slippage %2$s meningkatkan kemungkinan swap Anda gagal dan dikembalikan. Pertimbangkan menggunakan %3$s, terutama untuk jumlah yang lebih besar.</string>
+    <string name="swap_slippage_low_warning_1">Peringatan:</string>
+    <string name="swap_slippage_low_warning_2">di bawah %s%%</string>
+    <string name="swap_slippage_low_warning_3">%s%% atau lebih</string>
+    <string name="pay_slippage_info">Anda mungkin membayar hingga %s lebih banyak, di luar biaya transaksi.</string>
+    <string name="swap_title">Tukar</string>
+    <string name="swap_available_to_swap">Tersedia untuk ditukar</string>
+    <string name="swap_stats_price">Harga</string>
+    <string name="swap_stats_fee">Biaya</string>
+    <string name="swap_you_send">Anda kirim</string>
+    <string name="swap_you_receive">Anda terima</string>
+    <string name="swap_receiving_to">Diterima ke</string>
+    <string name="swap_change_address">Ubah</string>
+    <string name="swap_from">Dari</string>
+    <string name="swap_insufficient_funds">Dana tidak cukup</string>
+    <string name="swap_max_standalone">Dapat dibelanjakan: </string>
+    <string name="swap_max">Dapat dibelanjakan: %s</string>
+    <string name="swap_to">Ke</string>
+    <string name="swap_rate">Nilai tukar</string>
+    <string name="swap_zec_exchange_rate">1 %1$s = %2$s</string>
+    <string name="swap_slippage_tolerance">Toleransi slippage</string>
+    <string name="swap_cancel_title">Anda yakin?</string>
+    <string name="swap_cancel_subtitle">Jika Anda meninggalkan layar ini, semua informasi yang Anda masukkan akan hilang.</string>
+    <string name="swap_cancel_negative">Batalkan swap</string>
+    <string name="swap_cancel_positive">Jangan batalkan</string>
+    <string name="swap_quote_error_too_low_try_at_least">Jumlah terlalu kecil untuk bridge, coba minimal %s</string>
+    <string name="swap_quote_error_too_low_try_higher">Jumlah terlalu kecil untuk bridge, coba jumlah yang lebih besar.</string>
+    <string name="swap_quote_error_getting_quote">Kami sudah mencoba, tetapi tidak bisa mendapatkan penawaran untuk pembayaran dengan parameter Anda. Anda bisa menyesuaikan slippage atau coba lagi nanti.</string>
+    <string name="swap_quote_error_getting_quote_swap">Kami sudah mencoba, tetapi tidak bisa mendapatkan penawaran untuk swap dengan parameter Anda. Anda bisa menyesuaikan slippage atau coba lagi nanti.</string>
+    <string name="swap_quote_unavailable">Penawaran Tidak Tersedia</string>
+    <string name="swap_quote_cancel_payment">Batalkan pembayaran</string>
+    <string name="swap_quote_edit_payment">Ubah pembayaran</string>
+    <string name="swap_quote_cancel_swap">Batalkan swap</string>
+    <string name="swap_quote_edit_swap">Ubah swap</string>
+    <string name="swap_quote_title">Tukar Sekarang</string>
+    <string name="swap_quote_review">Tinjau Penawaran</string>
+    <string name="swap_quote_from">Tukar dari</string>
+    <string name="swap_quote_to">Tukar ke</string>
+    <string name="swap_quote_total_fees">Total biaya</string>
+    <string name="swap_quote_max_slippage">Slippage maks %s</string>
+    <string name="swap_quote_total_amount">Jumlah Total</string>
+    <string name="swap_quote_zashi">Zapp</string>
+    <string name="swap_quote_info">Anda mungkin menerima hingga %s lebih sedikit berdasarkan slippage %s yang Anda atur.</string>
+    <string name="swap_confirm">Dapatkan penawaran</string>
+    <string name="swap_picker_select_chain">Pilih jaringan</string>
+    <string name="swap_slippage_custom">Kustom</string>
+    <string name="pay_quote_title">Bayar Sekarang</string>
+    <string name="pay_from">Bayar dari</string>
+    <string name="pay_to">Bayar ke</string>
+    <string name="swap_to_zec_footer">Gunakan dompet %s Anda \n untuk menyetor dana. Menyetor aset lain dapat mengakibatkan hilangnya dana.</string>
+    <string name="swap_to_zec_footer_bold">%s di %s</string>
+    <string name="swap_to_zec_share_text">Alamat setor untuk swap %1$s %2$s di %3$s ke %4$s di Zapp</string>
+    <string name="swap_refund_address">Alamat Pengembalian</string>
+    <string name="swap_refund_address_info_title">Alamat Pengembalian</string>
+    <string name="swap_refund_address_info_message_empty">Jika swap gagal atau kondisi pasar berubah, transaksi Anda mungkin dikembalikan dikurangi biaya transaksi.\n\nJumlah yang dikembalikan akan dikirim ke dompet Anda dalam mata uang asal. Masukkan alamat yang valid untuk menghindari hilangnya dana.</string>
+    <string name="swap_refund_address_info_message">Jika swap gagal atau kondisi pasar berubah, transaksi Anda mungkin dikembalikan dikurangi biaya transaksi.\n\nJumlah yang dikembalikan akan dikirim ke dompet Anda dalam mata uang asal - %s di %s. Masukkan alamat yang valid untuk menghindari hilangnya dana.</string>
+    <string name="swap_detail_row_header">Detail Swap</string>
+    <string name="swap_detail_row_deposit_to">Setor ke</string>
+    <string name="swap_detail_title_swap_expired">Swap Kedaluwarsa</string>
+    <string name="swap_detail_title_swap_pending">Menukar</string>
+    <string name="swap_detail_title_swap_completed">Ditukar</string>
+    <string name="swap_detail_title_swap_refunded">Swap Dikembalikan</string>
+    <string name="swap_detail_title_swap_failed">Swap Gagal</string>
+    <string name="swap_detail_title_swap_processing">Swap diproses</string>
+    <string name="swap_confirmation_title">Tukar</string>
+    <string name="swap_confirmation_subtitle">Jumlah Setoran</string>
+    <string name="swap_confirmation_primary_button">Saya sudah mengirim dana</string>
+    <string name="swap_confirmation_dialog_title">Anda yakin ingin keluar?</string>
+    <string name="swap_confirmation_dialog_message">Jika Anda sudah mengirim atau berniat mengirim dana, ketuk \'Saya sudah mengirim dana.\' Atau batalkan swap untuk kembali ke layar sebelumnya.</string>
+    <string name="swap_deposit_info_title">Setor Dana</string>
+    <string name="swap_deposit_info_step_1">Tukar ke ZEC dengan aset apa pun yang didukung NEAR.</string>
+    <string name="swap_deposit_info_step_2">Kirim jumlah aset yang tepat seperti ditampilkan. Mengirim lebih sedikit akan menghasilkan pengembalian dana.</string>
+    <string name="swap_deposit_info_step_3">Periksa kembali bahwa Anda mengirim aset yang benar di jaringan yang benar (mis., USDC di Solana).</string>
+    <string name="swap_deposit_info_step_4">Sebaiknya kirim dari dompet milik Anda sendiri. Mengirim dari exchange dapat menyebabkan keterlambatan atau pengembalian dana.</string>
+
+    <!-- Swap / Offramp tab toggle -->
+    <string name="swap_tab_offramp">Bayar merchant</string>
+
+    <!-- UPI Offramp / Scan & Pay form -->
+    <string name="upi_offramp_scan_qr">Pindai kode QR</string>
+    <string name="upi_offramp_or">atau</string>
+    <string name="upi_offramp_token_inr">INR</string>
+    <string name="upi_offramp_amount_label">Jumlah</string>
+    <string name="upi_offramp_usdc_equivalent">≈ %1$s USDC</string>
+    <string name="upi_offramp_rate_label">1 USDC ≈ %1$s (perkiraan)</string>
+    <string name="upi_offramp_upi_id_label">Masukkan UPI ID</string>
+    <string name="upi_offramp_upi_id_placeholder">merchant@upi</string>
+    <string name="upi_offramp_powered_by">Didukung oleh p2p.me</string>
+    <string name="upi_offramp_info_content_description">Cara kerjanya</string>
+    <string name="upi_offramp_info_title">Cara kerjanya</string>
+    <string name="upi_offramp_info_body_flow">Masukkan jumlahnya terlebih dahulu. Zapp menghubungkan Anda ke merchant, lalu meminta Anda memindai QR merchant agar detail pembayaran terenkripsi dapat dikirim.</string>
+    <string name="upi_offramp_info_body_privacy">Tidak perlu KYC, dan dana Anda keluar dari saldo terlindungi, sehingga merchant hanya melihat akun Base yang membayar mereka, bukan alamat Zcash Anda.</string>
+    <string name="upi_offramp_estimate_disclaimer">Perkiraan. Jumlah akhir dikunci saat merchant menerima.</string>
+    <string name="upi_offramp_limit_hint">Maksimum 100 USDC per offramp.</string>
+    <string name="upi_offramp_error_invalid_upi">Itu tidak tampak seperti handle UPI (seharusnya seperti nama@bank).</string>
+    <string name="upi_offramp_send_button">Bayar</string>
+    <string name="upi_offramp_resume_button">Lanjutkan offramp yang berjalan</string>
+    <string name="upi_offramp_error_in_flight">Sebuah offramp sedang berjalan. Lanjutkan dulu sebelum memulai yang baru.</string>
+    <string name="upi_offramp_discard_in_flight">Buang pesanan lokal &amp; mulai ulang</string>
+
+    <!-- UPI Offramp progress screen -->
+    <string name="upi_offramp_progress_title_in_progress">Mengirim ke merchant</string>
+    <string name="upi_offramp_progress_title_completed">Pembayaran selesai</string>
+    <string name="upi_offramp_progress_title_failed">Terjadi kesalahan</string>
+    <string name="upi_offramp_progress_subtitle_recipient">Penerima: %1$s</string>
+    <string name="upi_offramp_progress_subtitle_completed">Pembayaran Anda selesai dan penerima telah dibayar.</string>
+    <string name="upi_offramp_progress_done_button">Selesai</string>
+    <string name="upi_offramp_progress_close_button">Tutup</string>
+    <string name="upi_offramp_step_init">Persiapan</string>
+    <string name="upi_offramp_step_selecting_circle">Memilih grup merchant</string>
+    <string name="upi_offramp_step_funding">Mem-bridge dana</string>
+    <string name="upi_offramp_step_funding_from_base">Menggunakan saldo Base Anda</string>
+    <string name="upi_offramp_step_approve">Menyetujui USDC</string>
+    <string name="upi_offramp_base_balance_label">%1$s USDC</string>
+    <string name="upi_offramp_funding_from_base">✓ Menggunakan saldo Base Anda, tanpa bridge.</string>
+    <string name="upi_offramp_funding_need_manual">Perlu %1$s USDC di Base. Bridge tidak tersedia di jaringan ini.</string>
+    <string name="upi_offramp_step_place_order">Membuat pesanan</string>
+    <string name="upi_offramp_step_wait_acceptance">Menunggu merchant menerima</string>
+    <string name="upi_offramp_step_scan_qr">Pindai QR merchant</string>
+    <string name="upi_offramp_step_encrypting_upi">Mengenkripsi data %1$s</string>
+    <string name="upi_offramp_step_send_upi">Mengirim %1$s terenkripsi</string>
+    <string name="upi_offramp_step_wait_completion">Menunggu pembayaran merchant</string>
+    <string name="upi_offramp_step_completed">Pembayaran selesai</string>
+    <string name="upi_offramp_progress_title_scan_qr">Pindai QR merchant</string>
+    <string name="upi_offramp_progress_subtitle_scan_qr">Seorang merchant menerima. Minta mereka membuat QR sekarang, lalu pindai untuk mengirim detail pembayaran.</string>
+    <string name="upi_offramp_scan_merchant_qr_button">Pindai QR merchant</string>
+
+    <!-- UPI Offramp progress: summary + detail lines + failure card -->
+    <string name="upi_offramp_progress_amount_usdc">%1$s USDC</string>
+    <string name="upi_offramp_summary_amount">Jumlah</string>
+    <string name="upi_offramp_summary_recipient">Penerima</string>
+    <string name="upi_offramp_summary_recipient_pending">QR belum dipindai</string>
+    <string name="upi_offramp_summary_order_id">ID Pesanan</string>
+    <string name="upi_offramp_summary_order_id_value">#%1$s</string>
+    <string name="upi_offramp_summary_signer">Dari</string>
+    <string name="upi_offramp_detail_candidates">%1$d grup kandidat dari subgraph</string>
+    <string name="upi_offramp_detail_deposit_addr">Setor %1$s</string>
+    <string name="upi_offramp_detail_bridging_amount">Mem-bridge %1$s USDC dari ZEC via NEAR Intents</string>
+    <string name="upi_offramp_detail_selected_circle">Grup terpilih #%1$s</string>
+    <string name="upi_offramp_detail_amount">%1$s USDC</string>
+    <string name="upi_offramp_detail_circle_id">Grup #%1$s</string>
+    <string name="upi_offramp_detail_polling_attempts">Polling… percobaan %1$d</string>
+    <string name="upi_offramp_detail_last_status">Status on-chain terakhir: %1$s</string>
+    <string name="upi_offramp_detail_merchant">Merchant %1$s</string>
+    <string name="upi_offramp_failure_header">Gagal saat: %1$s</string>
+    <string name="upi_offramp_failure_selector">Selector revert %1$s</string>
+
+    <!-- UPI Offramp known revert reasons (mapped from KnownRevertReason in offramp-lib).
+         Keep aligned with @p2pdotme/user-app-client i18n keys where wording overlaps. -->
+    <string name="upi_offramp_revert_buy_order_amount_exceeds_limit">Jumlah pesanan melebihi batas per transaksi Anda. Batas ini bertambah seiring poin reputasi. Selesaikan verifikasi di app.p2p.me/limits.</string>
+    <string name="upi_offramp_revert_insufficient_reputation">Akun Anda belum memiliki poin reputasi. Selesaikan verifikasi sosial atau KYC di app.p2p.me/limits sebelum membuat pesanan.</string>
+    <string name="upi_offramp_revert_order_amount_exceeds_limit">Jumlah pesanan melebihi batas global per pesanan.</string>
+    <string name="upi_offramp_revert_sell_amount_exceeds_fiat_limit">Jumlah melebihi batas fiat harian Anda.</string>
+    <string name="upi_offramp_revert_currency_not_supported">Mata uang ini belum tersedia di jaringan ini.</string>
+    <string name="upi_offramp_revert_user_is_blacklisted">Akun Anda diblokir oleh exchange. Hubungi dukungan p2p.me.</string>
+    <string name="upi_offramp_revert_exchange_not_operational">p2p.me sedang dijeda sementara. Coba lagi nanti.</string>
+    <string name="upi_offramp_revert_not_enough_eligible_merchants">Tidak ada merchant dengan likuiditas fiat untuk pesanan ini saat ini. Coba jumlah lebih kecil, tunggu merchant mengisi dana, atau coba lagi untuk memilih grup lain.</string>
+    <string name="upi_offramp_revert_order_expired">Merchant tidak bertindak tepat waktu. USDC Anda telah dikembalikan.</string>
+    <string name="upi_offramp_revert_upi_already_sent">Pesanan ini sudah memiliki alamat pembayaran. Ini adalah bug. Silakan laporkan.</string>
+    <string name="upi_offramp_revert_invalid_order_upi">Merchant menolak detail pembayaran terenkripsi. Ini mungkin menandakan masalah format data. Silakan laporkan.</string>
+    <string name="upi_offramp_revert_order_not_accepted">Pesanan belum diterima. Coba lagi sebentar.</string>
+    <string name="upi_offramp_revert_usdc_transfer_failed">Transfer USDC gagal. Periksa saldo dan allowance Anda.</string>
+    <string name="upi_offramp_revert_not_authorized">Pembatalan ditolak oleh kontrak. Pesanan mungkin sudah selesai atau dibatalkan.</string>
+    <!-- Long-tail fallback for SDK-known but non-curated contract errors. %1$s is the SDK error
+         constant (e.g. ORDER_ALREADY_MARKED_COMPLETED). -->
+    <string name="upi_offramp_revert_sdk_long_tail">Kesalahan kontrak: %1$s</string>
+
+    <!-- Surfaced when a poll loop has been running for a while without a merchant transition. -->
+    <string name="upi_offramp_detail_stalled">Masih menghubungkan Anda ke merchant. USDC Anda tetap di akun Anda; jika tidak ada merchant yang menerima, pesanan otomatis dibatalkan on-chain.</string>
+
+    <!-- Recovery flow (pullback of stranded USDC via bridgeFundsBackToZec) -->
+    <string name="upi_offramp_recover_button">Bridge USDC kembali ke ZEC</string>
+    <string name="upi_offramp_recovery_in_progress_title">Mem-bridge USDC kembali ke ZEC</string>
+    <string name="upi_offramp_recovery_in_progress_subtitle">Mengalihkan USDC yang dikembalikan ke ZEC via NEAR Intents. Ini bisa memakan beberapa menit.</string>
+    <string name="upi_offramp_recovery_in_progress_button">Mem-bridge…</string>
+    <string name="upi_offramp_recovery_done_title">USDC di-bridge kembali ke ZEC</string>
+    <string name="upi_offramp_recovery_amount">%1$s USDC dikirim ke bridge</string>
+    <string name="upi_offramp_recovery_target">Deposit bridge %1$s</string>
+
+    <!-- Per-step on-chain timestamps -->
+    <string name="upi_offramp_detail_accepted_at">Diterima pada %1$s</string>
+    <string name="upi_offramp_detail_paid_at">Pembayaran dikonfirmasi pada %1$s</string>
+    <string name="upi_offramp_detail_completed_at">Selesai pada %1$s</string>
+
+    <!-- Completed-state summary extras -->
+    <string name="upi_offramp_completion_duration">Selesai dalam %1$s</string>
+    <string name="upi_offramp_terminal_at">%1$s</string>
+    <string name="upi_offramp_summary_completion">Selesai dalam</string>
+    <string name="upi_offramp_summary_time">Waktu</string>
+    <string name="upi_offramp_summary_merchant">Dibayar ke</string>
+
+    <!-- Order fee breakdown card (from getAdditionalOrderDetails) -->
+    <string name="upi_offramp_fee_breakdown_header">Rincian pesanan</string>
+    <string name="upi_offramp_fee_breakdown_you_send">Anda kirim</string>
+    <string name="upi_offramp_fee_breakdown_fee">Biaya jaringan &amp; merchant</string>
+    <string name="upi_offramp_fee_breakdown_you_receive">Anda terima</string>
+    <string name="upi_offramp_fee_breakdown_amount_usdc">%1$s USDC</string>
+    <string name="upi_offramp_fee_breakdown_amount_inr">₹%1$s</string>
+
+    <!-- Cancelled terminal state (normal on-chain outcome, USDC refunded, not an error) -->
+    <string name="upi_offramp_progress_title_cancelled">Pesanan dibatalkan</string>
+    <string name="upi_offramp_progress_subtitle_cancelled">Tidak ada merchant yang menyelesaikan pesanan ini tepat waktu. USDC Anda ada di akun offramp Anda, siap di-bridge kembali.</string>
+    <string name="upi_offramp_cancelled_refunded">%1$s USDC dikembalikan ke dompet Anda</string>
+    <string name="upi_offramp_cancelled_returned_zec">%1$s USDC ada di akun offramp Anda, siap dibelanjakan atau di-bridge kembali ke ZEC</string>
+    <string name="upi_offramp_cancelled_at">Dibatalkan pada %1$s</string>
+    <string name="upi_offramp_cancelled_tip">Tips: minta merchant membuat QR hanya setelah layar ini terbuka, agar pesanan selesai sebelum kedaluwarsa.</string>
+
+    <!-- Reusable Base balance + two-step funding (pay screen additions) -->
+    <string name="upi_offramp_token_usdc">USDC</string>
+    <string name="upi_offramp_add_funds_button">Tambah dana ke Base</string>
+    <string name="upi_offramp_funding_topup_first">Anda akan menambahkan sekitar %1$s USDC ke Base dulu (beberapa menit), lalu membayar.</string>
+    <string name="upi_offramp_pay_button_add_funds">Tambah dana untuk membayar</string>
+    <string name="upi_offramp_confirm_title">Konfirmasi pembayaran</string>
+    <string name="upi_offramp_confirm_message">Bayar %1$s menggunakan sekitar %2$s USDC pada %3$s per USDC.</string>
+    <string name="upi_offramp_confirm_pay">Bayar sekarang</string>
+    <string name="upi_offramp_confirm_cancel">Batal</string>
+
+    <!-- Step 1: top up the reusable Base balance by bridging ZEC -->
+    <string name="bridge_to_base_title">Tambah dana ke Base</string>
+    <string name="bridge_to_base_explainer">Kami mem-bridge ZEC Anda ke Base, tempat pembayaran merchant diselesaikan. Ini butuh beberapa menit. Setelah itu, pembayaran instan dan Anda bisa memakai ulang saldonya.</string>
+    <string name="bridge_to_base_amount_label">Jumlah yang ditambahkan</string>
+    <string name="bridge_to_base_zec_send">Anda akan mengirim ≈ %1$s ZEC</string>
+    <string name="bridge_to_base_insufficient">ZEC tidak cukup. Saldo yang dapat dibelanjakan Anda %1$s ZEC.</string>
+    <string name="bridge_to_base_eta">Perkiraan waktu: ~%1$d mnt</string>
+    <string name="bridge_to_base_eta_value">%1$d mnt</string>
+    <string name="bridge_to_base_merchants_unavailable">Tidak ada merchant dengan likuiditas fiat saat ini. Dana Anda akan menunggu di Base, siap saat ada.</string>
+    <string name="bridge_to_base_add_button">Tambah dana</string>
+    <string name="bridge_to_base_bridging_button">Mem-bridge…</string>
+    <string name="bridge_to_base_pay_button">Bayar merchant</string>
+    <string name="bridge_to_base_try_again_button">Coba lagi</string>
+    <string name="bridge_to_base_step_bridging">Mem-bridge dari ZEC via NEAR</string>
+    <string name="bridge_to_base_step_arrived">Dana tiba di Base</string>
+    <string name="bridge_to_base_adding_amount">Menambahkan ≈ ₹%1$s · %2$s USDC</string>
+    <string name="bridge_to_base_added_amount">Menambahkan %1$s USDC ke Base</string>
+    <string name="bridge_to_base_failed_terminal">Bridge tidak dapat diselesaikan. Jika ZEC Anda dikembalikan, akan muncul di dompet Anda sebentar lagi.</string>
+    <string name="bridge_to_base_failed_generic">Tidak dapat memulai bridge. Periksa koneksi Anda dan coba lagi.</string>
+    <string name="bridge_to_base_failed_retry">Bridge masih berlangsung. Coba lagi untuk terus memeriksa transfer yang sama.</string>
+    <string name="bridge_to_base_leave_title">Bridge sedang berlangsung</string>
+    <string name="bridge_to_base_leave_message">ZEC Anda sedang dalam perjalanan ke Base dan akan tiba dengan sendirinya. Anda boleh keluar: saldo Base diperbarui saat tiba, dan pembayaran ZEC ada di aktivitas Anda.</string>
+    <string name="bridge_to_base_leave_confirm">Keluar</string>
+    <string name="bridge_to_base_leave_stay">Tetap pantau</string>
+    <string name="upi_offramp_recent_transactions">Transaksi terbaru</string>
+    <string name="upi_offramp_hero_secondary">%1$s · yang Anda bayar</string>
+    <string name="upi_offramp_fiat_amount">%1$s%2$s</string>
+    <string name="upi_offramp_ledger_amount_sent">Jumlah terkirim</string>
+    <string name="upi_offramp_ledger_rate">Kurs</string>
+    <string name="upi_offramp_ledger_from">Dari</string>
+    <string name="upi_offramp_base">Base</string>
+    <string name="bridge_to_base_currency_symbol">₹</string>
+    <string name="bridge_to_base_hero_secondary">%1$s · masuk ke Base</string>
+    <string name="bridge_to_base_ledger_you_send">Anda kirim</string>
+    <string name="bridge_to_base_ledger_eta">Perkiraan waktu</string>
+    <string name="bridge_to_base_ledger_base_now">Tersedia di Base</string>
+    <string name="bridge_to_base_ledger_fees">Total biaya</string>
+    <string name="bridge_to_base_ledger_slippage">Slippage maks.</string>
+    <string name="bridge_to_base_fee_value">~%1$s ZEC</string>
+    <string name="bridge_to_base_slippage_value">%1$s%%</string>
+    <string name="bridge_to_base_quote_loading">Mengambil kutipan langsung…</string>
+    <string name="bridge_to_base_quote_failed">Tidak dapat mengambil kutipan. Periksa koneksi Anda dan coba lagi.</string>
+    <string name="bridge_to_base_value_pending">—</string>
+    <string name="currency_inr_name">Rupee India</string>
+    <string name="currency_ngn_name">Naira Nigeria</string>
+    <string name="currency_brl_name">Real Brasil</string>
+    <string name="currency_cop_name">Peso Kolombia</string>
+    <string name="currency_idr_name">Rupiah Indonesia</string>
+    <string name="currency_ars_name">Peso Argentina</string>
+    <string name="currency_ven_name">Bolívar Venezuela</string>
+    <string name="country_india">India</string>
+    <string name="country_nigeria">Nigeria</string>
+    <string name="country_brazil">Brasil</string>
+    <string name="country_colombia">Kolombia</string>
+    <string name="country_indonesia">Indonesia</string>
+    <string name="country_argentina">Argentina</string>
+    <string name="country_venezuela">Venezuela</string>
+</resources>

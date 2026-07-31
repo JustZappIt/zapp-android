@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pay_info_title">CrossPay com</string>
+    <string name="pay_info_subtitle">Faça pagamentos entre cadeias em qualquer moeda ou token compatível com NEAR.\n\nSe o deslizamento real e as condições da rede fizerem com que seu destinatário receba menos que o valor prometido, sua transação será revertida. Você receberá um reembolso integral menos as taxas de rede.</string>
+    <string name="pay_slippage_footer">Qualquer parte não utilizada da taxa de deslizamento será reembolsada se o swap for executado com um deslizamento menor que o esperado.</string>
+</resources>

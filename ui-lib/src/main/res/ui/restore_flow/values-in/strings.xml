@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Restore flow — seed entry -->
+    <string name="restore_flow_seed_badge">Pulihkan · Frasa Pemulihan</string>
+    <string name="restore_flow_seed_title">Masukkan\nfrasa pemulihan Anda</string>
+    <string name="restore_flow_seed_sub">Ketik frasa pemulihan 24 kata Anda. Ini memulihkan dompet sekaligus identitas perpesanan Anda.</string>
+
+    <!-- Restore flow — birthday height -->
+    <string name="restore_flow_birthday_badge">Pulihkan · Tinggi Kelahiran</string>
+    <string name="restore_flow_birthday_title">Tinggi kelahiran\ndompet</string>
+    <string name="restore_flow_birthday_sub">Memasukkan kapan dompet Anda dibuat mempercepat pemulihan. Gunakan tinggi blok atau pilih bulan dan tahun.</string>
+    <string name="restore_flow_birthday_field_label">TINGGI BLOK</string>
+    <string name="restore_flow_birthday_field_hint">Masukkan angka atau biarkan kosong</string>
+    <string name="restore_flow_birthday_skip">Lewati: pindai semua</string>
+    <string name="restore_flow_birthday_mode_height">Tinggi Blok</string>
+    <string name="restore_flow_birthday_mode_date">Bulan &amp; Tahun</string>
+    <string name="restore_flow_birthday_date_note">Jika tidak yakin, pilih tanggal yang lebih awal.</string>
+    <string name="restore_flow_birthday_estimating">Memperkirakan tinggi blok…</string>
+
+    <!-- Restore flow — Tor -->
+
+    <!-- Restore flow — loading -->
+    <string name="restore_flow_loading_sub">Menyiapkan dompet dan identitas perpesanan Anda dari frasa pemulihan Anda.</string>
+    <string name="restore_flow_loading_error">Pemulihan gagal. Ketuk coba lagi untuk mengulang.</string>
+    <string name="restore_flow_loading_error_no_retry">Pemulihan gagal. Kembali dan coba lagi.</string>
+    <string name="restore_flow_loading_retry">Coba lagi</string>
+
+    <!-- Restore flow — errors -->
+    <string name="restore_flow_error_wallet_failed">Pemulihan dompet gagal. Ketuk coba lagi untuk mengulang.</string>
+    <string name="restore_flow_error_birthday_too_low">Tinggi kelahiran minimal harus %1$s.</string>
+    <string name="restore_flow_error_estimation_failed">Tidak dapat memperkirakan tinggi blok untuk tanggal itu. Coba tanggal lain atau masukkan tinggi secara langsung.</string>
+
+    <!-- Restore flow — seed confirm -->
+    <string name="restore_flow_confirm_title">Konfirmasi\nfrasa pemulihan Anda</string>
+    <string name="restore_flow_confirm_sub">Pastikan ini 24 kata yang Anda masukkan. Frasa ini memulihkan dompet sekaligus identitas perpesanan Anda.</string>
+
+    <!-- Restore flow — keep open -->
+    <string name="restore_flow_keep_open_badge">Pulihkan · Menyinkronkan</string>
+    <string name="restore_flow_keep_open_title">Biarkan Zapp\ntetap terbuka</string>
+    <string name="restore_flow_keep_open_sub">Dompet Anda sedang menyinkronkan dengan blockchain. Ini mungkin memakan waktu.</string>
+    <string name="restore_flow_keep_open_bullet_1">Biarkan aplikasi Zapp terbuka dengan layar ponsel aktif.</string>
+    <string name="restore_flow_keep_open_bullet_2">Pertimbangkan untuk mengisi daya perangkat Anda: sinkronisasi menghabiskan baterai.</string>
+    <string name="restore_flow_keep_open_checkbox">Biarkan layar menyala saat menyinkronkan</string>
+    <string name="restore_flow_keep_open_cta">Masuk ke Zapp</string>
+</resources>

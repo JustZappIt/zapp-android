@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App lock hub -->
+    <string name="security_settings_title">App lock</string>
+    <string name="security_settings_actions_header">Actions</string>
+
+    <!-- Auth-method selector tabs (label doubles as the illustration title) -->
+    <string name="security_settings_tab_pin">6-digit PIN</string>
+    <string name="security_settings_tab_biometric">Biometrics</string>
+
+    <!-- Action rows -->
+    <string name="security_settings_change_pin_row_title">Change PIN</string>
+    <string name="security_settings_change_pin_row_subtitle">Update your 6-digit unlock code</string>
+    <string name="security_settings_reenroll_bio_row_title">Re-enroll biometrics</string>
+    <string name="security_settings_reenroll_bio_row_subtitle">Use your device\'s biometric settings</string>
+
+    <!-- Illustration body copy -->
+    <string name="security_settings_illustration_pin_body">A PIN is required each time you open the app.</string>
+    <string name="security_settings_illustration_bio_body">Fingerprint or face recognition unlocks the app.\nA PIN fallback is always kept as backup.</string>
+
+    <!-- Bottom dock -->
+    <string name="security_settings_back_content_description">Go back</string>
+    <string name="security_settings_save_changes_content_description">Save Changes</string>
+    <string name="security_settings_save_changes_button">SAVE CHANGES</string>
+
+    <!-- Change-PIN screen -->
+    <string name="security_settings_change_pin_confirm_title">Confirm\nyour PIN</string>
+    <string name="security_settings_change_pin_change_title">Change\nyour PIN</string>
+    <string name="security_settings_change_pin_mismatch">PINs don\'t match. Try again.</string>
+    <string name="security_settings_change_pin_confirm_subtitle">Re-enter your new PIN to confirm.</string>
+    <string name="security_settings_change_pin_enter_subtitle">Enter a new 6-digit PIN.</string>
+    <string name="security_settings_change_pin_progress_fmt">%1$d of 6 entered</string>
+    <string name="security_settings_keypad_delete_content_description">Delete</string>
+
+    <!-- Re-auth prompts -->
+    <string name="security_settings_bio_verify_switch_pin_prompt">Verify it\'s you to switch to a PIN</string>
+
+    <!-- Success snackbars -->
+    <string name="security_settings_success_switched_pin">Switched to PIN successfully.</string>
+    <string name="security_settings_success_pin_changed">PIN changed successfully.</string>
+    <string name="security_settings_success_bio_enrolled">Biometrics enrolled successfully.</string>
+
+    <!-- Errors -->
+    <string name="security_settings_bio_enroll_failed">Biometric enrollment failed. Tap to retry.</string>
+
+    <!-- Visual back-arrow glyph; symbolic, not localised -->
+    <string name="security_settings_back_glyph" translatable="false">←</string>
+</resources>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Restore flow — seed entry -->
+    <string name="restore_flow_seed_badge">Restore · Recovery Phrase</string>
+    <string name="restore_flow_seed_title">Enter your\nrecovery phrase</string>
+    <string name="restore_flow_seed_sub">Type your 24-word recovery phrase. This restores both your wallet and your messaging identity.</string>
+
+    <!-- Restore flow — birthday height -->
+    <string name="restore_flow_birthday_badge">Restore · Birthday Height</string>
+    <string name="restore_flow_birthday_title">Wallet birthday\nheight</string>
+    <string name="restore_flow_birthday_sub">Entering when your wallet was created speeds up restoration. Use a block height or pick a month and year.</string>
+    <string name="restore_flow_birthday_field_label">BLOCK HEIGHT</string>
+    <string name="restore_flow_birthday_field_hint">Enter number or leave blank</string>
+    <string name="restore_flow_birthday_skip">Skip: scan everything</string>
+    <string name="restore_flow_birthday_mode_height">Block Height</string>
+    <string name="restore_flow_birthday_mode_date">Month &amp; Year</string>
+    <string name="restore_flow_birthday_date_note">If you\'re not sure, choose an earlier date.</string>
+    <string name="restore_flow_birthday_estimating">Estimating block height…</string>
+
+    <!-- Restore flow — Tor -->
+
+    <!-- Restore flow — loading -->
+    <string name="restore_flow_loading_sub">Setting up your wallet and messaging identity from your recovery phrase.</string>
+    <string name="restore_flow_loading_error">Restore failed. Tap retry to try again.</string>
+    <string name="restore_flow_loading_error_no_retry">Restore failed. Go back and try again.</string>
+    <string name="restore_flow_loading_retry">Retry</string>
+
+    <!-- Restore flow — errors -->
+    <string name="restore_flow_error_wallet_failed">Wallet restore failed. Tap retry to try again.</string>
+    <string name="restore_flow_error_birthday_too_low">Birthday height must be at least %1$s.</string>
+    <string name="restore_flow_error_estimation_failed">Couldn\'t estimate a block height for that date. Try a different date or enter a height directly.</string>
+
+    <!-- Restore flow — seed confirm -->
+    <string name="restore_flow_confirm_title">Confirm your\nrecovery phrase</string>
+    <string name="restore_flow_confirm_sub">Verify these are the 24 words you entered. This phrase restores both your wallet and your messaging identity.</string>
+
+    <!-- Restore flow — keep open -->
+    <string name="restore_flow_keep_open_badge">Restore · Syncing</string>
+    <string name="restore_flow_keep_open_title">Keep Zapp\nopen</string>
+    <string name="restore_flow_keep_open_sub">Your wallet is syncing with the blockchain. This may take a while.</string>
+    <string name="restore_flow_keep_open_bullet_1">Keep the Zapp app open on an active phone screen.</string>
+    <string name="restore_flow_keep_open_bullet_2">Consider plugging in your device: syncing uses battery.</string>
+    <string name="restore_flow_keep_open_checkbox">Keep screen on while syncing</string>
+    <string name="restore_flow_keep_open_cta">Enter Zapp</string>
+</resources>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources  xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="payment_request_title">Permintaan Pembayaran</string>
+    <string name="payment_request_close_content_description">Tutup</string>
+
+    <string name="payment_request_requested_by">Diminta Oleh</string>
+    <string name="payment_request_btn_show_address">Tampilkan</string>
+    <string name="payment_request_btn_hide_address">Sembunyikan</string>
+    <string name="payment_request_btn_save_contact">Simpan</string>
+
+    <string name="payment_request_memo">Untuk:</string>
+
+    <string name="payment_request_fee">Biaya</string>
+    <string name="payment_request_total">Total</string>
+
+    <string name="payment_request_send_btn">Kirim</string>
+
+    <string name="payment_request_dialog_error_title">Transaksi Gagal</string>
+    <string name="payment_request_dialog_error_text">Terjadi kesalahan dan upaya mengirim dana gagal. Silakan coba lagi.</string>
+    <string name="payment_request_dialog_error_ok_btn">OK</string>
+    <string name="payment_request_dialog_error_report_btn">Laporkan</string>
+
+    <string name="payment_request_dialog_error_grpc_title">Kesalahan Koneksi</string>
+    <string name="payment_request_dialog_error_grpc_text">Zapp mengalami beberapa masalah koneksi saat mengirimkan
+        transaksi ke jaringan. Zapp akan mencoba lagi dalam beberapa menit ke depan.</string>
+    <string name="payment_request_dialog_error_grpc_btn">OK</string>
+
+    <string name="payment_request_send_failed_report_unable_open_email">Tidak dapat membuka aplikasi email.</string>
+</resources>

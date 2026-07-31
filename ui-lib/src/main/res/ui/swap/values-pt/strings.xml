@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="swap_info_message">Faca swap de %1$s com qualquer token compativel com NEAR.\n\nSe fizer swap PARA %2$s, voce enviara fundos de uma carteira de terceiros e devera informar um endereco para onde o troco possa ser reembolsado.\n\nSe fizer swap DE %3$s, voce deve informar um endereco valido para o ativo para o qual esta fazendo swap.</string>
+    <string name="swap_info_title">Swap com</string>
+    <string name="swap_select_token">Selecionar token</string>
+    <string name="swap_select_chain">Selecionar rede</string>
+    <string name="swap_search_hint">Buscar por nome ou ticker…</string>
+    <string name="swap_slippage_title">Slippage</string>
+    <string name="swap_slippage_subtitle">Esta configuracao determina a diferenca maxima permitida entre o preco esperado de um swap e o preco real que voce paga, o que esta fora do controle do Zapp.</string>
+    <string name="swap_slippage_max_threshold">Por favor, informe um slippage maximo de 30%%.</string>
+    <string name="swap_slippage_info">Voce pode receber ate %s a menos do que o cotado.</string>
+    <string name="swap_slippage_low_warning">%1$s O slippage %2$s aumenta a chance do seu swap nao ser concluido e ser reembolsado. Considere usar %3$s, especialmente para valores maiores.</string>
+    <string name="swap_slippage_low_warning_1">Aviso:</string>
+    <string name="swap_slippage_low_warning_2">abaixo de %s%%</string>
+    <string name="swap_slippage_low_warning_3">%s%% ou mais</string>
+    <string name="pay_slippage_info">Voce pode pagar ate %s a mais, alem das taxas de transacao.</string>
+    <string name="swap_title">Swap</string>
+    <string name="swap_available_to_swap">Disponivel para swap</string>
+    <string name="swap_stats_price">Preco</string>
+    <string name="swap_stats_fee">Taxa</string>
+    <string name="swap_you_send">Voce envia</string>
+    <string name="swap_you_receive">Voce recebe</string>
+    <string name="swap_receiving_to">Recebendo em</string>
+    <string name="swap_change_address">Alterar</string>
+    <string name="swap_from">De</string>
+    <string name="swap_insufficient_funds">Fundos insuficientes</string>
+    <string name="swap_max_standalone">Disponivel: </string>
+    <string name="swap_max">Disponivel: %s</string>
+    <string name="swap_to">Para</string>
+    <string name="swap_rate">Cotacao</string>
+    <string name="swap_zec_exchange_rate">1 %1$s = %2$s</string>
+    <string name="swap_slippage_tolerance">Tolerancia de slippage</string>
+    <string name="swap_cancel_title">Tem certeza?</string>
+    <string name="swap_cancel_subtitle">Se voce sair desta tela, todas as informacoes inseridas serao perdidas.</string>
+    <string name="swap_cancel_negative">Cancelar swap</string>
+    <string name="swap_cancel_positive">Nao cancelar</string>
+    <string name="swap_quote_error_too_low_try_at_least">O valor e muito baixo para a ponte, tente pelo menos %s</string>
+    <string name="swap_quote_error_too_low_try_higher">O valor e muito baixo para a ponte, tente um valor maior.</string>
+    <string name="swap_quote_error_getting_quote">Tentamos, mas nao foi possivel obter uma cotacao para um pagamento com seus parametros. Voce pode ajustar o slippage ou tentar novamente mais tarde.</string>
+    <string name="swap_quote_error_getting_quote_swap">Tentamos, mas nao foi possivel obter uma cotacao para um swap com seus parametros. Voce pode ajustar o slippage ou tentar novamente mais tarde.</string>
+    <string name="swap_quote_unavailable">Cotacao indisponivel</string>
+    <string name="swap_quote_cancel_payment">Cancelar pagamento</string>
+    <string name="swap_quote_edit_payment">Editar pagamento</string>
+    <string name="swap_quote_cancel_swap">Cancelar swap</string>
+    <string name="swap_quote_edit_swap">Editar swap</string>
+    <string name="swap_quote_title">Fazer swap agora</string>
+    <string name="swap_quote_review">Revisar cotacao</string>
+    <string name="swap_quote_from">Swap de</string>
+    <string name="swap_quote_to">Swap para</string>
+    <string name="swap_quote_total_fees">Taxas totais</string>
+    <string name="swap_quote_max_slippage">Slippage maximo %s</string>
+    <string name="swap_quote_total_amount">Valor total</string>
+    <string name="swap_quote_zashi">Zapp</string>
+    <string name="swap_quote_info">Voce pode receber ate %s a menos com base no slippage de %s que voce configurou.</string>
+    <string name="swap_confirm">Obter cotacao</string>
+    <string name="swap_picker_select_chain">Selecionar rede</string>
+    <string name="swap_slippage_custom">Outro</string>
+    <string name="pay_quote_title">Pagar agora</string>
+    <string name="pay_from">Pagar de</string>
+    <string name="pay_to">Pagar para</string>
+    <string name="swap_to_zec_footer">Use sua carteira %s \n para depositar fundos. Depositar outros ativos pode resultar em perda de fundos.</string>
+    <string name="swap_to_zec_footer_bold">%s em %s</string>
+    <string name="swap_to_zec_share_text">Endereco de deposito para swap de %1$s %2$s em %3$s para %4$s no Zapp</string>
+    <string name="swap_refund_address">Endereco de reembolso</string>
+    <string name="swap_refund_address_info_title">Endereco de reembolso</string>
+    <string name="swap_refund_address_info_message_empty">Se o swap falhar ou as condicoes de mercado mudarem, sua transacao pode ser reembolsada menos as taxas de transacao.\n\nO valor reembolsado sera devolvido a sua carteira na moeda de origem. Por favor, informe um endereco valido para evitar a perda de fundos.</string>
+    <string name="swap_refund_address_info_message">Se o swap falhar ou as condicoes de mercado mudarem, sua transacao pode ser reembolsada menos as taxas de transacao.\n\nO valor reembolsado sera devolvido a sua carteira na moeda de origem - %s em %s. Por favor, informe um endereco valido para evitar a perda de fundos.</string>
+    <string name="swap_detail_row_header">Detalhes do swap</string>
+    <string name="swap_detail_row_deposit_to">Depositar em</string>
+    <string name="swap_detail_title_swap_expired">Swap expirado</string>
+    <string name="swap_detail_title_swap_pending">Fazendo swap</string>
+    <string name="swap_detail_title_swap_completed">Swap concluido</string>
+    <string name="swap_detail_title_swap_refunded">Swap reembolsado</string>
+    <string name="swap_detail_title_swap_failed">Swap falhou</string>
+    <string name="swap_detail_title_swap_processing">Processando swap</string>
+    <string name="swap_confirmation_title">Swap</string>
+    <string name="swap_confirmation_subtitle">Valor do deposito</string>
+    <string name="swap_confirmation_primary_button">Ja enviei os fundos</string>
+    <string name="swap_confirmation_dialog_title">Tem certeza de que deseja sair?</string>
+    <string name="swap_confirmation_dialog_message">Se voce ja enviou ou pretende enviar os fundos, toque em \'Ja enviei os fundos.\' Ou cancele o swap para voltar a tela anterior.</string>
+    <string name="swap_deposit_info_title">Depositar fundos</string>
+    <string name="swap_deposit_info_step_1">Faca swap para ZEC com qualquer ativo compativel com NEAR.</string>
+    <string name="swap_deposit_info_step_2">Envie o valor exato do ativo exibido. Enviar menos resultara em reembolso.</string>
+    <string name="swap_deposit_info_step_3">Confira novamente se voce esta enviando o ativo correto na rede correta (por ex., USDC na Solana).</string>
+    <string name="swap_deposit_info_step_4">E melhor enviar de uma carteira que seja sua. Enviar de uma exchange pode causar atrasos ou reembolsos.</string>
+
+    <!-- Swap / Offramp tab toggle -->
+    <string name="swap_tab_offramp">Pagar a um estabelecimento</string>
+
+    <!-- UPI Offramp / Scan & Pay form -->
+    <string name="upi_offramp_scan_qr">Escanear codigo QR</string>
+    <string name="upi_offramp_or">ou</string>
+    <string name="upi_offramp_token_inr">INR</string>
+    <string name="upi_offramp_amount_label">Valor</string>
+    <string name="upi_offramp_usdc_equivalent">≈ %1$s USDC</string>
+    <string name="upi_offramp_rate_label">1 USDC ≈ %1$s (estimado)</string>
+    <string name="upi_offramp_upi_id_label">Inserir UPI ID</string>
+    <string name="upi_offramp_upi_id_placeholder">comerciante@banco</string>
+    <string name="upi_offramp_powered_by">Com tecnologia de p2p.me</string>
+    <string name="upi_offramp_info_content_description">Como funciona</string>
+    <string name="upi_offramp_info_title">Como funciona</string>
+    <string name="upi_offramp_info_body_flow">Insira primeiro o valor. O Zapp conecta voce a um comerciante e, em seguida, pede para escanear o QR do comerciante para que os detalhes de pagamento criptografados possam ser enviados.</string>
+    <string name="upi_offramp_info_body_privacy">Nao e necessario KYC, e seus fundos saem do seu saldo blindado, entao o comerciante so ve a conta na Base que paga a ele, nao o seu endereco Zcash.</string>
+    <string name="upi_offramp_estimate_disclaimer">Estimado. O valor final e fixado quando o comerciante aceita.</string>
+    <string name="upi_offramp_limit_hint">Maximo de 100 USDC por offramp.</string>
+    <string name="upi_offramp_error_invalid_upi">Isso nao parece um identificador UPI (esperava algo como nome@banco).</string>
+    <string name="upi_offramp_send_button">Pagar</string>
+    <string name="upi_offramp_resume_button">Retomar offramp em andamento</string>
+    <string name="upi_offramp_error_in_flight">Ja ha um offramp em andamento. Retome-o antes de iniciar outro.</string>
+    <string name="upi_offramp_discard_in_flight">Descartar pedido local &amp; comecar de novo</string>
+
+    <!-- UPI Offramp progress screen -->
+    <string name="upi_offramp_progress_title_in_progress">Enviando ao comerciante</string>
+    <string name="upi_offramp_progress_title_completed">Pagamento concluido</string>
+    <string name="upi_offramp_progress_title_failed">Algo deu errado</string>
+    <string name="upi_offramp_progress_subtitle_recipient">Destinatario: %1$s</string>
+    <string name="upi_offramp_progress_subtitle_completed">Seu pagamento foi concluido e o destinatario recebeu os fundos.</string>
+    <string name="upi_offramp_progress_done_button">Concluido</string>
+    <string name="upi_offramp_progress_close_button">Fechar</string>
+    <string name="upi_offramp_step_init">Preparacao</string>
+    <string name="upi_offramp_step_selecting_circle">Escolhendo um grupo de comerciantes</string>
+    <string name="upi_offramp_step_funding">Transferindo fundos pela ponte</string>
+    <string name="upi_offramp_step_funding_from_base">Usando seu saldo na Base</string>
+    <string name="upi_offramp_step_approve">Aprovando USDC</string>
+    <string name="upi_offramp_base_balance_label">Disponivel na Base: %1$s USDC</string>
+    <string name="upi_offramp_funding_from_base">✓ Usando seu saldo na Base, nenhuma ponte necessaria.</string>
+    <string name="upi_offramp_funding_need_manual">Sao necessarios %1$s USDC na Base. A ponte nao esta disponivel nesta rede.</string>
+    <string name="upi_offramp_step_place_order">Criando o pedido</string>
+    <string name="upi_offramp_step_wait_acceptance">Aguardando o comerciante aceitar</string>
+    <string name="upi_offramp_step_scan_qr">Escanear QR do comerciante</string>
+    <string name="upi_offramp_step_encrypting_upi">Criptografando os dados %1$s</string>
+    <string name="upi_offramp_step_send_upi">Enviando %1$s criptografado</string>
+    <string name="upi_offramp_step_wait_completion">Aguardando o pagamento do comerciante</string>
+    <string name="upi_offramp_step_completed">Pagamento concluido</string>
+    <string name="upi_offramp_progress_title_scan_qr">Escanear QR do comerciante</string>
+    <string name="upi_offramp_progress_subtitle_scan_qr">Um comerciante aceitou. Peca a ele para gerar o QR agora e escaneie-o para enviar os detalhes de pagamento.</string>
+    <string name="upi_offramp_scan_merchant_qr_button">Escanear QR do comerciante</string>
+
+    <!-- UPI Offramp progress: summary + detail lines + failure card -->
+    <string name="upi_offramp_progress_amount_usdc">%1$s USDC</string>
+    <string name="upi_offramp_summary_amount">Valor</string>
+    <string name="upi_offramp_summary_recipient">Destinatario</string>
+    <string name="upi_offramp_summary_recipient_pending">QR ainda nao escaneado</string>
+    <string name="upi_offramp_summary_order_id">ID do pedido</string>
+    <string name="upi_offramp_summary_order_id_value">#%1$s</string>
+    <string name="upi_offramp_summary_signer">De</string>
+    <string name="upi_offramp_detail_candidates">%1$d circulo(s) candidato(s) do subgraph</string>
+    <string name="upi_offramp_detail_deposit_addr">Deposito %1$s</string>
+    <string name="upi_offramp_detail_bridging_amount">Transferindo %1$s USDC de ZEC via NEAR Intents</string>
+    <string name="upi_offramp_detail_selected_circle">Circulo selecionado #%1$s</string>
+    <string name="upi_offramp_detail_amount">%1$s USDC</string>
+    <string name="upi_offramp_detail_circle_id">Circulo #%1$s</string>
+    <string name="upi_offramp_detail_polling_attempts">Consultando… tentativa %1$d</string>
+    <string name="upi_offramp_detail_last_status">Ultimo status on-chain: %1$s</string>
+    <string name="upi_offramp_detail_merchant">Comerciante %1$s</string>
+    <string name="upi_offramp_failure_header">Falhou durante: %1$s</string>
+    <string name="upi_offramp_failure_selector">Seletor de revert %1$s</string>
+
+    <!-- UPI Offramp known revert reasons (mapped from KnownRevertReason in offramp-lib).
+         Keep aligned with @p2pdotme/user-app-client i18n keys where wording overlaps. -->
+    <string name="upi_offramp_revert_buy_order_amount_exceeds_limit">O valor do pedido esta acima do seu limite por transacao. O limite aumenta com os pontos de reputacao. Conclua a verificacao em app.p2p.me/limits.</string>
+    <string name="upi_offramp_revert_insufficient_reputation">Sua conta ainda nao tem pontos de reputacao. Conclua a verificacao social ou KYC em app.p2p.me/limits antes de fazer pedidos.</string>
+    <string name="upi_offramp_revert_order_amount_exceeds_limit">O valor do pedido excede o limite global por pedido.</string>
+    <string name="upi_offramp_revert_sell_amount_exceeds_fiat_limit">O valor excede seu limite diario em moeda fiduciaria.</string>
+    <string name="upi_offramp_revert_currency_not_supported">Esta moeda ainda nao foi implantada nesta rede.</string>
+    <string name="upi_offramp_revert_user_is_blacklisted">Sua conta esta bloqueada pela exchange. Entre em contato com o suporte da p2p.me.</string>
+    <string name="upi_offramp_revert_exchange_not_operational">A p2p.me esta temporariamente pausada. Tente novamente mais tarde.</string>
+    <string name="upi_offramp_revert_not_enough_eligible_merchants">Nenhum comerciante tem liquidez em moeda fiduciaria para este pedido agora. Tente um valor menor, espere os comerciantes carregarem liquidez ou tente novamente para escolher outro circulo.</string>
+    <string name="upi_offramp_revert_order_expired">O comerciante nao agiu a tempo. Seus USDC foram reembolsados.</string>
+    <string name="upi_offramp_revert_upi_already_sent">Este pedido ja tem um endereco de pagamento. Isto e um bug. Por favor, reporte.</string>
+    <string name="upi_offramp_revert_invalid_order_upi">O comerciante rejeitou os dados de pagamento criptografados. Isso pode indicar um problema de formato. Por favor, reporte.</string>
+    <string name="upi_offramp_revert_order_not_accepted">O pedido ainda nao foi aceito. Tente novamente em instantes.</string>
+    <string name="upi_offramp_revert_usdc_transfer_failed">A transferencia de USDC falhou. Verifique seu saldo e autorizacao.</string>
+    <string name="upi_offramp_revert_not_authorized">O cancelamento foi rejeitado pelo contrato. O pedido pode ja estar concluido ou cancelado.</string>
+    <!-- Long-tail fallback for SDK-known but non-curated contract errors. %1$s is the SDK error
+         constant (e.g. ORDER_ALREADY_MARKED_COMPLETED). -->
+    <string name="upi_offramp_revert_sdk_long_tail">Erro do contrato: %1$s</string>
+
+    <!-- Surfaced when a poll loop has been running for a while without a merchant transition. -->
+    <string name="upi_offramp_detail_stalled">Ainda conectando voce a um comerciante. Seus USDC permanecem na sua conta; se nenhum comerciante aceitar, o pedido se cancela automaticamente on-chain.</string>
+
+    <!-- Recovery flow (pullback of stranded USDC via bridgeFundsBackToZec) -->
+    <string name="upi_offramp_recover_button">Transferir USDC de volta para ZEC</string>
+    <string name="upi_offramp_recovery_in_progress_title">Transferindo USDC de volta para ZEC</string>
+    <string name="upi_offramp_recovery_in_progress_subtitle">Encaminhando seus USDC reembolsados para ZEC via NEAR Intents. Isso pode levar alguns minutos.</string>
+    <string name="upi_offramp_recovery_in_progress_button">Transferindo…</string>
+    <string name="upi_offramp_recovery_done_title">USDC transferido de volta para ZEC</string>
+    <string name="upi_offramp_recovery_amount">%1$s USDC enviado para a ponte</string>
+    <string name="upi_offramp_recovery_target">Deposito da ponte %1$s</string>
+
+    <!-- Per-step on-chain timestamps -->
+    <string name="upi_offramp_detail_accepted_at">Aceito as %1$s</string>
+    <string name="upi_offramp_detail_paid_at">Pagamento confirmado as %1$s</string>
+    <string name="upi_offramp_detail_completed_at">Concluido as %1$s</string>
+
+    <!-- Completed-state summary extras -->
+    <string name="upi_offramp_completion_duration">Concluido em %1$s</string>
+    <string name="upi_offramp_terminal_at">%1$s</string>
+    <string name="upi_offramp_summary_completion">Concluido em</string>
+    <string name="upi_offramp_summary_time">Hora</string>
+    <string name="upi_offramp_summary_merchant">Pago a</string>
+
+    <!-- Order fee breakdown card (from getAdditionalOrderDetails) -->
+    <string name="upi_offramp_fee_breakdown_header">Detalhamento do pedido</string>
+    <string name="upi_offramp_fee_breakdown_you_send">Voce envia</string>
+    <string name="upi_offramp_fee_breakdown_fee">Taxa de rede e do comerciante</string>
+    <string name="upi_offramp_fee_breakdown_you_receive">Voce recebe</string>
+    <string name="upi_offramp_fee_breakdown_amount_usdc">%1$s USDC</string>
+    <string name="upi_offramp_fee_breakdown_amount_inr">₹%1$s</string>
+
+    <!-- Cancelled terminal state (normal on-chain outcome, USDC refunded, not an error) -->
+    <string name="upi_offramp_progress_title_cancelled">Pedido cancelado</string>
+    <string name="upi_offramp_progress_subtitle_cancelled">Nenhum comerciante concluiu este pedido a tempo. Seus USDC estao na sua conta de offramp, prontos para transferir de volta.</string>
+    <string name="upi_offramp_cancelled_refunded">%1$s USDC devolvidos a sua carteira</string>
+    <string name="upi_offramp_cancelled_returned_zec">%1$s USDC estao na sua conta de offramp, prontos para gastar ou transferir de volta para ZEC</string>
+    <string name="upi_offramp_cancelled_at">Cancelado as %1$s</string>
+    <string name="upi_offramp_cancelled_tip">Dica: peca ao comerciante para gerar o QR somente apos esta tela abrir, para que o pedido seja concluido antes de expirar.</string>
+
+    <!-- Reusable Base balance + two-step funding (pay screen additions) -->
+    <string name="upi_offramp_token_usdc">USDC</string>
+    <string name="upi_offramp_add_funds_button">Adicionar fundos a Base</string>
+    <string name="upi_offramp_funding_topup_first">Voce primeiro adicionara cerca de %1$s USDC a Base (alguns minutos) e depois paga.</string>
+    <string name="upi_offramp_pay_button_add_funds">Adicionar fundos para pagar</string>
+    <string name="upi_offramp_confirm_title">Confirmar pagamento</string>
+    <string name="upi_offramp_confirm_message">Pague %1$s usando cerca de %2$s USDC a %3$s por USDC.</string>
+    <string name="upi_offramp_confirm_pay">Pagar agora</string>
+    <string name="upi_offramp_confirm_cancel">Cancelar</string>
+
+    <!-- Step 1: top up the reusable Base balance by bridging ZEC -->
+    <string name="bridge_to_base_title">Adicionar fundos a Base</string>
+    <string name="bridge_to_base_explainer">Transferimos seus ZEC para a Base, onde os pagamentos aos comerciantes sao liquidados. Isso leva alguns minutos. Depois disso, pagar e instantaneo e voce pode reutilizar o saldo.</string>
+    <string name="bridge_to_base_amount_label">Valor a adicionar</string>
+    <string name="bridge_to_base_zec_send">Voce enviara ≈ %1$s ZEC</string>
+    <string name="bridge_to_base_insufficient">ZEC insuficiente. Seu saldo disponivel e %1$s ZEC.</string>
+    <string name="bridge_to_base_eta">Tempo estimado: ~%1$d min</string>
+    <string name="bridge_to_base_merchants_unavailable">Nenhum comerciante tem liquidez em moeda fiduciaria agora. Seus fundos ficarao na Base, prontos quando houver.</string>
+    <string name="bridge_to_base_add_button">Adicionar fundos</string>
+    <string name="bridge_to_base_bridging_button">Transferindo…</string>
+    <string name="bridge_to_base_pay_button">Pagar a um estabelecimento</string>
+    <string name="bridge_to_base_try_again_button">Tentar novamente</string>
+    <string name="bridge_to_base_step_bridging">Transferindo de ZEC via NEAR</string>
+    <string name="bridge_to_base_step_arrived">Fundos chegaram a Base</string>
+    <string name="bridge_to_base_adding_amount">Adicionando ≈ ₹%1$s · %2$s USDC</string>
+    <string name="bridge_to_base_added_amount">%1$s USDC adicionados a Base</string>
+    <string name="bridge_to_base_failed_terminal">A ponte nao pode ser concluida. Se seus ZEC foram reembolsados, eles aparecerao na sua carteira em breve.</string>
+    <string name="bridge_to_base_failed_generic">Nao foi possivel iniciar a ponte. Verifique sua conexao e tente novamente.</string>
+    <string name="bridge_to_base_failed_retry">A ponte ainda esta em andamento. Tente novamente para continuar verificando a mesma transferencia.</string>
+    <string name="bridge_to_base_leave_title">Ponte em andamento</string>
+    <string name="bridge_to_base_leave_message">Seus ZEC estao a caminho da Base e chegarao sozinhos. Voce pode sair: o saldo da Base e atualizado quando chegarem, e o pagamento de ZEC fica na sua atividade.</string>
+    <string name="bridge_to_base_leave_confirm">Sair</string>
+    <string name="bridge_to_base_leave_stay">Continuar observando</string>
+</resources>

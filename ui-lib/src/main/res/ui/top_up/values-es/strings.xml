@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="top_up_title">¿Cómo vas a recargar?</string>
+    <string name="top_up_subtitle">Elige de dónde provienen tus ZEC.</string>
+    <string name="top_up_from_exchange_title">Desde un exchange</string>
+    <string name="top_up_from_exchange_subtitle">Los exchanges como Binance o Coinbase solo pueden enviar a una dirección transparente.</string>
+    <string name="top_up_from_wallet_title">Desde otra billetera</string>
+    <string name="top_up_from_wallet_subtitle">Recibe directamente en tu dirección blindada.</string>
+    <string name="top_up_add_zec_button">Agregar ZEC</string>
+    <string name="top_up_balance_subtitle">Recarga desde un exchange u otra billetera.</string>
+</resources>

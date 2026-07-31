@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="update_title_available">Zapp chegou.</string>
+    <string name="update_title_required">O problema não é você, somos nós.</string>
+    <string name="update_description_required">
+        Há uma atualização obrigatória\npara o Zapp que traz grandes melhorias de\ndesempenho e/ou segurança.
+    </string>
+    <string name="update_description_available">
+        Há uma nova versão do Zapp que traz pequenas atualizações para
+        melhorar o desempenho e/ou a segurança.\n\nReserve um momento para atualizar para a versão mais recente.
+    </string>
+    <string name="update_link_text">Saiba mais sobre esta atualização aqui.</string>
+    <string name="update_download_button">Atualizar</string>
+</resources>

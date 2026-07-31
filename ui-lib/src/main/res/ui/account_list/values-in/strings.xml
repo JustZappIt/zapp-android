@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="account_list_title">Dompet &amp; Hardware</string>
+    <string name="account_list_keystone_promo_title">Dompet Hardware Keystone</string>
+    <string name="account_list_keystone_promo_subtitle">Dapatkan diskon 5%% untuk dompet hardware airgapped. Kode promo "Zapp".</string>
+    <string name="account_list_keystone_primary">Hubungkan Dompet Hardware</string>
+</resources>

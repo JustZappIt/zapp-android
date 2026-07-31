@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="address_book_title">Buku Alamat</string>
+    <string name="address_book_add">Tambah Kontak Baru</string>
+    <string name="address_book_empty">Buku alamat Anda kosong</string>
+    <string name="address_book_version">Versi <xliff:g example="1" id="version">%s</xliff:g></string>
+    <string name="address_book_scan_btn">Pindai kode QR</string>
+    <string name="address_book_manual_btn">Entri manual</string>
+    <string name="address_book_multiple_wallets_title">Dompet Anda</string>
+    <string name="address_book_multiple_wallets_contacts_title">Kontak Buku Alamat</string>
+    <string name="address_book_select_recipient_title">Pilih penerima</string>
+    <string name="address_book_edit_contact_title">Ubah Kontak</string>
+    <string name="address_book_edit_save_btn">Simpan Perubahan</string>
+    <string name="address_book_edit_delete_btn">Hapus Kontak</string>
+    <string name="address_book_edit_save_content_description">Simpan perubahan</string>
+    <string name="address_book_edit_delete_content_description">Hapus kontak</string>
+    <string name="address_book_edit_delete_confirm_title">Hapus kontak?</string>
+    <string name="address_book_edit_delete_confirm_message">Tindakan ini tidak dapat dibatalkan.</string>
+    <string name="address_book_edit_delete_confirm_yes">Hapus</string>
+    <string name="address_book_edit_delete_confirm_no">Batal</string>
+
+    <string name="address_book_additional_addresses">Alamat Tambahan</string>
+    <string name="address_book_addr_unified">Unified Address (Zcash)</string>
+    <string name="address_book_addr_unified_hint">Masukkan unified address…</string>
+    <string name="address_book_addr_transparent">Alamat Transparan (Zcash)</string>
+    <string name="address_book_addr_transparent_hint">Masukkan alamat transparan…</string>
+    <string name="address_book_addr_evm">Alamat EVM (ETH, Polygon, dll.)</string>
+    <string name="address_book_addr_evm_hint">Masukkan alamat 0x…</string>
+    <string name="address_book_addr_solana">Alamat Solana</string>
+    <string name="address_book_addr_solana_hint">Masukkan alamat Solana…</string>
+
+    <string name="address_book_messaging_key_hint">Kunci Pesan (64 karakter hex)</string>
+    <string name="address_book_contact_name_required">Nama wajib diisi</string>
+    <string name="address_book_add_contact_content_description">Tambah Kontak</string>
+    <string name="address_book_scan_messaging_key_content_description">Pindai QR kunci pesan</string>
+    <string name="address_book_scan_wallet_address_content_description">Pindai QR alamat dompet</string>
+    <string name="address_book_scan_addr_qr_content_description">Pindai QR <xliff:g example="EVM Address" id="label">%1$s</xliff:g></string>
+    <string name="address_book_edit_cancel_delete_content_description">Batal hapus</string>
+    <string name="address_book_edit_confirm_delete_content_description">Konfirmasi hapus kontak</string>
+</resources>

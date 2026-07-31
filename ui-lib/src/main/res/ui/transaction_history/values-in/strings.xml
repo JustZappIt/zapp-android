@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="transaction_history_plus" formatted="true">
+        <xliff:g example="1.2345" id="amount">%1$s</xliff:g> %2$s
+    </string>
+    <string name="transaction_history_minus" formatted="true">
+        - <xliff:g example="0.2" id="amount">%1$s</xliff:g> %2$s
+    </string>
+    <string name="transaction_history_fee" formatted="true">Biaya <xliff:g example="0.0001 ZEC" id="fee">%1$s</xliff:g></string>
+    <string name="transaction_history_today">Hari ini</string>
+    <string name="transaction_history_yesterday">Kemarin</string>
+    <string name="transaction_history_previous_7_days">7 hari terakhir</string>
+    <string name="transaction_history_previous_30_days">30 hari terakhir</string>
+    <string name="transaction_history_days_ago" formatted="true"><xliff:g example="$" id="days">%s</xliff:g> hari lalu</string>
+    <string name="transaction_history_screen_title">Aktivitas</string>
+    <string name="transaction_history_send_transaction">Dapatkan %s</string>
+    <string name="transaction_history_widget_title">Aktivitas</string>
+    <string name="transaction_history_widget_header_button">Lihat semua</string>
+    <string name="transaction_history_widget_send_transaction">Kirim transaksi</string>
+    <string name="transaction_history_widget_empty_title">Belum ada apa-apa di sini.</string>
+    <string name="transaction_history_widget_empty_subtitle">Mulai langkah pertama…</string>
+    <string name="transaction_history_search">Cari</string>
+    <string name="transaction_history_sent">Terkirim</string>
+    <string name="transaction_history_sending">Mengirim…</string>
+    <string name="transaction_history_sending_failed">Gagal mengirim</string>
+    <string name="transaction_history_received">Diterima</string>
+    <string name="transaction_history_receiving">Menerima…</string>
+    <string name="transaction_history_receiving_failed">Gagal menerima</string>
+    <string name="transaction_history_shielded">Terlindungi</string>
+    <string name="transaction_history_shielding">Melindungi…</string>
+    <string name="transaction_history_shielding_failed">Gagal melindungi</string>
+
+    <string name="transaction_history_paid">Dibayar</string>
+    <string name="transaction_history_paying">Membayar…</string>
+    <string name="transaction_history_payment_failed">Pembayaran gagal</string>
+    <string name="transaction_history_payment_refunded">Pembayaran dikembalikan</string>
+    <string name="transaction_history_swapped">Ditukar</string>
+    <string name="transaction_history_swapping">Menukar…</string>
+    <string name="transaction_history_swap_failed">Tukar gagal</string>
+    <string name="transaction_history_swap_refunded">Tukar dikembalikan</string>
+    <string name="transaction_history_swap_expired">Tukar kedaluwarsa</string>
+    <string name="transaction_history_payment_expired">Pembayaran kedaluwarsa</string>
+</resources>

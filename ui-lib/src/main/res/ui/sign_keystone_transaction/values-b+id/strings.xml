@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sign_keystone_transaction_title">Pindai dengan dompet Keystone Anda</string>
+    <string name="sign_keystone_transaction_subtitle">Setelah menandatangani dengan Keystone, ketuk tombol Dapatkan Tanda Tangan di bawah.</string>
+    <string name="sign_keystone_transaction_bar_title">Tanda Tangani Transaksi</string>
+    <string name="sign_keystone_transaction_badge">Hardware</string>
+    <string name="sign_keystone_transaction_positive">Dapatkan Tanda Tangan</string>
+    <string name="sign_keystone_transaction_negative">Tolak</string>
+    <string name="sign_keystone_transaction_bottom_sheet_title">Anda yakin?</string>
+    <string name="sign_keystone_transaction_bottom_sheet_subtitle">Menolak tanda tangan akan membatalkan transaksi, dan Anda perlu memulai dari awal jika ingin melanjutkan. Tindakan ini tidak dapat dibatalkan.</string>
+    <string name="sign_keystone_transaction_bottom_sheet_go_back">Kembali</string>
+    <string name="sign_keystone_transaction_bottom_sheet_reject">Tolak Tanda Tangan</string>
+</resources>

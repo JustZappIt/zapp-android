@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark mode is the exact colour-inverse of light: the orange field becomes the dark theme
+         background, and the entire white Z mark — strokes, the diagonal gap, and the corners
+         (i.e. the splash background) — becomes the theme orange (ZappTheme accent). -->
+    <color name="zapp_splash_field">#0F0E0C</color>
+    <color name="zapp_splash_mark">#FF9417</color>
+    <color name="zapp_splash_bg">#FF9417</color>
+</resources>

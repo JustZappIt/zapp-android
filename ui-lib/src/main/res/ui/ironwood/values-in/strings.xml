@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ironwood_announcement_eyebrow">Pembaruan jaringan</string>
+    <string name="ironwood_announcement_title">Zcash Diperbarui ke Ironwood</string>
+    <string name="ironwood_announcement_body_1">Ironwood adalah pool terlindungi yang baru: protokol yang sama dengan Orchard, kini diverifikasi secara formal dan diaudit secara independen. Dana Anda aman dan alamat Anda tetap berfungsi.</string>
+    <string name="ironwood_announcement_body_2">Dana Orchard Anda tetap di sana sampai Anda memindahkannya. Anda masih dapat membelanjakannya, tetapi nilai yang keluar dari Orchard bersifat publik, sehingga pembelanjaan akan menerbitkan jumlah di blockchain, dan jumlahnya bisa lebih besar daripada yang Anda kirim.</string>
+    <string name="ironwood_announcement_body_3">Migrasi yang lebih privat akan hadir pada pembaruan berikutnya. Migrasi ini memindahkan dana Anda dalam bagian berukuran standar yang tidak mengidentifikasi Anda, jadi kami menyarankan untuk menunggu.</string>
+    <string name="ironwood_announcement_body_guide">Jika Anda tidak ingin menunggu, panduan kami menjelaskan cara memindahkan dana secara manual.</string>
+    <string name="ironwood_announcement_body_guide_link">panduan kami</string>
+    <string name="ironwood_announcement_primary_button">Buka Zapp</string>
+</resources>

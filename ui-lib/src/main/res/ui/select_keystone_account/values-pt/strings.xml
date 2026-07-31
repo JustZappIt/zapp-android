@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="select_keystone_account_default">Carteira Keystone</string>
+    <string name="select_keystone_account_positive">Desbloquear</string>
+    <string name="select_keystone_account_negative">Esquecer este dispositivo</string>
+    <string name="select_keystone_account_title">Confirmar a conta a acessar</string>
+    <string name="select_keystone_account_subtitle">Selecione a carteira que você deseja conectar para continuar. Depois de conectada, você poderá assinar transações sem fio com a sua carteira de hardware.</string>
+</resources>

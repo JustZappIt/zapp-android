@@ -1,0 +1,182 @@
+package co.electriccoin.zcash.ui.screen.transactionnote.view
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SheetState
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.design.component.ButtonState
+import co.electriccoin.zcash.ui.design.component.TextFieldState
+import co.electriccoin.zcash.ui.design.component.ZashiButton
+import co.electriccoin.zcash.ui.design.component.ZashiButtonDefaults
+import co.electriccoin.zcash.ui.design.component.ZashiScreenModalBottomSheet
+import co.electriccoin.zcash.ui.design.component.ZashiTextField
+import co.electriccoin.zcash.ui.design.component.rememberModalBottomSheetState
+import co.electriccoin.zcash.ui.design.component.rememberScreenModalBottomSheetState
+import co.electriccoin.zcash.ui.design.component.zapp.zappAccentButtonColors
+import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
+import co.electriccoin.zcash.ui.design.theme.ZappTheme
+import co.electriccoin.zcash.ui.design.theme.ZcashTheme
+import co.electriccoin.zcash.ui.design.util.getValue
+import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.design.util.withStyle
+import co.electriccoin.zcash.ui.screen.transactionnote.model.TransactionNoteState
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+internal fun TransactionNoteView(
+    state: TransactionNoteState?,
+    sheetState: SheetState = rememberScreenModalBottomSheetState(),
+    onSheetOpen: (FocusRequester) -> Unit = { }
+) {
+    val onSheetOpen by rememberUpdatedState(onSheetOpen)
+    ZashiScreenModalBottomSheet(
+        state = state,
+        sheetState = sheetState,
+        content = { state, contentPadding ->
+            val focusRequester = remember { FocusRequester() }
+            BottomSheetContent(
+                state = state,
+                contentPadding = contentPadding,
+                focusRequester = focusRequester,
+                modifier = Modifier.weight(1f, false)
+            )
+            LaunchedEffect(sheetState.currentValue) {
+                if (sheetState.currentValue == SheetValue.Expanded) {
+                    onSheetOpen(focusRequester)
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun BottomSheetContent(
+    state: TransactionNoteState,
+    contentPadding: PaddingValues,
+    focusRequester: FocusRequester,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier =
+            modifier
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = contentPadding.calculateBottomPadding())
+    ) {
+        Text(
+            modifier = Modifier.padding(horizontal = 24.dp),
+            text = state.title.getValue(),
+            style = ZappTheme.typography.screenTitle,
+            fontWeight = FontWeight.SemiBold,
+            color = ZappTheme.colors.text
+        )
+
+        Spacer(Modifier.height(28.dp))
+
+        ZashiTextField(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .focusRequester(focusRequester),
+            state = state.note,
+            minLines = 4,
+            placeholder = {
+                Text(
+                    text = stringResource(R.string.transaction_note_placeholder),
+                    style = ZappTheme.typography.body,
+                    color = ZappTheme.colors.textSubtle
+                )
+            }
+        )
+
+        Spacer(Modifier.height(6.dp))
+        Text(
+            modifier = Modifier.padding(horizontal = 24.dp),
+            text = state.noteCharacters.getValue(),
+            style = ZappTheme.typography.caption,
+            color = ZappTheme.colors.textMuted
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            state.negative?.let {
+                ZashiButton(
+                    state = it,
+                    modifier = Modifier.weight(1f),
+                    defaultPrimaryColors = ZashiButtonDefaults.destructive1Colors()
+                )
+            }
+
+            state.secondaryButton?.let {
+                ZashiButton(
+                    state = it,
+                    modifier = Modifier.weight(1f),
+                    defaultPrimaryColors = ZashiButtonDefaults.tertiaryColors()
+                )
+            }
+
+            state.primaryButton?.let {
+                ZashiButton(
+                    state = it,
+                    modifier = Modifier.weight(1f),
+                    defaultPrimaryColors = zappAccentButtonColors()
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@PreviewScreens
+@Composable
+private fun Preview() =
+    ZcashTheme {
+        TransactionNoteView(
+            state =
+                TransactionNoteState(
+                    onBack = {},
+                    title = stringRes("Title"),
+                    note = TextFieldState(stringRes("")) {},
+                    noteCharacters = stringRes("x/y characters").withStyle(),
+                    primaryButton = null,
+                    secondaryButton = null,
+                    negative = ButtonState(stringRes("Delete note")),
+                ),
+            sheetState =
+                rememberModalBottomSheetState(
+                    skipHiddenState = true,
+                    skipPartiallyExpanded = true,
+                    initialValue = SheetValue.Expanded,
+                    confirmValueChange = { true }
+                )
+        )
+    }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="about_title">Acerca de</string>
+    <string name="about_subtitle">Presentando Zapp</string>
+    <string name="about_overflow_menu_content_description">Más opciones</string>
+    <string name="about_version_format" formatted="true">Versión de Zapp <xliff:g example="1" id="version">%s</xliff:g></string>
+    <string name="about_debug_menu_app_name">Nombre de la app:<xliff:g example="Zapp" id="app_name">%1$s</xliff:g></string>
+    <string name="about_debug_menu_build">Compilación: <xliff:g example="635dac0eb9ddc2bc6da5177f0dd495d8b76af4dc" id="git_commit_hash">%1$s</xliff:g></string>
+    <string name="about_description">Zapp es una wallet móvil impulsada por Zcash, creada para pagos privados imparables.
+        Está optimizada para almacenar y usar en el mundo real $ZEC protegido: la criptomoneda verdaderamente privada.\n\nLos ingenieros de Zapp aportan un profundo dominio de la criptografía y del protocolo.
+    </string>
+    <string name="terms_of_use">Términos de uso</string>
+
+    <string name="about_unable_to_web_browser">No se pudo encontrar una aplicación de navegador web.</string>
+    <string name="about_button_privacy_policy">Política de privacidad</string>
+</resources>

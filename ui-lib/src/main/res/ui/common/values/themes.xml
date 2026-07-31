@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <!-- Matches the brand field the Z forms on (orange in light, dark in night) so the
+             system splash is already brand-coloured and blends straight into the animation's
+             intro with no white flash. -->
+        <item name="windowSplashScreenBackground">@color/zapp_splash_field</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/no_icon_splash_logo</item>
+        <item name="postSplashScreenTheme">@android:style/Theme.Material.NoActionBar</item>
+    </style>
+
+    <style name="Theme.App.Transparent" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+</resources>

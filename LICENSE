@@ -1,0 +1,21 @@
+Zapp Android Wallet — Licensing
+================================
+
+This project is a fork of the MIT-licensed Zashi/Zodl Zcash wallet, with
+Zapp-original contributions added on top.
+
+* The project as a whole is available under the MIT License (see LICENSE-MIT).
+  All code inherited or derived from upstream Zashi/Zodl (© 2021-2025 Zcash)
+  remains MIT-licensed and retains the upstream copyright notice.
+
+* Zapp-ORIGINAL contributions are additionally available under the Apache
+  License, Version 2.0 (see LICENSE-APACHE). These files are dual-licensed —
+  you may use them under EITHER the MIT License OR the Apache License 2.0, at
+  your option — and are marked with an SPDX header:
+
+      SPDX-License-Identifier: MIT OR Apache-2.0
+
+Unless a file carries the dual-license SPDX header above, treat it as MIT-only.
+
+See NOTICE for attribution details and docs/Third party licenses.md for bundled
+fonts and third-party dependency licenses.

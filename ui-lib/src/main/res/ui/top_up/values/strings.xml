@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="top_up_title">How are you topping up?</string>
+    <string name="top_up_subtitle">Choose where your ZEC is coming from.</string>
+    <string name="top_up_from_exchange_title">From an exchange</string>
+    <string name="top_up_from_exchange_subtitle">Exchanges like Binance or Coinbase can only send to a transparent address.</string>
+    <string name="top_up_from_wallet_title">From another wallet</string>
+    <string name="top_up_from_wallet_subtitle">Receive directly to your shielded address.</string>
+    <string name="top_up_add_zec_button">Add ZEC</string>
+    <string name="top_up_balance_subtitle">Top up from an exchange or another wallet.</string>
+</resources>

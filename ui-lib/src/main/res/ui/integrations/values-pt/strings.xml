@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="integrations_title">Integrações</string>
+    <string name="integrations_coinbase">Compre <xliff:g id="currency" example="ZEC">%1$s</xliff:g> com a Coinbase</string>
+    <string name="integrations_coinbase_subtitle">Uma forma prática de comprar <xliff:g id="currency" example="ZEC">%1$s</xliff:g> e recebê-lo diretamente na sua carteira Zapp.</string>
+    <string name="integrations_info">As integrações da Zapp dão acesso a serviços de terceiros. Os recursos e as informações compartilhadas com eles estão fora do nosso controle e sujeitos às políticas de privacidade deles.</string>
+    <string name="integrations_dialog_info">As informações compartilhadas com as integrações da Zapp estão sujeitas às políticas de privacidade deles.</string>
+    <string name="integrations_disabled_info">Durante o processo de restauração, não é possível usar integrações de pagamento.</string>
+    <string name="integrations_flexa">Pagar com Flexa</string>
+    <string name="integrations_flexa_subtitle">Gaste ZEC em milhares de estabelecimentos comerciais.</string>
+    <string name="integrations_flexa_biometric_message">Autentique-se para pagar com Flexa</string>
+    <string name="integrations_keystone">Conectar Keystone</string>
+    <string name="integrations_keystone_subtitle">Conecte uma carteira de hardware isolada (air-gapped) para armazenar ZEC blindado.</string>
+    <string name="integrations_disabled_info_flexa">Mude de Keystone para Zapp para usar a Flexa.</string>
+    <string name="integrations_dialog_more_options">Mais opções</string>
+    <string name="integrations_near_swap">Faça swap de %s com a NEAR Intents</string>
+    <string name="integrations_near_swap_message">Faça swap de %s por outras criptomoedas.</string>
+    <string name="integrations_coinbase_subtitle_disabled">A Coinbase Onramp está temporariamente indisponível.</string>
+</resources>

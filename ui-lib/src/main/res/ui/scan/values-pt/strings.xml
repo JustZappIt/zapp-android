@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="scan_preview_content_description">Câmera</string>
+
+    <string name="scan_cancel_button">Cancelar</string>
+    <string name="scan_settings_button">Abrir Configurações</string>
+    <string name="scan_settings_open_failed">Não foi possível abrir o app de Configurações.</string>
+
+    <string name="scan_state_permission">A câmera não está autorizada. Acesse as configurações de sistema do Zapp e ative-a.</string>
+    <string name="scan_state_failed">Falha ao inicializar a câmera. Tente novamente, por favor.</string>
+    <string name="scan_address_validation_failed">Este código QR não contém um endereço Zcash válido.</string>
+    <string name="scan_invalid_image">Esta imagem não contém um endereço Zcash válido.</string>
+    <string name="scan_several_codes_found">Esta imagem contém vários endereços Zcash válidos.</string>
+    <string name="scan_homepage_validation_failed">Este código QR não contém um endereço Zcash válido nem um QR de pagamento compatível.</string>
+    <string name="scan_homepage_invalid_image">Esta imagem não contém um endereço Zcash válido nem um QR de pagamento compatível.</string>
+
+    <string name="scan_torch_content_description">Alternar lanterna da câmera</string>
+    <string name="gallery_content_description">Galeria</string>
+
+    <string name="third_party_scan_title">Olá!</string>
+    <string name="third_party_scan_subtitle">Parece que você usou um app de terceiros para escanear o pagamento.</string>
+    <string name="third_party_scan_message">Para mais segurança e proteção, escaneie o código QR novamente com o Zapp.</string>
+    <string name="third_party_scan_button">Escanear novamente no Zapp</string>
+</resources>

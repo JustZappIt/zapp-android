@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="update_contact_title">Kontak</string>
+    <string name="update_contact_primary_btn">Simpan</string>
+    <string name="update_contact_secondary_btn">Hapus</string>
+    <string name="delete_contact_confirmation_title">Anda yakin?</string>
+    <string name="delete_contact_confirmation_message">Anda akan menghapus kontak ini. Tindakan ini tidak dapat dibatalkan.</string>
+    <string name="delete_contact_confirmation_confirm">Konfirmasi</string>
+    <string name="delete_contact_confirmation_cancel">Batal</string>
+</resources>

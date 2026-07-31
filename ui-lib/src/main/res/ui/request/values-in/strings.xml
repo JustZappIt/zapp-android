@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="request_title">Minta</string>
+    <string name="request_amount_invalid">Jumlah transaksi ini tidak valid</string>
+    <string name="request_amount_btn">Lanjut</string>
+    <string name="request_memo_btn">Minta</string>
+    <string name="request_qr_share_btn">Bagikan Kode QR</string>
+    <string name="request_qr_close_btn">Tutup</string>
+    <string name="request_qr_save_btn">Simpan QR ke Foto</string>
+    <string name="request_qr_send_in_chat_btn">Kirim di obrolan</string>
+    <string name="request_qr_send_in_chat_title">Kirim permintaan ke</string>
+    <string name="request_qr_send_in_chat_empty">Belum ada kontak obrolan</string>
+    <string name="request_qr_note_label">CATATAN</string>
+    <string name="request_qr_address_label_shielded">Alamat Terlindungi Anda</string>
+    <string name="request_qr_address_label_transparent">Alamat Transparan Anda</string>
+    <string name="request_qr_copy_address_content_description">Salin alamat</string>
+    <string name="request_back_content_description">Kembali</string>
+    <string name="request_privacy_level_shielded">Privat</string>
+    <string name="request_privacy_level_transparent">Tidak Privat</string>
+
+    <string name="request_amount_empty">0</string>
+    <string name="request_amount_keyboard_zero">0</string>
+    <string name="request_amount_keyboard_one">1</string>
+    <string name="request_amount_keyboard_two">2</string>
+    <string name="request_amount_keyboard_three">3</string>
+    <string name="request_amount_keyboard_four">4</string>
+    <string name="request_amount_keyboard_five">5</string>
+    <string name="request_amount_keyboard_six">6</string>
+    <string name="request_amount_keyboard_seven">7</string>
+    <string name="request_amount_keyboard_eight">8</string>
+    <string name="request_amount_keyboard_nine">9</string>
+    <string name="request_amount_keyboard_delete">Hapus</string>
+    <string name="request_amount_note_hint">Tambahkan catatan (opsional)</string>
+
+    <string name="request_memo_payment_request_subtitle">Permintaan Pembayaran</string>
+    <string name="request_memo_text_field_hint">Untuk apa ini?</string>
+    <string name="request_memo_bytes_counter">
+        <xliff:g id="typed_bytes" example="12">%1$s</xliff:g>/<xliff:g id="max_bytes" example="512">%2$s</xliff:g>
+    </string>
+
+    <string name="request_qr_code_content_description">Kode QR Permintaan</string>
+    <string name="request_qr_code_data_unable_to_share">Tidak dapat menemukan aplikasi untuk membagikan kode QR.</string>
+    <string name="request_qr_code_share_chooser_title">Minta %s</string>
+    <string name="request_qr_code_share_chooser_text">Hai, pindai kode QR ini untuk mengirimi saya pembayaran %s! Tautan Unduh:
+        https://play.google.com/store/apps/details?id=xyz.justzappit.zapp</string>
+</resources>

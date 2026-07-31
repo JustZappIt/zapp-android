@@ -1,0 +1,485 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Chat list screen -->
+    <string name="chat_list_title">Obrolan</string>
+    <string name="chat_list_empty_title">Belum ada percakapan</string>
+    <string name="chat_list_empty_subtitle">Ketuk + untuk memulai obrolan P2P baru</string>
+    <string name="chat_list_no_messages">Belum ada pesan</string>
+    <string name="chat_list_media_placeholder">[Media]</string>
+    <string name="chat_list_photo_placeholder">Foto</string>
+    <string name="chat_list_gif_placeholder">GIF</string>
+    <string name="chat_list_video_placeholder">Video</string>
+    <string name="chat_list_file_placeholder">File</string>
+    <string name="chat_list_location_placeholder">Lokasi</string>
+    <string name="chat_list_payment_placeholder">Pembayaran</string>
+    <string name="chat_list_payment_request_placeholder">Permintaan pembayaran</string>
+    <string name="chat_list_new_conversation_content_description">Percakapan baru</string>
+
+    <!-- Chat list — swipe-to-leave -->
+    <string name="chat_list_leave_action">Keluar</string>
+    <string name="chat_list_close_action">Tutup</string>
+    <string name="chat_list_leave_dialog_title">Keluar dari percakapan?</string>
+    <string name="chat_list_leave_dialog_message">Anda akan keluar dari \"%1$s\" dan berhenti menerima pesannya.</string>
+    <string name="chat_list_leave_dialog_cancel">Batal</string>
+    <string name="chat_list_leave_dialog_confirm">Keluar</string>
+
+    <!-- Chat list — network/status chip labels -->
+    <string name="chat_list_status_connecting">…</string>
+    <string name="chat_list_status_disconnected">off</string>
+    <string name="chat_list_status_error">err</string>
+
+    <!-- Chat list — relative time (short) -->
+    <string name="chat_list_time_now">kini</string>
+    <string name="chat_list_time_minutes_short">%1$dm</string>
+
+    <!-- Chat identity setup -->
+    <string name="chat_identity_setup_wallet_title">Siapkan Identitas Obrolan Anda</string>
+    <string name="chat_identity_setup_wallet_subtitle">Identitas pesan Anda berasal dari dompet Anda. Pilih nama tampilan untuk menyelesaikan penyiapannya.</string>
+    <string name="chat_identity_setup_wallet_button">Buat identitas saya</string>
+    <string name="chat_identity_setup_display_name_placeholder">Nama tampilan</string>
+    <string name="chat_identity_setup_error_name_invalid">Nama tampilan harus 3–20 karakter, menggunakan huruf kecil, angka, atau garis bawah.</string>
+    <string name="chat_identity_setup_error_export_seed_failed">Tidak dapat memuat frasa pemulihan Anda.</string>
+    <string name="chat_identity_setup_error_wallet_derive_failed">Tidak dapat menyiapkan identitas obrolan Anda dari dompet ini. Kembali dan coba lagi.</string>
+    <string name="chat_identity_setup_support_hint">Jika ini terus terjadi, salin detail kesalahan dan kirimkan ke tim Zapp.</string>
+    <string name="chat_identity_setup_copy_details">Salin detail kesalahan</string>
+
+    <!-- Chat room screen -->
+    <string name="chat_room_title_fallback">Obrolan</string>
+    <string name="chat_room_input_placeholder">Pesan</string>
+    <string name="chat_room_attach_content_description">Lampirkan</string>
+    <string name="chat_room_send_content_description">Kirim</string>
+    <string name="chat_room_copy_action">Salin pesan</string>
+
+    <!-- Chat room — chip labels -->
+    <string name="chat_room_chip_online">Online</string>
+    <string name="chat_room_chip_dht">DHT</string>
+    <string name="chat_room_chip_connected">P2P</string>
+    <string name="chat_room_chip_off">Off</string>
+    <string name="chat_room_chip_err">Err</string>
+
+    <!-- Chat room — connection subtitle -->
+    <string name="chat_room_subtitle_peer_online">Rekan online</string>
+    <string name="chat_room_subtitle_dht_unreachable">DHT tidak terjangkau</string>
+    <string name="chat_room_subtitle_peer_offline">Rekan offline, pesan diantrekan</string>
+    <string name="chat_room_subtitle_p2p_connected">P2P terhubung</string>
+    <string name="chat_room_subtitle_dht_degraded">DHT menurun</string>
+    <string name="chat_room_subtitle_waiting_for_peer">Menunggu rekan…</string>
+    <string name="chat_room_subtitle_connecting">Menghubungkan…</string>
+    <string name="chat_room_subtitle_offline">Offline</string>
+    <string name="chat_room_subtitle_error">Kesalahan koneksi</string>
+
+    <!-- Chat room — permission/location toasts -->
+    <string name="chat_room_toast_camera_permission_required">Izin kamera diperlukan</string>
+    <string name="chat_room_toast_location_permission_required">Izin lokasi diperlukan</string>
+    <string name="chat_room_toast_location_unavailable">Tidak dapat memperoleh lokasi</string>
+    <string name="chat_room_toast_group_rename_failed">Tidak dapat mengganti nama grup</string>
+    <string name="chat_room_toast_group_add_member_failed">Tidak dapat menambahkan anggota</string>
+    <string name="chat_room_toast_transaction_not_synced">Transaksi belum disinkronkan ke dompet ini</string>
+    <string name="chat_room_toast_location_error_fmt">Kesalahan lokasi: %1$s</string>
+
+    <!-- Chat room — date separator labels -->
+    <string name="chat_room_date_today">Hari ini</string>
+    <string name="chat_room_date_yesterday">Kemarin</string>
+    <string name="chat_room_unread_messages">Pesan belum dibaca</string>
+
+    <!-- Chat room — reply -->
+    <string name="chat_room_reply_action">Balas</string>
+    <string name="chat_room_reply_to_fmt">Membalas %1$s</string>
+    <string name="chat_room_reply_dismiss">Tutup balasan</string>
+    <string name="chat_room_reply_unknown_sender">Tidak dikenal</string>
+
+    <!-- Chat room — delivery indicator content descriptions -->
+    <string name="chat_room_delivery_sent">Terkirim</string>
+    <string name="chat_room_delivery_queued">Dalam antrean</string>
+    <string name="chat_room_delivery_failed">Gagal</string>
+    <string name="chat_room_delivery_sending">Mengirim</string>
+
+    <!-- Chat profile screen -->
+    <string name="chat_profile_title">Profil &amp; Identitas</string>
+    <string name="chat_profile_unknown_name">Tidak dikenal</string>
+    <string name="chat_profile_public_key_label">Kunci Publik</string>
+    <string name="chat_profile_qr_caption">Pindai untuk memulai percakapan</string>
+    <string name="chat_profile_tab_messaging_id">ID Pesan</string>
+    <string name="chat_profile_tab_wallet_address">Alamat Dompet</string>
+    <string name="chat_profile_subtab_shielded">Terlindungi</string>
+    <string name="chat_profile_subtab_transparent">Transparan</string>
+    <string name="chat_profile_address_shielded_label">Alamat Terlindungi</string>
+    <string name="chat_profile_address_transparent_label">Alamat Transparan</string>
+    <string name="chat_profile_address_shielded_caption">Alamat terlindungi · privat secara default</string>
+    <string name="chat_profile_address_transparent_caption">Alamat transparan · terlihat di rantai</string>
+    <string name="chat_profile_address_base_label">Dompet Base</string>
+
+    <!-- Chat profile — seed phrase row -->
+    <string name="chat_profile_seed_phrase_title">Frasa Pemulihan</string>
+    <string name="chat_profile_seed_phrase_subtitle">Mencadangkan identitas pesan &amp; dompet</string>
+
+    <!-- Chat profile — accessibility / content descriptions -->
+    <string name="chat_profile_back_content_description">Kembali</string>
+    <string name="chat_profile_edit_display_name_content_description">Ubah nama tampilan</string>
+    <string name="chat_profile_delete_identity_content_description">Hapus Identitas</string>
+    <string name="chat_profile_copy_public_key_content_description">Salin kunci publik</string>
+    <string name="chat_profile_copy_address_content_description">Salin alamat</string>
+    <string name="chat_profile_copied_content_description">Disalin</string>
+
+    <!-- Chat profile — bottom dock -->
+    <string name="chat_profile_delete_button">HAPUS IDENTITAS</string>
+
+    <!-- Chat profile — edit display name dialog -->
+    <string name="chat_profile_edit_name_title">Ubah nama tampilan</string>
+    <string name="chat_profile_edit_name_save">Simpan</string>
+    <string name="chat_profile_edit_name_cancel">Batal</string>
+    <string name="chat_display_name_updating">Menyimpan…</string>
+    <string name="chat_display_name_update_error">Nama tampilan Anda tidak dapat disimpan. Coba lagi.</string>
+
+    <!-- Chat profile — delete identity dialog -->
+    <string name="chat_profile_delete_dialog_title">Hapus identitas?</string>
+    <string name="chat_profile_delete_dialog_message">Ini akan menghapus identitas pesan Anda dan semua riwayat obrolan dari perangkat ini. Dana dompet Anda tidak terpengaruh dan dapat dipulihkan kapan saja dengan frasa pemulihan Anda.</string>
+    <string name="chat_profile_delete_dialog_confirm">Hapus</string>
+    <string name="chat_profile_delete_dialog_cancel">Batal</string>
+
+    <!-- Chat profile — seed phrase reveal dialog -->
+    <string name="chat_profile_seed_phrase_dialog_title">Frasa Pemulihan</string>
+    <string name="chat_profile_seed_phrase_dialog_message">Simpan ini dengan aman. Siapa pun yang memiliki kata-kata ini dapat mengakses dompet dan pesan Anda.</string>
+    <string name="chat_profile_seed_phrase_dialog_done">Selesai</string>
+    <string name="chat_profile_seed_phrase_biometric_prompt">Lihat frasa pemulihan Anda</string>
+
+    <!-- Chat profile — P2P wallet key row & reveal dialog -->
+    <string name="chat_profile_p2p_key_title">Kunci Dompet P2P</string>
+    <string name="chat_profile_p2p_key_subtitle">Kunci untuk akun pencairan P2P Anda, berasal dari frasa pemulihan Anda</string>
+    <string name="chat_profile_p2p_key_biometric_prompt">Lihat kunci dompet P2P Anda</string>
+    <string name="chat_profile_p2p_key_dialog_title">Kunci Dompet P2P</string>
+    <string name="chat_profile_p2p_key_dialog_message">Berasal dari frasa pemulihan Anda. Kunci ini mengontrol akun pencairan P2P Anda. Siapa pun yang memilikinya dapat membelanjakan dana tersebut.</string>
+    <string name="chat_profile_p2p_key_address_label">Alamat Pemilik</string>
+    <string name="chat_profile_p2p_key_private_key_label">Kunci Privat</string>
+    <string name="chat_profile_p2p_key_copy">Salin</string>
+    <string name="chat_profile_p2p_key_dialog_done">Selesai</string>
+
+    <!-- Chat settings screen -->
+    <string name="chat_settings_title">Pengaturan Obrolan</string>
+    <string name="chat_settings_delete_button">Hapus Identitas</string>
+    <string name="chat_settings_section_identity">Identitas</string>
+    <string name="chat_settings_section_account">Akun</string>
+    <string name="chat_settings_section_network">Jaringan</string>
+    <string name="chat_settings_row_profile">Profil</string>
+    <string name="chat_settings_row_profile_subtitle">Lihat detail identitas</string>
+    <string name="chat_settings_row_contacts">Kontak</string>
+    <string name="chat_settings_row_contacts_subtitle">Kelola kontak Anda</string>
+    <string name="chat_settings_label_connection">Koneksi</string>
+    <string name="chat_settings_label_dht_health">Kesehatan DHT</string>
+    <string name="chat_settings_label_peers">Rekan</string>
+    <string name="chat_settings_label_protocol">Protokol</string>
+    <string name="chat_settings_label_encryption">Enkripsi</string>
+    <string name="chat_settings_protocol_value">Hyperswarm DHT</string>
+    <string name="chat_settings_encryption_value">Ed25519 + Noise</string>
+    <string name="chat_settings_connection_connected">Terhubung</string>
+    <string name="chat_settings_connection_connecting">Menghubungkan</string>
+    <string name="chat_settings_connection_disconnected">Terputus</string>
+    <string name="chat_settings_connection_error">Kesalahan</string>
+    <string name="chat_settings_dht_healthy">Sehat</string>
+    <string name="chat_settings_dht_degraded">Menurun</string>
+    <string name="chat_settings_dht_critical">Kritis</string>
+    <string name="chat_settings_edit_name_content_description">Ubah nama</string>
+    <string name="chat_settings_copy_content_description">Salin</string>
+    <string name="chat_settings_edit_name_dialog_title">Ubah Nama Tampilan</string>
+    <string name="chat_settings_edit_name_dialog_placeholder">Nama tampilan</string>
+    <string name="chat_settings_edit_name_dialog_save">Simpan</string>
+    <string name="chat_settings_edit_name_dialog_cancel">Batal</string>
+    <string name="chat_settings_delete_dialog_title">Hapus Identitas</string>
+    <string name="chat_settings_delete_dialog_message">Ini akan menghapus identitas pesan Anda secara permanen. Cadangkan frasa pemulihan Anda terlebih dahulu.</string>
+    <string name="chat_settings_delete_dialog_confirm">Hapus</string>
+    <string name="chat_settings_delete_dialog_cancel">Batal</string>
+    <string name="chat_settings_section_notifications">Notifikasi</string>
+    <string name="chat_settings_notifications_toggle_title">Notifikasi pesan</string>
+    <string name="chat_settings_notifications_toggle_subtitle">Dapatkan notifikasi saat menerima pesan baru</string>
+    <string name="chat_settings_background_push_toggle_title">Pengiriman latar belakang</string>
+    <string name="chat_settings_background_push_toggle_subtitle">Izinkan Zapp memeriksa pesan di latar belakang</string>
+    <string name="chat_settings_section_privacy">Privasi</string>
+    <string name="chat_settings_read_receipts_toggle_title">Tanda dibaca</string>
+    <string name="chat_settings_read_receipts_toggle_subtitle">Tampilkan centang ganda saat pesan Anda dibaca. Nonaktifkan untuk juga berhenti melihat kapan orang lain membaca pesan Anda.</string>
+    <string name="read_receipts_settings_row_subtitle">Kontrol indikator terkirim dan dibaca untuk obrolan</string>
+    <string name="read_receipts_settings_title">Tanda dibaca</string>
+    <string name="read_receipts_settings_intro">Tanda dibaca memungkinkan obrolan menampilkan kapan sebuah pesan telah dibuka. Fitur ini opsional dan hanya menampilkan status dibaca saat kedua belah pihak mengizinkannya.</string>
+    <string name="read_receipts_settings_on_title">Saat ini aktif</string>
+    <string name="read_receipts_settings_on_body">Saat Anda membuka percakapan, Zapp dapat mengirimkan sinyal dibaca kecil untuk pesan yang Anda terima. Pesan keluar Anda juga dapat menampilkan centang ganda setelah aplikasi lain mengonfirmasi bahwa pesan telah dibaca.</string>
+    <string name="read_receipts_settings_off_title">Saat ini nonaktif</string>
+    <string name="read_receipts_settings_off_body">Zapp tidak akan mengirim sinyal dibaca saat Anda membuka pesan, dan tidak akan menampilkan status dibaca dari orang lain. Pesan tetap berstatus terkirim, bukan dibaca.</string>
+    <string name="read_receipts_settings_both_sides_title">Jika orang lain menonaktifkannya</string>
+    <string name="read_receipts_settings_both_sides_body">Centang ganda memerlukan kedua belah pihak mengizinkan tanda dibaca. Jika salah satu pihak menonaktifkannya, obrolan itu hanya menampilkan status terkirim.</string>
+    <string name="read_receipts_settings_section_control">Kontrol</string>
+    <string name="read_receipts_settings_toggle_title">Izinkan tanda dibaca</string>
+    <string name="read_receipts_settings_toggle_subtitle">Kirim dan tampilkan status dibaca saat kedua belah pihak mengizinkannya</string>
+    <string name="read_receipts_settings_save">Simpan</string>
+    <string name="chat_message_status_sending">Mengirim</string>
+    <string name="chat_message_status_queued">Menunggu penerima menyinkronkan</string>
+    <string name="chat_message_status_sent">Terkirim, menunggu diterima</string>
+    <string name="chat_message_status_delivered">Diterima</string>
+    <string name="chat_message_status_read">Dibaca</string>
+    <string name="chat_message_status_failed">Gagal terkirim</string>
+    <string name="background_delivery_settings_title">Pengiriman latar belakang</string>
+    <string name="background_delivery_settings_intro">Atur apakah Zapp dapat tetap terjangkau saat aplikasi ditutup atau ponsel Anda terkunci.</string>
+    <string name="background_delivery_settings_delivery_title">Saat ini nonaktif</string>
+    <string name="background_delivery_settings_delivery_body">Zapp menghentikan pemantauan latar belakang. Pesan baru mungkin tertunda hingga Anda membuka aplikasi, lalu Zapp memeriksa apa pun yang masuk saat Anda pergi.</string>
+    <string name="background_delivery_settings_battery_title">Saat ini aktif</string>
+    <string name="background_delivery_settings_battery_body">Android menjaga layanan Zapp tetap berjalan diam-diam agar aplikasi dapat bangun dan memeriksa saat mungkin ada pesan yang menunggu. Ini meningkatkan ketepatan waktu pengiriman, tetapi menggunakan lebih banyak baterai daripada memeriksa hanya saat aplikasi terbuka.</string>
+    <string name="background_delivery_settings_privacy_title">Apa yang terkandung dalam sinyal pengiriman</string>
+    <string name="background_delivery_settings_privacy_body">Sinyal hanya memberi tahu Zapp untuk bangun dan memeriksa pesan. Isi pesan tetap terenkripsi dan diambil oleh aplikasi Anda setelah bangun.</string>
+    <string name="background_delivery_settings_section_control">Kontrol</string>
+    <string name="background_delivery_settings_toggle_title">Izinkan pengiriman latar belakang</string>
+    <string name="background_delivery_settings_toggle_subtitle">Bangunkan Zapp untuk memeriksa pesan yang menunggu</string>
+    <string name="background_delivery_settings_save">Simpan</string>
+
+    <!-- Chat notifications -->
+    <string name="chat_notifications_channel_name">Pesan</string>
+    <string name="chat_notifications_channel_description">Peringatan pesan obrolan baru</string>
+    <string name="chat_notifications_fallback_title">Pesan baru</string>
+    <string name="chat_notifications_private_body">Buka Zapp untuk melihatnya</string>
+    <string name="chat_notifications_media_body">Mengirim lampiran</string>
+    <string name="chat_notifications_permission_required">Aktifkan notifikasi untuk mendapat peringatan pesan baru</string>
+
+    <!-- New conversation screen -->
+    <string name="chat_new_conversation_title">Percakapan Baru</string>
+    <string name="chat_new_conversation_empty_title">Mulai percakapan pribadi</string>
+    <string name="chat_new_conversation_empty_body">Pindai kode QR seseorang atau masukkan kunci publiknya untuk mengirim pesan.</string>
+    <string name="chat_new_conversation_privacy_callout">Pesan dienkripsi secara peer-to-peer dan hanya dapat dibaca oleh Anda dan penerima.</string>
+    <string name="chat_new_conversation_search_placeholder">Ketik atau tempel kunci publik…</string>
+    <string name="chat_new_conversation_public_key_detected">Kunci publik terdeteksi</string>
+    <string name="chat_new_conversation_add_action">Tambah</string>
+    <string name="chat_new_conversation_clear_content_description">Bersihkan</string>
+    <string name="chat_new_conversation_back_content_description">Kembali</string>
+    <string name="chat_new_conversation_selected_content_description">Dipilih</string>
+    <string name="chat_new_conversation_remove_participant_content_description_fmt">Hapus %1$s</string>
+    <string name="chat_new_conversation_start_chat_label">MULAI OBROLAN</string>
+    <string name="chat_new_conversation_start_chat_content_description">Mulai Obrolan</string>
+    <string name="chat_new_conversation_scan_qr_label">PINDAI KODE QR</string>
+    <string name="chat_new_conversation_scan_qr_content_description">Pindai Kode QR</string>
+
+    <!-- Contact edit screen -->
+    <string name="chat_contact_edit_title">Ubah Kontak</string>
+    <string name="chat_contact_edit_delete_content_description">Hapus</string>
+    <string name="chat_contact_edit_save">Simpan</string>
+    <string name="chat_contact_edit_not_found">Kontak tidak ditemukan</string>
+    <string name="chat_contact_edit_public_key_label">Kunci Publik</string>
+    <string name="chat_contact_edit_name_label">Nama</string>
+    <string name="chat_contact_edit_delete_dialog_title">Hapus Kontak</string>
+    <string name="chat_contact_edit_delete_dialog_message">Yakin ingin menghapus kontak ini?</string>
+    <string name="chat_contact_edit_delete_dialog_confirm">Hapus</string>
+    <string name="chat_contact_edit_delete_dialog_cancel">Batal</string>
+
+    <!-- Chat contacts screen -->
+    <string name="chat_contacts_title">Kontak</string>
+    <string name="chat_contacts_saved_count_fmt">%1$d tersimpan</string>
+    <string name="chat_contacts_blocked_badge">Diblokir</string>
+    <string name="chat_contacts_empty_title">Belum ada kontak</string>
+    <string name="chat_contacts_empty_subtitle">Tambahkan kontak untuk mulai mengobrol</string>
+    <string name="chat_contacts_add_content_description">Tambah kontak</string>
+    <string name="chat_contacts_start_chat_content_description">Mulai obrolan</string>
+
+    <!-- Support chat -->
+    <string name="support_chat_title">Dukungan Zapp</string>
+    <string name="support_chat_pick_topic">Pilih topik</string>
+    <string name="support_chat_category_problem">Masalah</string>
+    <string name="support_chat_category_feedback">Masukan</string>
+    <string name="support_chat_category_other">Lainnya</string>
+    <string name="support_chat_overflow_close">Tutup Obrolan Dukungan</string>
+    <string name="support_chat_leave_dialog_title">Tutup obrolan dukungan?</string>
+    <string name="support_chat_leave_dialog_message">Ini akan menghapus percakapan dukungan dari kotak masuk Anda. Tim Zapp juga akan melihatnya sebagai ditutup.</string>
+    <string name="support_chat_leave_dialog_confirm">Tutup</string>
+    <string name="support_chat_leave_dialog_cancel">Batal</string>
+    <string name="support_chat_contact_footer_subtitle">Laporkan masalah atau bagikan masukan</string>
+    <string name="support_chat_input_placeholder">Pesan</string>
+    <string name="support_chat_greeting_problem">Jelaskan masalah yang Anda alami.</string>
+    <string name="support_chat_greeting_feedback">Kami ingin mendengar pendapat Anda.</string>
+    <string name="support_chat_greeting_other">Ada yang bisa kami bantu?</string>
+    <string name="support_chat_leave_notice">Pengguna telah keluar dari obrolan.</string>
+
+    <!-- Support chat — accessibility / content descriptions -->
+    <string name="support_chat_overflow_content_description">Opsi lainnya</string>
+    <string name="support_chat_send_content_description">Kirim pesan</string>
+
+    <!-- Support ticket list -->
+    <string name="support_ticket_list_empty_title">Tidak ada tiket dukungan</string>
+    <string name="support_ticket_list_empty_subtitle">Ketuk + untuk membuat tiket baru</string>
+    <string name="support_ticket_list_new_content_description">Tiket baru</string>
+    <string name="support_ticket_close_dialog_title">Tutup tiket ini?</string>
+    <string name="support_ticket_close_dialog_message">Ini akan menghapus tiket dan pesannya.</string>
+    <string name="support_ticket_close_dialog_confirm">Tutup</string>
+    <string name="support_ticket_close_dialog_cancel">Batal</string>
+    <string name="support_ticket_default_label">Tiket</string>
+    <string name="chat_list_support_tickets_fmt">%1$d tiket terbuka</string>
+    <string name="chat_list_support_subtitle_default">Laporkan masalah, bagikan masukan</string>
+
+    <!-- Chat room — reply preview fallback names -->
+    <string name="chat_room_reply_sender_self">Anda</string>
+    <string name="chat_room_reply_sender_unknown">Tidak dikenal</string>
+
+    <!-- Chat room — image viewer -->
+    <string name="chat_room_image_viewer_close">Tutup</string>
+    <string name="chat_room_image_viewer_save">Simpan gambar</string>
+    <string name="chat_room_image_viewer_share">Bagikan gambar</string>
+    <string name="chat_room_image_viewer_saved">Gambar disimpan</string>
+    <string name="chat_room_image_viewer_save_failed">Tidak dapat menyimpan gambar</string>
+    <string name="chat_room_image_viewer_content_description">Gambar layar penuh</string>
+    <string name="chat_room_media_content_description_image">Gambar</string>
+    <string name="chat_room_media_content_description_gif">GIF</string>
+    <string name="chat_room_media_content_description_video">Video</string>
+    <string name="chat_room_media_play_video">Putar video</string>
+    <string name="chat_room_media_placeholder_video">Video</string>
+    <string name="chat_room_media_placeholder_image">Gambar</string>
+
+    <!-- Chat media attachment sheet (shared by chat room + support chat) -->
+    <string name="chat_media_sheet_title">Lampirkan</string>
+    <string name="chat_media_option_media">Media</string>
+    <string name="chat_media_option_file">File</string>
+    <string name="chat_media_option_camera">Kamera</string>
+    <string name="chat_media_option_location">Lokasi</string>
+
+    <!-- Chat contacts — add/edit validation errors -->
+    <string name="chat_contact_error_name_required">Nama wajib diisi</string>
+    <string name="chat_contact_error_messaging_key_required">Kunci pesan wajib diisi</string>
+    <string name="chat_contact_error_invalid_messaging_key">Kunci pesan tidak valid: harus 64 karakter heksadesimal</string>
+    <string name="chat_contact_error_already_exists">Kontak sudah ada</string>
+    <string name="chat_contact_error_save_failed">Tidak dapat menyimpan kontak. Coba lagi.</string>
+    <string name="chat_contact_error_delete_failed">Tidak dapat menghapus kontak. Coba lagi.</string>
+    <string name="chat_contact_error_invalid_wallet_address">Alamat Zcash tidak valid</string>
+
+    <!-- Chat moderation — shared fallback when displayName is blank -->
+    <string name="chat_moderation_fallback_user_name">pengguna ini</string>
+
+    <!-- Chat moderation — block dialog -->
+    <string name="chat_block_dialog_title">Blokir Pengguna</string>
+    <string name="chat_block_dialog_message_fmt">Blokir %1$s?</string>
+    <string name="chat_block_dialog_explanation">Anda tidak akan lagi menerima pesan dari pengguna ini. Mereka tidak akan diberi tahu bahwa mereka telah diblokir.</string>
+    <string name="chat_block_dialog_confirm">Blokir</string>
+    <string name="chat_block_dialog_cancel">Batal</string>
+
+    <!-- Chat moderation — unblock dialog -->
+    <string name="chat_unblock_dialog_title">Buka Blokir Pengguna</string>
+    <string name="chat_unblock_dialog_message_fmt">Buka blokir %1$s? Anda akan dapat menerima pesan darinya lagi.</string>
+    <string name="chat_unblock_dialog_confirm">Buka Blokir</string>
+    <string name="chat_unblock_dialog_cancel">Batal</string>
+
+    <!-- Chat contacts — add contact sheet -->
+    <string name="chat_contact_add_title">Tambah Kontak Baru</string>
+    <string name="chat_contact_add_messaging_key_placeholder">Kunci Pesan (64 karakter hex)</string>
+    <string name="chat_contact_scan_messaging_key_content_description">Pindai QR kunci pesan</string>
+    <string name="chat_contact_scan_wallet_address_content_description">Pindai QR alamat dompet</string>
+    <string name="chat_contact_add_save_content_description">Tambah Kontak</string>
+    <string name="chat_contact_add_save_button">SIMPAN</string>
+
+    <!-- Chat contacts — edit contact sheet -->
+    <string name="chat_contact_edit_save_changes_button">SIMPAN PERUBAHAN</string>
+    <string name="chat_contact_edit_save_changes_content_description">Simpan perubahan</string>
+    <string name="chat_contact_edit_block_button">BLOKIR PENGGUNA</string>
+    <string name="chat_contact_edit_block_content_description">Blokir pengguna</string>
+    <string name="chat_contact_edit_unblock_button">BUKA BLOKIR PENGGUNA</string>
+    <string name="chat_contact_edit_unblock_content_description">Buka blokir pengguna</string>
+    <string name="chat_contact_edit_delete_contact_button">HAPUS KONTAK</string>
+    <string name="chat_contact_edit_delete_contact_content_description">Hapus kontak</string>
+    <string name="chat_contact_edit_delete_confirm_title">Hapus kontak?</string>
+    <string name="chat_contact_edit_delete_confirm_subtitle">Tindakan ini tidak dapat dibatalkan.</string>
+    <string name="chat_contact_edit_delete_cancel_button">BATAL</string>
+    <string name="chat_contact_edit_delete_cancel_content_description">Batalkan penghapusan</string>
+    <string name="chat_contact_edit_delete_confirm_button">HAPUS</string>
+    <string name="chat_contact_edit_delete_confirm_content_description">Konfirmasi hapus kontak</string>
+
+    <!-- Chat room — attachment options sheet -->
+    <string name="chat_attachment_option_share_address">Bagikan Alamat</string>
+    <string name="chat_attachment_option_send_zec">Kirim ZEC</string>
+    <string name="chat_attachment_option_request_payment">Minta Pembayaran</string>
+    <string name="chat_attachment_option_split_bill">Bagi Tagihan</string>
+    <string name="chat_attachment_option_attach_media">Lampirkan Media</string>
+
+    <!-- Chat — group creation and management -->
+    <string name="chat_new_group_name_title">Beri nama grup ini</string>
+    <string name="chat_new_group_name_placeholder">Nama grup</string>
+    <string name="chat_new_group_name_confirm">Buat grup</string>
+    <string name="chat_new_group_name_cancel">Batal</string>
+    <string name="chat_group_info_members_fmt">%1$s anggota</string>
+    <string name="chat_group_info_rename">Ganti nama grup</string>
+    <string name="chat_group_info_add_member">Tambah anggota</string>
+    <string name="chat_group_info_roster_label">Anggota</string>
+    <string name="chat_group_info_no_contacts">Tidak ada kontak untuk ditambahkan</string>
+    <string name="chat_group_info_rename_save">Simpan</string>
+    <string name="chat_group_info_rename_cancel">Batal</string>
+
+    <!-- Chat room — split bill sheet -->
+    <string name="chat_split_title_group">Bagi tagihan</string>
+    <string name="chat_split_title_direct">Minta pembayaran</string>
+    <string name="chat_split_total_label">Jumlah total</string>
+    <string name="chat_split_total_placeholder">0</string>
+    <string name="chat_split_zec_suffix">ZEC</string>
+    <string name="chat_split_currency_toggle">Ganti mata uang</string>
+    <string name="chat_split_shares_label_fmt">Bagian tiap orang (dibagi %1$s)</string>
+    <string name="chat_split_memo_placeholder">Untuk apa? (opsional)</string>
+    <string name="chat_split_equivalent_fmt">≈ %1$s</string>
+    <string name="chat_split_send_button">Kirim permintaan</string>
+
+    <!-- Chat network — connection pill + details sheet -->
+    <string name="chat_network_section_connection">Koneksi</string>
+    <string name="chat_network_section_peers">Rekan dan DHT</string>
+    <string name="chat_network_section_messages">Pesan</string>
+    <string name="chat_network_label_status">Status</string>
+    <string name="chat_network_label_reachability">Keterjangkauan</string>
+    <string name="chat_network_value_reachability_direct">Langsung</string>
+    <string name="chat_network_value_reachability_nat">Di balik NAT, via relay</string>
+    <string name="chat_network_value_reachability_strict">NAT ketat, via relay</string>
+    <string name="chat_network_value_reachability_unknown">Tidak diketahui</string>
+    <string name="chat_network_label_backup">Pengiriman cadangan</string>
+    <string name="chat_network_value_backup_connected">Terhubung</string>
+    <string name="chat_network_value_backup_unavailable">Tidak tersedia</string>
+    <string name="chat_network_value_backup_off">Nonaktif</string>
+    <string name="chat_network_label_tcp_connections">Koneksi</string>
+    <string name="chat_network_label_dht_nodes">Node DHT</string>
+    <string name="chat_network_label_conversations">Percakapan</string>
+    <string name="chat_network_value_conversations_fmt">%1$d langsung · %2$d grup</string>
+    <string name="chat_network_label_pending">Tertunda</string>
+    <string name="chat_network_value_pending_fmt">%1$d pesan dalam %2$d antrean</string>
+    <string name="chat_network_value_pending_none">Tidak ada</string>
+    <string name="chat_network_label_invites">Undangan tertunda</string>
+
+    <!-- Chat room — message bubbles -->
+    <string name="chat_bubble_location_shared">Lokasi dibagikan</string>
+    <string name="chat_bubble_location_received">Lokasi diterima</string>
+    <string name="chat_bubble_location_open_in_maps">Buka di Maps</string>
+    <string name="chat_bubble_payment_request_sent">Permintaan pembayaran terkirim</string>
+    <string name="chat_bubble_payment_request">Permintaan pembayaran</string>
+    <string name="chat_bubble_payment_request_owe">Anda berutang</string>
+    <string name="chat_bubble_payment_request_owes_fmt">%1$s berutang</string>
+    <string name="chat_bubble_payment_request_split_fmt">Dibagi %1$s</string>
+    <string name="chat_bubble_payment_request_pay">Bayar</string>
+    <string name="chat_bubble_payment_request_paid">Lunas</string>
+    <string name="chat_bubble_transaction_sent">ZEC terkirim</string>
+    <string name="chat_bubble_transaction_received">ZEC diterima</string>
+    <string name="chat_bubble_transaction_signature_fmt">tx: %1$s...%2$s</string>
+    <string name="chat_bubble_wallet_address_shared">Alamat dompet dibagikan</string>
+    <string name="chat_bubble_wallet_address">Alamat dompet</string>
+    <string name="chat_bubble_wallet_address_send">Kirim ke alamat ini</string>
+    <string name="chat_bubble_wallet_qr_content_description">QR dompet</string>
+
+    <!-- Chat terms — one-time terms-and-conditions acceptance dialog (Google Play UGC policy) -->
+    <string name="chat_terms_dialog_title">Ketentuan Pesan</string>
+    <string name="chat_terms_dialog_intro">Sebelum menggunakan pesan Zapp, harap tinjau dan setujui pedoman komunitas kami:</string>
+    <string name="chat_terms_dialog_guidelines_heading">Pedoman Komunitas</string>
+    <string name="chat_terms_dialog_body">Dengan menggunakan pesan Zapp, Anda setuju untuk:\n\n1. Tidak mengirim spam, pesan yang tidak diminta, atau melakukan pelecehan.\n\n2. Tidak membagikan konten ilegal, termasuk tetapi tidak terbatas pada materi eksploitasi anak, zat terlarang, atau informasi keuangan curian.\n\n3. Tidak menyamar sebagai orang lain atau menggunakan fitur pesan untuk penipuan atau kecurangan.\n\n4. Tidak menggunakan fitur pesan untuk memfasilitasi aktivitas ilegal.\n\n5. Menghormati privasi pengguna lain dan tidak membagikan informasi mereka tanpa persetujuan.\n\nPengguna yang melanggar pedoman ini dapat diblokir oleh pengguna lain. Anda dapat memblokir atau melaporkan pengguna mana pun dari menu pengaturan percakapan.\n\nPesan dikirim secara peer-to-peer dan dienkripsi ujung-ke-ujung. Zapp tidak menyimpan atau memiliki akses ke isi pesan Anda.</string>
+    <string name="chat_terms_dialog_accept">Saya Setuju</string>
+    <string name="chat_terms_dialog_decline">Tolak</string>
+
+    <!-- Background push (embedded doorbell foreground service) -->
+    <string name="chat_push_service_channel_name">Pengiriman pesan latar belakang</string>
+    <string name="chat_push_service_title">Zapp</string>
+    <string name="chat_push_service_body">Pengiriman latar belakang aktif</string>
+    <string name="chat_settings_online_status_toggle_title">Status online</string>
+    <string name="online_status_settings_row_subtitle">Pilih apakah orang lain melihat saat Anda online</string>
+    <string name="online_status_settings_title">Status online</string>
+    <string name="online_status_settings_intro">Status online Anda memungkinkan orang yang Anda ajak mengobrol melihat kapan Anda terhubung. Ini opsional, dan berlaku dua arah.</string>
+    <string name="online_status_settings_on_title">Saat ini aktif</string>
+    <string name="online_status_settings_on_body">Orang yang memiliki obrolan langsung dengan Anda dapat melihat titik kecil saat Anda terhubung, dan Anda dapat melihat hal yang sama untuk mereka.</string>
+    <string name="online_status_settings_off_title">Saat ini nonaktif</string>
+    <string name="online_status_settings_off_body">Orang lain berhenti melihat kapan Anda online, dan Zapp juga berhenti menampilkan kapan mereka online. Pesan Anda tetap terkirim dan sampai seperti biasa.</string>
+    <string name="online_status_settings_reciprocal_title">Berlaku dua arah</string>
+    <string name="online_status_settings_reciprocal_body">Menyembunyikan status online Anda juga menyembunyikan status semua orang lain dari Anda. Aktifkan kembali untuk melihat dan dilihat lagi.</string>
+    <string name="online_status_settings_section_control">Kontrol</string>
+    <string name="online_status_settings_toggle_title">Tampilkan status online saya</string>
+    <string name="online_status_settings_toggle_subtitle">Biarkan orang yang Anda ajak mengobrol melihat kapan Anda terhubung</string>
+    <string name="online_status_settings_save">Simpan</string>
+</resources>

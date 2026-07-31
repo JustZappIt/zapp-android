@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="insufficient_funds_title">Saldo insuficiente</string>
+    <string name="insufficient_funds_description">Não foi possível criar esta transação. Sua carteira não tem saldo suficiente para cobrir tanto o valor da transação quanto as taxas. Reduza o valor da transação para considerar as taxas.</string>
+    <string name="insufficient_funds_add_zec_button">Adicionar ZEC com Venmo</string>
+    <string name="insufficient_funds_cancel">Cancelar</string>
+</resources>

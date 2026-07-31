@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="tex_unsupported_title">Jenis Alamat Tidak Didukung</string>
+    <string name="tex_unsupported_description_part1">Keystone saat ini tidak mendukung transfer ke alamat TEX Binance.</string>
+    <string name="tex_unsupported_description_part2">Silakan gunakan langkah-langkah di bawah ini untuk menyelesaikan transaksi Anda.</string>
+    <string name="tex_unsupported_workaround_title">Langkah Solusi Alternatif</string>
+    <string name="tex_unsupported_step_1_badge">Langkah 1</string>
+    <string name="tex_unsupported_step_1_title">Kirim ke Zapp terlebih dahulu</string>
+    <string name="tex_unsupported_step_1_description">Transfer ZEC ke alamat terlindungi Zapp Anda</string>
+    <string name="tex_unsupported_step_2_badge">Langkah 2</string>
+    <string name="tex_unsupported_step_2_title">Kirim dari Zapp ke alamat TEX</string>
+    <string name="tex_unsupported_step_2_description">Setelah diterima di Zapp, kirim token ke alamat tujuan TEX akhir Anda</string>
+    <string name="tex_unsupported_button">Mengerti</string>
+</resources>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="keep_open_title">¡Mantén Zapp abierto!</string>
+    <string name="keep_open_description">Zapp está escaneando la blockchain para recuperar tus transacciones. Las wallets antiguas pueden tardar horas en sincronizarse. Sigue estos pasos para evitar interrupciones:</string>
+    <string name="keep_open_bullet_1">Mantén la app de Zapp abierta en una pantalla activa del teléfono.</string>
+    <string name="keep_open_bullet_2">Para evitar que la pantalla se apague, desactiva el modo de ahorro de energía y mantén el teléfono conectado a la corriente.</string>
+
+    <string name="keep_open_keystone_description">Zapp está escaneando la blockchain para recuperar tus transacciones. Las wallets antiguas pueden tardar horas en completar la sincronización. Sigue estos pasos para evitar interrupciones:</string>
+    <string name="keep_open_keystone_subtitle">Tu wallet se está sincronizando.</string>
+    <string name="keep_open_keystone_warning">Tus fondos de Zapp no se pueden gastar hasta que tu wallet Keystone esté sincronizada.</string>
+    <string name="keep_open_keystone_checkbox">Mantener la pantalla encendida durante la sincronización</string>
+
+    <string name="keep_open_resync_description">Zapp está escaneando la blockchain para recuperar tus transacciones. Las wallets antiguas pueden tardar horas en resincronizarse. Sigue estos pasos para evitar interrupciones:</string>
+    <string name="keep_open_resync_subtitle">Tu wallet se está resincronizando.</string>
+    <string name="keep_open_resync_warning">Tus fondos no se pueden gastar hasta que tu wallet esté resincronizada.</string>
+    <string name="keep_open_resync_checkbox">Mantener la pantalla encendida durante la resincronización</string>
+
+    <string name="keep_open_restore_description">Zapp está escaneando la blockchain para recuperar tus transacciones. Las wallets antiguas pueden tardar horas en restaurarse. Sigue estos pasos para evitar interrupciones:</string>
+    <string name="keep_open_restore_subtitle">Tu wallet se está restaurando.</string>
+    <string name="keep_open_restore_warning">Tus fondos no se pueden gastar hasta que tu wallet esté restaurada.</string>
+    <string name="keep_open_restore_checkbox">Mantener la pantalla encendida durante la restauración</string>
+</resources>

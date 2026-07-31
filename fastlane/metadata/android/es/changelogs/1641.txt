@@ -1,0 +1,8 @@
+Añadido:
+- Añadimos una función para desconectar una billetera de hardware Keystone.
+
+Cambiado:
+- Actualizamos todas las dependencias.
+
+Corregido:
+- Solucionamos algunos problemas de interfaz de usuario.

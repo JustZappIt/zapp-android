@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="swap_info_message">Swap %1$s with any NEAR-supported token.\n\nIf swapping TO %2$s, you will send funds from a 3rd party wallet and provide an address where change can be refunded.\n\nIf swapping FROM %3$s, you must provide a valid address for the asset you are swapping to.</string>
+    <string name="swap_info_title">Swap with</string>
+    <string name="swap_select_token">Select Token</string>
+    <string name="swap_select_chain">Select Chain</string>
+    <string name="swap_search_hint">Search by name or ticker…</string>
+    <string name="swap_slippage_title">Slippage</string>
+    <string name="swap_slippage_subtitle">This setting determines the maximum allowable difference between the expected price of a swap and the actual price you pay, which is outside of Zapp\'s control.</string>
+    <string name="swap_slippage_max_threshold">Please enter maximum slippage of 30%%.</string>
+    <string name="swap_slippage_info">You may receive up to %s less than quoted.</string>
+    <string name="swap_slippage_low_warning">%1$s Slippage %2$s increases the chance your swap will be unsuccessful and refunded. Consider using %3$s, especially for larger amounts.</string>
+    <string name="swap_slippage_low_warning_1">Warning:</string>
+    <string name="swap_slippage_low_warning_2">under %s%%</string>
+    <string name="swap_slippage_low_warning_3">%s%% or higher</string>
+    <string name="pay_slippage_info">You may pay up to %s more, in addition to transaction fees.</string>
+    <string name="swap_title">Swap</string>
+    <string name="swap_available_to_swap">Available to swap</string>
+    <string name="swap_stats_price">Price</string>
+    <string name="swap_stats_fee">Fee</string>
+    <string name="swap_you_send">You send</string>
+    <string name="swap_you_receive">You receive</string>
+    <string name="swap_receiving_to">Receiving to</string>
+    <string name="swap_change_address">Change</string>
+    <string name="swap_from">From</string>
+    <string name="swap_insufficient_funds">Insufficient funds</string>
+    <string name="swap_max_standalone">Spendable: </string>
+    <string name="swap_max">Spendable: %s</string>
+    <string name="swap_to">To</string>
+    <string name="swap_rate">Rate</string>
+    <string name="swap_zec_exchange_rate">1 %1$s = %2$s</string>
+    <string name="swap_slippage_tolerance">Slippage tolerance</string>
+    <string name="swap_cancel_title">Are you sure?</string>
+    <string name="swap_cancel_subtitle">If you leave this screen, all the information you entered will be lost.</string>
+    <string name="swap_cancel_negative">Cancel swap</string>
+    <string name="swap_cancel_positive">Don\’t cancel</string>
+    <string name="swap_quote_error_too_low_try_at_least">Amount is too low for bridge, try at least %s</string>
+    <string name="swap_quote_error_too_low_try_higher">Amount is too low for bridge, try higher amount.</string>
+    <string name="swap_quote_error_getting_quote">We tried but couldn\’t get a quote for a payment with your parameters. You can try to adjust the slippage or try again later.</string>
+    <string name="swap_quote_error_getting_quote_swap">We tried but couldn\’t get a quote for a swap with your parameters. You can try to adjust the slippage or try again later.</string>
+    <string name="swap_quote_unavailable">Quote Unavailable</string>
+    <string name="swap_quote_cancel_payment">Cancel payment</string>
+    <string name="swap_quote_edit_payment">Edit payment</string>
+    <string name="swap_quote_cancel_swap">Cancel swap</string>
+    <string name="swap_quote_edit_swap">Edit swap</string>
+    <string name="swap_quote_title">Swap Now</string>
+    <string name="swap_quote_review">Review Quote</string>
+    <string name="swap_quote_from">Swap from</string>
+    <string name="swap_quote_to">Swap to</string>
+    <string name="swap_quote_total_fees">Total fees</string>
+    <string name="swap_quote_max_slippage">Max slippage %s</string>
+    <string name="swap_quote_total_amount">Total Amount</string>
+    <string name="swap_quote_zashi">Zapp</string>
+    <string name="swap_quote_info">You could receive up to %s less based on the %s slippage you set.</string>
+    <string name="swap_confirm">Get a quote</string>
+    <string name="swap_picker_select_chain">Select chain</string>
+    <string name="swap_slippage_custom">Custom</string>
+    <string name="pay_quote_title">Pay Now</string>
+    <string name="pay_from">Pay from</string>
+    <string name="pay_to">Pay to</string>
+    <string name="swap_to_zec_footer">Use your %s wallet \n to deposit funds. Depositing other assets may result in loss of funds.</string>
+    <string name="swap_to_zec_footer_bold">%s on %s</string>
+    <string name="swap_to_zec_share_text">Deposit address for %1$s %2$s on %3$s swap to %4$s in Zapp</string>
+    <string name="swap_refund_address">Refund Address</string>
+    <string name="swap_refund_address_info_title">Refund Address</string>
+    <string name="swap_refund_address_info_message_empty">If the swap fails or market conditions change, your transaction may be refunded minus the transaction fees.\n\nThe refunded amount will be returned to your wallet in the source currency. Please enter a valid address to avoid loss of funds.</string>
+    <string name="swap_refund_address_info_message">If the swap fails or market conditions change, your transaction may be refunded minus the transaction fees.\n\nThe refunded amount will be returned to your wallet in the source currency - %s on %s. Please enter a valid address to avoid loss of funds.</string>
+    <string name="swap_detail_row_header">Swap Details</string>
+    <string name="swap_detail_row_deposit_to">Deposit to</string>
+    <string name="swap_detail_title_swap_expired">Swap Expired</string>
+    <string name="swap_detail_title_swap_pending">Swapping</string>
+    <string name="swap_detail_title_swap_completed">Swapped</string>
+    <string name="swap_detail_title_swap_refunded">Swap Refunded</string>
+    <string name="swap_detail_title_swap_failed">Swap Failed</string>
+    <string name="swap_detail_title_swap_processing">Swap processing</string>
+    <string name="swap_confirmation_title">Swap</string>
+    <string name="swap_confirmation_subtitle">Deposit Amount</string>
+    <string name="swap_confirmation_primary_button">I’ve sent the funds</string>
+    <string name="swap_confirmation_dialog_title">Are you sure you want to exit?</string>
+    <string name="swap_confirmation_dialog_message">If you\'ve sent or intend to send the funds, tap \'I\'ve sent the funds.\' Or cancel the swap to return to the previous screen.</string>
+    <string name="swap_deposit_info_title">Deposit Funds</string>
+    <string name="swap_deposit_info_step_1">Swap into ZEC with any NEAR-supported asset.</string>
+    <string name="swap_deposit_info_step_2">Send the exact amount of the asset displayed. Sending less will result in a refund.</string>
+    <string name="swap_deposit_info_step_3">Double-check that you are sending the correct asset on the correct network (e.g., USDC on Solana).</string>
+    <string name="swap_deposit_info_step_4">It’s best to send from a wallet you own. Sending from an exchange may result in delays or refunds.</string>
+
+    <!-- Swap / Offramp tab toggle -->
+    <string name="swap_tab_offramp">Pay a merchant</string>
+
+    <!-- UPI Offramp / Scan & Pay form -->
+    <string name="upi_offramp_scan_qr">Scan QR code</string>
+    <string name="upi_offramp_or">or</string>
+    <string name="upi_offramp_token_inr">INR</string>
+    <string name="upi_offramp_amount_label">Amount</string>
+    <string name="upi_offramp_usdc_equivalent">≈ %1$s USDC</string>
+    <string name="upi_offramp_rate_label">1 USDC ≈ %1$s (estimated)</string>
+    <string name="upi_offramp_upi_id_label">Enter UPI ID</string>
+    <string name="upi_offramp_upi_id_placeholder">merchant@upi</string>
+    <string name="upi_offramp_powered_by">Powered by p2p.me</string>
+    <string name="upi_offramp_info_content_description">How this works</string>
+    <string name="upi_offramp_info_title">How this works</string>
+    <string name="upi_offramp_info_body_flow">Enter the amount first. Zapp connects you to a merchant, then asks you to scan the merchant QR so the encrypted payment details can be sent.</string>
+    <string name="upi_offramp_info_body_privacy">No KYC is required, and your funds leave from your shielded balance, so the merchant only sees the Base account that pays them, not your Zcash address.</string>
+    <string name="upi_offramp_estimate_disclaimer">Estimated. Final amount locks in when the merchant accepts.</string>
+    <string name="upi_offramp_limit_hint">Maximum 100 USDC per offramp.</string>
+    <string name="upi_offramp_error_invalid_upi">That doesn\'t look like a UPI handle (expected something like name@bank).</string>
+    <string name="upi_offramp_send_button">Pay</string>
+    <string name="upi_offramp_resume_button">Resume in-flight offramp</string>
+    <string name="upi_offramp_error_in_flight">An offramp is already in progress. Resume it before starting a new one.</string>
+    <string name="upi_offramp_discard_in_flight">Discard local order &amp; start over</string>
+
+    <!-- UPI Offramp progress screen -->
+    <string name="upi_offramp_progress_title_in_progress">Sending to merchant</string>
+    <string name="upi_offramp_progress_title_completed">Payment complete</string>
+    <string name="upi_offramp_progress_title_failed">Something went wrong</string>
+    <string name="upi_offramp_progress_subtitle_recipient">Recipient: %1$s</string>
+    <string name="upi_offramp_progress_subtitle_completed">Your payment is complete and the recipient has been paid.</string>
+    <string name="upi_offramp_progress_done_button">Done</string>
+    <string name="upi_offramp_progress_close_button">Close</string>
+    <string name="upi_offramp_step_init">Setup</string>
+    <string name="upi_offramp_step_selecting_circle">Picking a merchant pool</string>
+    <string name="upi_offramp_step_funding">Bridging funds</string>
+    <string name="upi_offramp_step_funding_from_base">Using your Base balance</string>
+    <string name="upi_offramp_step_approve">Approving USDC</string>
+    <string name="upi_offramp_base_balance_label">%1$s USDC</string>
+    <string name="upi_offramp_funding_from_base">✓ Using your Base balance, no bridge needed.</string>
+    <string name="upi_offramp_funding_need_manual">Need %1$s USDC on Base. Bridge unavailable on this network.</string>
+    <string name="upi_offramp_step_place_order">Placing the order</string>
+    <string name="upi_offramp_step_wait_acceptance">Waiting for merchant to accept</string>
+    <string name="upi_offramp_step_scan_qr">Scan merchant QR</string>
+    <string name="upi_offramp_step_encrypting_upi">Encrypting %1$s details</string>
+    <string name="upi_offramp_step_send_upi">Sending encrypted %1$s</string>
+    <string name="upi_offramp_step_wait_completion">Waiting for merchant payment</string>
+    <string name="upi_offramp_step_completed">Payment complete</string>
+    <string name="upi_offramp_progress_title_scan_qr">Scan merchant QR</string>
+    <string name="upi_offramp_progress_subtitle_scan_qr">A merchant accepted. Ask them to generate the QR now, then scan it to send payment details.</string>
+    <string name="upi_offramp_scan_merchant_qr_button">Scan merchant QR</string>
+
+    <!-- UPI Offramp progress: summary + detail lines + failure card -->
+    <string name="upi_offramp_progress_amount_usdc">%1$s USDC</string>
+    <string name="upi_offramp_summary_amount">Amount</string>
+    <string name="upi_offramp_summary_recipient">Recipient</string>
+    <string name="upi_offramp_summary_recipient_pending">QR not scanned yet</string>
+    <string name="upi_offramp_summary_order_id">Order ID</string>
+    <string name="upi_offramp_summary_order_id_value">#%1$s</string>
+    <string name="upi_offramp_summary_signer">From</string>
+    <string name="upi_offramp_detail_candidates">%1$d candidate circle(s) from subgraph</string>
+    <string name="upi_offramp_detail_deposit_addr">Deposit %1$s</string>
+    <string name="upi_offramp_detail_bridging_amount">Bridging %1$s USDC from ZEC via NEAR Intents</string>
+    <string name="upi_offramp_detail_selected_circle">Selected circle #%1$s</string>
+    <string name="upi_offramp_detail_amount">%1$s USDC</string>
+    <string name="upi_offramp_detail_circle_id">Circle #%1$s</string>
+    <string name="upi_offramp_detail_polling_attempts">Polling… attempt %1$d</string>
+    <string name="upi_offramp_detail_last_status">Last on-chain status: %1$s</string>
+    <string name="upi_offramp_detail_merchant">Merchant %1$s</string>
+    <string name="upi_offramp_failure_header">Failed during: %1$s</string>
+    <string name="upi_offramp_failure_transaction">Transaction</string>
+    <!-- Kept as a default for older locale resources; the selector is no longer rendered. -->
+    <string name="upi_offramp_failure_selector">Revert selector %1$s</string>
+
+    <!-- UPI Offramp known revert reasons (mapped from KnownRevertReason in offramp-lib).
+         Keep aligned with @p2pdotme/user-app-client i18n keys where wording overlaps. -->
+    <string name="upi_offramp_revert_buy_order_amount_exceeds_limit">Order amount is above your per-transaction limit. The limit grows with reputation points. Complete verification at app.p2p.me/limits.</string>
+    <string name="upi_offramp_revert_insufficient_reputation">Your account has no reputation points yet. Complete social or KYC verification at app.p2p.me/limits before placing orders.</string>
+    <string name="upi_offramp_revert_order_amount_exceeds_limit">Order amount exceeds the global per-order cap.</string>
+    <string name="upi_offramp_revert_sell_amount_exceeds_fiat_limit">Amount exceeds your daily fiat limit.</string>
+    <string name="upi_offramp_revert_currency_not_supported">This currency isn\'t deployed on this network yet.</string>
+    <string name="upi_offramp_revert_user_is_blacklisted">Your account is blocked by the exchange. Contact p2p.me support.</string>
+    <string name="upi_offramp_revert_exchange_not_operational">p2p.me is temporarily paused. Try again later.</string>
+    <string name="upi_offramp_revert_not_enough_eligible_merchants">No merchant has fiat liquidity for this order right now. Try a smaller amount, wait for merchants to fund, or retry to pick a different circle.</string>
+    <string name="upi_offramp_revert_order_expired">The merchant didn\'t act in time. Your USDC has been refunded.</string>
+    <string name="upi_offramp_revert_upi_already_sent">This order already has a payment address. This is a bug. Please report.</string>
+    <string name="upi_offramp_revert_invalid_order_upi">The merchant rejected the encrypted payment details. This may signal a wire-format issue. Please report.</string>
+    <string name="upi_offramp_revert_order_not_accepted">The order isn\'t yet accepted. Try again shortly.</string>
+    <string name="upi_offramp_revert_usdc_transfer_failed">USDC transfer failed. Check your balance and allowance.</string>
+    <string name="upi_offramp_revert_not_authorized">Cancel was rejected by the contract. The order may already be completed or cancelled.</string>
+    <!-- Long-tail fallback for SDK-known but non-curated contract errors. %1$s is the SDK error
+         constant (e.g. ORDER_ALREADY_MARKED_COMPLETED). -->
+    <string name="upi_offramp_revert_sdk_long_tail">Contract error: %1$s</string>
+
+    <!-- Surfaced when a poll loop has been running for a while without a merchant transition. -->
+    <string name="upi_offramp_detail_stalled">Still connecting you to a merchant. Your USDC stays in your account; if no merchant accepts, the order auto-cancels on chain.</string>
+
+    <!-- Recovery flow (pullback of stranded USDC via bridgeFundsBackToZec) -->
+    <string name="upi_offramp_recover_button">Bridge USDC back to ZEC</string>
+    <string name="upi_offramp_recovery_in_progress_title">Bridging USDC back to ZEC</string>
+    <string name="upi_offramp_recovery_in_progress_subtitle">Routing your refunded USDC to ZEC via NEAR Intents. This can take a couple of minutes.</string>
+    <string name="upi_offramp_recovery_in_progress_button">Bridging…</string>
+    <string name="upi_offramp_recovery_done_title">USDC bridged back to ZEC</string>
+    <string name="upi_offramp_recovery_amount">%1$s USDC sent to bridge</string>
+    <string name="upi_offramp_recovery_target">Bridge deposit %1$s</string>
+
+    <!-- Per-step on-chain timestamps -->
+    <string name="upi_offramp_detail_accepted_at">Accepted at %1$s</string>
+    <string name="upi_offramp_detail_paid_at">Payment confirmed at %1$s</string>
+    <string name="upi_offramp_detail_completed_at">Completed at %1$s</string>
+
+    <!-- Completed-state summary extras -->
+    <string name="upi_offramp_completion_duration">Completed in %1$s</string>
+    <string name="upi_offramp_terminal_at">%1$s</string>
+    <string name="upi_offramp_summary_completion">Completed in</string>
+    <string name="upi_offramp_summary_time">Time</string>
+    <string name="upi_offramp_summary_merchant">Paid to</string>
+
+    <!-- Order fee breakdown card (from getAdditionalOrderDetails) -->
+    <string name="upi_offramp_fee_breakdown_header">Order breakdown</string>
+    <string name="upi_offramp_fee_breakdown_you_send">You send</string>
+    <string name="upi_offramp_fee_breakdown_fee">Network &amp; merchant fee</string>
+    <string name="upi_offramp_fee_breakdown_you_receive">You receive</string>
+    <string name="upi_offramp_fee_breakdown_amount_usdc">%1$s USDC</string>
+    <string name="upi_offramp_fee_breakdown_amount_inr">₹%1$s</string>
+
+    <!-- Cancelled terminal state (normal on-chain outcome, USDC refunded, not an error) -->
+    <string name="upi_offramp_progress_title_cancelled">Order cancelled</string>
+    <string name="upi_offramp_progress_subtitle_cancelled">No payment was sent to the merchant.</string>
+    <string name="upi_offramp_cancelled_balance_unchanged">Your balance remains %1$s USDC.</string>
+    <string name="upi_offramp_cancelled_no_payment">Your balance remains unchanged.</string>
+    <string name="upi_offramp_cancelled_refunded">%1$s USDC returned to your wallet</string>
+    <string name="upi_offramp_cancelled_returned_zec">%1$s USDC is in your offramp account, ready to spend or bridge back to ZEC</string>
+    <string name="upi_offramp_cancelled_at">Cancelled at %1$s</string>
+    <string name="upi_offramp_cancelled_tip">Tip: ask the merchant to generate the QR only after this screen opens, so the order completes before it expires.</string>
+
+    <!-- Reusable Base balance + two-step funding (pay screen additions) -->
+    <string name="upi_offramp_token_usdc">USDC</string>
+    <string name="upi_offramp_add_funds_button">Add funds to Base</string>
+    <string name="upi_offramp_funding_topup_first">You\'ll add about %1$s USDC to Base first (a few minutes), then pay.</string>
+    <string name="upi_offramp_pay_button_add_funds">Add funds to pay</string>
+    <string name="upi_offramp_confirm_title">Confirm payment</string>
+    <string name="upi_offramp_confirm_message">Pay %1$s using about %2$s USDC at %3$s per USDC.</string>
+    <string name="upi_offramp_confirm_pay">Pay now</string>
+    <string name="upi_offramp_confirm_cancel">Cancel</string>
+
+    <!-- Step 1: top up the reusable Base balance by bridging ZEC -->
+    <string name="bridge_to_base_title">Add funds to Base</string>
+    <string name="bridge_to_base_explainer">We bridge your ZEC to Base, where merchant payments settle. This takes a few minutes. After that, paying is instant and you can reuse the balance.</string>
+    <string name="bridge_to_base_amount_label">Amount to add</string>
+    <string name="bridge_to_base_zec_send">You\'ll send ≈ %1$s ZEC</string>
+    <string name="bridge_to_base_insufficient">Not enough ZEC. Your spendable balance is %1$s ZEC.</string>
+    <string name="bridge_to_base_eta">Estimated time: ~%1$d min</string>
+    <string name="bridge_to_base_eta_value">%1$d min</string>
+    <string name="bridge_to_base_merchants_unavailable">No merchant has fiat liquidity right now. Your funds will wait on Base, ready when one does.</string>
+    <string name="bridge_to_base_add_button">Add funds</string>
+    <string name="bridge_to_base_bridging_button">Bridging…</string>
+    <string name="bridge_to_base_pay_button">Pay a merchant</string>
+    <string name="bridge_to_base_try_again_button">Try again</string>
+    <string name="bridge_to_base_step_bridging">Bridging from ZEC via NEAR</string>
+    <string name="bridge_to_base_step_arrived">Funds arrived on Base</string>
+    <string name="bridge_to_base_adding_amount">Adding ≈ ₹%1$s · %2$s USDC</string>
+    <string name="bridge_to_base_added_amount">Added %1$s USDC to Base</string>
+    <string name="bridge_to_base_failed_terminal">The bridge couldn\'t complete. If your ZEC was refunded, it will appear at your wallet shortly.</string>
+    <string name="bridge_to_base_failed_generic">Couldn\'t start the bridge. Check your connection and try again.</string>
+    <string name="bridge_to_base_failed_retry">The bridge is still in progress. Try again to keep checking the same transfer.</string>
+    <string name="bridge_to_base_leave_title">Bridge in progress</string>
+    <string name="bridge_to_base_leave_message">Your ZEC is on its way to Base and will arrive on its own. You can leave: the Base balance updates when it lands, and the ZEC payment is in your activity.</string>
+    <string name="bridge_to_base_leave_confirm">Leave</string>
+    <string name="bridge_to_base_leave_stay">Keep watching</string>
+    <string name="upi_offramp_recent_transactions">Recent transactions</string>
+    <string name="upi_offramp_hero_secondary">%1$s · what you pay</string>
+    <string name="upi_offramp_fiat_amount">%1$s%2$s</string>
+    <string name="upi_offramp_ledger_amount_sent">Amount sent</string>
+    <string name="upi_offramp_ledger_rate">Rate</string>
+    <string name="upi_offramp_ledger_from">From</string>
+    <string name="upi_offramp_base">Base</string>
+    <string name="bridge_to_base_currency_symbol">₹</string>
+    <string name="bridge_to_base_hero_secondary">%1$s · lands on Base</string>
+    <string name="bridge_to_base_ledger_you_send">You send</string>
+    <string name="bridge_to_base_ledger_eta">Estimated time</string>
+    <string name="bridge_to_base_ledger_base_now">Available on Base</string>
+    <string name="bridge_to_base_ledger_fees">Total fees</string>
+    <string name="bridge_to_base_ledger_slippage">Max slippage</string>
+    <string name="bridge_to_base_fee_value">~%1$s ZEC</string>
+    <string name="bridge_to_base_slippage_value">%1$s%%</string>
+    <string name="bridge_to_base_quote_loading">Getting a live quote…</string>
+    <string name="bridge_to_base_quote_failed">Couldn\'t fetch a live quote. Check your connection and try again.</string>
+    <string name="bridge_to_base_value_pending">—</string>
+    <string name="currency_inr_name">Indian Rupee</string>
+    <string name="currency_ngn_name">Nigerian Naira</string>
+    <string name="currency_brl_name">Brazilian Real</string>
+    <string name="currency_cop_name">Colombian Peso</string>
+    <string name="currency_idr_name">Indonesian Rupiah</string>
+    <string name="currency_ars_name">Argentine Peso</string>
+    <string name="currency_ven_name">Venezuelan Bolívar</string>
+    <string name="country_india">India</string>
+    <string name="country_nigeria">Nigeria</string>
+    <string name="country_brazil">Brazil</string>
+    <string name="country_colombia">Colombia</string>
+    <string name="country_indonesia">Indonesia</string>
+    <string name="country_argentina">Argentina</string>
+    <string name="country_venezuela">Venezuela</string>
+</resources>

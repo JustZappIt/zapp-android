@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="home_balance_chart_title">Histórico de saldo</string>
+    <string name="home_balance_chart_period_24h">24h</string>
+    <string name="home_balance_chart_period_1w">1sem</string>
+    <string name="home_balance_chart_period_1m">1m</string>
+    <string name="home_balance_chart_period_all">Tudo</string>
+    <string name="home_balance_chart_footer" formatted="true">Saldo: <xliff:g example="1.2345" id="amount">%1$s</xliff:g> ZEC</string>
+    <string name="home_balance_chart_empty">Ainda não há atividade suficiente para este período.</string>
+
+    <string name="home_wallet_title">Carteira</string>
+    <string name="home_pay_title">Pagar</string>
+    <string name="home_recent_activity_title">Atividade recente</string>
+    <string name="home_balance_total_label">Saldo total</string>
+    <string name="home_balance_breakdown_shielded">Protegido</string>
+    <string name="home_balance_breakdown_transparent">Transparente</string>
+    <string name="home_activity_empty_title">Ainda não há transações.</string>
+    <string name="home_activity_empty_subtitle">Seus envios e recebimentos aparecerão aqui.</string>
+
+    <string name="home_button_receive">Receber</string>
+    <string name="home_button_send">Enviar</string>
+    <string name="home_button_scan">Escanear</string>
+    <string name="home_button_request">Solicitar</string>
+    <string name="home_button_buy">Comprar</string>
+    <string name="home_button_more">Mais</string>
+    <string name="home_message_backup_required_title">Backup da Carteira Necessário</string>
+    <string name="home_message_backup_required_subtitle">Evite a possível perda de fundos</string>
+    <string name="home_message_backup_required_button">Iniciar</string>
+    <string name="home_message_wallet_disconnected_title">Carteira Desconectada</string>
+    <string name="home_message_wallet_disconnected_subtitle">Verifique sua conexão e recarregue o Zapp</string>
+    <string name="home_message_transparent_balance_subtitle">%1$s %2$s</string>
+    <string name="home_message_transparent_balance_title">Saldo Transparente Detectado</string>
+    <string name="home_message_transparent_balance_button">Proteger</string>
+    <string name="home_message_currency_conversion_title">Conversão de Moeda</string>
+    <string name="home_message_currency_conversion_subtitle">Ative para exibir valores em USD</string>
+    <string name="home_message_currency_conversion_button">Iniciar</string>
+    <string name="home_message_wallet_updating_title">Atualizando Saldo…</string>
+    <string name="home_message_wallet_updating_subtitle">Aguardando o processamento da última transação</string>
+    <!-- Wallet sync status row / chip (inline home progress) -->
+    <string name="home_sync_progress_syncing">Sincronizando</string>
+    <string name="home_sync_progress_restoring">Restaurando</string>
+    <string name="home_sync_progress_connecting">Conectando</string>
+    <string name="home_sync_progress_offline">Sem conexão, reconectando</string>
+    <string name="home_sync_progress_error">Erro de sincronização</string>
+    <string name="home_sync_chip_synced">Sincronizado</string>
+    <string name="home_sync_chip_offline">Sem conexão</string>
+    <string name="home_sync_chip_syncing_fmt">Sincronizando %1$.2f%%</string>
+    <string name="home_sync_chip_restoring_fmt">Restaurando %1$.2f%%</string>
+
+    <string name="home_message_restoring_title">Restaurando Carteira • %1$.1f%% Concluído</string>
+    <string name="home_message_restoring_subtitle">Mantenha o Zapp aberto com a tela do telefone ativa</string>
+    <string name="home_message_restoring_subtitle_spendable">Seus fundos já estão prontos para uso agora</string>
+    <string name="home_message_resyncing_title">Ressincronizando</string>
+    <string name="home_message_resyncing_subtitle">Mantenha o Zapp aberto com a tela do telefone ativa</string>
+    <string name="home_message_syncing_title">Sincronizando • %1$.1f%% Concluído</string>
+    <string name="home_message_syncing_subtitle">Sua carteira está sendo atualizada</string>
+    <string name="home_message_error_title">Erro encontrado durante a sincronização</string>
+    <string name="home_message_error_subtitle">Tentando resolver</string>
+    <string name="home_message_tor_title">Ativar Proteção Tor</string>
+    <string name="home_message_tor_subtitle">Proteja seu endereço IP</string>
+    <string name="home_info_backup_title">Backup Necessário</string>
+    <string name="home_info_backup_subtitle_1">Evite a possível perda de fundos fazendo o backup da sua carteira de forma segura.</string>
+    <string name="home_info_backup_subtitle_2">Faça o backup do acesso aos seus fundos guardando:</string>
+    <string name="home_info_backup_bullet_1">Frase Secreta de Recuperação (um conjunto único de 24 palavras em uma
+        ordem exata)</string>
+    <string name="home_info_backup_bullet_2">Altura de Bloco de Nascimento da Carteira (a altura de bloco em que sua carteira
+        foi criada)</string>
+    <string name="home_info_backup_message_1">Caso você perca o acesso ao app ou ao seu dispositivo, conhecer a Frase Secreta
+        de Recuperação é a única maneira de recuperar seus fundos. Não podemos vê-la nem ajudá-lo a recuperá-la.</string>
+    <string name="home_info_backup_message_2">Qualquer pessoa com acesso à sua Frase Secreta de Recuperação terá controle total
+        da sua carteira, então mantenha-a segura e nunca a mostre a ninguém.</string>
+    <string name="home_info_backup_checkbox">Eu li e entendo os riscos de não fazer o backup da minha carteira.</string>
+    <string name="home_info_transparent_not_now">Agora não</string>
+    <string name="home_info_transparent_checkbox">Não mostrar esta mensagem novamente.</string>
+    <string name="home_info_transparent_balance_shield">Proteger</string>
+    <string name="home_info_transparent_title">Sempre Proteger Fundos Transparentes</string>
+    <string name="home_info_transparent_subtitle">Para proteger a privacidade do usuário, o Zapp não permite gastar
+        %s transparente. Toque no botão \"Proteger\" abaixo para tornar seus fundos transparentes utilizáveis e seu saldo total no Zapp privado. </string>
+    <string name="home_info_transparent_message">Isso criará uma transação de proteção dentro da carteira, consolidando seus
+        fundos transparentes e protegidos. (Taxa típica: &lt; %1$s %2$s)</string>
+    <string name="home_info_transparent_subheader">Transparente</string>
+    <string name="home_info_disconnected_title">Carteira Desconectada</string>
+    <string name="home_info_disconnected_subtitle">Parece que você está sem conexão. Restaure sua conexão com a internet
+        para usar a carteira Zapp.</string>
+    <string name="home_info_restoring_title">Restauração da Carteira em Andamento</string>
+    <string name="home_info_restoring_message">O Zapp está varrendo a blockchain para recuperar suas transações. Carteiras
+        mais antigas podem levar horas para restaurar. Siga estes passos para evitar interrupções:</string>
+    <string name="home_info_restoring_bullet_1">Mantenha o app Zapp aberto com a tela do telefone ativa.</string>
+    <string name="home_info_restoring_bullet_2">Para evitar que a tela do telefone apague, desative o modo de economia
+        de energia e mantenha o telefone conectado à energia.</string>
+    <string name="home_info_restoring_note">Os fundos não podem ser gastos até que sua carteira seja restaurada.</string>
+    <string name="home_info_syncing_title">Sincronização da Carteira em Andamento</string>
+    <string name="home_info_syncing_message">O Zapp está varrendo a blockchain em busca das suas transações mais recentes para garantir
+        que seus saldos sejam exibidos corretamente. Mantenha o app Zapp aberto com a tela do telefone ativa para evitar interrupções.</string>
+    <string name="home_info_resyncing_title">Ressincronização da Carteira em Andamento</string>
+    <string name="home_info_resyncing_message">O Zapp está varrendo a blockchain em busca das suas transações mais recentes para garantir
+        que seus saldos sejam exibidos corretamente. Mantenha o app Zapp aberto com a tela do telefone ativa para evitar interrupções.</string>
+    <string name="home_info_updating_title">Atualizando Saldo</string>
+    <string name="home_info_updating_message">Sua última transação está sendo minerada e confirmada.</string>
+    <string name="crash_report_detail_title">Ajude a Melhorar o Zapp</string>
+    <string name="crash_report_detail_subtitle">Os relatórios de falhas são uma ferramenta essencial para desenvolvedores, usada para melhorar a qualidade e a confiabilidade dos apps. Seu único propósito é corrigir bugs que causam falhas.</string>
+    <string name="crash_report_detail_item_title_2">O que não é compartilhado?</string>
+    <string name="crash_report_detail_item_subtitle_1">Usamos o Firebase Crashlytics para coletar relatórios de falhas. Eles incluem informações sobre a versão do app, o horário em que a falha ocorreu e o stack trace, para deixar claro onde no app a falha aconteceu.</string>
+    <string name="crash_report_detail_item_subtitle_2">O Zapp não acessa nem pode acessar ou coletar informações sobre usuários individuais, seus dispositivos, transações ou sua atividade dentro do app. Os dados são completamente anonimizados.</string>
+    <string name="crash_report_detail_item_title_1">O que é compartilhado?</string>
+    <string name="crash_report_detail_opt_out">Recusar</string>
+    <string name="crash_report_detail_opt_in">Aceitar</string>
+    <string name="home_message_crash_reporting_title">Ajude a melhorar o Zapp</string>
+    <string name="home_message_crash_reporting_subtitle">Permitir o compartilhamento de relatórios de falhas</string>
+    <string name="home_message_crash_reporting_button">Revisar</string>
+    <string name="balance_action_title">Saldo Disponível</string>
+    <string name="balance_action_all_shielded">Todos os seus fundos estão protegidos e disponíveis.</string>
+    <string name="balance_action_pending">Aguardando o recebimento do troco de uma transação anterior.</string>
+    <string name="balance_action_syncing">O Zapp está varrendo a blockchain para garantir que seus saldos sejam exibidos corretamente.</string>
+    <string name="balance_action_shield_message">Proteja seu %1$s transparente para torná-lo utilizável e privado. Isso criará uma transação de proteção dentro da carteira, consolidando seus fundos transparentes e protegidos. (Taxa típica: %2$s %3$s)</string>
+    <string name="balance_action_info_shielded">Protegido (Disponível)</string>
+    <string name="balance_action_info_pending">Pendente</string>
+    <string name="home_button_pay">Pagar</string>
+    <string name="home_button_pay_merchant">Pagar Comerciante</string>
+    <string name="home_fab_actions_expand">Ações de pagamento</string>
+    <string name="home_fab_actions_collapse">Fechar ações de pagamento</string>
+    <string name="home_button_swap">Swap</string>
+    <string name="home_balance_pools_content_description">Ver saldo por pool</string>
+</resources>

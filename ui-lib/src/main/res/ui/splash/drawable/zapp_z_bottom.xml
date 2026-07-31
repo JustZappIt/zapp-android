@@ -1,0 +1,31 @@
+<!--
+  Brand splash Z — bottom-right half. Split from Figma export z-splash.svg, kept in the same
+  424x917 frame as zapp_z_top so the two halves stay pixel-aligned at the diagonal seam.
+  Colours are theme resources (light/dark variants in values/ and values-night/); paint order
+  matches the source.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="424dp"
+    android:height="917dp"
+    android:viewportWidth="424"
+    android:viewportHeight="917">
+
+    <path
+        android:fillColor="@color/zapp_splash_field"
+        android:pathData="M423.4904,-5.07338 L458,-5.07338 L458,926.526 L-34.1034,926.526 L423.4904,-5.07338 Z" />
+    <!-- Centre stroke is painted in the foreground half so its full width remains visible. -->
+    <path
+        android:strokeColor="@color/zapp_splash_mark"
+        android:strokeWidth="14.6955"
+        android:pathData="M421.394,-0.80531 L-11.8372,881.195" />
+    <!-- Right diagonal accent — mirrored 31 units from the centre stroke. -->
+    <path
+        android:strokeColor="@color/zapp_splash_mark"
+        android:strokeWidth="14.6955"
+        android:pathData="M449.2186,12.8619 L15.9874,894.8622" />
+    <!-- Bottom bar of the Z; the orange field continues below it to the screen edge. -->
+    <path
+        android:strokeColor="@color/zapp_splash_mark"
+        android:strokeWidth="61.2863"
+        android:pathData="M-13.3594,907.939 L468.745,674.394" />
+</vector>

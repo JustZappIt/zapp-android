@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="seed_recovery_title">Frase de Recuperação</string>
+    <string name="seed_recovery_header">Frase Secreta de Recuperação</string>
+    <string name="seed_recovery_description">Estas palavras são a única forma de recuperar seus fundos! Salve-as na ordem correta.</string>
+    <string name="seed_recovery_tap_reveal_hint">Toque em mostrar abaixo</string>
+    <string name="seed_recovery_reveal_button">Mostrar detalhes de segurança</string>
+    <string name="seed_recovery_saved_button">Já salvei!</string>
+    <string name="seed_recovery_hide_button">Ocultar detalhes de segurança</string>
+    <string name="seed_recovery_next_button">Avançar</string>
+    <string name="seed_recovery_bday_title">Altura de Nascimento da Carteira</string>
+    <string name="seed_recovery_bday_tooltip_title">Altura de Nascimento da Carteira</string>
+    <string name="seed_recovery_bday_tooltip_message">A Altura de Nascimento da Carteira determina a altura (de bloco) de nascimento da
+        sua carteira e facilita um processo de restauração mais rápido. Salve este número junto com sua frase semente em
+        um lugar seguro.</string>
+    <string name="wallet_backup_title">Backup da carteira</string>
+    <string name="wallet_backup_subtitle">Sua Frase Secreta de Recuperação</string>
+    <string name="wallet_backup_message">Sua frase secreta de recuperação é um conjunto único de 24 palavras, que aparecem em uma ordem precisa. Ela protege o acesso aos seus fundos.</string>
+    <string name="wallet_backup_info">Mantenha esta frase escondida com segurança. Não tire capturas de tela dela nem a guarde no seu celular!</string>
+    <string name="wallet_backup_btn">Avançar</string>
+    <string name="wallet_backup_item_1">Controle sua carteira</string>
+    <string name="wallet_backup_item_2">Mantenha-a privada</string>
+    <string name="wallet_backup_item_3">Guarde-a com segurança</string>
+    <string name="wallet_backup_item_4">Altura de nascimento da carteira</string>
+    <string name="wallet_backup_item_subtitle_1">Use-a para acessar seus fundos de outros dispositivos e carteiras Zcash.</string>
+    <string name="wallet_backup_item_subtitle_2">Não a compartilhe com ninguém! Ela pode ser usada para obter controle total dos seus fundos.</string>
+    <string name="wallet_backup_item_subtitle_3">Nós não temos acesso a ela e nunca a pediremos. Se você a perder, não será possível recuperá-la.</string>
+    <string name="wallet_backup_item_subtitle_4">A altura de bloco em que sua carteira foi criada pode acelerar significativamente o processo de recuperação da carteira.</string>
+</resources>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="error_general_title">Terjadi kesalahan</string>
+    <string name="error_general_message">Penyebab tidak diketahui. Silakan hubungi tim dukungan kami jika masalah berlanjut.\n\n%s</string>
+    <string name="error_sync_title">Kesalahan sinkronisasi</string>
+    <string name="error_shielding_title">Kesalahan perlindungan</string>
+    <string name="error_shielding_message">Terjadi kesalahan saat transaksi perlindungan terakhir. Anda dapat mencoba lagi nanti atau melaporkan masalah ini jika berlanjut.\n\n%s</string>
+    <string name="error_shielding_message_grpc">Terjadi kesalahan saat transaksi perlindungan terakhir. Kami akan mencoba mengirim ulang transaksi ini nanti. Jika gagal, Anda mungkin perlu mengulang upaya perlindungan di lain waktu.</string>
+    <string name="error_keystone_firmware_title">Pembaruan Firmware Keystone Diperlukan</string>
+    <string name="error_keystone_firmware_message">Firmware Keystone Anda (%1$s) berada di bawah versi minimum yang didukung (%2$s). Perbarui firmware perangkat Anda, lalu coba lagi.</string>
+    <string name="error_keystone_firmware_message_legacy">Firmware Keystone Anda terlalu lama untuk melaporkan versinya dan berada di bawah versi minimum yang didukung (%1$s). Perbarui firmware perangkat Anda, lalu coba lagi.</string>
+    <string name="error_keystone_firmware_close">Tutup</string>
+
+    <string name="error_keystone_account_title">Tidak Dapat Menambahkan Akun Keystone</string>
+    <string name="error_keystone_account_message">Akun Keystone yang dipindai tidak dapat digunakan dengan aplikasi ini. Pastikan perangkat Keystone Anda diatur ke jaringan yang sama dengan aplikasi ini, lalu pindai kode QR lagi.</string>
+
+    <string name="error_tor_title">Nonaktifkan Tor?</string>
+    <string name="error_tor_message">Masalah koneksi Tor terdeteksi. Untuk meningkatkan performa, coba nonaktifkan Tor. Ini akan menghentikan pembaruan nilai tukar. Anda dapat mengaktifkannya kembali nanti di Pengaturan Lanjutan.</string>
+    <string name="error_tor_negative">Nonaktifkan</string>
+    <string name="error_tor_positive">Jangan nonaktifkan</string>
+</resources>

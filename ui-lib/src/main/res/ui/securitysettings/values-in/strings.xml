@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App lock hub -->
+    <string name="security_settings_title">Kunci aplikasi</string>
+    <string name="security_settings_actions_header">Tindakan</string>
+
+    <!-- Auth-method selector tabs (label doubles as the illustration title) -->
+    <string name="security_settings_tab_pin">PIN 6 digit</string>
+    <string name="security_settings_tab_biometric">Biometrik</string>
+
+    <!-- Action rows -->
+    <string name="security_settings_change_pin_row_title">Ubah PIN</string>
+    <string name="security_settings_change_pin_row_subtitle">Perbarui kode buka kunci 6 digit Anda</string>
+    <string name="security_settings_reenroll_bio_row_title">Daftarkan ulang biometrik</string>
+    <string name="security_settings_reenroll_bio_row_subtitle">Gunakan pengaturan biometrik perangkat Anda</string>
+
+    <!-- Illustration body copy -->
+    <string name="security_settings_illustration_pin_body">PIN diperlukan setiap kali Anda membuka aplikasi.</string>
+    <string name="security_settings_illustration_bio_body">Sidik jari atau pengenalan wajah membuka aplikasi.\nPIN selalu tersedia sebagai cadangan.</string>
+
+    <!-- Bottom dock -->
+    <string name="security_settings_back_content_description">Kembali</string>
+    <string name="security_settings_save_changes_content_description">Simpan Perubahan</string>
+    <string name="security_settings_save_changes_button">SIMPAN PERUBAHAN</string>
+
+    <!-- Change-PIN screen -->
+    <string name="security_settings_change_pin_confirm_title">Konfirmasi\nPIN Anda</string>
+    <string name="security_settings_change_pin_change_title">Ubah\nPIN Anda</string>
+    <string name="security_settings_change_pin_mismatch">PIN tidak cocok. Coba lagi.</string>
+    <string name="security_settings_change_pin_confirm_subtitle">Masukkan ulang PIN baru Anda untuk konfirmasi.</string>
+    <string name="security_settings_change_pin_enter_subtitle">Masukkan PIN 6 digit baru.</string>
+    <string name="security_settings_change_pin_progress_fmt">%1$d dari 6 dimasukkan</string>
+    <string name="security_settings_keypad_delete_content_description">Hapus</string>
+
+    <!-- Re-auth prompts -->
+    <string name="security_settings_bio_verify_switch_pin_prompt">Verifikasi identitas Anda untuk beralih ke PIN</string>
+
+    <!-- Success snackbars -->
+    <string name="security_settings_success_switched_pin">Berhasil beralih ke PIN.</string>
+    <string name="security_settings_success_pin_changed">PIN berhasil diubah.</string>
+    <string name="security_settings_success_bio_enrolled">Biometrik berhasil didaftarkan.</string>
+
+    <!-- Errors -->
+    <string name="security_settings_bio_enroll_failed">Pendaftaran biometrik gagal. Ketuk untuk coba lagi.</string>
+</resources>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="transaction_filters_title">Filter</string>
+    <string name="transaction_filters_sent">Terkirim</string>
+    <string name="transaction_filters_received">Diterima</string>
+    <string name="transaction_filters_memos">Memo</string>
+    <string name="transaction_filters_unread">Belum dibaca</string>
+    <string name="transaction_filters_bookmarked">Ditandai</string>
+    <string name="transaction_filters_notes">Catatan</string>
+    <string name="transaction_filters_swap">Tukar</string>
+    <string name="transaction_filters_btn_reset">Atur ulang</string>
+    <string name="transaction_filters_btn_apply">Terapkan</string>
+</resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="support_header">Bantuan</string>
+    <string name="support_title">Kirim Masukan ke Kami</string>
+    <string name="support_experience_title">Bagaimana pengalaman Anda dengan Zapp?</string>
+    <string name="support_help_title">Ada yang bisa kami bantu?</string>
+    <string name="support_hint">Saya ingin bertanya tentang…</string>
+    <string name="support_send">Kirim</string>
+    <string name="support_confirmation_dialog_ok">OK</string>
+    <string name="support_confirmation_dialog_cancel">Batal</string>
+    <string name="support_confirmation_dialog_title">Buka aplikasi email</string>
+    <string name="support_confirmation_explanation">Zapp akan membuka aplikasi email Anda dengan pesan yang sudah terisi.\n\nPastikan Anda menekan kirim di dalam aplikasi email.</string>
+    <string name="support_information">Beri tahu kami tentang masalah apa pun yang Anda alami, atau fitur yang ingin Anda lihat ke depannya.</string>
+    <string name="support_email_part_1">Bagaimana pengalaman Anda dengan Zapp?\n<xliff:g id="emoji_encoding" example="😍">%1$s</xliff:g> <xliff:g id="emoji_order" example="5">%2$s</xliff:g>/5</string>
+    <string name="support_email_part_2">Ada yang bisa kami bantu?\n%s</string>
+</resources>

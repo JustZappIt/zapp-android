@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Restore flow — seed entry -->
+    <string name="restore_flow_seed_badge">Restaurar · Frase de recuperación</string>
+    <string name="restore_flow_seed_title">Ingresa tu\nfrase de recuperación</string>
+    <string name="restore_flow_seed_sub">Escribe tu frase de recuperación de 24 palabras. Esto restaura tanto tu billetera como tu identidad de mensajería.</string>
+
+    <!-- Restore flow — birthday height -->
+    <string name="restore_flow_birthday_badge">Restaurar · Altura de nacimiento</string>
+    <string name="restore_flow_birthday_title">Altura de nacimiento\nde la billetera</string>
+    <string name="restore_flow_birthday_sub">Ingresar cuándo se creó tu billetera acelera la restauración. Usa una altura de bloque o elige un mes y año.</string>
+    <string name="restore_flow_birthday_field_label">ALTURA DEL BLOQUE</string>
+    <string name="restore_flow_birthday_field_hint">Ingresa un número o déjalo en blanco</string>
+    <string name="restore_flow_birthday_skip">Omitir: escanear todo</string>
+    <string name="restore_flow_birthday_mode_height">Altura del bloque</string>
+    <string name="restore_flow_birthday_mode_date">Mes y año</string>
+    <string name="restore_flow_birthday_date_note">Si no estás seguro, elige una fecha anterior.</string>
+    <string name="restore_flow_birthday_estimating">Estimando altura del bloque…</string>
+
+    <!-- Restore flow — Tor -->
+
+    <!-- Restore flow — loading -->
+    <string name="restore_flow_loading_sub">Configurando tu billetera e identidad de mensajería desde tu frase de recuperación.</string>
+    <string name="restore_flow_loading_error">La restauración falló. Toca reintentar para intentar de nuevo.</string>
+    <string name="restore_flow_loading_error_no_retry">La restauración falló. Regresa e intenta de nuevo.</string>
+    <string name="restore_flow_loading_retry">Reintentar</string>
+
+    <!-- Restore flow — errors -->
+    <string name="restore_flow_error_wallet_failed">La restauración de la billetera falló. Toca reintentar.</string>
+    <string name="restore_flow_error_birthday_too_low">La altura de nacimiento debe ser al menos %1$s.</string>
+    <string name="restore_flow_error_estimation_failed">No se pudo estimar una altura para esa fecha. Prueba con otra fecha o ingresa una altura directamente.</string>
+
+    <!-- Restore flow — seed confirm -->
+    <string name="restore_flow_confirm_title">Confirma tu\nfrase de recuperación</string>
+    <string name="restore_flow_confirm_sub">Verifica que estas son las 24 palabras que ingresaste. Esta frase restaura tanto tu billetera como tu identidad de mensajería.</string>
+
+    <!-- Restore flow — keep open -->
+    <string name="restore_flow_keep_open_badge">Restaurar · Sincronización</string>
+    <string name="restore_flow_keep_open_title">Mantén Zapp\nabierto</string>
+    <string name="restore_flow_keep_open_sub">Tu billetera se está sincronizando con la blockchain. Esto puede tomar un momento.</string>
+    <string name="restore_flow_keep_open_bullet_1">Mantén la app Zapp abierta en una pantalla activa.</string>
+    <string name="restore_flow_keep_open_bullet_2">Considera conectar tu dispositivo: la sincronización consume batería.</string>
+    <string name="restore_flow_keep_open_checkbox">Mantener pantalla encendida durante la sincronización</string>
+    <string name="restore_flow_keep_open_cta">Entrar a Zapp</string>
+</resources>

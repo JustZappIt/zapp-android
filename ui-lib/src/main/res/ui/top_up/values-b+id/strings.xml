@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="top_up_title">Bagaimana Anda mengisi saldo?</string>
+    <string name="top_up_subtitle">Pilih dari mana ZEC Anda berasal.</string>
+    <string name="top_up_from_exchange_title">Dari bursa</string>
+    <string name="top_up_from_exchange_subtitle">Bursa seperti Binance atau Coinbase hanya dapat mengirim ke alamat transparan.</string>
+    <string name="top_up_from_wallet_title">Dari dompet lain</string>
+    <string name="top_up_from_wallet_subtitle">Terima langsung ke alamat terlindungi Anda.</string>
+    <string name="top_up_add_zec_button">Tambah ZEC</string>
+    <string name="top_up_balance_subtitle">Isi saldo dari bursa atau dompet lain.</string>
+</resources>

@@ -1,0 +1,49 @@
+Zapp Android Wallet
+Copyright (c) 2025-2026 The Zapp Contributors
+
+This product includes software developed as part of the Zcash ecosystem.
+
+================================================================================
+Upstream lineage (MIT License)
+================================================================================
+
+Zapp is a fork of Zodl (https://github.com/zodl-inc/zodl-android), which is
+itself a fork of the Electric Coin Company's Zashi wallet
+(https://github.com/Electric-Coin-Company/zashi-android).
+
+    Copyright (c) 2021-2025 Zcash
+    Licensed under the MIT License. See LICENSE-MIT.
+
+All code inherited or derived from Zashi/Zodl remains under the MIT License and
+retains the upstream copyright notice above.
+
+================================================================================
+Zapp-original contributions (MIT OR Apache-2.0)
+================================================================================
+
+Code authored by the Zapp Contributors — including (but not limited to) the
+`evm-lib` and `offramp-lib` modules and the P2P chat feature under
+`ui-lib/.../ui/screen/chat/` — is dual-licensed and may be used under the terms
+of EITHER the MIT License (LICENSE-MIT) OR the Apache License, Version 2.0
+(LICENSE-APACHE), at your option. Such files carry an SPDX header:
+
+    SPDX-License-Identifier: MIT OR Apache-2.0
+
+================================================================================
+Bundled fonts (SIL Open Font License 1.1)
+================================================================================
+
+    Inter   — https://fonts.google.com/specimen/Inter
+    Archivo — https://fonts.google.com/specimen/Archivo
+
+Both are licensed under the SIL Open Font License, Version 1.1
+(https://scripts.sil.org/OFL). See docs/Third party licenses.md.
+
+================================================================================
+Third-party dependencies
+================================================================================
+
+This product depends on third-party libraries resolved at build time (AndroidX,
+Jetpack Compose, Koin, Coil, the Zcash Android SDK, and others), each under its
+own license. See docs/Third party licenses.md and the dependency declarations in
+gradle.properties / settings.gradle.kts.

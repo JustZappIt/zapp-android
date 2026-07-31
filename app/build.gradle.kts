@@ -1,0 +1,436 @@
+import co.electriccoin.zcash.Git
+import com.android.build.api.variant.BuildConfigField
+import com.android.build.api.variant.ResValue
+import model.BuildType
+import model.DistributionDimension
+import model.NetworkDimension
+import java.util.Locale
+
+plugins {
+    id("com.android.application")
+    kotlin("android")
+    id("secant.android-build-conventions")
+    id("com.osacky.fladle")
+    id("wtf.emulator.gradle")
+    id("secant.emulator-wtf-conventions")
+    id("publish.secant.publish-conventions")
+}
+
+val hasFirebaseApiKeys = run {
+    val srcDir = File(project.projectDir, "src")
+    val releaseApiKey = File(File(srcDir, "release"), "google-services.json")
+    val debugApiKey = File(File(srcDir, "debug"), "google-services.json")
+
+    val result = releaseApiKey.exists() || debugApiKey.exists()
+
+    if (!result) {
+        project.logger.info("Firebase API keys not found. Crashlytics will not be enabled. To enable " +
+            "Firebase, add an API key for the build type at ${srcDir.path}/<buildType>/google-services.json.")
+    } else {
+        listOf(releaseApiKey, debugApiKey).filterNot(File::exists).forEach { missing ->
+            project.logger.info("Firebase API key not found for ${missing.parentFile.name}: ${missing.path}")
+        }
+    }
+
+    result
+}
+
+if (hasFirebaseApiKeys) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
+
+    // Google-enabled distributions consume Firebase configuration, while FOSS
+    // must remain buildable beside those files without processing or embedding it.
+    tasks.configureEach {
+        val isFossTask = name.contains("Foss", ignoreCase = true)
+        val isFirebaseTask = name.contains("GoogleServices") || name.contains("Crashlytics")
+        if (isFossTask && isFirebaseTask) enabled = false
+    }
+}
+
+val packageName = project.property("ZCASH_RELEASE_PACKAGE_NAME").toString()
+
+val testnetNetworkName = "Testnet"
+
+android {
+    namespace = "co.electriccoin.zcash.app"
+
+    defaultConfig {
+        applicationId = packageName
+
+        // If Google Play deployment is triggered, then these are placeholders which are overwritten
+        // when the deployment runs
+        versionCode = project.property("ZCASH_VERSION_CODE").toString().toInt()
+        versionName = project.property("ZCASH_VERSION_NAME").toString()
+
+        if (project.property("IS_USE_TEST_ORCHESTRATOR").toString().toBoolean()) {
+            testInstrumentationRunnerArguments["clearPackageData"] = "true"
+        }
+
+        testInstrumentationRunner = "co.electriccoin.zcash.test.ZcashUiTestRunner"
+    }
+
+    if (project.property("IS_USE_TEST_ORCHESTRATOR").toString().toBoolean()) {
+        testOptions {
+            execution = "ANDROIDX_TEST_ORCHESTRATOR"
+        }
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    flavorDimensions += listOf(NetworkDimension.DIMENSION_NAME, DistributionDimension.DIMENSION_NAME)
+
+    productFlavors {
+        create(NetworkDimension.TESTNET.value) {
+            dimension = NetworkDimension.DIMENSION_NAME
+            applicationId = packageName
+            applicationIdSuffix = ".testnet"
+            matchingFallbacks.addAll(listOf(NetworkDimension.TESTNET.value, BuildType.DEBUG.value))
+        }
+
+        create(NetworkDimension.MAINNET.value) {
+            dimension = NetworkDimension.DIMENSION_NAME
+            applicationId = packageName
+            matchingFallbacks.addAll(listOf(NetworkDimension.MAINNET.value, BuildType.RELEASE.value))
+        }
+
+        create(DistributionDimension.STORE.value) {
+            dimension = DistributionDimension.DIMENSION_NAME
+            applicationId = packageName
+            matchingFallbacks.addAll(listOf(DistributionDimension.STORE.value, BuildType.RELEASE.value))
+        }
+
+        create(DistributionDimension.FOSS.value) {
+            dimension = DistributionDimension.DIMENSION_NAME
+            applicationId = packageName
+            matchingFallbacks.addAll(listOf(DistributionDimension.FOSS.value, BuildType.RELEASE.value))
+            versionNameSuffix = "-foss"
+            applicationIdSuffix = ".foss"
+        }
+
+        create(DistributionDimension.INTERNAL.value) {
+            dimension = DistributionDimension.DIMENSION_NAME
+            applicationId = packageName
+            // Fallback to store flavor for dependencies that don't have internal flavor
+            matchingFallbacks.addAll(listOf(DistributionDimension.STORE.value, BuildType.RELEASE.value))
+            versionNameSuffix = "-internal"
+            applicationIdSuffix = ".internal"
+        }
+    }
+
+    val releaseKeystorePath = project.property("ZCASH_RELEASE_KEYSTORE_PATH").toString()
+    val releaseKeystorePassword = project.property("ZCASH_RELEASE_KEYSTORE_PASSWORD").toString()
+    val releaseKeyAlias = project.property("ZCASH_RELEASE_KEY_ALIAS").toString()
+    val releaseKeyAliasPassword =
+        project.property("ZCASH_RELEASE_KEY_ALIAS_PASSWORD").toString()
+    val isReleaseSigningConfigured = listOf(
+        releaseKeystorePath,
+        releaseKeystorePassword,
+        releaseKeyAlias,
+        releaseKeyAliasPassword
+    ).all { it.isNotBlank() }
+
+    signingConfigs {
+        if (isReleaseSigningConfigured) {
+            // If this block doesn't execute, the output will be unsigned
+            create(BuildType.RELEASE.value).apply {
+                storeFile = File(releaseKeystorePath)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyAliasPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName(BuildType.DEBUG.value).apply {
+            // Note that the build-conventions defines the res configs
+            isPseudoLocalesEnabled = true
+
+            // Suffixing app package name and version to avoid collisions with other installed Zcash wallets
+            // apps (e.g. from Google Play)
+            versionNameSuffix = "-debug"
+            applicationIdSuffix = ".debug"
+        }
+        getByName(BuildType.RELEASE.value).apply {
+            isMinifyEnabled = project.property("IS_MINIFY_ENABLED").toString().toBoolean()
+            isShrinkResources = project.property("IS_MINIFY_ENABLED").toString().toBoolean()
+            ndk {
+                debugSymbolLevel = project.property("NDK_DEBUG_SYMBOL_LEVEL").toString()
+                abiFilters.addAll(setOf("arm64-v8a", "armeabi-v7a"))
+            }
+
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-project.txt"
+            )
+
+            val isReleaseBuildDebuggable = project.property("IS_RELEASE_BUILD_DEBUGGABLE")
+                .toString().toBoolean()
+            isDebuggable = isReleaseBuildDebuggable
+
+            val isSignReleaseBuildWithDebugKey = project.property("IS_SIGN_RELEASE_BUILD_WITH_DEBUG_KEY")
+                .toString().toBoolean()
+            if (isReleaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName(BuildType.RELEASE.value)
+            } else if (isSignReleaseBuildWithDebugKey) {
+                // Warning: in this case is the release build signed with the debug key
+                signingConfig = signingConfigs.getByName(BuildType.DEBUG.value)
+            }
+        }
+    }
+
+    // Resolve final app name
+    // Format: [BuildDistributionNetwork] - D=Debug/R=Release, S=Store/F=FOSS/I=Internal, M=Mainnet/T=Testnet
+    applicationVariants.all {
+        val defaultAppName = project.property("ZCASH_RELEASE_APP_NAME").toString()
+        when (this.name) {
+            "zcashtestnetStoreDebug" -> {
+                resValue("string", "app_name", "$defaultAppName [DST]")
+            }
+            "zcashmainnetStoreDebug" -> {
+                resValue("string", "app_name", "$defaultAppName [DSM]")
+            }
+            "zcashtestnetStoreRelease" -> {
+                resValue("string", "app_name", "$defaultAppName [RST]")
+            }
+            "zcashmainnetStoreRelease" -> {
+                resValue("string", "app_name", defaultAppName)
+            }
+            "zcashtestnetFossDebug" -> {
+                resValue("string", "app_name", "$defaultAppName [DFT]")
+            }
+            "zcashmainnetFossDebug" -> {
+                resValue("string", "app_name", "$defaultAppName [DFM]")
+            }
+            "zcashtestnetFossRelease" -> {
+                resValue("string", "app_name", "$defaultAppName [RFT]")
+            }
+            "zcashmainnetFossRelease" -> {
+                resValue("string", "app_name", defaultAppName)
+            }
+            "zcashmainnetInternalRelease" -> {
+                resValue("string", "app_name", "$defaultAppName [RIM]")
+            }
+            "zcashtestnetInternalRelease" -> {
+                resValue("string", "app_name", "$defaultAppName [RIT]")
+            }
+            "zcashmainnetInternalDebug" -> {
+                resValue("string", "app_name", "$defaultAppName [DIM]")
+            }
+            "zcashtestnetInternalDebug" -> {
+                resValue("string", "app_name", "$defaultAppName [DIT]")
+            }
+        }
+    }
+
+    dependenciesInfo {
+        // Disables dependency metadata when building APKs
+        includeInApk = false
+        // Disables dependency metadata when building Android App Bundles
+        includeInBundle = false
+    }
+
+    testCoverage {
+        jacocoVersion = project.property("JACOCO_VERSION").toString()
+    }
+}
+
+
+dependencies {
+    implementation(libs.androidx.activity)
+    implementation(libs.androidx.annotation)
+    implementation(libs.androidx.core)
+    // just to support baseline profile installation needed by benchmark tests
+    implementation(libs.androidx.profileinstaller)
+    implementation(libs.kotlin.stdlib)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.androidx.lifecycle.process)
+    implementation(libs.zcash.sdk) // just to configure logging
+    implementation(projects.crashAndroidLib)
+    implementation(projects.preferenceApiLib)
+    implementation(projects.preferenceImplAndroidLib)
+    implementation(projects.spackleAndroidLib)
+    implementation(projects.uiLib)
+
+    androidTestImplementation(projects.testLib)
+
+    androidTestUtil(libs.androidx.test.services) {
+        artifact {
+            type = "apk"
+        }
+    }
+
+    if (project.property("IS_USE_TEST_ORCHESTRATOR").toString().toBoolean()) {
+        androidTestUtil(libs.androidx.test.orchestrator) {
+            artifact {
+                type = "apk"
+            }
+        }
+    }
+}
+
+androidComponents {
+    // Optional single-network build switch. When `ZCASH_NETWORK` is set to `mainnet`
+    // or `testnet` (via gradle.properties, `-P`, or `ORG_GRADLE_PROJECT_ZCASH_NETWORK`
+    // env var), variants for the other network are disabled — so `./gradlew
+    // :app:assembleDebug` resolves to a single buildable variant. When blank (the
+    // default), both networks remain enabled for CI and side-by-side installs.
+    beforeVariants { variantBuilder ->
+        val requested = project.findProperty("ZCASH_NETWORK")?.toString()?.trim()?.lowercase()
+        if (!requested.isNullOrEmpty()) {
+            val expected = when (requested) {
+                "mainnet" -> NetworkDimension.MAINNET.value
+                "testnet" -> NetworkDimension.TESTNET.value
+                else -> error("ZCASH_NETWORK must be 'mainnet', 'testnet', or empty (got '$requested')")
+            }
+            val flavor = variantBuilder.productFlavors
+                .firstOrNull { (dim, _) -> dim == NetworkDimension.DIMENSION_NAME }
+                ?.second
+            if (flavor != null && flavor != expected) {
+                variantBuilder.enable = false
+            }
+        }
+    }
+
+    onVariants { variant ->
+        for (output in variant.outputs) {
+            // Configure strict mode in runtime
+            variant.buildConfigFields?.put(
+                "IS_STRICT_MODE_CRASH_ENABLED",
+                BuildConfigField(
+                    type = "boolean",
+                    value = project.property("IS_CRASH_ON_STRICT_MODE_VIOLATION").toString(),
+                    comment = "Whether is the strict mode enabled"
+                )
+            )
+
+            variant.resValues.put(
+                // Key matches the one in crash-android-lib/src/res/values/bools.xml
+                variant.makeResValueKey("bool", "co_electriccoin_zcash_crash_is_firebase_enabled"),
+                ResValue(value = hasFirebaseApiKeys.toString())
+            )
+
+            // Single source of truth for the Zcash network: derived from the network
+            // product flavor and emitted as `R.bool.zcash_is_testnet`, overriding the
+            // default declared in `sdk-ext-lib/src/main/res/values/bools.xml`. Keeps
+            // `BuildConfig.FLAVOR_network` and runtime network resolution in lockstep.
+            val isTestnetFlavor = variant.productFlavors
+                .any { (dim, value) -> dim == NetworkDimension.DIMENSION_NAME && value == NetworkDimension.TESTNET.value }
+            variant.resValues.put(
+                variant.makeResValueKey("bool", "zcash_is_testnet"),
+                ResValue(value = isTestnetFlavor.toString())
+            )
+
+            val defaultVersionName = project.property("ZCASH_VERSION_NAME").toString()
+            output.versionName.set(defaultVersionName)
+            val versionCodeOverride = project.property("ZCASH_VERSION_CODE").toString().toInt()
+            val gitInfo = Git.newInfo(Git.HEAD, rootDir)
+            output.versionCode.set(if (versionCodeOverride == 1) gitInfo.commitCount else versionCodeOverride)
+        }
+
+        variant.packaging.resources.excludes.addAll(listOf(
+            ".readme",
+        ))
+
+        // The fixed Locale.US is intended
+        if (variant.name.lowercase(Locale.US).contains(BuildType.RELEASE.value)) {
+            variant.packaging.resources.excludes.addAll(listOf(
+                "**/*.kotlin_metadata",
+                "DebugProbesKt.bin",
+                "META-INF/*.kotlin_module",
+                "META-INF/*.version",
+                "META-INF/android.arch**",
+                "META-INF/androidx**",
+                "META-INF/com.android**",
+                "META-INF/com.google.android.material_material.version",
+                "META-INF/com.google.dagger_dagger.version",
+                "build-data.properties",
+                "core.properties",
+                "firebase-**.properties",
+                "kotlin-tooling-metadata.json",
+                "kotlin/**",
+                "play-services-**.properties",
+                "protolite-well-known-types.properties",
+                "transport-api.properties",
+                "transport-backend-cct.properties",
+                "transport-runtime.properties"
+            ))
+        }
+    }
+}
+
+fladle {
+    // Firebase Test Lab has min and max values that might differ from our project's
+    // These are determined by `gcloud firebase test android models list`
+    @Suppress("MagicNumber", "VariableNaming")
+    val FIREBASE_TEST_LAB_MIN_SDK = 27 // Minimum for Pixel2.arm device
+
+    @Suppress("MagicNumber", "VariableNaming")
+    val FIREBASE_TEST_LAB_MAX_SDK = 33
+
+    val minSdkVersion = run {
+        val buildMinSdk = project.properties["ANDROID_MIN_SDK_VERSION"].toString().toInt()
+        buildMinSdk.coerceAtLeast(FIREBASE_TEST_LAB_MIN_SDK).toString()
+    }
+    val targetSdkVersion = run {
+        val buildTargetSdk = project.properties["ANDROID_TARGET_SDK_VERSION"].toString().toInt()
+        buildTargetSdk.coerceAtMost(FIREBASE_TEST_LAB_MAX_SDK).toString()
+    }
+
+    val firebaseTestLabKeyPath = project.properties["ZCASH_FIREBASE_TEST_LAB_API_KEY_PATH"].toString()
+    val firebaseProject = project.properties["ZCASH_FIREBASE_TEST_LAB_PROJECT"].toString()
+
+    if (firebaseTestLabKeyPath.isNotEmpty()) {
+        serviceAccountCredentials.set(File(firebaseTestLabKeyPath))
+    } else if (firebaseProject.isNotEmpty()) {
+        projectId.set(firebaseProject)
+    }
+
+    @Suppress("MagicNumber")
+    flakyTestAttempts.set(1)
+
+    configs {
+        val buildDirectory = layout.buildDirectory.get().asFile
+        create("sanityConfigDebug") {
+            clearPropertiesForSanityRobo()
+
+            debugApk.set(
+                project.provider {
+                    "${buildDirectory}/outputs/apk/zcashmainnetStore/debug/app-zcashmainnet-store-debug.apk"
+                }
+            )
+
+            testTimeout.set("3m")
+
+            devices.addAll(
+                mapOf("model" to "Pixel2.arm", "version" to minSdkVersion),
+                mapOf("model" to "Pixel2.arm", "version" to targetSdkVersion)
+            )
+
+            flankVersion.set(libs.versions.flank.get())
+        }
+        create("sanityConfigRelease") {
+            clearPropertiesForSanityRobo()
+
+            debugApk.set(
+                project.provider {
+                    "$buildDirectory" +
+                        "/outputs/apk_from_bundle/zcashmainnetStoreRelease/app-zcashmainnet-store-release-universal.apk"
+                }
+            )
+
+            testTimeout.set("3m")
+
+            devices.addAll(
+                mapOf("model" to "Pixel2.arm", "version" to minSdkVersion),
+                mapOf("model" to "Pixel2.arm", "version" to targetSdkVersion)
+            )
+
+            flankVersion.set(libs.versions.flank.get())
+        }
+    }
+}

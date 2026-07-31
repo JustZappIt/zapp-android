@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_header">Billetera móvil impulsada por Zcash, diseñada para la soberanía financiera.</string>
+    <string name="onboarding_create_new_wallet">Crear Nueva Billetera</string>
+    <string name="onboarding_import_existing_wallet">Restaurar Billetera Existente</string>
+    <string name="onboarding_error_wallet_creation_failed">No se pudo crear tu billetera. Regresa e inténtalo de nuevo.</string>
+    <string name="onboarding_continue">Continuar</string>
+
+    <!-- SeedLoadingPlaceholder -->
+    <string name="onboarding_encrypting_greeting">Hola.</string>
+    <string name="onboarding_encrypting_message">Un momento,\nestamos cifrando tu nueva billetera.</string>
+    <string name="onboarding_restoring_message">Un momento,\nestamos restaurando tu billetera.</string>
+    <string name="onboarding_wallet_ready_message">Tu billetera está lista.\nFinalizando la configuración…</string>
+    <string name="onboarding_seed_loading_timeout">Está tardando más de lo esperado.</string>
+    <string name="onboarding_seed_loading_retry_hint">Toca reintentar, o regresa e intenta de nuevo.</string>
+    <string name="onboarding_seed_loading_no_retry_hint">Intenta regresar y enviarlo de nuevo.</string>
+    <string name="onboarding_seed_loading_retry">Reintentar</string>
+
+    <!-- Wallet-tab empty state: shown when the user reached the tabs without setting up a wallet. -->
+    <string name="wallet_empty_eyebrow">Billetera</string>
+    <string name="wallet_empty_title">Configura\ntu billetera</string>
+    <string name="wallet_empty_subtitle">Tu billetera vive en este dispositivo. Solo tú tienes las claves.</string>
+    <string name="wallet_empty_create">Crear nueva billetera</string>
+    <string name="wallet_empty_create_sub">Obtén una nueva frase de recuperación</string>
+    <string name="wallet_empty_restore">Restaurar desde frase</string>
+    <string name="wallet_empty_restore_sub">Usa tu frase de recuperación existente</string>
+
+    <!-- Welcome gate (shown before onboarding starts) -->
+    <string name="welcome_hero_line1">Tus mensajes\ny tu dinero.</string>
+    <string name="welcome_hero_line2">Cifrados.</string>
+    <string name="welcome_body">Mensajería cifrada de extremo a extremo con una billetera Zcash blindada integrada.</string>
+    <string name="welcome_get_started_button">Comenzar</string>
+    <string name="welcome_restore_button">Ya uso Zapp</string>
+    <string name="welcome_terms_caption">Al continuar aceptas nuestros términos y política de privacidad.</string>
+
+    <!-- Shared onboarding chrome -->
+    <string name="onboarding_back_label">atrás</string>
+
+    <!-- Part 1 — wallet phase intro -->
+    <string name="onboarding_wallet_intro_badge">Parte 1 de 3 · Billetera y mensajería</string>
+    <string name="onboarding_wallet_intro_title">Configura tu\nbilletera y\nmensajería</string>
+    <string name="onboarding_wallet_intro_sub">La frase de recuperación de 24 palabras de tu billetera también genera tu identidad de mensajería: una sola frase cubre ambas.</string>
+    <string name="onboarding_wallet_intro_bullet_create_label">Crea o restaura una billetera</string>
+    <string name="onboarding_wallet_intro_bullet_create_sub">Tu elección aquí también define tu identidad de mensajería</string>
+    <string name="onboarding_wallet_intro_bullet_phrase_label">Una frase para todo</string>
+    <string name="onboarding_wallet_intro_bullet_phrase_sub">24 palabras BIP-39 restauran tus fondos y tus chats. Respáldala fuera de línea.</string>
+
+    <!-- Part 1 — wallet choice -->
+    <string name="onboarding_wallet_choice_badge">Parte 1 · Billetera y mensajería</string>
+    <string name="onboarding_wallet_choice_subtitle">La semilla de tu billetera también crea tu identidad de mensajería. Un solo respaldo para todo.</string>
+    <string name="onboarding_wallet_choice_create_sub">Billetera nueva + identidad de mensajería nueva</string>
+    <string name="onboarding_wallet_choice_restore_sub">Restaura la billetera y deriva tu ID de mensajería de ella</string>
+
+    <!-- Part 1 — wallet recovery phrase -->
+    <string name="onboarding_wallet_seed_title">Frase de billetera\ny mensajería</string>
+    <string name="onboarding_wallet_seed_sub">Estas 24 palabras restauran tanto los fondos de tu billetera como tu identidad de mensajería. Respáldalas fuera de línea: lo cubren todo.</string>
+
+    <!-- Part 2 — messaging phase intro -->
+    <string name="onboarding_msg_intro_badge">Parte 2 de 3 · Cuenta de mensajería</string>
+    <string name="onboarding_msg_intro_title">Crea tu\nidentidad de\nmensajería</string>
+    <string name="onboarding_msg_intro_sub">Tu identidad es un nombre de usuario respaldado por la frase de recuperación de tu billetera: una sola frase restaura tu billetera y tu identidad de mensajería en cualquier dispositivo. El historial de mensajes se guarda localmente y no es recuperable.</string>
+    <string name="onboarding_msg_intro_bullet_username_label">Elige un nombre de usuario</string>
+    <string name="onboarding_msg_intro_bullet_username_sub">Así te encuentran y te escriben tus amigos</string>
+    <string name="onboarding_msg_intro_bullet_phrase_label">Una sola frase de recuperación</string>
+    <string name="onboarding_msg_intro_bullet_phrase_sub">La frase de 24 palabras de tu billetera también restaura tu identidad de mensajería.</string>
+
+    <!-- Part 2 — username entry -->
+    <string name="onboarding_username_badge">Parte 2 · Nombre de usuario</string>
+    <string name="onboarding_username_title">Elige un\nnombre de usuario</string>
+    <string name="onboarding_username_subtitle">Así apareces para quienes aún no te guardaron como contacto. Puedes cambiarlo más tarde.</string>
+    <string name="onboarding_username_placeholder">tu_usuario</string>
+    <string name="onboarding_username_rule_min">3+ caracteres</string>
+    <string name="onboarding_username_rule_max">≤20 caracteres</string>
+    <string name="onboarding_username_info">Zapp genera un par de claves local. Ningún servidor ve jamás tu clave privada.</string>
+
+    <!-- Seed reveal (shared between create and restore paths) -->
+    <string name="onboarding_seed_tap_to_reveal">Toca para revelar</string>
+    <string name="onboarding_seed_saved_checkbox">He escrito las %1$d palabras en orden. Entiendo que esta frase no se puede recuperar si se pierde.</string>
+    <string name="onboarding_seed_saved_cta">Ya la guardé</string>
+
+    <!-- Part 3 — secure-method choice -->
+    <string name="onboarding_secure_badge">Parte 3 de 3 · Protege Zapp</string>
+    <string name="onboarding_secure_title">Protege\ntu app</string>
+    <string name="onboarding_secure_subtitle">Elige cómo desbloqueas Zapp y autorizas pagos.</string>
+    <string name="onboarding_secure_bio_label">Biometría</string>
+    <string name="onboarding_secure_bio_sub">Huella o rostro, lo más rápido</string>
+    <string name="onboarding_secure_pin_sub">Un código que tú recuerdas</string>
+
+    <!-- Part 3 — PIN setup -->
+    <string name="onboarding_pin_create_title">Crea\ntu PIN</string>
+    <string name="onboarding_pin_mismatch">Los PIN no coinciden. Inténtalo de nuevo.</string>
+    <string name="onboarding_pin_confirm_subtitle">Vuelve a ingresar tu PIN de 6 dígitos para confirmar.</string>
+    <string name="onboarding_pin_create_subtitle">Elige un código de 6 dígitos que recuerdes.</string>
+
+    <!-- PIN verification (also reused by auth gates outside onboarding) -->
+    <string name="onboarding_pin_verify_title">Ingresa\ntu PIN</string>
+    <string name="onboarding_pin_verify_lockout">Demasiados intentos. Inténtalo de nuevo en %1$d s.</string>
+    <string name="onboarding_pin_verify_incorrect">PIN incorrecto. Inténtalo de nuevo.</string>
+    <string name="onboarding_pin_verify_subtitle">Ingresa tu PIN de 6 dígitos para continuar.</string>
+
+    <!-- Part 3 — biometric enrollment -->
+    <string name="onboarding_bio_verifying">Verificando…</string>
+    <string name="onboarding_bio_title">Desbloqueo biométrico</string>
+    <string name="onboarding_bio_subtitle">Zapp usará tu huella o tu rostro para bloquear y desbloquear la app.</string>
+    <string name="onboarding_bio_enable_cta">Activar biometría</string>
+    <string name="onboarding_bio_prompt_message">Activa el desbloqueo biométrico para Zapp</string>
+    <string name="onboarding_bio_error_not_enrolled">No hay biometría registrada en este dispositivo. Agrega una huella o un rostro en Ajustes e inténtalo de nuevo.</string>
+    <string name="onboarding_bio_error_verification_failed">La verificación biométrica falló. Toca para reintentar.</string>
+
+    <!-- Done screen -->
+    <string name="onboarding_done_title">Todo\nlisto.</string>
+    <string name="onboarding_done_subtitle_bio">Identidad creada, billetera lista, protegida con biometría.</string>
+    <string name="onboarding_done_subtitle_pin">Identidad creada, billetera lista, protegida con un PIN.</string>
+    <string name="onboarding_done_enter_cta">Entrar a Zapp →</string>
+</resources>

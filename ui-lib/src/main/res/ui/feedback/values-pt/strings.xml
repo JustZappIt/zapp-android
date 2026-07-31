@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="support_header">Suporte</string>
+    <string name="support_title">Envie seu feedback</string>
+    <string name="support_experience_title">Como tem sido sua experiência com o Zapp?</string>
+    <string name="support_help_title">Como podemos ajudar você?</string>
+    <string name="support_hint">Eu gostaria de perguntar sobre…</string>
+    <string name="support_send">Enviar</string>
+    <string name="support_confirmation_dialog_ok">OK</string>
+    <string name="support_confirmation_dialog_cancel">Cancelar</string>
+    <string name="support_confirmation_dialog_title">Abrir aplicativo de e-mail</string>
+    <string name="support_confirmation_explanation">O Zapp está prestes a
+        abrir seu aplicativo de e-mail com uma mensagem preenchida.\n\nNão se esqueça de tocar em enviar dentro do seu aplicativo de e-mail.</string>
+    <string name="support_information">Por favor, conte-nos sobre quaisquer problemas que você tenha tido ou recursos que gostaria de ver no futuro.</string>
+    <string name="support_email_part_1">Como tem sido sua experiência com o Zapp?\n<xliff:g id="emoji_encoding" example="😍">%1$s</xliff:g> <xliff:g id="emoji_order" example="5">%2$s</xliff:g>/5</string>
+    <string name="support_email_part_2">Como podemos ajudar você?\n%s</string>
+</resources>

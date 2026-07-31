@@ -1,0 +1,177 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
+
+package xyz.justzappit.evm.signer
+
+import kotlinx.coroutines.delay
+import xyz.justzappit.evm.abi.AbiAddress
+import xyz.justzappit.evm.abi.AbiEncoder
+import xyz.justzappit.evm.abi.AbiUint
+import xyz.justzappit.evm.abi.keccak256
+import xyz.justzappit.evm.hd.EvmKey
+import xyz.justzappit.evm.math.BigInteger
+import xyz.justzappit.evm.math.bigIntegerOne
+import xyz.justzappit.evm.math.bigIntegerValueOf
+import xyz.justzappit.evm.math.bigIntegerZero
+import xyz.justzappit.evm.math.div
+import xyz.justzappit.evm.math.plus
+import xyz.justzappit.evm.math.times
+import xyz.justzappit.evm.rpc.BaseRpcClient
+import xyz.justzappit.evm.rpc.BundlerClient
+import xyz.justzappit.evm.rpc.TransactionReceipt
+import xyz.justzappit.evm.types.Address
+import xyz.justzappit.evm.types.ChainId
+import xyz.justzappit.evm.types.TxHash
+import xyz.justzappit.evm.types.Wei
+import xyz.justzappit.evm.util.hexToBigInteger
+import xyz.justzappit.evm.util.hexToBytes
+import xyz.justzappit.evm.util.padLeftToWord
+import kotlin.time.TimeSource
+
+/**
+ * Sends each `{to, value, data}` as a gas-sponsored ERC-4337 v0.6 UserOperation. The owner key
+ * signs locally (self-custody); the bundler (Pimlico) relays and its verifying paymaster pays. The
+ * first op for an undeployed account carries the factory initCode (lazy deploy); subsequent ops
+ * carry none.
+ *
+ * The returned [TxHash] is the userOpHash; [awaitReceipt] resolves it to the mined transaction
+ * receipt via the bundler, whose inner logs are identical to a normal tx — so downstream log
+ * parsing is unchanged from the EOA path.
+ */
+class Erc4337Submitter(
+    private val rpc: BaseRpcClient,
+    private val bundler: BundlerClient,
+    private val entryPoint: Address,
+    private val accountFactory: Address,
+    private val owner: EvmKey,
+    private val smartAccount: Address,
+    private val chainId: ChainId,
+    private val gasLimitBufferPercent: Int = DEFAULT_GAS_BUFFER_PCT,
+    private val receiptTimeoutMs: Long = DEFAULT_RECEIPT_TIMEOUT_MS,
+    private val receiptPollIntervalMs: Long = DEFAULT_POLL_INTERVAL_MS,
+) : TxSubmitter {
+    /**
+     * Local nonce cursor. After a successful `eth_sendUserOperation`, the next sequential nonce is
+     * deterministically `cursor + 1` — no RPC read needed. Sidesteps the cross-RPC race on
+     * fast-block chains where Pimlico's simulator (which validates the nonce at sponsorship time)
+     * has already advanced past what our node RPC reports, causing AA25 on back-to-back UserOps.
+     * Null = uninitialized; populated by the first RPC read and incremented locally thereafter.
+     */
+    private var nonceCursor: BigInteger? = null
+
+    override suspend fun sendTransaction(to: Address, value: Wei, data: ByteArray): TxHash {
+        val initCode =
+            if (rpc.ethGetCode(smartAccount).isEmpty()) {
+                ThirdwebSmartAccount.initCode(accountFactory, owner.address)
+            } else {
+                ByteArray(0)
+            }
+        val gasPrice = bundler.getUserOperationGasPrice()
+        val nonce = nonceCursor ?: entryPointNonce().also { nonceCursor = it }
+
+        val draft =
+            UserOperationV06(
+                sender = smartAccount,
+                nonce = nonce,
+                initCode = initCode,
+                callData = ThirdwebSmartAccount.executeCalldata(to, value, data),
+                callGasLimit = bigIntegerZero,
+                verificationGasLimit = bigIntegerZero,
+                preVerificationGas = bigIntegerZero,
+                maxFeePerGas = hexToBigInteger(gasPrice.maxFeePerGas),
+                maxPriorityFeePerGas = hexToBigInteger(gasPrice.maxPriorityFeePerGas),
+                paymasterAndData = ByteArray(0),
+                signature = DUMMY_SIGNATURE,
+            )
+
+        // ERC-7677: estimate with a paymaster stub (so the estimate covers paymaster validation),
+        // then request the real sponsorship. Stub and final paymasterAndData share a length, so the
+        // gas estimate stays valid.
+        val stubbed = draft.copy(paymasterAndData = bundler.getPaymasterStubData(draft).paymasterAndData.hexToBytes())
+        val estimate = bundler.estimateUserOperationGas(stubbed)
+        val withGas =
+            stubbed.copy(
+                callGasLimit = hexToBigInteger(estimate.callGasLimit).buffered(),
+                verificationGasLimit = hexToBigInteger(estimate.verificationGasLimit).buffered(),
+                preVerificationGas = hexToBigInteger(estimate.preVerificationGas).buffered(),
+            )
+
+        val sponsored =
+            withGas.copy(
+                paymasterAndData = bundler.sponsorUserOperation(withGas).paymasterAndData.hexToBytes(),
+            )
+        val signed = sponsored.copy(signature = signOwner(sponsored.userOpHash(entryPoint, chainId)))
+        val txHash = bundler.sendUserOperation(signed)
+        // Advance optimistically so back-to-back sends don't collide on the same nonce; awaitReceipt
+        // resets the cursor on a non-success / missing receipt so a reused submitter doesn't
+        // AA25-storm against a stale value.
+        nonceCursor = nonce + bigIntegerOne
+        return txHash
+    }
+
+    override suspend fun awaitReceipt(txHash: TxHash): TransactionReceipt {
+        val started = TimeSource.Monotonic.markNow()
+        while (started.elapsedNow().inWholeMilliseconds < receiptTimeoutMs) {
+            bundler.getUserOperationReceipt(txHash)?.let { receipt ->
+                if (!receipt.success) nonceCursor = null
+                return receipt
+            }
+            delay(receiptPollIntervalMs)
+        }
+        // No receipt: cursor state is undefined, force a re-read on the next send.
+        nonceCursor = null
+        val minutes = receiptTimeoutMs / 60_000
+        error(
+            "Bundler did not return a receipt for userOp ${txHash.hex} after ${minutes}m. " +
+                "The operation may still confirm on-chain — check the explorer before retrying.",
+        )
+    }
+
+    /**
+     * EntryPoint.getNonce(sender, key=0): the next sequential nonce; 0 for a counterfactual account.
+     * Read once per submitter instance — the cursor takes over after the first UserOp lands. Uses
+     * the node RPC because Pimlico's bundler endpoint does not serve `eth_call`.
+     */
+    private suspend fun entryPointNonce(): BigInteger {
+        val ret =
+            rpc.ethCall(
+                to = entryPoint,
+                data =
+                    AbiEncoder.encodeFunctionCall(
+                        "getNonce(address,uint192)",
+                        listOf(AbiAddress(smartAccount), AbiUint(bigIntegerZero)),
+                    ),
+            )
+        return if (ret.isEmpty()) bigIntegerZero else BigInteger(1, ret)
+    }
+
+    /** thirdweb's prebuilt Account contract validates the owner's ECDSA signature over the EIP-191-prefixed userOpHash. */
+    private fun signOwner(userOpHash: ByteArray): ByteArray {
+        val ethHash = keccak256(EIP191_PREFIX + userOpHash)
+        return encodeSignature(owner.signRecoverable(ethHash))
+    }
+
+    private fun BigInteger.buffered(): BigInteger =
+        this * bigIntegerValueOf(100L + gasLimitBufferPercent) / bigIntegerValueOf(100L)
+
+    companion object {
+        private const val DEFAULT_GAS_BUFFER_PCT = 15
+        private const val DEFAULT_RECEIPT_TIMEOUT_MS = 300_000L
+        private const val DEFAULT_POLL_INTERVAL_MS = 2_000L
+        private const val V_OFFSET = 27
+        private const val EIP191_BYTE: Byte = 0x19
+
+        private val EIP191_PREFIX =
+            byteArrayOf(EIP191_BYTE) + "Ethereum Signed Message:\n32".encodeToByteArray()
+
+        // A structurally valid (canonical, low-s) throwaway signature for gas estimation, before the
+        // real userOpHash is known. Recovers to some address, not the owner — fine, estimation does
+        // not enforce the signature, it only needs the right length so ECDSA.recover doesn't revert.
+        private val DUMMY_SIGNATURE: ByteArray =
+            encodeSignature(EcdsaSigner.sign(keccak256("estimate".encodeToByteArray()), bigIntegerOne))
+
+        private fun encodeSignature(sig: EcdsaSignature): ByteArray =
+            sig.r.toByteArray().padLeftToWord() + sig.s.toByteArray().padLeftToWord() +
+                byteArrayOf((sig.yParity + V_OFFSET).toByte())
+    }
+}

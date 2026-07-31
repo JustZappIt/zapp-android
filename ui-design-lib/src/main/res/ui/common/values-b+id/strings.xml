@@ -1,0 +1,44 @@
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="amount_with_fiat_currency_symbol" formatted="true"><xliff:g example="$" id="fiat_currency_symbol">%1$s</xliff:g><xliff:g example="123" id="amount">%2$s</xliff:g></string>
+    <string name="hide_balance_placeholder">-----</string>
+    <string name="back_navigation_content_description">Kembali</string>
+    <string name="general_back_content_description">Kembali</string>
+    <string name="triple_dots">…</string>
+    <string name="seed_recovery_reveal">Tampilkan frasa pemulihan</string>
+    <string name="general_masked_seed_word">•••••</string>
+    <string name="general_hidden_seed_word">Kata tersembunyi dari frasa pemulihan</string>
+
+    <string name="general_service_unavailable">Layanan tidak tersedia</string>
+    <string name="general_unexpected_error">Kesalahan tak terduga</string>
+    <string name="general_please_try_again">Silakan coba lagi nanti.</string>
+    <string name="general_check_connection">Silakan periksa koneksi Anda dan coba lagi.</string>
+    <string name="general_error_title">Terjadi kesalahan</string>
+    <string name="general_error_message">Kami tidak dapat memuat aset. Silakan periksa koneksi Anda dan coba lagi.</string>
+    <string name="general_try_again">Coba lagi</string>
+    <string name="general_contact_support">Hubungi Dukungan</string>
+    <string name="general_show">Tampilkan</string>
+    <string name="general_hide">Sembunyikan</string>
+    <string name="general_more">Lebih banyak</string>
+    <string name="general_less">Lebih sedikit</string>
+    <string name="general_loading">Memuat</string>
+    <string name="general_review">Tinjau</string>
+    <string name="general_ok">OK</string>
+    <string name="general_report">Laporkan</string>
+    <string name="general_zec">%1$s %2$s</string>
+    <string name="general_dismiss">Tutup</string>
+    <string name="general_select">Pilih…</string>
+    <string name="general_confirm">Konfirmasi</string>
+    <string name="general_address">Alamat</string>
+    <string name="general_processing">Memproses</string>
+    <string name="general_enter_address">Masukkan alamat…</string>
+    <string name="general_enter_address_partial">Alamat %s…</string>
+    <string name="general_copy">Salin</string>
+    <string name="general_share_qr">Bagikan QR</string>
+    <string name="general_cancel">Batal</string>
+    <string name="general_on">di</string>
+
+    <string name="common_empty_screen_title">Tidak ada hasil</string>
+    <string name="common_empty_screen_subtitle">Kami sudah mencoba, tetapi tidak menemukan apa pun.</string>
+    <string name="general_got_it">Mengerti!</string>
+    <string name="general_warning">Peringatan:&#160;</string>
+</resources>

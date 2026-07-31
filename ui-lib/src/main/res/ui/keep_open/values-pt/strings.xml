@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="keep_open_title">Mantenha o Zapp aberto!</string>
+    <string name="keep_open_description">O Zapp está escaneando a blockchain para recuperar suas transações. Carteiras antigas podem levar horas para sincronizar. Siga estes passos para evitar interrupções:</string>
+    <string name="keep_open_bullet_1">Mantenha o app Zapp aberto com a tela do telefone ativa.</string>
+    <string name="keep_open_bullet_2">Para evitar que a tela do telefone apague, desative o modo de economia de energia e mantenha o telefone conectado à tomada.</string>
+
+    <string name="keep_open_keystone_description">O Zapp está escaneando a blockchain para recuperar suas transações. Carteiras antigas podem levar horas para concluir a sincronização. Siga estes passos para evitar interrupções:</string>
+    <string name="keep_open_keystone_subtitle">Sua carteira está sendo sincronizada.</string>
+    <string name="keep_open_keystone_warning">Seus fundos do Zapp não podem ser gastos até que sua carteira Keystone esteja sincronizada.</string>
+    <string name="keep_open_keystone_checkbox">Manter a tela ligada durante a sincronização</string>
+
+    <string name="keep_open_resync_description">O Zapp está escaneando a blockchain para recuperar suas transações. Carteiras antigas podem levar horas para ressincronizar. Siga estes passos para evitar interrupções:</string>
+    <string name="keep_open_resync_subtitle">Sua carteira está sendo ressincronizada.</string>
+    <string name="keep_open_resync_warning">Seus fundos não podem ser gastos até que sua carteira seja ressincronizada.</string>
+    <string name="keep_open_resync_checkbox">Manter a tela ligada durante a ressincronização</string>
+
+    <string name="keep_open_restore_description">O Zapp está escaneando a blockchain para recuperar suas transações. Carteiras antigas podem levar horas para restaurar. Siga estes passos para evitar interrupções:</string>
+    <string name="keep_open_restore_subtitle">Sua carteira está sendo restaurada.</string>
+    <string name="keep_open_restore_warning">Seus fundos não podem ser gastos até que sua carteira seja restaurada.</string>
+    <string name="keep_open_restore_checkbox">Manter a tela ligada durante a restauração</string>
+</resources>

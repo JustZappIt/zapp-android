@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="keep_open_title">Biarkan Zapp tetap terbuka!</string>
+    <string name="keep_open_description">Zapp sedang memindai blockchain untuk mengambil transaksi Anda. Dompet lama bisa memakan waktu berjam-jam untuk sinkronisasi. Ikuti langkah berikut agar tidak terputus:</string>
+    <string name="keep_open_bullet_1">Biarkan aplikasi Zapp tetap terbuka dengan layar ponsel aktif.</string>
+    <string name="keep_open_bullet_2">Agar layar ponsel tidak mati, nonaktifkan mode hemat daya dan pastikan ponsel tetap terhubung ke pengisi daya.</string>
+
+    <string name="keep_open_keystone_description">Zapp sedang memindai blockchain untuk mengambil transaksi Anda. Dompet lama bisa memakan waktu berjam-jam untuk menyelesaikan sinkronisasi. Ikuti langkah berikut agar tidak terputus:</string>
+    <string name="keep_open_keystone_subtitle">Dompet Anda sedang disinkronkan.</string>
+    <string name="keep_open_keystone_warning">Dana Zapp Anda tidak dapat digunakan hingga dompet Keystone Anda selesai disinkronkan.</string>
+    <string name="keep_open_keystone_checkbox">Biarkan layar tetap menyala selama sinkronisasi</string>
+
+    <string name="keep_open_resync_description">Zapp sedang memindai blockchain untuk mengambil transaksi Anda. Dompet lama bisa memakan waktu berjam-jam untuk sinkronisasi ulang. Ikuti langkah berikut agar tidak terputus:</string>
+    <string name="keep_open_resync_subtitle">Dompet Anda sedang disinkronkan ulang.</string>
+    <string name="keep_open_resync_warning">Dana Anda tidak dapat digunakan hingga dompet Anda selesai disinkronkan ulang.</string>
+    <string name="keep_open_resync_checkbox">Biarkan layar tetap menyala selama sinkronisasi ulang</string>
+
+    <string name="keep_open_restore_description">Zapp sedang memindai blockchain untuk mengambil transaksi Anda. Dompet lama bisa memakan waktu berjam-jam untuk pemulihan. Ikuti langkah berikut agar tidak terputus:</string>
+    <string name="keep_open_restore_subtitle">Dompet Anda sedang dipulihkan.</string>
+    <string name="keep_open_restore_warning">Dana Anda tidak dapat digunakan hingga dompet Anda selesai dipulihkan.</string>
+    <string name="keep_open_restore_checkbox">Biarkan layar tetap menyala selama pemulihan</string>
+</resources>

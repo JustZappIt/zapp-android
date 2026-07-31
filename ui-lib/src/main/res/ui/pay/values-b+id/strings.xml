@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pay_info_title">CrossPay dengan</string>
+    <string name="pay_info_subtitle">Lakukan pembayaran lintas rantai dengan koin atau token apa pun yang didukung NEAR.\n\nJika slippage sebenarnya dan kondisi jaringan menyebabkan penerima Anda menerima kurang dari jumlah yang dijanjikan, transaksi Anda akan dibatalkan. Anda akan menerima pengembalian dana penuh dikurangi biaya jaringan.</string>
+    <string name="pay_slippage_footer">Bagian mana pun dari biaya slippage yang tidak terpakai akan dikembalikan jika penukaran dijalankan dengan slippage lebih rendah dari perkiraan.</string>
+</resources>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="unified_send_sentence_i_want_to_send">Quero enviar</string>
+    <string name="unified_send_sentence_who_will_receive">quem vai receber</string>
+    <string name="unified_send_sentence_ill_pay">Vou pagar</string>
+    <string name="unified_send_address_placeholder">o endereço de alguém…</string>
+    <string name="unified_send_memo_hint">Adicione uma nota (opcional)</string>
+    <string name="unified_send_they_receive_approx">Recebem ≈</string>
+    <string name="unified_send_top_up">Adicionar saldo</string>
+    <string name="unified_send_title">Enviar</string>
+    <string name="unified_send_available_balance">Saldo disponível</string>
+    <string name="unified_send_swap_amounts">Trocar os campos de ZEC e moeda</string>
+    <string name="unified_send_toggle_balance_currency">Alternar a moeda principal do saldo</string>
+</resources>

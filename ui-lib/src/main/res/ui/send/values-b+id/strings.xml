@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="send_stage_send_title">Kirim</string>
+    <string name="send_scan_content_description">Pindai</string>
+    <string name="send_address_label">Kirim ke</string>
+    <string name="send_address_hint">Alamat Zcash</string>
+    <string name="send_address_invalid">Alamat tidak valid</string>
+    <string name="send_amount_label">Jumlah</string>
+    <string name="send_amount_hint"><xliff:g id="currency" example="ZEC">%1$s</xliff:g></string>
+    <string name="send_usd_amount_hint">USD</string>
+    <string name="send_amount_insufficient_balance">Dana tidak cukup</string>
+    <string name="send_amount_invalid">Jumlah tidak valid</string>
+    <string name="send_memo_label">Pesan</string>
+    <string name="send_memo_hint">Tulis pesan terenkripsi di sini…</string>
+    <string name="send_memo_bytes_counter">
+        <xliff:g id="typed_bytes" example="12">%1$s</xliff:g>/<xliff:g id="max_bytes" example="512">%2$s</xliff:g>
+    </string>
+    <string name="send_create">Tinjau</string>
+    <string name="send_fee">(Biaya umum &lt; <xliff:g id="fee_amount" example="0.001">%1$s</xliff:g>)</string>
+
+    <string name="send_dialog_error_title">Gagal mengirim dana</string>
+    <string name="send_dialog_error_text">Kesalahan: Upaya mengirim dana gagal. Silakan coba lagi.</string>
+    <string name="send_dialog_error_btn">OK</string>
+
+    <string name="send_abbreviated_address_format" formatted="true"><xliff:g id="first_five" example="zs1g7">%1$s</xliff:g>…<xliff:g id="last_five" example="mvyzg">%2$s</xliff:g></string>
+    <string name="send_transparent_memo">Transaksi transparan tidak bisa memiliki memo</string>
+
+    <string name="send_address_book_hint">Tambahkan kontak dengan menekan ikon Buku Alamat.</string>
+    <string name="send_address_book_content_description">Buka buku alamat</string>
+
+</resources>

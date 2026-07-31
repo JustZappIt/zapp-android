@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="settings_title">Pengaturan</string>
+    <string name="settings_advanced_settings">Pengaturan Lanjutan</string>
+    <string name="settings_integrations">Integrasi</string>
+    <string name="settings_about_us">Tentang</string>
+    <string name="settings_feedback">Kirim Masukan</string>
+    <string name="settings_version">Versi <xliff:g example="1" id="version">%s</xliff:g></string>
+    <string name="settings_address_book">Buku Alamat</string>
+    <string name="settings_whats_new">Yang Baru</string>
+
+    <string name="settings_troubleshooting_menu_content_description">Pengaturan tambahan</string>
+    <string name="settings_troubleshooting_rescan">Pindai ulang blockchain</string>
+    <string name="settings_troubleshooting_enable_background_sync">Sinkronisasi latar belakang</string>
+    <string name="settings_troubleshooting_enable_keep_screen_on">Biarkan layar tetap menyala selama sinkronisasi</string>
+
+    <!-- Tab Pengaturan (beranda bertab Zapp) -->
+    <string name="settings_you_title">Anda</string>
+    <string name="settings_group_people">Orang</string>
+    <string name="settings_group_security">Keamanan</string>
+    <string name="settings_group_privacy">Privasi</string>
+    <string name="settings_group_p2p">P2P</string>
+    <string name="settings_group_wallet">Dompet</string>
+    <string name="settings_contacts_subtitle">Kelola kontak obrolan Anda</string>
+    <string name="settings_profile_identity_title">Profil &amp; identitas</string>
+    <string name="settings_profile_identity_subtitle">Frasa pemulihan, kunci pesan, alamat dompet</string>
+    <string name="settings_app_lock_title">Kunci aplikasi</string>
+    <string name="settings_app_lock_subtitle">Ubah PIN atau ganti metode autentikasi</string>
+    <string name="settings_tor_title">Tor</string>
+    <string name="settings_tor_subtitle">Arahkan koneksi melalui Tor</string>
+    <string name="settings_swap_title">Tukar</string>
+    <string name="settings_swap_subtitle">Tukar aset kripto</string>
+    <string name="settings_local_currency_title">Mata uang lokal</string>
+    <string name="settings_local_currency_subtitle">%1$s - %2$s</string>
+    <string name="settings_server_subtitle">Pilih server lightwalletd</string>
+    <string name="settings_p2p_payment_method_title">Metode pembayaran P2P</string>
+    <string name="settings_p2p_payment_method_selected_subtitle">%1$s - %2$s</string>
+    <string name="settings_p2p_payment_method_save">Simpan pilihan</string>
+    <string name="settings_p2p_payment_method_coming_soon">Segera hadir</string>
+    <string name="settings_p2p_payment_method_pix">PIX</string>
+    <string name="settings_p2p_payment_method_pix_subtitle">Brasil</string>
+    <string name="settings_p2p_payment_method_upi">UPI</string>
+    <string name="settings_p2p_payment_method_upi_subtitle">India</string>
+    <string name="settings_p2p_payment_method_qris">QRIS</string>
+    <string name="settings_p2p_payment_method_qris_subtitle">Indonesia</string>
+    <string name="settings_p2p_payment_method_mercadopago">MercadoPago</string>
+    <string name="settings_p2p_payment_method_mercadopago_subtitle">Argentina</string>
+    <string name="settings_p2p_payment_method_pago_movil">Pago Móvil</string>
+    <string name="settings_p2p_payment_method_pago_movil_subtitle">Venezuela</string>
+    <string name="settings_p2p_payment_method_nip">NIP</string>
+    <string name="settings_p2p_payment_method_nip_subtitle">Nigeria</string>
+    <string name="settings_p2p_payment_method_transferencia">Transferencia</string>
+    <string name="settings_p2p_payment_method_transferencia_subtitle">Kolombia</string>
+    <string name="settings_p2p_payment_method_info_content_description">Cara kerjanya</string>
+    <string name="settings_p2p_payment_method_info_title">Cara kerjanya</string>
+    <string name="settings_p2p_payment_method_info_rails">Bayar merchant langsung melalui jalur P2P lokal. Saat ini kami mendukung UPI di India, PIX di Brasil, QRIS di Indonesia, MercadoPago di Argentina, Pago Móvil di Venezuela, NIP di Nigeria, dan Transferencia di Kolombia.</string>
+    <string name="settings_p2p_payment_method_info_flow">ZEC Anda dikonversi dan diselesaikan di Base, tempat merchant dibayar dalam mata uang lokalnya. Tanpa KYC, dan merchant hanya melihat akun Base Anda, bukan alamat Zcash Anda.</string>
+    <string name="settings_p2p_payment_method_info_base_label">Dompet Base Anda</string>
+    <string name="settings_p2p_payment_method_info_copy_content_description">Salin alamat Base</string>
+    <string name="settings_p2p_payment_method_info_copied_content_description">Tersalin</string>
+
+    <!-- Transaksi P2P (Pengaturan → entri Dompet) -->
+    <string name="p2p_transactions_title">Transaksi P2P</string>
+    <string name="p2p_transactions_balance_label">Saldo di Base</string>
+    <string name="p2p_transactions_balance_amount">%1$s USDC</string>
+    <string name="p2p_transactions_balance_unavailable">Saldo tidak tersedia</string>
+    <string name="p2p_transactions_balance_loading">—</string>
+    <string name="p2p_transactions_refund_button">Kembalikan ke ZEC</string>
+    <string name="p2p_transactions_refund_in_progress">Mengembalikan…</string>
+    <string name="p2p_transactions_refund_retry">Coba kembalikan lagi</string>
+    <string name="p2p_transactions_refund_failed">Gagal mengembalikan: %1$s</string>
+    <string name="p2p_transactions_refund_dialog_title">Kembalikan ke ZEC?</string>
+    <string name="p2p_transactions_refund_dialog_message">Ini mentransfer %1$s kembali ke dompet ZEC Anda melalui NEAR. Dana biasanya tiba dalam 5–10 menit.</string>
+    <string name="p2p_transactions_refund_dialog_confirm">Kembalikan</string>
+    <string name="p2p_transactions_refund_dialog_cancel">Batal</string>
+    <string name="p2p_transactions_account_label">Akun P2P</string>
+    <string name="p2p_transactions_empty">Belum ada transaksi P2P.</string>
+    <string name="p2p_transactions_error">Tidak dapat memuat transaksi. Tarik untuk menyegarkan.</string>
+    <string name="p2p_transactions_row_amount_usdc">%1$s USDC</string>
+    <string name="p2p_transactions_row_amount_fiat">%1$s %2$s</string>
+    <string name="p2p_transactions_row_order_id">Pesanan #%1$s</string>
+    <string name="p2p_transactions_type_buy">Beli</string>
+    <string name="p2p_transactions_type_sell">Jual</string>
+    <string name="p2p_transactions_type_pay">Bayar</string>
+    <string name="p2p_transactions_status_placed">Dibuat</string>
+    <string name="p2p_transactions_status_accepted">Diterima</string>
+    <string name="p2p_transactions_status_paid">Dibayar</string>
+    <string name="p2p_transactions_status_completed">Selesai</string>
+    <string name="p2p_transactions_status_cancelled">Dibatalkan</string>
+
+    <!-- Panel detail (baris transaksi yang diperluas) -->
+    <string name="p2p_transactions_detail_fee">Biaya</string>
+    <string name="p2p_transactions_detail_paid_by">Dibayar oleh</string>
+    <string name="p2p_transactions_detail_paid_to">Dibayar ke</string>
+    <string name="p2p_transactions_detail_p2p_merchant_address">Alamat merchant P2P</string>
+    <string name="p2p_transactions_detail_duration">Durasi</string>
+    <string name="p2p_transactions_detail_expand_content_description">Tampilkan detail</string>
+    <string name="p2p_transactions_detail_collapse_content_description">Sembunyikan detail</string>
+</resources>

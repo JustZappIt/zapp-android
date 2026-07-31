@@ -1,0 +1,3 @@
+Swap ZEC con Zapp
+- Swap ZEC protegidos por cualquier criptomoneda compatible con la integración de Near Intents.
+- Zapp es una billetera exclusiva para ZEC, por lo que necesitarás una dirección de billetera válida para el activo al que vas a intercambiar.

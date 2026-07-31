@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="tex_unsupported_title">Tipo de endereço não compatível</string>
+    <string name="tex_unsupported_description_part1">No momento, o Keystone não é compatível com transferências para endereços Binance TEX.</string>
+    <string name="tex_unsupported_description_part2">Siga as etapas abaixo para concluir sua transação.</string>
+    <string name="tex_unsupported_workaround_title">Etapas alternativas</string>
+    <string name="tex_unsupported_step_1_badge">Etapa 1</string>
+    <string name="tex_unsupported_step_1_title">Envie primeiro para o Zapp</string>
+    <string name="tex_unsupported_step_1_description">Transfira ZEC para o seu endereço protegido do Zapp</string>
+    <string name="tex_unsupported_step_2_badge">Etapa 2</string>
+    <string name="tex_unsupported_step_2_title">Envie do Zapp para o endereço TEX</string>
+    <string name="tex_unsupported_step_2_description">Depois de receber no Zapp, envie os tokens para o seu endereço de destino final TEX</string>
+    <string name="tex_unsupported_button">Entendi</string>
+</resources>

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="exchange_rate_info_title_1">Perlindungan Alamat IP</string>
+    <string name="exchange_rate_info_subtitle_1">Jika Perlindungan Tor diaktifkan (Pengaturan Lanjutan), Zapp melindungi alamat IP Anda.</string>
+    <string name="exchange_rate_info_subtitle_1_no_cmc">Nilai tukar diambil melalui Tor untuk melindungi alamat IP Anda. Pastikan penggunaan Tor diizinkan di wilayah Anda.</string>
+    <string name="exchange_rate_info_title_2">Pembaruan Nilai Tukar</string>
+    <string name="exchange_rate_info_subtitle_2">Nilai tukar diperbarui secara otomatis dan juga dapat diperbarui secara manual.</string>
+
+    <string name="exchange_rate_unavailable_title">Nilai tukar tidak tersedia</string>
+    <string name="exchange_rate_unavailable_subtitle">Kami sudah mencoba, tetapi tidak dapat memperbarui nilai tukar
+        untuk Anda. Periksa koneksi Anda, buka ulang aplikasi, dan kami akan mencoba lagi.</string>
+    <string name="exchange_rate_opt_in_title">Fitur Baru</string>
+    <string name="exchange_rate_opt_in_subtitle">Konversi Mata Uang</string>
+    <string name="exchange_rate_opt_in_primary_btn">Tinjau</string>
+
+    <string name="exchange_rate_opt_in_enable">Aktifkan</string>
+    <string name="exchange_rate_opt_in_save">Simpan perubahan</string>
+    <string name="exchange_rate_opt_in_skip">Lewati</string>
+    <string name="exchange_rate_opt_in_note">Catatan bagi yang sangat peduli privasi: Karena kami mengambil nilai tukar
+        dari bursa, sebuah bursa mungkin dapat melihat bahwa nilai tukar telah ditanyakan sebelum sebuah transaksi terjadi.</string>
+
+    <string name="exchange_rate_opt_in_option_title">Aktifkan</string>
+    <string name="exchange_rate_opt_in_option_subtitle">Tampilkan konversi mata uang.</string>
+    <string name="exchange_rate_opt_out_option_title">Nonaktifkan</string>
+    <string name="exchange_rate_opt_out_option_subtitle">Jangan tampilkan konversi mata uang.</string>
+    <string name="exchange_rate_opt_in_description">Tampilkan saldo dan jumlah pembayaran Anda dalam USD.\nAnda dapat mengelola
+        fitur ini di Pengaturan Lanjutan.</string>
+    <string name="exchange_rate_opt_in_description_settings">Lihat saldo dan jumlah pembayaran Anda dalam USD dengan
+        privasi tambahan. Nilai tukar diambil melalui Tor untuk melindungi alamat IP Anda.\n\nPeriksa apakah penggunaan Tor diizinkan di
+        wilayah Anda sebelum mengaktifkannya.</string>
+
+    <string name="exchange_rate_tor_opt_in_title">Tor Diperlukan untuk Konversi Mata Uang</string>
+    <string name="exchange_rate_tor_opt_in_description">Perlindungan Tor adalah fitur beta yang memberikan perlindungan
+        tambahan untuk alamat IP Anda. Nilai tukar USD hanya tersedia saat fitur ini diaktifkan.\n\nJika Tor diizinkan di wilayah Anda, kami sarankan untuk mengaktifkannya. Anda dapat mengelolanya di Pengaturan Lanjutan.</string>
+    <string name="exchange_rate_tor_opt_in_positive">Aktifkan</string>
+    <string name="exchange_rate_tor_opt_in_negative">Nanti saja</string>
+
+    <string name="exchange_rate_tor_enabled_footer">Menonaktifkan Perlindungan Tor juga akan menonaktifkan fitur Konversi Mata Uang hingga diaktifkan kembali.</string>
+    <string name="exchange_rate_tor_disabled_footer">Jika Anda ingin melindungi alamat IP Anda, aktifkan Perlindungan Tor di Pengaturan Lanjutan.</string>
+
+    <string name="exchange_rate_currency_picker_title">Pilih mata uang</string>
+    <string name="exchange_rate_currency_picker_save">Simpan pilihan</string>
+
+</resources>

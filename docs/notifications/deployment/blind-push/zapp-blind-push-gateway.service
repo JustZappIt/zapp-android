@@ -1,0 +1,22 @@
+[Unit]
+Description=Zapp blind-push Firebase gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zapp-push
+Group=zapp-push
+WorkingDirectory=/opt/zapp-blind-push
+ExecStart=/opt/zapp-blind-push/node_modules/.bin/blind-push-gateway run --config /etc/zapp-blind-push/gateway.json --storage /var/lib/zapp-blind-push-gateway
+Restart=on-failure
+RestartSec=10
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/zapp-blind-push-gateway
+
+[Install]
+WantedBy=multi-user.target

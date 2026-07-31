@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="select_keystone_account_default">Dompet Keystone</string>
+    <string name="select_keystone_account_positive">Buka kunci</string>
+    <string name="select_keystone_account_negative">Lupakan perangkat ini</string>
+    <string name="select_keystone_account_title">Konfirmasi Akun untuk Diakses</string>
+    <string name="select_keystone_account_subtitle">Pilih dompet yang ingin Anda hubungkan untuk melanjutkan. Setelah terhubung, Anda dapat menandatangani transaksi secara nirkabel dengan dompet perangkat keras Anda.</string>
+</resources>

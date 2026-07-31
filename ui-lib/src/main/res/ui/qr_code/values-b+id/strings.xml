@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="qr_code_close_content_description">Tutup</string>
+    <string name="qr_code_receive_title">Terima</string>
+    <string name="qr_code_unified_content_description">Kode QR Unified Address</string>
+    <string name="qr_code_sapling_content_description">Kode QR Alamat Sapling</string>
+    <string name="qr_code_transparent_content_description">Kode QR Alamat Transparan</string>
+    <string name="qr_code_wallet_address_shielded">Alamat Terlindungi Zcash</string>
+    <string name="qr_code_wallet_address_sapling">Alamat Sapling Zcash</string>
+    <string name="qr_code_wallet_address_transparent">Alamat Transparan Zcash</string>
+    <string name="qr_code_privacy_level_shielded">Privat</string>
+    <string name="qr_code_privacy_level_transparent">Tidak Privat</string>
+    <string name="qr_code_share_btn">Bagikan Kode QR</string>
+    <string name="qr_code_copy_btn">Salin Alamat</string>
+    <string name="qr_code_clipboard_tag">Alamat Dompet Zcash</string>
+    <string name="qr_code_data_unable_to_share">Tidak dapat menemukan aplikasi untuk membagikan kode QR.</string>
+    <string name="qr_code_share_chooser_title">Alamat %s Saya di Zapp</string>
+    <string name="qr_code_share_chooser_text">Hai, pindai kode QR ini untuk mengirimi saya pembayaran %s! Tautan Unduhan:
+        https://play.google.com/store/apps/details?id=xyz.justzappit.zapp</string>
+    <string name="qr_code_wallet_address_shielded_keystone">Alamat Terlindungi Keystone</string>
+    <string name="qr_code_wallet_address_sapling_keystone">Alamat Sapling Keystone</string>
+    <string name="qr_code_wallet_address_transparent_keystone">Alamat Transparan Keystone</string>
+</resources>

@@ -1,0 +1,344 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:ChatMessageBubble.kt$(isFromMe &amp;&amp; offsetX &lt; -swipeThreshold) || (!isFromMe &amp;&amp; offsetX &gt; swipeThreshold)</ID>
+    <ID>ComplexCondition:ChatMessageBubble.kt$(offsetX &gt; SWIPE_ICON_APPEAR_THRESHOLD &amp;&amp; !isFromMe) || (offsetX &lt; -SWIPE_ICON_APPEAR_THRESHOLD &amp;&amp; isFromMe)</ID>
+    <ID>ComplexCondition:EcdsaSigner.kt$EcdsaSigner$r.signum() &lt;= 0 || s.signum() &lt;= 0 || r &gt;= curve.n || s &gt;= curve.n</ID>
+    <ID>ComplexCondition:MediaBubble.kt$w != null &amp;&amp; h != null &amp;&amp; w &gt; 0 &amp;&amp; h &gt; 0</ID>
+    <ID>ComplexCondition:UnifiedSendVM.kt$UnifiedSendVM$!isSwap &amp;&amp; (hasZeroBalance || (hasAmount &amp;&amp; isAmountValid &amp;&amp; !hasFunds))</ID>
+    <ID>ComplexCondition:UnifiedSendVM.kt$UnifiedSendVM$!isSwap || asset == null || zecValue == null || zecUsdPrice == null</ID>
+    <ID>ComplexCondition:UnifiedSendVM.kt$UnifiedSendVM$isAddressValid &amp;&amp; isAmountValid &amp;&amp; hasFunds &amp;&amp; isMemoValid</ID>
+    <ID>ComplexCondition:UpiPayUri.kt$UpiPayUri$c in 'A'..'Z' || c in 'a'..'z' || c in '0'..'9' || c == '-' || c == '_' || c == '.' || c == '~' || c == '@'</ID>
+    <ID>ComplexCondition:WalletAddressField.kt$t.startsWith("0x") &amp;&amp; t.length == 42 &amp;&amp; t.drop(2).all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }</ID>
+    <ID>CyclomaticComplexMethod:AddContactSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable internal fun AddContactSheet( scannedMessagingKey: String?, onConsumeScannedMessagingKey: () -&gt; Unit, onScanMessagingKey: () -&gt; Unit, scannedAddress: String?, onConsumeScannedAddress: () -&gt; Unit, onScanWalletAddress: () -&gt; Unit, scanTargetField: String?, onScanAddrField: (addrType: String) -&gt; Unit, onConsumeScanTarget: () -&gt; Unit, onDismiss: () -&gt; Unit, onAdd: (name: String, messagingKey: String, walletAddress: String, walletAddresses: Map&lt;String, String&gt;) -&gt; Unit, )</ID>
+    <ID>CyclomaticComplexMethod:AddressBookSerializer.kt$AddressBookSerializer$fun deserializeAddressBook(inputStream: InputStream): AddressBook</ID>
+    <ID>CyclomaticComplexMethod:AddressBookView.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun AddressBookView( state: AddressBookState )</ID>
+    <ID>CyclomaticComplexMethod:ChatMessageBubble.kt$@Composable internal fun MessageBubble( message: ChatMessage, onReplyToMessage: ((ChatMessage) -&gt; Unit)? = null, onImageClick: ((ChatMessage) -&gt; Unit)? = null, )</ID>
+    <ID>CyclomaticComplexMethod:ChatRoomView.kt$@Composable internal fun ChatRoomView( state: ChatRoomState, onReplyToMessage: (ChatMessage) -&gt; Unit = {}, modifier: Modifier = Modifier, )</ID>
+    <ID>CyclomaticComplexMethod:EditContactSheet.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable internal fun EditContactSheet( editData: EditContactData, scannedAddress: String?, onConsumeScannedAddress: () -&gt; Unit, scanTargetField: String?, onScanAddrField: (addrType: String) -&gt; Unit, onConsumeScanTarget: () -&gt; Unit, onDismiss: () -&gt; Unit, onSave: (name: String, walletAddress: String, walletAddresses: Map&lt;String, String&gt;) -&gt; Unit, onDelete: () -&gt; Unit, )</ID>
+    <ID>CyclomaticComplexMethod:ExactInputVMMapper.kt$ExactInputVMMapper$fun createState( internalState: InternalState, onBack: () -&gt; Unit, onSwapInfoClick: () -&gt; Unit, onSwapAssetPickerClick: () -&gt; Unit, onSwapCurrencyTypeClick: (BigDecimal?) -&gt; Unit, onSlippageClick: (BigDecimal?) -&gt; Unit, onRequestSwapQuoteClick: (BigDecimal, String) -&gt; Unit, onTryAgainClick: () -&gt; Unit, onAddressChange: (String) -&gt; Unit, onTextFieldChange: (NumberTextFieldInnerState) -&gt; Unit, onQrCodeScannerClick: () -&gt; Unit, onAddressBookClick: () -&gt; Unit, onDeleteSelectedContactClick: () -&gt; Unit, onBalanceButtonClick: () -&gt; Unit, onChangeButtonClick: () -&gt; Unit, onAddressClick: () -&gt; Unit, onTopUpClick: () -&gt; Unit, onChangeReceivingAddress: () -&gt; Unit, ): SwapState</ID>
+    <ID>CyclomaticComplexMethod:ImageViewerOverlay.kt$private fun saveImageToGallery(context: Context, message: ChatMessage)</ID>
+    <ID>CyclomaticComplexMethod:MediaBubble.kt$@Composable internal fun MediaBubble( message: ChatMessage, isFromMe: Boolean, onImageClick: ((ChatMessage) -&gt; Unit)? = null, transferProgress: Float? = null, )</ID>
+    <ID>CyclomaticComplexMethod:NetworkStatus.kt$@Composable internal fun ConnectionPill( connectionStatus: ChatListConnectionStatus, peerCount: Int, dhtHealth: ChatListDhtHealth, onClick: (() -&gt; Unit)? = null )</ID>
+    <ID>CyclomaticComplexMethod:NetworkStatus.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable internal fun NetworkDetailsSheet( connectionStatus: ChatListConnectionStatus, peerCount: Int, dhtHealth: ChatListDhtHealth, connectionDetails: ConnectionDetailsUi?, onDismiss: () -&gt; Unit )</ID>
+    <ID>CyclomaticComplexMethod:OfframpStatusToSteps.kt$private fun stepDetail(status: OfframpStatus, step: OfframpStep): List&lt;StringResource&gt;</ID>
+    <ID>CyclomaticComplexMethod:PinVerifyScreen.kt$@Composable internal fun PinVerifyScreen( hasError: Boolean, showBack: Boolean = true, lockoutSecondsRemaining: Int = 0, onPinSubmit: (String) -&gt; Unit, onCancel: () -&gt; Unit = {}, )</ID>
+    <ID>CyclomaticComplexMethod:SecuritySettingsView.kt$@Composable private fun ChangePinScreen( onNewPinConfirmed: (String) -&gt; Unit, onBack: () -&gt; Unit, )</ID>
+    <ID>CyclomaticComplexMethod:UpiOfframpProgressVM.kt$UpiOfframpProgressVM$private fun curatedRevertStringRes(reason: KnownRevertReason): Int</ID>
+    <ID>CyclomaticComplexMethod:ZappOnboardingFlow.kt$@Composable internal fun ZappOnboardingFlow( onComplete: () -&gt; Unit, onBackToWelcome: () -&gt; Unit, walletViewModel: WalletViewModel, chatBootstrap: ChatBootstrap, navigationRouter: NavigationRouter, )</ID>
+    <ID>ForbiddenImport:AccountDataSource.kt$import co.electriccoin.zcash.ui.util.loggable</ID>
+    <ID>FunctionOnlyReturningConstant:Eip1559TxTest.kt$Eip1559TxTest$fun rlpEmpty()</ID>
+    <ID>FunctionOnlyReturningConstant:Eip1559TxTest.kt$Eip1559TxTest$fun rlpEmptyList()</ID>
+    <ID>ImplicitDefaultLocale:MessagingIdentityView.kt$String.format("%02d", idx + 1)</ID>
+    <ID>ImplicitDefaultLocale:OnbComponents.kt$String.format("%02d", n)</ID>
+    <ID>ImplicitDefaultLocale:WalletBackupView.kt$String.format("%02d", idx + 1)</ID>
+    <ID>InstanceOfCheckForException:OfframpBridgeWallet.kt$NearBridgeOfframpFunding$e is IllegalArgumentException</ID>
+    <ID>InstanceOfCheckForException:OfframpBridgeWallet.kt$NearBridgeOfframpFunding$e is TokenNotFoundException</ID>
+    <ID>LargeClass:ChatRoomVM.kt$ChatRoomVM : ViewModel</ID>
+    <ID>LargeClass:UnifiedSendVM.kt$UnifiedSendVM : ViewModel</ID>
+    <ID>LoopWithTooManyJumpStatements:P2pOrderHistory.kt$P2pOrderHistorySource$while</ID>
+    <ID>LoopWithTooManyJumpStatements:UpiQrParser.kt$UpiQrParser$for</ID>
+    <ID>MagicNumber:AbiDecoder.kt$AbiDecoder$0xff</ID>
+    <ID>MagicNumber:AddChatContactSheet.kt$10</ID>
+    <ID>MagicNumber:AddChatContactSheet.kt$6</ID>
+    <ID>MagicNumber:AddChatContactVM.kt$AddChatContactVM$64</ID>
+    <ID>MagicNumber:AddContactSheet.kt$10</ID>
+    <ID>MagicNumber:AddContactSheet.kt$6</ID>
+    <ID>MagicNumber:AddContactSheet.kt$64</ID>
+    <ID>MagicNumber:Address.kt$Address.Companion$16</ID>
+    <ID>MagicNumber:AdvancedSettingsView.kt$0.45f</ID>
+    <ID>MagicNumber:AuthenticationViewModel.kt$AuthenticationViewModel$1000</ID>
+    <ID>MagicNumber:AuthenticationViewModel.kt$AuthenticationViewModel$1_000</ID>
+    <ID>MagicNumber:AuthenticationViewModel.kt$AuthenticationViewModel$1_500</ID>
+    <ID>MagicNumber:AuthenticationViewModel.kt$AuthenticationViewModel$999</ID>
+    <ID>MagicNumber:BalanceChartPeriod.kt$BalanceChartPeriod.H24$24</ID>
+    <ID>MagicNumber:BalanceChartPeriod.kt$BalanceChartPeriod.M1$30</ID>
+    <ID>MagicNumber:BalanceChartPeriod.kt$BalanceChartPeriod.W1$7</ID>
+    <ID>MagicNumber:BalanceChartWidget.kt$BalanceChartWidgetStateFixture$200_000_000.0</ID>
+    <ID>MagicNumber:BalanceChartWidget.kt$BalanceChartWidgetStateFixture$220_000_000.0</ID>
+    <ID>MagicNumber:BalanceChartWidget.kt$BalanceChartWidgetStateFixture$225_000_000.0</ID>
+    <ID>MagicNumber:BalanceChartWidget.kt$BalanceChartWidgetStateFixture$260_000_000.0</ID>
+    <ID>MagicNumber:BalanceChartWidget.kt$BalanceChartWidgetStateFixture$290_000_000.0</ID>
+    <ID>MagicNumber:BalanceChartWidget.kt$BalanceChartWidgetStateFixture$290_000_000L</ID>
+    <ID>MagicNumber:BalanceChartWidget.kt$BalanceChartWidgetStateFixture$3.0</ID>
+    <ID>MagicNumber:BalanceChartWidget.kt$BalanceChartWidgetStateFixture$310_000_000.0</ID>
+    <ID>MagicNumber:BalanceChartWidget.kt$BalanceChartWidgetStateFixture$4.0</ID>
+    <ID>MagicNumber:BalanceChartWidget.kt$BalanceChartWidgetStateFixture$400_000_000.0</ID>
+    <ID>MagicNumber:BalanceChartWidget.kt$BalanceChartWidgetStateFixture$5.0</ID>
+    <ID>MagicNumber:BalanceChartWidget.kt$BalanceChartWidgetStateFixture$6.0</ID>
+    <ID>MagicNumber:BioScanScreen.kt$0.9f</ID>
+    <ID>MagicNumber:ChatMessageBubble.kt$80f</ID>
+    <ID>MagicNumber:ChatScanPublicKeyVM.kt$ChatScanPublicKeyVM$64</ID>
+    <ID>MagicNumber:EoaSigner.kt$EoaSigner$100L</ID>
+    <ID>MagicNumber:Erc4337Submitter.kt$Erc4337Submitter$100L</ID>
+    <ID>MagicNumber:Erc4337Submitter.kt$Erc4337Submitter$60_000</ID>
+    <ID>MagicNumber:EvmKeyDerivation.kt$EvmKeyDerivation$0x8000_0000L</ID>
+    <ID>MagicNumber:EvmKeyDerivation.kt$EvmKeyDerivation$0xff</ID>
+    <ID>MagicNumber:EvmKeyDerivation.kt$EvmKeyDerivation$0xffff_ffffL</ID>
+    <ID>MagicNumber:EvmKeyDerivation.kt$EvmKeyDerivation$16</ID>
+    <ID>MagicNumber:EvmKeyDerivation.kt$EvmKeyDerivation$24</ID>
+    <ID>MagicNumber:EvmKeyDerivation.kt$EvmKeyDerivation$44</ID>
+    <ID>MagicNumber:EvmKeyDerivation.kt$EvmKeyDerivation$60</ID>
+    <ID>MagicNumber:EvmKeyDerivation.kt$EvmKeyDerivation$8</ID>
+    <ID>MagicNumber:FileUtils.kt$FileUtils$1024</ID>
+    <ID>MagicNumber:FileUtils.kt$FileUtils$1024.0</ID>
+    <ID>MagicNumber:FloatingPillNavBar.kt$0.81f</ID>
+    <ID>MagicNumber:FloatingPillNavBar.kt$99</ID>
+    <ID>MagicNumber:Hex.kt$0xff</ID>
+    <ID>MagicNumber:Hex.kt$16</ID>
+    <ID>MagicNumber:Hex.kt$4</ID>
+    <ID>MagicNumber:ImageViewerOverlay.kt$5f</ID>
+    <ID>MagicNumber:MessagingIdentityView.kt$0.92f</ID>
+    <ID>MagicNumber:MessagingIdentityView.kt$3</ID>
+    <ID>MagicNumber:OrderReader.kt$OrderStatus.CANCELLED$4</ID>
+    <ID>MagicNumber:OrderReader.kt$OrderStatus.COMPLETED$3</ID>
+    <ID>MagicNumber:PinComponents.kt$6</ID>
+    <ID>MagicNumber:PinSetupScreen.kt$6</ID>
+    <ID>MagicNumber:PinVerifyScreen.kt$6</ID>
+    <ID>MagicNumber:ReceiveView.kt$0.92f</ID>
+    <ID>MagicNumber:RequestQrCodeView.kt$0.92f</ID>
+    <ID>MagicNumber:RequestQrCodeView.kt$10</ID>
+    <ID>MagicNumber:RequestQrCodeView.kt$16</ID>
+    <ID>MagicNumber:RequestQrCodeView.kt$6</ID>
+    <ID>MagicNumber:ReviewTransactionVM.kt$ReviewTransactionVM$1000</ID>
+    <ID>MagicNumber:ReviewTransactionVM.kt$ReviewTransactionVM$1_000</ID>
+    <ID>MagicNumber:ReviewTransactionVM.kt$ReviewTransactionVM$1_500</ID>
+    <ID>MagicNumber:ReviewTransactionVM.kt$ReviewTransactionVM$999</ID>
+    <ID>MagicNumber:Rlp.kt$Rlp$0x80</ID>
+    <ID>MagicNumber:Rlp.kt$Rlp$0xc0</ID>
+    <ID>MagicNumber:Rlp.kt$Rlp$0xff</ID>
+    <ID>MagicNumber:RpcHttpClient.kt$RpcHttpClient$500</ID>
+    <ID>MagicNumber:RpcHttpClient.kt$RpcHttpClient$599</ID>
+    <ID>MagicNumber:SecuritySettingsVM.kt$SecuritySettingsVM$1000</ID>
+    <ID>MagicNumber:SecuritySettingsVM.kt$SecuritySettingsVM$1000L</ID>
+    <ID>MagicNumber:SecuritySettingsView.kt$1500</ID>
+    <ID>MagicNumber:SecuritySettingsView.kt$6</ID>
+    <ID>MagicNumber:TransactionBubble.kt$4</ID>
+    <ID>MagicNumber:TransactionBubble.kt$8</ID>
+    <ID>MagicNumber:UnifiedSendVM.kt$UnifiedSendVM$512</ID>
+    <ID>MagicNumber:WalletAddressField.kt$32</ID>
+    <ID>MagicNumber:WalletAddressField.kt$34</ID>
+    <ID>MagicNumber:WalletAddressField.kt$36</ID>
+    <ID>MagicNumber:WalletAddressField.kt$42</ID>
+    <ID>MagicNumber:WalletAddressField.kt$44</ID>
+    <ID>MagicNumber:WalletAddressField.kt$6</ID>
+    <ID>MagicNumber:WalletAddressField.kt$78</ID>
+    <ID>MagicNumber:WalletAddressField.kt$8</ID>
+    <ID>MagicNumber:WalletBackupView.kt$0.95f</ID>
+    <ID>MagicNumber:WalletBackupView.kt$3</ID>
+    <ID>MagicNumber:WalletBackupViewModel.kt$WalletBackupViewModel$1000</ID>
+    <ID>MagicNumber:WalletBackupViewModel.kt$WalletBackupViewModel$1_000</ID>
+    <ID>MagicNumber:WalletBackupViewModel.kt$WalletBackupViewModel$1_500</ID>
+    <ID>MagicNumber:WalletBackupViewModel.kt$WalletBackupViewModel$999</ID>
+    <ID>MagicNumber:WalletBalanceCard.kt$100</ID>
+    <ID>MagicNumber:WalletBalanceCard.kt$100.0</ID>
+    <ID>MagicNumber:WalletBalanceCard.kt$100_000_000L</ID>
+    <ID>MagicNumber:WalletBalanceCard.kt$6</ID>
+    <ID>MagicNumber:WalletBalanceCard.kt$8</ID>
+    <ID>MagicNumber:WalletPhaseIntroView.kt$0.94f</ID>
+    <ID>MagicNumber:WalletSyncStateVM.kt$WalletSyncStateVM$100f</ID>
+    <ID>MagicNumber:WalletSyncStatusViews.kt$0.02f</ID>
+    <ID>MagicNumber:WalletSyncStatusViews.kt$100f</ID>
+    <ID>MagicNumber:WalletTabContent.kt$0.94f</ID>
+    <ID>MagicNumber:WelcomeGateView.kt$0.85f</ID>
+    <ID>MagicNumber:ZappComponents.kt$0.45f</ID>
+    <ID>MagicNumber:ZappPalette.kt$0x14141210</ID>
+    <ID>MagicNumber:ZappPalette.kt$0x73141210</ID>
+    <ID>MagicNumber:ZappPalette.kt$0x80000000</ID>
+    <ID>MagicNumber:ZappPalette.kt$0x8C000000</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF0F0E0C</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF15120D</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF171512</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF1A140B</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF1A2E24</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF1B1916</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF1C1A16</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF1F1C18</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF201D19</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF2A2622</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF2E1A18</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF2F9D6A</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF3A2713</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF3A342D</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF5FD49C</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF6B645A</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF726A60</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFF9A9288</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFFA59C90</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFFA65500</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFFD7F0E3</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFFD94545</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFFD9D4CA</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFFEBE7E0</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFFECEBE5</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFFEF6A5F</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFFEFECE5</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFFF4F2EE</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFFF6F2EA</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFFF6F4F0</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFFFDE2E0</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFFFF9417</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFFFFB26B</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFFFFE7CC</ID>
+    <ID>MagicNumber:ZappPalette.kt$0xFFFFFFFF</ID>
+    <ID>MatchingDeclarationName:AndroidTabs.kt$TabsArgs</ID>
+    <ID>MatchingDeclarationName:BridgeToBaseScreen.kt$BridgeToBaseArgs</ID>
+    <ID>MatchingDeclarationName:ChatProfileSegmentedRow.kt$SegmentItem</ID>
+    <ID>MatchingDeclarationName:FloatingPillNavBar.kt$ZappTab</ID>
+    <ID>MatchingDeclarationName:SecuritySettingsScreen.kt$SecuritySettingsArgs</ID>
+    <ID>MatchingDeclarationName:SparkChart.kt$SparkChartData</ID>
+    <ID>MatchingDeclarationName:TwoFAChoiceScreen.kt$TwoFAMode</ID>
+    <ID>MatchingDeclarationName:ZappSpeedDialFab.kt$ZappSpeedDialAction</ID>
+    <ID>MatchingDeclarationName:ZappTypography.kt$ZappTextStyles</ID>
+    <ID>MaxLineLength:AccountDataSource.kt$AccountDataSourceImpl$log("retrying address derivation for ${sdkAccount.accountUuid}, attempt $attempt", cause as? Exception)</ID>
+    <ID>MaxLineLength:AddChatContactVM.kt$AddChatContactVM$private val onSaveContact: (publicKey: String, name: String, walletAddress: String, walletAddresses: Map&lt;String, String&gt;) -&gt; Unit</ID>
+    <ID>MaxLineLength:AddContactSheet.kt$if (evmAddr.text.isNotBlank()) put(AddressBookContact.ADDR_TYPE_EVM, evmAddr.text.trim())</ID>
+    <ID>MaxLineLength:AddContactSheet.kt$if (solanaAddr.text.isNotBlank()) put(AddressBookContact.ADDR_TYPE_SOLANA, solanaAddr.text.trim())</ID>
+    <ID>MaxLineLength:AddContactSheet.kt$val scanMessagingKeyDescription = stringResource(R.string.address_book_scan_messaging_key_content_description)</ID>
+    <ID>MaxLineLength:AddContactSheet.kt$val scanWalletAddressDescription = stringResource(R.string.address_book_scan_wallet_address_content_description)</ID>
+    <ID>MaxLineLength:AddressBookVM.kt$AddressBookVM$private</ID>
+    <ID>MaxLineLength:BridgeToBaseView.kt$amountInput = NumberTextFieldState(NumberTextFieldInnerState.fromAmount(java.math.BigDecimal("5.04"))) {}</ID>
+    <ID>MaxLineLength:BridgeToBaseView.kt$availabilityHint = BridgeAvailabilityHint(stringRes("Merchants are available now."), isWarning = false)</ID>
+    <ID>MaxLineLength:BridgeToBaseView.kt$explainer = stringRes("We bridge your ZEC to Base. This takes a few minutes; after that, paying merchants is instant.")</ID>
+    <ID>MaxLineLength:ChatMessageBubble.kt$if</ID>
+    <ID>MaxLineLength:EditChatContactVM.kt$EditChatContactVM$private val onSaveContact: (publicKey: String, name: String, walletAddress: String, walletAddresses: Map&lt;String, String&gt;) -&gt; Unit</ID>
+    <ID>MaxLineLength:EditContactSheet.kt$if (transparentAddr.text.isNotBlank()) put(AddressBookContact.ADDR_TYPE_TRANSPARENT, transparentAddr.text.trim())</ID>
+    <ID>MaxLineLength:EditContactSheet.kt$val cancelDeleteDescription = stringResource(R.string.address_book_edit_cancel_delete_content_description)</ID>
+    <ID>MaxLineLength:EditContactSheet.kt$val confirmDeleteDescription = stringResource(R.string.address_book_edit_confirm_delete_content_description)</ID>
+    <ID>MaxLineLength:EoaSignerTest.kt$EoaSignerTest$"""{"jsonrpc":"2.0","id":1,"result":{"number":"0x100","timestamp":"0x68000000","baseFeePerGas":"0x77359400"}}"""</ID>
+    <ID>MaxLineLength:Erc4337Submitter.kt$Erc4337Submitter$/** thirdweb's prebuilt Account contract validates the owner's ECDSA signature over the EIP-191-prefixed userOpHash. */</ID>
+    <ID>MaxLineLength:ImageViewerOverlay.kt$Toast.makeText(context, context.getString(R.string.chat_room_image_viewer_save_failed), Toast.LENGTH_SHORT).show()</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Entry("MERCHANT_NOT_FULLFILLED_ELIGIBILITY_THRESHOLD", "Merchant has not fulfilled eligibility threshold")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Entry("USER_HAS_NO_REPUTATION", "Kindly do ZK social verifications and increase your limits to place more orders")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x0ece93a6") to Entry("RECOMMENDATION_ALREADY_CLAIMED", "Recommendation already claimed")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x138b9d5a") to Entry("INVALID_ORDER_AMOUNT_TO_COVER_FEE", "Order amount is not enough to cover fee")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x181b1b2e") to Entry("ORDER_STATUS_INVALID", "Order with placed status only can be re-assigned")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x1b19ad97") to Entry("MERCHANT_MONTHLY_REFERRAL_LIMIT_REACHED", "Merchant monthly referral limit reached")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x1b5433c8") to Entry("ACCOUNT_BOUND_TO_ANOTHER_CIRCLE", "Account is bound to another circle")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x20d5910f") to Entry("ORDER_TOO_LATE_FOR_REASSIGNMENT", "Order is too late for reassignment")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x279bbc0c") to Entry("USDC_TRANSFER_FAILED_WITH_PANIC", "USDC transfer failed with panic")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x2a829f07") to Entry("INVALID_ORDER_STATUS_TO_RAISE_DISPUTE", "Invalid order status to raise dispute")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x36bdb7b6") to Entry("ZK_PASSPORT_IDENTIFIER_ALREADY_VERIFIED", "ZK Passport identifier already verified")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x3a8fbef4") to Entry("NOT_PRICE_UPDATER_FOR_CURRENCY", "Not the price updater for this currency")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x47bfece5") to Entry("USDC_TRANSFER_FAILED_WITH_ERROR_MESSAGE", "USDC transfer failed with error message")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x48183836") to Entry("ZK_PASSPORT_MIN_AGE_TOO_HIGH", "ZK Passport minimum age too high")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x487add97") to Entry("NEW_PAYMENT_CHANNEL_SHOULD_BE_ACTIVE", "New payment channel should be active")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x549e2555") to Entry("EXIT_AMOUNT_EXCEEDED_CIRCLE_BALANCE", "Exit amount exceeded circle balance")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x64301cb8") to Entry("SELL_ORDER_AMOUNT_LIMIT_EXCEEDED", "Sell order amount limit exceeded")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x675dbc86") to Entry("MONTHLY_BUY_ORDER_LIMIT_EXCEEDED", "Monthly buy order count limit exceeded")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x81c2b982") to Entry("NO_FIAT_LIQUIDITY", "No fiat liquidity on exchange to complete order")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x91da284f") to Entry("BUY_ORDER_AMOUNT_EXCEEDS_LIMIT", "Buy order amount exceeds limit")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0xa18ea4e8") to Entry("USER_ID_ALREADY_VERIFIED", "The social media account's user ID is already verified")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0xab284291") to Entry("PAYMENT_CHANNEL_NOT_REJECTED", "Payment channel has not been rejected")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0xab948796") to Entry("ONLY_ROUTER_CAN_FULFILL", "Only the router can fulfill this request")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0xb14a1ff3") to Entry("USER_YEARLY_VOLUME_LIMIT_EXCEEDED", "Yearly volume limit exceeded")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0xb407b9ec") to Entry("SELL_ORDER_AMOUNT_EXCEEDS_LIMIT", "Sell order amount exceeds limit")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0xbb776720") to Entry("ORDER_TOO_EARLY_FOR_REASSIGNMENT", "Order is too early for reassignment")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0xbba2edf9") to Entry("SELL_AMOUNT_EXCEEDS_FIAT_LIMIT", "Sell amount exceeds fiat limit")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0xbf2d0ba1") to Entry("P2P_UNSTAKE_COOLDOWN_NOT_PASSED", "P2P unstake cooldown period has not passed")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0xc905b99a") to Entry("SAME_PAYMENT_CHANNEL", "Old and new payment channels are the same")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0xcedb41f1") to Entry("OLD_PAYMENT_CHANNEL_SHOULD_BE_INACTIVE", "Old payment channel should be inactive")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0xd2e1e6e0") to Entry("ZERO_REPUTATION_POINTS", "Cannot place buy orders with 0 reputation points")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0xdab11ea6") to Entry("P2P_UNSTAKE_REQUEST_PENDING", "A P2P unstake request is already pending")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0xe595a7bf") to Entry("DAILY_BUY_ORDER_LIMIT_EXCEEDED", "Daily buy order count limit exceeded")</ID>
+    <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0xec4b3ce6") to Entry("EXIT_WOULD_BREACH_DELEGATION_INVARIANT", "Exit would breach delegation invariant")</ID>
+    <ID>MaxLineLength:MessagingIdentityView.kt$style = ZappTheme.typography.button.copy(color = c.onAccent, fontSize = 12.sp, fontWeight = FontWeight.Black)</ID>
+    <ID>MaxLineLength:NearApiProvider.kt$"Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjIwMjUtMDEtMTItdjEifQ.eyJ2IjoxLCJrZXlfdHlwZSI6ImRpc3RyaWJ1dGlvbl9jaGFubmVsIiwicGFydG5lcl9pZCI6InphcHAiLCJpYXQiOjE3NzgxNTU1ODQsImV4cCI6MTgwOTY5MTU4NH0.R7Nk8UI0ZI-q4h0nFHjij8-zZBIzHkeKAGHtySUX8FL3GLsDm53hnqoiGArQqcj2Iwf-x9fcg0GSV8-WAnlFTakQh6RBke91cU7CemIcqbffzw98wqiSw6iDGZxpbLDwUN7dD_6PNPhp4ZUWfiwmi7U6VcpARqqc2KJAiCn2GbZF6E_dQ-uNBFi7T4Paw641E-mKSrSDvn2OCUQbQLF3iY8_JyLMfbf8kCQPq8-MPv93nvMXieogeu5c6Z9PmZfWCKEfuMbCpjBHEe9BDD8_S9CcuzQCOLtdHkXEbmT4QQ7nBVAY-DMpYVGgOs1mzCK4xmW8frtStYBn194C-DK6yA"</ID>
+    <ID>MaxLineLength:OfframpCheckpoint.kt$OfframpCheckpoint$/** Nullable for back-compat with checkpoints written before fiat was tracked; resume falls back to live sellPrice. */</ID>
+    <ID>MaxLineLength:OfframpCheckpointPersisterTest.kt$OfframpCheckpointPersisterTest$persister.onStatus(OfframpStatus.PlacingOrder(txHash = PLACE_ORDER_HASH, circleId = BigInteger.ONE, amount = AMOUNT))</ID>
+    <ID>MaxLineLength:OfframpOrchestratorTest.kt$OfframpOrchestratorTest$"""{"jsonrpc":"2.0","id":1,"result":{"number":"0x100","timestamp":"0x68000000","baseFeePerGas":"0x77359400"}}"""</ID>
+    <ID>MaxLineLength:OfframpOrchestratorTest.kt$OfframpOrchestratorTest$assertEquals(listOf&lt;String?&gt;("near-deposit-abc"), seenResumeHandles, "resume must pass the persisted handle")</ID>
+    <ID>MaxLineLength:OfframpOrchestratorTest.kt$OfframpOrchestratorTest$onChainVerifier.next = snapshot(status = OrderStatus.ACCEPTED, pubkey = MERCHANT_PUBKEY, merchant = MERCHANT_ADDRESS)</ID>
+    <ID>MaxLineLength:OfframpOrchestratorTest.kt$OfframpOrchestratorTest$orderReader.enqueue(snapshot(status = OrderStatus.ACCEPTED, pubkey = ATTACKER_PUBKEY, merchant = MERCHANT_ADDRESS))</ID>
+    <ID>MaxLineLength:OfframpOrchestratorTest.kt$OfframpOrchestratorTest$orderReader.enqueue(snapshot(status = OrderStatus.ACCEPTED, pubkey = MERCHANT_PUBKEY, merchant = MERCHANT_ADDRESS))</ID>
+    <ID>MaxLineLength:OfframpOrchestratorTest.kt$OfframpOrchestratorTest$orderReader.enqueue(snapshot(status = OrderStatus.COMPLETED, pubkey = MERCHANT_PUBKEY, merchant = MERCHANT_ADDRESS))</ID>
+    <ID>MaxLineLength:OfframpOrchestratorTest.kt$OfframpOrchestratorTest$orderReader.enqueue(snapshot(status = OrderStatus.PAID, pubkey = MERCHANT_PUBKEY, merchant = MERCHANT_ADDRESS))</ID>
+    <ID>MaxLineLength:OfframpOrchestratorTest.kt$OfframpOrchestratorTest.Companion$private const</ID>
+    <ID>MaxLineLength:P2pTransactionsFormat.kt$amountUsdc = stringRes(R.string.p2p_transactions_row_amount_usdc, usdcAmount.toDisplayString(stripTrailingZeros = true))</ID>
+    <ID>MaxLineLength:P2pTransactionsFormat.kt$fromLabel = fromForType(orderType)?.let(::extractUpiVpa)?.let { stringRes(R.string.p2p_transactions_row_from, it) }</ID>
+    <ID>MaxLineLength:SecuritySettingsVM.kt$SecuritySettingsVM$NewPinIntent.SwitchFromBiometric -&gt; stringRes(R.string.security_settings_success_switched_pin)</ID>
+    <ID>MaxLineLength:SecuritySettingsVM.kt$SecuritySettingsVM$PinVerifyIntent.ChangePinSetNew -&gt; SecuritySettingsState.SettingNewPin(NewPinIntent.ChangeExisting)</ID>
+    <ID>MaxLineLength:SelectABRecipientVM.kt$SelectABRecipientVM$private</ID>
+    <ID>MaxLineLength:UpiOfframpProgressVM.kt$UpiOfframpProgressVM$.</ID>
+    <ID>MaxLineLength:UpiOfframpProgressVM.kt$UpiOfframpProgressVM$combine</ID>
+    <ID>MaxLineLength:UpiOfframpProgressView.kt$"Still connecting you to a merchant. Your USDC stays in your account; if no merchant accepts, the order auto-cancels on chain."</ID>
+    <ID>MaxLineLength:UpiOfframpProgressView.kt$subtitle = stringRes("No merchant completed this order in time. Your USDC has been refunded on-chain.")</ID>
+    <ID>MaxLineLength:UpiOfframpProgressView.kt$tip = stringRes("Tip: ask the merchant to generate the UPI QR only after this screen opens.")</ID>
+    <ID>MaxLineLength:UpiQrParser.kt$UpiQrParser$val paymentAddress = params[PARAM_PAYMENT_ADDRESS] ?: return UpiQrParseResult.Failure(UpiQrError.MissingPaymentAddress)</ID>
+    <ID>MaxLineLength:UserOperationV06Test.kt$UserOperationV06Test$// "getUserOpHash((address,uint256,bytes,bytes,uint256,uint256,uint256,uint256,uint256,bytes,bytes))(bytes32)" \</ID>
+    <ID>MaxLineLength:WalletAddressField.kt$return</ID>
+    <ID>MaxLineLength:WalletAddressField.kt$return if ((t.startsWith("t1") || t.startsWith("t3")) &amp;&amp; t.length in 34..36) AddrValidation.VALID else AddrValidation.INVALID</ID>
+    <ID>MaxLineLength:WalletAddressField.kt$val scanDescription = stringResource(R.string.address_book_scan_addr_qr_content_description, label)</ID>
+    <ID>MaxLineLength:build.gradle.kts$.</ID>
+    <ID>MayBeConst:CurrencyUtil.kt$val CURRENCY_TICKER: String = "ZEC"</ID>
+    <ID>MayBeConst:EncryptedPreferenceProviderTest.kt$EncryptedPreferenceProviderTest.Companion$private val FILENAME = "encrypted_preference_test"</ID>
+    <ID>MayBeConst:StandardPreferenceProviderTest.kt$StandardPreferenceProviderTest.Companion$private val FILENAME = "encrypted_preference_test"</ID>
+    <ID>NestedBlockDepth:FileUtils.kt$FileUtils$fun getFileName(context: Context, uri: Uri): String?</ID>
+    <ID>NestedBlockDepth:OfframpBridgeWallet.kt$NearBridgeOfframpFunding$private suspend fun pollUntilSettled(depositAddress: String, tokens: List&lt;SwapAsset&gt;)</ID>
+    <ID>NestedBlockDepth:UpiQrParser.kt$UpiQrParser$private fun urlDecode(s: String): String</ID>
+    <ID>ReturnCount:AbiDecoder.kt$AbiDecoder$fun dynamicStringAt(byteOffset: Int): String</ID>
+    <ID>ReturnCount:Address.kt$Address.Companion$fun parseOrNull(input: String): Address?</ID>
+    <ID>ReturnCount:BalanceChartVM.kt$BalanceChartVM$private fun createState( history: List&lt;BalanceHistoryPoint&gt;?, period: BalanceChartPeriod, ): BalanceChartState</ID>
+    <ID>ReturnCount:BalanceChartVM.kt$BalanceChartVM$private fun windowForPeriod( history: List&lt;BalanceHistoryPoint&gt;, period: BalanceChartPeriod, ): List&lt;BalanceHistoryPoint&gt;</ID>
+    <ID>ReturnCount:BaseRpcClient.kt$BaseRpcClient$suspend fun ethGetTransactionReceipt(txHash: TxHash): TransactionReceipt?</ID>
+    <ID>ReturnCount:CircleRouter.kt$CircleRouter$fun selectCircle(eligible: List&lt;CircleForRouting&gt;): CircleForRouting?</ID>
+    <ID>ReturnCount:CircleRouter.kt$CircleRouter$private fun weightedRandomChoice( circles: List&lt;CircleForRouting&gt;, weights: List&lt;Double&gt;, ): CircleForRouting</ID>
+    <ID>ReturnCount:EcdsaSigner.kt$EcdsaSigner$fun recoverPublicKey(recId: Int, r: BigInteger, s: BigInteger, messageHash: ByteArray): ECPoint?</ID>
+    <ID>ReturnCount:EvmKeyDerivation.kt$EvmKeyDerivation$private fun ckdPrivOnce(parent: ExtKey, index: Int): ExtKey?</ID>
+    <ID>ReturnCount:ExactInputVMMapper.kt$ExactInputVMMapper$private fun createTopUpButtonState( state: ExactInputInternalState, onTopUpClick: () -&gt; Unit, ): ButtonState?</ID>
+    <ID>ReturnCount:ImageViewerOverlay.kt$private fun saveImageToGallery(context: Context, message: ChatMessage)</ID>
+    <ID>ReturnCount:OfframpOrchestrator.kt$OfframpOrchestrator$private suspend fun isUpiAlreadyOnChain(orderId: BigInteger, accepted: OrderSnapshot): Boolean</ID>
+    <ID>ReturnCount:OfframpStatusToSteps.kt$private fun computeStepStatus( index: Int, order: List&lt;OfframpStep&gt;, currentStep: OfframpStep?, failedStep: OfframpStep?, status: OfframpStatus, ): UpiOfframpStepStatus</ID>
+    <ID>ReturnCount:OfframpVM.kt$OfframpVM$private fun computeFiat(amount: String, rate: ExchangeRateState): StringResource?</ID>
+    <ID>ReturnCount:OrderEvents.kt$OrderEvents$fun parseOrderIdFromLog(log: EvmLog): BigInteger?</ID>
+    <ID>ReturnCount:OrderReader.kt$OrderReader$fun decodeAddressArrayNonEmpty(returnData: ByteArray): Boolean</ID>
+    <ID>ReturnCount:P2pTransactionsVM.kt$P2pTransactionsVM$private fun refundUi(bal: BalanceLoad, rf: RefundFlow): RefundUiState</ID>
+    <ID>ReturnCount:SolidityErrors.kt$SolidityErrors$fun decodeErrorString(revertData: ByteArray): String?</ID>
+    <ID>ReturnCount:SubgraphOrderParser.kt$SubgraphOrderParser$private fun parseEpochSecondsOrNull(value: String?): Long?</ID>
+    <ID>ReturnCount:SubgraphOrderParser.kt$SubgraphOrderParser$private fun parseNullableAddress(hex: String?): Address?</ID>
+    <ID>ReturnCount:UnifiedSendVM.kt$UnifiedSendVM$@Suppress("CyclomaticComplexMethod") private fun buildPrimaryButton( isSwap: Boolean, isRequesting: Boolean, swapAssets: SwapAssetsData, isAddressValid: Boolean, isAmountValid: Boolean, hasAmount: Boolean, hasFunds: Boolean, hasZeroBalance: Boolean, isMemoValid: Boolean, ): PrimaryButtonState</ID>
+    <ID>ReturnCount:UnifiedSendVM.kt$UnifiedSendVM$fun onFiatAmountChange(inner: NumberTextFieldInnerState)</ID>
+    <ID>ReturnCount:UnifiedSendVM.kt$UnifiedSendVM$private fun computeTheyReceiveLabel( isSwap: Boolean, asset: SwapAsset?, zecValue: BigDecimal?, zecUsdPrice: BigDecimal?, ): StringResource?</ID>
+    <ID>ReturnCount:UpiOfframpProgressVM.kt$UpiOfframpProgressVM$private fun buildFeeBreakdown(fees: OrderFeeDetails?): UpiOfframpFeeBreakdown?</ID>
+    <ID>ReturnCount:UpiOfframpProgressVM.kt$UpiOfframpProgressVM$private fun decodedReason(failed: OfframpStatus.Failed): StringResource?</ID>
+    <ID>ReturnCount:UpiOfframpVM.kt$UpiOfframpVM$private fun onSendClick()</ID>
+    <ID>ReturnCount:UpiOfframpVM.kt$UpiOfframpVM$private fun validate(usdc: BigDecimal?, upi: String): StringResource?</ID>
+    <ID>ReturnCount:UpiQrParser.kt$UpiQrParser$fun parseQr(qrData: String): UpiQrParseResult</ID>
+    <ID>ReturnCount:WalletBalanceCard.kt$private fun BalanceChartState.computeDelta(): BalanceDeltaResult?</ID>
+    <ID>SwallowedException:AndroidUncaughtExceptionHandlerTest.kt$AndroidUncaughtExceptionHandlerTest$e: IllegalStateException</ID>
+    <ID>ThrowsCount:BaseRpcClient.kt$BaseRpcClient$private suspend fun rpcCall(method: String, params: JsonArray): JsonElement</ID>
+    <ID>ThrowsCount:BundlerClient.kt$BundlerClient$private suspend fun rpcCall(method: String, params: JsonArray): JsonElement</ID>
+    <ID>ThrowsCount:OfframpBridgeWallet.kt$NearBridgeOfframpFunding$private suspend fun pollUntilSettled(depositAddress: String, tokens: List&lt;SwapAsset&gt;)</ID>
+    <ID>TooGenericExceptionCaught:FallbackOrderReader.kt$FallbackOrderReader$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:OfframpOrchestrator.kt$OfframpOrchestrator$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:SubmitProposalUseCase.kt$SubmitProposalUseCase$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ZcashApplication.kt$ZcashApplication$e: Exception</ID>
+    <ID>TooManyFunctions:AddChatContactVM.kt$AddChatContactVM</ID>
+    <ID>TooManyFunctions:AddressBookVM.kt$AddressBookVM : ViewModel</ID>
+    <ID>TooManyFunctions:AuthenticationViewModel.kt$AuthenticationViewModel : AndroidViewModel</ID>
+    <ID>TooManyFunctions:BaseRpcClient.kt$BaseRpcClient</ID>
+    <ID>TooManyFunctions:BundlerClient.kt$BundlerClient</ID>
+    <ID>TooManyFunctions:EditChatContactVM.kt$EditChatContactVM</ID>
+    <ID>TooManyFunctions:OfframpOrchestrator.kt$OfframpOrchestrator : OfframpDriver</ID>
+    <ID>TooManyFunctions:P2pTransactionsView.kt$co.electriccoin.zcash.ui.screen.settings.p2p.P2pTransactionsView.kt</ID>
+    <ID>TooManyFunctions:SecuritySettingsVM.kt$SecuritySettingsVM : ViewModel</ID>
+    <ID>TooManyFunctions:SelectABRecipientVM.kt$SelectABRecipientVM : ViewModel</ID>
+    <ID>TooManyFunctions:SupportTicketListVM.kt$SupportTicketListVM : ViewModel</ID>
+    <ID>TooManyFunctions:SwapView.kt$co.electriccoin.zcash.ui.screen.swap.SwapView.kt</ID>
+    <ID>TooManyFunctions:UpiOfframpProgressView.kt$co.electriccoin.zcash.ui.screen.swap.upi.progress.UpiOfframpProgressView.kt</ID>
+    <ID>TooManyFunctions:WalletBalanceCard.kt$co.electriccoin.zcash.ui.screen.tabs.view.WalletBalanceCard.kt</ID>
+    <ID>TooManyFunctions:ZappComponents.kt$co.electriccoin.zcash.ui.design.component.zapp.ZappComponents.kt</ID>
+    <ID>UnusedParameter:ChatNavGraph.kt$navigationRouter: NavigationRouter</ID>
+    <ID>UnusedParameter:ReceiveView.kt$appBarState: ZashiMainTopAppBarState?</ID>
+    <ID>UnusedParameter:RootNavGraph.kt$walletViewModel: WalletViewModel</ID>
+    <ID>UnusedParameter:SwapView.kt$appBarState: ZashiMainTopAppBarState</ID>
+    <ID>UnusedPrivateMember:RequestVM.kt$RequestVM$private fun onAmountDone(conversion: FiatCurrencyConversion?)</ID>
+    <ID>UnusedPrivateProperty:HomeMessage.kt$val bottomCornerSize by animateDpAsState( targetValue = if (isVisible) BOTTOM_CUTOUT_HEIGHT_DP.dp else 0.dp, animationSpec = animationSpec() )</ID>
+    <ID>UnusedPrivateProperty:SettingsTabContent.kt$val scope = rememberCoroutineScope()</ID>
+    <ID>UnusedPrivateProperty:UpiOfframpProgressView.kt$private const val CARD_PADDING = 14</ID>
+    <ID>UseRequire:ExceptionPath.kt$ExceptionPath$throw IllegalArgumentException("Directories couldn't be created")</ID>
+    <ID>UseRequire:ExceptionPath.kt$ExceptionPath$throw IllegalArgumentException("Path is a file when a directory was expected")</ID>
+    <ID>UseRequire:ExceptionPath.kt$ExceptionPath$throw IllegalArgumentException("Path is not writeable")</ID>
+  </CurrentIssues>
+</SmellBaseline>

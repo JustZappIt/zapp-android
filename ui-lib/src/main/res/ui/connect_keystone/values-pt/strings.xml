@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connect_keystone_title">Conectar carteira de hardware</string>
+    <string name="connect_keystone_subtitle">Escaneie o QR code do seu dispositivo para conectar.</string>
+    <string name="connect_keystone_subtitle_clickable">Ver tutorial da Keystone</string>
+    <string name="connect_keystone_item_1">Desbloqueie sua Keystone</string>
+    <string name="connect_keystone_item_2">Toque no ícone de menu</string>
+    <string name="connect_keystone_item_3">Toque em Conectar carteira de software</string>
+    <string name="connect_keystone_item_4">Selecione o app Zapp e escaneie o QR code</string>
+    <string name="connect_keystone_item_title">Instruções:</string>
+    <string name="connect_keystone_positive">Pronto para escanear</string>
+    <string name="keystone_connected_subtitle">Conectado!</string>
+    <string name="keystone_connected_message">Sua carteira de hardware Keystone foi conectada com sucesso.</string>
+    <string name="keystone_connected_button">Fechar</string>
+    <string name="keystone_active_device_button">Conectar dispositivo ativo</string>
+    <string name="keystone_explainer_about_message">A Keystone é uma marca popular de carteira de hardware que oferece segurança air-gapped com assinatura por QR code. É uma das muitas opções confiáveis de carteira de hardware, ao lado da Ledger e outras.</string>
+    <string name="keystone_explainer_about_title">Sobre a Keystone</string>
+    <string name="keystone_explainer_button">Entendi</string>
+    <string name="keystone_explainer_control_message">Suas chaves são suas, sua cripto é sua</string>
+    <string name="keystone_explainer_control_title">Controle total</string>
+    <string name="keystone_explainer_description">Uma carteira de hardware é um dispositivo físico que armazena as chaves privadas das suas criptomoedas offline, mantendo-as protegidas de hackers e malware online.</string>
+    <string name="keystone_explainer_malware_message">Imune a vírus de computador e ataques de phishing</string>
+    <string name="keystone_explainer_malware_title">Proteção contra malware</string>
+    <string name="keystone_explainer_security_message">Suas chaves nunca saem do dispositivo, mesmo ao assinar transações</string>
+    <string name="keystone_explainer_security_title">Segurança máxima</string>
+    <string name="keystone_explainer_title">O que é uma carteira de hardware?</string>
+    <string name="keystone_first_transaction_estimation_confirm">Conectar</string>
+    <string name="keystone_first_transaction_estimation_title">Conectar carteira de hardware</string>
+    <string name="keystone_first_transaction_message">Informar a altura de bloco em que sua carteira foi criada garante que o número correto de blocos seja escaneado. Se você não tiver certeza, escolha uma data anterior.</string>
+    <string name="keystone_first_transaction_note">Se você não tiver certeza, escolha uma data anterior.</string>
+    <string name="keystone_first_transaction_title">Conectar carteira de hardware</string>
+    <string name="keystone_new_device_button">Conectar novo dispositivo</string>
+    <string name="keystone_new_or_active_message">Conectar a uma carteira de hardware que já foi vinculada ao Zapp exigirá sincronização para descobrir seu histórico de transações. Vamos te guiar nesse processo.</string>
+    <string name="keystone_new_or_active_subtitle">Dispositivo novo ou ativo?</string>
+    <string name="keystone_wbh_confirm_button">Conectar</string>
+    <string name="keystone_wbh_info_message">é a altura de bloco (número do bloco na blockchain) em que sua carteira foi criada. É importante informar a altura correta, pois ela determina o intervalo de blocos que escanearemos para exibir seu histórico de transações e o saldo da carteira. Se você recuperou uma frase semente de um dispositivo de hardware diferente, certifique-se de informar a altura de bloco do seu dispositivo de hardware original.</string>
+    <string name="keystone_wbh_info_message_bold">A altura de aniversário da carteira</string>
+    <string name="keystone_wbh_info_title">Precisa saber mais?</string>
+    <string name="keystone_wbh_title">Conectar carteira de hardware</string>
+</resources>

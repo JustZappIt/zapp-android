@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_header">Dompet seluler bertenaga Zcash, dibuat untuk kedaulatan finansial.</string>
+    <string name="onboarding_create_new_wallet">Buat Dompet Baru</string>
+    <string name="onboarding_import_existing_wallet">Pulihkan Dompet yang Ada</string>
+    <string name="onboarding_error_wallet_creation_failed">Tidak dapat membuat dompet Anda. Kembali dan coba lagi.</string>
+    <string name="onboarding_continue">Lanjutkan</string>
+
+    <!-- WalletEncryptingScreen: shown while the SDK persists a freshly-created or
+         restored wallet and (optionally) derives the chat identity. -->
+    <string name="onboarding_encrypting_greeting">Halo.</string>
+    <string name="onboarding_encrypting_message">Tunggu sebentar,\nkami sedang mengenkripsi dompet baru Anda.</string>
+    <string name="onboarding_seed_loading_timeout">Membutuhkan waktu lebih lama dari perkiraan.</string>
+    <string name="onboarding_seed_loading_retry_hint">Ketuk coba lagi, atau kembali dan kirim ulang.</string>
+    <string name="onboarding_seed_loading_no_retry_hint">Coba kembali dan kirim ulang.</string>
+    <string name="onboarding_seed_loading_retry">Coba lagi</string>
+
+    <!-- Wallet-tab empty state: shown when the user reached the tabs without setting up a wallet. -->
+    <string name="wallet_empty_eyebrow">Dompet</string>
+    <string name="wallet_empty_title">Siapkan\ndompet Anda</string>
+    <string name="wallet_empty_subtitle">Dompet Anda tersimpan di perangkat ini. Hanya Anda yang memegang kuncinya.</string>
+    <string name="wallet_empty_create">Buat dompet baru</string>
+    <string name="wallet_empty_create_sub">Dapatkan frasa pemulihan baru</string>
+    <string name="wallet_empty_restore">Pulihkan dari frasa</string>
+    <string name="wallet_empty_restore_sub">Gunakan frasa pemulihan Anda yang sudah ada</string>
+
+    <!-- Welcome gate (shown before onboarding starts) -->
+    <string name="welcome_hero_line1">Pesan\ndan uang Anda.</string>
+    <string name="welcome_hero_line2">Terenkripsi.</string>
+    <string name="welcome_body">Pesan terenkripsi ujung-ke-ujung dengan dompet Zcash terlindungi yang terintegrasi.</string>
+    <string name="welcome_get_started_button">Mulai</string>
+    <string name="welcome_restore_button">Saya sudah pakai Zapp</string>
+    <string name="welcome_terms_caption">Dengan melanjutkan, Anda menyetujui ketentuan &amp; kebijakan privasi kami.</string>
+
+    <!-- Shared onboarding chrome -->
+    <string name="onboarding_back_label">kembali</string>
+
+    <!-- Part 1 — wallet phase intro -->
+    <string name="onboarding_wallet_intro_badge">Bagian 1 dari 3 · Dompet &amp; Pesan</string>
+    <string name="onboarding_wallet_intro_title">Siapkan\ndompet &amp;\npesan</string>
+    <string name="onboarding_wallet_intro_sub">Frasa pemulihan 24 kata dompet Anda juga menjadi dasar identitas pesan Anda, satu frasa mencakup keduanya.</string>
+    <string name="onboarding_wallet_intro_bullet_create_label">Buat atau pulihkan dompet</string>
+    <string name="onboarding_wallet_intro_bullet_create_sub">Pilihan Anda di sini juga menentukan identitas pesan Anda</string>
+    <string name="onboarding_wallet_intro_bullet_phrase_label">Satu frasa untuk semuanya</string>
+    <string name="onboarding_wallet_intro_bullet_phrase_sub">24 kata BIP-39 memulihkan dana dan obrolan Anda, cadangkan secara offline.</string>
+
+    <!-- Part 1 — wallet choice -->
+    <string name="onboarding_wallet_choice_badge">Bagian 1 · Dompet &amp; Pesan</string>
+    <string name="onboarding_wallet_choice_subtitle">Frasa pemulihan dompet Anda juga membuat identitas pesan Anda. Satu cadangan untuk semuanya.</string>
+    <string name="onboarding_wallet_choice_create_sub">Dompet baru + identitas pesan baru</string>
+    <string name="onboarding_wallet_choice_restore_sub">Memulihkan dompet dan menurunkan ID pesan Anda darinya</string>
+
+    <!-- Part 1 — wallet recovery phrase -->
+    <string name="onboarding_wallet_seed_title">Frasa dompet &amp;\npesan</string>
+    <string name="onboarding_wallet_seed_sub">24 kata ini memulihkan dana dompet sekaligus identitas pesan Anda. Cadangkan secara offline, semuanya tercakup.</string>
+
+    <!-- Part 2 — messaging phase intro -->
+    <string name="onboarding_msg_intro_badge">Bagian 2 dari 3 · Akun pesan</string>
+    <string name="onboarding_msg_intro_title">Buat\nidentitas\npesan Anda</string>
+    <string name="onboarding_msg_intro_sub">Identitas Anda adalah nama pengguna yang didukung frasa pemulihan dompet Anda, satu frasa memulihkan dompet dan identitas pesan Anda di perangkat mana pun. Riwayat pesan disimpan secara lokal dan tidak dapat dipulihkan.</string>
+    <string name="onboarding_msg_intro_bullet_username_label">Pilih nama pengguna</string>
+    <string name="onboarding_msg_intro_bullet_username_sub">Cara teman menemukan dan mengirim pesan kepada Anda</string>
+    <string name="onboarding_msg_intro_bullet_phrase_label">Satu frasa pemulihan</string>
+    <string name="onboarding_msg_intro_bullet_phrase_sub">Frasa 24 kata dompet Anda juga memulihkan identitas pesan Anda.</string>
+
+    <!-- Part 2 — username entry -->
+    <string name="onboarding_username_badge">Bagian 2 · Nama pengguna</string>
+    <string name="onboarding_username_title">Pilih\nnama pengguna</string>
+    <string name="onboarding_username_subtitle">Nama ini ditampilkan kepada orang yang belum menyimpan Anda sebagai kontak. Anda dapat mengubahnya nanti.</string>
+    <string name="onboarding_username_placeholder">nama_anda</string>
+    <string name="onboarding_username_rule_min">3+ karakter</string>
+    <string name="onboarding_username_rule_max">≤20 karakter</string>
+    <string name="onboarding_username_info">Zapp menghasilkan pasangan kunci lokal. Tidak ada server yang pernah melihat kunci privat Anda.</string>
+
+    <!-- Seed reveal (shared between create and restore paths) -->
+    <string name="onboarding_seed_tap_to_reveal">Ketuk untuk menampilkan</string>
+    <string name="onboarding_seed_saved_checkbox">Saya sudah menulis seluruh %1$d kata secara berurutan. Saya paham frasa ini tidak dapat dipulihkan jika hilang.</string>
+    <string name="onboarding_seed_saved_cta">Sudah saya simpan</string>
+
+    <!-- Part 3 — secure-method choice -->
+    <string name="onboarding_secure_badge">Bagian 3 dari 3 · Amankan Zapp</string>
+    <string name="onboarding_secure_title">Amankan\naplikasi Anda</string>
+    <string name="onboarding_secure_subtitle">Pilih cara Anda membuka Zapp dan mengotorisasi pembayaran.</string>
+    <string name="onboarding_secure_bio_label">Biometrik</string>
+    <string name="onboarding_secure_bio_sub">Sidik jari atau wajah, tercepat</string>
+    <string name="onboarding_secure_pin_sub">Kode sandi yang Anda ingat</string>
+
+    <!-- Part 3 — PIN setup -->
+    <string name="onboarding_pin_create_title">Buat\nPIN Anda</string>
+    <string name="onboarding_pin_mismatch">PIN tidak cocok. Silakan coba lagi.</string>
+    <string name="onboarding_pin_confirm_subtitle">Masukkan ulang PIN 6 digit Anda untuk konfirmasi.</string>
+    <string name="onboarding_pin_create_subtitle">Pilih kode 6 digit yang akan Anda ingat.</string>
+
+    <!-- PIN verification (also reused by auth gates outside onboarding) -->
+    <string name="onboarding_pin_verify_title">Masukkan\nPIN Anda</string>
+    <string name="onboarding_pin_verify_lockout">Terlalu banyak percobaan. Coba lagi dalam %1$d dtk.</string>
+    <string name="onboarding_pin_verify_incorrect">PIN salah. Silakan coba lagi.</string>
+    <string name="onboarding_pin_verify_subtitle">Masukkan PIN 6 digit Anda untuk melanjutkan.</string>
+
+    <!-- Part 3 — biometric enrollment -->
+    <string name="onboarding_bio_verifying">Memverifikasi…</string>
+    <string name="onboarding_bio_title">Buka dengan biometrik</string>
+    <string name="onboarding_bio_subtitle">Zapp akan menggunakan sidik jari atau wajah Anda untuk mengunci dan membuka aplikasi.</string>
+    <string name="onboarding_bio_enable_cta">Aktifkan Biometrik</string>
+    <string name="onboarding_bio_prompt_message">Aktifkan buka dengan biometrik untuk Zapp</string>
+    <string name="onboarding_bio_error_not_enrolled">Belum ada biometrik yang terdaftar di perangkat ini. Tambahkan sidik jari atau wajah di Pengaturan, lalu coba lagi.</string>
+    <string name="onboarding_bio_error_verification_failed">Verifikasi biometrik gagal. Ketuk untuk coba lagi.</string>
+
+    <!-- Done screen -->
+    <string name="onboarding_done_title">Semua\nsiap.</string>
+    <string name="onboarding_done_subtitle_bio">Identitas dibuat, dompet siap, diamankan dengan biometrik.</string>
+    <string name="onboarding_done_subtitle_pin">Identitas dibuat, dompet siap, diamankan dengan PIN.</string>
+    <string name="onboarding_done_enter_cta">Masuk ke Zapp →</string>
+</resources>

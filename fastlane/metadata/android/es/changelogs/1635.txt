@@ -1,0 +1,6 @@
+Añadido:
+- Añadimos una función para desconectar una billetera de hardware Keystone.
+Cambiado:
+- Actualizamos todas las dependencias. (Solo para Android)
+Corregido:
+- Solucionamos algunos problemas de interfaz de usuario.

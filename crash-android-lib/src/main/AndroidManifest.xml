@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <provider
+            android:name=".internal.local.CrashProcessNameContentProvider"
+            android:authorities="${applicationId}.co.electriccoin.zcash.crash"
+            android:enabled="@bool/co_electriccoin_zcash_crash_is_use_secondary_process"
+            android:exported="false"
+            android:process=":crash" />
+        <receiver
+            android:name=".internal.local.ExceptionReceiver"
+            android:enabled="@bool/co_electriccoin_zcash_crash_is_use_secondary_process"
+            android:exported="false"
+            android:process=":crash" />
+    </application>
+</manifest>

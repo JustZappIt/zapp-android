@@ -1,0 +1,31 @@
+Impulsada por Zcash, la criptomoneda más privada jamás diseñada, también conocida como el Bitcoin encriptado. Con Zapp, no necesitas saber cómo funcionan los blockchains para usar dinero privado. Zapp oculta la complejidad sin comprometer la seguridad, lo que la convierte en una forma fácil y de bajo riesgo para empezar.
+
+Nuestro propósito
+Imaginamos un mundo sin vigilancia financiera masiva, donde las personas que respetan la ley puedan realizar transacciones de forma libre y privada, sin temor a que sus datos sean explotados, vendidos o utilizados como arma por criminales, corporaciones o gobiernos. Un mundo donde la privacidad financiera sea el estándar y el acceso a los mercados sea un derecho humano. Porque la capacidad de realizar transacciones que sostengan la vida y la libertad debe pertenecer a todos. No hay soberanía sin privacidad.
+
+Hecha diferente
+Nuestra billetera parece simple en la superficie, pero está respaldada por una profundidad de ingeniería que otras billeteras Zcash simplemente no alcanzan. Los ingenieros de Zapp aportan un profundo dominio de la criptografía y del protocolo. Combinado con un equipo de producto obsesionado con la experiencia de usuario en Zcash, Zapp innova con un conocimiento total de los requisitos, capacidades, potencial y riesgos del blockchain.
+
+Desarrollo de código abierto
+Nuestro trabajo es de código abierto porque la privacidad financiera confiable requiere un desarrollo transparente. Cualquiera puede inspeccionar el código del protocolo, auditar la billetera y verificar nuestro trabajo. No pedimos confianza. Mostramos nuestro trabajo.
+
+Privacidad por diseño
+A diferencia de la mayoría de las apps que dicen priorizar la privacidad, Zapp está construida para eso. Hacemos todo lo posible por no saber nada sobre ti. Zapp no ve, recopila ni rastrea la actividad de tu billetera, saldos, historial de transacciones, clics ni hábitos. No creamos perfiles.
+
+Autocustodia
+Zapp te pone en control total de tus fondos: sin intermediarios, sin guardianes, solo verdadera soberanía financiera. Solo tú puedes acceder y administrar tu ZEC. Tus claves, tu cripto.
+
+Los pagos P2P más privados
+Zcash es la criptomoneda más privada jamás diseñada, y Zapp está construida para honrar ese diseño. El ZEC blindado mantiene los detalles de las transacciones ocultos en el blockchain, y Zapp extiende esa protección a nivel de billetera.
+
+Pagos privados entre cadenas
+El hecho de que tus contactos expongan sus datos financieros en blockchains públicos no significa que tú debas hacerlo. Con Zapp CrossPay, puedes usar ZEC blindado para realizar pagos en el activo que tu destinatario prefiera, como BTC o una stablecoin. Tu privacidad, intacta.
+
+Swaps hacia y desde ZEC blindado
+Los swaps integrados de Zapp son la forma más sencilla y privada de fondear tu billetera o pasar de Zcash a otra criptomoneda.
+
+Tu opinión importa
+Zapp se construye junto a sus usuarios. Cada actualización refleja lo que más quiere nuestra comunidad. Ya sea que solicites una nueva función o reportes un error, tu voz hace que la billetera mejore para todos.
+
+Tags / Etiquetas:
+Criptomoneda, pagos entre pares, herramientas financieras, finanzas, billetera, pagos, privacidad, finanzas personales, encriptación

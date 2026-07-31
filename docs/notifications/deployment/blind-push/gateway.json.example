@@ -1,0 +1,8 @@
+{
+  "certPath": "/etc/zapp-blind-push/firebase-service-account.json",
+  "notification": {
+    "title": "Zapp",
+    "body": "New private message"
+  },
+  "apnsTopic": "xyz.justzappit.zapp"
+}

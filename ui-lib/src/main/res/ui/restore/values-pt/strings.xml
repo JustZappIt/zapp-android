@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="restore_title">Restaurar</string>
+    <string name="restore_subtitle">Frase Semente de Recuperação</string>
+    <string name="restore_message">Por favor, digite sua frase secreta de recuperação de 24 palavras na ordem correta.</string>
+    <string name="restore_button">Avançar</string>
+
+    <string name="restore_dialog_title">Precisa saber mais?</string>
+    <string name="restore_dialog_message_1_bold_part">A Frase Secreta de Recuperação</string>
+    <string name="restore_dialog_message_1">é um conjunto único de 24 palavras, que aparecem em uma
+        ordem precisa. Ela pode ser usada para obter controle total dos seus fundos a partir de qualquer dispositivo por meio de qualquer app de carteira Zcash.
+        Pense nela como a chave-mestra da sua carteira. Ela fica armazenada nas Configurações Avançadas do Zapp.</string>
+    <string name="restore_dialog_message_2_bold_part">A Altura de Nascimento da Carteira</string>
+    <string name="restore_dialog_message_2">é a altura de bloco (nº do bloco na
+        blockchain) em que sua carteira foi criada. Se você algum dia perder o acesso ao seu app Zapp e precisar recuperar
+        seus fundos, fornecer a altura de bloco junto com sua frase de recuperação pode acelerar significativamente o processo.
+    </string>
+    <string name="restore_dialog_button">Entendi!</string>
+
+    <string name="restore_bd_height_btn">Estimar minha altura de bloco</string>
+    <string name="restore_bd_restore_btn">Restaurar</string>
+
+    <string name="restore_bd_subtitle">Altura de Nascimento da Carteira</string>
+    <string name="restore_bd_message">Informar a Altura de Nascimento da sua carteira ajuda a acelerar o processo de restauração.</string>
+    <string name="restore_bd_text_field_title">Altura de Bloco</string>
+    <string name="restore_bd_text_field_hint">Digite o número</string>
+    <string name="restore_bd_text_field_note">A Altura de Nascimento da Carteira é o momento em que sua carteira foi criada.</string>
+
+    <string name="restore_bd_date_message">Decida até onde o Zapp deve escanear. Informe uma data anterior à sua primeira transação recebida. Se não tiver certeza, escolha uma data anterior.</string>
+
+    <string name="restore_bd_estimation_subtitle">Altura de Bloco Estimada</string>
+    <string name="restore_bd_estimation_message">O Zapp vai escanear e recuperar todas as transações feitas após o número de bloco a seguir.</string>
+    <string name="restore_bd_estimation_copy">Copiar</string>
+    <string name="restore_bd_estimation_restore">Restaurar</string>
+
+    <string name="restore_seed_warning_suggestions">Esta palavra não está no dicionário da frase semente.  Por favor, selecione a correta entre as sugestões.</string>
+
+
+    <string name="resync_title">Ressincronizar Carteira</string>
+    <string name="resync_bd_date_subtitle">Primeira Transação da Carteira</string>
+    <string name="resync_bd_date_message">Decida até onde o Zapp deve ressincronizar. Informe uma data anterior à sua primeira transação recebida.</string>
+    <string name="resync_bd_date_note">Se não tiver certeza, escolha uma data anterior.</string>
+
+    <string name="resync_bd_estimation_subtitle">Altura de Bloco Estimada</string>
+    <string name="resync_bd_estimation_message">Sua carteira será ressincronizada a partir de %1$s (%2$s blocos). O Zapp vai escanear e recuperar todas as transações feitas após o número de bloco a seguir.</string>
+    <string name="resync_bd_estimation_btn">Definir esta altura</string>
+
+    <string name="confirm_resync_title">Confirmar Ressincronização</string>
+    <string name="confirm_resync_subtitle">Ressincronize a carteira atual sem redefinir o app. Isso pode ser usado para
+        resolver problemas que normalmente exigiriam restaurar sua carteira, como corrigir o saldo do seu Keystone
+        .\n\nA menos que você especifique o contrário abaixo, o Zapp ressincronizará a partir da data exibida. </string>
+    <string name="confirm_resync_message">A menos que você especifique o contrário abaixo, o Zapp ressincronizará a partir da data exibida.</string>
+    <string name="confirm_resync_info">Sua carteira será ressincronizada a partir de %1$s (%2$s blocos). Use o botão abaixo se desejar alterá-la.</string>
+    <string name="confirm_resync_change">Alterar</string>
+    <string name="confirm_resync_confirm">Confirmar</string>
+    <string name="resync_wbh_confirm_button">Confirmar</string>
+    <string name="resync_confirm_failed_title">Falha na Ressincronização</string>
+    <string name="resync_confirm_failed_message">Não foi possível concluir a ressincronização da carteira. Por favor, tente novamente ou relate um problema.</string>
+
+</resources>

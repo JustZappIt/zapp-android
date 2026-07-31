@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="error_general_title">Ocorreu um erro</string>
+    <string name="error_general_message">Causa desconhecida. Entre em contato com nossa equipe de suporte se o problema persistir.\n\n%s</string>
+    <string name="error_sync_title">Erro de sincronização</string>
+    <string name="error_shielding_title">Erro de proteção</string>
+    <string name="error_shielding_message">Ocorreu um erro durante a última transação de proteção. Você pode tentar novamente mais tarde ou relatar este problema se ele persistir.\n\n%s</string>
+    <string name="error_shielding_message_grpc">Ocorreu um erro durante a última transação de proteção. Tentaremos reenviar a transação mais tarde. Se falhar, talvez você precise repetir a tentativa de proteção em outro momento.</string>
+    <string name="error_keystone_firmware_title">Atualização de Firmware do Keystone Necessária</string>
+    <string name="error_keystone_firmware_message">O firmware do seu Keystone (%1$s) está abaixo da versão mínima suportada (%2$s). Atualize o firmware do seu dispositivo e tente novamente.</string>
+    <string name="error_keystone_firmware_message_legacy">O firmware do seu Keystone é antigo demais para informar sua versão e está abaixo da versão mínima suportada (%1$s). Atualize o firmware do seu dispositivo e tente novamente.</string>
+    <string name="error_keystone_firmware_close">Fechar</string>
+
+    <string name="error_keystone_account_title">Não é Possível Adicionar a Conta Keystone</string>
+    <string name="error_keystone_account_message">A conta Keystone digitalizada não pode ser usada com este aplicativo. Verifique se o seu dispositivo Keystone está definido para a mesma rede deste aplicativo e digitalize o código QR novamente.</string>
+
+    <string name="error_tor_title">Desativar o Tor?</string>
+    <string name="error_tor_message">Foram detectados problemas de conexão com o Tor. Para melhorar o desempenho, tente desativar o Tor. Isso interromperá as atualizações da taxa de câmbio. Você pode reativá-lo mais tarde nas Configurações avançadas.</string>
+    <string name="error_tor_negative">Desativar</string>
+    <string name="error_tor_positive">Não desativar</string>
+</resources>

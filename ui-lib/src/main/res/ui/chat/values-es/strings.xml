@@ -1,0 +1,491 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- Chat list screen -->
+    <string name="chat_list_title">Chats</string>
+    <string name="chat_list_empty_title">Aún no hay conversaciones</string>
+    <string name="chat_list_empty_subtitle">Toca + para iniciar un nuevo chat P2P</string>
+    <string name="chat_list_no_messages">Aún no hay mensajes</string>
+    <string name="chat_list_media_placeholder">[Multimedia]</string>
+    <string name="chat_list_photo_placeholder">Foto</string>
+    <string name="chat_list_gif_placeholder">GIF</string>
+    <string name="chat_list_video_placeholder">Video</string>
+    <string name="chat_list_file_placeholder">Archivo</string>
+    <string name="chat_list_location_placeholder">Ubicación</string>
+    <string name="chat_list_payment_placeholder">Pago</string>
+    <string name="chat_list_payment_request_placeholder">Solicitud de pago</string>
+    <string name="chat_list_new_conversation_content_description">Nueva conversación</string>
+
+    <!-- Chat list — swipe-to-leave -->
+    <string name="chat_list_leave_action">Salir</string>
+    <string name="chat_list_close_action">Cerrar</string>
+    <string name="chat_list_leave_dialog_title">¿Salir de la conversación?</string>
+    <string name="chat_list_leave_dialog_message">Saldrás de \"%1$s\" y dejarás de recibir sus mensajes.</string>
+    <string name="chat_list_leave_dialog_cancel">Cancelar</string>
+    <string name="chat_list_leave_dialog_confirm">Salir</string>
+
+    <!-- Chat list — network/status chip labels -->
+    <string name="chat_list_status_connecting">…</string>
+    <string name="chat_list_status_disconnected">des</string>
+    <string name="chat_list_status_error">err</string>
+
+    <!-- Chat list — relative time (short) -->
+    <string name="chat_list_time_now">ahora</string>
+    <string name="chat_list_time_minutes_short">%1$dm</string>
+
+    <!-- Chat identity setup -->
+    <string name="chat_identity_setup_wallet_title">Configura tu identidad de chat</string>
+    <string name="chat_identity_setup_wallet_subtitle">Tu identidad de mensajería se deriva de tu billetera. Elige un nombre visible para terminar de configurarla.</string>
+    <string name="chat_identity_setup_wallet_button">Crear mi identidad</string>
+    <string name="chat_identity_setup_display_name_placeholder">Nombre visible</string>
+    <string name="chat_identity_setup_error_name_invalid">El nombre visible debe tener entre 3 y 20 caracteres, usando letras minúsculas, números o guiones bajos.</string>
+    <string name="chat_identity_setup_error_export_seed_failed">No se pudo cargar tu frase de recuperación.</string>
+    <string name="chat_identity_setup_error_wallet_derive_failed">No se pudo configurar tu identidad de chat desde esta billetera. Vuelve atrás e inténtalo de nuevo.</string>
+    <string name="chat_identity_setup_support_hint">Si esto sigue ocurriendo, copia los detalles del error y envíalos al equipo de Zapp.</string>
+    <string name="chat_identity_setup_copy_details">Copiar detalles del error</string>
+
+    <!-- Chat room screen -->
+    <string name="chat_room_title_fallback">Chat</string>
+    <string name="chat_room_input_placeholder">Mensaje</string>
+    <string name="chat_room_attach_content_description">Adjuntar</string>
+    <string name="chat_room_send_content_description">Enviar</string>
+    <string name="chat_room_copy_action">Copiar mensaje</string>
+    <string name="chat_room_open_link_content_description">Abrir enlace de %1$s</string>
+
+    <!-- Chat room — chip labels -->
+    <string name="chat_room_chip_online">En línea</string>
+    <string name="chat_room_chip_dht">DHT</string>
+    <string name="chat_room_chip_connected">P2P</string>
+    <string name="chat_room_chip_off">Des</string>
+    <string name="chat_room_chip_err">Err</string>
+
+    <!-- Chat room — connection subtitle -->
+    <string name="chat_room_subtitle_peer_online">Par en línea</string>
+    <string name="chat_room_subtitle_dht_unreachable">DHT inalcanzable</string>
+    <string name="chat_room_subtitle_peer_offline">Par sin conexión, mensajes en cola</string>
+    <string name="chat_room_subtitle_p2p_connected">P2P conectado</string>
+    <string name="chat_room_subtitle_dht_degraded">DHT degradado</string>
+    <string name="chat_room_subtitle_waiting_for_peer">Esperando al par…</string>
+    <string name="chat_room_subtitle_connecting">Conectando…</string>
+    <string name="chat_room_subtitle_offline">Sin conexión</string>
+    <string name="chat_room_subtitle_error">Error de conexión</string>
+
+    <!-- Chat room — permission/location toasts -->
+    <string name="chat_room_toast_camera_permission_required">Se requiere permiso de cámara</string>
+    <string name="chat_room_toast_location_permission_required">Se requiere permiso de ubicación</string>
+    <string name="chat_room_toast_location_unavailable">No se pudo obtener la ubicación</string>
+    <string name="chat_room_toast_group_rename_failed">No se pudo renombrar el grupo</string>
+    <string name="chat_room_toast_group_add_member_failed">No se pudo añadir al miembro</string>
+    <string name="chat_room_toast_transaction_not_synced">La transacción aún no se ha sincronizado con esta billetera</string>
+    <string name="chat_room_toast_location_error_fmt">Error de ubicación: %1$s</string>
+
+    <!-- Chat room — date separator labels -->
+    <string name="chat_room_date_today">Hoy</string>
+    <string name="chat_room_date_yesterday">Ayer</string>
+    <string name="chat_room_unread_messages">Mensajes no leídos</string>
+
+    <!-- Chat room — reply -->
+    <string name="chat_room_reply_action">Responder</string>
+    <string name="chat_room_reply_to_fmt">Respondiendo a %1$s</string>
+    <string name="chat_room_reply_dismiss">Descartar respuesta</string>
+    <string name="chat_room_reply_unknown_sender">Desconocido</string>
+
+    <!-- Chat room — delivery indicator content descriptions -->
+    <string name="chat_room_delivery_sent">Enviado</string>
+    <string name="chat_room_delivery_queued">En cola</string>
+    <string name="chat_room_delivery_failed">Fallido</string>
+    <string name="chat_room_delivery_sending">Enviando</string>
+
+    <!-- Chat profile screen -->
+    <string name="chat_profile_title">Perfil e identidad</string>
+    <string name="chat_profile_unknown_name">Desconocido</string>
+    <string name="chat_profile_public_key_label">Clave pública</string>
+    <string name="chat_profile_qr_caption">Escanea para iniciar una conversación</string>
+    <string name="chat_profile_tab_messaging_id">ID de mensajería</string>
+    <string name="chat_profile_tab_wallet_address">Dirección de billetera</string>
+    <string name="chat_profile_subtab_shielded">Protegida</string>
+    <string name="chat_profile_subtab_transparent">Transparente</string>
+    <string name="chat_profile_address_shielded_label">Dirección protegida</string>
+    <string name="chat_profile_address_transparent_label">Dirección transparente</string>
+    <string name="chat_profile_address_shielded_caption">Dirección protegida · privada por defecto</string>
+    <string name="chat_profile_address_transparent_caption">Dirección transparente · visible en la cadena</string>
+    <string name="chat_profile_address_base_label">Billetera Base</string>
+
+    <!-- Chat profile — seed phrase row -->
+    <string name="chat_profile_seed_phrase_title">Frase de recuperación</string>
+    <string name="chat_profile_seed_phrase_subtitle">Respalda las identidades de mensajería y de billetera</string>
+
+    <!-- Chat profile — accessibility / content descriptions -->
+    <string name="chat_profile_back_content_description">Atrás</string>
+    <string name="chat_profile_edit_display_name_content_description">Editar nombre visible</string>
+    <string name="chat_profile_delete_identity_content_description">Eliminar identidad</string>
+    <string name="chat_profile_copy_public_key_content_description">Copiar clave pública</string>
+    <string name="chat_profile_copy_address_content_description">Copiar dirección</string>
+    <string name="chat_profile_copied_content_description">Copiado</string>
+
+    <!-- Chat profile — bottom dock -->
+    <string name="chat_profile_delete_button">ELIMINAR IDENTIDAD</string>
+
+    <!-- Chat profile — edit display name dialog -->
+    <string name="chat_profile_edit_name_title">Editar nombre visible</string>
+    <string name="chat_profile_edit_name_save">Guardar</string>
+    <string name="chat_profile_edit_name_cancel">Cancelar</string>
+    <string name="chat_display_name_updating">Guardando…</string>
+    <string name="chat_display_name_update_error">No se pudo guardar tu nombre visible. Inténtalo de nuevo.</string>
+
+    <!-- Chat profile — delete identity dialog -->
+    <string name="chat_profile_delete_dialog_title">¿Eliminar identidad?</string>
+    <string name="chat_profile_delete_dialog_message">Esto eliminará tu identidad de mensajería y todo el historial de chat de este dispositivo. Los fondos de tu billetera no se verán afectados y se pueden recuperar en cualquier momento con tu frase de recuperación.</string>
+    <string name="chat_profile_delete_dialog_confirm">Eliminar</string>
+    <string name="chat_profile_delete_dialog_cancel">Cancelar</string>
+
+    <!-- Chat profile — seed phrase reveal dialog -->
+    <string name="chat_profile_seed_phrase_dialog_title">Frase de recuperación</string>
+    <string name="chat_profile_seed_phrase_dialog_message">Guárdala en un lugar seguro. Cualquier persona que tenga estas palabras puede acceder a tu billetera y tus mensajes.</string>
+    <string name="chat_profile_seed_phrase_dialog_done">Listo</string>
+    <string name="chat_profile_seed_phrase_biometric_prompt">Ver tu frase de recuperación</string>
+
+    <!-- Chat profile — P2P wallet key row & reveal dialog -->
+    <string name="chat_profile_p2p_key_title">Clave de la billetera P2P</string>
+    <string name="chat_profile_p2p_key_subtitle">Clave de tu cuenta de retiro P2P, derivada de tu frase de recuperación</string>
+    <string name="chat_profile_p2p_key_biometric_prompt">Ver la clave de tu billetera P2P</string>
+    <string name="chat_profile_p2p_key_dialog_title">Clave de la billetera P2P</string>
+    <string name="chat_profile_p2p_key_dialog_message">Se deriva de tu frase de recuperación. Esta clave controla tu cuenta de retiro P2P: cualquier persona que la tenga puede gastar esos fondos.</string>
+    <string name="chat_profile_p2p_key_address_label">Dirección del propietario</string>
+    <string name="chat_profile_p2p_key_private_key_label">Clave privada</string>
+    <string name="chat_profile_p2p_key_copy">Copiar</string>
+    <string name="chat_profile_p2p_key_dialog_done">Listo</string>
+
+    <!-- Chat settings screen -->
+    <string name="chat_settings_title">Ajustes de chat</string>
+    <string name="chat_settings_delete_button">Eliminar identidad</string>
+    <string name="chat_settings_section_identity">Identidad</string>
+    <string name="chat_settings_section_account">Cuenta</string>
+    <string name="chat_settings_section_network">Red</string>
+    <string name="chat_settings_row_profile">Perfil</string>
+    <string name="chat_settings_row_profile_subtitle">Ver detalles de la identidad</string>
+    <string name="chat_settings_row_contacts">Contactos</string>
+    <string name="chat_settings_row_contacts_subtitle">Administra tus contactos</string>
+    <string name="chat_settings_label_connection">Conexión</string>
+    <string name="chat_settings_label_dht_health">Estado de la DHT</string>
+    <string name="chat_settings_label_peers">Pares</string>
+    <string name="chat_settings_label_protocol">Protocolo</string>
+    <string name="chat_settings_label_encryption">Cifrado</string>
+    <string name="chat_settings_protocol_value">Hyperswarm DHT</string>
+    <string name="chat_settings_encryption_value">Ed25519 + Noise</string>
+    <string name="chat_settings_connection_connected">Conectado</string>
+    <string name="chat_settings_connection_connecting">Conectando</string>
+    <string name="chat_settings_connection_disconnected">Desconectado</string>
+    <string name="chat_settings_connection_error">Error</string>
+    <string name="chat_settings_dht_healthy">Saludable</string>
+    <string name="chat_settings_dht_degraded">Degradado</string>
+    <string name="chat_settings_dht_critical">Crítico</string>
+    <string name="chat_settings_edit_name_content_description">Editar nombre</string>
+    <string name="chat_settings_copy_content_description">Copiar</string>
+    <string name="chat_settings_edit_name_dialog_title">Editar nombre visible</string>
+    <string name="chat_settings_edit_name_dialog_placeholder">Nombre visible</string>
+    <string name="chat_settings_edit_name_dialog_save">Guardar</string>
+    <string name="chat_settings_edit_name_dialog_cancel">Cancelar</string>
+    <string name="chat_settings_delete_dialog_title">Eliminar identidad</string>
+    <string name="chat_settings_delete_dialog_message">Esto eliminará permanentemente tu identidad de mensajería. Respalda primero tu frase de recuperación.</string>
+    <string name="chat_settings_delete_dialog_confirm">Eliminar</string>
+    <string name="chat_settings_delete_dialog_cancel">Cancelar</string>
+    <string name="chat_settings_section_notifications">Notificaciones</string>
+    <string name="chat_settings_notifications_toggle_title">Notificaciones de mensajes</string>
+    <string name="chat_settings_notifications_toggle_subtitle">Recibe un aviso cuando llegue un mensaje nuevo</string>
+    <string name="chat_settings_background_push_toggle_title">Entrega en segundo plano</string>
+    <string name="chat_settings_background_push_toggle_subtitle">Activa el servicio persistente sin Google</string>
+    <string name="chat_settings_section_privacy">Privacidad</string>
+    <string name="chat_settings_read_receipts_toggle_title">Confirmaciones de lectura</string>
+    <string name="chat_settings_read_receipts_toggle_subtitle">Muestra una doble marca cuando leen tus mensajes. Desactívala para dejar de ver también cuándo leen los tuyos.</string>
+    <string name="read_receipts_settings_row_subtitle">Controla los indicadores de enviado y leído en los chats</string>
+    <string name="read_receipts_settings_title">Confirmaciones de lectura</string>
+    <string name="read_receipts_settings_intro">Las confirmaciones de lectura permiten que un chat muestre cuándo se abrió un mensaje. Son opcionales y solo muestran el estado leído cuando ambas partes las permiten.</string>
+    <string name="read_receipts_settings_on_title">Cuando está activado</string>
+    <string name="read_receipts_settings_on_body">Cuando abres una conversación, Zapp puede enviar una pequeña señal de lectura para los mensajes que recibiste. Tus mensajes enviados también pueden mostrar una doble marca cercana después de que la otra app confirme que fueron leídos.</string>
+    <string name="read_receipts_settings_off_title">Cuando está desactivado</string>
+    <string name="read_receipts_settings_off_body">Zapp no enviará señales de lectura cuando abras mensajes y no mostrará el estado leído de otras personas. Los mensajes permanecen como enviados en lugar de leídos.</string>
+    <string name="read_receipts_settings_both_sides_title">Si la otra persona lo tiene desactivado</string>
+    <string name="read_receipts_settings_both_sides_body">Las dobles marcas requieren que ambas partes permitan las confirmaciones de lectura. Si cualquiera las desactiva, ese chat funciona solo con estado enviado.</string>
+    <string name="read_receipts_settings_section_control">Control</string>
+    <string name="read_receipts_settings_toggle_title">Permitir confirmaciones de lectura</string>
+    <string name="read_receipts_settings_toggle_subtitle">Enviar y mostrar el estado leído cuando ambas partes lo permitan</string>
+    <string name="read_receipts_settings_save">Guardar</string>
+    <string name="chat_message_status_sending">Enviando</string>
+    <string name="chat_message_status_queued">Esperando que el destinatario sincronice</string>
+    <string name="chat_message_status_sent">Enviado, pendiente de entrega</string>
+    <string name="chat_message_status_delivered">Entregado</string>
+    <string name="chat_message_status_read">Leído</string>
+    <string name="chat_message_status_failed">Error al enviar</string>
+    <string name="background_delivery_settings_title">Entrega en segundo plano</string>
+    <string name="background_delivery_settings_intro">En FOSS, la entrega en segundo plano mantiene activo un servicio sin Google cuando Zapp está cerrado.</string>
+    <string name="background_delivery_settings_delivery_title">Cuando está desactivado</string>
+    <string name="background_delivery_settings_delivery_body">Zapp detiene el servicio. Los mensajes siguen cifrados y se sincronizan cuando vuelves a abrir la app.</string>
+    <string name="background_delivery_settings_battery_title">Cuando está activado</string>
+    <string name="background_delivery_settings_battery_body">Android muestra una notificación permanente de “Zapp está activo” y mantiene una conexión ntfy. Esto usa más batería que revisar solo al abrir la app.</string>
+    <string name="background_delivery_settings_privacy_title">Qué contiene la señal de entrega</string>
+    <string name="background_delivery_settings_privacy_body">La señal solo le indica a Zapp que se despierte y revise mensajes. El contenido de los mensajes permanece cifrado y tu app lo obtiene después de despertarse.</string>
+    <string name="background_delivery_settings_section_control">Control</string>
+    <string name="background_delivery_settings_toggle_title">Permitir entrega en segundo plano</string>
+    <string name="background_delivery_settings_toggle_subtitle">Despertar Zapp para revisar mensajes pendientes</string>
+    <string name="background_delivery_settings_save">Guardar</string>
+
+    <!-- Chat notifications -->
+    <string name="chat_notifications_channel_name">Mensajes</string>
+    <string name="chat_notifications_channel_description">Avisos de mensajes nuevos</string>
+    <string name="chat_notifications_fallback_title">Mensaje nuevo</string>
+    <string name="chat_notifications_private_body">Abre Zapp para verlo</string>
+    <string name="chat_notifications_media_body">Envió un archivo adjunto</string>
+    <string name="chat_notifications_permission_required">Activa las notificaciones para recibir avisos de mensajes nuevos</string>
+
+    <!-- New conversation screen -->
+    <string name="chat_new_conversation_title">Nueva conversación</string>
+    <string name="chat_new_conversation_empty_title">Inicia una conversación privada</string>
+    <string name="chat_new_conversation_empty_body">Escanea el código QR de alguien o ingresa su clave pública para enviarle un mensaje.</string>
+    <string name="chat_new_conversation_privacy_callout">Los mensajes están cifrados de par a par y solo tú y el destinatario pueden leerlos.</string>
+    <string name="chat_new_conversation_search_placeholder">Escribe o pega una clave pública…</string>
+    <string name="chat_new_conversation_public_key_detected">Clave pública detectada</string>
+    <string name="chat_new_conversation_add_action">Agregar</string>
+    <string name="chat_new_conversation_clear_content_description">Borrar</string>
+    <string name="chat_new_conversation_back_content_description">Atrás</string>
+    <string name="chat_new_conversation_selected_content_description">Seleccionado</string>
+    <string name="chat_new_conversation_remove_participant_content_description_fmt">Quitar a %1$s</string>
+    <string name="chat_new_conversation_start_chat_label">INICIAR CHAT</string>
+    <string name="chat_new_conversation_start_chat_content_description">Iniciar chat</string>
+    <string name="chat_new_conversation_scan_qr_label">ESCANEAR CÓDIGO QR</string>
+    <string name="chat_new_conversation_scan_qr_content_description">Escanear código QR</string>
+
+    <!-- Contact edit screen -->
+    <string name="chat_contact_edit_title">Editar contacto</string>
+    <string name="chat_contact_edit_delete_content_description">Eliminar</string>
+    <string name="chat_contact_edit_save">Guardar</string>
+    <string name="chat_contact_edit_not_found">Contacto no encontrado</string>
+    <string name="chat_contact_edit_public_key_label">Clave pública</string>
+    <string name="chat_contact_edit_name_label">Nombre</string>
+    <string name="chat_contact_edit_delete_dialog_title">Eliminar contacto</string>
+    <string name="chat_contact_edit_delete_dialog_message">¿Seguro que quieres eliminar este contacto?</string>
+    <string name="chat_contact_edit_delete_dialog_confirm">Eliminar</string>
+    <string name="chat_contact_edit_delete_dialog_cancel">Cancelar</string>
+
+    <!-- Chat contacts screen -->
+    <string name="chat_contacts_title">Contactos</string>
+    <string name="chat_contacts_saved_count_fmt">%1$d guardados</string>
+    <string name="chat_contacts_blocked_badge">Bloqueado</string>
+    <string name="chat_contacts_empty_title">Aún no hay contactos</string>
+    <string name="chat_contacts_empty_subtitle">Agrega contactos para empezar a chatear</string>
+    <string name="chat_contacts_add_content_description">Agregar contacto</string>
+    <string name="chat_contacts_start_chat_content_description">Iniciar chat</string>
+
+    <!-- Support chat -->
+    <string name="support_chat_title">Soporte de Zapp</string>
+    <string name="support_chat_pick_topic">Elige un tema</string>
+    <string name="support_chat_category_problem">Problema</string>
+    <string name="support_chat_category_feedback">Comentarios</string>
+    <string name="support_chat_category_other">Otro</string>
+    <string name="support_chat_overflow_close">Cerrar chat de soporte</string>
+    <string name="support_chat_leave_dialog_title">¿Cerrar chat de soporte?</string>
+    <string name="support_chat_leave_dialog_message">Esto eliminará la conversación de soporte de tu bandeja de entrada. El equipo de Zapp también la verá como cerrada.</string>
+    <string name="support_chat_leave_dialog_confirm">Cerrar</string>
+    <string name="support_chat_leave_dialog_cancel">Cancelar</string>
+    <string name="support_chat_contact_footer_subtitle">Reporta problemas o comparte tus comentarios</string>
+    <string name="support_chat_input_placeholder">Mensaje</string>
+    <string name="support_chat_greeting_problem">Describe el problema que estás experimentando.</string>
+    <string name="support_chat_greeting_feedback">Nos encantaría conocer tu opinión.</string>
+    <string name="support_chat_greeting_other">¿Cómo podemos ayudarte?</string>
+    <string name="support_chat_leave_notice">El usuario salió del chat.</string>
+
+    <!-- Support chat — accessibility / content descriptions -->
+    <string name="support_chat_overflow_content_description">Más opciones</string>
+    <string name="support_chat_send_content_description">Enviar mensaje</string>
+
+    <!-- Support ticket list -->
+    <string name="support_ticket_list_empty_title">No hay tickets de soporte</string>
+    <string name="support_ticket_list_empty_subtitle">Toca + para crear un nuevo ticket</string>
+    <string name="support_ticket_list_new_content_description">Nuevo ticket</string>
+    <string name="support_ticket_close_dialog_title">¿Cerrar este ticket?</string>
+    <string name="support_ticket_close_dialog_message">Esto eliminará el ticket y sus mensajes.</string>
+    <string name="support_ticket_close_dialog_confirm">Cerrar</string>
+    <string name="support_ticket_close_dialog_cancel">Cancelar</string>
+    <string name="support_ticket_default_label">Ticket</string>
+    <string name="chat_list_support_tickets_fmt">%1$d ticket(s) abierto(s)</string>
+    <string name="chat_list_support_subtitle_default">Reporta problemas, comparte comentarios</string>
+
+    <!-- Chat room — reply preview fallback names -->
+    <string name="chat_room_reply_sender_self">Tú</string>
+    <string name="chat_room_reply_sender_unknown">Desconocido</string>
+
+    <!-- Chat room — image viewer -->
+    <string name="chat_room_image_viewer_close">Cerrar</string>
+    <string name="chat_room_image_viewer_save">Guardar imagen</string>
+    <string name="chat_room_image_viewer_share">Compartir imagen</string>
+    <string name="chat_room_image_viewer_saved">Imagen guardada</string>
+    <string name="chat_room_image_viewer_save_failed">No se pudo guardar la imagen</string>
+    <string name="chat_room_image_viewer_content_description">Imagen a pantalla completa</string>
+    <string name="chat_room_media_content_description_image">Imagen</string>
+    <string name="chat_room_media_content_description_gif">GIF</string>
+    <string name="chat_room_media_content_description_video">Video</string>
+    <string name="chat_room_media_play_video">Reproducir video</string>
+    <string name="chat_room_media_placeholder_video">Video</string>
+    <string name="chat_room_media_placeholder_image">Imagen</string>
+
+    <!-- Chat media attachment sheet (shared by chat room + support chat) -->
+    <string name="chat_media_sheet_title">Adjuntar</string>
+    <string name="chat_media_option_media">Multimedia</string>
+    <string name="chat_media_option_file">Archivo</string>
+    <string name="chat_media_option_camera">Cámara</string>
+    <string name="chat_media_option_location">Ubicación</string>
+
+    <!-- Chat contacts — add/edit validation errors -->
+    <string name="chat_contact_error_name_required">El nombre es obligatorio</string>
+    <string name="chat_contact_error_messaging_key_required">La clave de mensajería es obligatoria</string>
+    <string name="chat_contact_error_invalid_messaging_key">Clave de mensajería inválida: debe tener 64 caracteres hexadecimales</string>
+    <string name="chat_contact_error_already_exists">El contacto ya existe</string>
+    <string name="chat_contact_error_save_failed">No se pudo guardar el contacto. Inténtalo de nuevo.</string>
+    <string name="chat_contact_error_delete_failed">No se pudo eliminar el contacto. Inténtalo de nuevo.</string>
+    <string name="chat_contact_error_invalid_wallet_address">Dirección Zcash no válida</string>
+
+    <!-- Chat moderation — shared fallback when displayName is blank -->
+    <string name="chat_moderation_fallback_user_name">este usuario</string>
+
+    <!-- Chat moderation — block dialog -->
+    <string name="chat_block_dialog_title">Bloquear usuario</string>
+    <string name="chat_block_dialog_message_fmt">¿Bloquear a %1$s?</string>
+    <string name="chat_block_dialog_explanation">Ya no recibirás mensajes de este usuario. No se le notificará que ha sido bloqueado.</string>
+    <string name="chat_block_dialog_confirm">Bloquear</string>
+    <string name="chat_block_dialog_cancel">Cancelar</string>
+
+    <!-- Chat moderation — unblock dialog -->
+    <string name="chat_unblock_dialog_title">Desbloquear usuario</string>
+    <string name="chat_unblock_dialog_message_fmt">¿Desbloquear a %1$s? Podrás volver a recibir sus mensajes.</string>
+    <string name="chat_unblock_dialog_confirm">Desbloquear</string>
+    <string name="chat_unblock_dialog_cancel">Cancelar</string>
+
+    <!-- Chat contacts — add contact sheet -->
+    <string name="chat_contact_add_title">Agregar nuevo contacto</string>
+    <string name="chat_contact_add_messaging_key_placeholder">Clave de mensajería (64 caracteres hex)</string>
+    <string name="chat_contact_scan_messaging_key_content_description">Escanear QR de la clave de mensajería</string>
+    <string name="chat_contact_scan_wallet_address_content_description">Escanear QR de la dirección de billetera</string>
+    <string name="chat_contact_add_save_content_description">Agregar contacto</string>
+    <string name="chat_contact_add_save_button">GUARDAR</string>
+
+    <!-- Chat contacts — edit contact sheet -->
+    <string name="chat_contact_edit_save_changes_button">GUARDAR CAMBIOS</string>
+    <string name="chat_contact_edit_save_changes_content_description">Guardar cambios</string>
+    <string name="chat_contact_edit_block_button">BLOQUEAR USUARIO</string>
+    <string name="chat_contact_edit_block_content_description">Bloquear usuario</string>
+    <string name="chat_contact_edit_unblock_button">DESBLOQUEAR USUARIO</string>
+    <string name="chat_contact_edit_unblock_content_description">Desbloquear usuario</string>
+    <string name="chat_contact_edit_delete_contact_button">ELIMINAR CONTACTO</string>
+    <string name="chat_contact_edit_delete_contact_content_description">Eliminar contacto</string>
+    <string name="chat_contact_edit_delete_confirm_title">¿Eliminar contacto?</string>
+    <string name="chat_contact_edit_delete_confirm_subtitle">Esto no se puede deshacer.</string>
+    <string name="chat_contact_edit_delete_cancel_button">CANCELAR</string>
+    <string name="chat_contact_edit_delete_cancel_content_description">Cancelar eliminación</string>
+    <string name="chat_contact_edit_delete_confirm_button">ELIMINAR</string>
+    <string name="chat_contact_edit_delete_confirm_content_description">Confirmar eliminación del contacto</string>
+
+    <!-- Chat room — attachment options sheet -->
+    <string name="chat_attachment_option_share_address">Compartir dirección</string>
+    <string name="chat_attachment_option_send_zec">Enviar ZEC</string>
+    <string name="chat_attachment_option_request_payment">Solicitar pago</string>
+    <string name="chat_attachment_option_split_bill">Dividir cuenta</string>
+    <string name="chat_attachment_option_attach_media">Adjuntar multimedia</string>
+
+    <!-- Chat — group creation and management -->
+    <string name="chat_new_group_name_title">Nombra este grupo</string>
+    <string name="chat_new_group_name_placeholder">Nombre del grupo</string>
+    <string name="chat_new_group_name_confirm">Crear grupo</string>
+    <string name="chat_new_group_name_cancel">Cancelar</string>
+    <string name="chat_new_rejoin_dialog_title">¿Volver a la conversación?</string>
+    <string name="chat_new_rejoin_dialog_message">Ya saliste de "%1$s". Si vuelves, esta conversación aparecerá de nuevo en Chats.</string>
+    <string name="chat_new_rejoin_dialog_confirm">Volver</string>
+    <string name="chat_new_rejoin_dialog_cancel">Cancelar</string>
+    <string name="chat_group_info_members_fmt">%1$s miembros</string>
+    <string name="chat_group_info_rename">Renombrar grupo</string>
+    <string name="chat_group_info_add_member">Añadir miembro</string>
+    <string name="chat_group_info_roster_label">Miembros</string>
+    <string name="chat_group_info_no_contacts">No hay contactos para añadir</string>
+    <string name="chat_group_info_rename_save">Guardar</string>
+    <string name="chat_group_info_rename_cancel">Cancelar</string>
+
+    <!-- Chat room — split bill sheet -->
+    <string name="chat_split_title_group">Dividir cuenta</string>
+    <string name="chat_split_title_direct">Solicitar pago</string>
+    <string name="chat_split_total_label">Importe total</string>
+    <string name="chat_split_total_placeholder">0</string>
+    <string name="chat_split_zec_suffix">ZEC</string>
+    <string name="chat_split_currency_toggle">Cambiar moneda</string>
+    <string name="chat_split_shares_label_fmt">Parte de cada uno (dividido entre %1$s)</string>
+    <string name="chat_split_memo_placeholder">¿Para qué es? (opcional)</string>
+    <string name="chat_split_equivalent_fmt">≈ %1$s</string>
+    <string name="chat_split_send_button">Enviar solicitud</string>
+
+    <!-- Chat network — connection pill + details sheet -->
+    <string name="chat_network_section_connection">Conexión</string>
+    <string name="chat_network_section_peers">Pares y DHT</string>
+    <string name="chat_network_section_messages">Mensajes</string>
+    <string name="chat_network_label_status">Estado</string>
+    <string name="chat_network_label_reachability">Accesibilidad</string>
+    <string name="chat_network_value_reachability_direct">Directa</string>
+    <string name="chat_network_value_reachability_nat">Tras NAT, vía relé</string>
+    <string name="chat_network_value_reachability_strict">NAT estricta, vía relé</string>
+    <string name="chat_network_value_reachability_unknown">Desconocida</string>
+    <string name="chat_network_label_backup">Entrega de respaldo</string>
+    <string name="chat_network_value_backup_connected">Conectado</string>
+    <string name="chat_network_value_backup_unavailable">No disponible</string>
+    <string name="chat_network_value_backup_off">Desactivada</string>
+    <string name="chat_network_label_tcp_connections">Conexiones</string>
+    <string name="chat_network_label_dht_nodes">Nodos DHT</string>
+    <string name="chat_network_label_conversations">Conversaciones</string>
+    <string name="chat_network_value_conversations_fmt">%1$d directas · %2$d grupales</string>
+    <string name="chat_network_label_pending">Pendientes</string>
+    <string name="chat_network_value_pending_fmt">%1$d msjs. en %2$d colas</string>
+    <string name="chat_network_value_pending_none">Ninguno</string>
+    <string name="chat_network_label_invites">Invitaciones pendientes</string>
+
+    <!-- Chat room — message bubbles -->
+    <string name="chat_bubble_location_shared">Ubicación compartida</string>
+    <string name="chat_bubble_location_received">Ubicación recibida</string>
+    <string name="chat_bubble_location_open_in_maps">Abrir en Maps</string>
+    <string name="chat_bubble_payment_request_sent">Solicitud de pago enviada</string>
+    <string name="chat_bubble_payment_request">Solicitud de pago</string>
+    <string name="chat_bubble_payment_request_owe">Debes</string>
+    <string name="chat_bubble_payment_request_owes_fmt">%1$s debe</string>
+    <string name="chat_bubble_payment_request_split_fmt">Dividido entre %1$s</string>
+    <string name="chat_bubble_payment_request_pay">Pagar</string>
+    <string name="chat_bubble_payment_request_paid">Pagado</string>
+    <string name="chat_bubble_transaction_sent">ZEC enviado</string>
+    <string name="chat_bubble_transaction_received">ZEC recibido</string>
+    <string name="chat_bubble_transaction_signature_fmt">tx: %1$s...%2$s</string>
+    <string name="chat_bubble_wallet_address_shared">Dirección de billetera compartida</string>
+    <string name="chat_room_toast_conversation_unavailable">Los detalles de la conversación todavía se están cargando. Inténtalo de nuevo.</string>
+    <string name="chat_bubble_wallet_address">Dirección de billetera</string>
+    <string name="chat_bubble_wallet_address_send">Enviar a esta dirección</string>
+    <string name="chat_bubble_wallet_qr_content_description">QR de la billetera</string>
+
+    <!-- Chat terms — one-time terms-and-conditions acceptance dialog (Google Play UGC policy) -->
+    <string name="chat_terms_dialog_title">Términos de mensajería</string>
+    <string name="chat_terms_dialog_intro">Antes de usar la mensajería de Zapp, revisa y acepta nuestras normas de la comunidad:</string>
+    <string name="chat_terms_dialog_guidelines_heading">Normas de la comunidad</string>
+    <string name="chat_terms_dialog_body">Al usar la mensajería de Zapp, aceptas:\n\n1. No enviar spam, mensajes no solicitados ni acosar a otras personas.\n\n2. No compartir contenido ilegal, incluyendo, entre otros, material de explotación infantil, sustancias ilegales o información financiera robada.\n\n3. No hacerte pasar por otras personas ni usar la función de mensajería para estafas o fraudes.\n\n4. No usar la función de mensajería para facilitar actividades ilegales.\n\n5. Respetar la privacidad de otros usuarios y no compartir su información sin su consentimiento.\n\nLos usuarios que infrinjan estas normas podrán ser bloqueados por otros usuarios. Puedes bloquear o reportar a cualquier usuario desde el menú de ajustes de la conversación.\n\nLos mensajes se envían de par a par y están cifrados de extremo a extremo. Zapp no almacena ni tiene acceso al contenido de tus mensajes.</string>
+    <string name="chat_terms_dialog_accept">Acepto</string>
+    <string name="chat_terms_dialog_decline">Rechazar</string>
+
+    <!-- Background push (embedded doorbell foreground service) -->
+    <string name="chat_push_service_channel_name">Entrega de mensajes en segundo plano</string>
+    <string name="chat_push_service_title">Zapp</string>
+    <string name="chat_push_service_body">La entrega en segundo plano está activada</string>
+    <string name="chat_settings_online_status_toggle_title">Estado en línea</string>
+    <string name="online_status_settings_row_subtitle">Elige si las personas ven cuándo estás en línea</string>
+    <string name="online_status_settings_title">Estado en línea</string>
+    <string name="online_status_settings_intro">Tu estado en línea permite que las personas con las que chateas vean cuándo estás conectado. Es opcional y funciona en ambos sentidos.</string>
+    <string name="online_status_settings_on_title">Cuando está activado</string>
+    <string name="online_status_settings_on_body">Las personas con las que tienes un chat directo pueden ver un punto cuando estás conectado, y tú puedes ver lo mismo de ellas.</string>
+    <string name="online_status_settings_off_title">Cuando está desactivado</string>
+    <string name="online_status_settings_off_body">Las personas dejan de ver cuándo estás en línea, y Zapp también deja de mostrarte cuándo ellas lo están. Tus mensajes se siguen enviando y recibiendo con normalidad.</string>
+    <string name="online_status_settings_reciprocal_title">Funciona en ambos sentidos</string>
+    <string name="online_status_settings_reciprocal_body">Ocultar tu estado en línea también te oculta el de los demás. Vuelve a activarlo para ver y que te vean.</string>
+    <string name="online_status_settings_section_control">Control</string>
+    <string name="online_status_settings_toggle_title">Mostrar mi estado en línea</string>
+    <string name="online_status_settings_toggle_subtitle">Permite que las personas con las que chateas vean cuándo estás conectado</string>
+    <string name="online_status_settings_save">Guardar</string>
+</resources>

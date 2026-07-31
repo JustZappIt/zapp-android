@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="delete_wallet_title">Setel Ulang Zapp</string>
+    <string name="delete_wallet_text_1">Pastikan Anda telah menyimpan frasa pemulihan rahasia dan tinggi kelahiran dompet sebelum melanjutkan.</string>
+    <string name="delete_wallet_text_2">Menyetel ulang aplikasi Zapp akan menghapus basis data dan cache Zapp, serta memutuskan semua dompet perangkat keras yang terhubung.</string>
+    <string name="delete_wallet_text_3">Setelah Anda Setel Ulang Zapp, satu-satunya cara untuk mengakses dana Anda adalah melalui proses pemulihan dompet yang memerlukan Frasa Pemulihan Zapp dan Tinggi Kelahiran Dompet Anda.</string>
+    <string name="delete_wallet_checkbox_title">Simpan cadangan metadata terenkripsi - yang mencakup kontak, catatan, markah, dan detail tukar/pembayaran.</string>
+    <string name="delete_wallet_checkbox_warning_checked">Data ini tidak dapat dipulihkan saat Pemulihan.</string>
+    <string name="delete_wallet_checkbox_warning_unchecked">Data ini tidak dapat dipulihkan saat Pemulihan.</string>
+    <string name="delete_wallet_button">Konfirmasi</string>
+    <string name="delete_wallet_confirmation_title">Apakah Anda yakin?</string>
+    <string name="delete_wallet_confirmation_subtitle">Menyetel ulang aplikasi tidak dapat dibatalkan. Anda perlu memulihkan dompet menggunakan frasa pemulihan rahasia Anda.</string>
+    <string name="delete_wallet_confirmation_button">Setel Ulang Zapp</string>
+    <string name="delete_wallet_confirmation_cancel">Batal</string>
+    <string name="delete_wallet_failed">Gagal menghapus dompet. Silakan coba lagi.</string>
+</resources>

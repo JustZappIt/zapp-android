@@ -1,0 +1,828 @@
+package co.electriccoin.zcash.ui.screen.unifiedsend
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import cash.z.ecc.android.sdk.ext.convertZecToZatoshi
+import cash.z.ecc.android.sdk.model.FiatCurrency
+import cash.z.ecc.android.sdk.model.Memo
+import cash.z.ecc.android.sdk.model.WalletAddress
+import cash.z.ecc.android.sdk.model.ZecSend
+import cash.z.ecc.android.sdk.type.AddressType
+import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
+import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.model.SwapAsset
+import co.electriccoin.zcash.ui.common.model.SwapMode
+import co.electriccoin.zcash.ui.common.model.ZecSwapAsset
+import co.electriccoin.zcash.ui.common.repository.EnhancedABContact
+import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
+import co.electriccoin.zcash.ui.common.repository.SwapAssetsData
+import co.electriccoin.zcash.ui.common.repository.SwapRepository
+import co.electriccoin.zcash.ui.common.usecase.CancelSwapUseCase
+import co.electriccoin.zcash.ui.common.usecase.CreateProposalUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetSelectedSwapAssetUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetSlippageUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetSwapAssetsUseCase
+import co.electriccoin.zcash.ui.common.usecase.IsABContactHintVisibleUseCase
+import co.electriccoin.zcash.ui.common.usecase.NavigateToScanGenericAddressUseCase
+import co.electriccoin.zcash.ui.common.usecase.NavigateToSelectABSwapRecipientUseCase
+import co.electriccoin.zcash.ui.common.usecase.NavigateToSelectRecipientUseCase
+import co.electriccoin.zcash.ui.common.usecase.NavigateToSwapQuoteIfAvailableUseCase
+import co.electriccoin.zcash.ui.common.usecase.ObserveABContactPickedUseCase
+import co.electriccoin.zcash.ui.common.usecase.ObserveClearSendUseCase
+import co.electriccoin.zcash.ui.common.usecase.PrefillSendData
+import co.electriccoin.zcash.ui.common.usecase.PrefillSendUseCase
+import co.electriccoin.zcash.ui.common.usecase.PreselectSwapAssetUseCase
+import co.electriccoin.zcash.ui.common.usecase.RequestSwapQuoteUseCase
+import co.electriccoin.zcash.ui.common.usecase.ValidateAddressUseCase
+import co.electriccoin.zcash.ui.common.wallet.ZecFiatRate
+import co.electriccoin.zcash.ui.common.wallet.zecFiatRate
+import co.electriccoin.zcash.ui.design.component.AssetCardState
+import co.electriccoin.zcash.ui.design.component.ButtonState
+import co.electriccoin.zcash.ui.design.component.ChipButtonState
+import co.electriccoin.zcash.ui.design.component.IconButtonState
+import co.electriccoin.zcash.ui.design.component.InnerTextFieldState
+import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
+import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
+import co.electriccoin.zcash.ui.design.component.TextFieldState
+import co.electriccoin.zcash.ui.design.component.TextSelection
+import co.electriccoin.zcash.ui.design.util.StringResource
+import co.electriccoin.zcash.ui.design.util.imageRes
+import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
+import co.electriccoin.zcash.ui.design.util.stringResByDynamicNumber
+import co.electriccoin.zcash.ui.design.util.stringResByNumber
+import co.electriccoin.zcash.ui.screen.swap.SwapCancelState
+import co.electriccoin.zcash.ui.screen.swap.SwapErrorFooterState
+import co.electriccoin.zcash.ui.screen.swap.picker.SwapAssetPickerArgs
+import co.electriccoin.zcash.ui.screen.swap.slippage.SwapSlippageArgs
+import co.electriccoin.zcash.ui.screen.topup.TopUpArgs
+import co.electriccoin.zcash.ui.util.isServiceUnavailable
+import io.ktor.client.plugins.ResponseException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.WhileSubscribed
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import java.math.BigDecimal
+import java.math.MathContext
+
+@Suppress("TooManyFunctions")
+internal class UnifiedSendVM(
+    private val args: UnifiedSendArgs,
+    getSelectedSwapAsset: GetSelectedSwapAssetUseCase,
+    getSwapAssetsUseCase: GetSwapAssetsUseCase,
+    getSlippage: GetSlippageUseCase,
+    getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
+    preselectSwapAsset: PreselectSwapAssetUseCase,
+    private val swapRepository: SwapRepository,
+    private val cancelSwap: CancelSwapUseCase,
+    private val requestSwapQuote: RequestSwapQuoteUseCase,
+    private val navigateToSwapQuoteIfAvailable: NavigateToSwapQuoteIfAvailableUseCase,
+    private val validateAddress: ValidateAddressUseCase,
+    private val createProposal: CreateProposalUseCase,
+    private val observeABContactPicked: ObserveABContactPickedUseCase,
+    private val prefillSend: PrefillSendUseCase,
+    private val observeClearSend: ObserveClearSendUseCase,
+    private val navigateToSelectRecipient: NavigateToSelectRecipientUseCase,
+    private val navigateToSelectSwapRecipient: NavigateToSelectABSwapRecipientUseCase,
+    private val navigateToScanAddress: NavigateToScanGenericAddressUseCase,
+    private val isABContactHintVisibleUseCase: IsABContactHintVisibleUseCase,
+    private val exchangeRateRepository: ExchangeRateRepository,
+    private val navigationRouter: NavigationRouter,
+) : ViewModel() {
+    // ── Internal mutable state ────────────────────────────────────────────────
+
+    private val zecAmountInner = MutableStateFlow(NumberTextFieldInnerState())
+    private val fiatAmountInner = MutableStateFlow(NumberTextFieldInnerState())
+    private val fiatWasLastEdited = MutableStateFlow(false)
+
+    /** ZEC-direct: zcash address (string) + validated type */
+    private val zcashAddress = MutableStateFlow(args.recipientAddress ?: "")
+    private val zcashAddressType = MutableStateFlow<AddressType?>(null)
+
+    /** Swap: raw address string */
+    private val swapAddress = MutableStateFlow("")
+
+    /** Swap: address book contact (takes precedence over swapAddress) */
+    private val swapContact = MutableStateFlow<EnhancedABContact?>(null)
+
+    private val memoText = MutableStateFlow("")
+    private val isRequestingQuote = MutableStateFlow(false)
+    private val isCancelStateVisible = MutableStateFlow(false)
+
+    private val manualAmountSwap = MutableStateFlow<Boolean?>(null)
+
+    // ── Derived flows ─────────────────────────────────────────────────────────
+
+    private val selectedAsset = getSelectedSwapAsset.observe()
+
+    /** Combined zcash recipient — reduces two flows to one for the main combine */
+    private val zcashRecipient = combine(zcashAddress, zcashAddressType) { addr, type -> addr to type }
+
+    private val swapAssetsWithRate =
+        combine(getSwapAssetsUseCase.observe(), exchangeRateRepository.state) { assets, rate ->
+            assets to rate
+        }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val isABHintVisible =
+        combine(swapAddress, zcashAddress, swapContact) { swap, zcash, contact ->
+            Triple(swap, zcash, contact)
+        }.flatMapLatest { (swap, zcash, contact) ->
+            val text = swap.ifBlank { zcash }
+            isABContactHintVisibleUseCase.observe(selectedContact = contact, text = text)
+        }
+
+    val cancelState =
+        isCancelStateVisible
+            .map { isVisible ->
+                if (isVisible) {
+                    SwapCancelState(
+                        icon = imageRes(R.drawable.ic_swap_quote_cancel),
+                        title = stringRes(R.string.swap_cancel_title),
+                        subtitle = stringRes(R.string.swap_cancel_subtitle),
+                        negativeButton =
+                            ButtonState(
+                                text = stringRes(R.string.swap_cancel_negative),
+                                onClick = ::onCancelSwapClick
+                            ),
+                        positiveButton =
+                            ButtonState(
+                                text = stringRes(R.string.swap_cancel_positive),
+                                onClick = ::onDismissCancelClick
+                            ),
+                        onBack = ::onBack
+                    )
+                } else {
+                    null
+                }
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
+                initialValue = null
+            )
+
+    private val coreState =
+        co.electriccoin.zcash.ui.design.util.combine(
+            selectedAsset,
+            zecAmountInner,
+            fiatAmountInner,
+            zcashRecipient,
+            swapAddress,
+            swapContact,
+            memoText,
+            swapAssetsWithRate,
+            getSlippage.observe(),
+            getSelectedWalletAccount.observe(),
+            isABHintVisible,
+            isRequestingQuote,
+        ) {
+            asset,
+            zecAmount,
+            fiatAmount,
+            (zcashAddr, zcashType),
+            swapAddr,
+            contact,
+            memo,
+            (swapAssets, exchangeRate),
+            slippage,
+            account,
+            abHintVisible,
+            requesting,
+            ->
+            // Fall back to the ZEC asset from swap data when no explicit selection has been
+            // made yet. This prevents the asset card from showing a Loading spinner while
+            // PreselectSwapAssetUseCase is still running its coroutine.
+            val effectiveAsset = asset ?: swapAssets.zecAsset
+            val isSwap = effectiveAsset != null && effectiveAsset !is ZecSwapAsset
+            val zecUsdPrice = swapAssets.zecAsset?.usdPrice
+            val fiatRate = zecFiatRate(exchangeRate, zecUsdPrice = null)
+            val fiatPrice = fiatRate?.pricePerZec
+            val fiatCurrency = fiatRate?.currency
+            val spendable = account?.spendableShieldedBalance
+            val zecValue = zecAmount.amount
+            val zatoshi = zecValue?.convertZecToZatoshi()
+            val hasFunds = zatoshi == null || spendable == null || spendable >= zatoshi
+            val hasZeroBalance = spendable != null && spendable.value == 0L
+
+            buildFormState(
+                isSwap = isSwap,
+                asset = effectiveAsset,
+                zecAmount = zecAmount,
+                fiatAmount = fiatAmount,
+                zcashAddr = zcashAddr,
+                zcashType = zcashType,
+                swapAddr = swapAddr,
+                contact = contact,
+                memo = memo,
+                swapAssets = swapAssets,
+                slippage = slippage,
+                zecUsdPrice = zecUsdPrice,
+                fiatPrice = fiatPrice,
+                fiatCurrency = fiatCurrency,
+                zecValue = zecValue,
+                hasFunds = hasFunds,
+                hasZeroBalance = hasZeroBalance,
+                abHintVisible = abHintVisible,
+                isRequesting = requesting,
+            )
+        }
+
+    val state =
+        coreState
+            .combine(manualAmountSwap) { form, manual ->
+                form.copy(isAmountSwapped = manual ?: form.isAmountSwapped, onAmountSwap = ::onAmountSwap)
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
+                initialValue = null
+            )
+
+    init {
+        // Validate the address supplied via nav args (e.g. from Chat or QR scan)
+        if (!args.recipientAddress.isNullOrBlank()) {
+            viewModelScope.launch {
+                zcashAddressType.update { validateAddress(args.recipientAddress) }
+            }
+        }
+
+        selectedAsset
+            .filterNotNull()
+            .distinctUntilChangedBy { it.assetId }
+            .drop(1)
+            .onEach {
+                zcashAddress.update { "" }
+                zcashAddressType.update { null }
+                swapAddress.update { "" }
+                swapContact.update { null }
+            }.launchIn(viewModelScope)
+
+        exchangeRateRepository.state
+            .map { zecFiatRate(it, zecUsdPrice = null) }
+            .distinctUntilChanged()
+            .onEach { rate ->
+                rate ?: return@onEach
+                if (fiatWasLastEdited.value) {
+                    updateZecAmount(fiatAmountInner.value.amount, rate)
+                } else {
+                    updateFiatAmount(zecAmountInner.value.amount, rate)
+                }
+            }.launchIn(viewModelScope)
+
+        // Listen for ZEC-direct AB picks (shared bus)
+        viewModelScope.launch {
+            observeABContactPicked().collect { state ->
+                zcashAddress.update { state.address }
+                zcashAddressType.update { state.type }
+            }
+        }
+
+        // Pre-fill address/amount/memo from external triggers (QR scan, ZIP321, tx replay)
+        prefillSend()
+            .onEach { data ->
+                when (data) {
+                    is PrefillSendData.FromAddressScan -> {
+                        zcashAddress.update { data.address }
+                        zcashAddressType.update {
+                            if (data.address.isBlank()) null else validateAddress(data.address)
+                        }
+                    }
+
+                    is PrefillSendData.All -> {
+                        val addr = data.address.orEmpty()
+                        zcashAddress.update { addr }
+                        if (addr.isNotBlank()) {
+                            zcashAddressType.update { validateAddress(addr) }
+                        }
+                        data.memos?.firstOrNull()?.let { memo -> memoText.update { memo } }
+                        val fee = data.fee
+                        val zatoshiAmount =
+                            when {
+                                fee == null -> data.amount
+                                fee > data.amount -> data.amount
+                                else -> data.amount - fee
+                            }
+                        val zecAmount =
+                            BigDecimal(zatoshiAmount.value).divide(
+                                BigDecimal("100000000"),
+                                MathContext.DECIMAL128
+                            )
+                        onZecAmountChange(NumberTextFieldInnerState.fromAmount(zecAmount))
+                    }
+                }
+            }.launchIn(viewModelScope)
+
+        // Clear all fields when a proposal is cancelled
+        observeClearSend()
+            .onEach {
+                zcashAddress.update { "" }
+                zcashAddressType.update { null }
+                zecAmountInner.update { NumberTextFieldInnerState() }
+                fiatAmountInner.update { NumberTextFieldInnerState() }
+                fiatWasLastEdited.update { false }
+                memoText.update { "" }
+                swapAddress.update { "" }
+                swapContact.update { null }
+            }.launchIn(viewModelScope)
+
+        preselectSwapAsset.observe().launchIn(viewModelScope)
+
+        swapRepository.requestRefreshAssets()
+    }
+
+    // ── Public event handlers ─────────────────────────────────────────────────
+
+    private fun currentFiatRate(): ZecFiatRate? =
+        zecFiatRate(exchangeRateRepository.state.value, zecUsdPrice = null)
+
+    fun onZecAmountChange(inner: NumberTextFieldInnerState) {
+        zecAmountInner.update { inner }
+        fiatWasLastEdited.update { false }
+        val rate = currentFiatRate() ?: return
+        updateFiatAmount(inner.amount, rate)
+    }
+
+    fun onFiatAmountChange(inner: NumberTextFieldInnerState) {
+        fiatAmountInner.update { inner }
+        fiatWasLastEdited.update { true }
+        val rate = currentFiatRate() ?: return
+        updateZecAmount(inner.amount, rate)
+    }
+
+    private fun updateFiatAmount(zec: BigDecimal?, rate: ZecFiatRate) {
+        fiatAmountInner.value = zec?.let(rate::zecToFiat).toAmountState()
+    }
+
+    private fun updateZecAmount(fiat: BigDecimal?, rate: ZecFiatRate) {
+        zecAmountInner.value = fiat?.let(rate::fiatToZec).toAmountState()
+    }
+
+    private fun BigDecimal?.toAmountState(): NumberTextFieldInnerState =
+        this?.let { amount ->
+            NumberTextFieldInnerState(
+                innerTextFieldState =
+                    InnerTextFieldState(
+                        value = stringResByDynamicNumber(amount, includeGroupingSeparator = false),
+                        selection = TextSelection.End,
+                    ),
+                amount = amount,
+                lastValidAmount = amount,
+            )
+        } ?: NumberTextFieldInnerState()
+
+    fun onAddressChange(new: String) {
+        swapContact.update { null }
+        val isSwap = selectedAsset.value?.let { it !is ZecSwapAsset } ?: false
+        if (isSwap) {
+            swapAddress.update { new }
+        } else {
+            zcashAddress.update { new }
+            viewModelScope.launch {
+                zcashAddressType.update {
+                    if (new.isBlank()) null else validateAddress(new)
+                }
+            }
+        }
+    }
+
+    fun onMemoChange(text: String) {
+        memoText.update { text }
+    }
+
+    fun onAssetPickerClick() =
+        navigationRouter.forward(SwapAssetPickerArgs(swapContact.value?.blockchain?.chainTicker))
+
+    fun onAddressBookClick(isSwap: Boolean) =
+        viewModelScope.launch {
+            if (isSwap) {
+                val selected = navigateToSelectSwapRecipient()
+                if (selected != null) {
+                    swapContact.update { selected }
+                    swapAddress.update { "" }
+                }
+            } else {
+                navigateToSelectRecipient()
+            }
+        }
+
+    fun onDeleteSwapContactClick() = swapContact.update { null }
+
+    fun onQrScannerClick() =
+        viewModelScope.launch {
+            val result = navigateToScanAddress()
+            if (result != null) {
+                navigationRouter.back()
+                swapContact.update { null }
+                swapAddress.update { result.address }
+                zcashAddress.update { result.address }
+                zcashAddressType.update { validateAddress(result.address) }
+                if (result.amount != null) {
+                    onZecAmountChange(NumberTextFieldInnerState.fromAmount(result.amount))
+                }
+            }
+        }
+
+    fun onPrimaryButtonClick(isSwap: Boolean) {
+        if (isSwap) requestSwapQuoteClick() else createZecSendClick()
+    }
+
+    fun onBack() =
+        viewModelScope.launch {
+            if (isRequestingQuote.value) {
+                isCancelStateVisible.update { true }
+            } else if (isCancelStateVisible.value) {
+                isCancelStateVisible.update { false }
+                navigateToSwapQuoteIfAvailable { hideCancelBottomSheet() }
+            } else {
+                if (isCancelStateVisible.value) hideCancelBottomSheet()
+                cancelSwap()
+            }
+        }
+
+    fun onTryAgainClick() = swapRepository.requestRefreshAssets()
+
+    fun onAmountSwap() {
+        if (currentFiatRate() == null) return
+        manualAmountSwap.update { current -> current?.not() ?: false }
+    }
+
+    // ── Private submission helpers ────────────────────────────────────────────
+
+    private fun requestSwapQuoteClick() {
+        val zecAmt = zecAmountInner.value.amount ?: return
+        val addr = swapContact.value?.address ?: swapAddress.value
+        if (addr.isBlank()) return
+        viewModelScope.launch {
+            isRequestingQuote.update { true }
+            requestSwapQuote.requestExactInput(
+                amount = zecAmt,
+                address = addr,
+                canNavigateToSwapQuote = { !isCancelStateVisible.value }
+            )
+            isRequestingQuote.update { false }
+        }
+    }
+
+    private fun createZecSendClick() {
+        val addr = zcashAddress.value
+        val type = zcashAddressType.value
+        val zecAmt = zecAmountInner.value.amount ?: return
+        if (addr.isBlank() || type is AddressType.Invalid || type == null) return
+        viewModelScope.launch {
+            isRequestingQuote.update { true }
+            try {
+                val walletAddr = toWalletAddress(addr, type)
+                val zatoshi = zecAmt.convertZecToZatoshi()
+                val memoStr = if (type == AddressType.Transparent) "" else memoText.value
+                val zecSend =
+                    ZecSend(
+                        destination = walletAddr,
+                        amount = zatoshi,
+                        memo = Memo(memoStr),
+                        proposal = null
+                    )
+                createProposal(zecSend, fiatWasLastEdited.value)
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Exception
+            ) {
+                // createProposal handles navigation to error/review internally. Log the class
+                // only — SDK validation messages can embed the typed recipient address.
+                Twig.warn { "UnifiedSendVM: createZecSendClick failed (${e::class.simpleName})" }
+            } finally {
+                isRequestingQuote.update { false }
+            }
+        }
+    }
+
+    private suspend fun toWalletAddress(address: String, type: AddressType): WalletAddress =
+        when (type) {
+            AddressType.Unified -> WalletAddress.Unified.new(address)
+            AddressType.Shielded -> WalletAddress.Unified.new(address)
+            AddressType.Transparent -> WalletAddress.Transparent.new(address)
+            AddressType.Tex -> WalletAddress.Tex.new(address)
+            is AddressType.Invalid -> WalletAddress.Unified.new(address)
+        }
+
+    private fun onCancelSwapClick() =
+        viewModelScope.launch {
+            if (isCancelStateVisible.value) hideCancelBottomSheet()
+            cancelSwap()
+        }
+
+    private fun onDismissCancelClick() =
+        viewModelScope.launch {
+            isCancelStateVisible.update { false }
+            navigateToSwapQuoteIfAvailable { hideCancelBottomSheet() }
+        }
+
+    @Suppress("MagicNumber")
+    private suspend fun hideCancelBottomSheet() {
+        isCancelStateVisible.update { false }
+        delay(350)
+    }
+
+    private fun onTopUpClick() = navigationRouter.forward(TopUpArgs)
+
+    // ── State builder ─────────────────────────────────────────────────────────
+
+    @Suppress("CyclomaticComplexMethod")
+    private fun buildFormState(
+        isSwap: Boolean,
+        asset: SwapAsset?,
+        zecAmount: NumberTextFieldInnerState,
+        fiatAmount: NumberTextFieldInnerState,
+        zcashAddr: String,
+        zcashType: AddressType?,
+        swapAddr: String,
+        contact: EnhancedABContact?,
+        memo: String,
+        swapAssets: SwapAssetsData,
+        slippage: BigDecimal,
+        zecUsdPrice: BigDecimal?,
+        fiatPrice: BigDecimal?,
+        fiatCurrency: FiatCurrency?,
+        zecValue: BigDecimal?,
+        hasFunds: Boolean,
+        hasZeroBalance: Boolean,
+        abHintVisible: Boolean,
+        isRequesting: Boolean,
+    ): UnifiedSendState {
+        val hasAmount = zecValue != null && zecValue > BigDecimal.ZERO
+        val isAmountValid = !zecAmount.isError && hasAmount
+        val isAddressValid =
+            if (isSwap) {
+                (contact?.address ?: swapAddr).isNotBlank()
+            } else {
+                zcashType != null && zcashType !is AddressType.Invalid && zcashAddr.isNotEmpty()
+            }
+        val isMemoValid = zcashType == AddressType.Transparent || memo.toByteArray().size <= 512
+
+        val theyReceiveLabel = computeTheyReceiveLabel(isSwap, asset, zecValue, zecUsdPrice)
+        val slippageLabel: StringResource? =
+            if (isSwap) {
+                stringResByNumber(slippage, minDecimals = 0) + stringRes("%")
+            } else {
+                null
+            }
+
+        return UnifiedSendState(
+            asset = buildAssetState(asset, isRequesting),
+            address =
+                TextFieldState(
+                    value = stringRes(if (isSwap) swapAddr else zcashAddr),
+                    error =
+                        if (!isSwap && zcashAddr.isNotEmpty() && zcashType is AddressType.Invalid) {
+                            stringRes(R.string.send_address_invalid)
+                        } else {
+                            null
+                        },
+                    onValueChange = ::onAddressChange,
+                    isEnabled = !isRequesting,
+                ),
+            addressPlaceholder =
+                if (isSwap && asset != null) {
+                    stringRes(
+                        co.electriccoin.zcash.ui.design.R.string.general_enter_address_partial,
+                        asset.chainName
+                    )
+                } else {
+                    stringRes(R.string.unified_send_address_placeholder)
+                },
+            abContact =
+                if (contact == null) {
+                    null
+                } else {
+                    ChipButtonState(
+                        text = stringRes(contact.contact.name),
+                        onClick = ::onDeleteSwapContactClick,
+                        endIcon = co.electriccoin.zcash.ui.design.R.drawable.ic_chip_close,
+                        isEnabled = !isRequesting,
+                    )
+                },
+            abButton =
+                IconButtonState(
+                    icon = R.drawable.send_address_book,
+                    contentDescription = stringRes(R.string.send_address_book_content_description),
+                    onClick = { onAddressBookClick(isSwap) },
+                    isEnabled = !isRequesting
+                ),
+            qrButton =
+                IconButtonState(
+                    icon = R.drawable.qr_code_icon,
+                    contentDescription = stringRes(R.string.send_scan_content_description),
+                    onClick = ::onQrScannerClick,
+                    isEnabled = !isRequesting
+                ),
+            isABHintVisible = abHintVisible,
+            zecAmount =
+                NumberTextFieldState(
+                    innerState = zecAmount,
+                    onValueChange = ::onZecAmountChange,
+                    isEnabled = !isRequesting,
+                    explicitError = if (!hasFunds && hasAmount) stringRes("") else null
+                ),
+            fiatAmount =
+                NumberTextFieldState(
+                    innerState = fiatAmount,
+                    onValueChange = ::onFiatAmountChange,
+                    isEnabled = !isRequesting && fiatPrice != null,
+                    explicitError = if (!hasFunds && hasAmount) stringRes("") else null
+                ),
+            fiatCurrency = fiatCurrency,
+            isAmountSwapped = fiatPrice != null,
+            onAmountSwap = ::onAmountSwap,
+            amountError =
+                if (!hasFunds && hasAmount) {
+                    stringRes(R.string.send_amount_insufficient_balance)
+                } else {
+                    null
+                },
+            theyReceiveLabel = theyReceiveLabel,
+            slippage = slippageLabel,
+            onSlippageClick =
+                if (isSwap) {
+                    { onSlippageClick(zecValue) }
+                } else {
+                    null
+                },
+            memo =
+                if (isSwap) {
+                    null
+                } else {
+                    MemoFieldState.Editable(
+                        text = memo,
+                        byteCount = memo.toByteArray().size,
+                        maxBytes = 512,
+                        isEnabled = zcashType != AddressType.Transparent,
+                        onValueChange = ::onMemoChange
+                    )
+                },
+            amountErrorFooter = null,
+            errorFooter = buildErrorFooter(swapAssets),
+            infoFooter =
+                if (!isSwap && (hasZeroBalance || (hasAmount && isAmountValid && !hasFunds))) {
+                    stringRes(R.string.top_up_balance_subtitle)
+                } else {
+                    null
+                },
+            onBack = ::onBack,
+            primaryButton =
+                buildPrimaryButton(
+                    isSwap = isSwap,
+                    isRequesting = isRequesting,
+                    swapAssets = swapAssets,
+                    isAddressValid = isAddressValid,
+                    isAmountValid = isAmountValid,
+                    hasAmount = hasAmount,
+                    hasFunds = hasFunds,
+                    hasZeroBalance = hasZeroBalance,
+                    isMemoValid = isMemoValid,
+                ),
+        )
+    }
+
+    private fun computeTheyReceiveLabel(
+        isSwap: Boolean,
+        asset: SwapAsset?,
+        zecValue: BigDecimal?,
+        zecUsdPrice: BigDecimal?,
+    ): StringResource? {
+        if (!isSwap || asset == null || zecValue == null || zecUsdPrice == null) return null
+        val tokenPrice = asset.usdPrice ?: return null
+        if (tokenPrice == BigDecimal.ZERO) return null
+        val tokenAmount =
+            zecValue
+                .multiply(zecUsdPrice, MathContext.DECIMAL128)
+                .divide(tokenPrice, MathContext.DECIMAL128)
+        return stringRes(R.string.unified_send_they_receive_approx) + " " +
+            stringResByDynamicCurrencyNumber(tokenAmount, asset.tokenTicker)
+    }
+
+    private fun onSlippageClick(zecValue: BigDecimal?) =
+        navigationRouter.forward(
+            SwapSlippageArgs(
+                fiatAmount =
+                    zecValue
+                        ?.multiply(
+                            swapRepository.assets.value.zecAsset
+                                ?.usdPrice ?: BigDecimal.ZERO,
+                            MathContext.DECIMAL128
+                        )?.toPlainString(),
+                mode = SwapMode.EXACT_INPUT
+            )
+        )
+
+    private fun buildAssetState(asset: SwapAsset?, isRequesting: Boolean): AssetCardState =
+        if (asset == null) {
+            AssetCardState.Loading(onClick = ::onAssetPickerClick, isEnabled = !isRequesting)
+        } else {
+            AssetCardState.Data(
+                token = stringRes(asset.tokenTicker),
+                chain = if (asset is ZecSwapAsset) null else asset.chainName,
+                isSingleLine = true,
+                bigIcon = asset.tokenIcon,
+                smallIcon = if (asset is ZecSwapAsset) null else asset.chainIcon,
+                onClick = ::onAssetPickerClick,
+                isEnabled = !isRequesting,
+            )
+        }
+
+    private fun buildErrorFooter(swapAssets: SwapAssetsData): SwapErrorFooterState? {
+        if (swapAssets.error == null) return null
+        val isUnavailable =
+            swapAssets.error is ResponseException &&
+                swapAssets.error.response.status
+                    .isServiceUnavailable()
+        return SwapErrorFooterState(
+            title =
+                if (isUnavailable) {
+                    stringRes(co.electriccoin.zcash.ui.design.R.string.general_service_unavailable)
+                } else {
+                    stringRes(co.electriccoin.zcash.ui.design.R.string.general_unexpected_error)
+                },
+            subtitle =
+                if (isUnavailable) {
+                    stringRes(co.electriccoin.zcash.ui.design.R.string.general_please_try_again)
+                } else {
+                    stringRes(co.electriccoin.zcash.ui.design.R.string.general_check_connection)
+                }
+        )
+    }
+
+    @Suppress("CyclomaticComplexMethod")
+    private fun buildPrimaryButton(
+        isSwap: Boolean,
+        isRequesting: Boolean,
+        swapAssets: SwapAssetsData,
+        isAddressValid: Boolean,
+        isAmountValid: Boolean,
+        hasAmount: Boolean,
+        hasFunds: Boolean,
+        hasZeroBalance: Boolean,
+        isMemoValid: Boolean,
+    ): PrimaryButtonState {
+        // Service unavailable blocks button
+        if (isSwap && swapAssets.error is ResponseException &&
+            swapAssets.error.response.status
+                .isServiceUnavailable()
+        ) {
+            return PrimaryButtonState.Disabled
+        }
+
+        // Zero balance in ZEC mode → always show Top Up (before any amount is entered)
+        if (!isSwap && hasZeroBalance) {
+            return PrimaryButtonState.TopUp(onClick = ::onTopUpClick)
+        }
+
+        // Insufficient funds → Top Up
+        if (hasAmount && isAmountValid && !hasFunds) {
+            return PrimaryButtonState.TopUp(onClick = ::onTopUpClick)
+        }
+
+        return if (isSwap) {
+            when {
+                swapAssets.error != null -> {
+                    PrimaryButtonState.Review(
+                        isLoading = swapAssets.isLoading && swapAssets.data == null,
+                        onClick = ::onTryAgainClick
+                    )
+                }
+
+                swapAssets.data != null && isAddressValid && isAmountValid && !isRequesting -> {
+                    PrimaryButtonState.Review(
+                        isLoading = isRequesting,
+                        onClick = { onPrimaryButtonClick(true) }
+                    )
+                }
+
+                else -> {
+                    PrimaryButtonState.Disabled
+                }
+            }
+        } else {
+            if (isAddressValid && isAmountValid && hasFunds && isMemoValid) {
+                PrimaryButtonState.Review(
+                    isLoading = isRequesting,
+                    onClick = { onPrimaryButtonClick(false) }
+                )
+            } else {
+                PrimaryButtonState.Disabled
+            }
+        }
+    }
+}

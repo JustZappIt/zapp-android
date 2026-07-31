@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="settings_title">Configurações</string>
+    <string name="settings_advanced_settings">Configurações avançadas</string>
+    <string name="settings_integrations">Integrações</string>
+    <string name="settings_about_us">Sobre</string>
+    <string name="settings_feedback">Envie seu feedback</string>
+    <string name="settings_version">Versão <xliff:g example="1" id="version">%s</xliff:g></string>
+    <string name="settings_address_book">Catálogo de endereços</string>
+    <string name="settings_whats_new">Novidades</string>
+
+    <string name="settings_troubleshooting_menu_content_description">Configurações adicionais</string>
+    <string name="settings_troubleshooting_rescan">Reescanear a blockchain</string>
+    <string name="settings_troubleshooting_enable_background_sync">Sincronização em segundo plano</string>
+    <string name="settings_troubleshooting_enable_keep_screen_on">Manter a tela ligada durante a sincronização</string>
+
+    <!-- Settings tab (Zapp tabbed home) -->
+    <string name="settings_you_title">Você</string>
+    <string name="settings_group_people">Pessoas</string>
+    <string name="settings_group_security">Segurança</string>
+    <string name="settings_group_privacy">Privacidade</string>
+    <string name="settings_group_p2p">P2P</string>
+    <string name="settings_group_wallet">Carteira</string>
+    <string name="settings_contacts_subtitle">Gerencie seus contatos de chat</string>
+    <string name="settings_profile_identity_title">Perfil e identidade</string>
+    <string name="settings_profile_identity_subtitle">Frase semente, chave de mensagens, endereço da carteira</string>
+    <string name="settings_app_lock_title">Bloqueio do app</string>
+    <string name="settings_app_lock_subtitle">Alterar o PIN ou trocar o método de autenticação</string>
+    <string name="settings_tor_title">Tor</string>
+    <string name="settings_tor_subtitle">Encaminhar conexões pelo Tor</string>
+    <string name="settings_swap_title">Swap</string>
+    <string name="settings_swap_subtitle">Trocar criptoativos</string>
+    <string name="settings_local_currency_title">Moeda local</string>
+    <string name="settings_local_currency_subtitle">%1$s - %2$s</string>
+    <string name="settings_server_subtitle">Escolha um servidor lightwalletd</string>
+    <string name="settings_p2p_payment_method_title">Método de pagamento P2P</string>
+    <string name="settings_p2p_payment_method_selected_subtitle">%1$s - %2$s</string>
+    <string name="settings_p2p_payment_method_save">Salvar seleção</string>
+    <string name="settings_p2p_payment_method_coming_soon">Em breve</string>
+    <string name="settings_p2p_payment_method_pix">PIX</string>
+    <string name="settings_p2p_payment_method_pix_subtitle">Brasil</string>
+    <string name="settings_p2p_payment_method_upi">UPI</string>
+    <string name="settings_p2p_payment_method_upi_subtitle">Índia</string>
+    <string name="settings_p2p_payment_method_qris">QRIS</string>
+    <string name="settings_p2p_payment_method_qris_subtitle">Indonésia</string>
+    <string name="settings_p2p_payment_method_mercadopago">MercadoPago</string>
+    <string name="settings_p2p_payment_method_mercadopago_subtitle">Argentina</string>
+    <string name="settings_p2p_payment_method_pago_movil">Pago Móvil</string>
+    <string name="settings_p2p_payment_method_pago_movil_subtitle">Venezuela</string>
+    <string name="settings_p2p_payment_method_nip">NIP</string>
+    <string name="settings_p2p_payment_method_nip_subtitle">Nigéria</string>
+    <string name="settings_p2p_payment_method_transferencia">Transferencia</string>
+    <string name="settings_p2p_payment_method_transferencia_subtitle">Colômbia</string>
+    <string name="settings_p2p_payment_method_info_content_description">Como funciona</string>
+    <string name="settings_p2p_payment_method_info_title">Como funciona</string>
+    <string name="settings_p2p_payment_method_info_rails">Pague comerciantes diretamente pelos trilhos P2P locais. Atualmente oferecemos suporte a UPI na Índia, PIX no Brasil, QRIS na Indonésia, MercadoPago na Argentina, Pago Móvil na Venezuela, NIP na Nigéria e Transferencia na Colômbia.</string>
+    <string name="settings_p2p_payment_method_info_flow">Seu ZEC é convertido e liquidado na Base, onde o comerciante é pago na moeda local dele. Sem KYC, e o comerciante só vê a sua conta na Base, não o seu endereço Zcash.</string>
+    <string name="settings_p2p_payment_method_info_base_label">Sua carteira Base</string>
+    <string name="settings_p2p_payment_method_info_copy_content_description">Copiar endereço da Base</string>
+    <string name="settings_p2p_payment_method_info_copied_content_description">Copiado</string>
+
+    <!-- P2P transactions (Settings → Wallet entry). Reached from SettingsTabContent → "P2P
+         transactions"; the file lives under settings/ rather than swap/ because the screen is a
+         settings-tier transaction history, not a swap-flow surface. -->
+    <string name="p2p_transactions_title">Transações P2P</string>
+    <string name="p2p_transactions_balance_label">Saldo na Base</string>
+    <string name="p2p_transactions_balance_amount">%1$s USDC</string>
+    <string name="p2p_transactions_balance_unavailable">Saldo indisponível</string>
+    <string name="p2p_transactions_balance_loading">—</string>
+    <string name="p2p_transactions_refund_button">Reembolsar para ZEC</string>
+    <string name="p2p_transactions_refund_in_progress">Reembolsando…</string>
+    <string name="p2p_transactions_refund_retry">Tentar reembolso novamente</string>
+    <string name="p2p_transactions_refund_failed">Falha no reembolso: %1$s</string>
+    <string name="p2p_transactions_refund_dialog_title">Reembolsar para ZEC?</string>
+    <string name="p2p_transactions_refund_dialog_message">Isso transfere %1$s de volta para a sua carteira ZEC via NEAR. Os fundos costumam chegar em 5–10 minutos.</string>
+    <string name="p2p_transactions_refund_dialog_confirm">Reembolsar</string>
+    <string name="p2p_transactions_refund_dialog_cancel">Cancelar</string>
+    <string name="p2p_transactions_account_label">Conta P2P</string>
+    <string name="p2p_transactions_empty">Ainda não há transações P2P.</string>
+    <string name="p2p_transactions_error">Não foi possível carregar as transações. Puxe para atualizar.</string>
+    <string name="p2p_transactions_row_amount_usdc">%1$s USDC</string>
+    <string name="p2p_transactions_row_amount_fiat">%1$s %2$s</string>
+    <string name="p2p_transactions_row_order_id">Pedido nº %1$s</string>
+    <string name="p2p_transactions_type_buy">Compra</string>
+    <string name="p2p_transactions_type_sell">Venda</string>
+    <string name="p2p_transactions_type_pay">Pagamento</string>
+    <string name="p2p_transactions_status_placed">Realizada</string>
+    <string name="p2p_transactions_status_accepted">Aceita</string>
+    <string name="p2p_transactions_status_paid">Paga</string>
+    <string name="p2p_transactions_status_completed">Concluída</string>
+    <string name="p2p_transactions_status_cancelled">Cancelada</string>
+
+    <!-- Detail panel (expanded transaction row) -->
+    <string name="p2p_transactions_detail_fee">Taxa</string>
+    <string name="p2p_transactions_detail_paid_by">Pago por</string>
+    <string name="p2p_transactions_detail_paid_to">Pago a</string>
+    <string name="p2p_transactions_detail_p2p_merchant_address">Endereço do comerciante P2P</string>
+    <string name="p2p_transactions_detail_duration">Duração</string>
+    <string name="p2p_transactions_detail_expand_content_description">Mostrar detalhes</string>
+    <string name="p2p_transactions_detail_collapse_content_description">Ocultar detalhes</string>
+</resources>

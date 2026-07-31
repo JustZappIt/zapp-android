@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="scan_keystone_failure">Este código QR não é uma carteira Keystone válida.</string>
+    <string name="scan_keystone_preview_content_description">Câmera</string>
+    <string name="scan_keystone_cancel_button">Cancelar</string>
+    <string name="scan_keystone_settings_button">Abrir Configurações</string>
+    <string name="scan_keystone_settings_open_failed">Não foi possível abrir o aplicativo de Configurações.</string>
+    <string name="scan_keystone_state_permission">A câmera não está autorizada. Acesse as configurações do sistema do
+        Zapp e ative-a.</string>
+    <string name="scan_keystone_state_failed">A inicialização da câmera falhou. Tente novamente, por favor.</string>
+    <string name="scan_keystone_address_validation_failed">Este código QR não é um endereço Zcash válido.</string>
+    <string name="scan_keystone_torch_content_description">Alternar lanterna da câmera</string>
+    <string name="scan_keystone_gallery_content_description">Galeria</string>
+    <string name="scan_keystone_info">Escaneie sua carteira Keystone para conectar</string>
+    <string name="scan_keystone_info_transaction">Escaneie o código QR da sua Keystone para assinar a transação</string>
+
+</resources>

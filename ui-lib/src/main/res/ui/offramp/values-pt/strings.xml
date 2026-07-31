@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Merchant payment QR scanner (shown by the shared ScanView for the offramp corridors) -->
+    <string name="offramp_scan_invalid">Este código QR não é um código de pagamento válido.</string>
+    <string name="offramp_scan_invalid_image">Esta imagem não contém um código QR de pagamento válido.</string>
+    <string name="offramp_scan_several_codes">Esta imagem contém vários códigos QR.</string>
+</resources>

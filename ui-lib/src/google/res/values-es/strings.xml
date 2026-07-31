@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_settings_background_push_toggle_subtitle">Recibe avisos privados sin mantener Zapp activo</string>
+    <string name="background_delivery_settings_intro">Recibe un aviso genérico cuando pueda haber un mensaje directo cifrado en espera.</string>
+    <string name="background_delivery_settings_delivery_title">Cuando está desactivado</string>
+    <string name="background_delivery_settings_delivery_body">Zapp cancela la suscripción a sus temas opacos. Los mensajes se sincronizan cuando vuelves a abrir la app.</string>
+    <string name="background_delivery_settings_battery_title">Cuando está activado</string>
+    <string name="background_delivery_settings_battery_body">Los servicios de Google Play pueden entregar un aviso genérico durante Doze sin un servicio persistente de Zapp ni una notificación de ejecución.</string>
+    <string name="background_delivery_settings_privacy_title">Qué puede observar el servicio de avisos</string>
+    <string name="background_delivery_settings_privacy_body">FCM puede observar esta instalación, la pertenencia a temas opacos y los horarios. No recibe identidad, contactos, mensajes, archivos, datos de cartera ni claves de conversación. Al abrir Zapp se realiza la sincronización cifrada auténtica.</string>
+    <string name="background_delivery_settings_toggle_title">Permitir avisos en segundo plano</string>
+    <string name="background_delivery_settings_toggle_subtitle">Suscribirse a temas opacos de mensajes directos</string>
+</resources>

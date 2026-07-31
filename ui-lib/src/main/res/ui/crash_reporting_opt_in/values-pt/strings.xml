@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="crash_reporting_opt_in_title">Ajude a Melhorar o Zapp</string>
+    <string name="crash_reporting_opt_in_subtitle">Os relatórios de falhas são uma ferramenta essencial para que os desenvolvedores melhorem a
+        qualidade e a confiabilidade dos aplicativos. Na prática, eles são muito úteis para ajudar a corrigir erros que
+        causam travamentos.</string>
+    <string name="crash_reporting_opt_in_info">Observação: os relatórios de falhas incluem informações sobre a versão do app, o horário
+        em que a falha ocorreu e o stack trace, deixando claro em que ponto do app o travamento aconteceu. Os dados
+        coletados são completamente anonimizados.</string>
+    <string name="crash_reporting_opt_in_positive">Participar</string>
+    <string name="crash_reporting_opt_in_positive_desc">Compartilhar relatórios de falhas com os desenvolvedores do Zapp.</string>
+    <string name="crash_reporting_opt_in_negative">Não participar</string>
+    <string name="crash_reporting_opt_in_negative_desc">Não compartilhar relatórios de falhas com os desenvolvedores do Zapp.</string>
+    <string name="crash_reporting_opt_in_save">Salvar alterações</string>
+</resources>

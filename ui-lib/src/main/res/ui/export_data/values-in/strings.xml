@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="export_data_title">Ekspor Data</string>
+    <string name="export_data_header">Persetujuan untuk Mengekspor Data Pribadi</string>
+    <string name="export_data_text">
+        Dengan mengeklik “Saya Setuju” di bawah, Anda memberikan persetujuan untuk mengekspor semua data pribadi dompet Anda, seperti seluruh riwayat dompet Anda, termasuk dompet perangkat keras yang terhubung. Semua informasi pribadi, memo, jumlah, dan alamat penerima, bahkan untuk aktivitas terlindungi Anda, akan diekspor.*\n\nData pribadi ini juga memungkinkan seseorang melihat tindakan tertentu yang Anda lakukan dengan Zapp di masa mendatang.\n\nBerbagi data pribadi ini tidak dapat dibatalkan: setelah Anda membagikan data pribadi ini kepada seseorang, tidak ada cara untuk mencabut aksesnya.\n\n*Perlu diketahui bahwa data pribadi ini tidak memberi mereka kemampuan untuk membelanjakan dana Anda, hanya kemampuan untuk melihat apa yang Anda lakukan dengan dana Anda.
+    </string>
+    <string name="export_data_confirm">Ekspor Data Pribadi</string>
+    <string name="export_data_agree">Saya setuju dengan Kebijakan Ekspor Data Pribadi dan Kebijakan Privasi Zapp</string>
+    <string name="export_data_export_data_chooser_title">Bagikan data internal Zapp dengan:</string>
+    <string name="export_data_unable_to_share">Tidak dapat menemukan aplikasi untuk berbagi.</string>
+    <string name="export_data_share_text">Ekspor Berkas Pajak</string>
+</resources>

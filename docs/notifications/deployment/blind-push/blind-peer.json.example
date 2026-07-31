@@ -1,0 +1,17 @@
+{
+  "storage": "/var/lib/zapp-blind-peer",
+  "port": 49737,
+  "maxBytes": 10000000000,
+  "maxNotificationsPerMinute": 120,
+  "pushGatewayKeys": [
+    "REPLACE_WITH_BLIND_PUSH_GATEWAY_PUBLIC_KEY"
+  ],
+  "inviteMailboxDir": "/var/lib/zapp-blind-peer/invite-mailbox",
+  "inviteMailboxHttpPort": 49739,
+  "inviteMailboxHttpHost": "127.0.0.1",
+  "maxInvitesPerRecipient": 100,
+  "maxInvitesPerSender": 8,
+  "maxInvitesTotal": 10000,
+  "maxInviteBytesPerRecipient": 262144,
+  "maxInviteRequestsPerMinute": 600
+}

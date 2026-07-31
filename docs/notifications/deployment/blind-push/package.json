@@ -1,0 +1,16 @@
+{
+  "name": "zapp-blind-push-deployment",
+  "private": true,
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "b4a": "1.7.2",
+    "blind-peer": "3.12.2",
+    "blind-push-gateway": "0.3.0",
+    "blind-relay": "1.6.1",
+    "compact-encoding": "3.3.0",
+    "hypercore-id-encoding": "1.3.0",
+    "protomux-rpc": "1.10.0",
+    "sodium-universal": "5.0.1"
+  }
+}

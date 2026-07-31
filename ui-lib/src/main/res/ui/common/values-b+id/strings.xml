@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="back_navigation">Kembali</string>
+    <string name="back_navigation_content_description">Kembali</string>
+    <string name="close_navigation_content_description">Tutup</string>
+    <string name="tooltip_close_content_description">Tutup tooltip</string>
+
+    <string name="fiat_currency_conversion_rate_unavailable">Tidak tersedia</string>
+    <string name="empty_char">-</string>
+    <string name="zcash_logo_content_description">Logo Zcash</string>
+    <string name="settings_menu_content_description">Buka Pengaturan</string>
+    <string name="balance_widget_available">Saldo tersedia:</string>
+
+    <string name="hide_balances_content_description">Sembunyikan saldo</string>
+
+    <string name="unable_to_open_email">Tidak dapat membuka aplikasi email.</string>
+
+    <string name="restoring_wallet_label">[Memulihkan Dompet Anda…]</string>
+    <string name="restoring_wallet_label_new">Memulihkan Dompet Anda…</string>
+    <string name="disconnected_label">[Terputus…]</string>
+    <string name="disconnected_label_new">Terputus…</string>
+    <string name="unable_to_open_play_store">Tidak dapat membuka aplikasi Google Play Store…</string>
+
+    <string name="general_copied_to_clipboard">Disalin ke papan klip</string>
+    <string name="general_etc">…</string>
+
+    <string name="general_remind_me_later">Ingatkan saya nanti</string>
+    <string name="general_remind_me_in">Ingatkan saya dalam %s</string>
+    <string name="general_remind_me_in_two_days">dua hari</string>
+    <string name="general_remind_me_in_two_weeks">dua minggu</string>
+    <string name="general_remind_me_in_two_months">dua bulan</string>
+    <string name="wbh_copy">Salin</string>
+    <string name="wbh_date_subtitle">Transaksi Dompet Pertama</string>
+    <string name="wbh_enter_block_height">Masukkan tinggi blok</string>
+    <string name="wbh_estimation_message">Zapp akan memindai dan memulihkan semua transaksi yang dibuat setelah nomor blok berikut.</string>
+    <string name="wbh_estimation_subtitle">Perkiraan Tinggi Blok</string>
+    <string name="wbh_message">Memasukkan Tinggi Kelahiran Dompet Anda memastikan kami dapat menampilkan semua dana dan riwayat transaksi Anda dengan benar.</string>
+    <string name="wbh_next">Lanjut</string>
+    <string name="wbh_subtitle">Tinggi Kelahiran Dompet</string>
+    <string name="wbh_text_field_hint">Masukkan nomor</string>
+    <string name="wbh_text_field_note">Tinggi Kelahiran Dompet adalah waktu saat dompet Anda dibuat.</string>
+    <string name="wbh_text_field_title">Tinggi Blok</string>
+</resources>

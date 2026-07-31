@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- App lock hub -->
+    <string name="security_settings_title">Bloqueo de la app</string>
+    <string name="security_settings_actions_header">Acciones</string>
+
+    <!-- Auth-method selector tabs (label doubles as the illustration title) -->
+    <string name="security_settings_tab_pin">PIN de 6 dígitos</string>
+    <string name="security_settings_tab_biometric">Biometría</string>
+
+    <!-- Action rows -->
+    <string name="security_settings_change_pin_row_title">Cambiar PIN</string>
+    <string name="security_settings_change_pin_row_subtitle">Actualiza tu código de desbloqueo de 6 dígitos</string>
+    <string name="security_settings_reenroll_bio_row_title">Volver a registrar biometría</string>
+    <string name="security_settings_reenroll_bio_row_subtitle">Usa los ajustes biométricos de tu dispositivo</string>
+
+    <!-- Illustration body copy -->
+    <string name="security_settings_illustration_pin_body">Se requiere un PIN cada vez que abres la app.</string>
+    <string name="security_settings_illustration_bio_body">La huella dactilar o el reconocimiento facial desbloquean la app.\nSiempre se conserva un PIN como respaldo.</string>
+
+    <!-- Bottom dock -->
+    <string name="security_settings_back_content_description">Atrás</string>
+    <string name="security_settings_save_changes_content_description">Guardar cambios</string>
+    <string name="security_settings_save_changes_button">GUARDAR CAMBIOS</string>
+
+    <!-- Change-PIN screen -->
+    <string name="security_settings_change_pin_confirm_title">Confirma\ntu PIN</string>
+    <string name="security_settings_change_pin_change_title">Cambia\ntu PIN</string>
+    <string name="security_settings_change_pin_mismatch">Los PIN no coinciden. Inténtalo de nuevo.</string>
+    <string name="security_settings_change_pin_confirm_subtitle">Vuelve a ingresar tu nuevo PIN para confirmar.</string>
+    <string name="security_settings_change_pin_enter_subtitle">Ingresa un nuevo PIN de 6 dígitos.</string>
+    <string name="security_settings_change_pin_progress_fmt">%1$d de 6 ingresados</string>
+    <string name="security_settings_keypad_delete_content_description">Eliminar</string>
+
+    <!-- Re-auth prompts -->
+    <string name="security_settings_bio_verify_switch_pin_prompt">Verifica que eres tú para cambiar a un PIN</string>
+
+    <!-- Success snackbars -->
+    <string name="security_settings_success_switched_pin">Cambiaste a PIN correctamente.</string>
+    <string name="security_settings_success_pin_changed">PIN cambiado correctamente.</string>
+    <string name="security_settings_success_bio_enrolled">Biometría registrada correctamente.</string>
+
+    <!-- Errors -->
+    <string name="security_settings_bio_enroll_failed">El registro biométrico falló. Toca para reintentar.</string>
+</resources>

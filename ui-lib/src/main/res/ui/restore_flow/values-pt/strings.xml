@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="restore_flow_seed_badge">Restaurar · Frase de recuperação</string>
+    <string name="restore_flow_seed_title">Digite sua\nfrase de recuperação</string>
+    <string name="restore_flow_seed_sub">Digite sua frase de recuperação de 24 palavras. Isso restaura tanto sua carteira quanto sua identidade de mensageria.</string>
+
+    <string name="restore_flow_birthday_badge">Restaurar · Altura de nascimento</string>
+    <string name="restore_flow_birthday_title">Altura de nascimento\nda carteira</string>
+    <string name="restore_flow_birthday_sub">Informar quando sua carteira foi criada acelera a restauração. Use uma altura de bloco ou escolha um mês e ano.</string>
+    <string name="restore_flow_birthday_field_label">ALTURA DO BLOCO</string>
+    <string name="restore_flow_birthday_field_hint">Digite um número ou deixe em branco</string>
+    <string name="restore_flow_birthday_skip">Pular: escanear tudo</string>
+    <string name="restore_flow_birthday_mode_height">Altura do bloco</string>
+    <string name="restore_flow_birthday_mode_date">Mês e ano</string>
+    <string name="restore_flow_birthday_date_note">Se você não tiver certeza, escolha uma data anterior.</string>
+    <string name="restore_flow_birthday_estimating">Estimando a altura do bloco…</string>
+
+
+    <string name="restore_flow_loading_sub">Configurando sua carteira e identidade de mensageria a partir da sua frase de recuperação.</string>
+    <string name="restore_flow_loading_error">A restauração falhou. Toque em repetir para tentar de novo.</string>
+    <string name="restore_flow_loading_error_no_retry">A restauração falhou. Volte e tente de novo.</string>
+    <string name="restore_flow_loading_retry">Repetir</string>
+
+    <string name="restore_flow_error_wallet_failed">A restauração da carteira falhou. Toque em repetir para tentar de novo.</string>
+    <string name="restore_flow_error_birthday_too_low">A altura de nascimento deve ser de pelo menos %1$s.</string>
+    <string name="restore_flow_error_estimation_failed">Não foi possível estimar uma altura de bloco para essa data. Tente outra data ou informe uma altura diretamente.</string>
+
+    <string name="restore_flow_confirm_title">Confirme sua\nfrase de recuperação</string>
+    <string name="restore_flow_confirm_sub">Verifique se estas são as 24 palavras que você digitou. Esta frase restaura tanto sua carteira quanto sua identidade de mensageria.</string>
+
+    <string name="restore_flow_keep_open_badge">Restaurar · Sincronização</string>
+    <string name="restore_flow_keep_open_title">Mantenha o Zapp\naberto</string>
+    <string name="restore_flow_keep_open_sub">Sua carteira está sincronizando com a blockchain. Isso pode levar um tempo.</string>
+    <string name="restore_flow_keep_open_bullet_1">Mantenha o app Zapp aberto com a tela do celular ativa.</string>
+    <string name="restore_flow_keep_open_bullet_2">Considere conectar seu dispositivo à energia: a sincronização consome bateria.</string>
+    <string name="restore_flow_keep_open_checkbox">Manter a tela ligada durante a sincronização</string>
+    <string name="restore_flow_keep_open_cta">Entrar no Zapp</string>
+</resources>

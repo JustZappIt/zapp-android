@@ -1,0 +1,86 @@
+# Commenting this out would improve obfuscation. The wallet is already open source so obfuscation doesn't provide much benefit
+# and makes analyzing the release build of the app more difficult.
+-dontobfuscate
+
+# Ensure that stacktraces are reversible.
+-renamesourcefileattribute SourceFile
+-keepattributes SourceFile,LineNumberTable
+
+# Generate the combined proguard configuration for debugging.
+-printconfiguration build/outputs/proguard-config.txt
+
+# This is generated automatically by the Android Gradle plugin.
+-dontwarn androidx.compose.ui.util.MathHelpersKt
+-dontwarn com.google.common.util.concurrent.ListenableFuture
+-dontwarn com.google.errorprone.annotations.InlineMe
+-dontwarn com.google.errorprone.annotations.MustBeClosed
+-dontwarn com.google.j2objc.annotations.ReflectionSupport
+-dontwarn com.google.j2objc.annotations.ReflectionSupport$Level
+-dontwarn com.google.j2objc.annotations.RetainedWith
+-dontwarn javax.naming.directory.Attribute
+-dontwarn javax.naming.directory.Attributes
+-dontwarn javax.naming.directory.DirContext
+-dontwarn javax.naming.directory.InitialDirContext
+-dontwarn javax.naming.NamingEnumeration
+-dontwarn javax.naming.NamingException
+
+-dontwarn javax.naming.InvalidNameException
+-dontwarn javax.naming.ldap.LdapName
+-dontwarn javax.naming.ldap.Rdn
+-dontwarn org.ietf.jgss.GSSContext
+-dontwarn org.ietf.jgss.GSSCredential
+-dontwarn org.ietf.jgss.GSSException
+-dontwarn org.ietf.jgss.GSSManager
+-dontwarn org.ietf.jgss.GSSName
+-dontwarn org.ietf.jgss.Oid
+
+# kotlinx.datetime supports kotlinx.serialization, but we don't use kotlinx.serialization elsewhere
+# in the projects, so the classes aren't present.  These warnings are safe to suppress.
+-dontwarn kotlinx.serialization.KSerializer
+-dontwarn kotlinx.serialization.Serializable
+-dontwarn kotlinx.serialization.internal.AbstractPolymorphicSerializer
+
+# Keep kotlinx.datetime classes used by Zcash SDK
+-keep class kotlinx.datetime.** { *; }
+-dontwarn kotlinx.datetime.Instant
+-dontwarn kotlinx.datetime.Clock$System
+-dontwarn kotlinx.datetime.Instant$Companion
+
+# OkHttp internal classes - Flexa SDK references old OkHttp 4.x internals that moved in 5.x
+# Using dontwarn since these are implementation details that don't affect runtime behavior
+-dontwarn okhttp3.internal.Util
+
+-keepclassmembers class java.util.concurrent.ConcurrentHashMap { *; }
+-keepclassmembers class java.util.IntSummaryStatistics { *; }
+-keepclassmembers class java.util.LongSummaryStatistics { *; }
+-keepclassmembers class java.util.DoubleSummaryStatistics { *; }
+
+# Keystone SDK
+# Note: we should keep only the necessary components
+-keep class com.keystone.module.** { *; }
+-keepnames class **.R$drawable { *; }
+-keepclassmembers class **.R$drawable { *; }
+
+# Bare runtime (holepunchto/bare-kit), used by the ZappMessaging P2P chat stack.
+# The native JNI layer in bare-kit's IPC.c and Worklet.c resolves Java callback methods
+# (readable/writable/apply) by name at runtime via GetMethodID. R8's shrinker can't see
+# these native call sites, so it strips the methods; GetMethodID then returns null and the
+# unchecked CallVoidMethod aborts the VM with
+# "JNI DETECTED ERROR IN APPLICATION: mid == null" on launch. Keep the whole package.
+-keep class to.holepunch.bare.kit.** { *; }
+
+# ZappMessaging SDK. It drives the Bare worklet over an NDJSON IPC bridge
+# (core.IPCBridge / core.BareWorkletManager) and derives the chat identity from the
+# wallet seed via sdk.restoreFromSeedPhrase(). The SDK's own consumer rules only keep
+# its public API (ZappMessagingSDK + models.**), NOT the core.* internals — so in a
+# minified release build R8 shrinks/optimizes those internals and the worklet round-trip
+# silently never completes. Chat identity then stays null, and onboarding (which gates on
+# chatIdentity != null) hangs on the loading screen. Debug builds are fine because R8 is
+# off there. Keep the whole package and its kotlinx.serialization plumbing.
+-keep class xyz.justzappit.zappmessaging.** { *; }
+-keepclassmembers class xyz.justzappit.zappmessaging.** { *; }
+-keepclassmembers class xyz.justzappit.zappmessaging.**$$serializer { *; }
+-keepclassmembers class xyz.justzappit.zappmessaging.** {
+    *** Companion;
+    kotlinx.serialization.KSerializer serializer(...);
+}

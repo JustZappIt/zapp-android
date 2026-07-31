@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="choose_server_title">Server</string>
+    <string name="choose_server_default_label">bawaan: <xliff:g id="server" example="example.com:123">%1$s</xliff:g></string>
+    <string name="choose_server_custom">khusus</string>
+    <string name="choose_server_custom_delimiter">:</string>
+    <string name="choose_server_full_server_name">
+        <xliff:g id="hostname" example="example.com">%1$s</xliff:g>:
+        <xliff:g id="port" example="508">%2$d</xliff:g>
+    </string>
+    <string name="choose_server_full_server_name_text_field">
+        <xliff:g id="hostname" example="example.com">%1$s</xliff:g>:<xliff:g id="port" example="508">%2$d</xliff:g>
+    </string>
+    <string name="choose_server_textfield_hint">&lt;nama host&gt;:&lt;port&gt;</string>
+    <string name="choose_server_save">Simpan pilihan</string>
+
+    <string name="choose_server_validation_dialog_error_title">Endpoint server tidak valid</string>
+    <string name="choose_server_validation_dialog_error_text">Kesalahan: Upaya mengganti endpoint gagal.
+        Pastikan nama host dan port sudah benar, dan diformat sebagai &lt;nama host&gt;:&lt;port&gt;.</string>
+    <string name="choose_server_validation_dialog_error_btn">OK</string>
+
+    <string name="choose_server_save_success_dialog_title">Server disimpan</string>
+    <string name="choose_server_save_success_dialog_text">Endpoint server yang dipilih berhasil
+        disimpan.</string>
+    <string name="choose_server_save_success_dialog_btn">OK</string>
+    <string name="choose_server_save_default">Bawaan</string>
+
+    <string name="choose_server_loading_title">Menjalankan Uji Server</string>
+    <string name="choose_server_loading_subtitle">Ini mungkin memerlukan waktu sejenak…</string>
+
+    <string name="choose_server_fastest_servers">Server tercepat</string>
+    <string name="choose_server_other_servers">Server lainnya</string>
+    <string name="choose_server_refresh">Segarkan</string>
+    <string name="choose_server_active">Aktif</string>
+    <string name="choose_server_default">Bawaan</string>
+</resources>

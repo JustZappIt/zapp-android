@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="back_navigation">Voltar</string>
+    <string name="back_navigation_content_description">Voltar</string>
+    <string name="close_navigation_content_description">Fechar</string>
+    <string name="tooltip_close_content_description">Fechar dica</string>
+
+    <string name="fiat_currency_conversion_rate_unavailable">Indisponível</string>
+    <string name="empty_char">-</string>
+    <string name="zcash_logo_content_description">Logo da Zcash</string>
+    <string name="settings_menu_content_description">Abrir Configurações</string>
+    <string name="balance_widget_available">Saldo disponível:</string>
+
+    <string name="hide_balances_content_description">Ocultar saldos</string>
+
+    <string name="unable_to_open_email">Não foi possível abrir o app de e-mail.</string>
+
+    <string name="restoring_wallet_label">[Restaurando sua carteira…]</string>
+    <string name="restoring_wallet_label_new">Restaurando sua carteira…</string>
+    <string name="disconnected_label">[Sem conexão…]</string>
+    <string name="disconnected_label_new">Sem conexão…</string>
+    <string name="unable_to_open_play_store">Não foi possível abrir o app da Google Play Store…</string>
+
+    <string name="general_copied_to_clipboard">Copiado para a área de transferência</string>
+    <string name="general_etc">…</string>
+
+    <string name="general_remind_me_later">Lembrar-me mais tarde</string>
+    <string name="general_remind_me_in">Lembrar-me em %s</string>
+    <string name="general_remind_me_in_two_days">dois dias</string>
+    <string name="general_remind_me_in_two_weeks">duas semanas</string>
+    <string name="general_remind_me_in_two_months">dois meses</string>
+    <string name="wbh_copy">Copiar</string>
+    <string name="wbh_date_subtitle">Primeira Transação da Carteira</string>
+    <string name="wbh_enter_block_height">Inserir altura do bloco</string>
+    <string name="wbh_estimation_message">O Zapp vai escanear e recuperar todas as transações feitas após o seguinte número de bloco.</string>
+    <string name="wbh_estimation_subtitle">Altura de Bloco Estimada</string>
+    <string name="wbh_message">Inserir a Altura de Nascimento da sua carteira garante que possamos exibir corretamente todos os seus fundos e o histórico de transações.</string>
+    <string name="wbh_next">Próximo</string>
+    <string name="wbh_subtitle">Altura de Nascimento da Carteira</string>
+    <string name="wbh_text_field_hint">Insira um número</string>
+    <string name="wbh_text_field_note">A Altura de Nascimento da Carteira é o momento em que sua carteira foi criada.</string>
+    <string name="wbh_text_field_title">Altura do Bloco</string>
+</resources>

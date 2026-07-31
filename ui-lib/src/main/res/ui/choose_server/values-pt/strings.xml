@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="choose_server_title">Servidor</string>
+    <string name="choose_server_default_label">padrão: <xliff:g id="server" example="example.com:123">%1$s</xliff:g></string>
+    <string name="choose_server_custom">personalizado</string>
+    <string name="choose_server_custom_delimiter">:</string>
+    <string name="choose_server_full_server_name">
+        <xliff:g id="hostname" example="example.com">%1$s</xliff:g>:
+        <xliff:g id="port" example="508">%2$d</xliff:g>
+    </string>
+    <string name="choose_server_full_server_name_text_field">
+        <xliff:g id="hostname" example="example.com">%1$s</xliff:g>:<xliff:g id="port" example="508">%2$d</xliff:g>
+    </string>
+    <string name="choose_server_textfield_hint">&lt;nome do host&gt;:&lt;porta&gt;</string>
+    <string name="choose_server_save">Salvar seleção</string>
+
+    <string name="choose_server_validation_dialog_error_title">Endpoint do servidor inválido</string>
+    <string name="choose_server_validation_dialog_error_text">Erro: A tentativa de trocar de endpoint falhou.
+        Verifique se o nome do host e a porta estão corretos e formatados como &lt;nome do host&gt;:&lt;porta&gt;.</string>
+    <string name="choose_server_validation_dialog_error_btn">OK</string>
+
+    <string name="choose_server_save_success_dialog_title">Servidor salvo</string>
+    <string name="choose_server_save_success_dialog_text">O endpoint do servidor selecionado foi
+        salvo com sucesso.</string>
+    <string name="choose_server_save_success_dialog_btn">OK</string>
+    <string name="choose_server_save_default">Padrão</string>
+
+    <string name="choose_server_loading_title">Executando teste de servidor</string>
+    <string name="choose_server_loading_subtitle">Isto pode levar um momento…</string>
+
+    <string name="choose_server_fastest_servers">Servidores mais rápidos</string>
+    <string name="choose_server_other_servers">Outros servidores</string>
+    <string name="choose_server_refresh">Atualizar</string>
+    <string name="choose_server_active">Ativo</string>
+    <string name="choose_server_default">Padrão</string>
+</resources>

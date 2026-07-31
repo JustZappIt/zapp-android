@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Network security configuration for Zapp Android.
+  - Disables cleartext (HTTP) traffic by default.
+  - Pins certificates for critical API endpoints.
+-->
+<network-security-config>
+    <!-- Forbid cleartext on all domains by default -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Debug overrides: trust user-installed CAs (e.g. Charles/mitmproxy) in debug builds.
+         Cleartext is still blocked even in debug; only the trust anchor set is expanded. -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

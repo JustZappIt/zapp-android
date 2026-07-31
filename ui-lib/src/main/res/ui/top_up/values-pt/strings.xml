@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="top_up_title">Como você vai adicionar saldo?</string>
+    <string name="top_up_subtitle">Escolha de onde vêm seus ZEC.</string>
+    <string name="top_up_from_exchange_title">De uma corretora</string>
+    <string name="top_up_from_exchange_subtitle">Corretoras como Binance ou Coinbase só podem enviar para um endereço transparente.</string>
+    <string name="top_up_from_wallet_title">De outra carteira</string>
+    <string name="top_up_from_wallet_subtitle">Receba diretamente no seu endereço blindado.</string>
+    <string name="top_up_add_zec_button">Adicionar ZEC</string>
+    <string name="top_up_balance_subtitle">Adicione saldo de uma corretora ou de outra carteira.</string>
+</resources>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="authentication_system_ui_title">
+        Autentikasi untuk <xliff:g id="app_name" example="Zapp">%1$s</xliff:g>
+    </string>
+    <string name="authentication_system_ui_subtitle">
+        Gunakan biometrik atau kredensial perangkat untuk mengakses <xliff:g id="use_case" example="Recovery Phrase">%1$s</xliff:g>.
+    </string>
+
+    <string name="authentication_use_case_delete_wallet">Fitur Hapus Dompet</string>
+    <string name="authentication_use_case_export_data">Fitur Ekspor Data Pribadi</string>
+    <string name="authentication_use_case_seed_recovery">Fitur Pemulihan Frasa Pemulihan</string>
+    <string name="authentication_use_case_send_funds">Fitur Kirim Dana</string>
+    <string name="authentication_use_case_adress_book">Fitur Buku Alamat</string>
+    <string name="authentication_use_case_tax_export">Ekspor pajak</string>
+
+    <string name="authentication_toast_canceled">Autentikasi dibatalkan</string>
+    <string name="authentication_toast_failed">Autentikasi gagal</string>
+
+    <string name="authentication_error_title">Kesalahan autentikasi</string>
+    <string name="authentication_error_text">Autentikasi gagal karena alasan berikut. Coba autentikasi lagi, atau hubungi tim dukungan untuk bantuan.</string>
+    <string name="authentication_error_details">
+        Kode kesalahan: <xliff:g id="code" example="-1">%1$d</xliff:g>\nPesan kesalahan: <xliff:g id="message" example="No device credential">%2$s</xliff:g>
+    </string>
+    <string name="authentication_error_button_retry">Coba lagi</string>
+    <string name="authentication_error_button_support">Hubungi Dukungan</string>
+
+    <string name="authentication_failed_title">Autentikasi gagal</string>
+    <string name="authentication_failed_text">
+        Autentikasi ditampilkan tetapi tidak dikenali. Coba autentikasi lagi, atau hubungi tim dukungan untuk bantuan.
+    </string>
+    <string name="authentication_failed_button_retry">Coba lagi</string>
+    <string name="authentication_failed_button_support">Hubungi Dukungan</string>
+
+    <string name="authentication_failed_welcome_icon_cont_desc">Ketuk untuk membuka aplikasi <xliff:g id="app_name" example="Zapp">%1$s</xliff:g></string>
+    <string name="authentication_failed_welcome_title">Akun Zapp Anda aman.</string>
+    <string name="authentication_failed_welcome_subtitle">Ketuk ikon kunci untuk membukanya.</string>
+</resources>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="request_title">Solicitar</string>
+    <string name="request_amount_invalid">Este valor de transação é inválido</string>
+    <string name="request_amount_btn">Avançar</string>
+    <string name="request_memo_btn">Solicitar</string>
+    <string name="request_qr_share_btn">Compartilhar código QR</string>
+    <string name="request_qr_close_btn">Fechar</string>
+    <string name="request_qr_save_btn">Salvar QR nas Fotos</string>
+    <string name="request_qr_send_in_chat_btn">Enviar no chat</string>
+    <string name="request_qr_send_in_chat_title">Enviar solicitação para</string>
+    <string name="request_qr_send_in_chat_empty">Ainda não há contatos de chat</string>
+    <string name="request_qr_note_label">NOTA</string>
+    <string name="request_qr_address_label_shielded">Seu endereço protegido</string>
+    <string name="request_qr_address_label_transparent">Seu endereço transparente</string>
+    <string name="request_qr_copy_address_content_description">Copiar endereço</string>
+    <string name="request_back_content_description">Voltar</string>
+    <string name="request_privacy_level_shielded">Privado</string>
+    <string name="request_privacy_level_transparent">Não privado</string>
+    <string name="request_amount_empty">0</string>
+    <string name="request_amount_keyboard_zero">0</string>
+    <string name="request_amount_keyboard_one">1</string>
+    <string name="request_amount_keyboard_two">2</string>
+    <string name="request_amount_keyboard_three">3</string>
+    <string name="request_amount_keyboard_four">4</string>
+    <string name="request_amount_keyboard_five">5</string>
+    <string name="request_amount_keyboard_six">6</string>
+    <string name="request_amount_keyboard_seven">7</string>
+    <string name="request_amount_keyboard_eight">8</string>
+    <string name="request_amount_keyboard_nine">9</string>
+    <string name="request_amount_keyboard_delete">Excluir</string>
+    <string name="request_amount_note_hint">Adicione uma nota (opcional)</string>
+
+    <string name="request_memo_payment_request_subtitle">Solicitação de pagamento</string>
+    <string name="request_memo_text_field_hint">Para que é isto?</string>
+    <string name="request_memo_bytes_counter">
+        <xliff:g id="typed_bytes" example="12">%1$s</xliff:g>/<xliff:g id="max_bytes" example="512">%2$s</xliff:g>
+    </string>
+
+    <string name="request_qr_code_content_description">Código QR de solicitação</string>
+    <string name="request_qr_code_data_unable_to_share">Não foi possível encontrar um aplicativo para compartilhar o código QR.</string>
+    <string name="request_qr_code_share_chooser_title">Solicitar %s</string>
+    <string name="request_qr_code_share_chooser_text">Olá, escaneie este código QR para me enviar um pagamento de %s! Link para download:
+        https://play.google.com/store/apps/details?id=xyz.justzappit.zapp</string>
+</resources>

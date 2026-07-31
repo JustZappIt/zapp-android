@@ -1,0 +1,22 @@
+[Unit]
+Description=Zapp blind peer with upstream blind-push forwarding
+After=network-online.target zapp-blind-push-gateway.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zapp-push
+Group=zapp-push
+WorkingDirectory=/opt/zapp-blind-push
+ExecStart=/usr/bin/node /opt/zapp-blind-push/blind-peer-server.js /etc/zapp-blind-push/blind-peer.json
+Restart=on-failure
+RestartSec=10
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/zapp-blind-peer
+
+[Install]
+WantedBy=multi-user.target

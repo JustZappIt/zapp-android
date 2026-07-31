@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="address_book_title">Libreta de Direcciones</string>
+    <string name="address_book_add">Agregar Nuevo Contacto</string>
+    <string name="address_book_empty">Tu libreta de direcciones está vacía</string>
+    <string name="address_book_version">Versión <xliff:g example="1" id="version">%s</xliff:g></string>
+    <string name="address_book_scan_btn">Escanear código QR</string>
+    <string name="address_book_manual_btn">Entrada manual</string>
+    <string name="address_book_multiple_wallets_title">Tus Wallets</string>
+    <string name="address_book_multiple_wallets_contacts_title">Contactos de la Libreta de Direcciones</string>
+    <string name="address_book_select_recipient_title">Seleccionar destinatario</string>
+    <string name="address_book_edit_contact_title">Editar Contacto</string>
+    <string name="address_book_edit_save_btn">Guardar Cambios</string>
+    <string name="address_book_edit_delete_btn">Eliminar Contacto</string>
+    <string name="address_book_edit_save_content_description">Guardar cambios</string>
+    <string name="address_book_edit_delete_content_description">Eliminar contacto</string>
+    <string name="address_book_edit_delete_confirm_title">¿Eliminar contacto?</string>
+    <string name="address_book_edit_delete_confirm_message">Esta acción no se puede deshacer.</string>
+    <string name="address_book_edit_delete_confirm_yes">Eliminar</string>
+    <string name="address_book_edit_delete_confirm_no">Cancelar</string>
+
+    <string name="address_book_additional_addresses">Direcciones Adicionales</string>
+    <string name="address_book_addr_unified">Dirección Unificada (Zcash)</string>
+    <string name="address_book_addr_unified_hint">Ingrese dirección unificada…</string>
+    <string name="address_book_addr_transparent">Dirección Transparente (Zcash)</string>
+    <string name="address_book_addr_transparent_hint">Ingrese dirección transparente…</string>
+    <string name="address_book_addr_evm">Dirección EVM (ETH, Polygon, etc.)</string>
+    <string name="address_book_addr_evm_hint">Ingrese dirección 0x…</string>
+    <string name="address_book_addr_solana">Dirección Solana</string>
+    <string name="address_book_addr_solana_hint">Ingrese dirección Solana…</string>
+
+    <string name="address_book_messaging_key_hint">Clave de mensajería (64 caracteres hex)</string>
+    <string name="address_book_contact_name_required">El nombre es obligatorio</string>
+    <string name="address_book_add_contact_content_description">Agregar contacto</string>
+    <string name="address_book_scan_messaging_key_content_description">Escanear código QR de la clave de mensajería</string>
+    <string name="address_book_scan_wallet_address_content_description">Escanear código QR de la dirección de billetera</string>
+    <string name="address_book_scan_addr_qr_content_description">Escanear código QR de <xliff:g example="Dirección EVM" id="label">%1$s</xliff:g></string>
+    <string name="address_book_edit_cancel_delete_content_description">Cancelar eliminación</string>
+    <string name="address_book_edit_confirm_delete_content_description">Confirmar eliminación del contacto</string>
+</resources>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="export_data_title">Exportar Dados</string>
+    <string name="export_data_header">Consentimento para Exportar Dados Privados</string>
+    <string name="export_data_text">
+        Ao clicar em “Concordo” abaixo, você dá o seu consentimento para exportar todos os dados privados das suas
+        carteiras, como o histórico completo da(s) sua(s) carteira(s), incluindo quaisquer carteiras de hardware
+        conectadas. Todas as informações privadas, notas, valores e endereços de destinatários, mesmo da sua atividade
+        protegida, serão exportados.*\n\nOs dados privados também permitem ver certas ações futuras que você fizer com
+        o Zapp.\n\nCompartilhar esses dados privados é irrevogável: depois de compartilhá-los com alguém, não há como
+        revogar o acesso dessa pessoa.\n\n*Observe que esses dados privados não dão a essa pessoa a capacidade de
+        gastar os seus fundos, apenas a possibilidade de ver o que você faz com eles.
+    </string>
+    <string name="export_data_confirm">Exportar Dados Privados</string>
+    <string name="export_data_agree">Concordo com as Políticas de Exportação de Dados Privados e a Política de Privacidade do Zapp</string>
+    <string name="export_data_export_data_chooser_title">Compartilhar dados internos do Zapp com:</string>
+    <string name="export_data_unable_to_share">Não foi possível encontrar um aplicativo para compartilhar.</string>
+    <string name="export_data_share_text">Exportar Arquivo de Impostos</string>
+</resources>

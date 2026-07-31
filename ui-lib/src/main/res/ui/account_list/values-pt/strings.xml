@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="account_list_title">Carteiras e Dispositivos</string>
+    <string name="account_list_keystone_promo_title">Carteira de Hardware Keystone</string>
+    <string name="account_list_keystone_promo_subtitle">Ganhe 5%% de desconto na carteira de hardware isolada (airgapped). Código promocional "Zapp".</string>
+    <string name="account_list_keystone_primary">Conectar Carteira de Hardware</string>
+</resources>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="crash_reporting_opt_in_title">Bantu Tingkatkan Zapp</string>
+    <string name="crash_reporting_opt_in_subtitle">Laporan kerusakan adalah alat penting bagi pengembang untuk meningkatkan kualitas dan keandalan aplikasi. Laporan ini sangat berguna dalam praktik untuk membantu memperbaiki bug yang menyebabkan aplikasi berhenti mendadak.</string>
+    <string name="crash_reporting_opt_in_info">Catatan: Laporan kerusakan mencakup informasi tentang versi aplikasi, waktu terjadinya kerusakan, dan stack trace sehingga jelas di bagian mana aplikasi mengalami kerusakan. Data yang dikumpulkan sepenuhnya dianonimkan.</string>
+    <string name="crash_reporting_opt_in_positive">Ikut serta</string>
+    <string name="crash_reporting_opt_in_positive_desc">Bagikan laporan kerusakan dengan pengembang Zapp.</string>
+    <string name="crash_reporting_opt_in_negative">Tidak ikut serta</string>
+    <string name="crash_reporting_opt_in_negative_desc">Jangan bagikan laporan kerusakan dengan pengembang Zapp.</string>
+    <string name="crash_reporting_opt_in_save">Simpan perubahan</string>
+</resources>

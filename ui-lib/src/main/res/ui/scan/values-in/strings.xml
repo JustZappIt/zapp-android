@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="scan_preview_content_description">Kamera</string>
+
+    <string name="scan_cancel_button">Batal</string>
+    <string name="scan_settings_button">Buka Pengaturan</string>
+    <string name="scan_settings_open_failed">Tidak dapat membuka aplikasi Pengaturan.</string>
+
+    <string name="scan_state_permission">Kamera tidak diizinkan. Buka pengaturan sistem Zapp dan aktifkan.</string>
+    <string name="scan_state_failed">Inisialisasi kamera gagal. Silakan coba lagi.</string>
+    <string name="scan_address_validation_failed">Kode QR ini tidak berisi alamat Zcash yang valid.</string>
+    <string name="scan_invalid_image">Gambar ini tidak berisi alamat Zcash yang valid.</string>
+    <string name="scan_several_codes_found">Gambar ini berisi beberapa alamat Zcash yang valid.</string>
+    <string name="scan_homepage_validation_failed">Kode QR ini tidak berisi alamat Zcash yang valid atau QR pembayaran yang didukung.</string>
+    <string name="scan_homepage_invalid_image">Gambar ini tidak berisi alamat Zcash yang valid atau QR pembayaran yang didukung.</string>
+    <string name="scan_torch_content_description">Alihkan senter kamera</string>
+    <string name="gallery_content_description">Galeri</string>
+
+    <string name="third_party_scan_title">Halo!</string>
+    <string name="third_party_scan_subtitle">Sepertinya Anda menggunakan aplikasi pihak ketiga untuk memindai pembayaran.</string>
+    <string name="third_party_scan_message">Untuk keamanan yang lebih baik, pindai ulang kode QR dengan Zapp.</string>
+    <string name="third_party_scan_button">Pindai ulang di Zapp</string>
+</resources>

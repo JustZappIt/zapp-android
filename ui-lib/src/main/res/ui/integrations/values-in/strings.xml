@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="integrations_title">Integrasi</string>
+    <string name="integrations_coinbase">Beli <xliff:g id="currency" example="ZEC">%1$s</xliff:g> dengan Coinbase</string>
+    <string name="integrations_coinbase_subtitle">Cara praktis untuk membeli <xliff:g id="currency" example="ZEC">%1$s</xliff:g> dan langsung menerimanya di dompet Zapp Anda.</string>
+    <string name="integrations_info">Integrasi Zapp memberi akses ke layanan pihak ketiga. Fitur dan informasi yang dibagikan dengan mereka berada di luar kendali kami dan tunduk pada kebijakan privasi mereka.</string>
+    <string name="integrations_dialog_info">Informasi yang dibagikan dengan integrasi Zapp tunduk pada kebijakan privasi mereka.</string>
+    <string name="integrations_disabled_info">Selama proses pemulihan, integrasi pembayaran tidak dapat digunakan.</string>
+    <string name="integrations_flexa">Bayar dengan Flexa</string>
+    <string name="integrations_flexa_subtitle">Belanjakan ZEC di ribuan lokasi ritel.</string>
+    <string name="integrations_flexa_biometric_message">Autentikasi diri Anda untuk membayar dengan Flexa</string>
+    <string name="integrations_keystone">Hubungkan Keystone</string>
+    <string name="integrations_keystone_subtitle">Hubungkan dompet perangkat keras airgapped untuk menyimpan ZEC terlindungi.</string>
+    <string name="integrations_disabled_info_flexa">Beralih dari Keystone ke Zapp untuk menggunakan Flexa.</string>
+    <string name="integrations_dialog_more_options">Opsi Lainnya</string>
+    <string name="integrations_near_swap">Tukar %s dengan NEAR Intents</string>
+    <string name="integrations_near_swap_message">Tukar %s dengan mata uang kripto lainnya.</string>
+    <string name="integrations_coinbase_subtitle_disabled">Coinbase Onramp sementara tidak tersedia.</string>
+</resources>

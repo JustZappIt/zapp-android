@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_settings_background_push_toggle_subtitle">Receive private alerts without keeping Zapp running</string>
+    <string name="background_delivery_settings_intro">Receive a generic alert when an encrypted direct message may be waiting.</string>
+    <string name="background_delivery_settings_delivery_title">When this is off</string>
+    <string name="background_delivery_settings_delivery_body">Zapp unsubscribes from its opaque notification topics. Messages synchronize when you next open the app.</string>
+    <string name="background_delivery_settings_battery_title">When this is on</string>
+    <string name="background_delivery_settings_battery_body">Google Play services can deliver a generic alert in Doze without a persistent Zapp service or “running” notification.</string>
+    <string name="background_delivery_settings_privacy_title">What the alert service can observe</string>
+    <string name="background_delivery_settings_privacy_body">FCM can observe this app installation, opaque topic membership, and timing. It receives no identity, contact, message, media, wallet, or conversation-key data. Opening Zapp performs the authentic encrypted sync.</string>
+    <string name="background_delivery_settings_toggle_title">Allow background alerts</string>
+    <string name="background_delivery_settings_toggle_subtitle">Subscribe to opaque direct-message topics</string>
+</resources>

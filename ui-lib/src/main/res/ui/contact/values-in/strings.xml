@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="contact_name_label">Nama Kontak</string>
+    <string name="contact_name_hint">Masukkan nama kontak…</string>
+    <string name="contact_address_label">Alamat Dompet</string>
+    <string name="contact_address_hint">Masukkan Unified Address…</string>
+
+    <string name="contact_name_error_not_unique">Nama kontak ini sudah digunakan. Silakan pilih nama lain.</string>
+    <string name="contact_name_error_too_long">Nama kontak ini melebihi batas 32 karakter. Silakan persingkat namanya.</string>
+    <string name="contact_address_error_not_unique">Alamat dompet ini sudah ada di Buku Alamat Anda.</string>
+    <string name="contact_chain_address_error_not_unique">Alamat dengan jaringan ini sudah ada di Buku Alamat Anda.</string>
+    <string name="contact_address_error_invalid">Alamat tidak valid</string>
+    <string name="contact_select_chain">Pilih Jaringan</string>
+</resources>

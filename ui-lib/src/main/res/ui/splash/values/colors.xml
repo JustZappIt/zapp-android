@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Zapp splash Z. Light: orange field, white Z mark on white. -->
+    <color name="zapp_splash_field">#FF8D18</color>
+    <color name="zapp_splash_mark">#FFFFFF</color>
+    <color name="zapp_splash_bg">#FFFFFF</color>
+</resources>

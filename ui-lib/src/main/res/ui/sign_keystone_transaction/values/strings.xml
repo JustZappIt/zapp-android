@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sign_keystone_transaction_title">Scan with your Keystone wallet</string>
+    <string name="sign_keystone_transaction_subtitle">After you have signed with Keystone, tap on the Get Signature button below.</string>
+    <string name="sign_keystone_transaction_bar_title">Sign Transaction</string>
+    <string name="sign_keystone_transaction_badge">Hardware</string>
+    <string name="sign_keystone_transaction_positive">Get Signature</string>
+    <string name="sign_keystone_transaction_negative">Reject</string>
+    <string name="sign_keystone_transaction_bottom_sheet_title">Are you sure?</string>
+    <string name="sign_keystone_transaction_bottom_sheet_subtitle">Rejecting the signature will cancel the transaction, and you’ll need to start over if you want to proceed. This action cannot be undone.</string>
+    <string name="sign_keystone_transaction_bottom_sheet_go_back">Go back</string>
+    <string name="sign_keystone_transaction_bottom_sheet_reject">Reject Signature</string>
+</resources>

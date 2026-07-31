@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connect_keystone_title">Hubungkan Dompet Perangkat Keras</string>
+    <string name="connect_keystone_subtitle">Pindai kode QR perangkat Anda untuk terhubung.</string>
+    <string name="connect_keystone_subtitle_clickable">Lihat tutorial Keystone</string>
+    <string name="connect_keystone_item_1">Buka kunci Keystone Anda</string>
+    <string name="connect_keystone_item_2">Ketuk ikon menu</string>
+    <string name="connect_keystone_item_3">Ketuk Hubungkan Dompet Perangkat Lunak</string>
+    <string name="connect_keystone_item_4">Pilih aplikasi Zapp dan pindai kode QR</string>
+    <string name="connect_keystone_item_title">Instruksi:</string>
+    <string name="connect_keystone_positive">Siap Memindai</string>
+    <string name="keystone_connected_subtitle">Terhubung!</string>
+    <string name="keystone_connected_message">Dompet Perangkat Keras Keystone Anda berhasil terhubung.</string>
+    <string name="keystone_connected_button">Tutup</string>
+    <string name="keystone_active_device_button">Hubungkan perangkat aktif</string>
+    <string name="keystone_explainer_about_message">Keystone adalah merek dompet perangkat keras populer yang menawarkan keamanan air-gapped dengan penandatanganan lewat kode QR. Ini salah satu dari banyak pilihan dompet perangkat keras tepercaya, bersama Ledger dan lainnya.</string>
+    <string name="keystone_explainer_about_title">Tentang Keystone</string>
+    <string name="keystone_explainer_button">Mengerti</string>
+    <string name="keystone_explainer_control_message">Kunci Anda milik Anda, kripto Anda milik Anda</string>
+    <string name="keystone_explainer_control_title">Kontrol Penuh</string>
+    <string name="keystone_explainer_description">Dompet perangkat keras (dompet HW) adalah perangkat fisik yang menyimpan kunci privat kripto Anda secara offline, menjaganya tetap aman dari peretas dan malware online.</string>
+    <string name="keystone_explainer_malware_message">Kebal terhadap virus komputer dan serangan phishing</string>
+    <string name="keystone_explainer_malware_title">Perlindungan dari Malware</string>
+    <string name="keystone_explainer_security_message">Kunci Anda tidak pernah meninggalkan perangkat, bahkan saat menandatangani transaksi</string>
+    <string name="keystone_explainer_security_title">Keamanan Maksimal</string>
+    <string name="keystone_explainer_title">Apa Itu Dompet Perangkat Keras?</string>
+    <string name="keystone_first_transaction_estimation_confirm">Hubungkan</string>
+    <string name="keystone_first_transaction_estimation_title">Hubungkan Dompet Perangkat Keras</string>
+    <string name="keystone_first_transaction_message">Memasukkan tinggi blok saat dompet Anda dibuat memastikan jumlah blok yang benar akan dipindai. Jika Anda tidak yakin, pilih tanggal yang lebih awal.</string>
+    <string name="keystone_first_transaction_note">Jika Anda tidak yakin, pilih tanggal yang lebih awal.</string>
+    <string name="keystone_first_transaction_title">Hubungkan Dompet Perangkat Keras</string>
+    <string name="keystone_new_device_button">Hubungkan perangkat baru</string>
+    <string name="keystone_new_or_active_message">Menghubungkan ke dompet perangkat keras yang sebelumnya pernah terhubung ke Zapp memerlukan sinkronisasi untuk menemukan riwayat transaksi Anda. Kami akan memandu Anda.</string>
+    <string name="keystone_new_or_active_subtitle">Perangkat Baru atau Aktif?</string>
+    <string name="keystone_wbh_confirm_button">Hubungkan</string>
+    <string name="keystone_wbh_info_message">adalah tinggi blok (nomor blok di blockchain) saat dompet Anda dibuat. Penting untuk memberikan tinggi yang benar karena hal itu menentukan rentang blok yang akan kami pindai untuk menampilkan riwayat transaksi dan saldo dompet Anda. Jika Anda memulihkan frasa pemulihan dari perangkat keras yang berbeda, pastikan memasukkan tinggi blok perangkat keras asli Anda.</string>
+    <string name="keystone_wbh_info_message_bold">Tinggi Kelahiran Dompet</string>
+    <string name="keystone_wbh_info_title">Perlu tahu lebih banyak?</string>
+    <string name="keystone_wbh_title">Hubungkan Dompet Perangkat Keras</string>
+</resources>

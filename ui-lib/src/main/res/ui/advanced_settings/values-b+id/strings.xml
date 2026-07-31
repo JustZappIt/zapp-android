@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="advanced_settings_title">Pengaturan Lanjutan</string>
+    <string name="advanced_settings_recovery">Frasa Pemulihan Zapp</string>
+    <string name="advanced_settings_export">Ekspor Data Pribadi</string>
+    <string name="advanced_settings_choose_server">Pilih Server</string>
+    <string name="advanced_settings_privacy">Perlindungan Tor</string>
+    <string name="advanced_settings_currency_conversion">Konversi Mata Uang</string>
+    <string name="advanced_settings_crash_reporting">Pelaporan Kerusakan</string>
+    <string name="advanced_settings_info">Anda akan diminta konfirmasi di layar berikutnya</string>
+    <string name="advanced_settings_delete_button">Setel Ulang Zapp</string>
+    <string name="advanced_settings_tax">Ekspor Berkas Pajak</string>
+    <string name="advanced_settings_resync_wallet">Sinkronkan Ulang Dompet</string>
+    <string name="advanced_settings_discover_funds">Temukan dana</string>
+    <string name="advanced_settings_refresh_transaction_data">Segarkan data transaksi</string>
+    <string name="advanced_settings_developer_tools">Alat pengembang</string>
+
+    <!-- Disconnect Hardware Wallet Confirmation Screen -->
+    <string name="advanced_settings_disconnect_hw_wallet">Putuskan Hardware</string>
+    <string name="disconnect_hardware_wallet_biometric_message">Konfirmasi untuk memutuskan hardware wallet Anda</string>
+    <string name="disconnect_hardware_wallet_header">PUTUSKAN</string>
+    <string name="disconnect_hardware_wallet_title">Putuskan Keystone</string>
+    <string name="disconnect_hardware_wallet_subtitle">Memutuskan hardware wallet Anda akan menghapus secara permanen sebagian data lokal yang tidak bisa dipulihkan dari blockchain.</string>
+    <string name="disconnect_hardware_wallet_warning_title">Ini mungkin mencakup:</string>
+    <string name="disconnect_hardware_wallet_warning_item_1">Pengiriman yang gagal atau kedaluwarsa</string>
+    <string name="disconnect_hardware_wallet_warning_item_2">Transaksi mempool yang tidak pernah terkonfirmasi</string>
+    <string name="disconnect_hardware_wallet_warning_item_3">Transaksi yang kemudian dibatalkan dalam reorganisasi rantai</string>
+    <string name="disconnect_hardware_wallet_connected_title">Hardware Keystone</string>
+    <string name="disconnect_hardware_wallet_connected_status">Saat ini terhubung</string>
+    <string name="disconnect_hardware_wallet_info">Jika Anda memutuskan sekarang, Keystone Anda tidak lagi dipasangkan dengan dompet Zapp Anda.</string>
+    <string name="disconnect_hardware_wallet_button">Putuskan</string>
+
+    <!-- Disconnect Hardware Wallet Confirmation Dialog -->
+    <string name="disconnect_hardware_wallet_confirmation_title">Anda yakin?</string>
+    <string name="disconnect_hardware_wallet_confirmation_message">Memutuskan hardware wallet tidak bisa dibatalkan.</string>
+    <string name="disconnect_hardware_wallet_confirmation_confirm">Putuskan</string>
+    <string name="disconnect_hardware_wallet_confirmation_cancel">Batal</string>
+
+    <!-- Disconnect Hardware Wallet Error Dialog -->
+    <string name="disconnect_hardware_wallet_error_title">Gagal Memutuskan</string>
+    <string name="disconnect_hardware_wallet_error_message">Pemutusan hardware wallet tidak bisa diselesaikan.</string>
+</resources>

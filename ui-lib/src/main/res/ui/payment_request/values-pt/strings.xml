@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources  xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="payment_request_title">Solicitação de Pagamento</string>
+    <string name="payment_request_close_content_description">Fechar</string>
+
+    <string name="payment_request_requested_by">Solicitado Por</string>
+    <string name="payment_request_btn_show_address">Mostrar</string>
+    <string name="payment_request_btn_hide_address">Ocultar</string>
+    <string name="payment_request_btn_save_contact">Salvar</string>
+
+    <string name="payment_request_memo">Para:</string>
+
+    <string name="payment_request_fee">Taxa</string>
+    <string name="payment_request_total">Total</string>
+
+    <string name="payment_request_send_btn">Enviar</string>
+
+    <string name="payment_request_dialog_error_title">Transação Falhou</string>
+    <string name="payment_request_dialog_error_text">Ocorreu um erro e a tentativa de enviar fundos falhou. Por favor, tente novamente.</string>
+    <string name="payment_request_dialog_error_ok_btn">OK</string>
+    <string name="payment_request_dialog_error_report_btn">Reportar</string>
+
+    <string name="payment_request_dialog_error_grpc_title">Erro de Conexão</string>
+    <string name="payment_request_dialog_error_grpc_text">O Zapp encontrou alguns problemas de conexão ao enviar
+        a transação para a rede. Ele tentará novamente nos próximos minutos.</string>
+    <string name="payment_request_dialog_error_grpc_btn">OK</string>
+
+    <string name="payment_request_send_failed_report_unable_open_email">Não foi possível iniciar o aplicativo de e-mail.</string>
+</resources>

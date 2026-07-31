@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_header">Zcash-powered mobile wallet built for financial sovereignty.</string>
+    <string name="onboarding_create_new_wallet">Create New Wallet</string>
+    <string name="onboarding_import_existing_wallet">Restore Existing Wallet</string>
+    <string name="onboarding_error_wallet_creation_failed">Couldn\'t create your wallet. Go back and try again.</string>
+    <string name="onboarding_continue">Continue</string>
+
+    <!-- WalletEncryptingScreen: shown while the SDK persists a freshly-created or
+         restored wallet and (optionally) derives the chat identity. -->
+    <string name="onboarding_encrypting_greeting">Hey.</string>
+    <string name="onboarding_encrypting_message">Hold on a moment,\nwe\'re encrypting your new wallet.</string>
+    <string name="onboarding_restoring_message">Hold on a moment,\nwe\'re restoring your wallet.</string>
+    <string name="onboarding_wallet_ready_message">Your wallet is ready.\nFinishing setup…</string>
+    <string name="onboarding_seed_loading_timeout">Taking longer than expected.</string>
+    <string name="onboarding_seed_loading_retry_hint">Tap retry, or go back and submit again.</string>
+    <string name="onboarding_seed_loading_no_retry_hint">Try going back and submitting again.</string>
+    <string name="onboarding_seed_loading_retry">Retry</string>
+
+    <!-- Wallet-tab empty state: shown when the user reached the tabs without setting up a wallet. -->
+    <string name="wallet_empty_eyebrow">Wallet</string>
+    <string name="wallet_empty_title">Set up\nyour wallet</string>
+    <string name="wallet_empty_subtitle">Your wallet lives on this device. Only you hold the keys.</string>
+    <string name="wallet_empty_create">Create new wallet</string>
+    <string name="wallet_empty_create_sub">Get a fresh recovery phrase</string>
+    <string name="wallet_empty_restore">Restore from phrase</string>
+    <string name="wallet_empty_restore_sub">Use your existing recovery phrase</string>
+
+    <!-- Welcome gate (shown before onboarding starts) -->
+    <string name="welcome_logo_glyph" translatable="false">Z</string>
+    <string name="welcome_wordmark" translatable="false">Zapp</string>
+    <string name="welcome_hero_line1">Your messages\nand money.</string>
+    <string name="welcome_hero_line2">Encrypted.</string>
+    <string name="welcome_body">End-to-end encrypted messaging with a shielded Zcash wallet built in.</string>
+    <string name="welcome_get_started_button">Get started</string>
+    <string name="welcome_restore_button">I already use Zapp</string>
+    <string name="welcome_terms_caption">By continuing you accept our terms &amp; privacy policy.</string>
+
+    <!-- Shared onboarding chrome -->
+    <string name="onboarding_back_label">back</string>
+
+    <!-- Part 1 — wallet phase intro -->
+    <string name="onboarding_wallet_intro_badge">Part 1 of 3 · Wallet &amp; Messaging</string>
+    <string name="onboarding_wallet_intro_title">Wallet &amp;\nmessaging\nsetup</string>
+    <string name="onboarding_wallet_intro_sub">Your wallet\'s 24-word recovery phrase also seeds your messaging identity: one phrase covers both.</string>
+    <string name="onboarding_wallet_intro_bullet_create_label">Create or restore a wallet</string>
+    <string name="onboarding_wallet_intro_bullet_create_sub">Your choice here also sets your messaging identity</string>
+    <string name="onboarding_wallet_intro_bullet_phrase_label">One phrase for everything</string>
+    <string name="onboarding_wallet_intro_bullet_phrase_sub">24 BIP-39 words restore your funds and your chats. Back it up offline.</string>
+
+    <!-- Part 1 — wallet choice -->
+    <string name="onboarding_wallet_choice_badge">Part 1 · Wallet &amp; Messaging</string>
+    <string name="onboarding_wallet_choice_subtitle">Your wallet seed also creates your messaging identity. One backup for everything.</string>
+    <string name="onboarding_wallet_choice_create_sub">New wallet + fresh messaging identity</string>
+    <string name="onboarding_wallet_choice_restore_sub">Restores wallet and derives your messaging ID from it</string>
+
+    <!-- Part 1 — wallet recovery phrase -->
+    <string name="onboarding_wallet_seed_title">Wallet &amp;\nmessaging phrase</string>
+    <string name="onboarding_wallet_seed_sub">These 24 words restore both your wallet funds and your messaging identity. Back them up offline: they cover everything.</string>
+
+    <!-- Part 2 — messaging phase intro -->
+    <string name="onboarding_msg_intro_badge">Part 2 of 3 · Messaging account</string>
+    <string name="onboarding_msg_intro_title">Create your\nmessaging\nidentity</string>
+    <string name="onboarding_msg_intro_sub">Your identity is a username backed by your wallet\'s recovery phrase: one phrase restores your wallet and messaging identity on any device. Message history is stored locally and is not recoverable.</string>
+    <string name="onboarding_msg_intro_bullet_username_label">Pick a username</string>
+    <string name="onboarding_msg_intro_bullet_username_sub">How friends find and message you</string>
+    <string name="onboarding_msg_intro_bullet_phrase_label">One recovery phrase</string>
+    <string name="onboarding_msg_intro_bullet_phrase_sub">Your wallet\'s 24-word phrase also restores your messaging identity.</string>
+
+    <!-- Part 2 — username entry -->
+    <string name="onboarding_username_badge">Part 2 · Username</string>
+    <string name="onboarding_username_title">Choose a\nusername</string>
+    <string name="onboarding_username_subtitle">This is how you appear to people who haven\'t saved you as a contact. You can change it later.</string>
+    <string name="onboarding_username_placeholder">your_handle</string>
+    <string name="onboarding_username_rule_min">3+ chars</string>
+    <string name="onboarding_username_rule_max">≤20 chars</string>
+    <string name="onboarding_username_rule_charset" translatable="false">a–z 0–9 _</string>
+    <string name="onboarding_username_info">Zapp generates a local keypair. No server ever sees your private key.</string>
+
+    <!-- Seed reveal (shared between create and restore paths) -->
+    <string name="onboarding_seed_tap_to_reveal">Tap to reveal</string>
+    <string name="onboarding_seed_saved_checkbox">I\'ve written all %1$d words in order. I understand this phrase cannot be recovered if lost.</string>
+    <string name="onboarding_seed_saved_cta">I\'ve saved it</string>
+
+    <!-- Part 3 — secure-method choice -->
+    <string name="onboarding_secure_badge">Part 3 of 3 · Secure Zapp</string>
+    <string name="onboarding_secure_title">Secure\nyour app</string>
+    <string name="onboarding_secure_subtitle">Choose how you unlock Zapp and authorise payments.</string>
+    <string name="onboarding_secure_bio_label">Biometric</string>
+    <string name="onboarding_secure_bio_sub">Fingerprint or face, fastest</string>
+    <string name="onboarding_secure_pin_sub">A passcode you remember</string>
+
+    <!-- Part 3 — PIN setup -->
+    <string name="onboarding_pin_create_title">Create\nyour PIN</string>
+    <string name="onboarding_pin_mismatch">PINs don\'t match. Please try again.</string>
+    <string name="onboarding_pin_confirm_subtitle">Re-enter your 6-digit PIN to confirm.</string>
+    <string name="onboarding_pin_create_subtitle">Choose a 6-digit code you\'ll remember.</string>
+
+    <!-- PIN verification (also reused by auth gates outside onboarding) -->
+    <string name="onboarding_pin_verify_title">Enter\nyour PIN</string>
+    <string name="onboarding_pin_verify_lockout">Too many attempts. Try again in %1$ds.</string>
+    <string name="onboarding_pin_verify_incorrect">Incorrect PIN. Please try again.</string>
+    <string name="onboarding_pin_verify_subtitle">Enter your 6-digit PIN to continue.</string>
+
+    <!-- Part 3 — biometric enrollment -->
+    <string name="onboarding_bio_verifying">Verifying…</string>
+    <string name="onboarding_bio_title">Biometric unlock</string>
+    <string name="onboarding_bio_subtitle">Zapp will use your fingerprint or face to lock and unlock the app.</string>
+    <string name="onboarding_bio_enable_cta">Enable Biometrics</string>
+    <string name="onboarding_bio_prompt_message">Enable biometric unlock for Zapp</string>
+    <string name="onboarding_bio_error_not_enrolled">No biometrics enrolled on this device. Add a fingerprint or face in Settings, then try again.</string>
+    <string name="onboarding_bio_error_verification_failed">Biometric verification failed. Tap to retry.</string>
+
+    <!-- Done screen -->
+    <string name="onboarding_done_title">You\'re\nall set.</string>
+    <string name="onboarding_done_subtitle_bio">Identity created, wallet ready, secured with biometrics.</string>
+    <string name="onboarding_done_subtitle_pin">Identity created, wallet ready, secured with a PIN.</string>
+    <string name="onboarding_done_enter_cta">Enter Zapp →</string>
+</resources>
