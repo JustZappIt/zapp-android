@@ -47,6 +47,8 @@ import co.electriccoin.zcash.ui.screen.migration.privacy.MigrationPrivacyArgs
 import co.electriccoin.zcash.ui.screen.migration.privacy.MigrationPrivacyScreen
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressArgs
 import co.electriccoin.zcash.ui.screen.migration.progress.MigrationProgressScreen
+import co.electriccoin.zcash.ui.screen.migration.restart.MigrationRestartArgs
+import co.electriccoin.zcash.ui.screen.migration.restart.MigrationRestartScreen
 import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewArgs
 import co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewScreen
 import co.electriccoin.zcash.ui.screen.migration.scheduled.MigrationScheduledArgs
@@ -216,6 +218,7 @@ class MigrationNavContributorImpl : MigrationNavContributor {
             composable<MigrationCompleteArgs> { MigrationCompleteScreen() }
             composable<MigrationProgressArgs> { MigrationProgressScreen() }
             composable<MigrationTransferInvalidArgs> { MigrationTransferInvalidScreen() }
+            composable<MigrationRestartArgs> { MigrationRestartScreen() }
         }
     }
 }
