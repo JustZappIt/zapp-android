@@ -6,6 +6,7 @@ import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ChipButtonState
 import co.electriccoin.zcash.ui.design.component.SwapQuoteHeaderState
+import co.electriccoin.zcash.ui.design.component.ZashiConfirmationState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.StyledStringResource
 
@@ -14,6 +15,9 @@ data class ReviewTransactionState(
     val items: List<ReviewTransactionItemState>,
     val primaryButton: ButtonState,
     val onBack: () -> Unit,
+    // Non-null while the Orchard-spend warning sheet is shown on entry (spec §8 bottom sheet):
+    // the send would spend Orchard notes before migration, leaking the amount at the turnstile.
+    val orchardWarningSheet: ZashiConfirmationState? = null,
 )
 
 sealed interface ReviewTransactionItemState

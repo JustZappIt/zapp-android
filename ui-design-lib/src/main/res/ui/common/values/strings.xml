@@ -676,6 +676,10 @@
 
     <!-- ===== send_confirmation ===== -->
     <string name="send_confirmationTitle">Confirmation</string>
+    <string name="send_orchardWarning_title">This send requires spending Orchard funds</string>
+    <string name="send_orchardWarning_message">We recommend migrating your funds first to avoid leaking the transaction amount on-chain.</string>
+    <string name="send_orchardWarning_continue">Continue anyway</string>
+    <string name="send_orchardWarning_cancel">Cancel</string>
     <string name="send_amountSummary">Total Amount</string>
     <string name="accounts_sendingFrom">Send from</string>
     <string name="send_confirmation_sending_title">Sending…</string>

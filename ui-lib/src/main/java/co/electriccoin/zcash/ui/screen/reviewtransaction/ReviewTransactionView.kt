@@ -45,6 +45,7 @@ import co.electriccoin.zcash.ui.design.component.SwapTokenAmountState
 import co.electriccoin.zcash.ui.design.component.TextFieldState
 import co.electriccoin.zcash.ui.design.component.ZashiButton
 import co.electriccoin.zcash.ui.design.component.ZashiChipButton
+import co.electriccoin.zcash.ui.design.component.ZashiConfirmationBottomSheet
 import co.electriccoin.zcash.ui.design.component.ZashiHorizontalDivider
 import co.electriccoin.zcash.ui.design.component.ZashiSmallTopAppBar
 import co.electriccoin.zcash.ui.design.component.ZashiSwapQuoteHeader
@@ -163,6 +164,8 @@ fun ReviewTransactionView(state: ReviewTransactionState) {
             }
             BottomBar(state)
         }
+
+        ZashiConfirmationBottomSheet(state.orchardWarningSheet)
     }
 }
 

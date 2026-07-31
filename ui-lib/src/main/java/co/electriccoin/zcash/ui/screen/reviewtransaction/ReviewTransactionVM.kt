@@ -24,6 +24,7 @@ import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ButtonStyle
 import co.electriccoin.zcash.ui.design.component.ChipButtonState
+import co.electriccoin.zcash.ui.design.component.ZashiConfirmationState
 import co.electriccoin.zcash.ui.design.util.Ellipsize
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByAddress
@@ -35,6 +36,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -55,6 +57,8 @@ class ReviewTransactionVM(
 ) : ViewModel() {
     private val isReceiverExpanded = MutableStateFlow(false)
 
+    private val orchardWarningSheet = MutableStateFlow<ZashiConfirmationState?>(null)
+
     private val exchangeRate =
         flow {
             emit(getExchangeRate())
@@ -66,7 +70,7 @@ class ReviewTransactionVM(
 
     @Suppress("DestructuringDeclarationWithTooManyEntries")
     @OptIn(ExperimentalCoroutinesApi::class)
-    val state =
+    private val baseState =
         combine(
             observeSelectedWalletAccount.require(),
             observeProposal.filterSend(),
@@ -105,6 +109,11 @@ class ReviewTransactionVM(
                     }
                 }
             }
+        }
+
+    val state =
+        combine(baseState, orchardWarningSheet) { base, sheet ->
+            base.copy(orchardWarningSheet = sheet)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
@@ -112,6 +121,21 @@ class ReviewTransactionVM(
         )
 
     private var onConfirmClickJob: Job? = null
+
+    init {
+        // Side effect kept in init{} rather than in the state combine to avoid re-triggering on
+        // resubscribe (see the LCE/side-effects convention). Suspends until the first send proposal
+        // that spends Orchard notes, then shows the warning sheet once for this screen entry.
+        viewModelScope.launch {
+            observeProposal.filterSend().first { it.proposal.usesOrchardInputs() }
+            orchardWarningSheet.value =
+                orchardWarningSheetState(
+                    usesOrchardInputs = true,
+                    onContinue = ::onOrchardWarningContinue,
+                    onCancel = ::onOrchardWarningCancel,
+                )
+        }
+    }
 
     private fun createState(
         selectedWallet: WalletAccount,
@@ -253,6 +277,19 @@ class ReviewTransactionVM(
 
     private fun onBack() = viewModelScope.launch { cancelProposalFlow(clearSendForm = false) }
 
+    // "Continue anyway": dismiss the sheet and stay on the review screen; the user still has to tap
+    // the primary button to broadcast, exactly as without the warning.
+    private fun onOrchardWarningContinue() {
+        orchardWarningSheet.value = null
+    }
+
+    // "Cancel" (and back gesture / scrim tap): dismiss the sheet and leave the review screen back to
+    // Send, reusing the screen's existing cancel-proposal-flow action.
+    private fun onOrchardWarningCancel() {
+        orchardWarningSheet.value = null
+        onBack()
+    }
+
     private fun onConfirmClick() {
         if (onConfirmClickJob?.isActive == true) return
         onConfirmClickJob = viewModelScope.launch { submitProposal() }
@@ -274,3 +311,32 @@ internal fun orchardPrivacyWarningState(usesOrchardInputs: Boolean): OrchardPriv
 
 internal fun orchardPrivacyWarningButtonStyle(usesOrchardInputs: Boolean): ButtonStyle? =
     ButtonStyle.DESTRUCTIVE1.takeIf { usesOrchardInputs }
+
+// Spec §8 bottom sheet shown on entry to Review when the proposal spends Orchard notes: warns the
+// user that sending now (pre-migration) leaks the amount at the turnstile. Extracted as a pure
+// builder so the copy, styles, and button wiring are testable without the whole VM (mirrors
+// orchardPrivacyWarningState above). "Continue anyway" is destructive-outline over the dark
+// "Cancel", matching the Figma order (primary rendered first/top by ZashiConfirmationBottomSheet).
+internal fun orchardWarningSheetState(
+    usesOrchardInputs: Boolean,
+    onContinue: () -> Unit,
+    onCancel: () -> Unit,
+): ZashiConfirmationState? =
+    ZashiConfirmationState(
+        icon = R.drawable.ic_reset_zashi_warning,
+        title = stringRes(R.string.send_orchardWarning_title),
+        message = stringRes(R.string.send_orchardWarning_message),
+        primaryAction =
+            ButtonState(
+                text = stringRes(R.string.send_orchardWarning_continue),
+                style = ButtonStyle.DESTRUCTIVE1,
+                onClick = onContinue,
+            ),
+        secondaryAction =
+            ButtonState(
+                text = stringRes(R.string.send_orchardWarning_cancel),
+                style = ButtonStyle.PRIMARY,
+                onClick = onCancel,
+            ),
+        onBack = onCancel,
+    ).takeIf { usesOrchardInputs }
