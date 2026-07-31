@@ -7,6 +7,7 @@ import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorag
 import co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
+import co.electriccoin.zcash.ui.common.usecase.MigrationWorkerRunState
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -24,16 +25,17 @@ import kotlin.test.assertTrue
  * decision is exercised against a self-consistent in-progress world.
  *
  * What is asserted:
- *  - A HEALTHY in-progress migration consults the worker-active check (revival would fire if the
- *    worker were absent) and does NOT auto-navigate (Task 6: only a pending Tor failure
+ *  - A HEALTHY in-progress migration consults the worker-run-state check (revival would fire if
+ *    the worker were absent) and does NOT auto-navigate (Task 6: only a pending Tor failure
  *    auto-navigates on app-open).
  *  - A completed migration with no saved plan skips reconciliation entirely.
+ *  - A worker merely SCHEDULED for later (armed, not yet due) is accelerated to run now — the
+ *    app-open forward-progress trigger, for users with no reliable background execution.
  *
- * Scope note: the revival branch itself calls `co.electriccoin.zcash.work.MigrationScheduler(context)`
- * directly (not injected), whose init touches AlarmManager and whose `schedule` calls
- * `WorkManager.getInstance` — neither works under a plain unit-test `Context` mock. So these tests
- * assert the injectable worker-active decision and the FakeSdk-derived state (InProgress) that the
- * revival branch keys on; the revival itself was verified live (2026-07-29 reinstall run).
+ * Scope note: `getWorkerRunState`/`scheduleNow` are injected specifically so this file's
+ * reconciliation/acceleration assertions don't need a real WorkManager-initialised `Context`
+ * (the production defaults call `WorkManager`/`AlarmManager`, neither of which work under a plain
+ * unit-test `Context` mock); this file drives them against the FakeSdk-derived InProgress state.
  */
 class MigrationBackgroundRecoveryScenarioTest {
     @BeforeTest
@@ -82,7 +84,8 @@ class MigrationBackgroundRecoveryScenarioTest {
         driver: MigrationSimDriver,
         navigationRouter: NavigationRouter,
         pendingMigrationTorFailure: Boolean = false,
-        isWorkerActive: suspend (String) -> Boolean = { true },
+        getWorkerRunState: suspend (String) -> MigrationWorkerRunState = { MigrationWorkerRunState.RUNNING },
+        scheduleNow: suspend (String) -> Unit = {},
     ) = CheckMigrationRecoveryUseCase(
         getOrchardMigrationSdk =
             mockk<GetOrchardMigrationSdkUseCase> {
@@ -95,7 +98,8 @@ class MigrationBackgroundRecoveryScenarioTest {
             },
         getSelectedWalletAccount = mockk<GetSelectedWalletAccountUseCase>(relaxed = true),
         context = mockk<Context>(relaxed = true),
-        isWorkerActive = isWorkerActive,
+        getWorkerRunState = getWorkerRunState,
+        scheduleNow = scheduleNow,
     )
 
     @Test
@@ -111,9 +115,9 @@ class MigrationBackgroundRecoveryScenarioTest {
             useCase(
                 driver = driver,
                 navigationRouter = router,
-                isWorkerActive = {
+                getWorkerRunState = {
                     workerChecked = true
-                    true
+                    MigrationWorkerRunState.RUNNING
                 },
             ).invoke()
 
@@ -143,13 +147,35 @@ class MigrationBackgroundRecoveryScenarioTest {
             useCase(
                 driver = driver,
                 navigationRouter = router,
-                isWorkerActive = {
+                getWorkerRunState = {
                     workerChecked = true
-                    true
+                    MigrationWorkerRunState.RUNNING
                 },
             ).invoke()
 
             assertFalse(workerChecked, "a completed migration must not consult the worker-active check")
             coVerify(exactly = 0) { router.replaceAll(any()) }
+        }
+
+    @Test
+    fun `an in-progress migration with a worker scheduled for later accelerates it to now`() =
+        runTest {
+            // The app-open trigger: some users never get reliable background execution, so opening
+            // the app must accelerate a merely-scheduled worker chain to run now rather than waiting
+            // out whatever delay it last armed for itself.
+            val driver = inProgressDriver()
+            assertTrue(driver.sdk.getMigrationState() is MigrationState.InProgress)
+
+            val router = mockk<NavigationRouter>(relaxed = true)
+            var scheduledAccountKeyId: String? = null
+
+            useCase(
+                driver = driver,
+                navigationRouter = router,
+                getWorkerRunState = { MigrationWorkerRunState.SCHEDULED },
+                scheduleNow = { scheduledAccountKeyId = it },
+            ).invoke()
+
+            assertTrue(scheduledAccountKeyId != null, "a scheduled-for-later worker must be accelerated to run now")
         }
 }

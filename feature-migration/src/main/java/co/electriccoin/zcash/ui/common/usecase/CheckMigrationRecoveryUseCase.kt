@@ -18,7 +18,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
 /**
@@ -47,7 +46,12 @@ class CheckMigrationRecoveryUseCase(
     private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
     private val context: Context,
     /** Extracted for testability — production default checks WorkManager. */
-    private val isWorkerActive: suspend (String) -> Boolean = { isMigrationWorkerActiveInWorkManager(context, it) },
+    private val getWorkerRunState: suspend (String) -> MigrationWorkerRunState = { migrationWorkerRunState(context, it) },
+    /**
+     * Extracted for testability — production default enqueues an immediate WorkManager run
+     * (`Duration.ZERO`), replacing whatever delay the worker last armed for itself.
+     */
+    private val scheduleNow: suspend (String) -> Unit = { MigrationScheduler(context).schedule(it, Duration.ZERO) },
 ) {
     suspend operator fun invoke() {
         // Three independent triggers exist (MainActivity.onStart, RootNavGraph unlock, and any
@@ -75,8 +79,7 @@ class CheckMigrationRecoveryUseCase(
                 return
             }
 
-        // Worker reconciliation — if a plan exists but the migration worker's unique work is
-        // absent (ENQUEUED or RUNNING), re-schedule it. This self-heals after process kill, device
+        // Worker reconciliation + app-open acceleration. Self-heals after process kill, device
         // reboot, or an app upgrade that cleared WorkManager state, without requiring the user to
         // re-enter the migration flow (the worker's re-arm only happens at the end of its own run
         // and its due alarms don't survive a package update — see OnMigrationSyncCompletedUseCase;
@@ -86,13 +89,33 @@ class CheckMigrationRecoveryUseCase(
         // (observed live: repository empty while the engine held a run with 8/9 broadcast and the
         // last transfer proved) and the engine is the single source of truth — a live in-progress
         // migration must always have its worker chain running.
+        //
+        // App-open is a forward-progress trigger in its own right, not just a revival mechanism:
+        // some users never get reliable background execution at all (battery restrictions, some
+        // OEM schedulers silently defer WorkManager indefinitely) — for them, opening the app is
+        // the ONLY moment the migration can move. So a worker merely SCHEDULED for later (not
+        // absent) is also accelerated to run now, not just left to wait out its armed delay.
+        // A currently RUNNING worker is left alone (already doing the work this trigger wants).
+        // Safe to accelerate unconditionally: nextStep()/broadcastRun are idempotent and still
+        // privacy-gated (a due-but-gapped broadcast just re-arms, per spec §4), and a cancelled
+        // in-flight send's durable mark is cancellation-safe (spec §2a).
         val engineInProgress = sdk.getMigrationState() is MigrationState.InProgress
         if (engineInProgress) {
             val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
-            if (!isWorkerActive(accountKeyId)) {
-                migrationLog("MigrationRecovery: migration worker absent, re-scheduling.")
-                MigrationScheduler(context)
-                    .schedule(accountKeyId, 60.seconds)
+            when (getWorkerRunState(accountKeyId)) {
+                MigrationWorkerRunState.RUNNING -> {
+                    migrationLog("MigrationRecovery: migration worker already running — nothing to accelerate.")
+                }
+
+                MigrationWorkerRunState.SCHEDULED -> {
+                    migrationLog("MigrationRecovery: migration worker scheduled for later — accelerating to run now.")
+                    scheduleNow(accountKeyId)
+                }
+
+                MigrationWorkerRunState.ABSENT -> {
+                    migrationLog("MigrationRecovery: migration worker absent — scheduling now.")
+                    scheduleNow(accountKeyId)
+                }
             }
         }
 
@@ -141,3 +164,34 @@ internal suspend fun isMigrationWorkerActiveInWorkManager(context: Context, acco
                 MigrationScheduler.workId(accountKeyId)
             ).get()
     }.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
+
+/**
+ * What the migration worker's unique work is doing right now, distinguishing [SCHEDULED] (armed
+ * for a future run — the app-open acceleration case) from [RUNNING] (already executing — nothing
+ * to accelerate) and [ABSENT] (needs reviving). [isMigrationWorkerActiveInWorkManager] collapses
+ * the first two together, which is all [OnMigrationSyncCompletedUseCase] needs; this finer state
+ * is what [CheckMigrationRecoveryUseCase]'s app-open trigger needs.
+ */
+enum class MigrationWorkerRunState { RUNNING, SCHEDULED, ABSENT }
+
+/**
+ * Production implementation of the migration-worker run-state check — reads WorkManager unique
+ * work state (per-account unique work name). Extracted so [CheckMigrationRecoveryUseCase] tests
+ * can supply a lambda stub instead of needing a real WorkManager context (unit tests can't
+ * initialise WorkManager).
+ */
+internal suspend fun migrationWorkerRunState(context: Context, accountKeyId: String): MigrationWorkerRunState {
+    val infos =
+        withContext(Dispatchers.IO) {
+            WorkManager
+                .getInstance(context)
+                .getWorkInfosForUniqueWork(
+                    MigrationScheduler.workId(accountKeyId)
+                ).get()
+        }
+    return when {
+        infos.any { it.state == WorkInfo.State.RUNNING } -> MigrationWorkerRunState.RUNNING
+        infos.any { it.state == WorkInfo.State.ENQUEUED } -> MigrationWorkerRunState.SCHEDULED
+        else -> MigrationWorkerRunState.ABSENT
+    }
+}

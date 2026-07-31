@@ -28,9 +28,10 @@ class CheckMigrationRecoveryUseCaseTest {
         sdk: OrchardMigrationSdk?,
         navigationRouter: NavigationRouter,
         pendingMigrationTorFailure: Boolean = false,
-        // Default: the worker is always active in tests so the reconciliation branch is skipped,
+        // Default: the worker is already RUNNING in tests so the reconciliation branch is a no-op,
         // keeping existing test behaviour unchanged. Override to test reconciliation explicitly.
-        isWorkerActive: suspend (String) -> Boolean = { true },
+        getWorkerRunState: suspend (String) -> MigrationWorkerRunState = { MigrationWorkerRunState.RUNNING },
+        scheduleNow: suspend (String) -> Unit = {},
     ) = CheckMigrationRecoveryUseCase(
         getOrchardMigrationSdk =
             mockk<GetOrchardMigrationSdkUseCase> {
@@ -43,7 +44,8 @@ class CheckMigrationRecoveryUseCaseTest {
             },
         getSelectedWalletAccount = mockk<GetSelectedWalletAccountUseCase>(relaxed = true),
         context = mockk<Context>(relaxed = true),
-        isWorkerActive = isWorkerActive,
+        getWorkerRunState = getWorkerRunState,
+        scheduleNow = scheduleNow,
     )
 
     // ── Task 6: auto-navigation removal — only Tor-failure fires on app-open ─────────────
@@ -166,16 +168,13 @@ class CheckMigrationRecoveryUseCaseTest {
             coVerify(exactly = 0) { router.replaceAll(any()) }
         }
 
-    // ── Worker reconciliation ─────────────────────────────────────────────────────────────
-    // The inactive-worker branch schedules through a real MigrationScheduler(context), which
-    // needs a WorkManager-initialised context — not constructible in a plain unit test. The
-    // active-worker (skip) branch is covered here; the revival itself is exercised by the
-    // background-recovery sim scenario and was verified live (2026-07-29 reinstall run).
+    // ── Worker reconciliation + app-open acceleration ─────────────────────────────────────
 
     @Test
-    fun workerReconciliation_planExistsAndWorkerActive_doesNotReschedule() =
+    fun workerReconciliation_planExistsAndWorkerRunning_doesNotSchedule() =
         runTest {
             var asked = false
+            var scheduled = false
             val sdk =
                 mockk<OrchardMigrationSdk>(relaxed = true) {
                     coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))
@@ -185,13 +184,60 @@ class CheckMigrationRecoveryUseCaseTest {
             useCase(
                 sdk = sdk,
                 navigationRouter = mockk(relaxed = true),
-                isWorkerActive = {
+                getWorkerRunState = {
                     asked = true
-                    true
+                    MigrationWorkerRunState.RUNNING
                 },
+                scheduleNow = { scheduled = true },
             ).invoke()
 
-            // The check ran and, because the worker was active, nothing needed a real scheduler.
+            // The check ran and, because the worker is already executing, nothing was scheduled —
+            // a RUNNING worker is already doing the work this trigger wants.
             kotlin.test.assertTrue(asked)
+            kotlin.test.assertFalse(scheduled)
+        }
+
+    @Test
+    fun workerReconciliation_planExistsAndWorkerScheduledForLater_acceleratesToNow() =
+        runTest {
+            var scheduledAccountKeyId: String? = null
+            val sdk =
+                mockk<OrchardMigrationSdk>(relaxed = true) {
+                    coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))
+                    coEvery { hasOverdueTransfers() } returns false
+                }
+
+            useCase(
+                sdk = sdk,
+                navigationRouter = mockk(relaxed = true),
+                getWorkerRunState = { MigrationWorkerRunState.SCHEDULED },
+                scheduleNow = { scheduledAccountKeyId = it },
+            ).invoke()
+
+            // App-open must not just wait out whatever delay the worker last armed — a worker
+            // merely scheduled for later is accelerated to run now.
+            kotlin.test.assertTrue(scheduledAccountKeyId != null, "a scheduled-for-later worker must be accelerated to run now")
+        }
+
+    @Test
+    fun workerReconciliation_planExistsAndWorkerAbsent_schedulesNow() =
+        runTest {
+            var scheduled = false
+            val sdk =
+                mockk<OrchardMigrationSdk>(relaxed = true) {
+                    coEvery { getMigrationState() } returns MigrationState.InProgress(mockk(relaxed = true))
+                    coEvery { hasOverdueTransfers() } returns false
+                }
+
+            useCase(
+                sdk = sdk,
+                navigationRouter = mockk(relaxed = true),
+                getWorkerRunState = { MigrationWorkerRunState.ABSENT },
+                scheduleNow = { scheduled = true },
+            ).invoke()
+
+            // Revival: an absent worker chain (killed process, cleared WorkManager state) is
+            // rescheduled immediately.
+            kotlin.test.assertTrue(scheduled)
         }
 }
