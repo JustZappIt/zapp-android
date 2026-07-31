@@ -73,7 +73,7 @@ class MigrationCompleteVM(
     // could pick different notes) or re-prompting biometrics.
     private data class MigrateAnywayProposal(
         val proposal: Proposal,
-        val amountZatoshi: Long
+        val amountZatoshi: Zatoshi
     )
 
     private var pendingMigrateAnywayProposal: MigrateAnywayProposal? = null
@@ -251,13 +251,13 @@ class MigrationCompleteVM(
             val sdk = getOrchardMigrationSdk() ?: error("MigrationCompleteVM: no wallet available to propose")
             val amount = getOrchardBalance().value
             val proposal = sdk.proposeImmediateMigration()
-            pendingMigrateAnywayProposal = MigrateAnywayProposal(proposal, amount)
+            pendingMigrateAnywayProposal = MigrateAnywayProposal(proposal, Zatoshi(amount))
             submitMigrateAnyway(proposal, amount)
         }
 
     private suspend fun retryMigrateAnyway() {
         val cached = pendingMigrateAnywayProposal ?: return
-        submitMigrateAnyway(cached.proposal, cached.amountZatoshi)
+        submitMigrateAnyway(cached.proposal, cached.amountZatoshi.value)
     }
 
     private suspend fun submitMigrateAnyway(proposal: Proposal, amountZatoshi: Long) {

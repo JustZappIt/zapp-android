@@ -11,9 +11,15 @@ import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
 import co.electriccoin.zcash.ui.screen.home.HomeArgs
 import co.electriccoin.zcash.ui.screen.migration.sending.MigrationSendingArgs
+import co.electriccoin.zcash.work.MigrationScheduler
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 /**
  * Single source of truth for migration re-entry routing on app launch/foreground — MainActivity's
@@ -49,13 +55,13 @@ class CheckMigrationRecoveryUseCase(
         // entry whose composition can re-trigger recovery, observed live as 7 redirects (and 3
         // duplicate catch-up shifts) within 8 seconds. One pass per window is enough: routing is
         // idempotent for the user and isSyncBlocked() protects sync regardless.
-        val nowMs = android.os.SystemClock.elapsedRealtime()
-        synchronized(CheckMigrationRecoveryUseCase) {
-            if (nowMs - lastRunElapsedMs < RUN_THROTTLE_MS) {
-                migrationLog("MigrationRecovery: throttled (ran ${nowMs - lastRunElapsedMs}ms ago)")
+        throttleMutex.withLock {
+            val elapsed = lastRunMark?.elapsedNow()
+            if (elapsed != null && elapsed < RUN_THROTTLE) {
+                migrationLog("MigrationRecovery: throttled (ran ${elapsed.inWholeMilliseconds}ms ago)")
                 return
             }
-            lastRunElapsedMs = nowMs
+            lastRunMark = TimeSource.Monotonic.markNow()
         }
         // No wallet YET — on a cold start this fires before the synchronizer initializes, and
         // silently consuming the throttle window here left recovery permanently ineffective
@@ -64,7 +70,7 @@ class CheckMigrationRecoveryUseCase(
         // (foreground/unlock/onStart all re-fire) gets a real attempt once the wallet is up.
         val sdk =
             getOrchardMigrationSdk() ?: run {
-                synchronized(CheckMigrationRecoveryUseCase) { lastRunElapsedMs = 0L }
+                throttleMutex.withLock { lastRunMark = null }
                 migrationLog("MigrationRecovery: SDK not ready — will retry on next trigger.")
                 return
             }
@@ -85,8 +91,7 @@ class CheckMigrationRecoveryUseCase(
             val accountKeyId = getSelectedWalletAccount().sdkAccount.accountUuid.toStorageKeyId()
             if (!isWorkerActive(accountKeyId)) {
                 migrationLog("MigrationRecovery: migration worker absent, re-scheduling.")
-                co.electriccoin.zcash.work
-                    .MigrationScheduler(context)
+                MigrationScheduler(context)
                     .schedule(accountKeyId, 60.seconds)
             }
         }
@@ -108,14 +113,16 @@ class CheckMigrationRecoveryUseCase(
     }
 
     companion object {
-        private const val RUN_THROTTLE_MS = 10_000L
+        private val RUN_THROTTLE: Duration = 10_000.milliseconds
+
+        private val throttleMutex = Mutex()
 
         @Volatile
-        private var lastRunElapsedMs = Long.MIN_VALUE / 2
+        private var lastRunMark: TimeSource.Monotonic.ValueTimeMark? = null
 
         /** Tests run in one JVM — reset the shared throttle between them. */
         internal fun resetRunThrottleForTests() {
-            lastRunElapsedMs = Long.MIN_VALUE / 2
+            lastRunMark = null
         }
     }
 }
@@ -131,7 +138,6 @@ internal suspend fun isMigrationWorkerActiveInWorkManager(context: Context, acco
         WorkManager
             .getInstance(context)
             .getWorkInfosForUniqueWork(
-                co.electriccoin.zcash.work.MigrationScheduler
-                    .workId(accountKeyId)
+                MigrationScheduler.workId(accountKeyId)
             ).get()
     }.any { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }

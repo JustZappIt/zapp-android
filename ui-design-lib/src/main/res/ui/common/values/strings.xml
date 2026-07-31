@@ -1227,5 +1227,25 @@ Your vote can no longer be submitted.</string>
     <!-- ===== whats_new ===== -->
     <string name="whats_new_title">What\'s new</string>
 
+    <!-- ===== migration (MigrationNotifier: notification channel + Orchard→Ironwood progress) ===== -->
+    <string name="migration_notification_channelName">Ironwood Migration</string>
+    <string name="migration_notification_channelDescription">Notifications for Orchard to Ironwood migration progress</string>
+    <string name="migration_notification_title">Ironwood Migration</string>
+    <string name="migration_notification_noteSplitProgress">Note split %1$d of %2$d</string>
+    <string name="migration_notification_noteSplitPreparing">Preparing your balance for migration</string>
+    <string name="migration_notification_transferComplete">Transfer %1$d of %2$d complete</string>
+    <string name="migration_notification_rescheduleWithCounts">Transfer %1$d of %2$d can\'t be sent — tap to reschedule the migration.</string>
+    <string name="migration_notification_rescheduleGeneric">The migration is blocked — tap to reschedule.</string>
+    <string name="migration_notification_actionRequiredTitle">Migration: Action Required</string>
+    <string name="migration_notification_manualConfirmationWithCounts">Transfer %1$d of %2$d is ready. Tap to confirm.</string>
+    <string name="migration_notification_manualConfirmationGeneric">A migration transfer is ready. Tap to confirm.</string>
+    <string name="migration_notification_torFailureTitle">Migration: Couldn\'t Connect to Tor</string>
+    <string name="migration_notification_torFailureText">A scheduled transfer couldn\'t send over Tor. Open Zodl to resolve.</string>
+    <string name="migration_notification_stepDueText">Your migration is ready to continue — tap to run the next step.</string>
+    <string name="migration_notification_planInvalidText">Migration plan needs update. Open Zodl to review the details.</string>
+    <string name="migration_notification_transferExpiredText">A transfer expired. Open Zodl to continue your migration.</string>
+    <string name="migration_notification_completeTitle">Ironwood Migration Complete</string>
+    <string name="migration_notification_completeText">All your funds have been migrated to Ironwood.</string>
+
 
 </resources>

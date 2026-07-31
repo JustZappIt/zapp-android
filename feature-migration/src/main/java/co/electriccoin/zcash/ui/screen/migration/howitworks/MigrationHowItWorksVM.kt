@@ -10,6 +10,7 @@ import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetMigrationPrivacyOrReviewDestinationUseCase
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -30,10 +31,15 @@ class MigrationHowItWorksVM(
         ).withLce(lce, errorStateMapper::mapToState)
             .stateIn(this)
 
-    private fun onContinue() =
-        viewModelScope.launch {
-            navigationRouter.forward(getMigrationPrivacyOrReviewDestination(MigrationMode.AUTOMATIC))
-        }
+    private var onContinueJob: Job? = null
+
+    private fun onContinue() {
+        if (onContinueJob?.isActive == true) return
+        onContinueJob =
+            viewModelScope.launch {
+                navigationRouter.forward(getMigrationPrivacyOrReviewDestination(MigrationMode.AUTOMATIC))
+            }
+    }
 
     private fun onBack() = navigationRouter.back()
 }

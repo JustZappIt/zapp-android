@@ -103,14 +103,19 @@ fun MigrationProgressView(state: MigrationProgressState) {
                         } else {
                             prep.statusLabel
                         }
+                    // Preparation rows never surface an attention state.
+                    val rowState =
+                        when {
+                            prep.isSent -> TransferRowState.DONE
+                            i == firstUnsentPrepIndex -> TransferRowState.ACTIVE
+                            else -> TransferRowState.IDLE
+                        }
                     TransferProgressTimelineRow(
                         title = "Split balance ${prep.number}",
                         statusLabel = rowStatusLabel,
                         amount = null,
                         fiatAmount = null,
-                        isDone = prep.isSent,
-                        isActive = i == firstUnsentPrepIndex,
-                        isAttention = false,
+                        state = rowState,
                         isLast = i == state.preparations.lastIndex && state.transfers.isEmpty(),
                     )
                 }
@@ -124,15 +129,21 @@ fun MigrationProgressView(state: MigrationProgressState) {
                         } else {
                             transfer.statusLabel
                         }
+                    // Priority mirrors the row painter: sent wins, then genuine attention, then active.
+                    val rowState =
+                        when {
+                            transfer.isSent -> TransferRowState.DONE
+                            transfer.isAttention -> TransferRowState.ATTENTION
+                            i == activeIndex -> TransferRowState.ACTIVE
+                            else -> TransferRowState.IDLE
+                        }
                     TransferProgressTimelineRow(
                         title = "Transfer ${transfer.index}",
                         statusLabel = rowStatus,
                         amount = transfer.amount,
                         fiatAmount = transfer.fiatAmount,
                         index = transfer.index,
-                        isDone = transfer.isSent,
-                        isActive = i == activeIndex,
-                        isAttention = transfer.isAttention,
+                        state = rowState,
                         isLast = i == state.transfers.lastIndex,
                     )
                 }
@@ -156,6 +167,12 @@ fun MigrationProgressView(state: MigrationProgressState) {
     }
 }
 
+/**
+ * Visual state of a single timeline row, resolved by priority: a sent row always paints as
+ * [DONE], then a genuine [ATTENTION] state, then the currently-[ACTIVE] row, else [IDLE].
+ */
+private enum class TransferRowState { DONE, ATTENTION, ACTIVE, IDLE }
+
 @Suppress("LongParameterList")
 @Composable
 private fun TransferProgressTimelineRow(
@@ -163,9 +180,7 @@ private fun TransferProgressTimelineRow(
     statusLabel: StringResource,
     amount: StringResource?,
     fiatAmount: StringResource?,
-    isDone: Boolean,
-    isActive: Boolean,
-    isAttention: Boolean,
+    state: TransferRowState,
     isLast: Boolean,
     index: Int = 0,
     @DrawableRes icon: Int? = null,
@@ -186,7 +201,11 @@ private fun TransferProgressTimelineRow(
         ) {
             if (!isLast) {
                 val connectorColor =
-                    if (isDone) ZashiColors.Utility.SuccessGreen.utilitySuccess500 else ZashiColors.Surfaces.strokePrimary
+                    if (state == TransferRowState.DONE) {
+                        ZashiColors.Utility.SuccessGreen.utilitySuccess500
+                    } else {
+                        ZashiColors.Surfaces.strokePrimary
+                    }
                 Box(
                     modifier =
                         Modifier
@@ -197,16 +216,16 @@ private fun TransferProgressTimelineRow(
                 )
             }
             val bgColor =
-                when {
-                    isDone -> ZashiColors.Utility.SuccessGreen.utilitySuccess500
-                    isAttention -> ZashiColors.Utility.WarningYellow.utilityOrange500
-                    isActive -> ZashiColors.Btns.Primary.btnPrimaryBg
-                    else -> ZashiColors.Surfaces.bgTertiary
+                when (state) {
+                    TransferRowState.DONE -> ZashiColors.Utility.SuccessGreen.utilitySuccess500
+                    TransferRowState.ATTENTION -> ZashiColors.Utility.WarningYellow.utilityOrange500
+                    TransferRowState.ACTIVE -> ZashiColors.Btns.Primary.btnPrimaryBg
+                    TransferRowState.IDLE -> ZashiColors.Surfaces.bgTertiary
                 }
             val textColor =
-                when {
-                    isAttention || isActive -> ZashiColors.Btns.Primary.btnPrimaryFg
-                    else -> ZashiColors.Utility.Gray.utilityGray400
+                when (state) {
+                    TransferRowState.ATTENTION, TransferRowState.ACTIVE -> ZashiColors.Btns.Primary.btnPrimaryFg
+                    TransferRowState.DONE, TransferRowState.IDLE -> ZashiColors.Utility.Gray.utilityGray400
                 }
             Box(
                 modifier =
@@ -217,7 +236,7 @@ private fun TransferProgressTimelineRow(
                 contentAlignment = Alignment.Center,
             ) {
                 when {
-                    isDone -> {
+                    state == TransferRowState.DONE -> {
                         Icon(
                             painter = painterResource(co.electriccoin.zcash.migration.R.drawable.ic_migration_check),
                             contentDescription = null,
@@ -257,7 +276,12 @@ private fun TransferProgressTimelineRow(
             Text(
                 text = statusLabel.getValue(),
                 style = ZashiTypography.textXs,
-                color = if (isAttention) ZashiColors.Utility.WarningYellow.utilityOrange500 else ZashiColors.Text.textTertiary,
+                color =
+                    if (state == TransferRowState.ATTENTION) {
+                        ZashiColors.Utility.WarningYellow.utilityOrange500
+                    } else {
+                        ZashiColors.Text.textTertiary
+                    },
             )
         }
         Column(horizontalAlignment = Alignment.End) {

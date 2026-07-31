@@ -30,6 +30,7 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.compose.BindCompLocalProvider
 import co.electriccoin.zcash.ui.common.compose.DisableScreenTimeout
 import co.electriccoin.zcash.ui.common.extension.setContentCompat
+import co.electriccoin.zcash.ui.common.migration.MigrationAppHooks
 import co.electriccoin.zcash.ui.common.viewmodel.AuthenticationUIState
 import co.electriccoin.zcash.ui.common.viewmodel.AuthenticationViewModel
 import co.electriccoin.zcash.ui.common.viewmodel.OldHomeViewModel
@@ -76,7 +77,7 @@ class MainActivity : FragmentActivity() {
     val configurationOverrideFlow = MutableStateFlow<ConfigurationOverride?>(null)
 
     private val navigationRouter: NavigationRouter by inject()
-    private val migrationAppHooks: co.electriccoin.zcash.ui.common.migration.MigrationAppHooks by inject()
+    private val migrationAppHooks: MigrationAppHooks by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -105,9 +106,7 @@ class MainActivity : FragmentActivity() {
         handleMigrationIntent(intent)
     }
 
-    private fun handleMigrationIntent(intent: Intent) {
-        migrationAppHooks.handleIntent(intent, lifecycleScope)
-    }
+    private fun handleMigrationIntent(intent: Intent): Boolean = migrationAppHooks.handleIntent(intent, lifecycleScope)
 
     override fun onStart() {
         Twig.debug { "Activity state: Start" }

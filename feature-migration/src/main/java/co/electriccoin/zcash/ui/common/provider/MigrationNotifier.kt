@@ -11,9 +11,40 @@ import co.electriccoin.zcash.ui.MainActivity
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.model.accountIdOffset
 
+/**
+ * Emits the system notifications that drive the background (app-closed) portion of an Orchard→
+ * Ironwood migration and let the user tap back into it. There is one instance per app process
+ * (see [ZcashApplication]); every method is keyed by an account so a Zodl and a Keystone account
+ * migrating in parallel never overwrite each other's notifications.
+ *
+ * All copy is resolved from string resources at build time via [Context.getString] (notifications
+ * need a concrete String, not a Compose `StringResource`), so it is localized like the rest of the
+ * UI.
+ *
+ * @param context an application-scoped [Context] used both to build the [PendingIntent]s and to
+ *   post/cancel notifications; must outlive individual notifications, hence application scope.
+ */
 class MigrationNotifier(
     private val context: Context
 ) {
+    // NOTE (reviewer: "an intent for a given activity should be built ONLY by a factory in that
+    // activity's companion object"): the two intents below target MainActivity, which lives in
+    // ui-lib. feature-migration depends on ui-lib (not vice versa), and the extra keys
+    // (EXTRA_OPEN_MIGRATION / EXTRA_RUN_STEP / EXTRA_ACCOUNT_KEY_ID) plus the per-account
+    // PendingIntent request codes are migration concerns. Moving construction into
+    // MainActivity.Companion would force ui-lib to reference feature-migration constants — a
+    // circular dependency — so the factory stays here by necessity. See the deferred-factory note
+    // in the review report.
+
+    /**
+     * Tap target that simply opens the migration UI for [accountKeyId] on the correct account. Uses
+     * a per-account request code so re-issuing it updates (rather than duplicates) the existing
+     * [PendingIntent].
+     *
+     * @param accountKeyId storage-key id ([toStorageKeyId]) of the migrating account; carried as an
+     *   Intent extra (String because Intents can't hold an `AccountUuid`) and used to derive the
+     *   per-account request code.
+     */
     private fun mainActivityIntent(accountKeyId: String): PendingIntent {
         val intent =
             Intent(context, MainActivity::class.java).apply {
@@ -54,14 +85,19 @@ class MigrationNotifier(
     private fun progressNotificationId(accountKeyId: String): Int =
         NOTIFICATION_ID_PROGRESS_BASE + accountIdOffset(accountKeyId)
 
+    /**
+     * Registers the notification channel every migration notification posts to. Must be called once
+     * before any `notify*` method (done at app start). The channel name/description are user-visible
+     * in the system Settings app, so they come from localized resources.
+     */
     fun createChannel() {
         val channel =
             NotificationChannel(
                 CHANNEL_ID,
-                "Ironwood Migration",
+                context.getString(R.string.migration_notification_channelName),
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "Notifications for Orchard to Ironwood migration progress"
+                description = context.getString(R.string.migration_notification_channelDescription)
             }
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
@@ -71,19 +107,28 @@ class MigrationNotifier(
      * Progress of the note-split (preparation) phase — splits are internal plumbing, so they never
      * announce crossing counts ("Transfer 0 of 11 complete" read as zero progress); they announce
      * their own.
+     *
+     * @param accountKeyId storage-key id ([toStorageKeyId]) of the migrating account.
+     * @param completedSplits number of note-splits already done.
+     * @param totalSplits total note-splits planned; when `<= 0` a generic "preparing" copy is shown
+     *   instead of a count.
      */
     fun notifyNoteSplitProgress(accountKeyId: String, completedSplits: Int, totalSplits: Int) {
         val contentText =
             if (totalSplits > 0) {
-                "Note split $completedSplits of $totalSplits"
+                context.getString(
+                    R.string.migration_notification_noteSplitProgress,
+                    completedSplits,
+                    totalSplits
+                )
             } else {
-                "Preparing your balance for migration"
+                context.getString(R.string.migration_notification_noteSplitPreparing)
             }
         val notification =
             NotificationCompat
                 .Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_alert_circle)
-                .setContentTitle("Ironwood Migration")
+                .setContentTitle(context.getString(R.string.migration_notification_title))
                 .setContentText(contentText)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setContentIntent(mainActivityIntent(accountKeyId))
@@ -93,14 +138,22 @@ class MigrationNotifier(
         NotificationManagerCompat.from(context).notify(progressNotificationId(accountKeyId), notification)
     }
 
+    /**
+     * Announces that a migration transfer just landed.
+     *
+     * @param accountKeyId storage-key id ([toStorageKeyId]) of the migrating account.
+     * @param completed number of transfers completed so far.
+     * @param total total transfers in the plan.
+     */
     fun notifyTransferComplete(accountKeyId: String, completed: Int, total: Int) {
         val notification =
             NotificationCompat
                 .Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_alert_circle)
-                .setContentTitle("Ironwood Migration")
-                .setContentText("Transfer $completed of $total complete")
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setContentTitle(context.getString(R.string.migration_notification_title))
+                .setContentText(
+                    context.getString(R.string.migration_notification_transferComplete, completed, total)
+                ).setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setContentIntent(mainActivityIntent(accountKeyId))
                 .setAutoCancel(true)
                 .build()
@@ -112,19 +165,28 @@ class MigrationNotifier(
      * Strict-order escalation: the plan's head transfer stayed unprovable across a completed sync
      * — with strict ordering everything behind it is blocked, so the user must reschedule (the
      * app-open recovery routes to the invalid/reschedule screen).
+     *
+     * @param accountKeyId storage-key id ([toStorageKeyId]) of the migrating account.
+     * @param transferIndex 1-based position of the blocked transfer; when `<= 0` (together with
+     *   [total]) a generic "blocked" copy is shown instead of a count.
+     * @param total total transfers in the plan; see [transferIndex].
      */
     fun notifyRescheduleRequired(accountKeyId: String, transferIndex: Int, total: Int) {
         val contentText =
             if (total > 0 && transferIndex > 0) {
-                "Transfer $transferIndex of $total can't be sent — tap to reschedule the migration."
+                context.getString(
+                    R.string.migration_notification_rescheduleWithCounts,
+                    transferIndex,
+                    total
+                )
             } else {
-                "The migration is blocked — tap to reschedule."
+                context.getString(R.string.migration_notification_rescheduleGeneric)
             }
         val notification =
             NotificationCompat
                 .Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_alert_circle)
-                .setContentTitle("Ironwood Migration")
+                .setContentTitle(context.getString(R.string.migration_notification_title))
                 .setContentText(contentText)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(mainActivityIntent(accountKeyId))
@@ -134,21 +196,33 @@ class MigrationNotifier(
         NotificationManagerCompat.from(context).notify(progressNotificationId(accountKeyId), notification)
     }
 
+    /**
+     * Prompts the user to hardware-sign / confirm the next transfer (Keystone flow).
+     *
+     * @param accountKeyId storage-key id ([toStorageKeyId]) of the migrating account.
+     * @param transferIndex 1-based position of the transfer awaiting confirmation; when `<= 0`
+     *   (together with [total]) a generic "a transfer is ready" copy is shown instead of a count.
+     * @param total total transfers in the plan; see [transferIndex].
+     */
     fun notifyManualConfirmationRequired(accountKeyId: String, transferIndex: Int, total: Int) {
         // F7: render real "Transfer X of Y" counts when the caller has them; fall back to generic
         // copy when they're unknown (total <= 0 or index <= 0) instead of the meaningless
         // "Transfer 0 of 0" the escalation call site used to pass.
         val contentText =
             if (total > 0 && transferIndex > 0) {
-                "Transfer $transferIndex of $total is ready. Tap to confirm."
+                context.getString(
+                    R.string.migration_notification_manualConfirmationWithCounts,
+                    transferIndex,
+                    total
+                )
             } else {
-                "A migration transfer is ready. Tap to confirm."
+                context.getString(R.string.migration_notification_manualConfirmationGeneric)
             }
         val notification =
             NotificationCompat
                 .Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_alert_circle)
-                .setContentTitle("Migration: Action Required")
+                .setContentTitle(context.getString(R.string.migration_notification_actionRequiredTitle))
                 .setContentText(contentText)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(mainActivityIntent(accountKeyId))
@@ -158,13 +232,18 @@ class MigrationNotifier(
         NotificationManagerCompat.from(context).notify(progressNotificationId(accountKeyId), notification)
     }
 
+    /**
+     * A scheduled transfer couldn't be broadcast over Tor; the user must open the app to resolve.
+     *
+     * @param accountKeyId storage-key id ([toStorageKeyId]) of the migrating account.
+     */
     fun notifyMigrationTorFailure(accountKeyId: String) {
         val notification =
             NotificationCompat
                 .Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_alert_circle)
-                .setContentTitle("Migration: Couldn't Connect to Tor")
-                .setContentText("A scheduled transfer couldn't send over Tor. Open Zodl to resolve.")
+                .setContentTitle(context.getString(R.string.migration_notification_torFailureTitle))
+                .setContentText(context.getString(R.string.migration_notification_torFailureText))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(mainActivityIntent(accountKeyId))
                 .setAutoCancel(true)
@@ -178,14 +257,17 @@ class MigrationNotifier(
      * migration STEP (prove or broadcast; everything is pre-signed, no user review exists) is due
      * and nothing is executing it. Tapping opens the app, which silently re-kicks the worker; the
      * worker's own next run start cancels this via [cancelStepDue].
+     *
+     * @param accountKeyId storage-key id ([toStorageKeyId]) of the migrating account; also selects
+     *   the per-account notification id so [cancelStepDue] can dismiss exactly this one.
      */
     fun notifyMigrationStepDue(accountKeyId: String) {
         val notification =
             NotificationCompat
                 .Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_alert_circle)
-                .setContentTitle("Ironwood Migration")
-                .setContentText("Your migration is ready to continue — tap to run the next step.")
+                .setContentTitle(context.getString(R.string.migration_notification_title))
+                .setContentText(context.getString(R.string.migration_notification_stepDueText))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(runStepIntent(accountKeyId))
                 .setAutoCancel(true)
@@ -194,7 +276,12 @@ class MigrationNotifier(
         NotificationManagerCompat.from(context).notify(stepDueNotificationId(accountKeyId), notification)
     }
 
-    /** The worker ran — the step-due fallback (if showing) is obsolete. */
+    /**
+     * The worker ran — the step-due fallback (if showing) is obsolete.
+     *
+     * @param accountKeyId storage-key id ([toStorageKeyId]) of the account whose step-due
+     *   notification (posted by [notifyMigrationStepDue]) should be dismissed.
+     */
     fun cancelStepDue(accountKeyId: String) {
         NotificationManagerCompat.from(context).cancel(stepDueNotificationId(accountKeyId))
     }
@@ -204,13 +291,20 @@ class MigrationNotifier(
     // currently deliver through the same TransferResult.InvalidNote/Expired branch in
     // MigrationWorker — the two causes read differently to the user, matching the distinct
     // Transfer Invalid screen copy (see MigrationAttentionKind).
+
+    /**
+     * The migration plan was invalidated (notes spent outside the flow); the user must reopen the
+     * app to review/rebuild it.
+     *
+     * @param accountKeyId storage-key id ([toStorageKeyId]) of the migrating account.
+     */
     fun notifyMigrationPlanInvalid(accountKeyId: String) {
         val notification =
             NotificationCompat
                 .Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_alert_circle)
-                .setContentTitle("Ironwood Migration")
-                .setContentText("Migration plan needs update. Open Zodl to review the details.")
+                .setContentTitle(context.getString(R.string.migration_notification_title))
+                .setContentText(context.getString(R.string.migration_notification_planInvalidText))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(mainActivityIntent(accountKeyId))
                 .setAutoCancel(true)
@@ -221,13 +315,20 @@ class MigrationNotifier(
 
     // Spec §6.3 (Transfer(s) Expired) — one or more transfers expired without executing (the app
     // wasn't opened in time to broadcast them before their anchor expired).
+
+    /**
+     * One or more transfers expired unexecuted (app wasn't opened before their anchor expired); the
+     * user must reopen the app to continue.
+     *
+     * @param accountKeyId storage-key id ([toStorageKeyId]) of the migrating account.
+     */
     fun notifyTransferExpired(accountKeyId: String) {
         val notification =
             NotificationCompat
                 .Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_alert_circle)
-                .setContentTitle("Ironwood Migration")
-                .setContentText("A transfer expired. Open Zodl to continue your migration.")
+                .setContentTitle(context.getString(R.string.migration_notification_title))
+                .setContentText(context.getString(R.string.migration_notification_transferExpiredText))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(mainActivityIntent(accountKeyId))
                 .setAutoCancel(true)
@@ -242,18 +343,26 @@ class MigrationNotifier(
      * covers them all — used when the migration itself is discarded (debug "Migration restart"),
      * where a leftover "ready to send"/"Tor failure" notification would tap into a migration that
      * no longer exists.
+     *
+     * @param accountKeyId storage-key id ([toStorageKeyId]) of the account whose progress
+     *   notification should be dismissed.
      */
     fun cancel(accountKeyId: String) {
         NotificationManagerCompat.from(context).cancel(progressNotificationId(accountKeyId))
     }
 
+    /**
+     * Terminal success notification: the whole migration finished.
+     *
+     * @param accountKeyId storage-key id ([toStorageKeyId]) of the migrated account.
+     */
     fun notifyMigrationComplete(accountKeyId: String) {
         val notification =
             NotificationCompat
                 .Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_alert_circle)
-                .setContentTitle("Ironwood Migration Complete")
-                .setContentText("All your funds have been migrated to Ironwood.")
+                .setContentTitle(context.getString(R.string.migration_notification_completeTitle))
+                .setContentText(context.getString(R.string.migration_notification_completeText))
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setContentIntent(mainActivityIntent(accountKeyId))
                 .setAutoCancel(true)
