@@ -73,6 +73,13 @@ class MigrationGateImpl(
     // (matches the sync it gates); see post-adoption TODO C2 for the any-account variant.
     override suspend fun isMigrationActive(): Boolean =
         getOrchardMigrationSdk()?.getMigrationState() is cash.z.ecc.android.sdk.MigrationState.InProgress
+
+    override suspend fun isRestartAvailable(): Boolean =
+        when (getOrchardMigrationSdk()?.getMigrationState()) {
+            is cash.z.ecc.android.sdk.MigrationState.InProgress,
+            is cash.z.ecc.android.sdk.MigrationState.RequiresAttention -> true
+            else -> false
+        }
 }
 
 class MigrationSyncedHookImpl(
@@ -196,6 +203,8 @@ class MigrationNavigatorImpl(
     private val navigationRouter: NavigationRouter,
 ) : MigrationNavigator {
     override fun backToMigrationReview() = navigationRouter.backTo(MigrationReviewArgs::class)
+
+    override fun forwardToRestartMigration() = navigationRouter.forward(MigrationRestartArgs)
 }
 
 class MigrationNavContributorImpl : MigrationNavContributor {

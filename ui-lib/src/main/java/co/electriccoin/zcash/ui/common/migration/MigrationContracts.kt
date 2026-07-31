@@ -24,6 +24,13 @@ interface MigrationHomeMessageSource {
 /** True while a migration plan is active — the daily background [SyncWorker] yields to Lane A. */
 interface MigrationGate {
     suspend fun isMigrationActive(): Boolean
+
+    /**
+     * True when the selected account has a migration that can be restarted — engine state
+     * InProgress or RequiresAttention (any mid-run or stuck state). False for NotStarted/Complete.
+     * Gates the Advanced-settings "Restart Migration" item.
+     */
+    suspend fun isRestartAvailable(): Boolean
 }
 
 /**
@@ -65,6 +72,9 @@ interface MigrationNavContributor {
  */
 interface MigrationNavigator {
     fun backToMigrationReview()
+
+    /** Opens the Restart Migration screen (Advanced settings entry point). */
+    fun forwardToRestartMigration()
 }
 
 /** Debug-menu migration actions; each returns the result text the debug screen displays. */

@@ -63,6 +63,10 @@ class CancelProposalFlowUseCaseTest {
         override fun backToMigrationReview() {
             backToReviewCalls++
         }
+
+        override fun forwardToRestartMigration() {
+            // no-op fake
+        }
     }
 
     private class FakeNavigationRouter : NavigationRouter {
