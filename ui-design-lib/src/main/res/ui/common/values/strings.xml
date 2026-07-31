@@ -1249,5 +1249,18 @@ Your vote can no longer be submitted.</string>
     <string name="migration_notification_completeTitle">Ironwood Migration Complete</string>
     <string name="migration_notification_completeText">All your funds have been migrated to Ironwood.</string>
 
+    <!-- Restart Migration -->
+    <string name="restartMigration_settingsItem">Restart Migration</string>
+    <string name="restartMigration_title">Restart Migration</string>
+    <string name="restartMigration_body">If your migration looks stuck, you can restart it safely. This creates a new plan for your remaining funds. Completed transfers are not affected.</string>
+    <string name="restartMigration_summaryMigratedLabel">Migrated</string>
+    <string name="restartMigration_summaryMigratedValue">%1$d of %2$d transfers</string>
+    <string name="restartMigration_summaryRemainingLabel">Remaining balance</string>
+    <string name="restartMigration_warning">This cancels the current migration plan. It cannot be undone once confirmed.</string>
+    <string name="restartMigration_support">If restarting doesn\'t resolve the issue, please reach out to Zodl Support via Send Feedback.</string>
+    <string name="restartMigration_next">Next</string>
+    <string name="restartMigration_confirmTitle">Restart this migration?</string>
+    <string name="restartMigration_confirmMessage">A new plan will be created for your remaining %1$s. The %2$d transfers already completed stay as they are and won\'t be repeated.</string>
+    <string name="restartMigration_confirmPrimary">Confirm restart</string>
 
 </resources>
