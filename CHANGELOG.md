@@ -53,7 +53,6 @@ and this application adheres to [Semantic Versioning](https://semver.org/spec/v2
 ### Fixed:
 - We fixed an issue with disconnecting a Keystone hardware wallet.
 - We fixed a couple of transaction status display issues.
->>>>>>> 3.8.1-2027
 
 ### Added:
 - Currency Conversion now supports multiple fiat currencies. You can pick which currency your balances and payment amounts are shown in from the Currency Conversion settings and opt-in screens.
