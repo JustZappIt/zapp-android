@@ -17,12 +17,12 @@ import co.electriccoin.zcash.ui.common.migration.MigrationSyncedHook
 import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
 import co.electriccoin.zcash.ui.common.provider.PendingMigrationTorFailureStorageProvider
-import co.electriccoin.zcash.ui.common.repository.RestartMigrationScheduleRepository
 import co.electriccoin.zcash.ui.common.usecase.CheckMigrationRecoveryUseCase
 import co.electriccoin.zcash.ui.common.usecase.DebugStartMigrationE2EUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardMigrationSdkUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.OnMigrationSyncCompletedUseCase
+import co.electriccoin.zcash.ui.common.usecase.RestartMigrationUseCase
 import co.electriccoin.zcash.ui.dialogComposable
 import co.electriccoin.zcash.ui.screen.home.HomeArgs
 import co.electriccoin.zcash.ui.screen.migration.battery.MigrationBatteryArgs
@@ -221,38 +221,17 @@ class MigrationNavContributorImpl : MigrationNavContributor {
 }
 
 class MigrationDebugActionsImpl(
+    private val restartMigrationUseCase: RestartMigrationUseCase,
     private val accountDataSource: AccountDataSource,
-    private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val pendingMigrationTorFailureStorageProvider: PendingMigrationTorFailureStorageProvider,
-    private val restartMigrationScheduleRepository: RestartMigrationScheduleRepository,
     private val migrationNotifier: MigrationNotifier,
     private val checkMigrationRecovery: CheckMigrationRecoveryUseCase,
-    private val context: Context,
 ) : MigrationDebugActions {
-    // Wipes the current account's in-progress migration entirely (see OrchardMigrationSdk.
-    // clearMigration's kdoc) so a fresh propose/commit can be tested immediately, instead of
-    // waiting out or resuming whatever migration is already in progress.
+    // Promoted to the production RestartMigrationUseCase (see its kdoc) so there is a single
+    // orchestration for both the debug action and the user-facing "Restart Migration" flow.
     override suspend fun restartMigration(): String {
-        val accountKeyId =
-            accountDataSource
-                .getSelectedAccount()
-                .sdkAccount.accountUuid
-                .toStorageKeyId()
-        getOrchardMigrationSdk()?.clearMigration()
-        // Cancel the background worker chain so it doesn't fire for a migration that no longer
-        // exists.
-        MigrationScheduler(context).cancel(accountKeyId)
-        // A leftover Tor-failure flag would keep routing every app launch into the Sending
-        // recovery screen for a migration that no longer exists.
-        pendingMigrationTorFailureStorageProvider.store(accountKeyId, false)
-        // An unconsumed restart schedule (invalid-screen Continue → debug restart instead of
-        // Review) would otherwise be silently used by the next Review entry in place of a
-        // fresh proposal over the post-clear balance.
-        restartMigrationScheduleRepository.consume(accountKeyId)
-        // Dismiss whatever migration notification is still showing — its tap routes into
-        // the migration that was just cleared.
-        migrationNotifier.cancel(accountKeyId)
-        return "Migration cleared. Propose a new migration to test."
+        restartMigrationUseCase()
+        return "Migration reset. Propose a new migration to test."
     }
 
     // Reproduces spec §6.2's "background Tor failure" state (MigrationWorker's non-retryable

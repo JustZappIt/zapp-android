@@ -552,8 +552,18 @@ class FakeOrchardMigrationSdk : OrchardMigrationSdk {
     override suspend fun lockRemainingOrchardBalance(): Unit =
         notImpl("lockRemainingOrchardBalance — add when a dust-locking scenario needs it")
 
-    override suspend fun clearMigration(): Unit =
-        notImpl("clearMigration — add when a debug-clear scenario needs it")
+    /** Recorded flag — set true when [clearMigration] is invoked; see RestartMigrationUseCaseTest. */
+    var clearMigrationCalled: Boolean = false
+        private set
+
+    override suspend fun clearMigration() {
+        clearMigrationCalled = true
+        // Return the fake to a no-run state so getMigrationState() reads NotStarted, mirroring the
+        // real clearMigration()'s "wipes the current account's in-progress migration entirely"
+        // contract closely enough for RestartMigrationUseCase's test to observe the reset.
+        txs.clear()
+        invalidTransfersPresent = false
+    }
 
     private fun notImpl(what: String): Nothing =
         throw NotImplementedError(
