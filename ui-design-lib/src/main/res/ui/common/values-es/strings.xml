@@ -19,6 +19,7 @@
     <string name="general_less">Menos</string>
     <string name="general_loading">Cargando</string>
     <string name="general_ok">OK</string>
+    <string name="general_report">Reportar</string>
     <string name="restoreInfo_gotIt">¡Entendido!</string>
     <string name="send_report">Reportar</string>
     <string name="general_zec">%1$s %2$s</string>
@@ -46,6 +47,7 @@
     <string name="empty_char">-</string>
     <string name="zcash_logo_content_description">Logo de Zcash</string>
     <string name="balance_widget_available">Saldo disponible:</string>
+    <string name="hide_balance_placeholder">-----</string>
     <string name="hide_balances_content_description">Ocultar saldos</string>
     <string name="unable_to_open_email">No se pudo abrir la app de correo.</string>
     <string name="restoring_wallet_label">[Restaurando tu billetera…]</string>

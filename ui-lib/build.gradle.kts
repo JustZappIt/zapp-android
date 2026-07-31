@@ -61,6 +61,7 @@ android {
                     "src/main/res/ui/insufficient_funds",
                     "src/main/res/ui/choose_server",
                     "src/main/res/ui/integrations",
+                    "src/main/res/ui/ironwood",
                     "src/main/res/ui/onboarding",
                     "src/main/res/ui/pay",
                     "src/main/res/ui/payment_request",

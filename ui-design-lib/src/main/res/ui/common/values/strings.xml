@@ -22,6 +22,7 @@
     <string name="general_loading">Loading</string>
     <string name="send_review">Review</string>
     <string name="general_ok">OK</string>
+    <string name="general_report">Report</string>
     <string name="restoreInfo_gotIt">Got it!</string>
     <string name="send_report">Report</string>
     <string name="general_zec">%1$s %2$s</string>
@@ -50,6 +51,7 @@
     <string name="zcash_logo_content_description">Zcash logo</string>
     <string name="scan_openSettings">Open Settings</string>
     <string name="balance_widget_available">Available Balance:</string>
+    <string name="hide_balance_placeholder">-----</string>
     <string name="hide_balances_content_description">Hide balances</string>
     <string name="unable_to_open_email">Unable to launch email app.</string>
     <string name="restoring_wallet_label">[Restoring Your Wallet…]</string>
