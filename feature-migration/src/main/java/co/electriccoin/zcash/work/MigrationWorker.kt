@@ -122,28 +122,36 @@ class MigrationWorker(
 
     /**
      * The engine answers `nextStep` at the SCANNED tip, which can lag wall clock by hours in a
-     * backgrounded wallet — so a `Waiting` verdict is re-checked against the estimated tip: if a
-     * proved, unsent transaction is already due by estimate, run the broadcast attempt now.
-     * `executeNextPendingTransfer` re-verifies with the engine (decision vs action), so a wrong
-     * estimate degrades to NothingDue, never a bad send.
+     * backgrounded wallet — nextStep is now Broadcast-authoritative (it checks
+     * `next_broadcastable` at the estimated tip internally), so a due broadcast is dispatched
+     * straight to [broadcastRun] by [doWork] and never reaches this function. `waitingRun` only
+     * handles a genuine engine `Waiting`: sweep to completion, surface an unprovable blocker, or
+     * re-arm.
      */
     private suspend fun waitingRun(sdk: OrchardMigrationSdk, accountKeyId: String): Result {
         val states = sdk.getMigrationTransferStates()
-        val est = sdk.estimatedChainTip()
-        if (states != null && broadcastDueByEstimate(states, est)) {
-            migrationLog("Worker: Waiting at the scanned tip but due by estimate ($est) — attempting broadcast.")
-            return broadcastRun(sdk, accountKeyId)
+        val allSent = states != null && states.transfers.isNotEmpty() && states.transfers.all { it.isSent }
+        val hasUnprovableBlocker = states?.transfers?.any { it.blocker == MigrationBlocker.UNPROVABLE_ANCHOR } == true
+        return when (waitingDisposition(allSent, hasUnprovableBlocker)) {
+            WaitingDisposition.COMPLETION_SWEEP -> {
+                // Everything broadcast, awaiting mining. Mining is only observed by a scan-driven
+                // reconcile, so the sweep must be a REAL sync run — a passive wait would never let
+                // the engine reach Complete in the background (review M2).
+                migrationLog("Worker: all transactions sent — completion sweep sync run.")
+                syncRun(sdk, accountKeyId)
+            }
+
+            WaitingDisposition.SURFACE_UNPROVABLE -> {
+                surfaceUnprovableBlocker(sdk, accountKeyId, states)
+                reArm(sdk, accountKeyId)
+                Result.success()
+            }
+
+            WaitingDisposition.RE_ARM -> {
+                reArm(sdk, accountKeyId)
+                Result.success()
+            }
         }
-        // Completion sweep: everything broadcast, awaiting mining. Mining is only observed by a
-        // scan-driven reconcile, so the sweep must be a REAL sync run — a passive wait would
-        // never let the engine reach Complete in the background (review M2).
-        if (states != null && states.transfers.isNotEmpty() && states.transfers.all { it.isSent }) {
-            migrationLog("Worker: all transactions sent — completion sweep sync run.")
-            return syncRun(sdk, accountKeyId)
-        }
-        surfaceUnprovableBlocker(sdk, accountKeyId, states)
-        reArm(sdk, accountKeyId)
-        return Result.success()
     }
 
     /**
@@ -434,7 +442,16 @@ class MigrationWorker(
         val states = sdk.getMigrationTransferStates()
         val wakeups = sdk.syncWakeupSchedule()
         val est = sdk.estimatedChainTip()
-        val delay = computeNextWakeDelay(states, wakeups, est, sdk.estimatedSecondsPerBlock())
+        val delay =
+            nextWake(
+                states,
+                wakeups,
+                est,
+                sdk.estimatedSecondsPerBlock(),
+                lastActivityEpochSeconds = lastNetworkActivity.get()?.epochSecond,
+                privacyBufferSeconds = sdk.privacySyncBufferDuration().inWholeSeconds,
+                nowEpochSeconds = nowEpochSeconds(),
+            )
         MigrationScheduler(applicationContext).schedule(accountKeyId, maxOf(delay ?: migrationCadence(), floor))
         // The full "why" of the chosen wake, so timing is diagnosable from logs alone: every
         // engine wake-up height, the next unsent due height, the tip estimate, and the floor.
@@ -479,7 +496,7 @@ internal fun nowEpochSeconds(): Long = Clock.System.now().epochSeconds
 /**
  * Fallback-only cadence: 5 min on testnet, 60 min on mainnet. Used ONLY when neither the engine's
  * wake-up schedule nor live transfer states (or the tip estimate) are available — every regular
- * wake is computed from the engine's own schedule instead (see [computeNextWakeDelay]).
+ * wake is computed from the engine's own schedule instead (see [nextWake]).
  *
  * Uses [BuildConfig.FLAVOR] because the SDK's network id is not cheaply reachable from a static
  * context without a full OrchardMigrationSdk instance.
@@ -613,16 +630,33 @@ internal fun broadcastDueByEstimate(states: MigrationTransferStates, estimatedTi
 }
 
 /**
- * The "when?" projection: the earliest relevant future height — the engine's next sync wake-up or
- * the next unsent transaction's scheduled height — converted to a wall-clock delay at the measured
- * block rate, floored at [MIN_REARM_SECONDS] (WorkManager slack / hot-loop guard).
+ * What a genuine engine `Waiting` verdict resolves to (nextStep is Broadcast-authoritative, so a
+ * due broadcast never reaches this decision — see [MigrationWorker.waitingRun]).
+ */
+internal enum class WaitingDisposition { COMPLETION_SWEEP, SURFACE_UNPROVABLE, RE_ARM }
+
+internal fun waitingDisposition(allSent: Boolean, hasUnprovableBlocker: Boolean): WaitingDisposition =
+    when {
+        allSent -> WaitingDisposition.COMPLETION_SWEEP
+        hasUnprovableBlocker -> WaitingDisposition.SURFACE_UNPROVABLE
+        else -> WaitingDisposition.RE_ARM
+    }
+
+/**
+ * The engine-side "when?" projection: the earliest relevant future height — the engine's next
+ * sync wake-up or the next unsent transaction's scheduled height — converted to a wall-clock
+ * delay at the measured block rate, floored at [MIN_REARM_SECONDS] (WorkManager slack / hot-loop
+ * guard).
  *
  * Wake-ups covering ONLY unprovable-anchor transactions are excluded: the engine keeps emitting
  * immediate wake-ups for them forever (engine change request, GAP 2) and syncing can never produce
  * their proof — honoring them would hot-loop the worker at the floor delay. Returns `null` (cadence
  * fallback) when the tip estimate is unavailable or nothing relevant remains.
+ *
+ * Engine-only — does not know about the app's privacy quiet gap; see [nextWake], which folds this
+ * in with the gap term and is what callers should use.
  */
-internal fun computeNextWakeDelay(
+internal fun computeEngineWakeDelay(
     states: MigrationTransferStates?,
     wakeups: List<MigrationSyncWakeup>?,
     est: Long,
@@ -649,4 +683,49 @@ internal fun computeNextWakeDelay(
     return ((target - est).coerceAtLeast(0L) * secondsPerBlock)
         .coerceAtLeast(MIN_REARM_SECONDS)
         .seconds
+}
+
+/**
+ * The single re-arm source of truth (spec §5): `min(engine schedule, app privacy-gap expiry)`.
+ * The gap is an app concept the clock-free engine cannot express — a proved, unsent transaction
+ * that is already due by estimate is broadcast-ready, but if we are inside the post-sync/
+ * post-broadcast quiet window, the earliest it can actually go out is `quietUntil`. Re-arming to
+ * the engine height alone would ignore that wait; re-arming to the gap alone would ignore a
+ * nearer engine wake (e.g. a cheaper prove). Do NOT sync while only the gap is pending — that
+ * would reset it and starve the due broadcast (spec §4).
+ */
+internal fun nextWake(
+    states: MigrationTransferStates?,
+    wakeups: List<MigrationSyncWakeup>?,
+    est: Long,
+    secondsPerBlock: Long,
+    lastActivityEpochSeconds: Long?,
+    privacyBufferSeconds: Long,
+    nowEpochSeconds: Long,
+): Duration? {
+    val broadcastReadyGapped = states != null && broadcastDueByEstimate(states, est)
+    val gapDelay =
+        if (broadcastReadyGapped && lastActivityEpochSeconds != null) {
+            val quietUntil = lastActivityEpochSeconds + privacyBufferSeconds
+            (quietUntil - nowEpochSeconds).coerceAtLeast(0L).seconds
+        } else {
+            null
+        }
+    // When the gap term applies, it is the precise re-arm for the already-due, broadcast-ready
+    // transfer(s) — exclude them from the engine's due-height floor (computeEngineWakeDelay floors
+    // an already-due height at MIN_REARM_SECONDS, which could otherwise beat a longer, more
+    // precise gap wait and starve it, spec §4).
+    val engineStates =
+        if (gapDelay != null && states != null) {
+            states.copy(
+                transfers =
+                    states.transfers.filterNot {
+                        !it.isSent && it.isProved && it.blocker != MigrationBlocker.UNPROVABLE_ANCHOR && it.scheduledHeight <= est
+                    }
+            )
+        } else {
+            states
+        }
+    val engineDelay = computeEngineWakeDelay(engineStates, wakeups, est, secondsPerBlock)
+    return listOfNotNull(engineDelay, gapDelay).minOrNull()
 }

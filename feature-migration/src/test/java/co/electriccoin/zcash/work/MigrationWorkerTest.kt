@@ -214,12 +214,12 @@ class MigrationWorkerTest {
         assertFalse(broadcastDueByEstimate(states(tx(1, scheduled = 150)), estimatedTip = -1))
     }
 
-    // ── computeNextWakeDelay (the "when?" projection) ─────────────────────────
+    // ── computeEngineWakeDelay (the engine-only "when?" projection) ─────────────────────────
 
     @Test
     fun `the earliest of wakeup and due height wins`() {
         val delay =
-            computeNextWakeDelay(
+            computeEngineWakeDelay(
                 states = states(tx(1, scheduled = 300, isProved = false, blocker = MigrationBlocker.ANCHOR_BOUNDARY)),
                 wakeups = listOf(MigrationSyncWakeup(height = 250, covers = listOf(1L))),
                 est = 100,
@@ -232,7 +232,7 @@ class MigrationWorkerTest {
     @Test
     fun `a past target floors at the minimum re-arm`() {
         val delay =
-            computeNextWakeDelay(
+            computeEngineWakeDelay(
                 states = states(tx(1, scheduled = 90)),
                 wakeups = emptyList(),
                 est = 100,
@@ -245,7 +245,7 @@ class MigrationWorkerTest {
     fun `wakeups covering only unprovable transactions are ignored`() {
         val stuck = tx(9, scheduled = 90, isProved = false, blocker = MigrationBlocker.UNPROVABLE_ANCHOR)
         val delay =
-            computeNextWakeDelay(
+            computeEngineWakeDelay(
                 states = states(stuck),
                 wakeups = listOf(MigrationSyncWakeup(height = 100, covers = listOf(9L))),
                 est = 100,
@@ -260,7 +260,7 @@ class MigrationWorkerTest {
         val stuck = tx(9, scheduled = 90, isProved = false, blocker = MigrationBlocker.UNPROVABLE_ANCHOR)
         val healthy = tx(10, scheduled = 300, isProved = false, blocker = MigrationBlocker.ANCHOR_BOUNDARY)
         val delay =
-            computeNextWakeDelay(
+            computeEngineWakeDelay(
                 states = states(stuck, healthy),
                 wakeups = listOf(MigrationSyncWakeup(height = 250, covers = listOf(9L, 10L))),
                 est = 100,
@@ -272,7 +272,7 @@ class MigrationWorkerTest {
     @Test
     fun `an unavailable estimate falls back to the cadence`() {
         assertNull(
-            computeNextWakeDelay(
+            computeEngineWakeDelay(
                 states = states(tx(1, scheduled = 300)),
                 wakeups = emptyList(),
                 est = -1,
@@ -284,12 +284,104 @@ class MigrationWorkerTest {
     @Test
     fun `nothing pending falls back to the cadence`() {
         assertNull(
-            computeNextWakeDelay(
+            computeEngineWakeDelay(
                 states = states(tx(1, scheduled = 90, isSent = true)),
                 wakeups = emptyList(),
                 est = 100,
                 secondsPerBlock = 10,
             )
         )
+    }
+
+    // ── nextWake (engine schedule folded with the app privacy gap) ────────────
+
+    @Test
+    fun `a ready-but-gapped broadcast re-arms to the quiet expiry`() {
+        // proved, unsent transfer due at est=1000; synced 60s ago, buffer 180s -> 120s remaining.
+        val delay =
+            nextWake(
+                states = states(tx(1, scheduled = 1000)),
+                wakeups = emptyList(),
+                est = 1000,
+                secondsPerBlock = 3,
+                lastActivityEpochSeconds = 1_000_000L,
+                privacyBufferSeconds = 180L,
+                nowEpochSeconds = 1_000_060L,
+            )
+        assertEquals(120.seconds, delay)
+    }
+
+    @Test
+    fun `an earlier engine proving wake wins over the gap`() {
+        val delay =
+            nextWake(
+                states = states(tx(1, scheduled = 1000)),
+                wakeups = listOf(MigrationSyncWakeup(height = 1100, covers = listOf(4L))),
+                est = 1000,
+                secondsPerBlock = 1,
+                lastActivityEpochSeconds = 1_000_000L,
+                privacyBufferSeconds = 600L,
+                nowEpochSeconds = 1_000_100L,
+            )
+        // engine proving wake at 1100: (1100-1000)*1 = 100s < 500s gap remaining -> 100s wins.
+        // (tx1 itself is excluded from the engine due-height calc since it's the gapped one.)
+        assertEquals(100.seconds, delay)
+    }
+
+    @Test
+    fun `no broadcast-ready transfer means the gap term does not apply`() {
+        val delay =
+            nextWake(
+                states = states(tx(1, scheduled = 2000, isProved = false, blocker = MigrationBlocker.ANCHOR_BOUNDARY)),
+                wakeups = emptyList(),
+                est = 1000,
+                secondsPerBlock = 3,
+                lastActivityEpochSeconds = 1_000_000L,
+                privacyBufferSeconds = 180L,
+                nowEpochSeconds = 1_000_178L, // if the gap applied, only 2s would remain
+            )
+        // Unproved -> not broadcast-ready -> gap term is inert; falls through to the engine-only
+        // due-height delay (2000-1000)*3 = 3000s, wildly different from the near-elapsed gap.
+        assertEquals(3000.seconds, delay)
+    }
+
+    @Test
+    fun `a gap already elapsed re-arms at zero, not negative`() {
+        val delay =
+            nextWake(
+                states = states(tx(1, scheduled = 1000)),
+                wakeups = emptyList(),
+                est = 1000,
+                secondsPerBlock = 3,
+                lastActivityEpochSeconds = 1_000_000L,
+                privacyBufferSeconds = 180L,
+                nowEpochSeconds = 1_000_500L, // 500s since last activity, buffer only 180s
+            )
+        assertEquals(0.seconds, delay)
+    }
+
+    // ── waitingDisposition (what a genuine engine Waiting resolves to) ────────
+
+    @Test
+    fun `all sent means a completion sweep`() {
+        assertEquals(WaitingDisposition.COMPLETION_SWEEP, waitingDisposition(allSent = true, hasUnprovableBlocker = false))
+    }
+
+    @Test
+    fun `an unprovable blocker with unsent work surfaces the blocker`() {
+        assertEquals(
+            WaitingDisposition.SURFACE_UNPROVABLE,
+            waitingDisposition(allSent = false, hasUnprovableBlocker = true)
+        )
+    }
+
+    @Test
+    fun `neither condition just re-arms`() {
+        assertEquals(WaitingDisposition.RE_ARM, waitingDisposition(allSent = false, hasUnprovableBlocker = false))
+    }
+
+    @Test
+    fun `all sent takes priority over an unprovable blocker`() {
+        assertEquals(WaitingDisposition.COMPLETION_SWEEP, waitingDisposition(allSent = true, hasUnprovableBlocker = true))
     }
 }
