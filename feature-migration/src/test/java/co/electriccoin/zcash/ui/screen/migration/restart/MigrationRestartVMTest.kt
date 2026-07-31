@@ -8,6 +8,8 @@ import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetMigrationSnapshotUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.common.usecase.RestartMigrationUseCase
+import co.electriccoin.zcash.ui.design.util.StringResource
+import co.electriccoin.zcash.ui.design.util.stringRes
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -23,8 +25,12 @@ import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.time.Instant
+import co.electriccoin.zcash.ui.design.R as DesignR
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MigrationRestartVMTest {
@@ -60,6 +66,15 @@ class MigrationRestartVMTest {
             loaded.content?.nextButton?.onClick?.invoke()
             val withDialog = vm.state.first { it.content?.confirmationDialog != null }
             val dialog = requireNotNull(withDialog.content?.confirmationDialog)
+
+            // The confirmation copy is built from restartMigration_confirmMessage with the
+            // remaining-balance StringResource and completed-count args (nested StringResource
+            // format path) — see MigrationRestartVM.onNextClicked.
+            val title = assertIs<StringResource.ByResource>(dialog.title)
+            assertEquals(DesignR.string.restartMigration_confirmTitle, title.resource)
+            val message = assertIs<StringResource.ByResource>(dialog.message)
+            assertEquals(DesignR.string.restartMigration_confirmMessage, message.resource)
+            assertContentEquals(listOf(stringRes(Zatoshi(307_000_000)), 7), message.args)
 
             // Confirm restart runs the use case and pops back.
             dialog.primaryAction.onClick()

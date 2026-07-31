@@ -86,11 +86,7 @@ fun MigrationRestartView(state: MigrationRestartState) {
             SupportRow(state.support.getValue())
             Spacer(Modifier.height(12.dp))
             ZashiButton(
-                state =
-                    ButtonState(
-                        text = stringRes(DesignR.string.restartMigration_next),
-                        onClick = state.nextButton.onClick,
-                    ),
+                state = state.nextButton,
                 modifier = Modifier.fillMaxWidth(),
             )
         }

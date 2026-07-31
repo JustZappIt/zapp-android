@@ -558,9 +558,11 @@ class FakeOrchardMigrationSdk : OrchardMigrationSdk {
 
     override suspend fun clearMigration() {
         clearMigrationCalled = true
-        // Return the fake to a no-run state so getMigrationState() reads NotStarted, mirroring the
-        // real clearMigration()'s "wipes the current account's in-progress migration entirely"
-        // contract closely enough for RestartMigrationUseCase's test to observe the reset.
+        // Return the fake to a no-run state so getMigrationState() reads NotStarted. Note this models
+        // the post-swap deleteMigration() target state, not today's interim real clearMigration() —
+        // that one marks the run Failed (state -> RequiresAttention) and keeps txs around. The
+        // simplification is fine here: RestartMigrationUseCaseTest asserts clearMigrationCalled plus
+        // the cleanup side effects, not the resulting getMigrationState() value.
         txs.clear()
         invalidTransfersPresent = false
     }
