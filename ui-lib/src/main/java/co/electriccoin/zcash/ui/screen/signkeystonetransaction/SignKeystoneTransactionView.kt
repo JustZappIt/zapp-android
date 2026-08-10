@@ -68,7 +68,9 @@ fun SignKeystoneTransactionView(state: SignKeystoneTransactionState) {
             Text(
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,
-                text = stringResource(co.electriccoin.zcash.ui.R.string.sign_keystone_transaction_title),
+                text =
+                    state.title?.getValue()
+                        ?: stringResource(co.electriccoin.zcash.ui.R.string.sign_keystone_transaction_title),
                 style = ZashiTypography.textMd,
                 fontWeight = FontWeight.Medium,
                 color = ZashiColors.Text.textPrimary
@@ -77,7 +79,9 @@ fun SignKeystoneTransactionView(state: SignKeystoneTransactionState) {
             Text(
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,
-                text = stringResource(co.electriccoin.zcash.ui.R.string.sign_keystone_transaction_subtitle),
+                text =
+                    state.subtitle?.getValue()
+                        ?: stringResource(co.electriccoin.zcash.ui.R.string.sign_keystone_transaction_subtitle),
                 style = ZashiTypography.textSm,
                 color = ZashiColors.Text.textTertiary
             )

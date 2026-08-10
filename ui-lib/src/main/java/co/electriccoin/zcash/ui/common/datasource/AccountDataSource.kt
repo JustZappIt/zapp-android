@@ -108,13 +108,15 @@ class AccountDataSourceImpl(
                                     observeUnified(synchronizer, sdkAccount),
                                     observeTransparent(synchronizer, sdkAccount),
                                     observeSapling(synchronizer, sdkAccount),
+                                    observeIronwoodBalance(sdkAccount),
                                     observeIsSelected(sdkAccount, allSdkAccounts),
-                                ) { unified, transparent, sapling, isSelected ->
+                                ) { unified, transparent, sapling, ironwoodBalance, isSelected ->
                                     when (sdkAccount.keySource?.lowercase()) {
                                         KEYSTONE_KEYSOURCE -> {
                                             KeystoneAccount(
                                                 sdkAccount = sdkAccount,
                                                 unified = unified,
+                                                ironwoodBalance = ironwoodBalance,
                                                 transparent = transparent,
                                                 isSelected = isSelected,
                                             )
@@ -126,6 +128,7 @@ class AccountDataSourceImpl(
                                                 unified = unified,
                                                 transparent = transparent,
                                                 sapling = sapling ?: return@combine null,
+                                                ironwoodBalance = ironwoodBalance,
                                                 isSelected = isSelected,
                                             )
                                         }
@@ -178,7 +181,7 @@ class AccountDataSourceImpl(
                 .getSynchronizer()
                 .importAccountByUfvk(
                     AccountImportSetup(
-                        accountName = context.getString(R.string.keystone_wallet_name),
+                        accountName = context.getString(R.string.accounts_keystone),
                         keySource = KEYSTONE_KEYSOURCE,
                         ufvk = UnifiedFullViewingKey(ufvk),
                         purpose =
@@ -273,7 +276,7 @@ class AccountDataSourceImpl(
                     true
                 }
 
-        return combine(addressFlow, synchronizer.walletBalances) { address, balances ->
+        return combine(addressFlow, synchronizerProvider.walletBalances) { address, balances ->
             val balance = balances?.get(sdkAccount.accountUuid)
             UnifiedInfo(
                 address = address,
@@ -290,7 +293,7 @@ class AccountDataSourceImpl(
                 delay(attempt.coerceAtMost(RETRY_DELAY).seconds)
                 true
             }
-        return combine(transparentAddress, synchronizer.walletBalances) { address, balances ->
+        return combine(transparentAddress, synchronizerProvider.walletBalances) { address, balances ->
             val balance = balances?.get(sdkAccount.accountUuid)
             TransparentInfo(address = address, balance = balance?.unshielded ?: Zatoshi.ZERO)
         }
@@ -307,10 +310,17 @@ class AccountDataSourceImpl(
                     delay(attempt.coerceAtMost(RETRY_DELAY).seconds)
                     true
                 }
-            combine(saplingAddress, synchronizer.walletBalances) { address, balances ->
+            combine(saplingAddress, synchronizerProvider.walletBalances) { address, balances ->
                 val balance = balances?.get(sdkAccount.accountUuid)
                 SaplingInfo(address = address, balance = balance?.sapling ?: createEmptyWalletBalance())
             }
+        }
+
+    // Ironwood shares the same unified address as Orchard (no address of its own to observe) —
+    // just its balance.
+    private fun observeIronwoodBalance(sdkAccount: Account): Flow<WalletBalance> =
+        synchronizerProvider.walletBalances.map { balances ->
+            balances?.get(sdkAccount.accountUuid)?.ironwood ?: createEmptyWalletBalance()
         }
 
     private fun createEmptyWalletBalance() = WalletBalance(Zatoshi.ZERO, Zatoshi.ZERO, Zatoshi.ZERO)

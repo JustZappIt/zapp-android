@@ -2,8 +2,8 @@ package co.electriccoin.zcash.ui.screen.swap.upi.bridge
 
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
+import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
 import co.electriccoin.zcash.ui.design.util.StringResource
-import co.electriccoin.zcash.ui.screen.swap.upi.progress.UpiOfframpStep
 
 internal data class BridgeToBaseState(
     val amountInput: NumberTextFieldState,
@@ -23,7 +23,7 @@ internal data class BridgeToBaseState(
     /** "Adding ≈ ₹Y · X USDC" shown once bridging starts, so the amount is always visible. */
     val bridgingAmountText: StringResource?,
     /** Empty while the user is still entering an amount; the small bridge step list once it starts. */
-    val steps: List<UpiOfframpStep>,
+    val steps: List<ZappStep>,
     val isInputVisible: Boolean,
     val primaryButton: ButtonState,
     val onBack: () -> Unit,

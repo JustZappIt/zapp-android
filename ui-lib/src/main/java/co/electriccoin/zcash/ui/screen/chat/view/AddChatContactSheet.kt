@@ -47,7 +47,6 @@ import co.electriccoin.zcash.ui.design.component.ZashiModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.zapp.ZappInputField
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.getValue
-import co.electriccoin.zcash.ui.screen.addressbook.WalletAddressesSection
 import co.electriccoin.zcash.ui.screen.chat.contacts.AddChatContactState
 
 /**
@@ -215,18 +214,19 @@ internal fun AddChatContactSheet(state: AddChatContactState) {
 
             Spacer(Modifier.height(16.dp))
 
-            // Additional Addresses section
-            WalletAddressesSection(
-                expanded = state.showAdditionalAddresses,
-                onToggle = state.onToggleAdditionalAddresses,
-                transparentAddr = state.transparentAddr,
-                onTransparentChange = state.onTransparentAddrChange,
-                evmAddr = state.evmAddr,
-                onEvmChange = state.onEvmAddrChange,
-                solanaAddr = state.solanaAddr,
-                onSolanaChange = state.onSolanaAddrChange,
-                onScanAddress = state.onScanAddressField,
-            )
+            // DEAD CODE [hidden]: Additional Addresses section — uncomment to restore, plus the
+            // co.electriccoin.zcash.ui.screen.addressbook.WalletAddressesSection import
+            // WalletAddressesSection(
+            //     expanded = state.showAdditionalAddresses,
+            //     onToggle = state.onToggleAdditionalAddresses,
+            //     transparentAddr = state.transparentAddr,
+            //     onTransparentChange = state.onTransparentAddrChange,
+            //     evmAddr = state.evmAddr,
+            //     onEvmChange = state.onEvmAddrChange,
+            //     solanaAddr = state.solanaAddr,
+            //     onSolanaChange = state.onSolanaAddrChange,
+            //     onScanAddress = state.onScanAddressField,
+            // )
 
             Spacer(Modifier.height(20.dp))
 

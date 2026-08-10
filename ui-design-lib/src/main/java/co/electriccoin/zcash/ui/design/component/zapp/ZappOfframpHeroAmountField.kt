@@ -33,6 +33,7 @@ fun ZappOfframpHeroAmountField(
     state: NumberTextFieldState,
     secondaryText: String?,
     modifier: Modifier = Modifier,
+    trailingText: String? = null,
     isError: Boolean = false,
     flag: Painter? = null,
 ) {
@@ -97,6 +98,14 @@ fun ZappOfframpHeroAmountField(
                     )
                 },
             )
+            trailingText?.let { text ->
+                BasicText(
+                    text = text,
+                    style = ZappTheme.typography.caption.copy(color = c.textMuted, textAlign = TextAlign.End),
+                    maxLines = 2,
+                    modifier = Modifier.padding(start = 12.dp),
+                )
+            }
         }
         Box(
             modifier =

@@ -9,6 +9,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import androidx.navigation.toRoute
+import co.electriccoin.zcash.ui.common.migration.MigrationNavContributor
 import co.electriccoin.zcash.ui.common.viewmodel.WalletViewModel
 import co.electriccoin.zcash.ui.screen.about.AboutArgs
 import co.electriccoin.zcash.ui.screen.about.AboutScreen
@@ -24,18 +25,14 @@ import co.electriccoin.zcash.ui.screen.advancedsettings.debug.DebugArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.DebugScreen
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBScreen
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceArgs
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceScreen
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.text.DebugTextArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.text.DebugTextScreen
 import co.electriccoin.zcash.ui.screen.balances.breakdown.BalanceBreakdownArgs
 import co.electriccoin.zcash.ui.screen.balances.breakdown.BalanceBreakdownScreen
 import co.electriccoin.zcash.ui.screen.balances.spendable.SpendableBalanceArgs
 import co.electriccoin.zcash.ui.screen.balances.spendable.SpendableBalanceScreen
-import co.electriccoin.zcash.ui.screen.chat.backgrounddelivery.BackgroundDeliverySettingsArgs
-import co.electriccoin.zcash.ui.screen.chat.backgrounddelivery.BackgroundDeliverySettingsScreen
-import co.electriccoin.zcash.ui.screen.chat.onlinestatus.OnlineStatusSettingsArgs
-import co.electriccoin.zcash.ui.screen.chat.onlinestatus.OnlineStatusSettingsScreen
-import co.electriccoin.zcash.ui.screen.chat.readreceipts.ReadReceiptsSettingsArgs
-import co.electriccoin.zcash.ui.screen.chat.readreceipts.ReadReceiptsSettingsScreen
 import co.electriccoin.zcash.ui.screen.chooseserver.ChooseServerArgs
 import co.electriccoin.zcash.ui.screen.chooseserver.ChooseServerScreen
 import co.electriccoin.zcash.ui.screen.connectkeystone.ConnectKeystoneArgs
@@ -114,6 +111,8 @@ import co.electriccoin.zcash.ui.screen.keepopen.KeepOpenArgs
 import co.electriccoin.zcash.ui.screen.keepopen.KeepOpenScreen
 import co.electriccoin.zcash.ui.screen.more.MoreArgs
 import co.electriccoin.zcash.ui.screen.more.MoreScreen
+import co.electriccoin.zcash.ui.screen.onramp.OnrampArgs
+import co.electriccoin.zcash.ui.screen.onramp.OnrampScreen
 import co.electriccoin.zcash.ui.screen.qrcode.QrCodeScreen
 import co.electriccoin.zcash.ui.screen.receive.ReceiveAddressType
 import co.electriccoin.zcash.ui.screen.receive.ReceiveArgs
@@ -224,6 +223,8 @@ import co.electriccoin.zcash.ui.screen.transactionprogress.TransactionProgressAr
 import co.electriccoin.zcash.ui.screen.transactionprogress.TransactionProgressScreen
 import co.electriccoin.zcash.ui.screen.unifiedsend.UnifiedSendArgs
 import co.electriccoin.zcash.ui.screen.unifiedsend.UnifiedSendScreen
+import co.electriccoin.zcash.ui.screen.viewingkeyexport.ViewingKeyExportArgs
+import co.electriccoin.zcash.ui.screen.viewingkeyexport.ViewingKeyExportScreen
 import co.electriccoin.zcash.ui.screen.walletbackup.AndroidWalletBackup
 import co.electriccoin.zcash.ui.screen.walletbackup.WalletBackup
 import co.electriccoin.zcash.ui.screen.warning.WrapNotEnoughSpace
@@ -271,6 +272,7 @@ fun NavGraphBuilder.walletNavGraph(
         composable<IronwoodAnnouncementArgs> { IronwoodAnnouncementScreen() }
         composable<MoreArgs> { MoreScreen() }
         composable<AdvancedSettingsArgs> { AdvancedSettingsScreen() }
+        composable<ViewingKeyExportArgs> { ViewingKeyExportScreen() }
         composable<ChooseServerArgs> { ChooseServerScreen() }
         composable<P2pTransactionsArgs> { P2pTransactionsScreen() }
         composable<P2pPaymentMethodArgs> { P2pPaymentMethodScreen() }
@@ -355,6 +357,7 @@ fun NavGraphBuilder.walletNavGraph(
         dialogComposable<SwapBlockchainPickerArgs> { SwapBlockchainPickerScreen(it.toRoute()) }
         composable<CurrencyConversionPickerArgs> { CurrencyConversionPickerScreen(it.toRoute()) }
         composable<SwapArgs> { SwapScreen() }
+        composable<OnrampArgs> { OnrampScreen(it.toRoute()) }
         composable<UpiOfframpArgs> {
             val offrampArgs = it.toRoute<UpiOfframpArgs>()
             SwapScreen(
@@ -375,9 +378,6 @@ fun NavGraphBuilder.walletNavGraph(
         composable<AddSwapABContactArgs> { AddSwapABContactScreen(it.toRoute()) }
         composable<AddGenericABContactArgs> { AddGenericABContactScreen(it.toRoute()) }
         composable<UpdateGenericABContactArgs> { UpdateGenericABContactScreen(it.toRoute()) }
-        composable<BackgroundDeliverySettingsArgs> { BackgroundDeliverySettingsScreen() }
-        composable<ReadReceiptsSettingsArgs> { ReadReceiptsSettingsScreen() }
-        composable<OnlineStatusSettingsArgs> { OnlineStatusSettingsScreen() }
         composable<TorSettingsArgs> { TorSettingsScreen() }
         composable<TorOptInArgs> { TorOptInScreen() }
         dialogComposable<ShieldedAddressInfoArgs> { ShieldedAddressInfoScreen() }
@@ -393,6 +393,7 @@ fun NavGraphBuilder.walletNavGraph(
         dialogComposable<EphemeralLockArgs> { EphemeralLockScreen() }
         composable<DebugArgs> { DebugScreen() }
         composable<DebugDBArgs> { DebugDBScreen() }
+        composable<DebugOrchardBalanceArgs> { DebugOrchardBalanceScreen() }
         dialogComposable<DebugTextArgs> { DebugTextScreen(it.toRoute()) }
         composable<ResyncConfirmArgs> { ResyncConfirmScreen() }
         composable<ResyncDateArgs> { ResyncDateScreen(it.toRoute()) }
@@ -406,5 +407,11 @@ fun NavGraphBuilder.walletNavGraph(
 
         // P2P Chat sub-graph — see ChatNavGraph.kt
         chatNavGraph(navigationRouter)
+
+        // Migration destinations are contributed by the feature-migration module — see
+        // MigrationNavContributor in MigrationContracts.kt (wired via Koin in the app module).
+        org.koin.mp.KoinPlatform.getKoin().getAll<MigrationNavContributor>().forEach {
+            it.contribute(this)
+        }
     }
 }

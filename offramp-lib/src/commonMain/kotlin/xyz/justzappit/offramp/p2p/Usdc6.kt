@@ -10,7 +10,6 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlin.jvm.JvmInline
 import xyz.justzappit.evm.math.BigDecimal
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.math.DecimalRounding
@@ -25,6 +24,7 @@ import xyz.justzappit.evm.math.decimalToBigInteger
 import xyz.justzappit.evm.math.decimalToPlainString
 import xyz.justzappit.evm.math.minus
 import xyz.justzappit.evm.math.plus
+import kotlin.jvm.JvmInline
 
 /**
  * A 6-decimal token amount, stored in micro-units (1 USDC = 1_000_000 micro-USDC). Used for both
@@ -52,6 +52,14 @@ value class Usdc6(
         } else {
             decimalToPlainString(whole)
         }
+
+    /**
+     * Display string for a fiat amount this happens to carry. No payment rail can charge the six
+     * decimals held here, so every fiat surface must quantise to the currency's own precision or
+     * the app shows an amount the user cannot actually send.
+     */
+    fun toFiatString(currency: CurrencyCode): String =
+        decimalToPlainString(decimalSetScale(whole, currency.precision, DecimalRounding.HALF_UP))
 
     operator fun plus(other: Usdc6): Usdc6 = Usdc6(micros + other.micros)
 

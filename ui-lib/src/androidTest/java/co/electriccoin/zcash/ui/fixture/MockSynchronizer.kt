@@ -143,6 +143,8 @@ internal class MockSynchronizer : CloseableSynchronizer {
         error("Intentionally not implemented in ${MockSynchronizer::class.simpleName} implementation.")
     }
 
+    override suspend fun getRecipients(): Map<TransactionId, List<TransactionRecipient>> = emptyMap()
+
     override suspend fun getSaplingAddress(account: Account): String {
         error("Intentionally not implemented in ${MockSynchronizer::class.simpleName} implementation.")
     }
@@ -252,6 +254,8 @@ internal class MockSynchronizer : CloseableSynchronizer {
         error("Intentionally not implemented in ${MockSynchronizer::class.simpleName} implementation.")
     }
 
+    override suspend fun getTransactionOutputs(): Map<TransactionId, List<TransactionOutput>> = emptyMap()
+
     override suspend fun getTransactions(accountUuid: AccountUuid): Flow<List<TransactionOverview>> {
         error("Intentionally not implemented in ${MockSynchronizer::class.simpleName} implementation.")
     }
@@ -306,6 +310,10 @@ internal class MockSynchronizer : CloseableSynchronizer {
     override fun onForeground() {
         error("Intentionally not implemented in ${MockSynchronizer::class.simpleName} implementation.")
     }
+
+    override fun pause() = Unit
+
+    override fun resume() = Unit
 
     override suspend fun getTorHttpClient(config: HttpClientConfig<HttpClientEngineConfig>.() -> Unit): HttpClient {
         error("Intentionally not implemented in ${MockSynchronizer::class.simpleName} implementation.")

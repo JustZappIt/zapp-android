@@ -96,34 +96,34 @@
     <string name="chat_room_delivery_sending">Sending</string>
 
     <!-- Chat profile screen -->
-    <string name="chat_profile_title">Profile &amp; Identity</string>
-    <string name="chat_profile_unknown_name">Unknown</string>
-    <string name="chat_profile_public_key_label">Public Key</string>
-    <string name="chat_profile_qr_caption">Scan to start a conversation</string>
-    <string name="chat_profile_tab_messaging_id">Messaging ID</string>
-    <string name="chat_profile_tab_wallet_address">Wallet Address</string>
-    <string name="chat_profile_subtab_shielded">Shielded</string>
-    <string name="chat_profile_subtab_transparent">Transparent</string>
-    <string name="chat_profile_address_shielded_label">Shielded Address</string>
-    <string name="chat_profile_address_transparent_label">Transparent Address</string>
-    <string name="chat_profile_address_shielded_caption">Shielded address · private by default</string>
-    <string name="chat_profile_address_transparent_caption">Transparent address · visible on chain</string>
-    <string name="chat_profile_address_base_label">Base Wallet</string>
+    <string name="chat_profile_title">Profile &amp; identity</string>
+    <string name="chat_profile_public_key_label">Public key</string>
+    <string name="chat_profile_group_identity">Identity</string>
+    <string name="chat_profile_group_danger_zone">Danger zone</string>
+    <string name="chat_profile_delete_identity_title">Delete identity</string>
+    <string name="chat_profile_delete_identity_subtitle">Removes your messaging identity and chat history from this device</string>
+    <string name="chat_wallet_address_title">Wallet address</string>
+    <string name="chat_wallet_address_subtitle">Shielded, transparent and Base addresses</string>
+    <string name="chat_wallet_address_qr_content_description">Open the address QR code</string>
+    <string name="chat_wallet_address_copy">Copy address</string>
+    <string name="chat_profile_address_shielded_label">Shielded address</string>
+    <string name="chat_profile_address_transparent_label">Transparent address</string>
+    <string name="chat_profile_address_shielded_caption">Private by default. Share this to receive shielded ZEC.</string>
+    <string name="chat_profile_address_transparent_caption">Visible on chain. Use it only when a service needs it.</string>
+    <string name="chat_profile_address_base_label">Base account</string>
+    <string name="chat_profile_address_base_caption">Where your P2P cash-out settles, on Base.</string>
 
     <!-- Chat profile — seed phrase row -->
-    <string name="chat_profile_seed_phrase_title">Seed Phrase</string>
+    <string name="chat_profile_seed_phrase_title">Seed phrase</string>
     <string name="chat_profile_seed_phrase_subtitle">Backs up both messaging &amp; wallet identities</string>
 
     <!-- Chat profile — accessibility / content descriptions -->
-    <string name="chat_profile_back_content_description">Go back</string>
     <string name="chat_profile_edit_display_name_content_description">Edit display name</string>
-    <string name="chat_profile_delete_identity_content_description">Delete Identity</string>
     <string name="chat_profile_copy_public_key_content_description">Copy public key</string>
     <string name="chat_profile_copy_address_content_description">Copy address</string>
     <string name="chat_profile_copied_content_description">Copied</string>
 
     <!-- Chat profile — bottom dock -->
-    <string name="chat_profile_delete_button">DELETE IDENTITY</string>
 
     <!-- Chat profile — edit display name dialog -->
     <string name="chat_profile_edit_name_title">Edit display name</string>
@@ -139,39 +139,36 @@
     <string name="chat_profile_delete_dialog_cancel">Cancel</string>
 
     <!-- Chat profile — seed phrase reveal dialog -->
-    <string name="chat_profile_seed_phrase_dialog_title">Seed Phrase</string>
+    <string name="chat_profile_seed_phrase_dialog_title">Seed phrase</string>
     <string name="chat_profile_seed_phrase_dialog_message">Keep this safe. Anyone with these words can access your wallet and messages.</string>
     <string name="chat_profile_seed_phrase_dialog_done">Done</string>
     <string name="chat_profile_seed_phrase_biometric_prompt">View your seed phrase</string>
 
     <!-- Chat profile — P2P wallet key row & reveal dialog -->
-    <string name="chat_profile_p2p_key_title">P2P Wallet Key</string>
+    <string name="chat_profile_p2p_key_title">P2P wallet key</string>
     <string name="chat_profile_p2p_key_subtitle">Key for your P2P cash-out account, derived from your seed</string>
     <string name="chat_profile_p2p_key_biometric_prompt">View your P2P wallet key</string>
-    <string name="chat_profile_p2p_key_dialog_title">P2P Wallet Key</string>
-    <string name="chat_profile_p2p_key_dialog_message">Derived from your seed phrase. This key controls your P2P cash-out account: anyone with it can spend those funds.</string>
-    <string name="chat_profile_p2p_key_address_label">Owner Address</string>
-    <string name="chat_profile_p2p_key_private_key_label">Private Key</string>
-    <string name="chat_profile_p2p_key_copy">Copy</string>
-    <string name="chat_profile_p2p_key_dialog_done">Done</string>
+    <string name="chat_p2p_key_title">P2P wallet key</string>
+    <string name="chat_p2p_key_info_content_description">How the P2P key works</string>
+    <string name="chat_p2p_key_info_title">About your P2P key</string>
+    <string name="chat_p2p_key_info_derivation">This key is derived from your seed phrase on its own path. It is not your Zcash spending key and it cannot touch your ZEC. Losing the app never loses it: the same seed always re-derives the same key.</string>
+    <string name="chat_p2p_key_info_smart_account">It owns a smart account. The address your cash-outs settle through is a contract account on Base that this key controls, which is what lets Zapp sponsor the network fees so you never hold gas.</string>
+    <string name="chat_p2p_key_info_safety">Anyone holding the private key controls that account and the funds sitting in it. Export it only if you need to move those funds with another wallet.</string>
+    <string name="chat_p2p_key_smart_account_label">Smart account</string>
+    <string name="chat_p2p_key_smart_account_caption">The Base account your P2P cash-outs settle through. Safe to share.</string>
+    <string name="chat_p2p_key_owner_label">Owner key</string>
+    <string name="chat_p2p_key_owner_locked_body">The private key that controls the smart account. Revealing it asks for your app lock first.</string>
+    <string name="chat_p2p_key_reveal">Reveal owner key</string>
+    <string name="chat_p2p_key_owner_address_label">Owner address</string>
+    <string name="chat_p2p_key_owner_address_caption">The address derived from the owner key. Safe to share.</string>
+    <string name="chat_p2p_key_private_key_label">Private key</string>
+    <string name="chat_p2p_key_private_key_caption">Never share this. Anyone with it can spend everything in the smart account.</string>
+    <string name="chat_p2p_key_copy_content_description">Copy</string>
 
     <!-- Chat settings screen -->
-    <string name="chat_settings_title">Chat Settings</string>
-    <string name="chat_settings_delete_button">Delete Identity</string>
-    <string name="chat_settings_section_identity">Identity</string>
-    <string name="chat_settings_section_account">Account</string>
+    <string name="chat_settings_title">Chat settings</string>
     <string name="chat_settings_section_network">Network</string>
-    <string name="chat_settings_row_profile">Profile</string>
-    <string name="chat_settings_row_profile_subtitle">View identity details</string>
-    <string name="chat_settings_row_contacts">Contacts</string>
-    <string name="chat_settings_row_contacts_subtitle">Manage your contacts</string>
-    <string name="chat_settings_label_connection">Connection</string>
-    <string name="chat_settings_label_dht_health">DHT Health</string>
     <string name="chat_settings_label_peers">Peers</string>
-    <string name="chat_settings_label_protocol">Protocol</string>
-    <string name="chat_settings_label_encryption">Encryption</string>
-    <string name="chat_settings_protocol_value">Hyperswarm DHT</string>
-    <string name="chat_settings_encryption_value">Ed25519 + Noise</string>
     <string name="chat_settings_connection_connected">Connected</string>
     <string name="chat_settings_connection_connecting">Connecting</string>
     <string name="chat_settings_connection_disconnected">Disconnected</string>
@@ -179,69 +176,23 @@
     <string name="chat_settings_dht_healthy">Healthy</string>
     <string name="chat_settings_dht_degraded">Degraded</string>
     <string name="chat_settings_dht_critical">Critical</string>
-    <string name="chat_settings_edit_name_content_description">Edit name</string>
-    <string name="chat_settings_copy_content_description">Copy</string>
-    <string name="chat_settings_edit_name_dialog_title">Edit Display Name</string>
-    <string name="chat_settings_edit_name_dialog_placeholder">Display name</string>
-    <string name="chat_settings_edit_name_dialog_save">Save</string>
-    <string name="chat_settings_edit_name_dialog_cancel">Cancel</string>
-    <string name="chat_settings_delete_dialog_title">Delete Identity</string>
-    <string name="chat_settings_delete_dialog_message">This will permanently remove your messaging identity. Back up your seed phrase first.</string>
-    <string name="chat_settings_delete_dialog_confirm">Delete</string>
-    <string name="chat_settings_delete_dialog_cancel">Cancel</string>
-    <string name="chat_settings_section_notifications">Notifications</string>
-    <string name="chat_settings_notifications_toggle_title">Message notifications</string>
-    <string name="chat_settings_notifications_toggle_subtitle">Get notified when you receive a new message</string>
     <string name="chat_settings_background_push_toggle_title">Background delivery</string>
-    <string name="chat_settings_background_push_toggle_subtitle">Opt in to the persistent no-Google listener</string>
+    <string name="chat_settings_background_push_toggle_subtitle">Wake Zapp to check for waiting messages</string>
     <string name="chat_settings_section_privacy">Privacy</string>
     <string name="chat_settings_read_receipts_toggle_title">Read receipts</string>
-    <string name="chat_settings_read_receipts_toggle_subtitle">Show a double tick when your messages are read. Turn off to also stop seeing when others read yours.</string>
-    <string name="read_receipts_settings_row_subtitle">Control sent and read indicators for chats</string>
-    <string name="read_receipts_settings_title">Read receipts</string>
-    <string name="read_receipts_settings_intro">Read receipts let a chat show when a message has been opened. They are optional and only show read status when both sides allow them.</string>
-    <string name="read_receipts_settings_on_title">When this is on</string>
-    <string name="read_receipts_settings_on_body">When you open a conversation, Zapp can send a small read signal for messages you received. Your outgoing messages can also show a close double tick after the other app confirms they were read.</string>
-    <string name="read_receipts_settings_off_title">When this is off</string>
-    <string name="read_receipts_settings_off_body">Zapp will not send read signals when you open messages, and it will not show read status from other people. Messages stay at sent instead of read.</string>
-    <string name="read_receipts_settings_both_sides_title">If the other person has it off</string>
-    <string name="read_receipts_settings_both_sides_body">Double ticks require both sides to allow read receipts. If either person turns them off, that chat behaves like sent-only status.</string>
-    <string name="read_receipts_settings_section_control">Control</string>
-    <string name="read_receipts_settings_toggle_title">Allow read receipts</string>
-    <string name="read_receipts_settings_toggle_subtitle">Send and show read status when both sides allow it</string>
-    <string name="read_receipts_settings_save">Save</string>
+    <string name="chat_settings_read_receipts_toggle_subtitle">Send and show read status</string>
     <string name="chat_settings_online_status_toggle_title">Online status</string>
-    <string name="online_status_settings_row_subtitle">Choose whether people see when you\'re online</string>
-    <string name="online_status_settings_title">Online status</string>
-    <string name="online_status_settings_intro">Your online status lets the people you chat with see when you\'re connected. It\'s optional, and it works both ways.</string>
-    <string name="online_status_settings_on_title">When this is on</string>
-    <string name="online_status_settings_on_body">People you have a direct chat with can see a small dot when you\'re connected, and you can see the same for them.</string>
-    <string name="online_status_settings_off_title">When this is off</string>
-    <string name="online_status_settings_off_body">People stop seeing when you\'re online, and Zapp also stops showing you when they\'re online. Your messages still send and arrive as usual.</string>
-    <string name="online_status_settings_reciprocal_title">It works both ways</string>
-    <string name="online_status_settings_reciprocal_body">Hiding your online status also hides everyone else\'s from you. Turn it back on to see and be seen again.</string>
-    <string name="online_status_settings_section_control">Control</string>
-    <string name="online_status_settings_toggle_title">Show my online status</string>
-    <string name="online_status_settings_toggle_subtitle">Let people you chat with see when you\'re connected</string>
-    <string name="online_status_settings_save">Save</string>
+    <string name="chat_settings_online_status_toggle_subtitle">Let people see when you\'re connected</string>
+    <string name="chat_settings_privacy_footer">Both work in both directions. Turning one off also hides other people\'s read status and online dots from you.</string>
+    <string name="chat_settings_section_delivery">Delivery</string>
+    <string name="chat_settings_delivery_footer">Keeps a no-Google listener running while Zapp is closed, with a permanent notification and more battery use. The signal only wakes Zapp; messages stay encrypted.</string>
+    <string name="chat_settings_save">Save</string>
     <string name="chat_message_status_sending">Sending</string>
     <string name="chat_message_status_queued">Waiting for recipient to sync</string>
     <string name="chat_message_status_sent">Sent, awaiting delivery</string>
     <string name="chat_message_status_delivered">Delivered</string>
     <string name="chat_message_status_read">Read</string>
     <string name="chat_message_status_failed">Failed to send</string>
-    <string name="background_delivery_settings_title">Background delivery</string>
-    <string name="background_delivery_settings_intro">FOSS background delivery keeps an explicit no-Google listener running while Zapp is closed.</string>
-    <string name="background_delivery_settings_delivery_title">When this is off</string>
-    <string name="background_delivery_settings_delivery_body">Zapp stops the listener. Messages remain encrypted and synchronize the next time you open the app.</string>
-    <string name="background_delivery_settings_battery_title">When this is on</string>
-    <string name="background_delivery_settings_battery_body">Android shows a permanent “Zapp is running” notification and keeps an ntfy connection open. This uses more battery than checking only when the app is open.</string>
-    <string name="background_delivery_settings_privacy_title">What the delivery signal contains</string>
-    <string name="background_delivery_settings_privacy_body">The signal only tells Zapp to wake up and check for messages. Message contents stay encrypted and are fetched by your app after it wakes.</string>
-    <string name="background_delivery_settings_section_control">Control</string>
-    <string name="background_delivery_settings_toggle_title">Allow background delivery</string>
-    <string name="background_delivery_settings_toggle_subtitle">Wake Zapp to check for waiting messages</string>
-    <string name="background_delivery_settings_save">Save</string>
 
     <!-- Chat notifications -->
     <string name="chat_notifications_channel_name">Messages</string>
@@ -378,6 +329,9 @@
     <string name="chat_contact_add_messaging_key_placeholder">Messaging Key (64 hex chars)</string>
     <string name="chat_contact_scan_messaging_key_content_description">Scan messaging key QR</string>
     <string name="chat_contact_scan_wallet_address_content_description">Scan wallet address QR</string>
+    <string name="chat_contact_copy_name_content_description">Copy contact name</string>
+    <string name="chat_contact_copy_messaging_key_content_description">Copy messaging key</string>
+    <string name="chat_contact_copy_wallet_address_content_description">Copy wallet address</string>
     <string name="chat_contact_add_save_content_description">Add Contact</string>
     <string name="chat_contact_add_save_button">SAVE</string>
 

@@ -5,18 +5,19 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.migration.MigrationHomeMessageSource
 import co.electriccoin.zcash.ui.common.provider.ShieldFundsInfoProvider
 import co.electriccoin.zcash.ui.common.repository.HomeMessageData
+import co.electriccoin.zcash.ui.common.repository.MigrationHomeMessage
 import co.electriccoin.zcash.ui.common.usecase.GetHomeMessageUseCase
 import co.electriccoin.zcash.ui.common.usecase.IsRestoreSuccessDialogVisibleUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToNearPayUseCase
+import co.electriccoin.zcash.ui.common.usecase.NavigateToOnrampUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToPayMerchantUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToReceiveUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToSwapUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShieldFundsFromMessageUseCase
 import co.electriccoin.zcash.ui.design.component.BigIconButtonState
-import co.electriccoin.zcash.ui.design.util.TickerLocation.HIDDEN
-import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.error.ErrorArgs
 import co.electriccoin.zcash.ui.screen.error.NavigateToErrorUseCase
@@ -34,7 +35,6 @@ import co.electriccoin.zcash.ui.screen.home.restoring.WalletRestoringInfo
 import co.electriccoin.zcash.ui.screen.home.restoring.WalletRestoringMessageState
 import co.electriccoin.zcash.ui.screen.home.resyncing.WalletResyncingInfo
 import co.electriccoin.zcash.ui.screen.home.resyncing.WalletResyncingMessageState
-import co.electriccoin.zcash.ui.screen.home.shieldfunds.ShieldFundsMessageState
 import co.electriccoin.zcash.ui.screen.home.syncing.WalletSyncingInfo
 import co.electriccoin.zcash.ui.screen.home.syncing.WalletSyncingMessageState
 import co.electriccoin.zcash.ui.screen.home.tor.EnableTorMessageState
@@ -69,11 +69,20 @@ class HomeVM(
     private val navigateToError: NavigateToErrorUseCase,
     private val navigateToReceive: NavigateToReceiveUseCase,
     private val navigateToNearPay: NavigateToNearPayUseCase,
+    private val navigateToOnramp: NavigateToOnrampUseCase,
     private val navigateToPayMerchant: NavigateToPayMerchantUseCase,
     private val navigateToSwap: NavigateToSwapUseCase,
+    private val migrationHomeMessageSource: MigrationHomeMessageSource,
+    private val homeMessageMapper: HomeMessageMapper,
 ) : ViewModel() {
     private var hasSyncErrorBeenShown = false
     private var hasRestoreSuccessBeenShown = false
+
+    // NOTE: no checkMigrationRecovery() here. HomeVM is lazily created on Home's FIRST
+    // composition — with replaceAll(Home, Progress) that moment is exactly when the user backs
+    // out of the Progress screen, so an init-time recovery check re-redirected them straight
+    // back (visible as "back closes Progress and it immediately reopens", plus stacked Home
+    // entries). MainActivity.onStart and RootNavGraph's unlock redirect cover the real cases.
 
     private val messageData =
         getHomeMessage
@@ -107,11 +116,8 @@ class HomeVM(
 
     val state: StateFlow<HomeState?> =
         messageState
-            .map { messageState ->
-                createState(
-                    messageState = messageState
-                )
-            }.stateIn(
+            .map { createState(it) }
+            .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
                 initialValue = null
@@ -146,29 +152,31 @@ class HomeVM(
 
     private var onSwapButtonClick: Job? = null
 
+    private var onBuyUsdcClickJob: Job? = null
+
     private fun createState(messageState: HomeMessageState?) =
         HomeState(
             firstButton =
                 BigIconButtonState(
-                    text = stringRes(R.string.home_button_receive),
+                    text = stringRes(R.string.tabs_receive),
                     icon = R.drawable.ic_home_receive,
                     onClick = ::onReceiveButtonClick,
                 ),
             secondButton =
                 BigIconButtonState(
-                    text = stringRes(R.string.home_button_send),
+                    text = stringRes(R.string.tabs_send),
                     icon = R.drawable.ic_home_send,
                     onClick = ::onSendButtonClick,
                 ),
             thirdButton =
                 BigIconButtonState(
-                    text = stringRes(R.string.home_button_pay),
+                    text = stringRes(R.string.crosspay_pay),
                     icon = R.drawable.ic_home_pay,
                     onClick = ::onPayButtonClick,
                 ),
             fourthButton =
                 BigIconButtonState(
-                    text = stringRes(R.string.home_button_swap),
+                    text = stringRes(R.string.swapAndPay_swap),
                     icon = R.drawable.ic_home_swap,
                     onClick = ::onSwapButtonClick,
                 ),
@@ -238,19 +246,10 @@ class HomeVM(
             }
 
             is HomeMessageData.ShieldFunds -> {
-                ShieldFundsMessageState(
-                    subtitle =
-                        stringRes(
-                            R.string.home_message_transparent_balance_subtitle,
-                            stringRes(data.zatoshi, HIDDEN).asPrivacySensitive(),
-                            CURRENCY_TICKER
-                        ),
-                    onClick =
-                        if (isShieldFundsInfoEnabled) {
-                            { onShieldFundsMessageClick() }
-                        } else {
-                            null
-                        },
+                homeMessageMapper.createState(
+                    data = data,
+                    isShieldFundsInfoEnabled = isShieldFundsInfoEnabled,
+                    onClick = ::onShieldFundsMessageClick,
                     onButtonClick = ::onShieldFundsMessageButtonClick,
                 )
             }
@@ -266,6 +265,10 @@ class HomeVM(
                     onClick = ::onCrashReportMessageClick,
                     onButtonClick = ::onCrashReportMessageClick
                 )
+            }
+
+            is MigrationHomeMessage -> {
+                migrationHomeMessageSource.createMessageState(data)
             }
 
             null -> {
@@ -293,6 +296,11 @@ class HomeVM(
 
     fun onSwapClick() = onSwapButtonClick()
 
+    fun onBuyUsdcClick() {
+        if (onBuyUsdcClickJob?.isActive == true) return
+        onBuyUsdcClickJob = viewModelScope.launch { navigateToOnramp() }
+    }
+
     private fun onPayButtonClick() {
         if (onPayButtonClickJob?.isActive == true) return
         onPayButtonClickJob = viewModelScope.launch { navigateToNearPay() }
@@ -310,15 +318,18 @@ class HomeVM(
 
     private fun onEnableCurrencyConversionClick() = navigationRouter.forward(ExchangeRateOptInArgs)
 
-    private fun onWalletDisconnectedMessageClick() = navigationRouter.forward(WalletDisconnectedInfo)
+    private fun onWalletDisconnectedMessageClick() =
+        navigationRouter.forward(WalletDisconnectedInfo)
 
     private fun onWalletBackupMessageClick() = navigationRouter.forward(SeedBackupInfo)
 
-    private fun onWalletBackupMessageButtonClick() = navigationRouter.forward(WalletBackupDetail(false))
+    private fun onWalletBackupMessageButtonClick() =
+        navigationRouter.forward(WalletBackupDetail(false))
 
     private fun onShieldFundsMessageClick() = viewModelScope.launch { shieldFundsFromMessage() }
 
-    private fun onShieldFundsMessageButtonClick() = viewModelScope.launch { shieldFundsFromMessage() }
+    private fun onShieldFundsMessageButtonClick() =
+        viewModelScope.launch { shieldFundsFromMessage() }
 
     private fun onWalletErrorMessageClick(homeMessageData: HomeMessageData.Error) =
         navigateToError(ErrorArgs.SyncError(homeMessageData.synchronizerError))

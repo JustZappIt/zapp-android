@@ -24,6 +24,8 @@
     <string name="settings_contacts_subtitle">Kelola kontak obrolan Anda</string>
     <string name="settings_profile_identity_title">Profil &amp; identitas</string>
     <string name="settings_profile_identity_subtitle">Frasa pemulihan, kunci pesan, alamat dompet</string>
+    <string name="settings_profile_copy_key">Salin kunci</string>
+    <string name="settings_chat_settings_subtitle">Tanda dibaca, status online, pengiriman</string>
     <string name="settings_app_lock_title">Kunci aplikasi</string>
     <string name="settings_app_lock_subtitle">Ubah PIN atau ganti metode autentikasi</string>
     <string name="settings_tor_title">Tor</string>

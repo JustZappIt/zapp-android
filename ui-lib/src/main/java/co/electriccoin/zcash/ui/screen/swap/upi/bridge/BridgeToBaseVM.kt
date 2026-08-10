@@ -20,11 +20,11 @@ import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationState
+import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
+import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.ellipsizeMiddle
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.screen.swap.upi.progress.UpiOfframpStep
-import co.electriccoin.zcash.ui.screen.swap.upi.progress.UpiOfframpStepStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -509,7 +509,7 @@ internal class BridgeToBaseVM(
             }
         }
 
-    private fun stepsFor(currentPhase: Phase): List<UpiOfframpStep> =
+    private fun stepsFor(currentPhase: Phase): List<ZappStep> =
         when (currentPhase) {
             Phase.Input -> {
                 emptyList()
@@ -517,9 +517,9 @@ internal class BridgeToBaseVM(
 
             is Phase.Bridging -> {
                 listOf(
-                    UpiOfframpStep(
+                    ZappStep(
                         label = stringRes(R.string.bridge_to_base_step_bridging),
-                        status = UpiOfframpStepStatus.InProgress,
+                        status = ZappStepStatus.InProgress,
                         detailLines =
                             currentPhase.depositAddress
                                 ?.let {
@@ -531,23 +531,23 @@ internal class BridgeToBaseVM(
                                     )
                                 }.orEmpty(),
                     ),
-                    UpiOfframpStep(
+                    ZappStep(
                         label = stringRes(R.string.bridge_to_base_step_arrived),
-                        status = UpiOfframpStepStatus.Pending,
+                        status = ZappStepStatus.Pending,
                     ),
                 )
             }
 
             is Phase.Complete -> {
                 listOf(
-                    UpiOfframpStep(stringRes(R.string.bridge_to_base_step_bridging), UpiOfframpStepStatus.Completed),
-                    UpiOfframpStep(stringRes(R.string.bridge_to_base_step_arrived), UpiOfframpStepStatus.Completed),
+                    ZappStep(stringRes(R.string.bridge_to_base_step_bridging), ZappStepStatus.Completed),
+                    ZappStep(stringRes(R.string.bridge_to_base_step_arrived), ZappStepStatus.Completed),
                 )
             }
 
             is Phase.Failed -> {
                 listOf(
-                    UpiOfframpStep(stringRes(R.string.bridge_to_base_step_bridging), UpiOfframpStepStatus.Failed),
+                    ZappStep(stringRes(R.string.bridge_to_base_step_bridging), ZappStepStatus.Failed),
                 )
             }
         }

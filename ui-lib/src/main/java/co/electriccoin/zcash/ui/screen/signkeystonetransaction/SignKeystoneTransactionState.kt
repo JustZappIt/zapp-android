@@ -13,6 +13,10 @@ data class SignKeystoneTransactionState(
     val shareButton: ButtonState?,
     val positiveButton: ButtonState,
     val negativeButton: ButtonState,
+    // Null keeps the screen's own send-flow copy. The Ironwood migration overrides them so a
+    // multi-round batch can say which round is on screen ("(1 of 2)"), which the fixed copy can't.
+    val title: StringResource? = null,
+    val subtitle: StringResource? = null,
 ) {
     fun toQrState(
         contentDescription: StringResource? = null,

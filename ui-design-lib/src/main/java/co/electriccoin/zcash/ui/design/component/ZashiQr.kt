@@ -5,10 +5,14 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,7 +55,8 @@ fun ZashiQr(
     modifier: Modifier = Modifier,
     qrSize: Dp = ZashiQrDefaults.width,
     colors: QrCodeColors = QrCodeDefaults.colors(),
-    contentPadding: PaddingValues = QrCodeDefaults.contentPadding()
+    contentPadding: PaddingValues = QrCodeDefaults.contentPadding(),
+    fullscreenAction: (@Composable () -> Unit)? = null
 ) {
     var isFullscreenDialogVisible by remember { mutableStateOf(false) }
 
@@ -92,6 +97,7 @@ fun ZashiQr(
                 FullscreenDialogContent(
                     state = state,
                     onBack = { isFullscreenDialogVisible = false },
+                    action = fullscreenAction,
                 )
             }
         }
@@ -155,10 +161,11 @@ private fun ZashiQrInternal(
 @Composable
 private fun FullscreenDialogContent(
     state: QrState,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    action: (@Composable () -> Unit)?
 ) {
     val containerWidth = LocalWindowInfo.current.containerSize.widthDp
-    Box(
+    Column(
         modifier =
             Modifier
                 .fillMaxSize()
@@ -166,13 +173,12 @@ private fun FullscreenDialogContent(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = onBack
-                ).padding(start = 16.dp, end = 16.dp, bottom = 64.dp)
+                ).padding(start = 16.dp, end = 16.dp, bottom = 64.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         ZashiQrInternal(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.Center),
+            modifier = Modifier.fillMaxWidth(),
             state = state,
             contentPadding = PaddingValues(6.dp),
             colors = QrCodeDefaults.colors(border = Color.Unspecified),
@@ -180,6 +186,11 @@ private fun FullscreenDialogContent(
             enableBitmapReload = true,
             centerImage = state.centerImage,
         )
+
+        if (action != null) {
+            Spacer(Modifier.height(16.dp))
+            action()
+        }
     }
 }
 

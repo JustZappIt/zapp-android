@@ -48,6 +48,9 @@ crashes in the biometric gate on emulators. `adb shell pm clear <package>` recov
 - Detekt (`tools/detekt.yml`): `LongMethod`/`LongParameterList` are DISABLED, never add
   `@Suppress` for them. Bare `TODO`/`FIXME` comments fail `ForbiddenComment`; write
   `TODO [#123]: …`. Kotlin warnings are errors (`ZCASH_IS_TREAT_WARNINGS_AS_ERRORS=true`).
+- Exception: files intentionally copied byte-identical from a pinned upstream release keep
+  upstream's comments and suppressions unchanged. Baseline any resulting fork-policy findings
+  instead of editing the copied file; record the upstream tag in the syncing PR.
 - Instrumented/UI tests run only in CI (emulator.wtf / Firebase Test Lab, secret-gated).
 
 ## Do not commit

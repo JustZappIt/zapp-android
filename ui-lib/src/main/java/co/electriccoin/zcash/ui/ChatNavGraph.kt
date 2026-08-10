@@ -19,8 +19,12 @@ import co.electriccoin.zcash.ui.screen.chat.ChatSettingsArgs
 import co.electriccoin.zcash.ui.screen.chat.NewConversationArgs
 import co.electriccoin.zcash.ui.screen.chat.SupportChatArgs
 import co.electriccoin.zcash.ui.screen.chat.SupportTicketListArgs
+import co.electriccoin.zcash.ui.screen.chat.p2pkey.ChatP2pKeyArgs
+import co.electriccoin.zcash.ui.screen.chat.p2pkey.ChatP2pKeyScreen
 import co.electriccoin.zcash.ui.screen.chat.scan.ChatScanPublicKeyArgs
 import co.electriccoin.zcash.ui.screen.chat.scan.ChatScanPublicKeyScreen
+import co.electriccoin.zcash.ui.screen.chat.walletaddress.ChatWalletAddressArgs
+import co.electriccoin.zcash.ui.screen.chat.walletaddress.ChatWalletAddressScreen
 
 /**
  * Registers the P2P chat (Zapp Messaging) screens.
@@ -50,6 +54,12 @@ fun NavGraphBuilder.chatNavGraph(navigationRouter: NavigationRouter) {
     }
     composable<ChatSettingsArgs> {
         AndroidChatSettings()
+    }
+    composable<ChatWalletAddressArgs> {
+        ChatWalletAddressScreen()
+    }
+    composable<ChatP2pKeyArgs> {
+        ChatP2pKeyScreen()
     }
     composable<ChatScanPublicKeyArgs> { backStackEntry ->
         ChatScanPublicKeyScreen(args = backStackEntry.toRoute())

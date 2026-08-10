@@ -284,6 +284,7 @@ dependencyResolutionManagement {
             library("mlkit-scanning", "com.google.mlkit:barcode-scanning:$mlkitScanningVersion")
             library("tink", "com.google.crypto.tink:tink-android:$tinkVersion")
             library("zcash-sdk", "cash.z.ecc.android:zcash-android-sdk:$zcashSdkVersion")
+            library("zcash-sdk-backend", "cash.z.ecc.android:zcash-android-backend:$zcashSdkVersion")
             library("zcash-sdk-incubator", "cash.z.ecc.android:zcash-android-sdk-incubator:$zcashSdkVersion")
             library("zcash-bip39", "cash.z.ecc.android:kotlin-bip39:$zcashBip39Version")
             library("zip321", "org.zecdev:zip321:$zip321Version")
@@ -401,6 +402,7 @@ include("configuration-api-lib")
 include("configuration-impl-android-lib")
 include("crash-lib")
 include("crash-android-lib")
+include("feature-migration")
 include("preference-api-lib")
 include("preference-impl-android-lib")
 include("sdk-ext-lib")
@@ -436,6 +438,7 @@ if (zcashSdkIncludedBuildPath.isNotEmpty() && file(zcashSdkIncludedBuildPath).ex
     includeBuild(zcashSdkIncludedBuildPath) {
         dependencySubstitution {
             substitute(module("cash.z.ecc.android:zcash-android-sdk")).using(project(":sdk-lib"))
+            substitute(module("cash.z.ecc.android:zcash-android-backend")).using(project(":backend-lib"))
             substitute(module("cash.z.ecc.android:zcash-android-sdk-incubator")).using(project(":sdk-incubator-lib"))
         }
     }

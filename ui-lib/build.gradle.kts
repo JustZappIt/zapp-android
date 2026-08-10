@@ -25,6 +25,13 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        // Android SDK stubs (e.g. android.util.Log, used by Twig) throw by default under plain
+        // JVM unit tests instead of no-oping — needed so ViewModel logging doesn't crash tests
+        // that don't otherwise touch Android framework classes.
+        unitTests.isReturnDefaultValues = true
+    }
+
     composeOptions {
         kotlinCompilerExtensionVersion = libs.androidx.compose.compiler.get().versionConstraint.displayName
     }
@@ -59,6 +66,7 @@ android {
                     "src/main/res/ui/ironwood",
                     "src/main/res/ui/keep_open",
                     "src/main/res/ui/onboarding",
+                    "src/main/res/ui/onramp",
                     "src/main/res/ui/pay",
                     "src/main/res/ui/payment_request",
                     "src/main/res/ui/qr_code",
@@ -97,6 +105,7 @@ android {
                     "src/main/res/ui/top_up",
                     "src/main/res/ui/offramp",
                     "src/main/res/ui/unified_send",
+                    "src/main/res/ui/viewing_key_export",
                 )
             )
         }
@@ -183,6 +192,22 @@ androidComponents {
                 type = "String",
                 value = "\"${project.property("P2P_NETWORK")?.toString().orEmpty()}\"",
                 comment = "UPI offramp p2p.me network: 'sepolia' or 'mainnet'"
+            )
+        )
+        variant.buildConfigFields?.put(
+            "P2P_ONRAMP_BASE_URL",
+            BuildConfigField(
+                type = "String",
+                value = "\"${project.property("P2P_ONRAMP_BASE_URL")?.toString().orEmpty()}\"",
+                comment = "Zapp onramp service base URL; the operator account places every BUY there"
+            )
+        )
+        variant.buildConfigFields?.put(
+            "P2P_ONRAMP_USE_FAKE_DRIVER",
+            BuildConfigField(
+                type = "boolean",
+                value = project.property("P2P_ONRAMP_USE_FAKE_DRIVER").toString().toBoolean().toString(),
+                comment = "Debug-only: drive the onramp screens off FakeOnrampDriver instead of the network"
             )
         )
         variant.buildConfigFields?.put(

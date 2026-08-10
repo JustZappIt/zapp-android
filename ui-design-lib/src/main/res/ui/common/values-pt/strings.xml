@@ -42,4 +42,79 @@
     <string name="common_empty_screen_subtitle">Tentamos, mas não encontramos nada.</string>
     <string name="general_got_it">Entendi!</string>
     <string name="general_warning">Aviso:&#160;</string>
+
+
+    <!-- Ironwood migration (upstream zodl 3.9.0) -->
+    <string name="accounts_sendingFrom">Enviar de</string>
+    <string name="annotation_addArticle">Adicionar nota</string>
+    <string name="crosspay_pay">Pagamento</string>
+    <string name="errorPage_action_contactSupport">Contatar suporte</string>
+    <string name="filter_daysAgo" formatted="true">Há <xliff:g example="$" id="days">%s</xliff:g> dias</string>
+    <string name="filter_today">Hoje</string>
+    <string name="filter_yesterday">Ontem</string>
+    <string name="general_close">Fechar</string>
+    <string name="general_save">Salvar</string>
+    <string name="keystone_confirm">Confirmar com Keystone</string>
+    <string name="send_amount">Valor</string>
+    <string name="send_amountSummary">Valor total</string>
+    <string name="send_confirmationTitle">Confirmação</string>
+    <string name="send_failureInfo">Ocorreu um erro ao tentar enviar moedas.\nPor favor, tente novamente.</string>
+    <string name="send_failureShielding">Não foi possível proteger</string>
+    <string name="send_failureShieldingInfo">Ocorreu um erro ao tentar proteger suas
+        moedas. Por favor, tente novamente.</string>
+    <string name="send_feeSummary">Taxa</string>
+    <string name="send_info_memo">Transações transparentes não podem ter mensagens</string>
+    <string name="send_message">Mensagem</string>
+    <string name="send_orchardWarning_cancel">Cancelar</string>
+    <string name="send_pendingShieldingTitle">Proteção Pendente</string>
+    <string name="send_pendingTitle">Transação Pendente</string>
+    <string name="send_report">Reportar</string>
+    <string name="send_requestPayment_for">Para:</string>
+    <string name="send_requestPayment_requestedBy">Solicitado Por</string>
+    <string name="send_requestPayment_title">Solicitação de Pagamento</string>
+    <string name="send_review">Revisar</string>
+    <string name="send_sendingInfo">Suas moedas estão sendo enviadas para\n
+        <xliff:g example="zs12ghrbdjfs24383x5T…" id="index">%1$s</xliff:g>
+    </string>
+    <string name="send_shieldingInfo">Suas moedas estão sendo protegidas</string>
+    <string name="send_success">Enviado!</string>
+    <string name="send_successInfo">Suas moedas foram enviadas com sucesso para\n
+        <xliff:g example="zs12ghrbdjfs24383x5T…" id="index">%1$s</xliff:g>
+    </string>
+    <string name="send_successShielding">Protegidas!</string>
+    <string name="send_successShieldingInfo">Suas moedas foram protegidas com sucesso</string>
+    <string name="send_to">Enviar para</string>
+    <string name="send_viewTransaction">Ver Transação</string>
+    <string name="swapAndPay_checkStatus">Verificar status</string>
+    <string name="swapAndPay_expiredTitle">Swap expirado</string>
+    <string name="swapAndPay_failureSwapInfo">Ocorreu um erro ao iniciar uma troca.\nPor favor, tente novamente.</string>
+    <string name="swapAndPay_pendingPayTitle">Pagamento Pendente</string>
+    <string name="swapAndPay_pendingSwapTitle">Troca Pendente</string>
+    <string name="swapAndPay_sendingInfo">Suas moedas estão sendo enviadas para o endereço de depósito…</string>
+    <string name="swapAndPay_successPayInfo">Você iniciou um pagamento entre cadeias com sucesso.\nAcompanhe o status na tela de transação.</string>
+    <string name="swapAndPay_successSwapInfo">Você iniciou uma troca com sucesso.\nAcompanhe o status na tela de transação.</string>
+    <string name="swapAndPay_swap">Swap</string>
+    <string name="swapStatus_paid">Paga</string>
+    <string name="swapStatus_paying">Pagando</string>
+    <string name="swapStatus_paymentExpired">Pagamento expirado</string>
+    <string name="swapStatus_paymentFailed">Falha no pagamento</string>
+    <string name="swapStatus_paymentIncomplete">Pagamento incompleto</string>
+    <string name="swapStatus_paymentRefunded">Pagamento reembolsado</string>
+    <string name="swapStatus_swapFailed">Swap falhou</string>
+    <string name="swapStatus_swapIncomplete">Swap incompleto</string>
+    <string name="swapStatus_swapRefunded">Swap reembolsado</string>
+    <string name="swapStatus_swapped">Swap concluido</string>
+    <string name="swapStatus_swapping">Fazendo swap</string>
+    <string name="tabs_receive">Receber</string>
+    <string name="tabs_send">Enviar</string>
+    <string name="transactionHistory_saveAddress">Salvar endereço</string>
+    <string name="transactionHistory_sendAgain">Enviar novamente</string>
+    <string name="transaction_failedSend">Falha no Envio</string>
+    <string name="transaction_failedShieldedFunds">Falha ao proteger</string>
+    <string name="transaction_received">Recebido</string>
+    <string name="transaction_receiving">Recebendo</string>
+    <string name="transaction_sending">Enviando</string>
+    <string name="transaction_sent">Enviado</string>
+    <string name="transaction_shieldedFunds">Protegido</string>
+    <string name="transaction_shieldingFunds">Protegendo</string>
 </resources>

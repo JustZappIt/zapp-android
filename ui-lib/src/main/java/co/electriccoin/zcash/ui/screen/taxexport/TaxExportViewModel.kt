@@ -48,9 +48,9 @@ class TaxExportViewModel(
                 stringRes(
                     R.string.tax_export_message,
                     if (selectedAccount is ZashiAccount) {
-                        stringRes(R.string.zashi_wallet_name)
+                        stringRes(R.string.accounts_zashi)
                     } else {
-                        stringRes(R.string.keystone_wallet_name)
+                        stringRes(R.string.accounts_keystone)
                     }
                 )
         )

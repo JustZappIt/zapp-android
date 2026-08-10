@@ -87,4 +87,5 @@
     <!-- Cross-chain payment success -->
     <string name="send_confirmation_success_cross_chain_subtitle">Anda berhasil memulai pembayaran lintas rantai.\nPantau statusnya di layar transaksi.</string>
 
+    <string name="send_confirmation_sending_subtitle_migration">ZEC Anda sedang dimigrasikan ke\nIronwood…</string>
 </resources>

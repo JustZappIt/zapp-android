@@ -3,26 +3,17 @@
 
 package co.electriccoin.zcash.ui.screen.chat.profile
 
+import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.design.util.StringResource
 
 data class ChatProfileState(
     val title: StringResource,
-    val activeTab: ChatProfileTab,
-    val walletSubTab: ChatProfileWalletSubTab,
     val displayName: String?,
     val publicKey: String?,
-    val shieldedAddress: String?,
-    val transparentAddress: String?,
-    val baseAddress: String?,
     val isKeyCopied: Boolean,
-    val isAddressCopied: Boolean,
-    val isBaseAddressCopied: Boolean,
-    val onMainTabSelected: (ChatProfileTab) -> Unit,
-    val onWalletSubTabSelected: (ChatProfileWalletSubTab) -> Unit,
     val onEditDisplayNameClick: () -> Unit,
     val onCopyPublicKeyClick: () -> Unit,
-    val onCopyAddressClick: () -> Unit,
-    val onCopyBaseAddressClick: () -> Unit,
+    val onWalletAddressClick: () -> Unit,
     val onSeedPhraseClick: () -> Unit,
     val onP2pKeyClick: () -> Unit,
     val onDeleteClick: () -> Unit,
@@ -30,13 +21,8 @@ data class ChatProfileState(
     val editNameDialog: ChatProfileEditNameDialogState?,
     val deleteDialog: ChatProfileDeleteDialogState?,
     val seedPhraseDialog: ChatProfileSeedPhraseDialogState?,
-    val p2pKeyDialog: ChatProfileP2pKeyDialogState?,
-    val pinVerify: ChatProfilePinVerifyState?,
+    val pinVerify: PinVerifyState?,
 )
-
-enum class ChatProfileTab { MESSAGING_ID, WALLET_ADDRESS }
-
-enum class ChatProfileWalletSubTab { SHIELDED, TRANSPARENT }
 
 data class ChatProfileEditNameDialogState(
     val value: String,
@@ -56,19 +42,4 @@ data class ChatProfileDeleteDialogState(
 data class ChatProfileSeedPhraseDialogState(
     val words: List<String>,
     val onDismiss: () -> Unit,
-)
-
-data class ChatProfileP2pKeyDialogState(
-    val address: String,
-    val privateKeyHex: String,
-    val onCopyAddress: () -> Unit,
-    val onCopyPrivateKey: () -> Unit,
-    val onDismiss: () -> Unit,
-)
-
-data class ChatProfilePinVerifyState(
-    val hasError: Boolean,
-    val lockoutSecondsRemaining: Int,
-    val onPinSubmit: (String) -> Unit,
-    val onCancel: () -> Unit,
 )

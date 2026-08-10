@@ -111,6 +111,7 @@ private fun ZappTabsScaffoldContent() {
     var currentTab by rememberSaveable { mutableStateOf(ZappTab.CHATS) }
     val localCurrency by tabsVM.localCurrency.collectAsState()
     val p2pPaymentMethod by tabsVM.p2pPaymentMethod.collectAsState()
+    val isWalletRestoring by tabsVM.isWalletRestoring.collectAsState()
     // Set by tab content when it pushes a fullscreen sub-screen that owns its
     // own bottom CTA (e.g. wallet seed-reveal). Hides the floating nav pill so
     // the two don't overlap.
@@ -153,10 +154,11 @@ private fun ZappTabsScaffoldContent() {
                         p2pPaymentMethod = p2pPaymentMethod,
                         onChooseServerClick = tabsVM::onChooseServerClick,
                         onTorClick = tabsVM::onTorClick,
-                        onBackgroundDeliveryClick = tabsVM::onBackgroundDeliveryClick,
-                        onReadReceiptsClick = tabsVM::onReadReceiptsClick,
-                        onOnlineStatusClick = tabsVM::onOnlineStatusClick,
+                        onChatSettingsClick = tabsVM::onChatSettingsClick,
+                        onCopyPublicKeyClick = tabsVM::onCopyPublicKeyClick,
                         onP2pPaymentMethodClick = tabsVM::onP2pPaymentMethodClick,
+                        onViewingKeyExportClick = tabsVM::onViewingKeyExportClick,
+                        isWalletRestoring = isWalletRestoring,
                     )
                 }
             }

@@ -96,33 +96,33 @@
 
     <!-- Chat profile screen -->
     <string name="chat_profile_title">Perfil e identidade</string>
-    <string name="chat_profile_unknown_name">Desconhecido</string>
     <string name="chat_profile_public_key_label">Chave pública</string>
-    <string name="chat_profile_qr_caption">Escaneie para iniciar uma conversa</string>
-    <string name="chat_profile_tab_messaging_id">ID de mensagens</string>
-    <string name="chat_profile_tab_wallet_address">Endereço da carteira</string>
-    <string name="chat_profile_subtab_shielded">Blindado</string>
-    <string name="chat_profile_subtab_transparent">Transparente</string>
+    <string name="chat_profile_group_identity">Identidade</string>
+    <string name="chat_profile_group_danger_zone">Zona de risco</string>
+    <string name="chat_profile_delete_identity_title">Excluir identidade</string>
+    <string name="chat_profile_delete_identity_subtitle">Remove sua identidade de mensagens e o histórico de conversas deste dispositivo</string>
+    <string name="chat_wallet_address_title">Endereço da carteira</string>
+    <string name="chat_wallet_address_subtitle">Endereços blindado, transparente e Base</string>
+    <string name="chat_wallet_address_qr_content_description">Abrir o código QR do endereço</string>
+    <string name="chat_wallet_address_copy">Copiar endereço</string>
     <string name="chat_profile_address_shielded_label">Endereço blindado</string>
     <string name="chat_profile_address_transparent_label">Endereço transparente</string>
-    <string name="chat_profile_address_shielded_caption">Endereço blindado · privado por padrão</string>
-    <string name="chat_profile_address_transparent_caption">Endereço transparente · visível na rede</string>
+    <string name="chat_profile_address_shielded_caption">Privado por padrão. Compartilhe para receber ZEC blindado.</string>
+    <string name="chat_profile_address_transparent_caption">Visível na rede. Use apenas quando um serviço exigir.</string>
     <string name="chat_profile_address_base_label">Carteira Base</string>
+    <string name="chat_profile_address_base_caption">Onde seu saque P2P é liquidado, na Base.</string>
 
     <!-- Chat profile — seed phrase row -->
     <string name="chat_profile_seed_phrase_title">Frase de recuperação</string>
     <string name="chat_profile_seed_phrase_subtitle">Faz backup das identidades de mensagens e de carteira</string>
 
     <!-- Chat profile — accessibility / content descriptions -->
-    <string name="chat_profile_back_content_description">Voltar</string>
     <string name="chat_profile_edit_display_name_content_description">Editar nome de exibição</string>
-    <string name="chat_profile_delete_identity_content_description">Excluir identidade</string>
     <string name="chat_profile_copy_public_key_content_description">Copiar chave pública</string>
     <string name="chat_profile_copy_address_content_description">Copiar endereço</string>
     <string name="chat_profile_copied_content_description">Copiado</string>
 
     <!-- Chat profile — bottom dock -->
-    <string name="chat_profile_delete_button">EXCLUIR IDENTIDADE</string>
 
     <!-- Chat profile — edit display name dialog -->
     <string name="chat_profile_edit_name_title">Editar nome de exibição</string>
@@ -147,30 +147,27 @@
     <string name="chat_profile_p2p_key_title">Chave da carteira P2P</string>
     <string name="chat_profile_p2p_key_subtitle">Chave da sua conta de saque P2P, derivada da sua frase de recuperação</string>
     <string name="chat_profile_p2p_key_biometric_prompt">Ver a chave da sua carteira P2P</string>
-    <string name="chat_profile_p2p_key_dialog_title">Chave da carteira P2P</string>
-    <string name="chat_profile_p2p_key_dialog_message">Derivada da sua frase de recuperação. Esta chave controla sua conta de saque P2P: qualquer pessoa que a tenha pode gastar esses fundos.</string>
-    <string name="chat_profile_p2p_key_address_label">Endereço do proprietário</string>
-    <string name="chat_profile_p2p_key_private_key_label">Chave privada</string>
-    <string name="chat_profile_p2p_key_copy">Copiar</string>
-    <string name="chat_profile_p2p_key_dialog_done">Concluído</string>
+    <string name="chat_p2p_key_title">Chave da carteira P2P</string>
+    <string name="chat_p2p_key_info_content_description">Como a chave P2P funciona</string>
+    <string name="chat_p2p_key_info_title">Sobre sua chave P2P</string>
+    <string name="chat_p2p_key_info_derivation">Esta chave é derivada da sua frase semente por um caminho próprio. Ela não é sua chave de gasto Zcash e não pode tocar seus ZEC. Perder o app não a perde: a mesma semente sempre deriva a mesma chave.</string>
+    <string name="chat_p2p_key_info_smart_account">Ela controla uma conta inteligente. O endereço pelo qual seus saques são liquidados é uma conta de contrato na Base governada por esta chave, o que permite ao Zapp patrocinar as taxas de rede para você nunca precisar de gas.</string>
+    <string name="chat_p2p_key_info_safety">Quem tiver a chave privada controla essa conta e os fundos nela. Exporte apenas se precisar movimentar esses fundos com outra carteira.</string>
+    <string name="chat_p2p_key_smart_account_label">Conta inteligente</string>
+    <string name="chat_p2p_key_smart_account_caption">A conta na Base pela qual seus saques P2P são liquidados. Pode ser compartilhada.</string>
+    <string name="chat_p2p_key_owner_label">Chave proprietária</string>
+    <string name="chat_p2p_key_owner_locked_body">A chave privada que controla a conta inteligente. Para exibi-la, o bloqueio do app é solicitado antes.</string>
+    <string name="chat_p2p_key_reveal">Exibir chave proprietária</string>
+    <string name="chat_p2p_key_owner_address_label">Endereço proprietário</string>
+    <string name="chat_p2p_key_owner_address_caption">O endereço derivado da chave proprietária. Pode ser compartilhado.</string>
+    <string name="chat_p2p_key_private_key_label">Chave privada</string>
+    <string name="chat_p2p_key_private_key_caption">Nunca compartilhe. Quem tiver essa chave pode gastar tudo o que estiver na conta inteligente.</string>
+    <string name="chat_p2p_key_copy_content_description">Copiar</string>
 
     <!-- Chat settings screen -->
     <string name="chat_settings_title">Configurações do chat</string>
-    <string name="chat_settings_delete_button">Excluir identidade</string>
-    <string name="chat_settings_section_identity">Identidade</string>
-    <string name="chat_settings_section_account">Conta</string>
     <string name="chat_settings_section_network">Rede</string>
-    <string name="chat_settings_row_profile">Perfil</string>
-    <string name="chat_settings_row_profile_subtitle">Ver detalhes da identidade</string>
-    <string name="chat_settings_row_contacts">Contatos</string>
-    <string name="chat_settings_row_contacts_subtitle">Gerencie seus contatos</string>
-    <string name="chat_settings_label_connection">Conexão</string>
-    <string name="chat_settings_label_dht_health">Saúde da DHT</string>
     <string name="chat_settings_label_peers">Pares</string>
-    <string name="chat_settings_label_protocol">Protocolo</string>
-    <string name="chat_settings_label_encryption">Criptografia</string>
-    <string name="chat_settings_protocol_value">Hyperswarm DHT</string>
-    <string name="chat_settings_encryption_value">Ed25519 + Noise</string>
     <string name="chat_settings_connection_connected">Conectado</string>
     <string name="chat_settings_connection_connecting">Conectando</string>
     <string name="chat_settings_connection_disconnected">Desconectado</string>
@@ -178,55 +175,23 @@
     <string name="chat_settings_dht_healthy">Saudável</string>
     <string name="chat_settings_dht_degraded">Degradada</string>
     <string name="chat_settings_dht_critical">Crítica</string>
-    <string name="chat_settings_edit_name_content_description">Editar nome</string>
-    <string name="chat_settings_copy_content_description">Copiar</string>
-    <string name="chat_settings_edit_name_dialog_title">Editar nome de exibição</string>
-    <string name="chat_settings_edit_name_dialog_placeholder">Nome de exibição</string>
-    <string name="chat_settings_edit_name_dialog_save">Salvar</string>
-    <string name="chat_settings_edit_name_dialog_cancel">Cancelar</string>
-    <string name="chat_settings_delete_dialog_title">Excluir identidade</string>
-    <string name="chat_settings_delete_dialog_message">Isso removerá permanentemente sua identidade de mensagens. Faça backup da sua frase de recuperação primeiro.</string>
-    <string name="chat_settings_delete_dialog_confirm">Excluir</string>
-    <string name="chat_settings_delete_dialog_cancel">Cancelar</string>
-    <string name="chat_settings_section_notifications">Notificações</string>
-    <string name="chat_settings_notifications_toggle_title">Notificações de mensagens</string>
-    <string name="chat_settings_notifications_toggle_subtitle">Seja notificado quando receber uma nova mensagem</string>
     <string name="chat_settings_background_push_toggle_title">Entrega em segundo plano</string>
-    <string name="chat_settings_background_push_toggle_subtitle">Permite que o Zapp verifique mensagens em segundo plano</string>
+    <string name="chat_settings_background_push_toggle_subtitle">Acorda o Zapp para buscar mensagens pendentes</string>
     <string name="chat_settings_section_privacy">Privacidade</string>
     <string name="chat_settings_read_receipts_toggle_title">Confirmações de leitura</string>
-    <string name="chat_settings_read_receipts_toggle_subtitle">Mostra um tique duplo quando suas mensagens são lidas. Desative para também parar de ver quando leem as suas.</string>
-    <string name="read_receipts_settings_row_subtitle">Controle os indicadores de enviado e lido nos chats</string>
-    <string name="read_receipts_settings_title">Confirmações de leitura</string>
-    <string name="read_receipts_settings_intro">As confirmações de leitura permitem que um chat mostre quando uma mensagem foi aberta. Elas são opcionais e só mostram o estado lido quando os dois lados permitem.</string>
-    <string name="read_receipts_settings_on_title">Quando isto está ativado</string>
-    <string name="read_receipts_settings_on_body">Quando você abre uma conversa, o Zapp pode enviar um pequeno sinal de leitura para as mensagens recebidas. Suas mensagens enviadas também podem mostrar um tique duplo próximo depois que o outro app confirmar que foram lidas.</string>
-    <string name="read_receipts_settings_off_title">Quando isto está desativado</string>
-    <string name="read_receipts_settings_off_body">O Zapp não enviará sinais de leitura quando você abrir mensagens e não mostrará o estado lido de outras pessoas. As mensagens permanecem como enviadas em vez de lidas.</string>
-    <string name="read_receipts_settings_both_sides_title">Se a outra pessoa tiver desativado</string>
-    <string name="read_receipts_settings_both_sides_body">Os tiques duplos exigem que os dois lados permitam confirmações de leitura. Se qualquer pessoa desativar, esse chat funciona apenas com estado enviado.</string>
-    <string name="read_receipts_settings_section_control">Controle</string>
-    <string name="read_receipts_settings_toggle_title">Permitir confirmações de leitura</string>
-    <string name="read_receipts_settings_toggle_subtitle">Enviar e mostrar o estado lido quando os dois lados permitirem</string>
-    <string name="read_receipts_settings_save">Salvar</string>
+    <string name="chat_settings_read_receipts_toggle_subtitle">Envia e mostra o status de leitura</string>
+    <string name="chat_settings_online_status_toggle_title">Status on-line</string>
+    <string name="chat_settings_online_status_toggle_subtitle">Deixe as pessoas verem quando você está conectado</string>
+    <string name="chat_settings_privacy_footer">As duas funcionam nos dois sentidos. Ao desativar uma, você também deixa de ver o status de leitura e o ponto de conexão dos outros.</string>
+    <string name="chat_settings_section_delivery">Entrega</string>
+    <string name="chat_settings_delivery_footer">Mantém um serviço sem Google em execução com o Zapp fechado, com uma notificação permanente e mais uso de bateria. O sinal apenas acorda o Zapp; as mensagens continuam criptografadas.</string>
+    <string name="chat_settings_save">Salvar</string>
     <string name="chat_message_status_sending">Enviando</string>
     <string name="chat_message_status_queued">A aguardar sincronização do destinatário</string>
     <string name="chat_message_status_sent">Enviada, a aguardar entrega</string>
     <string name="chat_message_status_delivered">Entregue</string>
     <string name="chat_message_status_read">Lido</string>
     <string name="chat_message_status_failed">Falha ao enviar</string>
-    <string name="background_delivery_settings_title">Entrega em segundo plano</string>
-    <string name="background_delivery_settings_intro">Controle se o Zapp pode continuar acessível quando o app está fechado ou seu telefone está bloqueado.</string>
-    <string name="background_delivery_settings_delivery_title">Quando isto está desativado</string>
-    <string name="background_delivery_settings_delivery_body">O Zapp para o ouvinte em segundo plano. As novas mensagens podem aguardar até você abrir o app; então o Zapp verifica o que chegou enquanto você estava ausente.</string>
-    <string name="background_delivery_settings_battery_title">Quando isto está ativado</string>
-    <string name="background_delivery_settings_battery_body">O Android mantém um serviço silencioso do Zapp ativo para que o app possa despertar e verificar quando uma mensagem pode estar aguardando. Isso melhora o tempo de entrega, mas usa mais bateria do que verificar apenas quando o app está aberto.</string>
-    <string name="background_delivery_settings_privacy_title">O que o sinal de entrega contém</string>
-    <string name="background_delivery_settings_privacy_body">O sinal apenas avisa o Zapp para despertar e verificar mensagens. O conteúdo das mensagens permanece criptografado e é buscado pelo seu app depois que ele desperta.</string>
-    <string name="background_delivery_settings_section_control">Controle</string>
-    <string name="background_delivery_settings_toggle_title">Permitir entrega em segundo plano</string>
-    <string name="background_delivery_settings_toggle_subtitle">Despertar o Zapp para verificar mensagens pendentes</string>
-    <string name="background_delivery_settings_save">Salvar</string>
 
     <!-- Chat notifications -->
     <string name="chat_notifications_channel_name">Mensagens</string>
@@ -363,6 +328,9 @@
     <string name="chat_contact_add_messaging_key_placeholder">Chave de mensagens (64 caracteres hex)</string>
     <string name="chat_contact_scan_messaging_key_content_description">Escanear QR da chave de mensagens</string>
     <string name="chat_contact_scan_wallet_address_content_description">Escanear QR do endereço da carteira</string>
+    <string name="chat_contact_copy_name_content_description">Copiar nome do contato</string>
+    <string name="chat_contact_copy_messaging_key_content_description">Copiar chave de mensagens</string>
+    <string name="chat_contact_copy_wallet_address_content_description">Copiar endereço da carteira</string>
     <string name="chat_contact_add_save_content_description">Adicionar contato</string>
     <string name="chat_contact_add_save_button">SALVAR</string>
 
@@ -468,18 +436,4 @@
     <string name="chat_push_service_channel_name">Entrega de mensagens em segundo plano</string>
     <string name="chat_push_service_title">Zapp</string>
     <string name="chat_push_service_body">A entrega em segundo plano está ativada</string>
-    <string name="chat_settings_online_status_toggle_title">Status on-line</string>
-    <string name="online_status_settings_row_subtitle">Escolha se as pessoas veem quando você está on-line</string>
-    <string name="online_status_settings_title">Status on-line</string>
-    <string name="online_status_settings_intro">Seu status on-line permite que as pessoas com quem você conversa vejam quando você está conectado. É opcional e funciona nos dois sentidos.</string>
-    <string name="online_status_settings_on_title">Quando está ativado</string>
-    <string name="online_status_settings_on_body">As pessoas com quem você tem uma conversa direta podem ver um ponto quando você está conectado, e você vê o mesmo delas.</string>
-    <string name="online_status_settings_off_title">Quando está desativado</string>
-    <string name="online_status_settings_off_body">As pessoas param de ver quando você está on-line, e o Zapp também para de mostrar quando elas estão. Suas mensagens continuam sendo enviadas e recebidas normalmente.</string>
-    <string name="online_status_settings_reciprocal_title">Funciona nos dois sentidos</string>
-    <string name="online_status_settings_reciprocal_body">Ocultar seu status on-line também oculta o das outras pessoas para você. Ative novamente para ver e ser visto.</string>
-    <string name="online_status_settings_section_control">Controle</string>
-    <string name="online_status_settings_toggle_title">Mostrar meu status on-line</string>
-    <string name="online_status_settings_toggle_subtitle">Permita que as pessoas com quem você conversa vejam quando você está conectado</string>
-    <string name="online_status_settings_save">Salvar</string>
 </resources>

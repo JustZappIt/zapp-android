@@ -103,7 +103,7 @@ private fun ExportPrivateDataPreview() =
                     text =
                         stringRes(
                             R.string.tax_export_message,
-                            stringResource(R.string.zashi_wallet_name)
+                            stringResource(R.string.accounts_zashi)
                         )
                 ),
         )

@@ -4,6 +4,8 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.ExactInputSwapTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.ExactOutputSwapTransactionProposal
+import co.electriccoin.zcash.ui.common.datasource.MigrationSweepTransactionProposal
+import co.electriccoin.zcash.ui.common.migration.MigrationNavigator
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.ZashiAccount
 import co.electriccoin.zcash.ui.common.provider.ChatSendContextProvider
@@ -21,6 +23,7 @@ class CancelProposalFlowUseCase(
     private val accountDataSource: AccountDataSource,
     private val swapRepository: SwapRepository,
     private val chatSendContext: ChatSendContextProvider,
+    private val migrationNavigator: MigrationNavigator,
 ) {
     suspend operator fun invoke(clearSendForm: Boolean = true) {
         val proposal =
@@ -42,6 +45,14 @@ class CancelProposalFlowUseCase(
             is ExactOutputSwapTransactionProposal -> {
                 swapRepository.clearQuote()
                 navigationRouter.backTo(UnifiedSendArgs::class)
+            }
+
+            is MigrationSweepTransactionProposal -> {
+                // Reached via MigrationReviewVM's IMMEDIATE-mode Keystone branch, never via the
+                // ordinary Send flow — Send was never on this back stack, so falling through to
+                // the `else` branch's `backTo(Send::class)` would silently no-op (no matching
+                // destination to pop to), leaving the user stuck on the Sign/reject sheet.
+                migrationNavigator.backToMigrationReview()
             }
 
             else -> {

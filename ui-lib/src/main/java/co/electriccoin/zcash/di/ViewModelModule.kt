@@ -11,10 +11,10 @@ import co.electriccoin.zcash.ui.screen.addressbook.SelectABRecipientVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.AdvancedSettingsVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.DebugVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBVM
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceVM
 import co.electriccoin.zcash.ui.screen.balances.BalanceWidgetVM
 import co.electriccoin.zcash.ui.screen.balances.breakdown.BalanceBreakdownVM
 import co.electriccoin.zcash.ui.screen.balances.spendable.SpendableBalanceVM
-import co.electriccoin.zcash.ui.screen.chat.backgrounddelivery.BackgroundDeliverySettingsVM
 import co.electriccoin.zcash.ui.screen.chooseserver.ChooseServerVM
 import co.electriccoin.zcash.ui.screen.connectkeystone.date.KeystoneDateVM
 import co.electriccoin.zcash.ui.screen.connectkeystone.estimation.KeystoneEstimationVM
@@ -49,6 +49,7 @@ import co.electriccoin.zcash.ui.screen.keepopen.KeepOpenVM
 import co.electriccoin.zcash.ui.screen.more.MoreVM
 import co.electriccoin.zcash.ui.screen.onboarding.OnboardingSecurityVM
 import co.electriccoin.zcash.ui.screen.onboarding.ZappRestoreFlowVM
+import co.electriccoin.zcash.ui.screen.onramp.OnrampVM
 import co.electriccoin.zcash.ui.screen.qrcode.QrCodeVM
 import co.electriccoin.zcash.ui.screen.receive.ReceiveVM
 import co.electriccoin.zcash.ui.screen.request.viewmodel.RequestVM
@@ -98,6 +99,7 @@ import co.electriccoin.zcash.ui.screen.transactionhistory.widget.ActivityWidgetV
 import co.electriccoin.zcash.ui.screen.transactionnote.viewmodel.TransactionNoteViewModel
 import co.electriccoin.zcash.ui.screen.transactionprogress.TransactionProgressVM
 import co.electriccoin.zcash.ui.screen.unifiedsend.UnifiedSendVM
+import co.electriccoin.zcash.ui.screen.viewingkeyexport.ViewingKeyExportVM
 import co.electriccoin.zcash.ui.screen.walletbackup.WalletBackupViewModel
 import co.electriccoin.zcash.ui.screen.warning.viewmodel.StorageCheckViewModel
 import co.electriccoin.zcash.ui.screen.welcome.WelcomeGateVM
@@ -120,6 +122,7 @@ val viewModelModule =
         viewModelOf(::RestoreSeedVM)
         viewModelOf(::MoreVM)
         viewModelOf(::AdvancedSettingsVM)
+        viewModelOf(::ViewingKeyExportVM)
         viewModelOf(::SupportViewModel)
         viewModelOf(::WhatsNewViewModel)
         viewModelOf(::ChooseServerVM)
@@ -140,7 +143,6 @@ val viewModelModule =
         viewModelOf(::ZashiTopAppBarVM)
         viewModelOf(::WelcomeGateVM)
         viewModelOf(::TabsVM)
-        viewModelOf(::BackgroundDeliverySettingsVM)
         viewModelOf(::SelectKeystoneAccountViewModel)
         viewModelOf(::KeystoneNewOrActiveVM)
         viewModelOf(::KeystoneDateVM)
@@ -160,6 +162,7 @@ val viewModelModule =
         viewModelOf(::BalanceWidgetVM)
         viewModelOf(::BalanceChartVM)
         viewModelOf(::HomeVM)
+        viewModelOf(::OnrampVM)
         viewModelOf(::KeepOpenVM)
         viewModelOf(::WalletSyncStateVM)
         viewModelOf(::RestoreBDHeightVM)
@@ -206,6 +209,7 @@ val viewModelModule =
         viewModelOf(::EphemeralLockVM)
         viewModelOf(::DebugVM)
         viewModelOf(::DebugDBVM)
+        viewModelOf(::DebugOrchardBalanceVM)
         viewModelOf(::TEXUnsupportedVM)
         viewModelOf(::InsufficientFundsVM)
         viewModelOf(::TopUpVM)

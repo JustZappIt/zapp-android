@@ -55,6 +55,12 @@ kotlin {
                 implementation(libs.ktor.okhttp)
             }
         }
+        getByName("jvmTest") {
+            dependencies {
+                implementation(project.dependencies.enforcedPlatform(libs.ktor.bom))
+                implementation(libs.ktor.okhttp)
+            }
+        }
         getByName("iosMain") {
             dependencies {
                 implementation(project.dependencies.enforcedPlatform(libs.ktor.bom))

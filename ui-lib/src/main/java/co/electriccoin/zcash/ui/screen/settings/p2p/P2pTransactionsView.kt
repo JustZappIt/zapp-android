@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBackButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
+import co.electriccoin.zcash.ui.design.component.zapp.ZappCompactButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
@@ -204,7 +205,7 @@ private fun RefundControl(refund: RefundUiState) {
 
         is RefundUiState.Available -> {
             Spacer(Modifier.width(GAP_MD.dp))
-            CompactPrimaryButton(
+            ZappCompactButton(
                 text = stringResource(R.string.p2p_transactions_refund_button),
                 onClick = refund.onClick,
             )
@@ -228,34 +229,11 @@ private fun RefundControl(refund: RefundUiState) {
 
         is RefundUiState.FailedRetry -> {
             Spacer(Modifier.width(GAP_MD.dp))
-            CompactPrimaryButton(
+            ZappCompactButton(
                 text = stringResource(R.string.p2p_transactions_refund_retry),
                 onClick = refund.onRetry,
             )
         }
-    }
-}
-
-/**
- * Inline yellow CTA sized for sitting next to a balance display — about half the height of
- * the standard [ZappButton] and uses the [ZappTextStyles.buttonSmall] type ramp. Keep visually
- * distinct (still accent-coloured) but unobtrusive against the balance number.
- */
-@Composable
-private fun CompactPrimaryButton(text: String, onClick: () -> Unit) {
-    val c = ZappTheme.colors
-    Box(
-        modifier =
-            Modifier
-                .background(c.accent, RectangleShape)
-                .clickable(onClick = onClick)
-                .padding(horizontal = COMPACT_BUTTON_PADDING_H.dp, vertical = COMPACT_BUTTON_PADDING_V.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        BasicText(
-            text = text,
-            style = ZappTheme.typography.buttonSmall.copy(color = c.onAccent),
-        )
     }
 }
 
@@ -502,8 +480,6 @@ private const val PILL_PADDING_V = 4
 private const val EMPTY_PADDING_V = 32
 private const val DIALOG_BUTTON_PADDING = 16
 private const val DIALOG_BUTTON_PADDING_V = 12
-private const val COMPACT_BUTTON_PADDING_H = 12
-private const val COMPACT_BUTTON_PADDING_V = 6
 private const val CHEVRON_SIZE = 18
 
 @PreviewScreens

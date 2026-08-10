@@ -3,6 +3,9 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Allow zappMessaging (minSdk 29) on minSdk 27 host app -->
+    <uses-sdk tools:overrideLibrary="xyz.justzappit.zappmessaging, to.holepunch.bare.kit" />
+
     <!-- For test coverage -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29"

@@ -45,6 +45,32 @@ class SubgraphClientTest {
     }
 
     @Test
+    fun `user order history matches the recipient as well as the placer`() =
+        runTest {
+            nextResponse = """{"data":{"orders_collection":[]}}"""
+
+            subgraph.ordersForUser(USER, first = 10, skip = 0)
+
+            val query = sentBodies.last()["query"]!!.jsonPrimitive.content
+            // An onramp BUY is placed on-chain by the operator, so userAddress is theirs and only
+            // usdcRecipientAddress is the user's. Filtering on the placer alone hid every purchase.
+            assertTrue(query.contains("usdcRecipientAddress: ${'$'}userAddress"), "must match on recipient: $query")
+            assertTrue(query.contains("userAddress: ${'$'}userAddress"), "must still match on placer: $query")
+            assertTrue(query.contains("or:"), "both must be an OR, not an AND: $query")
+        }
+
+    @Test
+    fun `the address is lower-cased, since the subgraph stores bytes that way`() =
+        runTest {
+            nextResponse = """{"data":{"orders_collection":[]}}"""
+
+            subgraph.ordersForUser("0x4A96C8EB7ECB6ECFE5855BB96A0EA379E339FA44", first = 10, skip = 0)
+
+            val vars = sentBodies.last()["variables"]!!.jsonObject
+            assertEquals("0x4a96c8eb7ecb6ecfe5855bb96a0ea379e339fa44", vars["userAddress"]!!.jsonPrimitive.content)
+        }
+
+    @Test
     fun `parses circles and drops zero-active-merchant entries`() =
         runTest {
             nextResponse =
@@ -92,4 +118,8 @@ class SubgraphClientTest {
             nextResponse = """{"data":{"circles":[]}}"""
             assertEquals(0, subgraph.circlesForRouting("0xabcd").size)
         }
+
+    private companion object {
+        const val USER = "0x4a96c8eb7ecb6ecfe5855bb96a0ea379e339fa44"
+    }
 }

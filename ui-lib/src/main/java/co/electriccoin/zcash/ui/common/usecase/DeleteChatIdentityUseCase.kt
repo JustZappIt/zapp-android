@@ -1,6 +1,6 @@
 package co.electriccoin.zcash.ui.common.usecase
 
-import cash.z.ecc.android.sdk.SdkSynchronizer
+import cash.z.ecc.android.sdk.CloseableSynchronizer
 import cash.z.ecc.android.sdk.WalletCoordinator
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
 import co.electriccoin.zcash.preference.StandardPreferenceProvider
@@ -39,7 +39,7 @@ class DeleteChatIdentityUseCase(
         metadataRepository.delete()
 
         runCatching {
-            (synchronizerProvider.synchronizer.value as? SdkSynchronizer)?.close()
+            (synchronizerProvider.synchronizer.value as? CloseableSynchronizer)?.close()
         }.onFailure { Twig.warn(it) { "DeleteChatIdentityUseCase: synchronizer close failed" } }
 
         runCatching { walletCoordinator.deleteSdkDataFlow().first() }
