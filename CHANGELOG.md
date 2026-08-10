@@ -7,7 +7,11 @@ and this application adheres to [Semantic Versioning](https://semver.org/spec/v2
 ## [Unreleased]
 
 ### Added:
-- We added support for Zcash's Ironwood network upgrade (NU6.3), keeping your wallet fully compatible with the latest network changes. Support for moving funds to the new Ironwood pool will arrive in a future update.
+- We added Move to Ironwood, a guided migration that moves your Orchard funds into the new Ironwood shielded pool.
+- We added two ways to migrate: a private option that splits your balance into smaller transfers sent automatically in the background over time, or an immediate single transfer.
+- We added Tor protection, progress notifications, Keystone support, and a home screen banner for tracking your migration.
+- We added ZODL Slipstream, a new sync engine that makes restoring a wallet and everyday syncing substantially faster.
+- We added support for Zcash's Ironwood network upgrade (NU6.3), keeping your wallet fully compatible with the latest network changes.
 - Tap "Total balance" on the home screen to see how your ZEC is split across Zcash pools, including the new Ironwood pool.
 - We added a one-time explainer, shown after Ironwood activates, covering what the upgrade means for your funds.
 - UPI offramp via p2p.me: convert USDC to INR with on-chain price reads, rich progress UI, and subgraph-with-on-chain-fallback order tracking.

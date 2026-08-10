@@ -87,4 +87,5 @@
     <!-- Cross-chain payment success -->
     <string name="send_confirmation_success_cross_chain_subtitle">Você iniciou um pagamento entre cadeias com sucesso.\nAcompanhe o status na tela de transação.</string>
 
+    <string name="send_confirmation_sending_subtitle_migration">O seu ZEC está a ser migrado para\nIronwood…</string>
 </resources>

@@ -5,7 +5,10 @@
     <ID>ComplexCondition:ChatMessageBubble.kt$(isFromMe &amp;&amp; offsetX &lt; -swipeThreshold) || (!isFromMe &amp;&amp; offsetX &gt; swipeThreshold)</ID>
     <ID>ComplexCondition:ChatMessageBubble.kt$(offsetX &gt; SWIPE_ICON_APPEAR_THRESHOLD &amp;&amp; !isFromMe) || (offsetX &lt; -SWIPE_ICON_APPEAR_THRESHOLD &amp;&amp; isFromMe)</ID>
     <ID>ComplexCondition:EcdsaSigner.kt$EcdsaSigner$r.signum() &lt;= 0 || s.signum() &lt;= 0 || r &gt;= curve.n || s &gt;= curve.n</ID>
+    <ID>ComplexCondition:KeystoneBatchRoundSlice.kt$preps == 0 &amp;&amp; transfers == 0 &amp;&amp; (prepsLeft &gt; 0 || transfersLeft &gt; 0)</ID>
     <ID>ComplexCondition:MediaBubble.kt$w != null &amp;&amp; h != null &amp;&amp; w &gt; 0 &amp;&amp; h &gt; 0</ID>
+    <ID>ComplexCondition:MigrationSendingVM.kt$MigrationSendingVM$( outcome == null || outcome is TransferAttemptOutcome.NothingDue || outcome is TransferAttemptOutcome.AwaitingProof ) &amp;&amp; attempt &lt; SEND_MAX_ATTEMPTS</ID>
+    <ID>ComplexCondition:TransactionRepository.kt$(transaction.sentNoteCount == 0 &amp;&amp; transaction.receivedNoteCount == 0) || ( transaction.raw == null &amp;&amp; transaction.minedHeight == null &amp;&amp; (transaction.zip318Kind == Zip318Kind.PREPARATION || transaction.zip318Kind == Zip318Kind.TRANSFER) )</ID>
     <ID>ComplexCondition:UnifiedSendVM.kt$UnifiedSendVM$!isSwap &amp;&amp; (hasZeroBalance || (hasAmount &amp;&amp; isAmountValid &amp;&amp; !hasFunds))</ID>
     <ID>ComplexCondition:UnifiedSendVM.kt$UnifiedSendVM$!isSwap || asset == null || zecValue == null || zecUsdPrice == null</ID>
     <ID>ComplexCondition:UnifiedSendVM.kt$UnifiedSendVM$isAddressValid &amp;&amp; isAmountValid &amp;&amp; hasFunds &amp;&amp; isMemoValid</ID>
@@ -20,13 +23,19 @@
     <ID>CyclomaticComplexMethod:ExactInputVMMapper.kt$ExactInputVMMapper$fun createState( internalState: InternalState, onBack: () -&gt; Unit, onSwapInfoClick: () -&gt; Unit, onSwapAssetPickerClick: () -&gt; Unit, onSwapCurrencyTypeClick: (BigDecimal?) -&gt; Unit, onSlippageClick: (BigDecimal?) -&gt; Unit, onRequestSwapQuoteClick: (BigDecimal, String) -&gt; Unit, onTryAgainClick: () -&gt; Unit, onAddressChange: (String) -&gt; Unit, onTextFieldChange: (NumberTextFieldInnerState) -&gt; Unit, onQrCodeScannerClick: () -&gt; Unit, onAddressBookClick: () -&gt; Unit, onDeleteSelectedContactClick: () -&gt; Unit, onBalanceButtonClick: () -&gt; Unit, onChangeButtonClick: () -&gt; Unit, onAddressClick: () -&gt; Unit, onTopUpClick: () -&gt; Unit, onChangeReceivingAddress: () -&gt; Unit, ): SwapState</ID>
     <ID>CyclomaticComplexMethod:ImageViewerOverlay.kt$private fun saveImageToGallery(context: Context, message: ChatMessage)</ID>
     <ID>CyclomaticComplexMethod:MediaBubble.kt$@Composable internal fun MediaBubble( message: ChatMessage, isFromMe: Boolean, onImageClick: ((ChatMessage) -&gt; Unit)? = null, transferProgress: Float? = null, )</ID>
+    <ID>CyclomaticComplexMethod:MigrationDriveOnce.kt$MigrationDriveOnce$@Suppress("ReturnCount") private suspend fun handleExecuted( sdk: OrchardMigrationSdk, accountKeyId: String, result: TransferResult, snapshotBefore: LiveMigrationSnapshot?, sentWasPrep: Boolean, ): DriveOnceResult</ID>
+    <ID>CyclomaticComplexMethod:MigrationKeystoneScanVM.kt$MigrationKeystoneScanVM$fun onScanned(result: String)</ID>
+    <ID>CyclomaticComplexMethod:MigrationProgressScreen.kt$@Suppress("LongParameterList") @Composable private fun TransferProgressTimelineRow( title: String, statusLabel: StringResource, isReadyNow: Boolean, amount: StringResource?, fiatAmount: StringResource?, state: TransferRowState, isLast: Boolean, index: Int = 0, @DrawableRes icon: Int? = null, // Non-null only for the collapsed "Split Balance" summary row — renders a "Show details ⌄" // line under the subtitle (Figma "PR App Designs Q3'26" node 5207:16023), not a whole-row // click target. onShowDetails: (() -&gt; Unit)? = null, )</ID>
     <ID>CyclomaticComplexMethod:NetworkStatus.kt$@Composable internal fun ConnectionPill( connectionStatus: ChatListConnectionStatus, peerCount: Int, dhtHealth: ChatListDhtHealth, onClick: (() -&gt; Unit)? = null )</ID>
     <ID>CyclomaticComplexMethod:NetworkStatus.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable internal fun NetworkDetailsSheet( connectionStatus: ChatListConnectionStatus, peerCount: Int, dhtHealth: ChatListDhtHealth, connectionDetails: ConnectionDetailsUi?, onDismiss: () -&gt; Unit )</ID>
     <ID>CyclomaticComplexMethod:OfframpStatusToSteps.kt$private fun stepDetail(status: OfframpStatus, step: OfframpStep): List&lt;StringResource&gt;</ID>
     <ID>CyclomaticComplexMethod:PinVerifyScreen.kt$@Composable internal fun PinVerifyScreen( hasError: Boolean, showBack: Boolean = true, lockoutSecondsRemaining: Int = 0, onPinSubmit: (String) -&gt; Unit, onCancel: () -&gt; Unit = {}, )</ID>
     <ID>CyclomaticComplexMethod:SecuritySettingsView.kt$@Composable private fun ChangePinScreen( onNewPinConfirmed: (String) -&gt; Unit, onBack: () -&gt; Unit, )</ID>
+    <ID>CyclomaticComplexMethod:TransactionProgressVM.kt$TransactionProgressVM$private suspend fun createSuccessState( proposal: TransactionProposal, result: SubmitResult.Success ): TransactionProgressState</ID>
     <ID>CyclomaticComplexMethod:UpiOfframpProgressVM.kt$UpiOfframpProgressVM$private fun curatedRevertStringRes(reason: KnownRevertReason): Int</ID>
     <ID>CyclomaticComplexMethod:ZappOnboardingFlow.kt$@Composable internal fun ZappOnboardingFlow( onComplete: () -&gt; Unit, onBackToWelcome: () -&gt; Unit, walletViewModel: WalletViewModel, chatBootstrap: ChatBootstrap, navigationRouter: NavigationRouter, )</ID>
+    <ID>ForbiddenComment:FeatureMigrationImpls.kt$MigrationGateImpl$// (matches the sync it gates); see post-adoption TODO C2 for the any-account variant.</ID>
+    <ID>ForbiddenComment:MigrationHomeMessageSourceImpl.kt$MigrationHomeMessageSourceImpl$// from the engine's late-dependency guard (TODO(remove: engine UnprovableAnchor)).</ID>
     <ID>ForbiddenImport:AccountDataSource.kt$import co.electriccoin.zcash.ui.util.loggable</ID>
     <ID>FunctionOnlyReturningConstant:Eip1559TxTest.kt$Eip1559TxTest$fun rlpEmpty()</ID>
     <ID>FunctionOnlyReturningConstant:Eip1559TxTest.kt$Eip1559TxTest$fun rlpEmptyList()</ID>
@@ -35,6 +44,7 @@
     <ID>ImplicitDefaultLocale:WalletBackupView.kt$String.format("%02d", idx + 1)</ID>
     <ID>InstanceOfCheckForException:OfframpBridgeWallet.kt$NearBridgeOfframpFunding$e is IllegalArgumentException</ID>
     <ID>InstanceOfCheckForException:OfframpBridgeWallet.kt$NearBridgeOfframpFunding$e is TokenNotFoundException</ID>
+    <ID>InvalidRange:KeystoneBatchChunkingTest.kt$KeystoneBatchChunkingTest$3 until 3</ID>
     <ID>LargeClass:ChatRoomVM.kt$ChatRoomVM : ViewModel</ID>
     <ID>LargeClass:UnifiedSendVM.kt$UnifiedSendVM : ViewModel</ID>
     <ID>LoopWithTooManyJumpStatements:P2pOrderHistory.kt$P2pOrderHistorySource$while</ID>
@@ -70,6 +80,7 @@
     <ID>MagicNumber:BioScanScreen.kt$0.9f</ID>
     <ID>MagicNumber:ChatMessageBubble.kt$80f</ID>
     <ID>MagicNumber:ChatScanPublicKeyVM.kt$ChatScanPublicKeyVM$64</ID>
+    <ID>MagicNumber:DebugStartMigrationE2EUseCase.kt$DebugStartMigrationE2EUseCase$120</ID>
     <ID>MagicNumber:EoaSigner.kt$EoaSigner$100L</ID>
     <ID>MagicNumber:Erc4337Submitter.kt$Erc4337Submitter$100L</ID>
     <ID>MagicNumber:Erc4337Submitter.kt$Erc4337Submitter$60_000</ID>
@@ -89,8 +100,18 @@
     <ID>MagicNumber:Hex.kt$16</ID>
     <ID>MagicNumber:Hex.kt$4</ID>
     <ID>MagicNumber:ImageViewerOverlay.kt$5f</ID>
+    <ID>MagicNumber:KeystoneFirmwareVersion.kt$3</ID>
     <ID>MagicNumber:MessagingIdentityView.kt$0.92f</ID>
     <ID>MagicNumber:MessagingIdentityView.kt$3</ID>
+    <ID>MagicNumber:MigrationDurationFormat.kt$1000</ID>
+    <ID>MagicNumber:MigrationDurationFormat.kt$3600</ID>
+    <ID>MagicNumber:MigrationDurationFormat.kt$60</ID>
+    <ID>MagicNumber:MigrationFlowPreviews.kt$3</ID>
+    <ID>MagicNumber:MigrationFlowPreviews.kt$4</ID>
+    <ID>MagicNumber:MigrationFlowPreviews.kt$5</ID>
+    <ID>MagicNumber:MigrationHomeMessageSourceImpl.kt$MigrationHomeMessageSourceImpl$100</ID>
+    <ID>MagicNumber:MigrationKeystoneSignVM.kt$MigrationKeystoneSignVM.Companion$16</ID>
+    <ID>MagicNumber:MigrationReviewVM.kt$MigrationReviewVM$75L</ID>
     <ID>MagicNumber:OrderReader.kt$OrderStatus.CANCELLED$4</ID>
     <ID>MagicNumber:OrderReader.kt$OrderStatus.COMPLETED$3</ID>
     <ID>MagicNumber:PinComponents.kt$6</ID>
@@ -186,6 +207,20 @@
     <ID>MatchingDeclarationName:BridgeToBaseScreen.kt$BridgeToBaseArgs</ID>
     <ID>MatchingDeclarationName:ChatProfileSegmentedRow.kt$SegmentItem</ID>
     <ID>MatchingDeclarationName:FloatingPillNavBar.kt$ZappTab</ID>
+    <ID>MatchingDeclarationName:KeystoneBatchChunking.kt$KeystoneBatchRoundSlice</ID>
+    <ID>MatchingDeclarationName:MigrationAttention.kt$MigrationAttentionKind</ID>
+    <ID>MatchingDeclarationName:MigrationBatteryScreen.kt$MigrationBatteryArgs</ID>
+    <ID>MatchingDeclarationName:MigrationCustomServerTorScreen.kt$MigrationCustomServerTorArgs</ID>
+    <ID>MatchingDeclarationName:MigrationHowItWorksScreen.kt$MigrationHowItWorksArgs</ID>
+    <ID>MatchingDeclarationName:MigrationKeystoneScanScreen.kt$MigrationKeystoneScanArgs</ID>
+    <ID>MatchingDeclarationName:MigrationKeystoneSignScreen.kt$MigrationKeystoneSignArgs</ID>
+    <ID>MatchingDeclarationName:MigrationLockExplainerScreen.kt$MigrationLockExplainerArgs</ID>
+    <ID>MatchingDeclarationName:MigrationNotificationScreen.kt$MigrationNotificationArgs</ID>
+    <ID>MatchingDeclarationName:MigrationPrivacyScreen.kt$MigrationPrivacyArgs</ID>
+    <ID>MatchingDeclarationName:MigrationScheduledScreen.kt$MigrationScheduledState</ID>
+    <ID>MatchingDeclarationName:MigrationSuccessScreen.kt$MigrationSuccessState</ID>
+    <ID>MatchingDeclarationName:MigrationTorFailureScreen.kt$MigrationTorFailureArgs</ID>
+    <ID>MatchingDeclarationName:MigrationTransferInvalidScreen.kt$MigrationTransferInvalidArgs</ID>
     <ID>MatchingDeclarationName:SecuritySettingsScreen.kt$SecuritySettingsArgs</ID>
     <ID>MatchingDeclarationName:SparkChart.kt$SparkChartData</ID>
     <ID>MatchingDeclarationName:TwoFAChoiceScreen.kt$TwoFAMode</ID>
@@ -202,13 +237,31 @@
     <ID>MaxLineLength:BridgeToBaseView.kt$availabilityHint = BridgeAvailabilityHint(stringRes("Merchants are available now."), isWarning = false)</ID>
     <ID>MaxLineLength:BridgeToBaseView.kt$explainer = stringRes("We bridge your ZEC to Base. This takes a few minutes; after that, paying merchants is instant.")</ID>
     <ID>MaxLineLength:ChatMessageBubble.kt$if</ID>
+    <ID>MaxLineLength:CheckMigrationRecoveryUseCase.kt$CheckMigrationRecoveryUseCase$"MigrationRecovery: migration worker already active (RUNNING or SCHEDULED) for $accountKeyId — nothing to do."</ID>
+    <ID>MaxLineLength:CheckMigrationRecoveryUseCase.kt$CheckMigrationRecoveryUseCase$migrationLog("MigrationRecovery: engine read failed (${e.message}) — un-stamping the throttle for a clean retry.", e)</ID>
+    <ID>MaxLineLength:CheckMigrationRecoveryUseCase.kt$CheckMigrationRecoveryUseCase$migrationLog("MigrationRecovery: migration worker absent for $accountKeyId — scheduling now.")</ID>
+    <ID>MaxLineLength:CheckMigrationRecoveryUseCase.kt$CheckMigrationRecoveryUseCase$private</ID>
+    <ID>MaxLineLength:CheckMigrationRecoveryUseCaseTest.kt$CheckMigrationRecoveryUseCaseTest$coEvery { getMigrationState() } returns MigrationState.RequiresAttention(AttentionReason.TransferExpired)</ID>
+    <ID>MaxLineLength:CheckMigrationRecoveryUseCaseTest.kt$CheckMigrationRecoveryUseCaseTest$coEvery { getMigrationStateUnreconciled() } returns MigrationState.RequiresAttention(AttentionReason.TransferExpired)</ID>
+    <ID>MaxLineLength:CheckMigrationRecoveryUseCaseTest.kt$CheckMigrationRecoveryUseCaseTest$kotlin.test.assertFalse(scheduled, "SCHEDULED must not call scheduleNow anymore — the live driver covers acceleration")</ID>
+    <ID>MaxLineLength:CheckMigrationRecoveryUseCaseTest.kt$CheckMigrationRecoveryUseCaseTest$kotlin.test.assertTrue(startedAccountKeyId != null, "an in-progress migration must always start (or no-op) the live driver")</ID>
     <ID>MaxLineLength:EditChatContactVM.kt$EditChatContactVM$private val onSaveContact: (publicKey: String, name: String, walletAddress: String, walletAddresses: Map&lt;String, String&gt;) -&gt; Unit</ID>
     <ID>MaxLineLength:EditContactSheet.kt$if (transparentAddr.text.isNotBlank()) put(AddressBookContact.ADDR_TYPE_TRANSPARENT, transparentAddr.text.trim())</ID>
     <ID>MaxLineLength:EditContactSheet.kt$val cancelDeleteDescription = stringResource(R.string.address_book_edit_cancel_delete_content_description)</ID>
     <ID>MaxLineLength:EditContactSheet.kt$val confirmDeleteDescription = stringResource(R.string.address_book_edit_confirm_delete_content_description)</ID>
     <ID>MaxLineLength:EoaSignerTest.kt$EoaSignerTest$"""{"jsonrpc":"2.0","id":1,"result":{"number":"0x100","timestamp":"0x68000000","baseFeePerGas":"0x77359400"}}"""</ID>
     <ID>MaxLineLength:Erc4337Submitter.kt$Erc4337Submitter$/** thirdweb's prebuilt Account contract validates the owner's ECDSA signature over the EIP-191-prefixed userOpHash. */</ID>
+    <ID>MaxLineLength:FakeOrchardMigrationSdk.kt$FakeOrchardMigrationSdk$if (txs.all { it.minedHeight != null }) return MigrationAdvanceResult(MigrationAdvanceStep.Complete, next = null)</ID>
+    <ID>MaxLineLength:FeatureMigrationImpls.kt$MigrationAppHooksImpl$migrationLog("AppHooks: notification account switch failed (${it.message}) — navigating on the selected account.")</ID>
+    <ID>MaxLineLength:FeatureMigrationImpls.kt$MigrationSyncedHookImpl$if (getOrchardMigrationSdk().getMigrationStateUnreconciled() !is cash.z.ecc.android.sdk.MigrationState.InProgress) return</ID>
+    <ID>MaxLineLength:FinalizeMigrationScheduleUseCaseTest.kt$FinalizeMigrationScheduleUseCaseTest$PreparationStep(id = 1, layer = 0, index = 1, broadcastHeight = 4219043, dependsOn = emptyList())</ID>
     <ID>MaxLineLength:ImageViewerOverlay.kt$Toast.makeText(context, context.getString(R.string.chat_room_image_viewer_save_failed), Toast.LENGTH_SHORT).show()</ID>
+    <ID>MaxLineLength:KeystoneBatchChunkingTest.kt$KeystoneBatchChunkingTest$assertEquals(KeystoneBatchRoundSlice(includeSplit = false, prepRange = IntRange.EMPTY, transferRange = 0 until 32), round0)</ID>
+    <ID>MaxLineLength:KeystoneBatchChunkingTest.kt$KeystoneBatchChunkingTest$assertEquals(KeystoneBatchRoundSlice(includeSplit = false, prepRange = IntRange.EMPTY, transferRange = 26 until 58), round1)</ID>
+    <ID>MaxLineLength:KeystoneBatchChunkingTest.kt$KeystoneBatchChunkingTest$assertEquals(KeystoneBatchRoundSlice(includeSplit = false, prepRange = IntRange.EMPTY, transferRange = 32 until 33), round1)</ID>
+    <ID>MaxLineLength:KeystoneBatchChunkingTest.kt$KeystoneBatchChunkingTest$assertEquals(KeystoneBatchRoundSlice(includeSplit = false, prepRange = IntRange.EMPTY, transferRange = 58 until 64), round2)</ID>
+    <ID>MaxLineLength:KeystoneBatchChunkingTest.kt$KeystoneBatchChunkingTest$assertEquals(KeystoneBatchRoundSlice(includeSplit = true, prepRange = IntRange.EMPTY, transferRange = 0 until 12), slice)</ID>
+    <ID>MaxLineLength:KeystoneBatchChunkingTest.kt$KeystoneBatchChunkingTest$assertEquals(KeystoneBatchRoundSlice(includeSplit = true, prepRange = IntRange.EMPTY, transferRange = 0 until 26), round0)</ID>
     <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Entry("MERCHANT_NOT_FULLFILLED_ELIGIBILITY_THRESHOLD", "Merchant has not fulfilled eligibility threshold")</ID>
     <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Entry("USER_HAS_NO_REPUTATION", "Kindly do ZK social verifications and increase your limits to place more orders")</ID>
     <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0x0ece93a6") to Entry("RECOMMENDATION_ALREADY_CLAIMED", "Recommendation already claimed")</ID>
@@ -243,7 +296,94 @@
     <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0xdab11ea6") to Entry("P2P_UNSTAKE_REQUEST_PENDING", "A P2P unstake request is already pending")</ID>
     <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0xe595a7bf") to Entry("DAILY_BUY_ORDER_LIMIT_EXCEEDED", "Daily buy order count limit exceeded")</ID>
     <ID>MaxLineLength:KnownContractErrors.kt$KnownContractErrors$Selector4.fromHex("0xec4b3ce6") to Entry("EXIT_WOULD_BREACH_DELEGATION_INVARIANT", "Exit would breach delegation invariant")</ID>
+    <ID>MaxLineLength:LiveMigrationSnapshot.kt$fun at(height: Long): Instant</ID>
     <ID>MaxLineLength:MessagingIdentityView.kt$style = ZappTheme.typography.button.copy(color = c.onAccent, fontSize = 12.sp, fontWeight = FontWeight.Black)</ID>
+    <ID>MaxLineLength:MigrationCompleteScreen.kt$state = ButtonState(text = stringRes(DesignR.string.migration_common_gotIt), onClick = state.onDone)</ID>
+    <ID>MaxLineLength:MigrationCompleteVM.kt$MigrationCompleteVM$transfersProgress = stringRes(DesignR.string.migrationComplete_transfersProgress, summary.totalCount, summary.totalCount)</ID>
+    <ID>MaxLineLength:MigrationDriveOnce.kt$MigrationDriveOnce$handleExecuted(sdk, accountKeyId, outcome.result, snapshotBefore, sentWasPrep = nextCandidate?.isTransfer == false)</ID>
+    <ID>MaxLineLength:MigrationDriveOnce.kt$MigrationDriveOnce$migrationLog("MigrationDriveOnce: AwaitingProof for ${outcome.transferId} despite a Broadcast step — re-arming.")</ID>
+    <ID>MaxLineLength:MigrationDriveOnce.kt$MigrationDriveOnce$migrationLog("MigrationDriveOnce: broadcast attempt timed out after $BROADCAST_ATTEMPT_TIMEOUT — re-arming.")</ID>
+    <ID>MaxLineLength:MigrationDriveOnce.kt$MigrationDriveOnce$migrationLog("MigrationDriveOnce: deferring broadcast $deferDelay — a sync source is live or the quiet gap is unmet.")</ID>
+    <ID>MaxLineLength:MigrationDriveOnce.kt$MigrationDriveOnce$migrationLog("MigrationDriveOnce: engine requests Replan — the whole plan is dead, user-driven reschedule required.")</ID>
+    <ID>MaxLineLength:MigrationDriveOnce.kt$MigrationDriveOnce$migrationLog("MigrationDriveOnce: sync done, next=$nextStep (preparation) — broadcasting same-beat.")</ID>
+    <ID>MaxLineLength:MigrationDriveOnce.kt$MigrationDriveOnce$migrationLog("MigrationDriveOnce: transfer ${stuck.id} blocked on an unprovable anchor — user-driven reschedule required.")</ID>
+    <ID>MaxLineLength:MigrationDriveOnce.kt$MigrationDriveOnce$migrationNotifier.notifyTransferComplete(accountKeyId, snapshot.completedCount, snapshot.totalCount)</ID>
+    <ID>MaxLineLength:MigrationDriveOnce.kt$MigrationDriveOnce$private suspend</ID>
+    <ID>MaxLineLength:MigrationDriveOnceTest.kt$MigrationDriveOnceTest$assertEquals(WaitingDisposition.COMPLETION_SWEEP, waitingDisposition(allSent = true, hasUnprovableBlocker = false))</ID>
+    <ID>MaxLineLength:MigrationDriveOnceTest.kt$MigrationDriveOnceTest$assertEquals(WaitingDisposition.COMPLETION_SWEEP, waitingDisposition(allSent = true, hasUnprovableBlocker = true))</ID>
+    <ID>MaxLineLength:MigrationDurationFormatTest.kt$MigrationDurationFormatTest$assertEquals("~0 min", formatMigrationDuration(totalSeconds = 0L, fineGrained = true, applyPrivacyFloor = false))</ID>
+    <ID>MaxLineLength:MigrationDurationFormatTest.kt$MigrationDurationFormatTest$assertEquals("~1 min", formatMigrationDuration(totalSeconds = 60L, fineGrained = true, applyPrivacyFloor = false))</ID>
+    <ID>MaxLineLength:MigrationDurationFormatTest.kt$MigrationDurationFormatTest$assertEquals("~2 min", formatMigrationDuration(totalSeconds = 130L, fineGrained = false, applyPrivacyFloor = false))</ID>
+    <ID>MaxLineLength:MigrationFailureBottomSheet.kt$state = ButtonState(text = stringRes(DesignR.string.migration_common_dismiss), onClick = state.onDismiss)</ID>
+    <ID>MaxLineLength:MigrationFlowPreviews.kt$// FlowStep("Failure bottom sheet (standalone)") { MigrationFailureBottomSheet(previewTransferFailureState()) }</ID>
+    <ID>MaxLineLength:MigrationFlowPreviews.kt$@Preview(name = "Migration – IMMEDIATE flow", widthDp = 2200, heightDp = 950, showBackground = true, backgroundColor = 0xFFDDDDDDL)</ID>
+    <ID>MaxLineLength:MigrationFlowPreviews.kt$FlowStep("Restart Migration — confirm sheet open") { MigrationRestartView(previewRestartState(confirming = true)) }</ID>
+    <ID>MaxLineLength:MigrationFlowPreviews.kt$MigrationReviewTransferState(1, 1, stringRes("12.458 ZEC"), stringRes("$4,832.86"), stringRes("Send immediately"))</ID>
+    <ID>MaxLineLength:MigrationFlowPreviews.kt$MigrationReviewTransferState(3, 5, stringRes("2.105 ZEC"), stringRes("$813.74"), stringRes("~12 hours"))</ID>
+    <ID>MaxLineLength:MigrationFlowPreviews.kt$MigrationReviewTransferState(4, 5, stringRes("1.897 ZEC"), stringRes("$733.51"), stringRes("~18 hours"))</ID>
+    <ID>MaxLineLength:MigrationFlowPreviews.kt$MigrationReviewTransferState(5, 5, stringRes("4.456 ZEC"), stringRes("$1,723.53"), stringRes("~24 hours"))</ID>
+    <ID>MaxLineLength:MigrationFlowPreviews.kt$body = stringRes("If your migration looks stuck, you can restart it safely. This creates a new plan for your remaining funds.")</ID>
+    <ID>MaxLineLength:MigrationFlowPreviews.kt$transfers = previewProgressStateInProgress().transfers.map { it.copy(statusLabel = stringRes("Sent"), isSent = true) }</ID>
+    <ID>MaxLineLength:MigrationHowItWorksScreen.kt$state = ButtonState(text = stringRes(DesignR.string.migration_common_continue), onClick = state.onContinue)</ID>
+    <ID>MaxLineLength:MigrationKeystoneMultiRoundScenarioTest.kt$MigrationKeystoneMultiRoundScenarioTest$assertEquals(1, sdk.estimateMigrationRunCount(), "a sub-dust residual still counts as 1 run to the raw estimate…")</ID>
+    <ID>MaxLineLength:MigrationKeystoneScanVM.kt$MigrationKeystoneScanVM$"KeystoneScan: round ${pending.roundIndex} done — handing off to round ${pending.roundIndex + 1} of $totalRounds"</ID>
+    <ID>MaxLineLength:MigrationKeystoneScanVMTest.kt$MigrationKeystoneScanVMTest$accumulatedTransferSigned = (0 until 35).map { it.toLong() to byteArrayOf(it.toByte()) }</ID>
+    <ID>MaxLineLength:MigrationKeystoneSignVM.kt$MigrationKeystoneSignVM$combine</ID>
+    <ID>MaxLineLength:MigrationKeystoneSignVM.kt$MigrationKeystoneSignVM$negativeButton = ButtonState(text = stringRes(DesignR.string.migrationKeystoneSign_reject), onClick = ::onReject)</ID>
+    <ID>MaxLineLength:MigrationKeystoneSignVMTest.kt$MigrationKeystoneSignVMTest$accumulatedTransferSigned = (0 until NO_SPLIT_ROUND_CAPACITY).map { it.toLong() to byteArrayOf(it.toByte()) }</ID>
+    <ID>MaxLineLength:MigrationKeystoneSignVMTest.kt$MigrationKeystoneSignVMTest$assertEquals(DesignR.string.migrationKeystoneSign_scanWithKeystone, (title as? StringResource.ByResource)?.resource)</ID>
+    <ID>MaxLineLength:MigrationKeystoneSignVMTest.kt$MigrationKeystoneSignVMTest$coEvery { createUnsignedTransferPczts(fakeScheduleFromSplit) } returns listOf(1L to byteArrayOf(0x01))</ID>
+    <ID>MaxLineLength:MigrationLiveDriver.kt$MigrationLiveDriverImpl$migrationLog("MigrationLiveDriver: loop for $accountKeyId failed (transient) — will resume on next start.", e)</ID>
+    <ID>MaxLineLength:MigrationLiveDriver.kt$MigrationLiveDriverImpl$runCatching { migrationTransferStateRepository.publish(accountKeyId, sdk.readUnreconciledLiveReadout()) }</ID>
+    <ID>MaxLineLength:MigrationLiveDriverTest.kt$MigrationLiveDriverTest$assertEquals(1, runCallCount, "a second start for the SAME account while the first is still active must be a no-op")</ID>
+    <ID>MaxLineLength:MigrationLiveDriverTest.kt$MigrationLiveDriverTest$assertEquals(3, runCallCount, "a failed publish read must not stop the loop — it must keep driving to Terminal")</ID>
+    <ID>MaxLineLength:MigrationLiveDriverTest.kt$MigrationLiveDriverTest$assertEquals(3, runCallCount, "respectAntiSpinFloor=false must NOT be floored — the loop must chain back-to-back")</ID>
+    <ID>MaxLineLength:MigrationLiveDriverTest.kt$MigrationLiveDriverTest$assertEquals(3, runCallCount, "the loop must call run() again after each returned delay, and stop on Terminal")</ID>
+    <ID>MaxLineLength:MigrationLiveDriverTest.kt$MigrationLiveDriverTest$if (runCallCount &lt; 3) DriveOnceResult.ReArmed(kotlin.time.Duration.ZERO) else DriveOnceResult.Terminal</ID>
+    <ID>MaxLineLength:MigrationPreparationDetails.kt$fun</ID>
+    <ID>MaxLineLength:MigrationPreparationDetailsBottomSheet.kt$state = ButtonState(text = stringRes(DesignR.string.migration_common_gotIt), onClick = details.onDismiss)</ID>
+    <ID>MaxLineLength:MigrationPrivacyScreen.kt$state = ButtonState(text = stringRes(DesignR.string.migration_common_gotIt), onClick = innerState.onConfirm)</ID>
+    <ID>MaxLineLength:MigrationProgressScreen.kt$subtitle = stringRes("Your balance splits into 5 transfers over ~24 h. There are 3 remaining transfers.")</ID>
+    <ID>MaxLineLength:MigrationProgressScreen.kt$title = stringRes(DesignR.string.migration_common_splitBalanceNumbered, prep.number).getValue()</ID>
+    <ID>MaxLineLength:MigrationProgressVM.kt$MigrationProgressVM$MigrationProgressPreparationSummary(statusLabel = display.label, isReadyNow = display.isReadyNow, isSent = false)</ID>
+    <ID>MaxLineLength:MigrationRestartVM.kt$MigrationRestartVM$migratedValue = stringRes(DesignR.string.restartMigration_summaryMigratedValue, summary.completed, summary.total)</ID>
+    <ID>MaxLineLength:MigrationReviewPlanShapeTest.kt$MigrationReviewPlanShapeTest$assertTrue("amount" !in prepFields &amp;&amp; "fiatAmount" !in prepFields, "preparation state must NOT have amount/fiatAmount")</ID>
+    <ID>MaxLineLength:MigrationReviewPlanShapeTest.kt$MigrationReviewPlanShapeTest$assertTrue("number" in prepFields &amp;&amp; "scheduledLabel" in prepFields, "preparation state must have number + scheduledLabel")</ID>
+    <ID>MaxLineLength:MigrationReviewPlanShapeTest.kt$MigrationReviewPlanShapeTest$assertTrue(step.statusLabel.asString().isNotEmpty(), "step '${step.title.asString()}' must have a non-empty statusLabel")</ID>
+    <ID>MaxLineLength:MigrationReviewPlanShapeTest.kt$MigrationReviewPlanShapeTest$assertTrue(step.timeLabel.asString().isNotEmpty(), "step '${step.title.asString()}' must have a non-empty timeLabel")</ID>
+    <ID>MaxLineLength:MigrationReviewPlanShapeTest.kt$MigrationReviewPlanShapeTest$val details = assertNotNull(state.preparationDetails, "preparation details must be present for &gt;1 preparations")</ID>
+    <ID>MaxLineLength:MigrationReviewPlanShapeTest.kt$MigrationReviewPlanShapeTest$val prep0 = PreparationStep(id = 10L, layer = 0, index = 0, broadcastHeight = anchorHeight, dependsOn = emptyList())</ID>
+    <ID>MaxLineLength:MigrationReviewPlanShapeTest.kt$MigrationReviewPlanShapeTest$val prep1 = PreparationStep(id = 11L, layer = 0, index = 1, broadcastHeight = anchorHeight, dependsOn = emptyList())</ID>
+    <ID>MaxLineLength:MigrationReviewPlanShapeTest.kt$MigrationReviewPlanShapeTest$val prep2 = PreparationStep(id = 20L, layer = 1, index = 0, broadcastHeight = anchorHeight + 10L, dependsOn = listOf(10L, 11L))</ID>
+    <ID>MaxLineLength:MigrationReviewPlanShapeTest.kt$MigrationReviewPlanShapeTest$val prep3 = PreparationStep(id = 30L, layer = 2, index = 0, broadcastHeight = anchorHeight + 25L, dependsOn = listOf(20L))</ID>
+    <ID>MaxLineLength:MigrationReviewPlanShapeTest.kt$MigrationReviewPlanShapeTest$val subtitle = assertNotNull(state.preparationsSummarySubtitle, "summary subtitle must be present for &gt;1 preparations")</ID>
+    <ID>MaxLineLength:MigrationReviewScreen.kt$ImmediateDetailsRow(label = stringRes(DesignR.string.migrationReview_amountLabel).getValue(), value = amount.getValue())</ID>
+    <ID>MaxLineLength:MigrationReviewScreen.kt$MigrationMode.AUTOMATIC -&gt; PrivacyReviewContent(state, onShowPreparationDetails = { isShowingPreparationDetails = true })</ID>
+    <ID>MaxLineLength:MigrationReviewScreen.kt$MigrationReviewTransferState(1, 5, stringRes("1.348 ZEC"), stringRes("$521.30"), stringRes("~10 mins"))</ID>
+    <ID>MaxLineLength:MigrationReviewScreen.kt$MigrationReviewTransferState(2, 5, stringRes("1.052 ZEC"), stringRes("$406.86"), stringRes("~6 hours"))</ID>
+    <ID>MaxLineLength:MigrationReviewScreen.kt$MigrationReviewTransferState(3, 5, stringRes("2.105 ZEC"), stringRes("$813.74"), stringRes("~12 hours"))</ID>
+    <ID>MaxLineLength:MigrationReviewScreen.kt$MigrationReviewTransferState(4, 5, stringRes("1.897 ZEC"), stringRes("$733.51"), stringRes("~18 hours"))</ID>
+    <ID>MaxLineLength:MigrationReviewScreen.kt$MigrationReviewTransferState(5, 5, stringRes("4.456 ZEC"), stringRes("$1,723.53"), stringRes("~24 hours"))</ID>
+    <ID>MaxLineLength:MigrationReviewScreen.kt$if (state.isConfirming) DesignR.string.migrationReview_signing else DesignR.string.migrationReview_confirm</ID>
+    <ID>MaxLineLength:MigrationReviewVM.kt$MigrationReviewVM$MigrationReviewPreparationState(number = i + 1, scheduledLabel = scheduledLabelForPrep(p, sched))</ID>
+    <ID>MaxLineLength:MigrationReviewVM.kt$MigrationReviewVM$is ReviewProposal.Automatic -&gt; createAutomaticState(proposal, isConfirming, exchangeRateState, isKeystone, failureResult)</ID>
+    <ID>MaxLineLength:MigrationReviewVM.kt$MigrationReviewVM$keystoneRound = proposal.keystoneRunCount?.takeIf { it &gt; 1 }?.let { MigrationKeystoneRound(current = 1, total = it) }</ID>
+    <ID>MaxLineLength:MigrationReviewVM.kt$MigrationReviewVM$val fromNow = estimatedSecondsBetweenHeights(referenceTip, t.nextExecutableAfterHeight, secondsPerBlock)</ID>
+    <ID>MaxLineLength:MigrationReviewVMTest.kt$MigrationReviewVMTest$private</ID>
+    <ID>MaxLineLength:MigrationScheduledScreen.kt$"Transfers run when you open the app — enable background activity in Settings for automatic sending."</ID>
+    <ID>MaxLineLength:MigrationScheduledScreen.kt$SkeletonSummaryRow(label = stringRes(DesignR.string.migrationScheduled_totalToTransferLabel).getValue())</ID>
+    <ID>MaxLineLength:MigrationScheduledVMTest.kt$MigrationScheduledVMTest$assertNotNull(state.content?.backgroundHint, "backgroundHint should not be null when background execution is unavailable")</ID>
+    <ID>MaxLineLength:MigrationScheduledVMTest.kt$MigrationScheduledVMTest$assertNull(state.content?.backgroundHint, "backgroundHint should be null when background execution is available")</ID>
+    <ID>MaxLineLength:MigrationScheduledVMTest.kt$MigrationScheduledVMTest$pendingKeystonePczts: PendingKeystoneMigrationPcztsRepositoryImpl = PendingKeystoneMigrationPcztsRepositoryImpl()</ID>
+    <ID>MaxLineLength:MigrationSendingVM.kt$MigrationSendingVM$while</ID>
+    <ID>MaxLineLength:MigrationSetupScreen.kt$private</ID>
+    <ID>MaxLineLength:MigrationSuccessScreen.kt$state = ButtonState(text = stringRes(DesignR.string.migrationSuccess_viewTransaction), onClick = onView)</ID>
+    <ID>MaxLineLength:MigrationTorFailureScreen.kt$state = ButtonState(text = stringRes(DesignR.string.migration_common_tryAgain), onClick = innerState.onTryAgain)</ID>
+    <ID>MaxLineLength:MigrationTransferInvalidScreen.kt$state = ButtonState(text = stringRes(DesignR.string.migration_common_continue), onClick = state.onContinue)</ID>
+    <ID>MaxLineLength:MigrationTransferInvalidVMTest.kt$MigrationTransferInvalidVMTest$coEvery { getMigrationState() } returns MigrationState.RequiresAttention(AttentionReason.InvalidTransfer(11L))</ID>
+    <ID>MaxLineLength:MigrationTransferInvalidVMTest.kt$MigrationTransferInvalidVMTest$coEvery { getMigrationState() } returns MigrationState.RequiresAttention(AttentionReason.TransferExpired)</ID>
+    <ID>MaxLineLength:MigrationTransferInvalidVMTest.kt$MigrationTransferInvalidVMTest$coEvery { getMigrationStateUnreconciled() } returns MigrationState.RequiresAttention(AttentionReason.TransferExpired)</ID>
+    <ID>MaxLineLength:MigrationWorker.kt$MigrationWorker$migrationLog("Worker: no accountKeyId in inputData — falling back to selected account $it (pre-upgrade job)")</ID>
     <ID>MaxLineLength:NearApiProvider.kt$"Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjIwMjUtMDEtMTItdjEifQ.eyJ2IjoxLCJrZXlfdHlwZSI6ImRpc3RyaWJ1dGlvbl9jaGFubmVsIiwicGFydG5lcl9pZCI6InphcHAiLCJpYXQiOjE3NzgxNTU1ODQsImV4cCI6MTgwOTY5MTU4NH0.R7Nk8UI0ZI-q4h0nFHjij8-zZBIzHkeKAGHtySUX8FL3GLsDm53hnqoiGArQqcj2Iwf-x9fcg0GSV8-WAnlFTakQh6RBke91cU7CemIcqbffzw98wqiSw6iDGZxpbLDwUN7dD_6PNPhp4ZUWfiwmi7U6VcpARqqc2KJAiCn2GbZF6E_dQ-uNBFi7T4Paw641E-mKSrSDvn2OCUQbQLF3iY8_JyLMfbf8kCQPq8-MPv93nvMXieogeu5c6Z9PmZfWCKEfuMbCpjBHEe9BDD8_S9CcuzQCOLtdHkXEbmT4QQ7nBVAY-DMpYVGgOs1mzCK4xmW8frtStYBn194C-DK6yA"</ID>
     <ID>MaxLineLength:OfframpCheckpoint.kt$OfframpCheckpoint$/** Nullable for back-compat with checkpoints written before fiat was tracked; resume falls back to live sellPrice. */</ID>
     <ID>MaxLineLength:OfframpCheckpointPersisterTest.kt$OfframpCheckpointPersisterTest$persister.onStatus(OfframpStatus.PlacingOrder(txHash = PLACE_ORDER_HASH, circleId = BigInteger.ONE, amount = AMOUNT))</ID>
@@ -257,6 +397,7 @@
     <ID>MaxLineLength:OfframpOrchestratorTest.kt$OfframpOrchestratorTest.Companion$private const</ID>
     <ID>MaxLineLength:P2pTransactionsFormat.kt$amountUsdc = stringRes(R.string.p2p_transactions_row_amount_usdc, usdcAmount.toDisplayString(stripTrailingZeros = true))</ID>
     <ID>MaxLineLength:P2pTransactionsFormat.kt$fromLabel = fromForType(orderType)?.let(::extractUpiVpa)?.let { stringRes(R.string.p2p_transactions_row_from, it) }</ID>
+    <ID>MaxLineLength:PendingMigrationTorFailureStorageProvider.kt$PendingMigrationTorFailureStorageProviderImpl$BooleanPreferenceDefault(key = PreferenceKey("pending_migration_tor_failure_$accountUuid"), defaultValue = false)</ID>
     <ID>MaxLineLength:SecuritySettingsVM.kt$SecuritySettingsVM$NewPinIntent.SwitchFromBiometric -&gt; stringRes(R.string.security_settings_success_switched_pin)</ID>
     <ID>MaxLineLength:SecuritySettingsVM.kt$SecuritySettingsVM$PinVerifyIntent.ChangePinSetNew -&gt; SecuritySettingsState.SettingNewPin(NewPinIntent.ChangeExisting)</ID>
     <ID>MaxLineLength:SelectABRecipientVM.kt$SelectABRecipientVM$private</ID>
@@ -275,6 +416,9 @@
     <ID>MayBeConst:EncryptedPreferenceProviderTest.kt$EncryptedPreferenceProviderTest.Companion$private val FILENAME = "encrypted_preference_test"</ID>
     <ID>MayBeConst:StandardPreferenceProviderTest.kt$StandardPreferenceProviderTest.Companion$private val FILENAME = "encrypted_preference_test"</ID>
     <ID>NestedBlockDepth:FileUtils.kt$FileUtils$fun getFileName(context: Context, uri: Uri): String?</ID>
+    <ID>NestedBlockDepth:MigrationDriveOnce.kt$MigrationDriveOnce$@Suppress("ReturnCount") private suspend fun handleExecuted( sdk: OrchardMigrationSdk, accountKeyId: String, result: TransferResult, snapshotBefore: LiveMigrationSnapshot?, sentWasPrep: Boolean, ): DriveOnceResult</ID>
+    <ID>NestedBlockDepth:MigrationDriveOnce.kt$MigrationDriveOnce$@Suppress("ReturnCount", "LongMethod", "CyclomaticComplexMethod") private suspend fun broadcastRun( sdk: OrchardMigrationSdk, accountKeyId: String, transferId: Long, allowForcedBroadcastWindow: Boolean, ): DriveOnceResult</ID>
+    <ID>NestedBlockDepth:MigrationLiveDriver.kt$MigrationLiveDriverImpl$private suspend fun loop(accountKeyId: String)</ID>
     <ID>NestedBlockDepth:OfframpBridgeWallet.kt$NearBridgeOfframpFunding$private suspend fun pollUntilSettled(depositAddress: String, tokens: List&lt;SwapAsset&gt;)</ID>
     <ID>NestedBlockDepth:UpiQrParser.kt$UpiQrParser$private fun urlDecode(s: String): String</ID>
     <ID>ReturnCount:AbiDecoder.kt$AbiDecoder$fun dynamicStringAt(byteOffset: Int): String</ID>
@@ -284,10 +428,29 @@
     <ID>ReturnCount:BaseRpcClient.kt$BaseRpcClient$suspend fun ethGetTransactionReceipt(txHash: TxHash): TransactionReceipt?</ID>
     <ID>ReturnCount:CircleRouter.kt$CircleRouter$fun selectCircle(eligible: List&lt;CircleForRouting&gt;): CircleForRouting?</ID>
     <ID>ReturnCount:CircleRouter.kt$CircleRouter$private fun weightedRandomChoice( circles: List&lt;CircleForRouting&gt;, weights: List&lt;Double&gt;, ): CircleForRouting</ID>
+    <ID>ReturnCount:DebugStartMigrationE2EUseCase.kt$DebugStartMigrationE2EUseCase$suspend operator fun invoke()</ID>
     <ID>ReturnCount:EcdsaSigner.kt$EcdsaSigner$fun recoverPublicKey(recId: Int, r: BigInteger, s: BigInteger, messageHash: ByteArray): ECPoint?</ID>
     <ID>ReturnCount:EvmKeyDerivation.kt$EvmKeyDerivation$private fun ckdPrivOnce(parent: ExtKey, index: Int): ExtKey?</ID>
     <ID>ReturnCount:ExactInputVMMapper.kt$ExactInputVMMapper$private fun createTopUpButtonState( state: ExactInputInternalState, onTopUpClick: () -&gt; Unit, ): ButtonState?</ID>
+    <ID>ReturnCount:FakeOrchardMigrationSdk.kt$FakeOrchardMigrationSdk$override suspend fun estimateMigrationRunCount(): Int?</ID>
+    <ID>ReturnCount:FakeOrchardMigrationSdk.kt$FakeOrchardMigrationSdk$override suspend fun executeNextPendingTransfer( options: NetworkPrivacyOptions, useEstimatedTip: Boolean, ): TransferAttemptOutcome</ID>
+    <ID>ReturnCount:FakeOrchardMigrationSdk.kt$FakeOrchardMigrationSdk$override suspend fun nextStep(): MigrationAdvanceResult?</ID>
+    <ID>ReturnCount:FakeOrchardMigrationSdk.kt$FakeOrchardMigrationSdk$private fun buildState(): MigrationState</ID>
+    <ID>ReturnCount:FakeOrchardMigrationSdk.kt$FakeOrchardMigrationSdk$private fun isProvable(tx: SimTx): Boolean</ID>
+    <ID>ReturnCount:FakeOrchardMigrationSdk.kt$FakeOrchardMigrationSdk$private fun isUnprovableAnchor(tx: SimTx): Boolean</ID>
+    <ID>ReturnCount:GetMigrationSnapshotUseCase.kt$GetMigrationSnapshotUseCase$suspend operator fun invoke(accountKeyId: String? = null): LiveMigrationSnapshot?</ID>
+    <ID>ReturnCount:GetOrchardMigrationSdkUseCase.kt$GetOrchardMigrationSdkUseCase$suspend fun lookup(accountKeyId: String): MigrationSdkLookup</ID>
     <ID>ReturnCount:ImageViewerOverlay.kt$private fun saveImageToGallery(context: Context, message: ChatMessage)</ID>
+    <ID>ReturnCount:MigrationDriveOnce.kt$MigrationDriveOnce$private suspend fun syncRun( sdk: OrchardMigrationSdk, accountKeyId: String, allowForcedBroadcastWindow: Boolean, ): DriveOnceResult</ID>
+    <ID>ReturnCount:MigrationDriveOnce.kt$MigrationDriveOnce$suspend fun run( sdk: OrchardMigrationSdk, accountKeyId: String, allowForcedBroadcastWindow: Boolean = false, driveByLiveLoop: Boolean = false, ): DriveOnceResult</ID>
+    <ID>ReturnCount:MigrationDriveOnce.kt$internal fun decideBroadcastPreflight( synchronizerSyncing: Boolean, nowEpochSeconds: Long, lastNetworkActivityEpochSeconds: Long?, privacyBufferSeconds: Long, prepFastTrack: Boolean = false, ): BroadcastPreflight</ID>
+    <ID>ReturnCount:MigrationProgressVM.kt$MigrationProgressVM$private fun fiatAmount(zatoshi: Zatoshi, exchangeRateState: ExchangeRateState): StringResource?</ID>
+    <ID>ReturnCount:MigrationReviewVM.kt$MigrationReviewVM$private fun fiatAmount(zatoshi: Zatoshi, exchangeRateState: ExchangeRateState): StringResource?</ID>
+    <ID>ReturnCount:MigrationReviewVM.kt$MigrationReviewVM$private fun preparationDetails( sched: MigrationSchedule, totalAmount: StringResource, ): MigrationPreparationDetails?</ID>
+    <ID>ReturnCount:MigrationReviewVM.kt$MigrationReviewVM$private fun preparationsSummarySubtitle(sched: MigrationSchedule): StringResource?</ID>
+    <ID>ReturnCount:MigrationSetupVM.kt$MigrationSetupVM$private fun fiatAmount(zatoshi: Zatoshi, exchangeRateState: ExchangeRateState): StringResource?</ID>
+    <ID>ReturnCount:MigrationTransferDueReceiver.kt$MigrationTransferDueReceiver$override fun onReceive(context: Context, intent: Intent)</ID>
+    <ID>ReturnCount:MigrationWorker.kt$MigrationWorker$override suspend fun doWork(): Result</ID>
     <ID>ReturnCount:OfframpOrchestrator.kt$OfframpOrchestrator$private suspend fun isUpiAlreadyOnChain(orderId: BigInteger, accepted: OrderSnapshot): Boolean</ID>
     <ID>ReturnCount:OfframpStatusToSteps.kt$private fun computeStepStatus( index: Int, order: List&lt;OfframpStep&gt;, currentStep: OfframpStep?, failedStep: OfframpStep?, status: OfframpStatus, ): UpiOfframpStepStatus</ID>
     <ID>ReturnCount:OfframpVM.kt$OfframpVM$private fun computeFiat(amount: String, rate: ExchangeRateState): StringResource?</ID>
@@ -310,18 +473,32 @@
     <ID>ThrowsCount:BaseRpcClient.kt$BaseRpcClient$private suspend fun rpcCall(method: String, params: JsonArray): JsonElement</ID>
     <ID>ThrowsCount:BundlerClient.kt$BundlerClient$private suspend fun rpcCall(method: String, params: JsonArray): JsonElement</ID>
     <ID>ThrowsCount:OfframpBridgeWallet.kt$NearBridgeOfframpFunding$private suspend fun pollUntilSettled(depositAddress: String, tokens: List&lt;SwapAsset&gt;)</ID>
+    <ID>TooGenericExceptionCaught:DebugStartMigrationE2EUseCase.kt$DebugStartMigrationE2EUseCase$e: RuntimeException</ID>
     <ID>TooGenericExceptionCaught:FallbackOrderReader.kt$FallbackOrderReader$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:MigrationKeystoneScanVM.kt$MigrationKeystoneScanVM$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:MigrationLiveDriver.kt$MigrationLiveDriverImpl$e: Throwable</ID>
+    <ID>TooGenericExceptionCaught:MigrationReviewVM.kt$MigrationReviewVM$e: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:MigrationScheduledVM.kt$MigrationScheduledVM$e: Throwable</ID>
     <ID>TooGenericExceptionCaught:OfframpOrchestrator.kt$OfframpOrchestrator$e: Throwable</ID>
     <ID>TooGenericExceptionCaught:SubmitProposalUseCase.kt$SubmitProposalUseCase$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ZcashApplication.kt$ZcashApplication$e: Exception</ID>
+    <ID>TooGenericExceptionThrown:MigrationKeystoneSignVMTest.kt$MigrationKeystoneSignVMTest$throw RuntimeException("first attempt fails")</ID>
     <ID>TooManyFunctions:AddChatContactVM.kt$AddChatContactVM</ID>
     <ID>TooManyFunctions:AddressBookVM.kt$AddressBookVM : ViewModel</ID>
+    <ID>TooManyFunctions:AdvancedSettingsVM.kt$AdvancedSettingsVM : ViewModel</ID>
     <ID>TooManyFunctions:AuthenticationViewModel.kt$AuthenticationViewModel : AndroidViewModel</ID>
     <ID>TooManyFunctions:BaseRpcClient.kt$BaseRpcClient</ID>
     <ID>TooManyFunctions:BundlerClient.kt$BundlerClient</ID>
     <ID>TooManyFunctions:EditChatContactVM.kt$EditChatContactVM</ID>
+    <ID>TooManyFunctions:MigrationDriveOnce.kt$MigrationDriveOnce</ID>
+    <ID>TooManyFunctions:MigrationDriveOnce.kt$co.electriccoin.zcash.work.MigrationDriveOnce.kt</ID>
+    <ID>TooManyFunctions:MigrationFlowPreviews.kt$co.electriccoin.zcash.ui.screen.migration.MigrationFlowPreviews.kt</ID>
+    <ID>TooManyFunctions:MigrationNotifier.kt$MigrationNotifier</ID>
+    <ID>TooManyFunctions:MigrationReviewScreen.kt$co.electriccoin.zcash.ui.screen.migration.review.MigrationReviewScreen.kt</ID>
+    <ID>TooManyFunctions:MigrationReviewVM.kt$MigrationReviewVM : ViewModel</ID>
     <ID>TooManyFunctions:OfframpOrchestrator.kt$OfframpOrchestrator : OfframpDriver</ID>
     <ID>TooManyFunctions:P2pTransactionsView.kt$co.electriccoin.zcash.ui.screen.settings.p2p.P2pTransactionsView.kt</ID>
+    <ID>TooManyFunctions:ReviewTransactionVM.kt$ReviewTransactionVM : ViewModel</ID>
     <ID>TooManyFunctions:SecuritySettingsVM.kt$SecuritySettingsVM : ViewModel</ID>
     <ID>TooManyFunctions:SelectABRecipientVM.kt$SelectABRecipientVM : ViewModel</ID>
     <ID>TooManyFunctions:SupportTicketListVM.kt$SupportTicketListVM : ViewModel</ID>
@@ -333,7 +510,10 @@
     <ID>UnusedParameter:ReceiveView.kt$appBarState: ZashiMainTopAppBarState?</ID>
     <ID>UnusedParameter:RootNavGraph.kt$walletViewModel: WalletViewModel</ID>
     <ID>UnusedParameter:SwapView.kt$appBarState: ZashiMainTopAppBarState</ID>
+    <ID>UnusedPrivateMember:MigrationFlowPreviews.kt$private fun previewPreparationDetails()</ID>
+    <ID>UnusedPrivateMember:MigrationFlowPreviews.kt$private fun previewSendingStateWithFailure()</ID>
     <ID>UnusedPrivateMember:RequestVM.kt$RequestVM$private fun onAmountDone(conversion: FiatCurrencyConversion?)</ID>
+    <ID>UnusedPrivateProperty:CheckMigrationRecoveryUseCaseTest.kt$CheckMigrationRecoveryUseCaseTest$private val testAccountKeyId = testSdkAccount.accountUuid.toStorageKeyId()</ID>
     <ID>UnusedPrivateProperty:HomeMessage.kt$val bottomCornerSize by animateDpAsState( targetValue = if (isVisible) BOTTOM_CUTOUT_HEIGHT_DP.dp else 0.dp, animationSpec = animationSpec() )</ID>
     <ID>UnusedPrivateProperty:SettingsTabContent.kt$val scope = rememberCoroutineScope()</ID>
     <ID>UnusedPrivateProperty:UpiOfframpProgressView.kt$private const val CARD_PADDING = 14</ID>

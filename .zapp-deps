@@ -3,7 +3,7 @@
 # Update when intentionally bumping a sibling dependency.
 
 # GitHub: https://github.com/JustZappIt/zappMessaging
-zappMessaging=7efb2692c805f4aff303ef3aac7c0b0ff834131c
+zappMessaging=db6ae33fd049b600e8095a0c772ab8022917bacb
 
 # bare-kit is a direct clone of holepunchto/bare-kit v2.0.0 with no Zapp modifications.
 # GitHub: https://github.com/holepunchto/bare-kit
@@ -15,7 +15,11 @@ bare-kit=15a3569f3d704de7151761051c8d9cc2e299414f
 # zodl ships SDK_INCLUDED_BUILD_PATH blank and requests ZCASH_SDK_VERSION from the
 # central.sonatype.com snapshot repo, so we match it rather than building the Rust backend
 # locally. This SHA is the provenance of that artifact, not a build input; CI does not
-# verify it. v2.8.0-rc.1 (LIBRARY_VERSION=2.8.0-rc.1, 2026-07-26) is the first SDK release
-# with Ironwood (NU6.3) support and is what upstream zodl 3.8.0 ships.
+# verify it. v3.0.0 carries the ZODL Slipstream sync engine (enabled per-wallet via
+# WalletCoordinator's isSlipstreamEnabled) and the OrchardMigrationSdk that drives the
+# Orchard->Ironwood migration; v3.0.1 adds the Slipstream fixes upstream zodl 3.9.1 ships:
+# the DB-backed chain-height fallback that stops transaction status flickering to Pending
+# across a synchronizer rebuild, and a timestamp estimate for expired never-mined
+# transactions. It also carries the semantic-types API break (Pczt, TransactionId).
 # GitHub: https://github.com/zcash/zcash-android-wallet-sdk
-zcashAndroidWalletSdk=a003bd83c3e6ae2be70e71fc5d54d56ab769d523
+zcashAndroidWalletSdk=b5a302cbbe6dd3da4a615dade221ca3461236304

@@ -81,7 +81,6 @@ fun ZappScreenHeader(
     onTitleClick: (() -> Unit)? = null,
     right: (@Composable () -> Unit)? = null,
     left: (@Composable () -> Unit)? = null,
-    containerColor: Color = ZappTheme.colors.surface,
     titleStyle: TextStyle = ZappTheme.typography.screenTitle,
 ) {
     val c = ZappTheme.colors
@@ -89,7 +88,7 @@ fun ZappScreenHeader(
         modifier =
             modifier
                 .fillMaxWidth()
-                .background(containerColor)
+                .background(c.bg)
                 // Respect horizontal display cutouts (camera punch-holes) so the right-side chip
                 // is never obscured behind the camera or a system overlay.
                 .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
@@ -504,6 +503,7 @@ fun ZappFab(
 fun ZappBottomActionBar(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    isBackEnabled: Boolean = true,
     primaryAction: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val c = ZappTheme.colors
@@ -527,7 +527,7 @@ fun ZappBottomActionBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        ZappBackButton(onClick = onBack)
+        ZappBackButton(onClick = onBack, enabled = isBackEnabled)
         if (primaryAction != null) primaryAction()
     }
 }
@@ -537,6 +537,7 @@ fun ZappBottomActionBar(
 fun ZappBackButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     val c = ZappTheme.colors
     val backContentDescription = stringResource(R.string.general_back_content_description)
@@ -545,19 +546,21 @@ fun ZappBackButton(
             modifier
                 .size(48.dp)
                 .clickable(
+                    enabled = enabled,
                     onClick = onClick,
                     interactionSource = remember { MutableInteractionSource() },
                     indication = ripple(bounded = true, color = c.text),
                 ).semantics {
                     contentDescription = backContentDescription
                     role = Role.Button
+                    if (!enabled) disabled()
                 },
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
             contentDescription = null,
-            tint = c.text,
+            tint = if (enabled) c.text else c.textSubtle,
             modifier = Modifier.size(20.dp),
         )
     }

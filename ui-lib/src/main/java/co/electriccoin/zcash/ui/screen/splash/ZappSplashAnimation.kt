@@ -1,4 +1,4 @@
-@file:Suppress("MatchingDeclarationName", "DEPRECATION")
+@file:Suppress("MatchingDeclarationName")
 
 package co.electriccoin.zcash.ui.screen.splash
 
@@ -11,7 +11,6 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -43,7 +42,6 @@ import co.electriccoin.zcash.ui.screen.splash.ZappSplashConstants.SLIDE_OUT_MS
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
-import android.graphics.Color as AndroidColor
 
 const val ZAPP_SPLASH_TEST_TAG = "ZAPP_SPLASH_TEST_TAG"
 
@@ -70,17 +68,6 @@ object ZappSplashConstants {
     const val MARK_SCALE = 1.02f
 }
 
-// Mirror ZcashTheme's navigation-bar contrast scrims so the splash can drop them while it covers
-// the screen and restore the exact same styling when it leaves.
-private const val NAV_LIGHT_ALPHA = 0xe6
-private const val NAV_LIGHT_CHANNEL = 0xFF
-private const val NAV_DARK_ALPHA = 0x80
-private const val NAV_DARK_CHANNEL = 0x1b
-private val NAV_LIGHT_SCRIM =
-    AndroidColor.argb(NAV_LIGHT_ALPHA, NAV_LIGHT_CHANNEL, NAV_LIGHT_CHANNEL, NAV_LIGHT_CHANNEL)
-private val NAV_DARK_SCRIM =
-    AndroidColor.argb(NAV_DARK_ALPHA, NAV_DARK_CHANNEL, NAV_DARK_CHANNEL, NAV_DARK_CHANNEL)
-
 /**
  * Brand splash. The Z is two orange triangles (R.drawable.zapp_z_top / _bottom, exported from
  * Figma) split along the Z's main diagonal. A single progress value drives both halves
@@ -106,23 +93,18 @@ internal fun ZappSplashAnimation(
     // ZcashTheme's edge-to-edge setup — whose LaunchedEffect re-enables the scrim — then restored
     // when the splash leaves.
     val activity = LocalActivity.current as? ComponentActivity
-    val darkMode = isSystemInDarkTheme()
     LaunchedEffect(activity) {
         withFrameNanos { }
         val window = activity?.window ?: return@LaunchedEffect
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
-        window.navigationBarColor = AndroidColor.TRANSPARENT
     }
-    DisposableEffect(activity, darkMode) {
+    DisposableEffect(activity) {
         onDispose {
             val window = activity?.window ?: return@onDispose
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 window.isNavigationBarContrastEnforced = true
-                window.navigationBarColor = AndroidColor.TRANSPARENT
-            } else {
-                window.navigationBarColor = if (darkMode) NAV_DARK_SCRIM else NAV_LIGHT_SCRIM
             }
         }
     }

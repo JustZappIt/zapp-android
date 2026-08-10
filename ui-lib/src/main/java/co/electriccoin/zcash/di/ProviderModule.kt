@@ -2,6 +2,7 @@ package co.electriccoin.zcash.di
 
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.BuildConfig
+import co.electriccoin.zcash.ui.common.provider.AndroidOnrampDeviceSignalsProvider
 import co.electriccoin.zcash.ui.common.provider.ApplicationStateProvider
 import co.electriccoin.zcash.ui.common.provider.ApplicationStateProviderImpl
 import co.electriccoin.zcash.ui.common.provider.BlockchainProvider
@@ -21,6 +22,7 @@ import co.electriccoin.zcash.ui.common.provider.GetVersionInfoProvider
 import co.electriccoin.zcash.ui.common.provider.GetZcashCurrencyProvider
 import co.electriccoin.zcash.ui.common.provider.HttpClientProvider
 import co.electriccoin.zcash.ui.common.provider.HttpClientProviderImpl
+import co.electriccoin.zcash.ui.common.provider.IsBackgroundExecutionAvailableProvider
 import co.electriccoin.zcash.ui.common.provider.IsExchangeRateEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.provider.IsExchangeRateEnabledStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.IsIronwoodAnnouncementShownStorageProvider
@@ -32,6 +34,8 @@ import co.electriccoin.zcash.ui.common.provider.IsTorEnabledStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.KeystoneSDKProvider
 import co.electriccoin.zcash.ui.common.provider.KeystoneSDKProviderImpl
 import co.electriccoin.zcash.ui.common.provider.KtorNearApiProvider
+import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProvider
+import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.LightWalletEndpointProvider
 import co.electriccoin.zcash.ui.common.provider.NearApiProvider
 import co.electriccoin.zcash.ui.common.provider.NearBridgeOfframpFunding
@@ -42,6 +46,8 @@ import co.electriccoin.zcash.ui.common.provider.OfframpCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.provider.OfframpTopUpCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.provider.OfframpTopUpCheckpointStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.OfframpTopUpPreview
+import co.electriccoin.zcash.ui.common.provider.OnrampCheckpointStorageProvider
+import co.electriccoin.zcash.ui.common.provider.OnrampCheckpointStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProviderImpl
 import co.electriccoin.zcash.ui.common.provider.PreferredFiatProvider
@@ -81,6 +87,7 @@ import co.electriccoin.zcash.ui.common.push.ChatNotificationTiming
 import co.electriccoin.zcash.ui.common.push.ChatPushBackend
 import co.electriccoin.zcash.ui.common.push.ChatPushBackendImpl
 import co.electriccoin.zcash.ui.common.push.PushRegistrar
+import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import io.ktor.client.HttpClient
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
@@ -105,6 +112,8 @@ import xyz.justzappit.offramp.funding.OfframpFunding
 import xyz.justzappit.offramp.funding.OfframpRefund
 import xyz.justzappit.offramp.funding.OfframpTopUp
 import xyz.justzappit.offramp.funding.PreFundedOfframpFunding
+import xyz.justzappit.offramp.onramp.OnrampDeviceSignalsProvider
+import xyz.justzappit.offramp.onramp.OnrampScreeningSessionProvider
 import xyz.justzappit.offramp.p2p.DirectPixResolver
 import xyz.justzappit.offramp.p2p.DynamicPixResolver
 import xyz.justzappit.offramp.p2p.SubgraphClient
@@ -115,13 +124,21 @@ const val OFFRAMP_HTTP_CLIENT_QUALIFIER = "offramp_http"
 val providerModule =
     module {
         factoryOf(::LightWalletEndpointProvider)
+        factoryOf(::SecretAuthGate)
         singleOf(::GetVersionInfoProvider)
         singleOf(::GetZcashCurrencyProvider)
         singleOf(::SelectedAccountUUIDProviderImpl) bind SelectedAccountUUIDProvider::class
         singleOf(::PersistableWalletProviderImpl) bind PersistableWalletProvider::class
         singleOf(::PreferredFiatProviderImpl) bind PreferredFiatProvider::class
         singleOf(::PreferredP2pPaymentMethodProviderImpl) bind PreferredP2pPaymentMethodProvider::class
-        singleOf(::SynchronizerProviderImpl) bind SynchronizerProvider::class
+        single {
+            SynchronizerProviderImpl(
+                walletCoordinator = get(),
+                persistableWalletProvider = get(),
+                // lazy {} breaks the AccountDataSource -> SynchronizerProvider resolution cycle
+                migrationSyncedHook = lazy { get() },
+            )
+        } bind SynchronizerProvider::class
         singleOf(::ApplicationStateProviderImpl) bind ApplicationStateProvider::class
         singleOf(::RestoreTimestampStorageProviderImpl) bind RestoreTimestampStorageProvider::class
         singleOf(::WalletBackupRemindMeCountStorageProviderImpl) bind
@@ -158,6 +175,11 @@ val providerModule =
 
         // UPI offramp infrastructure (evm-lib + offramp-lib config wiring).
         singleOf(::OfframpCheckpointStorageProviderImpl) bind OfframpCheckpointStorageProvider::class
+        singleOf(::OnrampCheckpointStorageProviderImpl) bind OnrampCheckpointStorageProvider::class
+        // Zapp ships without SEON, so the screening record goes out with native signals only.
+        // Wiring the SDK means replacing this one binding.
+        single<OnrampScreeningSessionProvider> { OnrampScreeningSessionProvider.ABSENT }
+        single<OnrampDeviceSignalsProvider> { AndroidOnrampDeviceSignalsProvider(get(), get()) }
         singleOf(::OfframpTopUpCheckpointStorageProviderImpl) bind OfframpTopUpCheckpointStorageProvider::class
         single<HttpClient>(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)) {
             // Pipe ktor's Logging plugin output through Twig so subgraph + RPC errors land in
@@ -318,4 +340,6 @@ val providerModule =
                 if (cause != null) Twig.warn(cause) { msg } else Twig.warn { msg }
             }
         }
+        singleOf(::LastNetworkActivityStorageProviderImpl) bind LastNetworkActivityStorageProvider::class
+        factoryOf(::IsBackgroundExecutionAvailableProvider)
     }

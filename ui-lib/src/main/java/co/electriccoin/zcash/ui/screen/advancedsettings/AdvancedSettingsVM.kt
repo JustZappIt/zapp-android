@@ -6,14 +6,18 @@ import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.UsbOff
+import androidx.compose.material.icons.filled.Visibility
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.migration.MigrationGate
+import co.electriccoin.zcash.ui.common.migration.MigrationNavigator
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.model.WalletRestoringState
@@ -28,6 +32,8 @@ import co.electriccoin.zcash.ui.screen.advancedsettings.debug.DebugArgs
 import co.electriccoin.zcash.ui.screen.disconnect.DisconnectArgs
 import co.electriccoin.zcash.ui.screen.hotfix.enhancement.EnhancementHotfixArgs
 import co.electriccoin.zcash.ui.screen.hotfix.ephemeral.EphemeralHotfixArgs
+import co.electriccoin.zcash.ui.screen.viewingkeyexport.ViewingKeyExportArgs
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
@@ -43,26 +49,37 @@ class AdvancedSettingsVM(
     private val navigateToResetWallet: NavigateToResetWalletUseCase,
     private val navigateToExportPrivateData: NavigateToExportPrivateDataUseCase,
     private val navigateToTaxExport: NavigateToTaxExportUseCase,
+    private val migrationGate: MigrationGate,
+    private val migrationNavigator: MigrationNavigator,
 ) : ViewModel() {
+    private val restartAvailable = MutableStateFlow(false)
+
+    init {
+        viewModelScope.launch { restartAvailable.value = migrationGate.isRestartAvailable() }
+    }
+
     val state: StateFlow<AdvancedSettingsState> =
         combine(
             getWalletRestoringState.observe(),
-            getWalletAccounts.observe()
-        ) { walletState, accounts ->
-            createState(walletState, accounts)
+            getWalletAccounts.observe(),
+            restartAvailable,
+        ) { walletState, accounts, isRestartAvailable ->
+            createState(walletState, accounts, isRestartAvailable)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
             initialValue =
                 createState(
                     getWalletRestoringState.observe().value,
-                    getWalletAccounts.observe().value
+                    getWalletAccounts.observe().value,
+                    restartAvailable.value,
                 )
         )
 
     private fun createState(
         walletRestoringState: WalletRestoringState,
-        accounts: List<WalletAccount>?
+        accounts: List<WalletAccount>?,
+        isRestartAvailable: Boolean,
     ): AdvancedSettingsState {
         val hasKeystoneAccount = accounts?.any { it is KeystoneAccount } == true
         val restoring = walletRestoringState == WalletRestoringState.RESTORING
@@ -88,6 +105,13 @@ class AdvancedSettingsVM(
                         onClick = ::onTaxExportClick,
                     ),
                     AdvancedSettingsItem(
+                        title = stringRes(R.string.advanced_settings_viewing_key_export),
+                        subtitle = stringRes(R.string.advanced_settings_viewing_key_export_subtitle),
+                        icon = Icons.Default.Visibility,
+                        isEnabled = !restoring,
+                        onClick = ::onViewingKeyExportClick,
+                    ),
+                    AdvancedSettingsItem(
                         title = stringRes(R.string.advanced_settings_discover_funds),
                         icon = Icons.Default.Search,
                         onClick = ::onDiscoverFundsClick,
@@ -102,6 +126,11 @@ class AdvancedSettingsVM(
                         icon = Icons.Default.UsbOff,
                         onClick = ::onDisconnectHwWalletClick,
                     ).takeIf { hasKeystoneAccount },
+                    AdvancedSettingsItem(
+                        title = stringRes(co.electriccoin.zcash.ui.design.R.string.restartMigration_settingsItem),
+                        icon = Icons.Default.RestartAlt,
+                        onClick = ::onRestartMigrationClick,
+                    ).takeIf { isRestartAvailable },
                     AdvancedSettingsItem(
                         title = stringRes(R.string.advanced_settings_developer_tools),
                         icon = Icons.Default.BugReport,
@@ -123,6 +152,8 @@ class AdvancedSettingsVM(
 
     private fun onTaxExportClick() = viewModelScope.launch { navigateToTaxExport() }
 
+    private fun onViewingKeyExportClick() = navigationRouter.forward(ViewingKeyExportArgs)
+
     private fun onDiscoverFundsClick() = navigationRouter.forward(EphemeralHotfixArgs(address = null))
 
     private fun onRefreshTransactionDataClick() = navigationRouter.forward(EnhancementHotfixArgs)
@@ -132,4 +163,6 @@ class AdvancedSettingsVM(
     private fun onDebugMenuClick() = navigationRouter.forward(DebugArgs)
 
     private fun onResetWalletClick() = viewModelScope.launch { navigateToResetWallet() }
+
+    private fun onRestartMigrationClick() = migrationNavigator.forwardToRestartMigration()
 }

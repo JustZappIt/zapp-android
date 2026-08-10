@@ -24,6 +24,8 @@
     <string name="settings_contacts_subtitle">Gerencie seus contatos de chat</string>
     <string name="settings_profile_identity_title">Perfil e identidade</string>
     <string name="settings_profile_identity_subtitle">Frase semente, chave de mensagens, endereço da carteira</string>
+    <string name="settings_profile_copy_key">Copiar chave</string>
+    <string name="settings_chat_settings_subtitle">Confirmações de leitura, status online, entrega</string>
     <string name="settings_app_lock_title">Bloqueio do app</string>
     <string name="settings_app_lock_subtitle">Alterar o PIN ou trocar o método de autenticação</string>
     <string name="settings_tor_title">Tor</string>

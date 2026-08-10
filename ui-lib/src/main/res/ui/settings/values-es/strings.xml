@@ -24,6 +24,8 @@
     <string name="settings_contacts_subtitle">Gestiona tus contactos de chat</string>
     <string name="settings_profile_identity_title">Perfil e identidad</string>
     <string name="settings_profile_identity_subtitle">Frase semilla, clave de mensajería, dirección de billetera</string>
+    <string name="settings_profile_copy_key">Copiar clave</string>
+    <string name="settings_chat_settings_subtitle">Confirmaciones de lectura, estado en línea, entrega</string>
     <string name="settings_profile_qr_content_description">Abrir el código QR de tu identidad de mensajería</string>
     <string name="settings_app_lock_title">Bloqueo de la app</string>
     <string name="settings_app_lock_subtitle">Cambia el PIN o el método de autenticación</string>

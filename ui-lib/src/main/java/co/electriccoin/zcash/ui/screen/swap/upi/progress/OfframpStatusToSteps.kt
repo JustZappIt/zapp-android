@@ -1,6 +1,8 @@
 package co.electriccoin.zcash.ui.screen.swap.upi.progress
 
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
+import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import xyz.justzappit.offramp.orchestrator.OfframpStatus
@@ -13,7 +15,7 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * Pure mapper: orchestrator [OfframpStatus] → ordered list of [UpiOfframpStep] rows for the UI.
+ * Pure mapper: orchestrator [OfframpStatus] → ordered list of [ZappStep] rows for the UI.
  *
  * Extracted from [UpiOfframpProgressVM] so it can be unit-tested without standing up a ViewModel
  * + Dispatchers.Main, and so the VM stays focused on flow plumbing. All inputs are values; the
@@ -24,7 +26,7 @@ internal fun buildProgressSteps(
     currency: CurrencyCode,
     fundedFromBaseObserved: Boolean = false,
     bridgingObserved: Boolean = false,
-): List<UpiOfframpStep> {
+): List<ZappStep> {
     val order =
         OfframpStep.UI_PROGRESS.filter { step ->
             step != OfframpStep.FUNDING || shouldShowFundingStep(status, fundedFromBaseObserved, bridgingObserved)
@@ -32,7 +34,7 @@ internal fun buildProgressSteps(
     val currentStep = status.step.takeIf { status !is OfframpStatus.Failed }
     val failedStep = (status as? OfframpStatus.Failed)?.step
     return order.mapIndexed { index, step ->
-        UpiOfframpStep(
+        ZappStep(
             label = labelFor(step, status, currency),
             status = computeStepStatus(index, order, currentStep, failedStep, status),
             detailLines = stepDetail(status, step),
@@ -76,13 +78,13 @@ private fun computeStepStatus(
     currentStep: OfframpStep?,
     failedStep: OfframpStep?,
     status: OfframpStatus,
-): UpiOfframpStepStatus {
+): ZappStepStatus {
     if (failedStep != null) {
         val failedAt = uiIndexFor(failedStep, order)
         return when {
-            index == failedAt -> UpiOfframpStepStatus.Failed
-            index < failedAt -> UpiOfframpStepStatus.Completed
-            else -> UpiOfframpStepStatus.Pending
+            index == failedAt -> ZappStepStatus.Failed
+            index < failedAt -> ZappStepStatus.Completed
+            else -> ZappStepStatus.Pending
         }
     }
     // Cancelled is terminal: the WAITING_FOR_COMPLETION row didn't complete (paint Failed);
@@ -90,27 +92,27 @@ private fun computeStepStatus(
     if (status is OfframpStatus.Cancelled) {
         val cancelledAt = uiIndexFor(OfframpStep.WAITING_FOR_COMPLETION, order)
         return when {
-            index == cancelledAt -> UpiOfframpStepStatus.Failed
-            index < cancelledAt -> UpiOfframpStepStatus.Completed
-            else -> UpiOfframpStepStatus.Pending
+            index == cancelledAt -> ZappStepStatus.Failed
+            index < cancelledAt -> ZappStepStatus.Completed
+            else -> ZappStepStatus.Pending
         }
     }
     // Completed is terminal success: every row is done, including the final completion row (which the
     // status->step mapping otherwise reports as the "current" step and would paint InProgress).
-    if (status is OfframpStatus.Completed) return UpiOfframpStepStatus.Completed
-    if (currentStep == null) return UpiOfframpStepStatus.Pending
+    if (status is OfframpStatus.Completed) return ZappStepStatus.Completed
+    if (currentStep == null) return ZappStepStatus.Pending
     val currentIndex = order.indexOf(displayedStepFor(currentStep))
     if (currentIndex < 0) {
         val nextVisibleIndex = nextVisibleIndexAfter(currentStep, order)
         return when {
-            index < nextVisibleIndex -> UpiOfframpStepStatus.Completed
-            else -> UpiOfframpStepStatus.Pending
+            index < nextVisibleIndex -> ZappStepStatus.Completed
+            else -> ZappStepStatus.Pending
         }
     }
     return when {
-        index < currentIndex -> UpiOfframpStepStatus.Completed
-        index == currentIndex -> UpiOfframpStepStatus.InProgress
-        else -> UpiOfframpStepStatus.Pending
+        index < currentIndex -> ZappStepStatus.Completed
+        index == currentIndex -> ZappStepStatus.InProgress
+        else -> ZappStepStatus.Pending
     }
 }
 

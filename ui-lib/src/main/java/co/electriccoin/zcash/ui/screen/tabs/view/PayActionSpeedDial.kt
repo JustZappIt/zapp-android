@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallReceived
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Wallet
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -24,6 +25,7 @@ internal fun PayActionSpeedDial(
     onSend: () -> Unit,
     onSwap: () -> Unit,
     onReceive: () -> Unit,
+    onBuyUsdc: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -32,6 +34,11 @@ internal fun PayActionSpeedDial(
         collapseContentDescription = stringResource(R.string.home_fab_actions_collapse),
         actions =
             listOf(
+                ZappSpeedDialAction(
+                    icon = Icons.Default.Wallet,
+                    label = stringResource(R.string.onramp_speed_dial_buy_usdc),
+                    onClick = onBuyUsdc,
+                ),
                 ZappSpeedDialAction(
                     icon = Icons.Default.Storefront,
                     label = stringResource(R.string.home_button_pay_merchant),

@@ -47,6 +47,9 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappOfframpHeroAmountField
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSettlementLedger
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSettlementLedgerRow
+import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
+import co.electriccoin.zcash.ui.design.component.zapp.ZappStepList
+import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
@@ -54,9 +57,6 @@ import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.swap.upi.OfframpAmountField
 import co.electriccoin.zcash.ui.screen.swap.upi.OfframpFieldLabel
-import co.electriccoin.zcash.ui.screen.swap.upi.progress.OfframpStepList
-import co.electriccoin.zcash.ui.screen.swap.upi.progress.UpiOfframpStep
-import co.electriccoin.zcash.ui.screen.swap.upi.progress.UpiOfframpStepStatus
 
 @Composable
 internal fun BridgeToBaseView(state: BridgeToBaseState) {
@@ -183,7 +183,7 @@ internal fun BridgeToBaseView(state: BridgeToBaseState) {
                     )
                     Spacer(modifier = Modifier.height(GAP_MD.dp))
                 }
-                OfframpStepList(state.steps)
+                ZappStepList(state.steps)
             }
 
             state.errorText?.let { err ->
@@ -345,8 +345,8 @@ private fun PreviewBridging() {
                     bridgingAmountText = stringRes("Adding ≈ ₹428 · 5.03 USDC"),
                     steps =
                         listOf(
-                            UpiOfframpStep(stringRes("Bridging from ZEC via NEAR"), UpiOfframpStepStatus.InProgress),
-                            UpiOfframpStep(stringRes("Funds arrived on Base"), UpiOfframpStepStatus.Pending),
+                            ZappStep(stringRes("Bridging from ZEC via NEAR"), ZappStepStatus.InProgress),
+                            ZappStep(stringRes("Funds arrived on Base"), ZappStepStatus.Pending),
                         ),
                     isInputVisible = false,
                     primaryButton = ButtonState(stringRes("Bridging…"), isEnabled = false),

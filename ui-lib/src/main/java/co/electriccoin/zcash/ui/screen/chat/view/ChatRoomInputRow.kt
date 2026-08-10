@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -61,6 +62,8 @@ import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.screen.chat.room.ChatRoomInputState
 import kotlinx.coroutines.launch
+
+private val INPUT_CONTROL_SIZE = 50.dp
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -121,7 +124,7 @@ internal fun InputRow(state: ChatRoomInputState) {
             Box(
                 modifier =
                     Modifier
-                        .size(TextFieldDefaults.MinHeight)
+                        .size(INPUT_CONTROL_SIZE)
                         .background(c.surfaceAlt, RectangleShape)
                         .border(BorderStroke(1.dp, c.border), RectangleShape)
                         .clickable(
@@ -154,6 +157,9 @@ internal fun InputRow(state: ChatRoomInputState) {
                 modifier =
                     Modifier
                         .weight(1f)
+                        // Beats the 56dp TextFieldDefaults.MinHeight that defaultMinSize would
+                        // otherwise apply, so the field matches the buttons beside it.
+                        .heightIn(min = INPUT_CONTROL_SIZE)
                         .then(
                             if (receiveContentListener != null) {
                                 Modifier.contentReceiver(receiveContentListener)
@@ -201,7 +207,7 @@ internal fun InputRow(state: ChatRoomInputState) {
             Box(
                 modifier =
                     Modifier
-                        .size(TextFieldDefaults.MinHeight)
+                        .size(INPUT_CONTROL_SIZE)
                         .pressScale(sendInteractionSource)
                         .background(sendBg, RectangleShape)
                         .border(BorderStroke(1.dp, c.border), RectangleShape)

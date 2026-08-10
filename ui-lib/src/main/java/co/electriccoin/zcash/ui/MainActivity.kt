@@ -26,11 +26,15 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
+import androidx.navigation.toRoute
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.compose.BindCompLocalProvider
 import co.electriccoin.zcash.ui.common.compose.DisableScreenTimeout
 import co.electriccoin.zcash.ui.common.extension.setContentCompat
+import co.electriccoin.zcash.ui.common.migration.MigrationAppHooks
 import co.electriccoin.zcash.ui.common.provider.CHAT_CONVERSATION_ID_EXTRA
 import co.electriccoin.zcash.ui.common.push.ChatNotificationTiming
 import co.electriccoin.zcash.ui.common.viewmodel.AuthenticationUIState
@@ -80,6 +84,7 @@ class MainActivity : FragmentActivity() {
     private val zappSplashStartFlow = MutableStateFlow(false)
 
     private val navigationRouter: NavigationRouter by inject()
+    private val migrationAppHooks: MigrationAppHooks by inject()
 
     private val chatNotificationTiming: ChatNotificationTiming by inject()
 
@@ -100,6 +105,7 @@ class MainActivity : FragmentActivity() {
         }
 
         forwardChatNotificationIntent(intent)
+        handleMigrationIntent(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -111,6 +117,7 @@ class MainActivity : FragmentActivity() {
         }
 
         forwardChatNotificationIntent(intent)
+        handleMigrationIntent(intent)
     }
 
     private fun forwardChatNotificationIntent(intent: Intent) {
@@ -118,15 +125,40 @@ class MainActivity : FragmentActivity() {
             // Consume once so Activity recreation cannot enqueue the same room again.
             intent.removeExtra(CHAT_CONVERSATION_ID_EXTRA)
             chatNotificationTiming.onNotificationTap(conversationId)
-            navigationRouter.forward(ChatRoomArgs(conversationId = conversationId))
+            navigationRouter.custom { current ->
+                // Pushing the room we are already on stacks a duplicate entry, so the first
+                // back press just reveals the same conversation.
+                if (current.isChatRoomOf(conversationId)) {
+                    null
+                } else {
+                    NavigationCommand.Forward(listOf(ChatRoomArgs(conversationId = conversationId)))
+                }
+            }
             chatNotificationTiming.onDeepLinkDispatched()
         }
     }
 
+    private fun NavBackStackEntry?.isChatRoomOf(conversationId: String): Boolean {
+        val destination = this?.destination ?: return false
+        return destination.hasRoute<ChatRoomArgs>() &&
+            toRoute<ChatRoomArgs>().conversationId == conversationId
+    }
+
+    private fun handleMigrationIntent(intent: Intent): Boolean = migrationAppHooks.handleIntent(intent, lifecycleScope)
+
     override fun onStart() {
         Twig.debug { "Activity state: Start" }
         authenticationViewModel.runAuthenticationRequiredCheck()
+        checkMigrationRecoveryOnStart()
         super.onStart()
+    }
+
+    // RootNavGraph's secretState-driven redirect only re-fires when secretState changes
+    // identity, so it won't catch "a transfer became overdue while backgrounded, already
+    // unlocked." onStart() fires on every foreground transition and catches that case —
+    // isSyncBlocked() has already stopped sync regardless, this is routing only.
+    private fun checkMigrationRecoveryOnStart() {
+        lifecycleScope.launch { migrationAppHooks.checkRecovery() }
     }
 
     override fun onStop() {

@@ -67,7 +67,7 @@ internal fun WalletAddressBubble(
             }
         }
     val copyToClipboard = koinInject<CopyToClipboardUseCase>()
-    val copyLabel = stringResource(R.string.chat_profile_p2p_key_copy)
+    val copyLabel = stringResource(R.string.chat_p2p_key_copy_content_description)
 
     val qrBitmap =
         remember(address) {

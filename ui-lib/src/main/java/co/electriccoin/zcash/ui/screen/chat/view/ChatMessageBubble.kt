@@ -417,7 +417,7 @@ private fun TextMessageBubble(
                 Spacer(modifier = Modifier.width(4.dp))
                 MessageStatusIndicator(
                     status = message.status,
-                    mutedColor = c.onAccent.copy(alpha = OUTGOING_META_ALPHA),
+                    mutedColor = c.onAccent.copy(alpha = OUTGOING_STATUS_ALPHA),
                     readColor = c.onAccent,
                 )
             }
@@ -489,6 +489,7 @@ private const val CONTENT_TYPE_LOCATION = MimeTypes.LOCATION
 private const val IMAGE_MIME_PREFIX = MimeTypes.IMAGE_PREFIX
 private const val VIDEO_MIME_PREFIX = MimeTypes.VIDEO_PREFIX
 private const val OUTGOING_META_ALPHA = 0.7f
+private const val OUTGOING_STATUS_ALPHA = 0.55f
 private const val MAX_BUBBLE_WIDTH = 280
 private const val SWIPE_MAX_OFFSET = 120f
 private const val SWIPE_THRESHOLD = 80f

@@ -114,7 +114,6 @@ internal fun RequestView(
                 topBar = {
                     ZappScreenHeader(
                         title = stringResource(id = R.string.request_title),
-                        containerColor = c.bg,
                         modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars),
                     )
                 },

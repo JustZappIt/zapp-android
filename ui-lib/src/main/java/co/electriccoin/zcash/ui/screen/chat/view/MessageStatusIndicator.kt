@@ -98,25 +98,36 @@ internal fun MessageStatusIndicator(
                 }
             }
         val description = stringResource(descriptionRes)
+        // On solid-accent bubbles readColor and mutedColor share a hue, so read also steps
+        // up in size; colour alone is imperceptible at caption scale.
+        val isRead = target == MessageStatus.READ
+        val fontSize =
+            when {
+                target == MessageStatus.SENDING -> 11.sp
+                isRead -> READ_GLYPH_SP.sp
+                else -> RESTING_GLYPH_SP.sp
+            }
         val textStyle =
             ZappTheme.typography.caption.copy(
-                fontSize = if (target == MessageStatus.SENDING) 11.sp else 10.sp,
+                fontSize = fontSize,
                 color = color,
                 fontWeight = FontWeight.Black,
             )
 
         if (tickCount > 1) {
+            val tickOffset = if (isRead) READ_TICK_OFFSET_DP else RESTING_TICK_OFFSET_DP
+            val glyphWidth = if (isRead) READ_GLYPH_WIDTH_DP else RESTING_GLYPH_WIDTH_DP
             Box(
                 modifier =
                     Modifier
-                        .width((7 + (tickCount - 1) * 4).dp)
+                        .width((glyphWidth + (tickCount - 1) * tickOffset).dp)
                         .clearAndSetSemantics { contentDescription = description },
             ) {
                 repeat(tickCount) { index ->
                     BasicText(
                         text = glyph,
                         style = textStyle,
-                        modifier = Modifier.offset(x = (index * 4).dp),
+                        modifier = Modifier.offset(x = (index * tickOffset).dp),
                     )
                 }
             }
@@ -129,3 +140,10 @@ internal fun MessageStatusIndicator(
         }
     }
 }
+
+private const val RESTING_GLYPH_SP = 10
+private const val READ_GLYPH_SP = 12
+private const val RESTING_GLYPH_WIDTH_DP = 7
+private const val READ_GLYPH_WIDTH_DP = 9
+private const val RESTING_TICK_OFFSET_DP = 4
+private const val READ_TICK_OFFSET_DP = 5

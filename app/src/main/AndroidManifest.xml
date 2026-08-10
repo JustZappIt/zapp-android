@@ -20,6 +20,16 @@
         android:supportsRtl="false"
         android:label="@string/app_name">
 
+        <!-- Apps targeting API 36 have screenOrientation / resizableActivity / aspect-ratio
+             restrictions ignored on displays with a smallest width of 600dp or more, which would
+             unlock landscape on tablets and unfolded foldables for the portrait-only layouts.
+             This property keeps the API 35 behaviour; it stops being honoured at API 37, so the
+             layouts have to be made adaptive before the next target-SDK bump. -->
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
+            android:value="true"
+            tools:targetApi="31" />
+
         <!-- Alias acts as the entrypoint to the application.
              Using an alias ensures we can refactor the actual Activity without breaking
              clients. -->

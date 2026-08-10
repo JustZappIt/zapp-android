@@ -1,9 +1,12 @@
 package co.electriccoin.zcash.di
 
+import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.common.provider.OrderRecipientUpiStorageProvider
 import co.electriccoin.zcash.ui.common.provider.RelayIdentityStorageProvider
 import co.electriccoin.zcash.ui.common.repository.ApplicationStateRepository
 import co.electriccoin.zcash.ui.common.repository.ApplicationStateRepositoryImpl
+import co.electriccoin.zcash.ui.common.repository.AutomaticServerRepository
+import co.electriccoin.zcash.ui.common.repository.AutomaticServerRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.common.repository.BiometricRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.ConfigurationRepository
@@ -18,6 +21,8 @@ import co.electriccoin.zcash.ui.common.repository.HomeMessageCacheRepository
 import co.electriccoin.zcash.ui.common.repository.HomeMessageCacheRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
 import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepositoryImpl
+import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepository
+import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.repository.SwapRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.TransactionFilterRepository
@@ -35,6 +40,14 @@ import org.koin.core.module.dsl.singleOf
 import org.koin.core.qualifier.named
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import xyz.justzappit.offramp.account.OfframpAccountProvider
+import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
+import xyz.justzappit.offramp.onramp.CustodialOnrampClient
+import xyz.justzappit.offramp.onramp.CustodialOnrampDriver
+import xyz.justzappit.offramp.onramp.FakeOnrampDriver
+import xyz.justzappit.offramp.onramp.OnrampBackendConfig
+import xyz.justzappit.offramp.onramp.OnrampDriver
+import xyz.justzappit.offramp.onramp.OnrampRequestSigner
 import xyz.justzappit.offramp.orchestrator.AaOfframpDriver
 import xyz.justzappit.offramp.orchestrator.OfframpDriver
 import xyz.justzappit.offramp.p2p.CircleRouter
@@ -49,6 +62,7 @@ import xyz.justzappit.offramp.p2p.SubgraphOrderReader
 val repositoryModule =
     module {
         singleOf(::WalletRepositoryImpl) bind WalletRepository::class
+        singleOf(::AutomaticServerRepositoryImpl) bind AutomaticServerRepository::class
         singleOf(::ConfigurationRepositoryImpl) bind ConfigurationRepository::class
         singleOf(::ExchangeRateRepositoryImpl) bind ExchangeRateRepository::class
         singleOf(::FlexaRepositoryImpl) bind FlexaRepository::class
@@ -62,6 +76,7 @@ val repositoryModule =
         singleOf(::ApplicationStateRepositoryImpl) bind ApplicationStateRepository::class
         singleOf(::SwapRepositoryImpl) bind SwapRepository::class
         singleOf(::EphemeralAddressRepositoryImpl) bind EphemeralAddressRepository::class
+        singleOf(::MockOrchardBalanceRepositoryImpl) bind MockOrchardBalanceRepository::class
         singleOf(::LinkPreviewRepository)
 
         // UPI offramp data sources + orchestrator.
@@ -107,5 +122,33 @@ val repositoryModule =
                 relayIdentityStore = get(),
                 orderRecipientUpiCache = get(),
             )
+        }
+        single { OnrampBackendConfig(baseUrl = BuildConfig.P2P_ONRAMP_BASE_URL) }
+        // The operator service places every BUY, so nothing here is signed on-chain. Requests are
+        // authenticated with the seed-derived Base EOA; USDC settles to the ERC-4337 smart account
+        // that EOA owns, which is where offramp, the Base balance and Pay Merchant already look.
+        // The service derives the same account from the signer and refuses any other address, so
+        // the two providers are not interchangeable — see OnrampRecipientProvider.
+        factory<OnrampDriver> {
+            if (BuildConfig.DEBUG && BuildConfig.P2P_ONRAMP_USE_FAKE_DRIVER) {
+                FakeOnrampDriver()
+            } else {
+                val config: OnrampBackendConfig = get()
+                val accountProvider: OfframpAccountProvider = get()
+                val smartAccountProvider: SmartOfframpAccountProvider = get()
+                CustodialOnrampDriver(
+                    client =
+                        CustodialOnrampClient(
+                            httpClient = get(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)),
+                            baseUrl = config.baseUrl,
+                            signerProvider = {
+                                OnrampRequestSigner(accountProvider.nextOfframpAccount(), config.appId)
+                            },
+                            appId = config.appId,
+                        ),
+                    deviceSignals = get(),
+                    recipientProvider = { smartAccountProvider.resolve().address },
+                )
+            }
         }
     }

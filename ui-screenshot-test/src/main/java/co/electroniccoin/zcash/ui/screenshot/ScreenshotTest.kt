@@ -22,16 +22,12 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.core.graphics.writeToTestStorage
-import androidx.test.espresso.Espresso
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.captureToBitmap
 import androidx.test.espresso.matcher.ViewMatchers.isRoot
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.filters.LargeTest
 import androidx.test.filters.SdkSuppress
-import cash.z.ecc.android.sdk.fixture.WalletAddressFixture
-import cash.z.ecc.android.sdk.model.MonetarySeparators
-import cash.z.ecc.sdk.fixture.MemoFixture
 import cash.z.ecc.sdk.fixture.SeedPhraseFixture
 import cash.z.ecc.sdk.type.ZcashCurrency
 import co.electriccoin.zcash.spackle.FirebaseTestLabUtil
@@ -39,7 +35,6 @@ import co.electriccoin.zcash.test.UiTestPrerequisites
 import co.electriccoin.zcash.ui.MainActivity
 import co.electriccoin.zcash.ui.NavigationTargets
 import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.common.appbar.ZashiTopAppBarTags
 import co.electriccoin.zcash.ui.common.viewmodel.SecretState
 import co.electriccoin.zcash.ui.design.component.ConfigurationOverride
 import co.electriccoin.zcash.ui.design.component.UiMode
@@ -50,7 +45,6 @@ import co.electriccoin.zcash.ui.screen.home.HomeTags
 import co.electriccoin.zcash.ui.screen.more.MoreArgs
 import co.electriccoin.zcash.ui.screen.restore.height.RestoreBDHeightTags
 import co.electriccoin.zcash.ui.screen.restore.seed.RestoreSeedTag
-import co.electriccoin.zcash.ui.screen.send.SendTag
 import co.electriccoin.zcash.ui.screen.splash.ZAPP_SPLASH_TEST_TAG
 import co.electriccoin.zcash.ui.screen.walletbackup.WalletBackup
 import kotlinx.coroutines.Dispatchers
@@ -61,7 +55,6 @@ import org.junit.Test
 import kotlin.time.Duration.Companion.seconds
 
 private const val DEFAULT_TIMEOUT_MILLISECONDS = 10_000L
-private const val DEFAULT_TIMEOUT_MILLISECONDS_LONG = 100_000L
 
 /*
  * This screenshot implementation does not change the system-wide configuration, but rather
@@ -364,14 +357,6 @@ class ScreenshotTest : UiTestPrerequisites() {
         accountScreenshots(tag, composeTestRule)
 
         composeTestRule.waitUntilAtLeastOneExists(
-            hasTestTag(HomeTags.SEND),
-            15.seconds.inWholeMilliseconds
-        )
-        composeTestRule.onNode(hasTestTag(HomeTags.SEND)).performClick()
-        sendZecScreenshots(resContext, tag, composeTestRule)
-
-        composeTestRule.onNode(hasTestTag(ZashiTopAppBarTags.BACK)).performClick()
-        composeTestRule.waitUntilAtLeastOneExists(
             hasTestTag(HomeTags.RECEIVE),
             15.seconds.inWholeMilliseconds
         )
@@ -482,61 +467,6 @@ private fun receiveZecScreenshots(
         }
 
     ScreenshotTest.takeScreenshot(tag, "Receive 1")
-}
-
-@OptIn(ExperimentalTestApi::class)
-private fun sendZecScreenshots(
-    resContext: Context,
-    tag: String,
-    composeTestRule: AndroidComposeTestRule<ActivityScenarioRule<MainActivity>, MainActivity>
-) {
-    composeTestRule.waitUntil(DEFAULT_TIMEOUT_MILLISECONDS_LONG) {
-        composeTestRule.activity.walletViewModel.synchronizer.value != null
-    }
-
-    composeTestRule.waitUntilAtLeastOneExists(
-        hasText(resContext.getString(R.string.send_create), ignoreCase = true),
-        15.seconds.inWholeMilliseconds
-    )
-
-    composeTestRule
-        .onNode(
-            hasText(
-                resContext.getString(R.string.send_create),
-                ignoreCase = true
-            )
-        ).also {
-            it.assertExists()
-        }
-
-    // Screenshot: Empty form
-    ScreenshotTest.takeScreenshot(tag, "Send 1")
-
-    composeTestRule
-        .onNode(
-            hasTestTag(SendTag.SEND_AMOUNT_FIELD)
-        ).also {
-            val separators = MonetarySeparators.current()
-
-            it.performTextInput("0${separators.decimal}123")
-        }
-
-    composeTestRule.onNodeWithText(resContext.getString(R.string.send_address_hint)).also {
-        it.performTextInput(WalletAddressFixture.UNIFIED_ADDRESS_STRING)
-    }
-
-    composeTestRule.onNodeWithText(resContext.getString(R.string.send_memo_hint)).also {
-        it.performTextInput(MemoFixture.MEMO_STRING)
-    }
-
-    // To close soft keyboard to reveal the send button
-    Espresso.closeSoftKeyboard()
-
-    // Screenshot: Fulfilled form
-    ScreenshotTest.takeScreenshot(tag, "Send 2")
-
-    // The rest of the Send screens (i.e. Send Confirmation) depends on sufficient available balance which can'
-    // achieve in this kind of the test in a reasonable time thanks to block synchronization
 }
 
 private fun supportScreenshots(

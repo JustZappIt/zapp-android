@@ -24,6 +24,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -47,13 +48,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.design.component.ZashiModalBottomSheet
+import co.electriccoin.zcash.ui.design.component.zapp.ZAPP_INPUT_FIELD_HEIGHT
 import co.electriccoin.zcash.ui.design.component.zapp.ZappInputField
 import co.electriccoin.zcash.ui.design.component.zapp.ellipsizeAddress
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.getValue
-import co.electriccoin.zcash.ui.screen.addressbook.WalletAddressesSection
 import co.electriccoin.zcash.ui.screen.chat.contacts.EditChatContactState
+import org.koin.compose.koinInject
 
 /**
  * "Edit chat contact" bottom sheet. All form state owned by `EditChatContactVM`
@@ -64,6 +67,7 @@ import co.electriccoin.zcash.ui.screen.chat.contacts.EditChatContactState
 internal fun EditChatContactSheet(state: EditChatContactState) {
     val c = ZappTheme.colors
     val keyboard = LocalSoftwareKeyboardController.current
+    val copyToClipboard = koinInject<CopyToClipboardUseCase>()
     val shortKey = remember(state.publicKey) { state.publicKey.ellipsizeAddress() }
     val scanWalletAddressLabel = stringResource(R.string.chat_contact_scan_wallet_address_content_description)
     val saveChangesLabel = stringResource(R.string.chat_contact_edit_save_changes_content_description)
@@ -110,6 +114,13 @@ internal fun EditChatContactSheet(state: EditChatContactState) {
                         tint = c.textSubtle,
                     )
                 },
+                trailingIcon = {
+                    CopyFieldAction(
+                        contentDescription = stringResource(R.string.chat_contact_copy_name_content_description),
+                        enabled = state.name.text.isNotBlank(),
+                        onClick = { copyToClipboard(state.name.text) },
+                    )
+                },
             )
 
             Spacer(Modifier.height(12.dp))
@@ -119,9 +130,10 @@ internal fun EditChatContactSheet(state: EditChatContactState) {
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .height(ZAPP_INPUT_FIELD_HEIGHT)
                         .background(c.surfaceInput, RectangleShape)
                         .border(BorderStroke(1.dp, c.border), RectangleShape)
-                        .padding(horizontal = 14.dp, vertical = 14.dp),
+                        .padding(start = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
@@ -136,6 +148,11 @@ internal fun EditChatContactSheet(state: EditChatContactState) {
                     style = ZappTheme.typography.mono.copy(color = c.textMuted),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                CopyFieldAction(
+                    contentDescription = stringResource(R.string.chat_contact_copy_messaging_key_content_description),
+                    onClick = { copyToClipboard(state.publicKey) },
                 )
             }
 
@@ -155,6 +172,12 @@ internal fun EditChatContactSheet(state: EditChatContactState) {
                     )
                 },
                 trailingIcon = {
+                    CopyFieldAction(
+                        contentDescription =
+                            stringResource(R.string.chat_contact_copy_wallet_address_content_description),
+                        enabled = state.walletAddress.text.isNotBlank(),
+                        onClick = { copyToClipboard(state.walletAddress.text) },
+                    )
                     Box(
                         modifier =
                             Modifier
@@ -186,18 +209,19 @@ internal fun EditChatContactSheet(state: EditChatContactState) {
 
             Spacer(Modifier.height(16.dp))
 
-            // Additional Addresses section
-            WalletAddressesSection(
-                expanded = state.showAdditionalAddresses,
-                onToggle = state.onToggleAdditionalAddresses,
-                transparentAddr = state.transparentAddr,
-                onTransparentChange = state.onTransparentAddrChange,
-                evmAddr = state.evmAddr,
-                onEvmChange = state.onEvmAddrChange,
-                solanaAddr = state.solanaAddr,
-                onSolanaChange = state.onSolanaAddrChange,
-                onScanAddress = state.onScanAddressField,
-            )
+            // DEAD CODE [hidden]: Additional Addresses section — uncomment to restore, plus the
+            // co.electriccoin.zcash.ui.screen.addressbook.WalletAddressesSection import
+            // WalletAddressesSection(
+            //     expanded = state.showAdditionalAddresses,
+            //     onToggle = state.onToggleAdditionalAddresses,
+            //     transparentAddr = state.transparentAddr,
+            //     onTransparentChange = state.onTransparentAddrChange,
+            //     evmAddr = state.evmAddr,
+            //     onEvmChange = state.onEvmAddrChange,
+            //     solanaAddr = state.solanaAddr,
+            //     onSolanaChange = state.onSolanaAddrChange,
+            //     onScanAddress = state.onScanAddressField,
+            // )
 
             Spacer(Modifier.height(20.dp))
 
@@ -309,6 +333,34 @@ internal fun EditChatContactSheet(state: EditChatContactState) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CopyFieldAction(
+    contentDescription: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
+    val c = ZappTheme.colors
+    Box(
+        modifier =
+            Modifier
+                .size(48.dp)
+                .clickable(enabled = enabled, onClick = onClick)
+                .semantics {
+                    this.contentDescription = contentDescription
+                    role = Role.Button
+                    if (!enabled) disabled()
+                },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            Icons.Default.ContentCopy,
+            contentDescription = null,
+            modifier = Modifier.size(15.dp),
+            tint = if (enabled) c.textSubtle else c.border,
+        )
     }
 }
 

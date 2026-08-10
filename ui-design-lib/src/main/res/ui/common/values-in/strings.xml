@@ -41,4 +41,78 @@
     <string name="common_empty_screen_subtitle">Kami sudah mencoba, tetapi tidak menemukan apa pun.</string>
     <string name="general_got_it">Mengerti!</string>
     <string name="general_warning">Peringatan:&#160;</string>
+
+
+    <!-- Ironwood migration (upstream zodl 3.9.0) -->
+    <string name="accounts_sendingFrom">Kirim dari</string>
+    <string name="annotation_addArticle">Tambah catatan</string>
+    <string name="crosspay_pay">Bayar</string>
+    <string name="errorPage_action_contactSupport">Hubungi Dukungan</string>
+    <string name="filter_daysAgo" formatted="true"><xliff:g example="$" id="days">%s</xliff:g> hari lalu</string>
+    <string name="filter_today">Hari ini</string>
+    <string name="filter_yesterday">Kemarin</string>
+    <string name="general_close">Tutup</string>
+    <string name="general_save">Simpan</string>
+    <string name="keystone_confirm">Konfirmasi dengan Keystone</string>
+    <string name="send_amount">Jumlah</string>
+    <string name="send_amountSummary">Jumlah Total</string>
+    <string name="send_confirmationTitle">Konfirmasi</string>
+    <string name="send_failureInfo">Terjadi kesalahan saat mencoba mengirim koin.\nSilakan coba lagi.</string>
+    <string name="send_failureShielding">Tidak dapat melindungi</string>
+    <string name="send_failureShieldingInfo">Terjadi kesalahan saat mencoba melindungi koin Anda. Silakan coba lagi.</string>
+    <string name="send_feeSummary">Biaya</string>
+    <string name="send_info_memo">Transaksi transparan tidak bisa memiliki memo</string>
+    <string name="send_message">Pesan</string>
+    <string name="send_orchardWarning_cancel">Batal</string>
+    <string name="send_pendingShieldingTitle">Perlindungan Tertunda</string>
+    <string name="send_pendingTitle">Transaksi Tertunda</string>
+    <string name="send_report">Laporkan</string>
+    <string name="send_requestPayment_for">Untuk:</string>
+    <string name="send_requestPayment_requestedBy">Diminta Oleh</string>
+    <string name="send_requestPayment_title">Permintaan Pembayaran</string>
+    <string name="send_review">Tinjau</string>
+    <string name="send_sendingInfo">Koin Anda sedang dikirim ke\n
+        <xliff:g example="zs12ghrbdjfs24383x5T…" id="index">%1$s</xliff:g>
+    </string>
+    <string name="send_shieldingInfo">Koin Anda sedang dilindungi</string>
+    <string name="send_success">Terkirim!</string>
+    <string name="send_successInfo">Koin Anda berhasil dikirim ke\n
+        <xliff:g example="zs12ghrbdjfs24383x5T…" id="index">%1$s</xliff:g>
+    </string>
+    <string name="send_successShielding">Terlindungi!</string>
+    <string name="send_successShieldingInfo">Koin Anda berhasil dilindungi</string>
+    <string name="send_to">Kirim ke</string>
+    <string name="send_viewTransaction">Lihat Transaksi</string>
+    <string name="swapAndPay_checkStatus">Cek status</string>
+    <string name="swapAndPay_expiredTitle">Swap Kedaluwarsa</string>
+    <string name="swapAndPay_failureSwapInfo">Terjadi kesalahan saat memulai Tukar.\nSilakan coba lagi.</string>
+    <string name="swapAndPay_pendingPayTitle">Pembayaran Tertunda</string>
+    <string name="swapAndPay_pendingSwapTitle">Tukar Tertunda</string>
+    <string name="swapAndPay_sendingInfo">Koin Anda sedang dikirim ke alamat deposit…</string>
+    <string name="swapAndPay_successPayInfo">Anda berhasil memulai pembayaran lintas rantai.\nPantau statusnya di layar transaksi.</string>
+    <string name="swapAndPay_successSwapInfo">Anda berhasil memulai Tukar.\nPantau statusnya di layar transaksi.</string>
+    <string name="swapAndPay_swap">Tukar</string>
+    <string name="swapStatus_paid">Dibayar</string>
+    <string name="swapStatus_paying">Membayar</string>
+    <string name="swapStatus_paymentExpired">Pembayaran kedaluwarsa</string>
+    <string name="swapStatus_paymentFailed">Pembayaran gagal</string>
+    <string name="swapStatus_paymentIncomplete">Pembayaran Belum Selesai</string>
+    <string name="swapStatus_paymentRefunded">Pembayaran dikembalikan</string>
+    <string name="swapStatus_swapFailed">Swap Gagal</string>
+    <string name="swapStatus_swapIncomplete">Tukar Belum Selesai</string>
+    <string name="swapStatus_swapRefunded">Swap Dikembalikan</string>
+    <string name="swapStatus_swapped">Ditukar</string>
+    <string name="swapStatus_swapping">Menukar</string>
+    <string name="tabs_receive">Terima</string>
+    <string name="tabs_send">Kirim</string>
+    <string name="transactionHistory_saveAddress">Simpan alamat</string>
+    <string name="transactionHistory_sendAgain">Kirim lagi</string>
+    <string name="transaction_failedSend">Pengiriman Gagal</string>
+    <string name="transaction_failedShieldedFunds">Gagal melindungi</string>
+    <string name="transaction_received">Diterima</string>
+    <string name="transaction_receiving">Menerima</string>
+    <string name="transaction_sending">Mengirim</string>
+    <string name="transaction_sent">Terkirim</string>
+    <string name="transaction_shieldedFunds">Terlindungi</string>
+    <string name="transaction_shieldingFunds">Melindungi</string>
 </resources>

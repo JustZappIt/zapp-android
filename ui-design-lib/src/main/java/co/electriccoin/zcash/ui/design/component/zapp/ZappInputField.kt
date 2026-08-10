@@ -6,7 +6,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
@@ -21,6 +23,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
+
+/** Fixed so a field with a 48dp trailing action is the same height as one without. */
+val ZAPP_INPUT_FIELD_HEIGHT = 52.dp
 
 @Composable
 fun ZappInputField(
@@ -37,6 +42,7 @@ fun ZappInputField(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .height(ZAPP_INPUT_FIELD_HEIGHT)
                 .background(c.surfaceInput, RectangleShape)
                 .then(
                     if (isFilled) {
@@ -49,8 +55,8 @@ fun ZappInputField(
         Row(
             modifier =
                 Modifier
-                    .fillMaxWidth()
-                    .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
+                    .fillMaxSize()
+                    .padding(start = 14.dp, end = if (trailingIcon == null) 14.dp else 0.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             leadingIcon?.let {

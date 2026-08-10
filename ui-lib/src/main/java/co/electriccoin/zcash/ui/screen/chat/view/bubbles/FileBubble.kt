@@ -90,7 +90,7 @@ internal fun FileBubble(
                 Spacer(modifier = Modifier.width(4.dp))
                 MessageStatusIndicator(
                     status = message.status,
-                    mutedColor = metaColor,
+                    mutedColor = c.onAccent.copy(alpha = OUTGOING_STATUS_ALPHA),
                     readColor = c.onAccent,
                 )
             }
@@ -99,3 +99,4 @@ internal fun FileBubble(
 }
 
 private const val OUTGOING_META_ALPHA = 0.7f
+private const val OUTGOING_STATUS_ALPHA = 0.55f

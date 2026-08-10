@@ -99,7 +99,6 @@ internal fun UnifiedSendView(
     ) {
         ZappScreenHeader(
             title = stringResource(R.string.unified_send_title),
-            containerColor = c.bg,
             titleStyle = ZappTheme.typography.displaySecondary,
         )
 

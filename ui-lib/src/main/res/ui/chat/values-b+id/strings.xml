@@ -96,33 +96,33 @@
 
     <!-- Chat profile screen -->
     <string name="chat_profile_title">Profil &amp; Identitas</string>
-    <string name="chat_profile_unknown_name">Tidak dikenal</string>
     <string name="chat_profile_public_key_label">Kunci Publik</string>
-    <string name="chat_profile_qr_caption">Pindai untuk memulai percakapan</string>
-    <string name="chat_profile_tab_messaging_id">ID Pesan</string>
-    <string name="chat_profile_tab_wallet_address">Alamat Dompet</string>
-    <string name="chat_profile_subtab_shielded">Terlindungi</string>
-    <string name="chat_profile_subtab_transparent">Transparan</string>
+    <string name="chat_profile_group_identity">Identitas</string>
+    <string name="chat_profile_group_danger_zone">Zona berbahaya</string>
+    <string name="chat_profile_delete_identity_title">Hapus identitas</string>
+    <string name="chat_profile_delete_identity_subtitle">Menghapus identitas pesan dan riwayat obrolan Anda dari perangkat ini</string>
+    <string name="chat_wallet_address_title">Alamat dompet</string>
+    <string name="chat_wallet_address_subtitle">Alamat shielded, transparan, dan Base</string>
+    <string name="chat_wallet_address_qr_content_description">Buka kode QR alamat</string>
+    <string name="chat_wallet_address_copy">Salin alamat</string>
     <string name="chat_profile_address_shielded_label">Alamat Terlindungi</string>
     <string name="chat_profile_address_transparent_label">Alamat Transparan</string>
-    <string name="chat_profile_address_shielded_caption">Alamat terlindungi · privat secara default</string>
-    <string name="chat_profile_address_transparent_caption">Alamat transparan · terlihat di rantai</string>
+    <string name="chat_profile_address_shielded_caption">Privat secara bawaan. Bagikan ini untuk menerima ZEC shielded.</string>
+    <string name="chat_profile_address_transparent_caption">Terlihat di rantai. Gunakan hanya jika suatu layanan memerlukannya.</string>
     <string name="chat_profile_address_base_label">Dompet Base</string>
+    <string name="chat_profile_address_base_caption">Tempat pencairan P2P Anda diselesaikan, di Base.</string>
 
     <!-- Chat profile — seed phrase row -->
     <string name="chat_profile_seed_phrase_title">Frasa Pemulihan</string>
     <string name="chat_profile_seed_phrase_subtitle">Mencadangkan identitas pesan &amp; dompet</string>
 
     <!-- Chat profile — accessibility / content descriptions -->
-    <string name="chat_profile_back_content_description">Kembali</string>
     <string name="chat_profile_edit_display_name_content_description">Ubah nama tampilan</string>
-    <string name="chat_profile_delete_identity_content_description">Hapus Identitas</string>
     <string name="chat_profile_copy_public_key_content_description">Salin kunci publik</string>
     <string name="chat_profile_copy_address_content_description">Salin alamat</string>
     <string name="chat_profile_copied_content_description">Disalin</string>
 
     <!-- Chat profile — bottom dock -->
-    <string name="chat_profile_delete_button">HAPUS IDENTITAS</string>
 
     <!-- Chat profile — edit display name dialog -->
     <string name="chat_profile_edit_name_title">Ubah nama tampilan</string>
@@ -147,30 +147,27 @@
     <string name="chat_profile_p2p_key_title">Kunci Dompet P2P</string>
     <string name="chat_profile_p2p_key_subtitle">Kunci untuk akun pencairan P2P Anda, berasal dari frasa pemulihan Anda</string>
     <string name="chat_profile_p2p_key_biometric_prompt">Lihat kunci dompet P2P Anda</string>
-    <string name="chat_profile_p2p_key_dialog_title">Kunci Dompet P2P</string>
-    <string name="chat_profile_p2p_key_dialog_message">Berasal dari frasa pemulihan Anda. Kunci ini mengontrol akun pencairan P2P Anda. Siapa pun yang memilikinya dapat membelanjakan dana tersebut.</string>
-    <string name="chat_profile_p2p_key_address_label">Alamat Pemilik</string>
-    <string name="chat_profile_p2p_key_private_key_label">Kunci Privat</string>
-    <string name="chat_profile_p2p_key_copy">Salin</string>
-    <string name="chat_profile_p2p_key_dialog_done">Selesai</string>
+    <string name="chat_p2p_key_title">Kunci dompet P2P</string>
+    <string name="chat_p2p_key_info_content_description">Cara kerja kunci P2P</string>
+    <string name="chat_p2p_key_info_title">Tentang kunci P2P Anda</string>
+    <string name="chat_p2p_key_info_derivation">Kunci ini diturunkan dari frasa pemulihan Anda melalui jalur tersendiri. Ini bukan kunci belanja Zcash Anda dan tidak bisa menyentuh ZEC Anda. Kehilangan aplikasi tidak menghilangkannya: frasa yang sama selalu menurunkan kunci yang sama.</string>
+    <string name="chat_p2p_key_info_smart_account">Kunci ini mengendalikan smart account. Alamat tempat pencairan Anda diselesaikan adalah akun kontrak di Base yang dikendalikan kunci ini, sehingga Zapp bisa menanggung biaya jaringan dan Anda tidak perlu memegang gas.</string>
+    <string name="chat_p2p_key_info_safety">Siapa pun yang memegang kunci privat mengendalikan akun itu beserta dananya. Ekspor hanya jika Anda perlu memindahkan dana tersebut dengan dompet lain.</string>
+    <string name="chat_p2p_key_smart_account_label">Smart account</string>
+    <string name="chat_p2p_key_smart_account_caption">Akun Base tempat pencairan P2P Anda diselesaikan. Aman dibagikan.</string>
+    <string name="chat_p2p_key_owner_label">Kunci pemilik</string>
+    <string name="chat_p2p_key_owner_locked_body">Kunci privat yang mengendalikan smart account. Menampilkannya meminta kunci aplikasi Anda terlebih dahulu.</string>
+    <string name="chat_p2p_key_reveal">Tampilkan kunci pemilik</string>
+    <string name="chat_p2p_key_owner_address_label">Alamat pemilik</string>
+    <string name="chat_p2p_key_owner_address_caption">Alamat yang diturunkan dari kunci pemilik. Aman dibagikan.</string>
+    <string name="chat_p2p_key_private_key_label">Kunci privat</string>
+    <string name="chat_p2p_key_private_key_caption">Jangan pernah dibagikan. Siapa pun yang memilikinya bisa membelanjakan seluruh isi smart account.</string>
+    <string name="chat_p2p_key_copy_content_description">Salin</string>
 
     <!-- Chat settings screen -->
-    <string name="chat_settings_title">Pengaturan Obrolan</string>
-    <string name="chat_settings_delete_button">Hapus Identitas</string>
-    <string name="chat_settings_section_identity">Identitas</string>
-    <string name="chat_settings_section_account">Akun</string>
+    <string name="chat_settings_title">Pengaturan obrolan</string>
     <string name="chat_settings_section_network">Jaringan</string>
-    <string name="chat_settings_row_profile">Profil</string>
-    <string name="chat_settings_row_profile_subtitle">Lihat detail identitas</string>
-    <string name="chat_settings_row_contacts">Kontak</string>
-    <string name="chat_settings_row_contacts_subtitle">Kelola kontak Anda</string>
-    <string name="chat_settings_label_connection">Koneksi</string>
-    <string name="chat_settings_label_dht_health">Kesehatan DHT</string>
     <string name="chat_settings_label_peers">Rekan</string>
-    <string name="chat_settings_label_protocol">Protokol</string>
-    <string name="chat_settings_label_encryption">Enkripsi</string>
-    <string name="chat_settings_protocol_value">Hyperswarm DHT</string>
-    <string name="chat_settings_encryption_value">Ed25519 + Noise</string>
     <string name="chat_settings_connection_connected">Terhubung</string>
     <string name="chat_settings_connection_connecting">Menghubungkan</string>
     <string name="chat_settings_connection_disconnected">Terputus</string>
@@ -178,55 +175,23 @@
     <string name="chat_settings_dht_healthy">Sehat</string>
     <string name="chat_settings_dht_degraded">Menurun</string>
     <string name="chat_settings_dht_critical">Kritis</string>
-    <string name="chat_settings_edit_name_content_description">Ubah nama</string>
-    <string name="chat_settings_copy_content_description">Salin</string>
-    <string name="chat_settings_edit_name_dialog_title">Ubah Nama Tampilan</string>
-    <string name="chat_settings_edit_name_dialog_placeholder">Nama tampilan</string>
-    <string name="chat_settings_edit_name_dialog_save">Simpan</string>
-    <string name="chat_settings_edit_name_dialog_cancel">Batal</string>
-    <string name="chat_settings_delete_dialog_title">Hapus Identitas</string>
-    <string name="chat_settings_delete_dialog_message">Ini akan menghapus identitas pesan Anda secara permanen. Cadangkan frasa pemulihan Anda terlebih dahulu.</string>
-    <string name="chat_settings_delete_dialog_confirm">Hapus</string>
-    <string name="chat_settings_delete_dialog_cancel">Batal</string>
-    <string name="chat_settings_section_notifications">Notifikasi</string>
-    <string name="chat_settings_notifications_toggle_title">Notifikasi pesan</string>
-    <string name="chat_settings_notifications_toggle_subtitle">Dapatkan notifikasi saat menerima pesan baru</string>
     <string name="chat_settings_background_push_toggle_title">Pengiriman latar belakang</string>
-    <string name="chat_settings_background_push_toggle_subtitle">Izinkan Zapp memeriksa pesan di latar belakang</string>
+    <string name="chat_settings_background_push_toggle_subtitle">Bangunkan Zapp untuk memeriksa pesan yang menunggu</string>
     <string name="chat_settings_section_privacy">Privasi</string>
     <string name="chat_settings_read_receipts_toggle_title">Tanda dibaca</string>
-    <string name="chat_settings_read_receipts_toggle_subtitle">Tampilkan centang ganda saat pesan Anda dibaca. Nonaktifkan untuk juga berhenti melihat kapan orang lain membaca pesan Anda.</string>
-    <string name="read_receipts_settings_row_subtitle">Kontrol indikator terkirim dan dibaca untuk obrolan</string>
-    <string name="read_receipts_settings_title">Tanda dibaca</string>
-    <string name="read_receipts_settings_intro">Tanda dibaca memungkinkan obrolan menampilkan kapan sebuah pesan telah dibuka. Fitur ini opsional dan hanya menampilkan status dibaca saat kedua belah pihak mengizinkannya.</string>
-    <string name="read_receipts_settings_on_title">Saat ini aktif</string>
-    <string name="read_receipts_settings_on_body">Saat Anda membuka percakapan, Zapp dapat mengirimkan sinyal dibaca kecil untuk pesan yang Anda terima. Pesan keluar Anda juga dapat menampilkan centang ganda setelah aplikasi lain mengonfirmasi bahwa pesan telah dibaca.</string>
-    <string name="read_receipts_settings_off_title">Saat ini nonaktif</string>
-    <string name="read_receipts_settings_off_body">Zapp tidak akan mengirim sinyal dibaca saat Anda membuka pesan, dan tidak akan menampilkan status dibaca dari orang lain. Pesan tetap berstatus terkirim, bukan dibaca.</string>
-    <string name="read_receipts_settings_both_sides_title">Jika orang lain menonaktifkannya</string>
-    <string name="read_receipts_settings_both_sides_body">Centang ganda memerlukan kedua belah pihak mengizinkan tanda dibaca. Jika salah satu pihak menonaktifkannya, obrolan itu hanya menampilkan status terkirim.</string>
-    <string name="read_receipts_settings_section_control">Kontrol</string>
-    <string name="read_receipts_settings_toggle_title">Izinkan tanda dibaca</string>
-    <string name="read_receipts_settings_toggle_subtitle">Kirim dan tampilkan status dibaca saat kedua belah pihak mengizinkannya</string>
-    <string name="read_receipts_settings_save">Simpan</string>
+    <string name="chat_settings_read_receipts_toggle_subtitle">Kirim dan tampilkan status dibaca</string>
+    <string name="chat_settings_online_status_toggle_title">Status online</string>
+    <string name="chat_settings_online_status_toggle_subtitle">Biarkan orang melihat saat Anda terhubung</string>
+    <string name="chat_settings_privacy_footer">Keduanya berlaku dua arah. Menonaktifkan salah satunya juga menyembunyikan status dibaca dan titik online orang lain dari Anda.</string>
+    <string name="chat_settings_section_delivery">Pengiriman</string>
+    <string name="chat_settings_delivery_footer">Menjaga pendengar tanpa Google tetap berjalan saat Zapp ditutup, dengan notifikasi permanen dan pemakaian baterai lebih besar. Sinyalnya hanya membangunkan Zapp; pesan tetap terenkripsi.</string>
+    <string name="chat_settings_save">Simpan</string>
     <string name="chat_message_status_sending">Mengirim</string>
     <string name="chat_message_status_queued">Menunggu penerima menyinkronkan</string>
     <string name="chat_message_status_sent">Terkirim, menunggu diterima</string>
     <string name="chat_message_status_delivered">Diterima</string>
     <string name="chat_message_status_read">Dibaca</string>
     <string name="chat_message_status_failed">Gagal terkirim</string>
-    <string name="background_delivery_settings_title">Pengiriman latar belakang</string>
-    <string name="background_delivery_settings_intro">Atur apakah Zapp dapat tetap terjangkau saat aplikasi ditutup atau ponsel Anda terkunci.</string>
-    <string name="background_delivery_settings_delivery_title">Saat ini nonaktif</string>
-    <string name="background_delivery_settings_delivery_body">Zapp menghentikan pemantauan latar belakang. Pesan baru mungkin tertunda hingga Anda membuka aplikasi, lalu Zapp memeriksa apa pun yang masuk saat Anda pergi.</string>
-    <string name="background_delivery_settings_battery_title">Saat ini aktif</string>
-    <string name="background_delivery_settings_battery_body">Android menjaga layanan Zapp tetap berjalan diam-diam agar aplikasi dapat bangun dan memeriksa saat mungkin ada pesan yang menunggu. Ini meningkatkan ketepatan waktu pengiriman, tetapi menggunakan lebih banyak baterai daripada memeriksa hanya saat aplikasi terbuka.</string>
-    <string name="background_delivery_settings_privacy_title">Apa yang terkandung dalam sinyal pengiriman</string>
-    <string name="background_delivery_settings_privacy_body">Sinyal hanya memberi tahu Zapp untuk bangun dan memeriksa pesan. Isi pesan tetap terenkripsi dan diambil oleh aplikasi Anda setelah bangun.</string>
-    <string name="background_delivery_settings_section_control">Kontrol</string>
-    <string name="background_delivery_settings_toggle_title">Izinkan pengiriman latar belakang</string>
-    <string name="background_delivery_settings_toggle_subtitle">Bangunkan Zapp untuk memeriksa pesan yang menunggu</string>
-    <string name="background_delivery_settings_save">Simpan</string>
 
     <!-- Chat notifications -->
     <string name="chat_notifications_channel_name">Pesan</string>
@@ -363,6 +328,9 @@
     <string name="chat_contact_add_messaging_key_placeholder">Kunci Pesan (64 karakter hex)</string>
     <string name="chat_contact_scan_messaging_key_content_description">Pindai QR kunci pesan</string>
     <string name="chat_contact_scan_wallet_address_content_description">Pindai QR alamat dompet</string>
+    <string name="chat_contact_copy_name_content_description">Salin nama kontak</string>
+    <string name="chat_contact_copy_messaging_key_content_description">Salin kunci perpesanan</string>
+    <string name="chat_contact_copy_wallet_address_content_description">Salin alamat dompet</string>
     <string name="chat_contact_add_save_content_description">Tambah Kontak</string>
     <string name="chat_contact_add_save_button">SIMPAN</string>
 
@@ -468,18 +436,4 @@
     <string name="chat_push_service_channel_name">Pengiriman pesan latar belakang</string>
     <string name="chat_push_service_title">Zapp</string>
     <string name="chat_push_service_body">Pengiriman latar belakang aktif</string>
-    <string name="chat_settings_online_status_toggle_title">Status online</string>
-    <string name="online_status_settings_row_subtitle">Pilih apakah orang lain melihat saat Anda online</string>
-    <string name="online_status_settings_title">Status online</string>
-    <string name="online_status_settings_intro">Status online Anda memungkinkan orang yang Anda ajak mengobrol melihat kapan Anda terhubung. Ini opsional, dan berlaku dua arah.</string>
-    <string name="online_status_settings_on_title">Saat ini aktif</string>
-    <string name="online_status_settings_on_body">Orang yang memiliki obrolan langsung dengan Anda dapat melihat titik kecil saat Anda terhubung, dan Anda dapat melihat hal yang sama untuk mereka.</string>
-    <string name="online_status_settings_off_title">Saat ini nonaktif</string>
-    <string name="online_status_settings_off_body">Orang lain berhenti melihat kapan Anda online, dan Zapp juga berhenti menampilkan kapan mereka online. Pesan Anda tetap terkirim dan sampai seperti biasa.</string>
-    <string name="online_status_settings_reciprocal_title">Berlaku dua arah</string>
-    <string name="online_status_settings_reciprocal_body">Menyembunyikan status online Anda juga menyembunyikan status semua orang lain dari Anda. Aktifkan kembali untuk melihat dan dilihat lagi.</string>
-    <string name="online_status_settings_section_control">Kontrol</string>
-    <string name="online_status_settings_toggle_title">Tampilkan status online saya</string>
-    <string name="online_status_settings_toggle_subtitle">Biarkan orang yang Anda ajak mengobrol melihat kapan Anda terhubung</string>
-    <string name="online_status_settings_save">Simpan</string>
 </resources>

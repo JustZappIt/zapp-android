@@ -255,6 +255,7 @@ dependencies {
     implementation(projects.preferenceImplAndroidLib)
     implementation(projects.spackleAndroidLib)
     implementation(projects.uiLib)
+    implementation(projects.featureMigration)
 
     androidTestImplementation(projects.testLib)
 

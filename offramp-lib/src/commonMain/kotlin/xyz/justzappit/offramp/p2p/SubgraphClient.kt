@@ -100,6 +100,7 @@ class SubgraphClient(
                 status
                 circleId
                 userAddress
+                usdcRecipientAddress
                 usdcAmount
                 fiatAmount
                 currency
@@ -127,10 +128,19 @@ class SubgraphClient(
 
         // Mirrors user-app-client's ORDERS_COLLECTION_WITH_DATE_FILTER_QUERY but without a date
         // window: this drives the all-time history list shown in the P2P transactions screen.
+        //
+        // Matches on recipient as well as placer. An onramp BUY is placed on-chain by the operator
+        // account, so `userAddress` is the operator's and only `usdcRecipientAddress` is the user's
+        // — filtering on the placer alone hides every order the user bought.
         const val USER_ORDERS_QUERY = """
             query UserOrders(${'$'}userAddress: String!, ${'$'}first: Int!, ${'$'}skip: Int!) {
               orders_collection(
-                where: { userAddress: ${'$'}userAddress }
+                where: {
+                  or: [
+                    { userAddress: ${'$'}userAddress }
+                    { usdcRecipientAddress: ${'$'}userAddress }
+                  ]
+                }
                 first: ${'$'}first
                 skip: ${'$'}skip
                 orderBy: placedAt
