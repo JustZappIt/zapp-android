@@ -19,7 +19,7 @@ ruled out.
 |---|---|---|
 | `ZCASH_RELEASE_APP_NAME` | `Zodl` | `Zapp` |
 | `ZCASH_RELEASE_PACKAGE_NAME` | `co.electriccoin.zcash` | `xyz.justzappit.zapp` |
-| `ZCASH_VERSION_NAME` | tracks zodl releases | independent line, currently `4.1.0` |
+| `ZCASH_VERSION_NAME` | tracks zodl releases | independent line, currently `4.4.0` |
 
 The **application id** changes so the two apps can coexist on one device. The **Kotlin and Java
 packages do not**: everything still lives under `co.electriccoin.zcash.*`, and the app module's
@@ -64,6 +64,18 @@ wallet living inside the Pay tab.
 - `.../screen/unifiedsend/` : the fork's send surface. Upstream's `screen/pay/` does not exist
   here; `UnifiedSendVM` is the equivalent, which is the single most common cause of an upstream
   patch not applying cleanly
+
+The Pay tab's balance card opens a portfolio value chart. The balance series is reconstructed on
+device by walking confirmed transaction history back from the current confirmed balance, so a
+wallet whose transactions do not reconcile declines to draw rather than drawing a plausible wrong
+line. Only the daily ZEC price series comes off the network, and its host is registered as an
+exchange-rate host, so it is blocked from the direct HTTP client and routes over Tor with the
+other rate lookups. Points are priced with the close from their own day in the selected fiat.
+
+- `.../screen/home/balancechart/` : the chart, its period selector and scrubbing
+- `.../common/pricing/` : the price series, its cache and its prewarm
+- `.../screen/settings/portfoliochart/` : the opt-out, which keeps the chart in ZEC and stops the
+  price requests entirely
 
 ## 4. P2P encrypted messaging
 
@@ -115,29 +127,52 @@ end-to-end-encrypted message over its own channel.
 - `docs/notifications/` : the architecture, the deployment units for the relay, and the operational
   notes
 
-## 6. The P2P.me offramp
+## 6. The peer-to-peer fiat rails
 
-Zapp can spend ZEC into local fiat rails (UPI, Pix, and several Latin American corridors) through
-[p2p.me](https://p2p.me), whose Diamond contract lives on Base. The protocol work is deliberately
-kept out of the Android modules so it can be unit-tested on the host JVM:
+Zapp moves value between shielded ZEC and local fiat without an account, a custodian or a KYC
+step, in both directions. Everything runs against contracts on Base, and the protocol work is
+deliberately kept out of the Android modules so it can be unit-tested on the host JVM:
 
 - `evm-lib/` : Kotlin Multiplatform EVM primitives under `xyz.justzappit.evm`. RLP, EIP-1559
-  transactions, ERC-4337 v0.6 user operations, secp256k1 signing, ECIES, an RPC client
-- `offramp-lib/` : the p2p.me protocol under `xyz.justzappit.offramp`. Order construction and
-  reading, the subgraph client, payment-address decryption, and the per-corridor QR parsers (UPI,
-  Pix, EMV, PagoMovil, MercadoPago, QRIS, NGN, COP)
+  transactions, ERC-4337 v0.6 user operations, secp256k1 signing, ECIES, an RPC client, and ABI
+  encoding including static and dynamic tuples
+- `offramp-lib/` : the protocols under `xyz.justzappit.offramp`. The p2p.me Diamond (order
+  construction and reading, the subgraph client, payment-address decryption, and the per-corridor
+  QR parsers for UPI, Pix, EMV, PagoMovil, MercadoPago, QRIS, NGN and COP), the Peer escrow under
+  `peer/`, and the onramp driver and ZEC delivery leg under `onramp/`
+
+**Spending (offramp).** Scan a merchant QR and pay in local currency out of shielded ZEC through
+p2p.me. Seven corridors are wired up.
+
+**Cashing out (offramp, Peer).** The `peer/` rail inverts the role: the user is the maker. Their
+USDC is escrowed as a protocol-held order priced at the Chainlink rate, a buyer pays them in fiat
+on Revolut, Zelle, Chime or Monzo, and the protocol releases the USDC against the buyer's proof.
+Peer exists on Base mainnet alone, and `PeerConfigProvider.currentOrNull()` is the single gate, so
+on any other network the rails are absent rather than present and failing at the first call. The
+chain is the source of truth: the local checkpoint caches only the bridge handle and the window
+before the indexer sees the deposit, so a waiting screen survives process death, a reboot and a
+reinstall on the same seed.
+
+**Buying (onramp).** Pay a matched merchant in local currency, and the purchase settles as USDC in
+the user's own Base account, then continues into a NEAR intents swap that pays out to the wallet's
+own shielded address. Each phase writes an encrypted checkpoint, the quote accepted at order time
+bounds the settlement re-quote as a slippage limit in basis points, and every failure names the
+location the money is provably in. Zapp never holds the funds at any point.
 
 The Android-facing surfaces:
 
-- `ui-lib/.../screen/swap/upi/` : the offramp flow itself, including the ZEC-to-USDC funding bridge
+- `ui-lib/.../screen/swap/upi/` : the p2p.me offramp flow, including the ZEC-to-USDC funding bridge
   and the scan-and-pay corridors
-- `ui-lib/.../screen/settings/p2p/` : payment-method selection and P2P transaction history
+- `ui-lib/.../screen/swap/peer/` : the Peer cash-out flow, its progress screen and its order screen
+- `ui-lib/.../screen/onramp/` : Buy ZEC, including the shielded delivery leg
+- `ui-lib/.../screen/settings/p2p/` : payment-method selection, and one Base account activity page
+  merging Peer orders with p2p.me merchant orders
 - `ui-lib/.../screen/topup/` : the top-up entry point
 
 Configuration arrives through the usual `local.properties` to `gradle.properties` to environment
 chain: `P2P_NETWORK`, `P2P_RPC_URL_BASE_*`, `P2P_SUBGRAPH_URL_*`, `PIMLICO_API_KEY`,
-`PIMLICO_SPONSORSHIP_POLICY_ID`, `OFFRAMP_USE_DEV_KEY`. The committed defaults are blank or safe;
-anything developer-specific belongs in `local.properties`.
+`PIMLICO_SPONSORSHIP_POLICY_ID`, `OFFRAMP_USE_DEV_KEY`, `P2P_ONRAMP_AUTO_ZEC_ENABLED`. The
+committed defaults are blank or safe; anything developer-specific belongs in `local.properties`.
 
 ## 7. Privacy posture
 

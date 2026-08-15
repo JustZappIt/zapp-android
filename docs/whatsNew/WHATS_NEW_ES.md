@@ -13,13 +13,25 @@ directly impact users rather than highlighting other key architectural updates.*
 ## [Unreleased]
 
 ### Añadido:
-- Añadimos compatibilidad con la actualización de red Ironwood (NU6.3) de Zcash, para que tu billetera siga siendo totalmente compatible con los últimos cambios de la red. La opción de mover fondos al nuevo pool Ironwood llegará en una actualización futura.
+- Añadimos compatibilidad con la actualización de red Ironwood (NU6.3) de Zcash, para que tu billetera siga siendo totalmente compatible con los últimos cambios de la red.
+- Ya puedes mover tus fondos al nuevo pool Ironwood. La opción privada divide tu saldo en partes de tamaño estándar y las envía en segundo plano a lo largo del tiempo, para que los importes que salen del pool anterior no te identifiquen. También puedes moverlo todo de una vez en una sola transferencia.
 - Toca Saldo total en la pantalla de inicio para ver cómo se reparte tu ZEC entre los pools de Zcash, incluido el nuevo pool Ironwood.
 - Añadimos una explicación única, que se muestra cuando Ironwood se activa, sobre lo que la actualización significa para tus fondos.
+- Tu tarjeta de saldo ahora abre un gráfico del valor de tu cartera a lo largo del tiempo, en tu moneda local, con vistas de 1 semana, 1 mes, 1 año y todo el histórico. Los datos de tu billetera nunca salen del dispositivo y puedes desactivar el gráfico en Ajustes.
 - Ahora puedes retirar a rupias indias mediante UPI, pagando desde tu saldo de USDC con precios en vivo y progreso paso a paso.
+- Ahora puedes retirar con un comprador que te paga por Revolut, Zelle, Chime o Monzo. Tú publicas el importe, un comprador te paga en tu moneda local y tus USDC se liberan automáticamente.
+- Comprar ZEC ahora entrega ZEC blindado. Pagas en tu moneda local a un comerciante emparejado y el ZEC llega a tu billetera; si cierras la app, la conversión continúa donde la dejaste.
+
+### Cambiado:
+- Los intercambios ya no incluyen una comisión de Zapp.
 
 ### Corregido:
 - Corregimos un problema por el que una billetera de hardware Keystone podía generar una firma que la app no podía transmitir. La firma con Keystone ahora requiere el firmware 3.0.1 o posterior.
+- Corregimos un problema por el que descartar un error durante una migración con Keystone eliminaba rondas que ya habías firmado en tu dispositivo.
+- Corregimos un problema por el que la app podía quedarse bloqueada varios minutos después de confirmar un plan de migración.
+- Corregimos un problema por el que el botón para permitir la entrega en segundo plano no hacía nada al tocarlo, lo que hacía que las transferencias programadas solo salieran con la app abierta.
+- Corregimos un problema por el que tu saldo disponible podía aparecer como cero después de interrumpirse un retiro.
+- Corregimos un problema por el que tu saldo en Base podía mostrar una cifra desactualizada tras añadir fondos.
 
 ## [3.3.1 (1643)] - 2026-04-10
 
