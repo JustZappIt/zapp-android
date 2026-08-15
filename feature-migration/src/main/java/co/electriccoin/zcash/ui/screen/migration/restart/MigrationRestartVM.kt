@@ -3,7 +3,6 @@ package co.electriccoin.zcash.ui.screen.migration.restart
 import androidx.lifecycle.ViewModel
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
-import co.electriccoin.zcash.ui.common.component.destructive
 import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.groupLce
 import co.electriccoin.zcash.ui.common.model.mutableLce
@@ -14,7 +13,7 @@ import co.electriccoin.zcash.ui.common.usecase.GetMigrationSnapshotUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.common.usecase.RestartMigrationUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
-import co.electriccoin.zcash.ui.design.component.ZashiConfirmationState
+import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationState
 import co.electriccoin.zcash.ui.design.util.stringRes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,7 +43,7 @@ class MigrationRestartVM(
     private val loadLce = mutableLce<Unit>()
     private val restartLce = mutableLce<Unit>()
     private val summaryFlow = MutableStateFlow<Summary?>(null)
-    private val confirmationDialogFlow = MutableStateFlow<ZashiConfirmationState?>(null)
+    private val confirmationDialogFlow = MutableStateFlow<ZappConfirmationState?>(null)
 
     init {
         loadLce.execute {
@@ -66,7 +65,7 @@ class MigrationRestartVM(
 
     private fun createState(
         summary: Summary,
-        dialog: ZashiConfirmationState?,
+        dialog: ZappConfirmationState?,
     ) = MigrationRestartState(
         onBack = navigationRouter::back,
         body = stringRes(DesignR.string.restartMigration_body),
@@ -87,7 +86,7 @@ class MigrationRestartVM(
 
     private fun onNextClicked(summary: Summary) {
         confirmationDialogFlow.value =
-            ZashiConfirmationState.destructive(
+            ZappConfirmationState(
                 title = stringRes(DesignR.string.restartMigration_confirmTitle),
                 message =
                     stringRes(
@@ -95,8 +94,17 @@ class MigrationRestartVM(
                         stringRes(summary.remaining),
                         summary.completed,
                     ),
-                primaryText = stringRes(DesignR.string.restartMigration_confirmPrimary),
-                onPrimary = ::onConfirmRestart,
+                primaryButton =
+                    ButtonState(
+                        text = stringRes(DesignR.string.restartMigration_confirmPrimary),
+                        onClick = ::onConfirmRestart,
+                    ),
+                secondaryButton =
+                    ButtonState(
+                        text = stringRes(DesignR.string.general_cancel),
+                        onClick = ::onDismissConfirmation,
+                    ),
+                isDestructive = true,
                 onBack = ::onDismissConfirmation,
             )
     }

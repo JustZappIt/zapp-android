@@ -1,7 +1,7 @@
 package co.electriccoin.zcash.ui.screen.migration.restart
 
 import co.electriccoin.zcash.ui.design.component.ButtonState
-import co.electriccoin.zcash.ui.design.component.ZashiConfirmationState
+import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationState
 import co.electriccoin.zcash.ui.design.util.StringResource
 
 data class MigrationRestartState(
@@ -14,5 +14,5 @@ data class MigrationRestartState(
     val warning: StringResource,
     val support: StringResource,
     val nextButton: ButtonState,
-    val confirmationDialog: ZashiConfirmationState?,
+    val confirmationDialog: ZappConfirmationState?,
 )

@@ -14,11 +14,11 @@ import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.common.model.migration.MigrationTransferFailureState
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ZashiButton
-import co.electriccoin.zcash.ui.design.component.ZashiButtonDefaults
 import co.electriccoin.zcash.ui.design.component.ZashiModalBottomSheet
+import co.electriccoin.zcash.ui.design.component.zapp.ZappModalBottomSheetDragHandle
+import co.electriccoin.zcash.ui.design.component.zapp.zappAccentButtonColors
+import co.electriccoin.zcash.ui.design.component.zapp.zappSecondaryButtonColors
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
-import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
-import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.R as DesignR
@@ -29,7 +29,11 @@ import co.electriccoin.zcash.ui.design.R as DesignR
 @Composable
 fun MigrationFailureBottomSheet(state: MigrationTransferFailureState?) {
     if (state == null) return
-    ZashiModalBottomSheet(onDismissRequest = state.onDismiss) {
+    ZashiModalBottomSheet(
+        onDismissRequest = state.onDismiss,
+        containerColor = ZappTheme.colors.surface,
+        dragHandle = { ZappModalBottomSheetDragHandle() },
+    ) {
         Column(modifier = Modifier.padding(24.dp)) {
             Text(
                 text = stringRes(DesignR.string.migrationFailureSheet_title).getValue(),
@@ -49,6 +53,7 @@ fun MigrationFailureBottomSheet(state: MigrationTransferFailureState?) {
                 ZashiButton(
                     state = ButtonState(text = stringRes(DesignR.string.migration_common_retry), onClick = onRetry),
                     modifier = Modifier.fillMaxWidth(),
+                    defaultPrimaryColors = zappAccentButtonColors(),
                 )
                 Spacer(Modifier.height(8.dp))
             }
@@ -59,7 +64,7 @@ fun MigrationFailureBottomSheet(state: MigrationTransferFailureState?) {
                         onClick = state.onDismiss
                     ),
                 modifier = Modifier.fillMaxWidth(),
-                defaultPrimaryColors = ZashiButtonDefaults.secondaryColors(),
+                defaultPrimaryColors = zappSecondaryButtonColors(),
             )
         }
     }

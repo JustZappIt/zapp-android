@@ -22,11 +22,11 @@ import co.electriccoin.zcash.ui.design.component.Spacer
 import co.electriccoin.zcash.ui.design.component.ZashiButton
 import co.electriccoin.zcash.ui.design.component.ZashiScreenModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.rememberScreenModalBottomSheetState
+import co.electriccoin.zcash.ui.design.component.zapp.ZappModalBottomSheetDragHandle
+import co.electriccoin.zcash.ui.design.component.zapp.zappAccentButtonColors
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
-import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
-import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
 import kotlinx.serialization.Serializable
@@ -53,6 +53,8 @@ fun MigrationLockExplainerView(
     ZashiScreenModalBottomSheet(
         state = state,
         sheetState = sheetState,
+        containerColor = ZappTheme.colors.surface,
+        dragHandle = { ZappModalBottomSheetDragHandle() },
     ) { innerState, contentPadding ->
         Column(
             modifier =
@@ -105,6 +107,7 @@ fun MigrationLockExplainerView(
                         onClick = innerState.onGotIt,
                     ),
                 modifier = Modifier.fillMaxWidth(),
+                defaultPrimaryColors = zappAccentButtonColors(),
             )
         }
     }

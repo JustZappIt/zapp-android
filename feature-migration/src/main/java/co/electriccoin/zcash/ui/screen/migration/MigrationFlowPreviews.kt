@@ -20,10 +20,9 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
 import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.CheckboxState
-import co.electriccoin.zcash.ui.design.component.ZashiConfirmationState
+import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationState
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
-import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.migration.battery.MigrationBatteryState
 import co.electriccoin.zcash.ui.screen.migration.battery.MigrationBatteryView
@@ -531,7 +530,17 @@ private fun previewRestartState(confirming: Boolean) =
         warning = stringRes("This cancels the current migration plan. It cannot be undone once confirmed."),
         support = stringRes("If restarting doesn't resolve the issue, please reach out to support."),
         nextButton = ButtonState(text = stringRes("Next"), onClick = {}),
-        confirmationDialog = if (confirming) ZashiConfirmationState.preview else null,
+        confirmationDialog = if (confirming) previewRestartConfirmation() else null,
+    )
+
+private fun previewRestartConfirmation() =
+    ZappConfirmationState(
+        title = stringRes("Restart migration?"),
+        message = stringRes("This discards the current plan and builds a new one for your remaining funds."),
+        primaryButton = ButtonState(text = stringRes("Restart"), onClick = {}),
+        secondaryButton = ButtonState(text = stringRes("Cancel"), onClick = {}),
+        isDestructive = true,
+        onBack = {},
     )
 
 private fun previewProgressStateComplete() =

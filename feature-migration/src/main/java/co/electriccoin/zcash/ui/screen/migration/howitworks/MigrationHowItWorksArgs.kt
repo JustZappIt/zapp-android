@@ -22,15 +22,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.electriccoin.zcash.ui.design.component.BlankBgScaffold
 import co.electriccoin.zcash.ui.design.component.ButtonState
-import co.electriccoin.zcash.ui.design.component.CircularScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.component.ZashiButton
 import co.electriccoin.zcash.ui.design.component.ZashiSmallTopAppBar
 import co.electriccoin.zcash.ui.design.component.ZashiTopAppBarBackNavigation
+import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenProgressIndicator
+import co.electriccoin.zcash.ui.design.component.zapp.zappAccentButtonColors
+import co.electriccoin.zcash.ui.design.component.zapp.zappTopAppBarColors
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
-import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
-import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.scaffoldPadding
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -48,7 +48,7 @@ fun MigrationHowItWorksScreen() {
     val state by vm.state.collectAsStateWithLifecycle()
     LceRenderer(
         state = state,
-        loading = { isLoading -> if (isLoading && state.content == null) CircularScreenProgressIndicator() },
+        loading = { isLoading -> if (isLoading && state.content == null) ZappScreenProgressIndicator() },
     ) { s ->
         BackHandler { s.onBack() }
         MigrationHowItWorksView(s)
@@ -58,8 +58,10 @@ fun MigrationHowItWorksScreen() {
 @Composable
 fun MigrationHowItWorksView(state: MigrationHowItWorksState) {
     BlankBgScaffold(
+        containerColor = ZappTheme.colors.bg,
         topBar = {
             ZashiSmallTopAppBar(
+                colors = zappTopAppBarColors(),
                 navigationAction = { ZashiTopAppBarBackNavigation(onBack = state.onBack) },
                 regularActions = {},
             )
@@ -132,6 +134,7 @@ fun MigrationHowItWorksView(state: MigrationHowItWorksState) {
                         onClick = state.onContinue
                     ),
                 modifier = Modifier.fillMaxWidth(),
+                defaultPrimaryColors = zappAccentButtonColors(),
             )
         }
     }

@@ -80,7 +80,7 @@ class MigrationRestartVMTest {
             assertContentEquals(listOf(stringRes(Zatoshi(307_000_000)), 7), message.args)
 
             // Confirm restart runs the use case and pops back.
-            dialog.primaryAction.onClick()
+            dialog.primaryButton.onClick()
             advanceUntilIdle()
             coVerify { restart.invoke() }
             verify { router.back() }

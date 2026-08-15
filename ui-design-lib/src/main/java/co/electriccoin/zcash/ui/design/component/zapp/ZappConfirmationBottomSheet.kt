@@ -78,6 +78,7 @@ data class ZappConfirmationState(
     val message: StringResource,
     val primaryButton: ButtonState,
     val secondaryButton: ButtonState? = null,
+    val isDestructive: Boolean = false,
     override val onBack: () -> Unit,
 ) : ModalBottomSheetState
 
@@ -106,7 +107,7 @@ private fun ZappConfirmationContent(state: ZappConfirmationState, modifier: Modi
         ZappButton(
             text = state.primaryButton.text.getValue(),
             enabled = state.primaryButton.isEnabled,
-            variant = ZappButtonVariant.Primary,
+            variant = if (state.isDestructive) ZappButtonVariant.Danger else ZappButtonVariant.Primary,
             modifier = Modifier.fillMaxWidth(),
             onClick = state.primaryButton.onClick,
         )

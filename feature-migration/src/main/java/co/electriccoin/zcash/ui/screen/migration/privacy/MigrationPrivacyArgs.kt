@@ -37,13 +37,12 @@ import co.electriccoin.zcash.ui.design.component.Spacer
 import co.electriccoin.zcash.ui.design.component.ZashiButton
 import co.electriccoin.zcash.ui.design.component.ZashiScreenModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.rememberScreenModalBottomSheetState
+import co.electriccoin.zcash.ui.design.component.zapp.ZappModalBottomSheetDragHandle
+import co.electriccoin.zcash.ui.design.component.zapp.zappAccentButtonColors
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
-import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
 import co.electriccoin.zcash.ui.design.theme.colors.ZashiLightColors
-import co.electriccoin.zcash.ui.design.theme.dimensions.ZashiDimensions
-import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
 import kotlinx.serialization.Serializable
@@ -73,6 +72,8 @@ fun MigrationPrivacyView(
     ZashiScreenModalBottomSheet(
         state = state,
         sheetState = sheetState,
+        containerColor = ZappTheme.colors.surface,
+        dragHandle = { ZappModalBottomSheetDragHandle() },
     ) { innerState, contentPadding ->
         Column(
             modifier =
@@ -108,6 +109,7 @@ fun MigrationPrivacyView(
                         onClick = innerState.onConfirm
                     ),
                 modifier = Modifier.fillMaxWidth(),
+                defaultPrimaryColors = zappAccentButtonColors(),
             )
         }
     }
@@ -122,7 +124,7 @@ fun MigrationPrivacyView(
 @Composable
 private fun TorToggleCard(state: CheckboxState) {
     Surface(
-        color = ZappTheme.colors.surface,
+        color = ZappTheme.colors.surfaceAlt,
         border = BorderStroke(1.dp, Color.Transparent),
         shape = RectangleShape,
         onClick = state.onClick,

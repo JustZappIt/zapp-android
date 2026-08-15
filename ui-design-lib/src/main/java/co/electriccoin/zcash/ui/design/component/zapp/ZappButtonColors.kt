@@ -18,3 +18,48 @@ fun zappAccentButtonColors(): ZashiButtonColors {
         disabledBorderColor = Color.Unspecified,
     )
 }
+
+/** Muted colors for a secondary action sharing a screen with a [zappAccentButtonColors] primary. */
+@Composable
+fun zappSecondaryButtonColors(): ZashiButtonColors {
+    val c = ZappTheme.colors
+    return ZashiButtonColors(
+        containerColor = c.surfaceAlt,
+        contentColor = c.text,
+        borderColor = Color.Unspecified,
+        disabledContainerColor = c.surfaceAlt,
+        disabledContentColor = c.textSubtle,
+        disabledBorderColor = Color.Unspecified,
+    )
+}
+
+/**
+ * Tinted colors for a secondary action that still belongs to the accent story. `accentText` is only
+ * legible on `accentSoft`, never on full `accent`, so the two tokens always travel together.
+ */
+@Composable
+fun zappAccentSoftButtonColors(): ZashiButtonColors {
+    val c = ZappTheme.colors
+    return ZashiButtonColors(
+        containerColor = c.accentSoft,
+        contentColor = c.accentText,
+        borderColor = Color.Unspecified,
+        disabledContainerColor = c.surfaceAlt,
+        disabledContentColor = c.textSubtle,
+        disabledBorderColor = Color.Unspecified,
+    )
+}
+
+/** Danger colors for an action the user should hesitate over, rendered with `ZashiButton`. */
+@Composable
+fun zappDangerButtonColors(): ZashiButtonColors {
+    val c = ZappTheme.colors
+    return ZashiButtonColors(
+        containerColor = c.dangerSoft,
+        contentColor = c.danger,
+        borderColor = Color.Unspecified,
+        disabledContainerColor = c.surfaceAlt,
+        disabledContentColor = c.textSubtle,
+        disabledBorderColor = Color.Unspecified,
+    )
+}

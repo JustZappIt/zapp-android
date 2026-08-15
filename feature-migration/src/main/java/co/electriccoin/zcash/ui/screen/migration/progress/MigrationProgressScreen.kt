@@ -36,15 +36,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.electriccoin.zcash.ui.design.component.BlankBgScaffold
 import co.electriccoin.zcash.ui.design.component.ButtonState
-import co.electriccoin.zcash.ui.design.component.CircularScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.component.ZashiButton
 import co.electriccoin.zcash.ui.design.component.ZashiSmallTopAppBar
 import co.electriccoin.zcash.ui.design.component.ZashiTopAppBarCloseNavigation
+import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenProgressIndicator
+import co.electriccoin.zcash.ui.design.component.zapp.zappAccentButtonColors
+import co.electriccoin.zcash.ui.design.component.zapp.zappTopAppBarColors
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
-import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
-import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.scaffoldPadding
@@ -63,7 +63,7 @@ fun MigrationProgressScreen() {
         state = state,
         // Guarded on content == null (MOB-1623) so a later isLoading=true (e.g. a retry/refresh)
         // doesn't flash the full-screen spinner back over content that's already on screen.
-        loading = { isLoading -> if (isLoading && state.content == null) CircularScreenProgressIndicator() },
+        loading = { isLoading -> if (isLoading && state.content == null) ZappScreenProgressIndicator() },
     ) { MigrationProgressView(it) }
 }
 
@@ -74,8 +74,10 @@ fun MigrationProgressView(state: MigrationProgressState) {
     // purely a "is the sheet open" UI toggle, not VM-owned state.
     var isShowingPreparationDetails by remember { mutableStateOf(false) }
     BlankBgScaffold(
+        containerColor = ZappTheme.colors.bg,
         topBar = {
             ZashiSmallTopAppBar(
+                colors = zappTopAppBarColors(),
                 navigationAction = { ZashiTopAppBarCloseNavigation(onBack = state.onBack) },
             )
         }
@@ -188,6 +190,7 @@ fun MigrationProgressView(state: MigrationProgressState) {
                     ZashiButton(
                         state = ButtonState(text = stringRes(DesignR.string.migration_common_gotIt), onClick = done),
                         modifier = Modifier.fillMaxWidth(),
+                        defaultPrimaryColors = zappAccentButtonColors(),
                     )
                 }
             }

@@ -31,17 +31,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.BlankBgScaffold
 import co.electriccoin.zcash.ui.design.component.ButtonState
-import co.electriccoin.zcash.ui.design.component.CircularScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.component.IconButtonState
 import co.electriccoin.zcash.ui.design.component.ZashiButton
-import co.electriccoin.zcash.ui.design.component.ZashiButtonDefaults
 import co.electriccoin.zcash.ui.design.component.ZashiIconButton
 import co.electriccoin.zcash.ui.design.component.ZashiSmallTopAppBar
+import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenProgressIndicator
+import co.electriccoin.zcash.ui.design.component.zapp.zappAccentButtonColors
+import co.electriccoin.zcash.ui.design.component.zapp.zappAccentSoftButtonColors
+import co.electriccoin.zcash.ui.design.component.zapp.zappTopAppBarColors
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
-import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
-import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.scaffoldPadding
@@ -77,7 +77,7 @@ fun MigrationCompleteScreen() {
     val state by vm.state.collectAsStateWithLifecycle()
     LceRenderer(
         state = state,
-        loading = { isLoading -> if (isLoading && state.content == null) CircularScreenProgressIndicator() },
+        loading = { isLoading -> if (isLoading && state.content == null) ZappScreenProgressIndicator() },
     ) { MigrationCompleteView(it) }
 }
 
@@ -85,8 +85,10 @@ fun MigrationCompleteScreen() {
 @Composable
 fun MigrationCompleteView(state: MigrationCompleteState) {
     BlankBgScaffold(
+        containerColor = ZappTheme.colors.bg,
         topBar = {
             ZashiSmallTopAppBar(
+                colors = zappTopAppBarColors(),
                 // The "?" opens the lock explainer as pure information. It's only meaningful while
                 // there's an unlocked residue that can still be locked, so it's hidden once the
                 // balance is locked or when there's no residual dust at all.
@@ -98,7 +100,7 @@ fun MigrationCompleteView(state: MigrationCompleteState) {
                                     icon = R.drawable.ic_help,
                                     onClick = state.onHelp,
                                 ),
-                            modifier = Modifier.size(40.dp),
+                            modifier = Modifier.size(48.dp),
                         )
                         Spacer(Modifier.width(20.dp))
                     }
@@ -178,6 +180,7 @@ fun MigrationCompleteView(state: MigrationCompleteState) {
                                 onClick = state.onDone
                             ),
                         modifier = Modifier.fillMaxWidth(),
+                        defaultPrimaryColors = zappAccentButtonColors(),
                     )
                 }
 
@@ -192,6 +195,7 @@ fun MigrationCompleteView(state: MigrationCompleteState) {
                                 onClick = state.onDone
                             ),
                         modifier = Modifier.fillMaxWidth(),
+                        defaultPrimaryColors = zappAccentButtonColors(),
                     )
                 }
 
@@ -222,11 +226,7 @@ fun MigrationCompleteView(state: MigrationCompleteState) {
                                 isLoading = state.isMigrating,
                             ),
                         modifier = Modifier.fillMaxWidth(),
-                        defaultPrimaryColors =
-                            ZashiButtonDefaults.secondaryColors(
-                                contentColor = ZappTheme.colors.accentText,
-                                borderColor = ZappTheme.colors.accentSoft,
-                            ),
+                        defaultPrimaryColors = zappAccentSoftButtonColors(),
                     )
                     Spacer(Modifier.height(8.dp))
                     ZashiButton(
@@ -245,6 +245,7 @@ fun MigrationCompleteView(state: MigrationCompleteState) {
                                 isLoading = state.isLocking,
                             ),
                         modifier = Modifier.fillMaxWidth(),
+                        defaultPrimaryColors = zappAccentButtonColors(),
                     )
                 }
             }

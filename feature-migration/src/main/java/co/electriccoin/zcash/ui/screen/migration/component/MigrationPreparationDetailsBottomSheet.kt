@@ -30,9 +30,9 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationPreparationStepD
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ZashiButton
 import co.electriccoin.zcash.ui.design.component.ZashiScreenModalBottomSheet
+import co.electriccoin.zcash.ui.design.component.zapp.ZappModalBottomSheetDragHandle
+import co.electriccoin.zcash.ui.design.component.zapp.zappAccentButtonColors
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
-import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
-import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.R as DesignR
@@ -57,7 +57,11 @@ import co.electriccoin.zcash.ui.design.R as DesignR
 @Composable
 fun MigrationPreparationDetailsBottomSheet(details: MigrationPreparationDetails?) {
     if (details == null) return
-    ZashiScreenModalBottomSheet(onDismissRequest = details.onDismiss) { contentPadding ->
+    ZashiScreenModalBottomSheet(
+        onDismissRequest = details.onDismiss,
+        containerColor = ZappTheme.colors.surface,
+        dragHandle = { ZappModalBottomSheetDragHandle() },
+    ) { contentPadding ->
         Column(
             modifier =
                 Modifier
@@ -81,7 +85,7 @@ fun MigrationPreparationDetailsBottomSheet(details: MigrationPreparationDetails?
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .background(ZappTheme.colors.bg, RectangleShape)
+                        .background(ZappTheme.colors.surfaceAlt, RectangleShape)
                         .padding(16.dp),
             ) {
                 Text(
@@ -104,7 +108,7 @@ fun MigrationPreparationDetailsBottomSheet(details: MigrationPreparationDetails?
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .background(ZappTheme.colors.surface, RectangleShape)
+                        .background(ZappTheme.colors.surfaceAlt, RectangleShape)
                         .padding(12.dp),
             ) {
                 Text(
@@ -128,6 +132,7 @@ fun MigrationPreparationDetailsBottomSheet(details: MigrationPreparationDetails?
                         onClick = details.onDismiss
                     ),
                 modifier = Modifier.fillMaxWidth(),
+                defaultPrimaryColors = zappAccentButtonColors(),
             )
         }
     }
