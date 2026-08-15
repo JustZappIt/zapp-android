@@ -50,6 +50,9 @@ import kotlin.time.Duration.Companion.seconds
 interface TransactionRepository {
     val transactions: Flow<List<Transaction>?>
 
+    /** Lightweight SDK rows for consumers that do not need recipient/output enrichment. */
+    val balanceHistoryTransactions: Flow<List<TransactionOverview>?>
+
     suspend fun getMemos(transaction: Transaction): List<String>
 
     fun observeTransaction(txId: String): Flow<Transaction?>
@@ -77,6 +80,45 @@ class TransactionRepositoryImpl(
     private val ownAddressCache = ConcurrentHashMap<AccountUuid, String>()
 
     @OptIn(ExperimentalCoroutinesApi::class)
+    override val balanceHistoryTransactions: Flow<List<TransactionOverview>?> =
+        accountDataSource
+            .selectedAccount
+            .map { it?.sdkAccount?.accountUuid }
+            .distinctUntilChanged()
+            .flatMapLatest { uuid ->
+                if (uuid == null) {
+                    flowOf(null)
+                } else {
+                    synchronizerProvider
+                        .synchronizer
+                        .flatMapLatest { synchronizer ->
+                            if (synchronizer == null) {
+                                flowOf(null)
+                            } else {
+                                combine(
+                                    synchronizer.getTransactions(uuid),
+                                    synchronizer.status,
+                                    ::normalizeTransactions,
+                                )
+                            }
+                        }.onStart { emit(null) }
+                }
+            }.retryWhen { cause, attempt ->
+                if (cause is CancellationException) {
+                    false
+                } else {
+                    Twig.error(cause) { "Balance-history transactions flow failed; retrying" }
+                    emit(null)
+                    delay(attempt.coerceAtMost(TRANSACTIONS_RETRY_DELAY_CAP).seconds)
+                    true
+                }
+            }.stateIn(
+                scope = scope,
+                started = SharingStarted.Lazily,
+                initialValue = null,
+            )
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Suppress("TooGenericExceptionCaught")
     override val transactions: Flow<List<Transaction>?> =
         accountDataSource
@@ -96,23 +138,9 @@ class TransactionRepositoryImpl(
                                 val normalizedTransactions =
                                     combine(
                                         synchronizer.getTransactions(uuid),
-                                        synchronizer.status
-                                    ) { transactions, status ->
-                                        transactions.map {
-                                            if (it.isSentTransaction) {
-                                                it.copy(
-                                                    transactionState =
-                                                        createTransactionState(
-                                                            minedHeight = it.minedHeight,
-                                                            transactionState = it.transactionState,
-                                                            isSyncing = status == Synchronizer.Status.SYNCING
-                                                        ) ?: it.transactionState
-                                                )
-                                            } else {
-                                                it
-                                            }
-                                        }
-                                    }.distinctUntilChanged()
+                                        synchronizer.status,
+                                        ::normalizeTransactions,
+                                    ).distinctUntilChanged()
 
                                 normalizedTransactions
                                     .conflate()
@@ -202,6 +230,25 @@ class TransactionRepositoryImpl(
                 started = SharingStarted.Lazily,
                 initialValue = null
             )
+
+    private fun normalizeTransactions(
+        transactions: List<TransactionOverview>,
+        status: Synchronizer.Status,
+    ): List<TransactionOverview> =
+        transactions.map { transaction ->
+            if (transaction.isSentTransaction) {
+                transaction.copy(
+                    transactionState =
+                        createTransactionState(
+                            minedHeight = transaction.minedHeight,
+                            transactionState = transaction.transactionState,
+                            isSyncing = status == Synchronizer.Status.SYNCING,
+                        ) ?: transaction.transactionState
+                )
+            } else {
+                transaction
+            }
+        }
 
     private fun createTransaction(transaction: TransactionOverview, details: TxDetails): Transaction =
         when (transaction.transactionState) {

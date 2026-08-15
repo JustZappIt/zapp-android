@@ -98,4 +98,11 @@
     <string name="p2p_transactions_detail_duration">Durasi</string>
     <string name="p2p_transactions_detail_expand_content_description">Tampilkan detail</string>
     <string name="p2p_transactions_detail_collapse_content_description">Sembunyikan detail</string>
+    <string name="settings_portfolio_chart_title">Grafik portofolio</string>
+    <string name="settings_portfolio_chart_subtitle">Visibilitas dan privasi</string>
+    <string name="settings_portfolio_chart_section">Tampilan</string>
+    <string name="settings_portfolio_chart_toggle_title">Nilai grafik dalam mata uang lokal</string>
+    <string name="settings_portfolio_chart_toggle_subtitle">Saat nonaktif, Bayar menampilkan riwayat saldo ZEC tanpa meminta harga</string>
+    <string name="settings_portfolio_chart_footer">Saat aktif, Zapp meminta harga pasar publik melalui Tor; data dompet tetap berada di perangkat ini. Saat nonaktif, grafik tetap tersedia dalam ZEC.</string>
+    <string name="settings_portfolio_chart_save">Simpan perubahan</string>
 </resources>

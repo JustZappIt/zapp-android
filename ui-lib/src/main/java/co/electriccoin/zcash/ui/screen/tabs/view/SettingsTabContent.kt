@@ -24,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.ContentCopy
@@ -94,6 +95,7 @@ internal fun SettingsTabContent(
     onChatSettingsClick: () -> Unit,
     onCopyPublicKeyClick: (String) -> Unit,
     onP2pPaymentMethodClick: () -> Unit,
+    onPortfolioChartClick: () -> Unit,
     walletViewModel: WalletViewModel = koinViewModel(),
 ) {
     val scope = rememberCoroutineScope()
@@ -218,6 +220,15 @@ internal fun SettingsTabContent(
                         //     onClick = { /* route via TabsVM */ },
                         // )
                         // ZappRowDivider(inset = true)
+                        ZappRow(
+                            title = stringResource(R.string.settings_portfolio_chart_title),
+                            subtitle = stringResource(R.string.settings_portfolio_chart_subtitle),
+                            icon = Icons.AutoMirrored.Filled.ShowChart,
+                            iconTint = c.accentText,
+                            iconBackground = c.accentSoft,
+                            onClick = onPortfolioChartClick,
+                        )
+                        ZappRowDivider(inset = true)
                         // Without a CMC key only USD resolves (non-USD falls back to the USD-only
                         // rate), so gate the row like ExchangeRateSettingsVM / ExchangeRateOptInView.
                         if (VersionInfo.IS_CMC_AVAILABLE) {

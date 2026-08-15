@@ -16,6 +16,8 @@ import co.electriccoin.zcash.ui.common.datasource.WalletSnapshotDataSource
 import co.electriccoin.zcash.ui.common.datasource.WalletSnapshotDataSourceImpl
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSourceImpl
+import co.electriccoin.zcash.ui.common.pricing.datasource.PricingEngineDataSource
+import co.electriccoin.zcash.ui.common.pricing.datasource.PricingEngineDataSourceImpl
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.module
@@ -30,4 +32,5 @@ val dataSourceModule =
         singleOf(::WalletSnapshotDataSourceImpl) bind WalletSnapshotDataSource::class
         singleOf(::NearSwapDataSourceImpl) bind SwapDataSource::class
         singleOf(::ExchangeRateDataSourceImpl) bind ExchangeRateDataSource::class
+        singleOf(::PricingEngineDataSourceImpl) bind PricingEngineDataSource::class
     }

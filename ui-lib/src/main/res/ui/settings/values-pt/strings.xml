@@ -100,4 +100,11 @@
     <string name="p2p_transactions_detail_duration">Duração</string>
     <string name="p2p_transactions_detail_expand_content_description">Mostrar detalhes</string>
     <string name="p2p_transactions_detail_collapse_content_description">Ocultar detalhes</string>
+    <string name="settings_portfolio_chart_title">Gráfico do portfólio</string>
+    <string name="settings_portfolio_chart_subtitle">Visibilidade e privacidade</string>
+    <string name="settings_portfolio_chart_section">Exibição</string>
+    <string name="settings_portfolio_chart_toggle_title">Avaliar o gráfico na moeda local</string>
+    <string name="settings_portfolio_chart_toggle_subtitle">Quando desativado, Pagar mostra o histórico do saldo em ZEC sem solicitar preços</string>
+    <string name="settings_portfolio_chart_footer">Quando ativado, o Zapp solicita preços públicos de mercado via Tor; os dados da carteira permanecem neste dispositivo. Quando desativado, o gráfico continua disponível em ZEC.</string>
+    <string name="settings_portfolio_chart_save">Salvar alterações</string>
 </resources>

@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -58,11 +59,12 @@ import co.electriccoin.zcash.ui.design.animation.ZappMotion
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 
 internal enum class ZappTab(
-    @param:StringRes val titleRes: Int
+    @param:StringRes val titleRes: Int,
+    val testTag: String,
 ) {
-    PAY(R.string.home_pay_title),
-    CHATS(R.string.chat_list_title),
-    YOU(R.string.settings_you_title),
+    PAY(R.string.home_pay_title, PAY_TAB_TEST_TAG),
+    CHATS(R.string.chat_list_title, CHATS_TAB_TEST_TAG),
+    YOU(R.string.settings_you_title, YOU_TAB_TEST_TAG),
 }
 
 @Composable
@@ -116,6 +118,7 @@ internal fun FloatingPillNavBar(
                     modifier =
                         Modifier
                             .weight(1f)
+                            .testTag(tab.testTag)
                             .defaultMinSize(minHeight = 48.dp)
                             .background(color = cellBg, shape = RectangleShape)
                             .clickable(
@@ -194,3 +197,7 @@ private fun iconFor(
         ZappTab.CHATS -> if (selected) Icons.AutoMirrored.Filled.Chat else Icons.AutoMirrored.Outlined.Chat
         ZappTab.YOU -> if (selected) Icons.Filled.Person else Icons.Outlined.Person
     }
+
+private const val PAY_TAB_TEST_TAG = "zapp_tab_pay"
+private const val CHATS_TAB_TEST_TAG = "zapp_tab_chats"
+private const val YOU_TAB_TEST_TAG = "zapp_tab_you"

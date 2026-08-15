@@ -22,4 +22,11 @@ class HttpClientProviderPrivacyTest {
         assertFalse(sanitized.contains("0xother"))
         assertTrue(sanitized.contains("safe=value"))
     }
+
+    @Test
+    fun `every exchange-rate host is blocked from the direct client`() {
+        assertTrue(CMC_API_HOST.isExchangeRateHost())
+        assertTrue(PRICING_ENGINE_HOST.isExchangeRateHost())
+        assertFalse("example.test".isExchangeRateHost())
+    }
 }

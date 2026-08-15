@@ -21,6 +21,13 @@
     <string name="settings_group_privacy">Privacidad</string>
     <string name="settings_group_p2p">P2P</string>
     <string name="settings_group_wallet">Billetera</string>
+    <string name="settings_portfolio_chart_title">Gráfico del portafolio</string>
+    <string name="settings_portfolio_chart_subtitle">Visibilidad y privacidad</string>
+    <string name="settings_portfolio_chart_section">Visualización</string>
+    <string name="settings_portfolio_chart_toggle_title">Valorar el gráfico en moneda local</string>
+    <string name="settings_portfolio_chart_toggle_subtitle">Al desactivarlo, Pagar muestra el historial del saldo en ZEC sin solicitar precios</string>
+    <string name="settings_portfolio_chart_footer">Al activarlo, Zapp solicita precios públicos del mercado mediante Tor; los datos de la billetera permanecen en este dispositivo. Al desactivarlo, el gráfico sigue disponible en ZEC.</string>
+    <string name="settings_portfolio_chart_save">Guardar cambios</string>
     <string name="settings_contacts_subtitle">Gestiona tus contactos de chat</string>
     <string name="settings_profile_identity_title">Perfil e identidad</string>
     <string name="settings_profile_identity_subtitle">Frase semilla, clave de mensajería, dirección de billetera</string>

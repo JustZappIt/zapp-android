@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.screen.tabs.view
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.core.tween
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -30,12 +32,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selectableGroup
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
@@ -47,11 +53,10 @@ import co.electriccoin.zcash.ui.common.wallet.zecFiatRate
 import co.electriccoin.zcash.ui.design.animation.ZappMotion
 import co.electriccoin.zcash.ui.design.component.chart.SparkChart
 import co.electriccoin.zcash.ui.design.component.chart.SparkChartData
+import co.electriccoin.zcash.ui.design.component.chart.SparkChartSelection
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
-import co.electriccoin.zcash.ui.design.component.zapp.ZappSegment
-import co.electriccoin.zcash.ui.design.component.zapp.ZappSegmentedSelector
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.TickerLocation
 import co.electriccoin.zcash.ui.design.util.getString
@@ -64,6 +69,13 @@ import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartState
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.DecimalFormat
+import java.text.NumberFormat
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Currency
+import java.util.Locale
 import kotlin.math.absoluteValue
 
 @Composable
@@ -75,7 +87,6 @@ internal fun BalanceCard(
     onToggleBalanceDisplay: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val c = ZappTheme.colors
     val hasBalance = balanceState.totalBalance.value > 0L
 
     Column(
@@ -94,13 +105,43 @@ internal fun BalanceCard(
             onToggleBalanceDisplay = onToggleBalanceDisplay,
         )
 
-        if (hasBalance && chartState is BalanceChartState.Data) {
+        if (hasBalance && chartState !is BalanceChartState.Hidden) {
             Spacer(Modifier.height(10.dp))
-            BalanceDelta(chartState = chartState)
-            Spacer(Modifier.height(14.dp))
-            ChartArea(state = chartState)
-            Spacer(Modifier.height(14.dp))
-            PeriodSelector(state = chartState)
+            if (chartState is BalanceChartState.Data) {
+                BalanceDelta(chartState = chartState)
+                Spacer(Modifier.height(14.dp))
+            }
+            ChartContent(state = chartState)
+            when (chartState) {
+                is BalanceChartState.Data -> {
+                    Spacer(Modifier.height(14.dp))
+                    PeriodSelector(
+                        selectedPeriod = chartState.selectedPeriod,
+                        onClick = chartState.onPeriodClick,
+                    )
+                }
+
+                is BalanceChartState.ZecData -> {
+                    Spacer(Modifier.height(14.dp))
+                    PeriodSelector(
+                        selectedPeriod = chartState.selectedPeriod,
+                        onClick = chartState.onPeriodClick,
+                    )
+                }
+
+                is BalanceChartState.Empty -> {
+                    Spacer(Modifier.height(14.dp))
+                    PeriodSelector(
+                        selectedPeriod = chartState.selectedPeriod,
+                        onClick = chartState.onPeriodClick,
+                    )
+                }
+
+                BalanceChartState.Loading,
+                BalanceChartState.Hidden -> {
+                    Unit
+                }
+            }
         }
 
         balanceState.breakdown?.let { breakdown ->
@@ -199,7 +240,7 @@ private fun BalanceBreakdownSection(
 private fun BreakdownLine(
     label: String,
     amount: String,
-    dotColor: androidx.compose.ui.graphics.Color,
+    dotColor: Color,
 ) {
     val c = ZappTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -322,19 +363,11 @@ private fun BalanceAmount(
 }
 
 @Composable
-private fun BalanceDelta(chartState: BalanceChartState) {
+private fun BalanceDelta(
+    chartState: BalanceChartState,
+) {
     val c = ZappTheme.colors
-    val chartPoints = if (chartState is BalanceChartState.Data) chartState.chart.points else null
-    val delta = remember(chartPoints) { chartState.computeDelta() }
-    val periodLabel = chartState.periodOrDefault().label()
-
-    if (delta == null) {
-        BasicText(
-            text = periodLabel,
-            style = ZappTheme.typography.caption.copy(color = c.textMuted),
-        )
-        return
-    }
+    val delta = remember(chartState) { chartState.computeDelta() } ?: return
 
     val sign = if (delta.isPositive) "▲" else "▼"
     val color = if (delta.isPositive) c.success else c.danger
@@ -352,43 +385,200 @@ private fun BalanceDelta(chartState: BalanceChartState) {
             text = delta.percentText,
             style = ZappTheme.typography.caption.copy(color = color),
         )
-        Dot(color = c.textSubtle)
+    }
+}
+
+@Composable
+private fun Dot(color: Color) {
+    Box(modifier = Modifier.size(3.dp).background(color, RectangleShape))
+}
+
+@Composable
+private fun ChartContent(state: BalanceChartState) {
+    when (state) {
+        is BalanceChartState.Data -> ChartArea(state)
+        is BalanceChartState.ZecData -> ZecChartArea(state)
+        is BalanceChartState.Empty -> ChartMessage(R.string.home_balance_chart_empty)
+        BalanceChartState.Loading -> ChartLoading()
+        BalanceChartState.Hidden -> Unit
+    }
+}
+
+@Composable
+private fun ZecChartArea(
+    state: BalanceChartState.ZecData,
+) {
+    val c = ZappTheme.colors
+    val context = LocalContext.current
+    val locale = Locale.getDefault()
+    val period = state.selectedPeriod.label()
+    val summary = stringResource(R.string.home_balance_chart_accessibility, period, "ZEC")
+    val scrubHint = stringResource(R.string.home_balance_chart_scrub_hint)
+    val selectionFormatter =
+        remember(locale, context) {
+            val date =
+                DateTimeFormatter
+                    .ofLocalizedDate(FormatStyle.MEDIUM)
+                    .withLocale(locale)
+                    .withZone(ZoneOffset.UTC)
+            val formatPoint: (SparkChartData.Point) -> SparkChartSelection = { point ->
+                val amount = stringRes(Zatoshi(point.y.toLong())).getString(context)
+                val day = date.format(Instant.ofEpochSecond(point.x.toLong()))
+                SparkChartSelection(
+                    primary = amount,
+                    secondary = day,
+                    contentDescription =
+                        context.getString(
+                            R.string.home_balance_chart_selection_accessibility,
+                            amount,
+                            day,
+                        ),
+                )
+            }
+            formatPoint
+        }
+    SparkChart(
+        data = state.chart,
+        lineColor = c.accent,
+        fillColor = c.accent,
+        selectionFormatter = selectionFormatter,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .testTag(BALANCE_CHART_READY_TEST_TAG)
+                .semantics { contentDescription = "$summary. $scrubHint" },
+    )
+}
+
+@Composable
+private fun ChartMessage(
+    @StringRes messageRes: Int,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(140.dp)
+                .testTag(BALANCE_CHART_READY_TEST_TAG),
+        contentAlignment = Alignment.Center,
+    ) {
         BasicText(
-            text = periodLabel,
-            style = ZappTheme.typography.caption.copy(color = c.textMuted),
+            text = stringResource(messageRes),
+            style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.textSubtle),
         )
     }
 }
 
 @Composable
-private fun Dot(color: androidx.compose.ui.graphics.Color) {
-    Box(modifier = Modifier.size(3.dp).background(color, RectangleShape))
+private fun ChartLoading() {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(140.dp)
+                .background(ZappTheme.colors.surfaceAlt, RectangleShape),
+    )
 }
 
 @Composable
-private fun ChartArea(state: BalanceChartState.Data) {
+private fun ChartArea(
+    state: BalanceChartState.Data,
+) {
     val c = ZappTheme.colors
+    val context = LocalContext.current
+    val locale = Locale.getDefault()
+    val period = state.selectedPeriod.label()
+    val delta = state.computeDelta()
+    val summary =
+        stringResource(
+            R.string.home_balance_chart_accessibility,
+            period,
+            delta?.let { "${it.valueText}, ${it.percentText}" }.orEmpty(),
+        )
+    val scrubHint = stringResource(R.string.home_balance_chart_scrub_hint)
+    val selectionFormatter =
+        remember(locale, context, state.fiatCurrency) {
+            val fiat =
+                NumberFormat.getCurrencyInstance(locale).apply {
+                    currency = Currency.getInstance(state.fiatCurrency.code)
+                    minimumFractionDigits = 2
+                    maximumFractionDigits = 2
+                }
+            val date =
+                DateTimeFormatter
+                    .ofLocalizedDate(FormatStyle.MEDIUM)
+                    .withLocale(locale)
+                    .withZone(ZoneOffset.UTC)
+            val formatPoint: (SparkChartData.Point) -> SparkChartSelection = { point ->
+                val amount = fiat.format(BigDecimal.valueOf(point.y))
+                val day = date.format(Instant.ofEpochSecond(point.x.toLong()))
+                SparkChartSelection(
+                    primary = amount,
+                    secondary = day,
+                    contentDescription =
+                        context.getString(
+                            R.string.home_balance_chart_selection_accessibility,
+                            amount,
+                            day,
+                        ),
+                )
+            }
+            formatPoint
+        }
     SparkChart(
         data = state.chart,
         lineColor = c.accent,
         fillColor = c.accent,
-        modifier = Modifier.fillMaxWidth(),
+        selectionFormatter = selectionFormatter,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .testTag(BALANCE_CHART_READY_TEST_TAG)
+                .semantics { contentDescription = "$summary. $scrubHint" },
     )
 }
 
-@Composable
-private fun PeriodSelector(state: BalanceChartState) {
-    val selectedPeriod = state.periodOrDefault()
-    val onClick = state.onPeriodClickOrNoop()
-    val periods = BalanceChartPeriod.entries
-    val segments = periods.map { ZappSegment(it.label()) }
-    val index = periods.indexOf(selectedPeriod).coerceAtLeast(0)
+private const val BALANCE_CHART_READY_TEST_TAG = "balance_chart_ready"
 
-    ZappSegmentedSelector(
-        segments = segments,
-        selectedIndex = index,
-        onSelect = { i -> onClick(periods[i]) },
-    )
+@Composable
+private fun PeriodSelector(
+    selectedPeriod: BalanceChartPeriod,
+    onClick: (BalanceChartPeriod) -> Unit,
+) {
+    val c = ZappTheme.colors
+
+    Row(
+        modifier = Modifier.fillMaxWidth().semantics { selectableGroup() },
+        horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.xxs, Alignment.End),
+    ) {
+        BalanceChartPeriod.entries.forEach { period ->
+            val isSelected = period == selectedPeriod
+            Box(
+                modifier =
+                    Modifier
+                        .height(ZappTheme.spacing.xl4)
+                        .defaultMinSize(minWidth = ZappTheme.spacing.xl5)
+                        .background(if (isSelected) c.accentSoft else Color.Transparent)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { onClick(period) }
+                        .semantics {
+                            role = Role.Tab
+                            selected = isSelected
+                        }.padding(horizontal = ZappTheme.spacing.md),
+                contentAlignment = Alignment.Center,
+            ) {
+                BasicText(
+                    text = period.label(),
+                    style =
+                        ZappTheme.typography.groupLabel.copy(
+                            color = if (isSelected) c.accentText else c.textSubtle,
+                        ),
+                )
+            }
+        }
+    }
 }
 
 private data class FormattedFiat(
@@ -438,37 +628,21 @@ private data class BalanceDeltaResult(
 
 private fun BalanceChartState.computeDelta(): BalanceDeltaResult? {
     if (this !is BalanceChartState.Data) return null
-    val points: List<SparkChartData.Point> = chart.points
-    if (points.size < 2) return null
-    val first = points.first().y
-    val last = points.last().y
-    if (first == 0.0) return null
-    val deltaZatoshi = last - first
-    val percent = (deltaZatoshi / first) * 100.0
-    val deltaZec = BigDecimal(deltaZatoshi).divide(BigDecimal(100_000_000L), 6, RoundingMode.HALF_UP)
-    val valueText = "${deltaZec.abs().toPlainString()} ZEC"
-    val sign = if (percent >= 0) "+" else "-"
-    val percentText = "$sign%.2f%%".format(percent.absoluteValue)
+    val formatter =
+        NumberFormat.getCurrencyInstance(Locale.getDefault()).apply {
+            currency = Currency.getInstance(fiatCurrency.code)
+            minimumFractionDigits = 2
+            maximumFractionDigits = 2
+        }
+    val valueText = formatter.format(absoluteChangeFiat.abs())
+    val sign = if (percentageChange.signum() >= 0) "+" else "-"
+    val percentText = "$sign${percentageChange.abs().setScale(2, RoundingMode.HALF_UP).toPlainString()}%"
     return BalanceDeltaResult(
         valueText = valueText,
         percentText = percentText,
-        isPositive = percent >= 0,
+        isPositive = percentageChange.signum() >= 0,
     )
 }
-
-private fun BalanceChartState.periodOrDefault(): BalanceChartPeriod =
-    when (this) {
-        is BalanceChartState.Data -> selectedPeriod
-        is BalanceChartState.Empty -> selectedPeriod
-        BalanceChartState.Loading, BalanceChartState.Hidden -> BalanceChartPeriod.DEFAULT
-    }
-
-private fun BalanceChartState.onPeriodClickOrNoop(): (BalanceChartPeriod) -> Unit =
-    when (this) {
-        is BalanceChartState.Data -> onPeriodClick
-        is BalanceChartState.Empty -> onPeriodClick
-        BalanceChartState.Loading, BalanceChartState.Hidden -> { _ -> }
-    }
 
 @Composable
 private fun BalanceChartPeriod.label(): String = stringResource(labelRes)

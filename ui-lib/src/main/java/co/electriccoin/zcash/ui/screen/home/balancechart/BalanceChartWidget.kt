@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.screen.home.balancechart
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,7 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import cash.z.ecc.android.sdk.model.Zatoshi
+import cash.z.ecc.android.sdk.model.FiatCurrency
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.BlankSurface
 import co.electriccoin.zcash.ui.design.component.ZashiCard
@@ -31,9 +32,9 @@ import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ProvideZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
-import co.electriccoin.zcash.ui.design.util.TickerLocation
-import co.electriccoin.zcash.ui.design.util.getValue
-import co.electriccoin.zcash.ui.design.util.stringRes
+import java.math.BigDecimal
+import java.time.Instant
+import java.time.LocalDate
 
 fun LazyListScope.balanceChartWidget(
     state: BalanceChartState,
@@ -83,8 +84,13 @@ fun BalanceChartWidget(
                     data = state.chart,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Spacer(Modifier.height(12.dp))
-                Footer(balance = state.periodEndBalance)
+            }
+
+            is BalanceChartState.ZecData -> {
+                SparkChart(
+                    data = state.chart,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
 
             is BalanceChartState.Empty -> {
@@ -107,6 +113,8 @@ private val BalanceChartState.selectedPeriod: BalanceChartPeriod
         when (this) {
             is BalanceChartState.Data -> selectedPeriod
 
+            is BalanceChartState.ZecData -> selectedPeriod
+
             is BalanceChartState.Empty -> selectedPeriod
 
             BalanceChartState.Loading,
@@ -117,6 +125,8 @@ private val BalanceChartState.onPeriodClick: (BalanceChartPeriod) -> Unit
     get() =
         when (this) {
             is BalanceChartState.Data -> onPeriodClick
+
+            is BalanceChartState.ZecData -> onPeriodClick
 
             is BalanceChartState.Empty -> onPeriodClick
 
@@ -170,20 +180,14 @@ private fun PeriodChip(
 }
 
 @Composable
-private fun Footer(balance: Zatoshi) {
-    Text(
-        text =
-            stringResource(
-                R.string.home_balance_chart_footer,
-                stringRes(balance, TickerLocation.HIDDEN).getValue(),
-            ),
-        color = ZappTheme.colors.textSubtle,
-        style = ZappTheme.typography.caption,
-    )
+private fun EmptyChart() {
+    ChartMessage(R.string.home_balance_chart_empty)
 }
 
 @Composable
-private fun EmptyChart() {
+private fun ChartMessage(
+    @StringRes messageRes: Int,
+) {
     Box(
         modifier =
             Modifier
@@ -192,7 +196,7 @@ private fun EmptyChart() {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = stringResource(R.string.home_balance_chart_empty),
+            text = stringResource(messageRes),
             color = ZappTheme.colors.textSubtle,
             style = ZappTheme.typography.caption,
         )
@@ -214,6 +218,7 @@ private fun LoadingChart() {
 object BalanceChartWidgetStateFixture {
     fun data(): BalanceChartState.Data =
         BalanceChartState.Data(
+            fiatCurrency = FiatCurrency.USD,
             chart =
                 SparkChartData(
                     points =
@@ -227,7 +232,11 @@ object BalanceChartWidgetStateFixture {
                             SparkChartData.Point(6.0, 290_000_000.0),
                         )
                 ),
-            periodEndBalance = Zatoshi(290_000_000L),
+            absoluteChangeFiat = BigDecimal("12.34"),
+            percentageChange = BigDecimal("5.67"),
+            availableFrom = LocalDate.parse("2025-01-01"),
+            dataAsOf = Instant.parse("2026-08-11T00:00:00Z"),
+            isStale = false,
             selectedPeriod = BalanceChartPeriod.W1,
             onPeriodClick = {},
         )

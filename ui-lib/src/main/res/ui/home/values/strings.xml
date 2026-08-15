@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="home_balance_chart_title">Balance history</string>
-    <string name="home_balance_chart_period_24h">24h</string>
+<resources>
+    <string name="home_balance_chart_title">Portfolio value</string>
     <string name="home_balance_chart_period_1w">1w</string>
     <string name="home_balance_chart_period_1m">1m</string>
+    <string name="home_balance_chart_period_1y">1y</string>
     <string name="home_balance_chart_period_all">All</string>
-    <string name="home_balance_chart_footer" formatted="true">Balance: <xliff:g example="1.2345" id="amount">%1$s</xliff:g> ZEC</string>
     <string name="home_balance_chart_empty">Not enough activity yet for this range.</string>
+    <string name="home_balance_chart_accessibility">%1$s portfolio value, %2$s</string>
+    <string name="home_balance_chart_scrub_hint">Touch and drag to inspect values</string>
+    <string name="home_balance_chart_selection_accessibility">%1$s on %2$s</string>
 
     <string name="home_wallet_title">Wallet</string>
     <string name="home_pay_title">Pay</string>

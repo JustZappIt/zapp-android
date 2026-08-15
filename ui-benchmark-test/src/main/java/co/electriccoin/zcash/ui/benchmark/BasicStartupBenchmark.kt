@@ -19,7 +19,7 @@ import org.junit.Test
  */
 class BasicStartupBenchmark {
     companion object {
-        private const val APP_TARGET_PACKAGE_NAME = "co.electriccoin.zcash"
+        private const val APP_TARGET_PACKAGE_NAME = "xyz.justzappit.zapp"
     }
 
     @get:Rule

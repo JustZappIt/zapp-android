@@ -18,6 +18,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.viewmodel.SecretState
 import co.electriccoin.zcash.ui.common.viewmodel.WalletViewModel
@@ -121,7 +123,13 @@ private fun ZappTabsScaffoldContent() {
     val unreadCount = conversations.orEmpty().sumOf { it.unreadCount }
     val c = ZappTheme.colors
 
-    Box(modifier = Modifier.fillMaxSize().background(c.bg)) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(c.bg)
+                .semantics { testTagsAsResourceId = true },
+    ) {
         // Fade-through, not a slide: tab switches are lateral moves, not navigation.
         AnimatedContent(
             targetState = currentTab,
@@ -156,6 +164,7 @@ private fun ZappTabsScaffoldContent() {
                         onChatSettingsClick = tabsVM::onChatSettingsClick,
                         onCopyPublicKeyClick = tabsVM::onCopyPublicKeyClick,
                         onP2pPaymentMethodClick = tabsVM::onP2pPaymentMethodClick,
+                        onPortfolioChartClick = tabsVM::onPortfolioChartClick,
                     )
                 }
             }
@@ -165,7 +174,12 @@ private fun ZappTabsScaffoldContent() {
             FloatingPillNavBar(
                 currentTab = currentTab,
                 chatUnreadCount = unreadCount,
-                onTabSelected = { currentTab = it },
+                onTabSelected = { selectedTab ->
+                    if (selectedTab == ZappTab.PAY && currentTab != ZappTab.PAY) {
+                        BalanceChartReadinessTrace.begin()
+                    }
+                    currentTab = selectedTab
+                },
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }

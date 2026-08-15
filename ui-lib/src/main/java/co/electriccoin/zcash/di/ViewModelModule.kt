@@ -71,6 +71,7 @@ import co.electriccoin.zcash.ui.screen.securitysettings.SecuritySettingsVM
 import co.electriccoin.zcash.ui.screen.selectkeystoneaccount.viewmodel.SelectKeystoneAccountViewModel
 import co.electriccoin.zcash.ui.screen.settings.p2p.P2pPaymentMethodVM
 import co.electriccoin.zcash.ui.screen.settings.p2p.P2pTransactionsVM
+import co.electriccoin.zcash.ui.screen.settings.portfoliochart.PortfolioChartSettingsVM
 import co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionVM
 import co.electriccoin.zcash.ui.screen.support.viewmodel.SupportViewModel
 import co.electriccoin.zcash.ui.screen.swap.SwapVM
@@ -141,6 +142,7 @@ val viewModelModule =
         viewModelOf(::ZashiTopAppBarVM)
         viewModelOf(::WelcomeGateVM)
         viewModelOf(::TabsVM)
+        viewModelOf(::PortfolioChartSettingsVM)
         viewModelOf(::SelectKeystoneAccountViewModel)
         viewModelOf(::KeystoneNewOrActiveVM)
         viewModelOf(::KeystoneDateVM)
