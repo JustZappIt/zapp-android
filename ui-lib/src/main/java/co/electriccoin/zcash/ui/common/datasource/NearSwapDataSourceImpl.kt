@@ -103,12 +103,16 @@ class NearSwapDataSourceImpl(
                 deadline = Clock.System.now() + 2.hours,
                 quoteWaitingTimeMs = QUOTE_WAITING_TIME,
                 appFees =
-                    listOf(
-                        AppFee(
-                            recipient = affiliateAddress,
-                            fee = AFFILIATE_FEE_BPS
+                    if (AFFILIATE_FEE_BPS > 0) {
+                        listOf(
+                            AppFee(
+                                recipient = affiliateAddress,
+                                fee = AFFILIATE_FEE_BPS
+                            )
                         )
-                    ),
+                    } else {
+                        emptyList()
+                    },
                 referral = "zapp"
             )
 
@@ -235,7 +239,9 @@ class NearSwapDataSourceImpl(
         }
 }
 
-const val AFFILIATE_FEE_BPS = 67
+// App fee disabled: swaps carry no Zapp fee. Set back to 67 to re-enable it — the quote request,
+// the fee display and the offramp bridge estimate all derive from this one constant.
+const val AFFILIATE_FEE_BPS = 0
 const val AFFILIATE_ADDRESS = "042269ffc94d52b822b4bd053f9122c5a890a5483822421ac35a5236f63e390d"
 private const val QUOTE_WAITING_TIME = 3000
 
