@@ -64,7 +64,7 @@
     <!-- P2P transactions (Settings → Wallet entry). Reached from SettingsTabContent → "P2P
          transactions"; the file lives under settings/ rather than swap/ because the screen is a
          settings-tier transaction history, not a swap-flow surface. -->
-    <string name="p2p_transactions_title">Transações P2P</string>
+    <string name="p2p_transactions_title">Atividade na Base</string>
     <string name="p2p_transactions_balance_label">Saldo na Base</string>
     <string name="p2p_transactions_balance_amount">%1$s USDC</string>
     <string name="p2p_transactions_balance_unavailable">Saldo indisponível</string>
@@ -73,24 +73,37 @@
     <string name="p2p_transactions_refund_in_progress">Reembolsando…</string>
     <string name="p2p_transactions_refund_retry">Tentar reembolso novamente</string>
     <string name="p2p_transactions_refund_failed">Falha no reembolso: %1$s</string>
+    <string name="p2p_transactions_refund_blocked">%1$s USDC estão reservados por um saque em andamento. O reembolso move todo o saldo, então conclua ou cancele esse primeiro.</string>
     <string name="p2p_transactions_refund_dialog_title">Reembolsar para ZEC?</string>
     <string name="p2p_transactions_refund_dialog_message">Isso transfere %1$s de volta para a sua carteira ZEC via NEAR. Os fundos costumam chegar em 5–10 minutos.</string>
     <string name="p2p_transactions_refund_dialog_confirm">Reembolsar</string>
     <string name="p2p_transactions_refund_dialog_cancel">Cancelar</string>
     <string name="p2p_transactions_account_label">Conta P2P</string>
-    <string name="p2p_transactions_empty">Ainda não há transações P2P.</string>
+    <string name="p2p_transactions_empty">Ainda não há atividade.</string>
     <string name="p2p_transactions_error">Não foi possível carregar as transações. Puxe para atualizar.</string>
     <string name="p2p_transactions_row_amount_usdc">%1$s USDC</string>
     <string name="p2p_transactions_row_amount_fiat">%1$s %2$s</string>
     <string name="p2p_transactions_row_order_id">Pedido nº %1$s</string>
+    <string name="p2p_transactions_row_deposit_id">Depósito n.º %1$s</string>
     <string name="p2p_transactions_type_buy">Compra</string>
     <string name="p2p_transactions_type_sell">Venda</string>
     <string name="p2p_transactions_type_pay">Pagamento</string>
+    <string name="p2p_transactions_type_cash_out">Saque · %1$s</string>
+    <string name="p2p_transactions_type_cash_out_unknown_rail">Saque</string>
     <string name="p2p_transactions_status_placed">Realizada</string>
     <string name="p2p_transactions_status_accepted">Aceita</string>
     <string name="p2p_transactions_status_paid">Paga</string>
     <string name="p2p_transactions_status_completed">Concluída</string>
     <string name="p2p_transactions_status_cancelled">Cancelada</string>
+    <string name="p2p_transactions_status_waiting">Aguardando</string>
+    <string name="p2p_transactions_status_selling">Vendendo</string>
+    <string name="p2p_transactions_status_partly_sold">Vendido em parte</string>
+    <string name="p2p_transactions_status_sold">Vendido</string>
+    <string name="p2p_transactions_status_paused">Pausado</string>
+    <string name="p2p_transactions_status_closed">Encerrado</string>
+    <string name="p2p_transactions_status_in_progress">Em andamento</string>
+    <string name="p2p_transactions_status_failed">Falhou</string>
+    <string name="p2p_transactions_filter_all">Tudo</string>
 
     <!-- Detail panel (expanded transaction row) -->
     <string name="p2p_transactions_detail_fee">Taxa</string>
@@ -98,8 +111,10 @@
     <string name="p2p_transactions_detail_paid_to">Pago a</string>
     <string name="p2p_transactions_detail_p2p_merchant_address">Endereço do comerciante P2P</string>
     <string name="p2p_transactions_detail_duration">Duração</string>
+    <string name="p2p_transactions_detail_step">Etapa</string>
     <string name="p2p_transactions_detail_expand_content_description">Mostrar detalhes</string>
     <string name="p2p_transactions_detail_collapse_content_description">Ocultar detalhes</string>
+    <string name="p2p_transactions_action_view_progress">Ver o progresso</string>
     <string name="settings_portfolio_chart_title">Gráfico do portfólio</string>
     <string name="settings_portfolio_chart_subtitle">Visibilidade e privacidade</string>
     <string name="settings_portfolio_chart_section">Exibição</string>
@@ -107,4 +122,16 @@
     <string name="settings_portfolio_chart_toggle_subtitle">Quando desativado, Pagar mostra o histórico do saldo em ZEC sem solicitar preços</string>
     <string name="settings_portfolio_chart_footer">Quando ativado, o Zapp solicita preços públicos de mercado via Tor; os dados da carteira permanecem neste dispositivo. Quando desativado, o gráfico continua disponível em ZEC.</string>
     <string name="settings_portfolio_chart_save">Salvar alterações</string>
+
+    <string name="settings_p2p_provider_p2pme">p2p.me</string>
+    <string name="settings_p2p_provider_peer">Peer</string>
+    <string name="settings_p2p_rail_revolut">Revolut</string>
+    <string name="settings_p2p_rail_zelle">Zelle</string>
+    <string name="settings_p2p_rail_chime">Chime</string>
+    <string name="settings_p2p_rail_monzo">Monzo</string>
+    <string name="settings_p2p_rail_currencies_more">%1$s e mais %2$d</string>
+    <string name="settings_p2p_payment_method_info_cash_out">O saque funciona ao contrário. Você oferece seus fundos a compradores à taxa de mercado, eles pagam na sua própria moeda e os fundos são liberados quando o pagamento é comprovado. Pode demorar para encontrar comprador, e nada fica fixado até alguém aceitar.</string>
+    <string name="settings_base_account_title">Conta na Base</string>
+    <string name="settings_base_account_subtitle">Seu saldo de USDC e sua atividade</string>
+    <string name="settings_base_account_in_progress">Saque em andamento</string>
 </resources>

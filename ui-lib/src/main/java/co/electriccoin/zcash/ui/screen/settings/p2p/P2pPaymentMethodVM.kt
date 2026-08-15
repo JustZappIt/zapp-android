@@ -6,6 +6,8 @@ import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.model.P2pProvider
+import co.electriccoin.zcash.ui.common.model.P2pRail
 import co.electriccoin.zcash.ui.common.provider.PreferredP2pPaymentMethodProvider
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOfframpBaseAddressUseCase
@@ -21,17 +23,19 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import xyz.justzappit.offramp.p2p.CurrencyCode
+import xyz.justzappit.offramp.peer.PeerConfigProvider
+import xyz.justzappit.offramp.peer.PeerPlatform
 
 internal class P2pPaymentMethodVM(
     private val copyToClipboard: CopyToClipboardUseCase,
     private val getOfframpBaseAddress: GetOfframpBaseAddressUseCase,
     private val preferredP2pPaymentMethodProvider: PreferredP2pPaymentMethodProvider,
+    private val peerConfigProvider: PeerConfigProvider,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     private val baseAddress = MutableStateFlow<String?>(null)
     private val isAddressCopied = MutableStateFlow(false)
-    private val selectedPaymentMethod = MutableStateFlow<CurrencyCode?>(null)
+    private val selectedRail = MutableStateFlow<P2pRail?>(null)
     private val isSaveInProgress = MutableStateFlow(false)
     private var copyResetJob: Job? = null
 
@@ -48,15 +52,15 @@ internal class P2pPaymentMethodVM(
             baseAddress,
             isAddressCopied,
             preferredP2pPaymentMethodProvider.observe(),
-            selectedPaymentMethod,
+            selectedRail,
             isSaveInProgress,
-        ) { addr, copied, savedPaymentMethod, selectedPaymentMethod, isSaveInProgress ->
+        ) { addr, copied, savedRail, selected, saving ->
             createState(
                 baseAddress = addr,
                 isAddressCopied = copied,
-                savedPaymentMethod = savedPaymentMethod,
-                selectedPaymentMethod = selectedPaymentMethod,
-                isSaveInProgress = isSaveInProgress,
+                savedRail = savedRail,
+                selectedRail = selected,
+                isSaveInProgress = saving,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -65,8 +69,8 @@ internal class P2pPaymentMethodVM(
                 createState(
                     baseAddress = null,
                     isAddressCopied = false,
-                    savedPaymentMethod = CurrencyCode.Inr,
-                    selectedPaymentMethod = null,
+                    savedRail = P2pRail.DEFAULT,
+                    selectedRail = null,
                     isSaveInProgress = false,
                 ),
         )
@@ -74,26 +78,19 @@ internal class P2pPaymentMethodVM(
     private fun createState(
         baseAddress: String?,
         isAddressCopied: Boolean,
-        savedPaymentMethod: CurrencyCode,
-        selectedPaymentMethod: CurrencyCode?,
+        savedRail: P2pRail,
+        selectedRail: P2pRail?,
         isSaveInProgress: Boolean,
     ): P2pPaymentMethodState {
-        val effectiveSelection = selectedPaymentMethod ?: savedPaymentMethod
+        val effectiveSelection = selectedRail ?: savedRail
         return P2pPaymentMethodState(
             baseAddress = baseAddress,
             isAddressCopied = isAddressCopied,
-            items =
-                P2pPaymentMethod.entries.map { method ->
-                    P2pPaymentMethodItemState(
-                        method = method,
-                        isSelected = method.currency == effectiveSelection,
-                        onClick = { onPaymentMethodClick(method) },
-                    )
-                },
+            sections = buildSections(effectiveSelection),
             saveButton =
                 ButtonState(
                     text = stringRes(R.string.settings_p2p_payment_method_save),
-                    isEnabled = effectiveSelection != savedPaymentMethod && !isSaveInProgress,
+                    isEnabled = effectiveSelection != savedRail && !isSaveInProgress,
                     isLoading = isSaveInProgress,
                     onClick = ::onSaveClick,
                 ),
@@ -102,26 +99,64 @@ internal class P2pPaymentMethodVM(
         )
     }
 
-    private fun onPaymentMethodClick(method: P2pPaymentMethod) {
-        if (method.available) {
-            selectedPaymentMethod.update { method.currency }
+    // Peer only exists on Base mainnet, so on any other build the section is absent rather than
+    // present and failing at the first call.
+    private fun buildSections(selection: P2pRail): List<P2pPaymentMethodSectionState> =
+        buildList {
+            add(
+                P2pPaymentMethodSectionState(
+                    provider = P2pProvider.P2P_ME,
+                    items =
+                        P2pPaymentMethod.entries.map { method ->
+                            itemFor(P2pRail.ScanAndPay(method.currency), method.available, selection)
+                        },
+                ),
+            )
+            if (peerConfigProvider.isAvailable) {
+                add(
+                    P2pPaymentMethodSectionState(
+                        provider = P2pProvider.PEER,
+                        items =
+                            PeerPlatform.entries.map { platform ->
+                                itemFor(P2pRail.PeerCashOut(platform), isAvailable = true, selection = selection)
+                            },
+                    ),
+                )
+            }
+        }
+
+    private fun itemFor(
+        rail: P2pRail,
+        isAvailable: Boolean,
+        selection: P2pRail,
+    ): P2pPaymentMethodItemState =
+        P2pPaymentMethodItemState(
+            rail = rail,
+            isSelected = rail == selection,
+            isAvailable = isAvailable,
+            onClick = { onRailClick(rail, isAvailable) },
+        )
+
+    private fun onRailClick(rail: P2pRail, isAvailable: Boolean) {
+        if (isAvailable) {
+            selectedRail.update { rail }
         }
     }
 
     private fun onSaveClick() {
         if (isSaveInProgress.value) return
         viewModelScope.launch {
-            val selection = selectedPaymentMethod.value ?: return@launch
+            val selection = selectedRail.value ?: return@launch
             val savedSelection = preferredP2pPaymentMethodProvider.get()
             if (selection == savedSelection) {
-                selectedPaymentMethod.update { null }
+                selectedRail.update { null }
                 return@launch
             }
 
             isSaveInProgress.update { true }
             try {
                 preferredP2pPaymentMethodProvider.store(selection)
-                selectedPaymentMethod.update { null }
+                selectedRail.update { null }
                 navigationRouter.back()
             } finally {
                 isSaveInProgress.update { false }

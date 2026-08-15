@@ -15,11 +15,10 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.withContext
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.rpc.TransactionReceipt
-import xyz.justzappit.evm.signer.TxSubmitter
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.evm.types.Wei
-import xyz.justzappit.offramp.account.OfframpSmartAccount
+import xyz.justzappit.offramp.account.SubmittingAccount
 import xyz.justzappit.offramp.onramp.FundsLocation
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryCheckpoint
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryDriver
@@ -49,25 +48,21 @@ internal fun interface OnrampZecDeliveryCheckpointStore {
     suspend fun save(orderId: String, checkpoint: OnrampZecDeliveryCheckpoint)
 }
 
-internal fun interface OnrampSmartAccountResolver {
-    suspend fun resolve(): OfframpSmartAccount
-}
-
 internal fun interface OnrampUsdcBalanceReader {
     suspend fun balance(account: Address): Usdc6
 }
 
-internal fun interface OnrampSubmitterFactory {
-    fun create(account: OfframpSmartAccount): TxSubmitter
-}
-
+/**
+ * The account and the one submitter allowed to spend from it, resolved together. Building a
+ * submitter here instead would give this rail its own nonce cursor, and it spends from the same
+ * smart account as every cash-out and top-up.
+ */
 internal class Erc4337OnrampZecTransferGateway(
     private val usdc: Address,
-    private val accountResolver: OnrampSmartAccountResolver,
+    private val accountResolver: suspend () -> SubmittingAccount,
     private val balanceReader: OnrampUsdcBalanceReader,
-    private val submitterFactory: OnrampSubmitterFactory,
 ) : OnrampZecTransferGateway {
-    private val resolvedAccount = AtomicReference<OfframpSmartAccount?>()
+    private val resolvedAccount = AtomicReference<SubmittingAccount?>()
 
     override suspend fun resolveAccount(): Address = account().address
 
@@ -80,8 +75,7 @@ internal class Erc4337OnrampZecTransferGateway(
         val resolved = account()
         require(account == resolved.address) { "Resolved smart account changed" }
         require(amount > Usdc6.ZERO) { "Transfer amount must be positive" }
-        return submitterFactory
-            .create(resolved)
+        return resolved.submitter
             .sendTransaction(
                 to = usdc,
                 value = Wei.ZERO,
@@ -92,12 +86,11 @@ internal class Erc4337OnrampZecTransferGateway(
     override suspend fun awaitReceipt(account: Address, userOperationHash: String): OnrampBaseTransferReceipt {
         val resolved = account()
         require(account == resolved.address) { "Resolved smart account changed" }
-        val receipt = submitterFactory.create(resolved).awaitReceipt(TxHash.fromHex(userOperationHash))
-        return receipt.toOnrampReceipt()
+        return resolved.submitter.awaitReceipt(TxHash.fromHex(userOperationHash)).toOnrampReceipt()
     }
 
-    private suspend fun account(): OfframpSmartAccount =
-        resolvedAccount.get() ?: accountResolver.resolve().also(resolvedAccount::set)
+    private suspend fun account(): SubmittingAccount =
+        resolvedAccount.get() ?: accountResolver().also(resolvedAccount::set)
 
     private fun TransactionReceipt.toOnrampReceipt() = OnrampBaseTransferReceipt(success, transactionHash)
 }

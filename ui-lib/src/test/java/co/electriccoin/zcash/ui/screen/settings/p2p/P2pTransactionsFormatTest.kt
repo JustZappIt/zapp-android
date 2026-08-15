@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.screen.settings.p2p
 
+import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.util.StringResource
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
@@ -23,9 +24,9 @@ class P2pTransactionsFormatTest {
                 merchantUpiPlain = null,
             ).toRow(network)
 
-        assertEquals("zeptonow.bdpg111@kotakpay", row.detail?.paidToUpiPlain)
-        assertNull(row.detail?.paidByUpiPlain)
-        assertEquals(listOf("0.100"), row.detail?.fee?.resourceArgs())
+        assertEquals("zeptonow.bdpg111@kotakpay", row.detailText(R.string.p2p_transactions_detail_paid_to))
+        assertNull(row.detailValue(R.string.p2p_transactions_detail_paid_by))
+        assertEquals(listOf("0.100"), row.detailValue(R.string.p2p_transactions_detail_fee)?.resourceArgs())
     }
 
     @Test
@@ -37,8 +38,8 @@ class P2pTransactionsFormatTest {
                 merchantUpiPlain = "merchant@okhdfc",
             ).toRow(network)
 
-        assertEquals("merchant@okhdfc", row.detail?.paidByUpiPlain)
-        assertEquals("shop@ybl", row.detail?.paidToUpiPlain)
+        assertEquals("merchant@okhdfc", row.detailText(R.string.p2p_transactions_detail_paid_by))
+        assertEquals("shop@ybl", row.detailText(R.string.p2p_transactions_detail_paid_to))
     }
 
     private fun historyItem(
@@ -60,6 +61,15 @@ class P2pTransactionsFormatTest {
         merchantUpiPlain = merchantUpiPlain,
         fixedFeePaid = Usdc6.ofMicros(100_000),
     )
+
+    private fun P2pTransactionRow.detailValue(labelRes: Int): StringResource? =
+        detail
+            ?.rows
+            ?.firstOrNull { (it.label as? StringResource.ByResource)?.resource == labelRes }
+            ?.value
+
+    private fun P2pTransactionRow.detailText(labelRes: Int): String? =
+        (detailValue(labelRes) as? StringResource.ByString)?.value
 
     private fun StringResource.resourceArgs(): List<Any> = (this as StringResource.ByResource).args
 

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -340,28 +341,11 @@ fun ZappButton(
     modifier: Modifier = Modifier,
     variant: ZappButtonVariant = ZappButtonVariant.Primary,
     enabled: Boolean = true,
+    loading: Boolean = false,
     leadingIcon: ImageVector? = null,
     onClick: () -> Unit,
 ) {
-    val c = ZappTheme.colors
-    // Primary disabled: surfaceAlt bg + textSubtle text per design system.
-    // Other variants dim with alpha when disabled.
-    val (bg, fg, borderCol) =
-        when {
-            variant == ZappButtonVariant.Primary && !enabled -> {
-                Triple(c.surfaceAlt, c.textSubtle, null)
-            }
-
-            else -> {
-                when (variant) {
-                    ZappButtonVariant.Primary -> Triple(c.accent, c.onAccent, null)
-                    ZappButtonVariant.Secondary -> Triple(c.surfaceAlt, c.text, null)
-                    ZappButtonVariant.Ghost -> Triple(Color.Transparent, c.text, c.border)
-                    ZappButtonVariant.Danger -> Triple(c.dangerSoft, c.danger, null)
-                    ZappButtonVariant.AccentGhost -> Triple(Color.Transparent, c.accent, c.accent)
-                }
-            }
-        }
+    val (bg, fg, borderCol) = zappButtonPalette(variant, enabled)
 
     val animatedBg by
         animateColorAsState(
@@ -399,7 +383,15 @@ fun ZappButton(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (leadingIcon != null) {
+            // A withdrawal waits on a bundler receipt, which is minutes rather than seconds. A
+            // greyed-out button alone reads as "nothing happened", so the wait is shown as one.
+            if (loading) {
+                CircularProgressIndicator(
+                    color = fg,
+                    strokeWidth = BUTTON_PROGRESS_STROKE.dp,
+                    modifier = Modifier.size(BUTTON_PROGRESS_SIZE.dp),
+                )
+            } else if (leadingIcon != null) {
                 Icon(
                     imageVector = leadingIcon,
                     contentDescription = null,
@@ -409,6 +401,24 @@ fun ZappButton(
             }
             BasicText(text = text, style = ZappTheme.typography.button.copy(color = fg))
         }
+    }
+}
+
+private const val BUTTON_PROGRESS_SIZE = 16
+private const val BUTTON_PROGRESS_STROKE = 2
+
+// Primary disabled: surfaceAlt bg + textSubtle text per design system.
+// Other variants dim with alpha when disabled.
+@Composable
+private fun zappButtonPalette(variant: ZappButtonVariant, enabled: Boolean): Triple<Color, Color, Color?> {
+    val c = ZappTheme.colors
+    if (variant == ZappButtonVariant.Primary && !enabled) return Triple(c.surfaceAlt, c.textSubtle, null)
+    return when (variant) {
+        ZappButtonVariant.Primary -> Triple(c.accent, c.onAccent, null)
+        ZappButtonVariant.Secondary -> Triple(c.surfaceAlt, c.text, null)
+        ZappButtonVariant.Ghost -> Triple(Color.Transparent, c.text, c.border)
+        ZappButtonVariant.Danger -> Triple(c.dangerSoft, c.danger, null)
+        ZappButtonVariant.AccentGhost -> Triple(Color.Transparent, c.accent, c.accent)
     }
 }
 

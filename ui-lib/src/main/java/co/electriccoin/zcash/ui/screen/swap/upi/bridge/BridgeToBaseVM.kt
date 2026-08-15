@@ -9,13 +9,16 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
-import co.electriccoin.zcash.ui.common.provider.BridgeTerminallyFailedException
+import co.electriccoin.zcash.ui.common.provider.BridgeAuthorizationCancelledException
 import co.electriccoin.zcash.ui.common.provider.InsufficientZecForBridgeException
 import co.electriccoin.zcash.ui.common.provider.OfframpTopUpCheckpoint
 import co.electriccoin.zcash.ui.common.provider.OfframpTopUpCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.provider.OfframpTopUpPreview
 import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
+import co.electriccoin.zcash.ui.common.provider.UnfundableBridgeHandle
 import co.electriccoin.zcash.ui.common.provider.evaluateBridgeGate
+import co.electriccoin.zcash.ui.common.repository.BaseBalance
+import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepository
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
@@ -48,7 +51,6 @@ import xyz.justzappit.offramp.orchestrator.OfframpDriver
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.p2p.getPriceConfig
-import xyz.justzappit.offramp.p2p.getUsdcBalance
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.RoundingMode
@@ -65,6 +67,7 @@ internal class BridgeToBaseVM(
     private val rpc: BaseRpcClient,
     private val network: P2pNetworkConfig,
     private val accountProvider: SmartOfframpAccountProvider,
+    private val baseBalance: BaseBalanceRepository,
     private val orchestrator: OfframpDriver,
     private val topUpPreview: OfframpTopUpPreview,
     private val accountDataSource: AccountDataSource,
@@ -79,8 +82,7 @@ internal class BridgeToBaseVM(
         ) : Phase
 
         data class Complete(
-            val addedAmount: Usdc6,
-            val baseBalance: Usdc6
+            val addedAmount: Usdc6
         ) : Phase
 
         data class Failed(
@@ -91,10 +93,9 @@ internal class BridgeToBaseVM(
 
     private enum class EstimateStatus { IDLE, LOADING, LOADED, FAILED }
 
-    // Data resolved once when the screen opens (account balance, merchant availability, sell rate, bridge
-    // ETA, required ZEC for the entered amount). Bundled so the state combine stays compact.
+    // Data resolved once when the screen opens (merchant availability, sell rate, bridge ETA,
+    // required ZEC for the entered amount). Bundled so the state combine stays compact.
     private data class Priming(
-        val baseBalance: Usdc6? = null,
         // Only set when no merchant has fiat liquidity right now; null (no hint) when merchants are available.
         val unavailableWarning: StringResource? = null,
         val sellRate: BigDecimal = FALLBACK_RATE,
@@ -142,12 +143,19 @@ internal class BridgeToBaseVM(
     }
 
     val state: StateFlow<BridgeToBaseState> =
-        combine(inr, phase, priming, accountDataSource.selectedAccount) { amt, currentPhase, prime, account ->
-            buildState(amt, currentPhase, prime, account?.spendableShieldedBalance ?: Zatoshi(0))
+        combine(
+            inr,
+            phase,
+            priming,
+            accountDataSource.selectedAccount,
+            baseBalance.balance,
+        ) { amt, currentPhase, prime, account, balance ->
+            buildState(amt, currentPhase, prime, account?.spendableShieldedBalance ?: Zatoshi(0), balance)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-            initialValue = buildState(inr.value, Phase.Input, Priming(), initialSpendableZec()),
+            initialValue =
+                buildState(inr.value, Phase.Input, Priming(), initialSpendableZec(), baseBalance.balance.value),
         )
 
     private suspend fun resolveAndPrime() {
@@ -156,20 +164,12 @@ internal class BridgeToBaseVM(
                 .onFailure { Twig.warn(it) { "BridgeToBaseVM: smart account resolve failed" } }
                 .getOrNull() ?: return
         smartAccountAddress = account
-        refreshBalance()
         refreshRate()
         if (!resumeIfInFlight()) {
             applyPrefill()
         }
         refreshEstimate()
         refreshAvailability()
-    }
-
-    private suspend fun refreshBalance() {
-        val account = smartAccountAddress ?: return
-        runCatching { rpc.getUsdcBalance(network.usdcAddress, account) }
-            .onSuccess { fetched -> priming.update { it.copy(baseBalance = fetched) } }
-            .onFailure { Twig.warn(it) { "BridgeToBaseVM: getUsdcBalance failed" } }
     }
 
     private suspend fun refreshRate() {
@@ -296,12 +296,12 @@ internal class BridgeToBaseVM(
 
             is BridgeToBaseStatus.Complete -> {
                 checkpointStorage.clear()
-                priming.update { it.copy(baseBalance = status.baseBalance) }
-                phase.update { Phase.Complete(addedAmount = status.addedAmount, baseBalance = status.baseBalance) }
+                baseBalance.invalidate()
+                phase.update { Phase.Complete(addedAmount = status.addedAmount) }
             }
 
             is BridgeToBaseStatus.Failed -> {
-                val terminal = status.cause is BridgeTerminallyFailedException
+                val terminal = status.cause is UnfundableBridgeHandle
                 val resumeHandle = if (terminal) null else status.depositAddress
                 if (resumeHandle == null) checkpointStorage.clear()
                 phase.update {
@@ -318,6 +318,10 @@ internal class BridgeToBaseVM(
                                         R.string.bridge_to_base_insufficient,
                                         zecText(cause.spendableZec),
                                     )
+                                }
+
+                                status.cause is BridgeAuthorizationCancelledException -> {
+                                    stringRes(R.string.bridge_to_base_failed_cancelled)
                                 }
 
                                 terminal -> {
@@ -340,6 +344,7 @@ internal class BridgeToBaseVM(
         currentPhase: Phase,
         prime: Priming,
         spendableZec: Zatoshi,
+        balance: BaseBalance,
     ): BridgeToBaseState {
         val isInput = currentPhase is Phase.Input
         val isBridging = currentPhase is Phase.Bridging
@@ -355,7 +360,7 @@ internal class BridgeToBaseVM(
         return BridgeToBaseState(
             amountInput = NumberTextFieldState(innerState = amt, onValueChange = ::onAmountChange),
             baseBalanceText =
-                prime.baseBalance?.let {
+                balance.loadedOrNull?.let {
                     stringRes(R.string.upi_offramp_base_balance_label, it.toDisplayString(stripTrailingZeros = true))
                 },
             usdcEquivalentText =

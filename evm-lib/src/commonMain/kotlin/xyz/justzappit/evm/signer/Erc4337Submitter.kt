@@ -3,7 +3,11 @@
 
 package xyz.justzappit.evm.signer
 
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import xyz.justzappit.evm.abi.AbiAddress
 import xyz.justzappit.evm.abi.AbiEncoder
 import xyz.justzappit.evm.abi.AbiUint
@@ -59,7 +63,29 @@ class Erc4337Submitter(
      */
     private var nonceCursor: BigInteger? = null
 
-    override suspend fun sendTransaction(to: Address, value: Wei, data: ByteArray): TxHash {
+    /**
+     * Operations this submitter has handed the bundler and not yet resolved. Each one is riding on a
+     * nonce the cursor has already moved past, so the cursor cannot be invalidated while any of them
+     * is still outstanding without handing the next send a nonce one of them already owns.
+     */
+    private val outstanding = mutableSetOf<TxHash>()
+
+    /**
+     * One send at a time per account. Reading the cursor, building the operation around it and
+     * advancing it is a read-modify-write over several round trips; two callers interleaving inside
+     * it sign two different operations against the same nonce, and the bundler keeps one.
+     *
+     * Only the send is serialised. Holding this across [awaitReceipt] would block every other
+     * operation for the length of a confirmation, and sequential nonces queue at the bundler
+     * perfectly well — but the bookkeeping [awaitReceipt] does at the end of a wait takes the lock
+     * too, because the cursor is shared and a send may be building an operation around it.
+     */
+    private val sendLock = Mutex()
+
+    override suspend fun sendTransaction(to: Address, value: Wei, data: ByteArray): TxHash =
+        sendLock.withLock { send(to, value, data) }
+
+    private suspend fun send(to: Address, value: Wei, data: ByteArray): TxHash {
         val initCode =
             if (rpc.ethGetCode(smartAccount).isEmpty()) {
                 ThirdwebSmartAccount.initCode(accountFactory, owner.address)
@@ -102,30 +128,52 @@ class Erc4337Submitter(
             )
         val signed = sponsored.copy(signature = signOwner(sponsored.userOpHash(entryPoint, chainId)))
         val txHash = bundler.sendUserOperation(signed)
-        // Advance optimistically so back-to-back sends don't collide on the same nonce; awaitReceipt
-        // resets the cursor on a non-success / missing receipt so a reused submitter doesn't
-        // AA25-storm against a stale value.
+        // Advance optimistically so back-to-back sends don't collide on the same nonce. Only a
+        // submission whose fate stays unknown, with nothing else riding on the cursor, takes it back.
         nonceCursor = nonce + bigIntegerOne
+        outstanding += txHash
         return txHash
     }
 
+    /**
+     * A poll that throws and a caller cancelled mid-wait leave the operation's fate as unknown as a
+     * timeout does, so every exit settles. A hash left behind in [outstanding] is never taken out
+     * again, and holds the cursor against invalidation for the life of the process.
+     */
     override suspend fun awaitReceipt(txHash: TxHash): TransactionReceipt {
         val started = TimeSource.Monotonic.markNow()
-        while (started.elapsedNow().inWholeMilliseconds < receiptTimeoutMs) {
-            bundler.getUserOperationReceipt(txHash)?.let { receipt ->
-                if (!receipt.success) nonceCursor = null
-                return receipt
+        // An included operation consumed its nonce whether or not its execution reverted, so the
+        // cursor stays where it is: re-reading the chain would hand the next send a nonce an
+        // operation already queued behind this one is using.
+        var wasIncluded = false
+        try {
+            while (started.elapsedNow().inWholeMilliseconds < receiptTimeoutMs) {
+                bundler.getUserOperationReceipt(txHash)?.let { receipt ->
+                    wasIncluded = true
+                    return receipt
+                }
+                delay(receiptPollIntervalMs)
             }
-            delay(receiptPollIntervalMs)
+        } finally {
+            settle(txHash, invalidateCursor = !wasIncluded)
         }
-        // No receipt: cursor state is undefined, force a re-read on the next send.
-        nonceCursor = null
         val minutes = receiptTimeoutMs / 60_000
         error(
             "Bundler did not return a receipt for userOp ${txHash.hex} after ${minutes}m. " +
                 "The operation may still confirm on-chain — check the explorer before retrying.",
         )
     }
+
+    /** [NonCancellable] because taking the lock suspends, and a cancelled caller must still release its hash. */
+    private suspend fun settle(txHash: TxHash, invalidateCursor: Boolean) =
+        withContext(NonCancellable) {
+            sendLock.withLock {
+                outstanding -= txHash
+                // With nothing else riding on the cursor, force a re-read rather than AA25-storming
+                // against a value nothing can confirm.
+                if (invalidateCursor && outstanding.isEmpty()) nonceCursor = null
+            }
+        }
 
     /**
      * EntryPoint.getNonce(sender, key=0): the next sequential nonce; 0 for a counterfactual account.

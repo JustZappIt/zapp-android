@@ -4,31 +4,33 @@ import co.electriccoin.zcash.preference.StandardPreferenceProvider
 import co.electriccoin.zcash.preference.api.PreferenceProvider
 import co.electriccoin.zcash.preference.model.entry.PreferenceDefault
 import co.electriccoin.zcash.preference.model.entry.PreferenceKey
-import xyz.justzappit.offramp.p2p.CurrencyCode
+import co.electriccoin.zcash.ui.common.model.P2pRail
 
-interface PreferredP2pPaymentMethodProvider : StorageProvider<CurrencyCode>
+interface PreferredP2pPaymentMethodProvider : StorageProvider<P2pRail>
 
 class PreferredP2pPaymentMethodProviderImpl(
     override val preferenceHolder: StandardPreferenceProvider,
-) : BaseStorageProvider<CurrencyCode>(),
+) : BaseStorageProvider<P2pRail>(),
     PreferredP2pPaymentMethodProvider {
-    override val default: PreferenceDefault<CurrencyCode> =
+    override val default: PreferenceDefault<P2pRail> =
         PreferredP2pPaymentMethodPreferenceDefault(PreferenceKey("preferred_p2p_payment_method_currency"))
 }
 
+// The key still says "currency" because it holds values written before Peer existed. Renaming it
+// would strand every user's existing selection; P2pRail.fromIdOrNull reads both forms instead.
 private class PreferredP2pPaymentMethodPreferenceDefault(
     override val key: PreferenceKey
-) : PreferenceDefault<CurrencyCode> {
-    override suspend fun getValue(preferenceProvider: PreferenceProvider): CurrencyCode =
+) : PreferenceDefault<P2pRail> {
+    override suspend fun getValue(preferenceProvider: PreferenceProvider): P2pRail =
         preferenceProvider
             .getString(key)
-            ?.let { CurrencyCode.fromCodeOrNull(it) }
-            ?: CurrencyCode.Inr
+            ?.let { P2pRail.fromIdOrNull(it) }
+            ?: P2pRail.DEFAULT
 
     override suspend fun putValue(
         preferenceProvider: PreferenceProvider,
-        newValue: CurrencyCode
+        newValue: P2pRail
     ) {
-        preferenceProvider.putString(key, newValue.code)
+        preferenceProvider.putString(key, newValue.id)
     }
 }

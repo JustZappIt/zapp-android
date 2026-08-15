@@ -43,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -52,12 +53,15 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.model.P2pProvider
+import co.electriccoin.zcash.ui.common.model.P2pRail
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ZashiScreenModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRowDivider
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
+import co.electriccoin.zcash.ui.design.component.zapp.ZappSettingsGroup
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStatusChip
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
@@ -67,6 +71,8 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.swap.upi.toOfframpCorridorUi
 import kotlinx.serialization.Serializable
 import org.koin.androidx.compose.koinViewModel
+import xyz.justzappit.offramp.p2p.CurrencyCode
+import xyz.justzappit.offramp.peer.PeerPlatform
 
 @Composable
 internal fun P2pPaymentMethodScreen() {
@@ -132,23 +138,21 @@ private fun P2pPaymentMethodView(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(
-                        start = 14.dp,
-                        end = 14.dp,
                         top = it.calculateTopPadding() + 12.dp,
                         bottom = it.calculateBottomPadding() + 12.dp,
                     ),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .background(c.surface, RectangleShape)
-                        .border(BorderStroke(1.dp, c.border), RectangleShape),
-            ) {
-                state.items.forEachIndexed { index, item ->
-                    P2pPaymentMethodRow(item)
-                    if (index != state.items.lastIndex) {
-                        ZappRowDivider()
+            state.sections.forEach { section ->
+                ZappSettingsGroup(
+                    title = section.provider.title(),
+                    titleLogo = section.provider.logo(),
+                ) {
+                    section.items.forEachIndexed { index, item ->
+                        P2pPaymentMethodRow(item)
+                        if (index != section.items.lastIndex) {
+                            ZappRowDivider()
+                        }
                     }
                 }
             }
@@ -178,6 +182,10 @@ private fun P2pHowItWorksSheet(state: P2pPaymentMethodState, onDismiss: () -> Un
             )
             BasicText(
                 text = stringResource(R.string.settings_p2p_payment_method_info_rails),
+                style = ZappTheme.typography.body.copy(color = c.textMuted),
+            )
+            BasicText(
+                text = stringResource(R.string.settings_p2p_payment_method_info_cash_out),
                 style = ZappTheme.typography.body.copy(color = c.textMuted),
             )
             BasicText(
@@ -253,17 +261,15 @@ private fun CopyIconButton(showCopiedFeedback: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun P2pPaymentMethodRow(item: P2pPaymentMethodItemState) {
-    val method = item.method
-    val corridor = method.currency.toOfframpCorridorUi()
     val c = ZappTheme.colors
-    val title = method.title()
-    val subtitle = method.subtitle()
+    val title = item.rail.title()
+    val subtitle = item.rail.subtitle()
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .clickable(
-                    enabled = method.available,
+                    enabled = item.isAvailable,
                     interactionSource = remember { MutableInteractionSource() },
                     indication = ripple(color = c.accent),
                     onClick = item.onClick,
@@ -273,11 +279,7 @@ private fun P2pPaymentMethodRow(item: P2pPaymentMethodItemState) {
                 }.padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Image(
-            painter = painterResource(corridor.flag),
-            contentDescription = null,
-            modifier = Modifier.size(width = 30.dp, height = 20.dp),
-        )
+        RailTile(item.rail)
         Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             BasicText(
@@ -290,11 +292,13 @@ private fun P2pPaymentMethodRow(item: P2pPaymentMethodItemState) {
             )
         }
         when {
-            !method.available -> {
+            !item.isAvailable -> {
+                Spacer(Modifier.width(8.dp))
                 ZappStatusChip(text = stringResource(R.string.settings_p2p_payment_method_coming_soon))
             }
 
             item.isSelected -> {
+                Spacer(Modifier.width(8.dp))
                 Icon(
                     imageVector = Icons.Default.Check,
                     contentDescription = null,
@@ -305,6 +309,24 @@ private fun P2pPaymentMethodRow(item: P2pPaymentMethodItemState) {
         }
     }
 }
+
+@Composable
+private fun RailTile(rail: P2pRail) {
+    val painter =
+        when (rail) {
+            is P2pRail.ScanAndPay -> painterResource(rail.currency.toOfframpCorridorUi().flag)
+            is P2pRail.PeerCashOut -> painterResource(rail.platform.logo())
+        }
+    Image(
+        painter = painter,
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
+        modifier = Modifier.size(width = TILE_WIDTH.dp, height = TILE_HEIGHT.dp),
+    )
+}
+
+private const val TILE_WIDTH = 30
+private const val TILE_HEIGHT = 20
 
 @Serializable
 data object P2pPaymentMethodArgs
@@ -318,14 +340,33 @@ private fun P2pPaymentMethodPreview() =
                 P2pPaymentMethodState(
                     baseAddress = "0x9858Effd232B4033e47d90003d41Ec34ECAEDA94",
                     isAddressCopied = false,
-                    items =
-                        P2pPaymentMethod.entries.map {
-                            P2pPaymentMethodItemState(
-                                method = it,
-                                isSelected = it == P2pPaymentMethod.UPI,
-                                onClick = {},
-                            )
-                        },
+                    sections =
+                        listOf(
+                            P2pPaymentMethodSectionState(
+                                provider = P2pProvider.P2P_ME,
+                                items =
+                                    P2pPaymentMethod.entries.map {
+                                        P2pPaymentMethodItemState(
+                                            rail = P2pRail.ScanAndPay(it.currency),
+                                            isSelected = it.currency == CurrencyCode.Inr,
+                                            isAvailable = it.available,
+                                            onClick = {},
+                                        )
+                                    },
+                            ),
+                            P2pPaymentMethodSectionState(
+                                provider = P2pProvider.PEER,
+                                items =
+                                    PeerPlatform.entries.map {
+                                        P2pPaymentMethodItemState(
+                                            rail = P2pRail.PeerCashOut(it),
+                                            isSelected = false,
+                                            isAvailable = true,
+                                            onClick = {},
+                                        )
+                                    },
+                            ),
+                        ),
                     saveButton =
                         ButtonState(
                             text = stringRes(R.string.settings_p2p_payment_method_save),

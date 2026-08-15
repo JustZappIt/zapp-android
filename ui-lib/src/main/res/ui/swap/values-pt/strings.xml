@@ -243,6 +243,7 @@
     <string name="bridge_to_base_adding_amount">Adicionando ≈ ₹%1$s · %2$s USDC</string>
     <string name="bridge_to_base_added_amount">%1$s USDC adicionados a Base</string>
     <string name="bridge_to_base_failed_terminal">A ponte nao pode ser concluida. Se seus ZEC foram reembolsados, eles aparecerao na sua carteira em breve.</string>
+    <string name="bridge_to_base_failed_cancelled">Você não aprovou a transferência, então nenhum ZEC foi enviado. Tente de novo quando quiser.</string>
     <string name="bridge_to_base_failed_generic">Nao foi possivel iniciar a ponte. Verifique sua conexao e tente novamente.</string>
     <string name="bridge_to_base_failed_retry">A ponte ainda esta em andamento. Tente novamente para continuar verificando a mesma transferencia.</string>
     <string name="bridge_to_base_leave_title">Ponte em andamento</string>

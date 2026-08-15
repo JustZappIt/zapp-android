@@ -8,6 +8,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -23,6 +24,7 @@ fun ZappSummaryRow(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
+    valueColor: Color = ZappTheme.colors.text,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -37,9 +39,7 @@ fun ZappSummaryRow(
         )
         BasicText(
             text = value,
-            style =
-                ZappTheme.typography.body
-                    .copy(color = ZappTheme.colors.text, fontWeight = FontWeight.SemiBold),
+            style = ZappTheme.typography.body.copy(color = valueColor, fontWeight = FontWeight.SemiBold),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(start = VALUE_GAP.dp),

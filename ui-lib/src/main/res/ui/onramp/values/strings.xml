@@ -21,8 +21,6 @@
     <string name="onramp_account_label">USDC destination</string>
     <string name="onramp_refund_account_label">USDC refund address</string>
     <string name="onramp_refund_account_explanation">Used only if the ZEC conversion cannot start or the provider returns your USDC.</string>
-    <string name="onramp_base_balance_label">Balance on Base</string>
-    <string name="onramp_base_balance_amount">%1$s USDC</string>
     <string name="onramp_base_balance_unavailable">—</string>
     <string name="onramp_send_to_zec">Send to ZEC</string>
     <string name="onramp_send_to_zec_in_progress">Sending…</string>

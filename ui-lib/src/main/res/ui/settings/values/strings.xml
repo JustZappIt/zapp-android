@@ -72,7 +72,7 @@
     <!-- P2P transactions (Settings → Wallet entry). Reached from SettingsTabContent → "P2P
          transactions"; the file lives under settings/ rather than swap/ because the screen is a
          settings-tier transaction history, not a swap-flow surface. -->
-    <string name="p2p_transactions_title">P2P transactions</string>
+    <string name="p2p_transactions_title">Base activity</string>
     <string name="p2p_transactions_balance_label">Balance on Base</string>
     <string name="p2p_transactions_balance_amount">%1$s USDC</string>
     <string name="p2p_transactions_balance_unavailable">Balance unavailable</string>
@@ -81,24 +81,39 @@
     <string name="p2p_transactions_refund_in_progress">Refunding…</string>
     <string name="p2p_transactions_refund_retry">Retry refund</string>
     <string name="p2p_transactions_refund_failed">Refund failed: %1$s</string>
+    <string name="p2p_transactions_refund_blocked">%1$s USDC is reserved by a cash-out in progress. Refund moves the whole balance, so finish or cancel that first.</string>
     <string name="p2p_transactions_refund_dialog_title">Refund to ZEC?</string>
     <string name="p2p_transactions_refund_dialog_message">This bridges %1$s back to your ZEC wallet via NEAR. Funds typically arrive in 5–10 minutes.</string>
     <string name="p2p_transactions_refund_dialog_confirm">Refund</string>
     <string name="p2p_transactions_refund_dialog_cancel">Cancel</string>
     <string name="p2p_transactions_account_label">P2P account</string>
-    <string name="p2p_transactions_empty">No P2P transactions yet.</string>
+    <string name="p2p_transactions_empty">No activity yet.</string>
     <string name="p2p_transactions_error">Couldn\'t load transactions. Pull to refresh.</string>
     <string name="p2p_transactions_row_amount_usdc">%1$s USDC</string>
     <string name="p2p_transactions_row_amount_fiat">%1$s %2$s</string>
     <string name="p2p_transactions_row_order_id">Order #%1$s</string>
+    <string name="p2p_transactions_row_deposit_id">Deposit #%1$s</string>
     <string name="p2p_transactions_type_buy">Buy</string>
     <string name="p2p_transactions_type_sell">Sell</string>
     <string name="p2p_transactions_type_pay">Pay</string>
+    <string name="p2p_transactions_type_cash_out">Cash out · %1$s</string>
+    <string name="p2p_transactions_type_cash_out_unknown_rail">Cash out</string>
     <string name="p2p_transactions_status_placed">Placed</string>
     <string name="p2p_transactions_status_accepted">Accepted</string>
     <string name="p2p_transactions_status_paid">Paid</string>
     <string name="p2p_transactions_status_completed">Completed</string>
     <string name="p2p_transactions_status_cancelled">Cancelled</string>
+    <string name="p2p_transactions_status_waiting">Waiting</string>
+    <string name="p2p_transactions_status_selling">Selling</string>
+    <string name="p2p_transactions_status_partly_sold">Partly sold</string>
+    <string name="p2p_transactions_status_sold">Sold</string>
+    <string name="p2p_transactions_status_paused">Paused</string>
+    <string name="p2p_transactions_status_closed">Closed</string>
+    <string name="p2p_transactions_status_in_progress">In progress</string>
+    <string name="p2p_transactions_status_failed">Failed</string>
+
+    <!-- Filter (shown only where both rails exist) -->
+    <string name="p2p_transactions_filter_all">All</string>
 
     <!-- Detail panel (expanded transaction row) -->
     <string name="p2p_transactions_detail_fee">Fee</string>
@@ -106,6 +121,20 @@
     <string name="p2p_transactions_detail_paid_to">Paid to</string>
     <string name="p2p_transactions_detail_p2p_merchant_address">P2P merchant address</string>
     <string name="p2p_transactions_detail_duration">Duration</string>
+    <string name="p2p_transactions_detail_step">Step</string>
     <string name="p2p_transactions_detail_expand_content_description">Show details</string>
     <string name="p2p_transactions_detail_collapse_content_description">Hide details</string>
+    <string name="p2p_transactions_action_view_progress">View progress</string>
+
+    <string name="settings_p2p_provider_p2pme">p2p.me</string>
+    <string name="settings_p2p_provider_peer">Peer</string>
+    <string name="settings_p2p_rail_revolut">Revolut</string>
+    <string name="settings_p2p_rail_zelle">Zelle</string>
+    <string name="settings_p2p_rail_chime">Chime</string>
+    <string name="settings_p2p_rail_monzo">Monzo</string>
+    <string name="settings_p2p_rail_currencies_more">%1$s and %2$d more</string>
+    <string name="settings_p2p_payment_method_info_cash_out">Cashing out works the other way round. You offer your funds to buyers at the live market rate, they pay you in your own currency, and the funds are released once the payment is proven. It can take a while to match, and nothing is locked in until a buyer takes it.</string>
+    <string name="settings_base_account_title">Base account</string>
+    <string name="settings_base_account_subtitle">Your USDC balance and activity</string>
+    <string name="settings_base_account_in_progress">Cash-out in progress</string>
 </resources>

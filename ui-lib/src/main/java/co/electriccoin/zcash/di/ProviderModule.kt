@@ -57,13 +57,15 @@ import co.electriccoin.zcash.ui.common.provider.OfframpTopUpCheckpointStoragePro
 import co.electriccoin.zcash.ui.common.provider.OfframpTopUpPreview
 import co.electriccoin.zcash.ui.common.provider.OnrampCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.provider.OnrampCheckpointStorageProviderImpl
-import co.electriccoin.zcash.ui.common.provider.OnrampSmartAccountResolver
-import co.electriccoin.zcash.ui.common.provider.OnrampSubmitterFactory
 import co.electriccoin.zcash.ui.common.provider.OnrampUsdcBalanceReader
 import co.electriccoin.zcash.ui.common.provider.OnrampZecDeliveryCheckpointStore
 import co.electriccoin.zcash.ui.common.provider.OnrampZecDeliveryCheckpointStoreImpl
 import co.electriccoin.zcash.ui.common.provider.OnrampZecSwapGateway
 import co.electriccoin.zcash.ui.common.provider.OnrampZecTransferGateway
+import co.electriccoin.zcash.ui.common.provider.PeerCashOutCheckpointStorageProvider
+import co.electriccoin.zcash.ui.common.provider.PeerCashOutCheckpointStorageProviderImpl
+import co.electriccoin.zcash.ui.common.provider.PeerPayeeHandleProvider
+import co.electriccoin.zcash.ui.common.provider.PeerPayeeHandleProviderImpl
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProviderImpl
 import co.electriccoin.zcash.ui.common.provider.PreferredFiatProvider
@@ -113,9 +115,9 @@ import org.koin.dsl.module
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.rpc.BundlerClient
 import xyz.justzappit.evm.rpc.RpcHttpClient
-import xyz.justzappit.evm.signer.Erc4337Submitter
 import xyz.justzappit.offramp.account.CachingOfframpAccountProvider
 import xyz.justzappit.offramp.account.DevOfframpAccountProvider
+import xyz.justzappit.offramp.account.Erc4337SubmitterProvider
 import xyz.justzappit.offramp.account.OfframpAccountProvider
 import xyz.justzappit.offramp.account.SeedPhraseSource
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
@@ -129,6 +131,7 @@ import xyz.justzappit.offramp.funding.OfframpFunding
 import xyz.justzappit.offramp.funding.OfframpRefund
 import xyz.justzappit.offramp.funding.OfframpTopUp
 import xyz.justzappit.offramp.funding.PreFundedOfframpFunding
+import xyz.justzappit.offramp.funding.SingleFlightOfframpTopUp
 import xyz.justzappit.offramp.onramp.OnrampDeviceSignalsProvider
 import xyz.justzappit.offramp.onramp.OnrampScreeningSessionProvider
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryDriver
@@ -136,6 +139,14 @@ import xyz.justzappit.offramp.p2p.DirectPixResolver
 import xyz.justzappit.offramp.p2p.DynamicPixResolver
 import xyz.justzappit.offramp.p2p.SubgraphClient
 import xyz.justzappit.offramp.p2p.getUsdcBalance
+import xyz.justzappit.offramp.peer.AaPeerCashOutDriver
+import xyz.justzappit.offramp.peer.PeerCashOutOrchestrator
+import xyz.justzappit.offramp.peer.PeerConfigProvider
+import xyz.justzappit.offramp.peer.PeerCuratorClient
+import xyz.justzappit.offramp.peer.PeerIndexerClient
+import xyz.justzappit.offramp.peer.PeerNetworkConfig
+import xyz.justzappit.offramp.peer.PeerOracleRate
+import xyz.justzappit.offramp.peer.UnavailablePeerCashOutOrchestrator
 import java.util.Locale
 
 const val OFFRAMP_HTTP_CLIENT_QUALIFIER = "offramp_http"
@@ -202,6 +213,8 @@ val providerModule =
         single<OnrampScreeningSessionProvider> { OnrampScreeningSessionProvider.ABSENT }
         single<OnrampDeviceSignalsProvider> { AndroidOnrampDeviceSignalsProvider(get(), get()) }
         singleOf(::OfframpTopUpCheckpointStorageProviderImpl) bind OfframpTopUpCheckpointStorageProvider::class
+        singleOf(::PeerCashOutCheckpointStorageProviderImpl) bind PeerCashOutCheckpointStorageProvider::class
+        singleOf(::PeerPayeeHandleProviderImpl) bind PeerPayeeHandleProvider::class
         single<HttpClient>(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)) {
             // Pipe ktor's Logging plugin output through Twig so subgraph + RPC errors land in
             // logcat under our "Twig" tag with the OfframpHttp prefix. Without this, transport
@@ -267,6 +280,43 @@ val providerModule =
         single<SubgraphClient> {
             val cfg = get<P2pNetworkConfig>()
             SubgraphClient(httpClient = get(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)), subgraphUrl = cfg.subgraphUrl)
+        }
+        single<PeerConfigProvider> { PeerConfigProvider(p2pNetworkName = get<P2pNetworkConfig>().name) }
+        // Koin singles are lazy, so this only resolves when something actually reaches for a Peer
+        // rail. Peer exists on Base mainnet alone, and the rails are hidden everywhere else, so a
+        // resolution here on another network is a routing bug and fails closed rather than talking
+        // to production from a testnet build.
+        single<PeerNetworkConfig> {
+            get<PeerConfigProvider>().currentOrNull()
+                ?: error("Peer cash-out is unavailable unless P2P_NETWORK is '${P2pNetworks.MAINNET_NAME}'")
+        }
+        single<PeerCuratorClient> {
+            PeerCuratorClient(
+                httpClient = get(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)),
+                baseUrl = get<PeerNetworkConfig>().curatorUrl,
+            )
+        }
+        single<PeerIndexerClient> {
+            PeerIndexerClient(
+                httpClient = get(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)),
+                indexerUrl = get<PeerNetworkConfig>().indexerUrl,
+            )
+        }
+        single<PeerOracleRate> { PeerOracleRate(rpcClient = get()) }
+        // Resolved by the tab graph, not only by a Peer screen: the activity row and the reset path
+        // both hold the repository this drives. On a network Peer does not exist on it has to answer
+        // rather than throw, or an unreachable rail takes the tab bar down with it.
+        single<PeerCashOutOrchestrator> {
+            val peerNetwork =
+                get<PeerConfigProvider>().currentOrNull() ?: return@single UnavailablePeerCashOutOrchestrator
+            AaPeerCashOutDriver(
+                rpc = get(),
+                peerNetwork = peerNetwork,
+                submitters = get(),
+                curatorClient = get(),
+                indexerClient = get(),
+                topUp = get(),
+            )
         }
         // Dynamic-PIX amount resolver: native HTTP has no CORS wall, so DirectPixResolver fetches the
         // bank location endpoint straight from the device, no proxy needed.
@@ -334,11 +384,13 @@ val providerModule =
             }
         }
         single<OfframpTopUp> {
-            if (get<P2pNetworkConfig>().chainId == P2pNetworks.MAINNET_CHAIN_ID) {
-                get<NearBridgeOfframpFunding>()
-            } else {
-                NoRouteOfframpTopUp()
-            }
+            SingleFlightOfframpTopUp(
+                if (get<P2pNetworkConfig>().chainId == P2pNetworks.MAINNET_CHAIN_ID) {
+                    get<NearBridgeOfframpFunding>()
+                } else {
+                    NoRouteOfframpTopUp()
+                },
+            )
         }
         single<OfframpTopUpPreview> {
             if (get<P2pNetworkConfig>().chainId == P2pNetworks.MAINNET_CHAIN_ID) {
@@ -355,6 +407,16 @@ val providerModule =
                 accountFactory = cfg.accountFactoryAddress,
             )
         }
+        // One per app, not one per operation: the submitter carries the smart account's nonce
+        // cursor, and every rail that spends from that account has to advance the same one.
+        single {
+            Erc4337SubmitterProvider(
+                rpc = get(),
+                bundler = get(),
+                network = get(),
+                accountProvider = get(),
+            )
+        }
         single<OnrampZecDeliveryCheckpointStore> {
             OnrampZecDeliveryCheckpointStoreImpl(storage = get())
         }
@@ -368,24 +430,11 @@ val providerModule =
         single<OnrampZecTransferGateway> {
             val network = get<P2pNetworkConfig>()
             val rpc = get<BaseRpcClient>()
-            val bundler = get<BundlerClient>()
-            val accountProvider = get<SmartOfframpAccountProvider>()
+            val submitters = get<Erc4337SubmitterProvider>()
             Erc4337OnrampZecTransferGateway(
                 usdc = network.usdcAddress,
-                accountResolver = OnrampSmartAccountResolver(accountProvider::resolve),
+                accountResolver = submitters::resolve,
                 balanceReader = OnrampUsdcBalanceReader { rpc.getUsdcBalance(network.usdcAddress, it) },
-                submitterFactory =
-                    OnrampSubmitterFactory { account ->
-                        Erc4337Submitter(
-                            rpc = rpc,
-                            bundler = bundler,
-                            entryPoint = network.entryPointAddress,
-                            accountFactory = network.accountFactoryAddress,
-                            owner = account.owner,
-                            smartAccount = account.address,
-                            chainId = network.chainId,
-                        )
-                    },
             )
         }
         single {

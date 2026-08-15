@@ -30,6 +30,7 @@ import xyz.justzappit.evm.rpc.BundlerClient
 import xyz.justzappit.evm.rpc.RpcHttpClient
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.evm.util.hexToBytes
+import xyz.justzappit.offramp.account.Erc4337SubmitterProvider
 import xyz.justzappit.offramp.account.OfframpAccountProvider
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
 import xyz.justzappit.offramp.config.P2pConfigProvider
@@ -468,9 +469,14 @@ class AppleOfframpClient private constructor(
                 val driver =
                     AaOfframpDriver(
                         rpc = rpc,
-                        bundler = bundler,
                         network = network,
-                        accountProvider = smartAccount,
+                        submitters =
+                            Erc4337SubmitterProvider(
+                                rpc = rpc,
+                                bundler = bundler,
+                                network = network,
+                                accountProvider = smartAccount,
+                            ),
                         subgraph = subgraph,
                         orderReader = orderReader,
                         funding = funding,

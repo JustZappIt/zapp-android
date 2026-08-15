@@ -6,4 +6,6 @@ import androidx.annotation.DrawableRes
 data class ZappSegment(
     val label: String,
     @param:DrawableRes val icon: Int? = null,
+    /** [icon] is drawn alone and [label] becomes what a screen reader hears. */
+    val iconStandsForLabel: Boolean = false,
 )

@@ -11,6 +11,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.zapp.ZappCompactButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappFieldBalance
 import co.electriccoin.zcash.ui.design.component.zapp.ZappOfframpHeroAmountField
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSegment
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSegmentedSelector
@@ -31,12 +32,14 @@ internal fun AmountContent(state: OnrampState) {
             symbol = state.currencySymbol,
             state = state.amountInput,
             secondaryText = null,
-            trailingText =
-                "${stringResource(R.string.onramp_base_balance_label)}\n" +
-                    stringResource(
-                        R.string.onramp_base_balance_amount,
-                        state.baseBalance ?: stringResource(R.string.onramp_base_balance_unavailable),
-                    ),
+            balance =
+                ZappFieldBalance(
+                    label = stringResource(R.string.offramp_field_balance_on_base),
+                    amount =
+                        state.baseBalance
+                            ?.let { stringResource(R.string.offramp_field_balance_usdc, it) }
+                            ?: stringResource(R.string.offramp_field_balance_pending),
+                ),
         )
         if (state.isZecDestinationEnabled) {
             DestinationSelector(state)

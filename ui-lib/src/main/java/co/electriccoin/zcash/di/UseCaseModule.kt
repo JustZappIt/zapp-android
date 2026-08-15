@@ -53,6 +53,9 @@ import co.electriccoin.zcash.ui.common.usecase.GetOfframpBaseAddressUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrCreateChatConversationUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOrchardBalanceUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetP2pOrderHistoryUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetPeerActiveOrdersUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetPeerMarketSnapshotUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetPeerOrderHistoryUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetPersistableWalletUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetProposalUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetResyncDataFromHeightUseCase
@@ -82,6 +85,8 @@ import co.electriccoin.zcash.ui.common.usecase.NavigateToExportPrivateDataUseCas
 import co.electriccoin.zcash.ui.common.usecase.NavigateToNearPayUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToOnrampUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToPayMerchantUseCase
+import co.electriccoin.zcash.ui.common.usecase.NavigateToPeerCashOutUseCase
+import co.electriccoin.zcash.ui.common.usecase.NavigateToPeerOrderUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToReceiveUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToRequestShieldedUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToResetWalletUseCase
@@ -107,6 +112,8 @@ import co.electriccoin.zcash.ui.common.usecase.ObserveChatPeerStatusUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveClearSendUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveContactByAddressUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveFastestServersUseCase
+import co.electriccoin.zcash.ui.common.usecase.ObservePeerCommittedUsdcUseCase
+import co.electriccoin.zcash.ui.common.usecase.ObservePeerOrderUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveProposalUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveTransactionSubmitStateUseCase
@@ -123,6 +130,7 @@ import co.electriccoin.zcash.ui.common.usecase.PersistEndpointUseCase
 import co.electriccoin.zcash.ui.common.usecase.PrefillSendUseCase
 import co.electriccoin.zcash.ui.common.usecase.PreselectSwapAssetUseCase
 import co.electriccoin.zcash.ui.common.usecase.ProcessSwapTransactionUseCase
+import co.electriccoin.zcash.ui.common.usecase.ReconcilePeerCheckpointsUseCase
 import co.electriccoin.zcash.ui.common.usecase.RefreshFastestServersUseCase
 import co.electriccoin.zcash.ui.common.usecase.RemindWalletBackupLaterUseCase
 import co.electriccoin.zcash.ui.common.usecase.RenameChatGroupUseCase
@@ -150,6 +158,7 @@ import co.electriccoin.zcash.ui.common.usecase.ShareQRUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShieldFundsFromMessageUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShieldFundsUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShowErrorUseCase
+import co.electriccoin.zcash.ui.common.usecase.StartPeerCashOutUseCase
 import co.electriccoin.zcash.ui.common.usecase.SubmitIncreaseEphemeralGapLimitUseCase
 import co.electriccoin.zcash.ui.common.usecase.SubmitKSProposalUseCase
 import co.electriccoin.zcash.ui.common.usecase.SubmitProposalUseCase
@@ -301,6 +310,15 @@ val useCaseModule =
         factoryOf(::NavigateToNearPayUseCase)
         factoryOf(::NavigateToOnrampUseCase)
         factoryOf(::NavigateToPayMerchantUseCase)
+        factoryOf(::NavigateToPeerCashOutUseCase)
+        factoryOf(::NavigateToPeerOrderUseCase)
+        factoryOf(::ObservePeerOrderUseCase)
+        factoryOf(::GetPeerActiveOrdersUseCase)
+        factoryOf(::GetPeerOrderHistoryUseCase)
+        factoryOf(::StartPeerCashOutUseCase)
+        factoryOf(::ObservePeerCommittedUsdcUseCase)
+        factoryOf(::ReconcilePeerCheckpointsUseCase)
+        single { GetPeerMarketSnapshotUseCase(indexerClient = get()) }
         factoryOf(::SaveORSwapUseCase)
         factoryOf(::GetORSwapQuoteUseCase)
         factoryOf(::ShareQRUseCase)

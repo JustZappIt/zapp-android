@@ -234,6 +234,7 @@
     <string name="bridge_to_base_adding_amount">Agregando ≈ ₹%1$s · %2$s USDC</string>
     <string name="bridge_to_base_added_amount">Se agregaron %1$s USDC a Base</string>
     <string name="bridge_to_base_failed_terminal">La transferencia no pudo completarse. Si tus ZEC fueron reembolsados, aparecerán en tu billetera en breve.</string>
+    <string name="bridge_to_base_failed_cancelled">No aprobaste la transferencia, así que no se enviaron ZEC. Inténtalo de nuevo cuando quieras.</string>
     <string name="bridge_to_base_failed_generic">No se pudo iniciar la transferencia. Revisa tu conexión e inténtalo de nuevo.</string>
     <string name="bridge_to_base_failed_retry">La transferencia sigue en curso. Reintenta para seguir revisando la misma transferencia.</string>
     <string name="bridge_to_base_leave_title">Transferencia en curso</string>
@@ -245,13 +246,9 @@
     <string name="upi_offramp_fiat_amount">%1$s%2$s</string>
     <string name="upi_offramp_ledger_amount_sent">Importe enviado</string>
     <string name="upi_offramp_ledger_rate">Tipo de cambio</string>
-    <string name="upi_offramp_ledger_from">Desde</string>
-    <string name="upi_offramp_base">Base</string>
     <string name="bridge_to_base_currency_symbol">₹</string>
-    <string name="bridge_to_base_hero_secondary">%1$s · llega a Base</string>
     <string name="bridge_to_base_ledger_you_send">Envías</string>
     <string name="bridge_to_base_ledger_eta">Tiempo estimado</string>
-    <string name="bridge_to_base_ledger_base_now">Disponible en Base</string>
     <string name="bridge_to_base_ledger_fees">Comisiones totales</string>
     <string name="bridge_to_base_ledger_slippage">Deslizamiento máx.</string>
     <string name="bridge_to_base_fee_value">~%1$s ZEC</string>

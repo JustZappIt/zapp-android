@@ -44,6 +44,7 @@ import co.electriccoin.zcash.ui.design.component.ZashiScreenModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
+import co.electriccoin.zcash.ui.design.component.zapp.ZappFieldBalance
 import co.electriccoin.zcash.ui.design.component.zapp.ZappOfframpHeroAmountField
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSettlementLedger
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSettlementLedgerRow
@@ -113,10 +114,14 @@ internal fun BridgeToBaseView(state: BridgeToBaseState) {
                     symbol = stringResource(R.string.bridge_to_base_currency_symbol),
                     state = state.amountInput,
                     isError = state.isInsufficient,
-                    secondaryText =
-                        state.usdcEquivalentText?.let {
-                            stringResource(R.string.bridge_to_base_hero_secondary, it.getValue())
-                        },
+                    balance =
+                        ZappFieldBalance(
+                            label = stringResource(R.string.offramp_field_balance_on_base),
+                            amount =
+                                state.baseBalanceText?.getValue()
+                                    ?: stringResource(R.string.offramp_field_balance_pending),
+                        ),
+                    secondaryText = state.usdcEquivalentText?.getValue(),
                 )
                 Spacer(modifier = Modifier.height(GAP_LG.dp))
                 ZappSettlementLedger(
@@ -149,12 +154,6 @@ internal fun BridgeToBaseView(state: BridgeToBaseState) {
                                 ZappSettlementLedgerRow(
                                     stringResource(R.string.bridge_to_base_ledger_eta),
                                     state.etaValueText?.getValue() ?: pendingValue,
-                                ),
-                            )
-                            add(
-                                ZappSettlementLedgerRow(
-                                    stringResource(R.string.bridge_to_base_ledger_base_now),
-                                    state.baseBalanceText?.getValue() ?: pendingValue,
                                 ),
                             )
                         },

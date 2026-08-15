@@ -3,25 +3,26 @@
 
 package xyz.justzappit.evm.abi
 
-import xyz.justzappit.evm.util.padLeftToWord
 import xyz.justzappit.evm.math.bigIntegerValueOf
+import xyz.justzappit.evm.util.padLeftToWord
 
 object AbiEncoder {
     fun encode(args: List<AbiArg>): ByteArray {
-        val staticSize = args.size * WORD
+        val staticSize = args.sumOf { if (it.isDynamic) WORD else it.headSize }
         val tails = args.map { if (it.isDynamic) it.tail() else EMPTY_BYTES }
         val out = ByteArray(staticSize + tails.sumOf(ByteArray::size))
         var writeOffset = 0
         var dynOffset = staticSize
 
         args.forEachIndexed { index, arg ->
-            val head = if (arg.isDynamic) {
-                bigIntegerValueOf(dynOffset.toLong()).toByteArray().padLeftToWord().also {
-                    dynOffset += tails[index].size
+            val head =
+                if (arg.isDynamic) {
+                    bigIntegerValueOf(dynOffset.toLong()).toByteArray().padLeftToWord().also {
+                        dynOffset += tails[index].size
+                    }
+                } else {
+                    arg.head()
                 }
-            } else {
-                arg.head()
-            }
             head.copyInto(out, writeOffset)
             writeOffset += head.size
         }

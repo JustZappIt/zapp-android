@@ -1,20 +1,28 @@
 package co.electriccoin.zcash.ui.screen.settings.p2p
 
+import co.electriccoin.zcash.ui.common.model.P2pProvider
+import co.electriccoin.zcash.ui.common.model.P2pRail
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import xyz.justzappit.offramp.p2p.CurrencyCode
 
 internal data class P2pPaymentMethodState(
     val baseAddress: String?,
     val isAddressCopied: Boolean,
-    val items: List<P2pPaymentMethodItemState>,
+    val sections: List<P2pPaymentMethodSectionState>,
     val saveButton: ButtonState,
     val onCopyBaseAddress: () -> Unit,
     val onBack: () -> Unit,
 )
 
+internal data class P2pPaymentMethodSectionState(
+    val provider: P2pProvider,
+    val items: List<P2pPaymentMethodItemState>,
+)
+
 internal data class P2pPaymentMethodItemState(
-    val method: P2pPaymentMethod,
+    val rail: P2pRail,
     val isSelected: Boolean,
+    val isAvailable: Boolean,
     val onClick: () -> Unit,
 )
 

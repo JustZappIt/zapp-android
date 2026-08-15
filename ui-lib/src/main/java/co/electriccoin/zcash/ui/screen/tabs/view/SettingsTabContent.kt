@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ShowChart
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.ContentCopy
@@ -57,6 +58,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cash.z.ecc.android.sdk.model.FiatCurrency
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.model.P2pRail
 import co.electriccoin.zcash.ui.common.model.VersionInfo
 import co.electriccoin.zcash.ui.common.viewmodel.SecretState
 import co.electriccoin.zcash.ui.common.viewmodel.WalletViewModel
@@ -74,12 +76,10 @@ import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByFiatDisplayName
 import co.electriccoin.zcash.ui.screen.chat.common.ChatBootstrap
-import co.electriccoin.zcash.ui.screen.settings.p2p.P2pPaymentMethod
 import co.electriccoin.zcash.ui.screen.settings.p2p.selectedSubtitle
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
-import xyz.justzappit.offramp.p2p.CurrencyCode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,12 +89,14 @@ internal fun SettingsTabContent(
     onAppLockClick: () -> Unit,
     localCurrency: FiatCurrency,
     onLocalCurrencyClick: () -> Unit,
-    p2pPaymentMethod: CurrencyCode,
+    p2pPaymentMethod: P2pRail,
+    hasPeerActivity: Boolean,
     onChooseServerClick: () -> Unit,
     onTorClick: () -> Unit,
     onChatSettingsClick: () -> Unit,
     onCopyPublicKeyClick: (String) -> Unit,
     onP2pPaymentMethodClick: () -> Unit,
+    onBaseAccountClick: () -> Unit,
     onPortfolioChartClick: () -> Unit,
     walletViewModel: WalletViewModel = koinViewModel(),
 ) {
@@ -200,11 +202,29 @@ internal fun SettingsTabContent(
                 ZappSettingsGroup(title = stringResource(R.string.settings_group_p2p)) {
                     ZappRow(
                         title = stringResource(R.string.settings_p2p_payment_method_title),
-                        subtitle = P2pPaymentMethod.fromCurrency(p2pPaymentMethod).selectedSubtitle(),
+                        subtitle = p2pPaymentMethod.selectedSubtitle(),
                         icon = Icons.Default.Payment,
                         iconTint = c.accentText,
                         iconBackground = c.accentSoft,
                         onClick = onP2pPaymentMethodClick,
+                    )
+                    ZappRowDivider()
+                    // A cash-out waits a median of half an hour and sometimes far longer, so the
+                    // one row that leads to it says so rather than reading as plain settings.
+                    ZappRow(
+                        title = stringResource(R.string.settings_base_account_title),
+                        subtitle =
+                            stringResource(
+                                if (hasPeerActivity) {
+                                    R.string.settings_base_account_in_progress
+                                } else {
+                                    R.string.settings_base_account_subtitle
+                                },
+                            ),
+                        icon = Icons.Default.AccountBalanceWallet,
+                        iconTint = c.accentText,
+                        iconBackground = c.accentSoft,
+                        onClick = onBaseAccountClick,
                     )
                 }
 
