@@ -13,13 +13,25 @@ directly impact users rather than highlighting other key architectural updates.*
 ## [Unreleased]
 
 ### Added:
-- We added support for Zcash's Ironwood network upgrade (NU6.3), so your wallet stays fully compatible with the latest network changes. Moving funds into the new Ironwood pool will arrive in a future update.
+- We added support for Zcash's Ironwood network upgrade (NU6.3), so your wallet stays fully compatible with the latest network changes.
+- You can now move your funds into the new Ironwood pool. The private option splits your balance into standard-sized pieces and sends them in the background over time, so the amounts leaving the old pool don't identify you. You can also move everything at once in a single transfer.
 - Tap Total balance on the home screen to see how your ZEC is split across Zcash pools, including the new Ironwood pool.
 - We added a one-time explainer, shown once Ironwood activates, covering what the upgrade means for your funds.
+- Your balance card now opens a chart of your portfolio's value over time, in your local currency, with 1 week, 1 month, 1 year and all-time views. Your wallet data never leaves the device, and you can turn the chart off in Settings.
 - You can now cash out to Indian rupees over UPI, paying from your USDC balance with live pricing and step-by-step progress.
+- You can now cash out to a buyer who pays you on Revolut, Zelle, Chime or Monzo. You post the amount, a buyer pays you in your local currency, and your USDC is released to them automatically.
+- Buy ZEC now delivers shielded ZEC. You pay a matched merchant in your local currency and the ZEC arrives in your wallet, with the conversion picking up where it left off if you close the app.
+
+### Changed:
+- Swaps no longer carry a Zapp fee.
 
 ### Fixed:
 - We fixed an issue where a Keystone hardware wallet could produce a signature the app was unable to broadcast. Keystone signing now requires firmware 3.0.1 or later.
+- We fixed an issue where dismissing an error during a Keystone migration discarded rounds you had already signed on your device.
+- We fixed an issue where the app could freeze for several minutes after you confirmed a migration plan.
+- We fixed an issue where the Allow Background Delivery button did nothing when tapped, which meant scheduled transfers only went out while the app was open.
+- We fixed an issue where your available balance could show as zero after a cash-out was interrupted.
+- We fixed an issue where your Base balance could show a stale figure after adding funds.
 
 ## [3.3.1 (1643)] - 2026-04-10
 

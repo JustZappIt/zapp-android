@@ -20,7 +20,12 @@ fork has taken from upstream since, and what it still owes, is tracked in
   stores encrypted blocks so they reach a recipient who was offline, and it cannot decrypt them.
 - **A peer-to-peer offramp.** Scan a merchant QR and pay in local currency out of shielded ZEC,
   through the p2p.me contracts on Base. Seven currencies are wired up: INR, BRL, IDR, ARS, VEN,
-  NGN, COP.
+  NGN, COP. A second rail cashes out through Peer (ZKP2P) on Base mainnet: you post the order, a
+  buyer pays you on Revolut, Zelle, Chime or Monzo, and the protocol releases your USDC against
+  their proof.
+- **A peer-to-peer onramp.** Buy ZEC by paying a matched merchant in local currency. The purchase
+  settles as USDC in your own Base account and continues into a swap that delivers shielded ZEC to
+  your wallet, resumable across a kill or a reinstall on the same seed.
 - **A different shell and visual system.** Three tabs (Pay | Chats | You), a Swiss-minimalist token
   set (`ZappTheme`), flat geometry, and bottom-left back navigation.
 - **No governance voting.** Upstream's voting feature is intentionally not carried.
@@ -32,8 +37,12 @@ future upstream merges stay cheap.
 ## Features
 
 - Shielded-by-default Zcash send and receive, with unified, transparent and shielded addresses
-- Ironwood (NU6.3) compatible, including a per-pool balance breakdown on the home screen
-- Balance history chart, transaction history, filters, notes and tax export
+- Ironwood (NU6.3) support: a per-pool balance breakdown on the home screen, and a background
+  migration that moves Orchard funds into Ironwood in standard-sized pieces over time, so the
+  amounts leaving the old pool do not identify you
+- Portfolio value chart in your local currency, with the balance series reconstructed on device
+  and only the daily price series fetched, over Tor; switchable off in settings
+- Transaction history, filters, notes and tax export
 - Address book, with the same records backing chat contacts
 - Encrypted chat: DMs, groups, media, read receipts, payment requests
 - Keystone hardware-wallet signing over animated QR
@@ -41,7 +50,8 @@ future upstream merges stay cheap.
 - Flexa payment integration, present and kept merge-compatible with upstream but inert:
   `ZCASH_FLEXA_KEY` ships blank so the SDK is never initialised
 - Top Up shows your own receive addresses (from an exchange, or from another wallet) instead of
-  handing you to a third-party on-ramp
+  handing you to a third-party on-ramp; Buy ZEC is the peer-to-peer alternative, with no account
+  and no third-party custody
 - Tor routing on by default for exchange-rate lookups, transaction submission and integrations,
   with a settings toggle to turn it off
 - Background chat notifications: contentless FCM topics on the Google-enabled `store` and
@@ -170,8 +180,9 @@ in `gradle.properties`, and blank means an unsigned release build. Debug builds 
 | `ui-lib` | Screens, view models and navigation, including the chat, swap and offramp flows |
 | `ui-design-lib` | `ZappTheme` tokens and the shared Compose component set |
 | `sdk-ext-lib` | Extensions over the Zcash Android SDK |
+| `feature-migration` | The Orchard to Ironwood migration: scheduling, the background driver, Keystone rounds, and its screens |
 | `evm-lib` | Kotlin Multiplatform EVM primitives: ABI coding, secp256k1 signing, HD derivation, JSON-RPC |
-| `offramp-lib` | Kotlin Multiplatform p2p.me client: order lifecycle, fees, QR parsing, revert decoding |
+| `offramp-lib` | Kotlin Multiplatform fiat-rail clients: the p2p.me order lifecycle, the Peer escrow, the onramp driver, QR parsing, revert decoding |
 | `preference-*`, `configuration-*`, `crash-*`, `spackle-*`, `build-info-lib` | Upstream plumbing, kept as upstream has it |
 | `test-lib`, `ui-integration-test`, `ui-screenshot-test`, `ui-benchmark-test` | Test and benchmark harnesses |
 | `build-conventions-secant` | Gradle convention plugins shared by every module |
@@ -283,7 +294,7 @@ are the versions in play.
 | Location | `com.google.android.gms:play-services-location` | 21.3.0 |
 | QR scan (`store`) | `com.google.mlkit:barcode-scanning` | 17.3.0 |
 | QR render | `com.google.zxing:core` | 3.5.4 |
-| Zcash | `cash.z.ecc.android:zcash-android-sdk` | 2.8.0-rc.1-SNAPSHOT (Ironwood / NU6.3) |
+| Zcash | `cash.z.ecc.android:zcash-android-sdk` | 3.0.1-SNAPSHOT (Ironwood / NU6.3, the Slipstream sync engine, and the Orchard migration SDK) |
 | Zcash | `cash.z.ecc.android:kotlin-bip39` | 1.0.9 |
 | Crypto | `com.google.crypto.tink:tink-android` | 1.20.0 |
 | Keystone | `com.github.KeystoneHQ:keystone-sdk-android` | 0.8.3 |
