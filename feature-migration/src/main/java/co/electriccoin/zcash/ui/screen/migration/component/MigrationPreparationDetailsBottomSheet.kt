@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPreparationDetails
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPreparationStepDetail
@@ -202,7 +203,7 @@ private fun PreparationStepRow(
             }
         }
         Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.weight(TITLE_COLUMN_WEIGHT)) {
             Text(
                 text = step.title.getValue(),
                 style = ZappTheme.typography.body,
@@ -215,11 +216,17 @@ private fun PreparationStepRow(
                 color = ZappTheme.colors.textMuted,
             )
         }
+        Spacer(Modifier.width(8.dp))
+        // Weighted, not a bare align: unweighted Row children measure first at full width, so a
+        // long "Waits on steps 1, 2, ..., 14" squeezed the title column into one character per line.
         Text(
             text = step.statusLabel.getValue(),
             style = ZappTheme.typography.caption,
             color = ZappTheme.colors.textMuted,
-            modifier = Modifier.align(Alignment.CenterVertically),
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f).align(Alignment.CenterVertically),
         )
     }
 }
+
+private const val TITLE_COLUMN_WEIGHT = 1.3f

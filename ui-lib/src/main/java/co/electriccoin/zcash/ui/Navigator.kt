@@ -11,6 +11,7 @@ import co.electriccoin.zcash.ui.design.SheetStateManager
 import co.electriccoin.zcash.ui.screen.ExternalUrl
 import co.electriccoin.zcash.ui.screen.about.util.WebBrowserUtil
 import co.electriccoin.zcash.ui.screen.flexa.FlexaViewModel
+import co.electriccoin.zcash.ui.screen.home.HomeArgs
 import com.flexa.core.Flexa
 import com.flexa.spend.buildSpend
 import kotlinx.serialization.InternalSerializationApi
@@ -129,17 +130,27 @@ class NavigatorImpl(
                     }
                 }
 
-                else -> {
-                    navController.executeNavigation(route = route) {
-                        if (index == 0) {
-                            navController.currentDestination?.parent?.startDestinationId?.let {
-                                popUpTo(it) {
-                                    inclusive = false
-                                }
-                            }
-                        }
+                // Upstream resets the stack by passing its root, HomeArgs, first. Ours is TabsArgs,
+                // and navigating on would stack a second tab shell that reopens on the default tab.
+                HomeArgs -> {
+                    if (index == 0) {
+                        backToRoot()
                     }
                 }
+
+                else -> {
+                    navController.executeNavigation(route = route) {
+                        if (index == 0) popUpToGraphRoot()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun NavOptionsBuilder.popUpToGraphRoot() {
+        navController.currentDestination?.parent?.startDestinationId?.let {
+            popUpTo(it) {
+                inclusive = false
             }
         }
     }

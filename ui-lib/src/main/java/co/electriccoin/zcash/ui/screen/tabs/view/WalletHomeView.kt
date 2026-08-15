@@ -36,6 +36,7 @@ import co.electriccoin.zcash.ui.screen.balances.BalanceWidgetVM
 import co.electriccoin.zcash.ui.screen.home.HomeVM
 import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartState
 import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartVM
+import co.electriccoin.zcash.ui.screen.home.migration.MigrationMessageState
 import co.electriccoin.zcash.ui.screen.tabs.viewmodel.WalletSyncStateVM
 import co.electriccoin.zcash.ui.screen.transactionhistory.widget.ActivityWidgetVM
 import org.koin.androidx.compose.koinViewModel
@@ -114,6 +115,16 @@ internal fun WalletHomeView() {
             }
 
             item { SyncProgressRow(state = syncChip) }
+
+            (homeState?.message as? MigrationMessageState)?.let { migration ->
+                item {
+                    Spacer(Modifier.height(14.dp))
+                    WalletMigrationBanner(
+                        state = migration,
+                        modifier = Modifier.padding(horizontal = 18.dp),
+                    )
+                }
+            }
 
             item {
                 Spacer(Modifier.height(14.dp))

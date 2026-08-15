@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
+import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_DUST_THRESHOLD_ZATOSHI
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.common.repository.WalletRepository
@@ -46,9 +47,16 @@ class WalletViewModel(
 
     /**
      * Emits `true` once — on the first launch that satisfies all Ironwood-announcement conditions:
-     * the wallet has synced past the Ironwood activation height, holds a non-zero spendable Orchard
-     * balance, and the one-time announcement has not been shown yet. Stays `false` while syncing or
-     * while the balance is unknown.
+     * the wallet has synced past the Ironwood activation height, holds a spendable Orchard balance
+     * above the dust threshold, and the one-time announcement has not been shown yet. Stays `false`
+     * while syncing or while the balance is unknown.
+     *
+     * Gated on [MIGRATION_DUST_THRESHOLD_ZATOSHI] rather than a bare `> 0L`, matching the same
+     * dust floor `migrationMessageFor`'s home banner uses (MOB-1620): `isIronwoodAnnouncementShown`
+     * is a local flag that resets on wallet re-import even though on-chain state didn't change, so
+     * a wallet with only dust-level residual Orchard balance (e.g. a previously locked residue)
+     * used to re-trigger this full-screen announcement on every re-import — a bare `> 0L` check
+     * doesn't distinguish that from a genuinely unmigrated balance worth announcing.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val shouldShowIronwoodAnnouncement: StateFlow<Boolean> =
@@ -68,7 +76,7 @@ class WalletViewModel(
                             scannedHeight != null &&
                             scannedHeight >= activationHeight &&
                             balances != null &&
-                            balances.values.any { it.orchard.available.value > 0L }
+                            balances.values.any { it.orchard.available.value > MIGRATION_DUST_THRESHOLD_ZATOSHI }
                     }
                 }
             }.stateIn(
