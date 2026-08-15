@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="home_balance_chart_title">Riwayat saldo</string>
-    <string name="home_balance_chart_period_24h">24j</string>
+<resources>
+    <string name="home_balance_chart_title">Nilai portofolio</string>
     <string name="home_balance_chart_period_1w">1mg</string>
     <string name="home_balance_chart_period_1m">1bln</string>
+    <string name="home_balance_chart_period_1y">1thn</string>
     <string name="home_balance_chart_period_all">Semua</string>
-    <string name="home_balance_chart_footer" formatted="true">Saldo: <xliff:g example="1.2345" id="amount">%1$s</xliff:g> ZEC</string>
     <string name="home_balance_chart_empty">Belum cukup aktivitas untuk rentang ini.</string>
+    <string name="home_balance_chart_accessibility">Nilai portofolio %1$s, %2$s</string>
+    <string name="home_balance_chart_scrub_hint">Sentuh dan geser untuk melihat nilai</string>
+    <string name="home_balance_chart_selection_accessibility">%1$s pada %2$s</string>
 
     <string name="home_wallet_title">Dompet</string>
     <string name="home_pay_title">Bayar</string>

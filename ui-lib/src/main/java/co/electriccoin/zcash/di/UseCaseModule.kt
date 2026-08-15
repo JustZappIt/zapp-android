@@ -1,6 +1,8 @@
 package co.electriccoin.zcash.di
 
 import co.electriccoin.zcash.ui.common.mapper.SwapSupportMapper
+import co.electriccoin.zcash.ui.common.pricing.usecase.ObservePortfolioHistoryUseCase
+import co.electriccoin.zcash.ui.common.pricing.usecase.PrewarmPortfolioHistoryUseCase
 import co.electriccoin.zcash.ui.common.usecase.AddChatGroupMemberUseCase
 import co.electriccoin.zcash.ui.common.usecase.ApplyTransactionFiltersUseCase
 import co.electriccoin.zcash.ui.common.usecase.ApplyTransactionFulltextFiltersUseCase
@@ -304,6 +306,8 @@ val useCaseModule =
         factoryOf(::ShareQRUseCase)
         factoryOf(::GetActivitiesUseCase)
         factoryOf(::GetBalanceHistoryUseCase)
+        factoryOf(::ObservePortfolioHistoryUseCase)
+        factoryOf(::PrewarmPortfolioHistoryUseCase)
         factoryOf(::GetResyncDataFromHeightUseCase)
         factoryOf(::NavigateToExportPrivateDataUseCase)
         factoryOf(::NavigateToResetWalletUseCase)

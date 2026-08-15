@@ -160,6 +160,8 @@ import co.electriccoin.zcash.ui.screen.settings.p2p.P2pPaymentMethodArgs
 import co.electriccoin.zcash.ui.screen.settings.p2p.P2pPaymentMethodScreen
 import co.electriccoin.zcash.ui.screen.settings.p2p.P2pTransactionsArgs
 import co.electriccoin.zcash.ui.screen.settings.p2p.P2pTransactionsScreen
+import co.electriccoin.zcash.ui.screen.settings.portfoliochart.PortfolioChartSettingsArgs
+import co.electriccoin.zcash.ui.screen.settings.portfoliochart.PortfolioChartSettingsScreen
 import co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionArgs
 import co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionScreen
 import co.electriccoin.zcash.ui.screen.swap.SwapArgs
@@ -273,6 +275,7 @@ fun NavGraphBuilder.walletNavGraph(
         composable<ChooseServerArgs> { ChooseServerScreen() }
         composable<P2pTransactionsArgs> { P2pTransactionsScreen() }
         composable<P2pPaymentMethodArgs> { P2pPaymentMethodScreen() }
+        composable<PortfolioChartSettingsArgs> { PortfolioChartSettingsScreen() }
         composable<SecuritySettingsArgs> { SecuritySettingsScreen() }
         composable<WalletBackup> { AndroidWalletBackup(it.toRoute()) }
         composable<FeedbackArgs> { FeedbackScreen() }

@@ -49,10 +49,9 @@ class HttpClientProviderImpl(
             configureHttpClient(installTimeouts = true)
             engine {
                 // MOB-1378: Currency Conversion exchange rates must only ever be fetched over Tor (the
-                // in-app copy promises rates are fetched over Tor to protect the user's IP). CMCApiProvider
-                // already routes through createTor(), so this clearnet client should never see a CMC
-                // request - this interceptor is a backstop that fails loudly if a future caller regresses
-                // to create(), rather than silently leaking the user's IP / request timing.
+                // in-app copy promises rates are fetched over Tor to protect the user's IP). Pricing
+                // providers route through createTor(), so this clearnet client should never see one of
+                // their requests. This interceptor is a backstop against leaking an IP or request timing.
                 addInterceptor { chain ->
                     if (chain
                             .request()
@@ -109,10 +108,11 @@ private fun String.isVotingHelperPath(): Boolean =
     contains("/shielded-vote/v1/shares") ||
         contains("/shielded-vote/v1/share-status/")
 
-// MOB-1378: the CMC quote API is the exchange-rate provider; requests to it must never leave over the
-// direct (clearnet) client. Matched on the host (not a substring of the full URL) so a path or query
-// that happens to echo the host can't trigger a false match. The host literal lives in CMCApiProvider.
-private fun String.isExchangeRateHost(): Boolean = this == CMC_API_HOST
+// MOB-1378: pricing requests must never leave over the direct (clearnet) client. Match exact hosts so
+// a path or query that happens to contain one of them cannot trigger a false positive.
+internal fun String.isExchangeRateHost(): Boolean = this == CMC_API_HOST || this == PRICING_ENGINE_HOST
+
+internal const val PRICING_ENGINE_HOST = "zapp-pricing-engine.majorworker.workers.dev"
 
 /**
  * MOB-1378: raised by the direct (clearnet) client's backstop interceptor when an exchange-rate request

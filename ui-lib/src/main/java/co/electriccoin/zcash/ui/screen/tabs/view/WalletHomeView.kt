@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -33,6 +34,7 @@ import co.electriccoin.zcash.ui.design.theme.colors.ZappNavBar
 import co.electriccoin.zcash.ui.screen.balances.BalanceWidgetArgs
 import co.electriccoin.zcash.ui.screen.balances.BalanceWidgetVM
 import co.electriccoin.zcash.ui.screen.home.HomeVM
+import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartState
 import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartVM
 import co.electriccoin.zcash.ui.screen.tabs.viewmodel.WalletSyncStateVM
 import co.electriccoin.zcash.ui.screen.transactionhistory.widget.ActivityWidgetVM
@@ -75,6 +77,16 @@ internal fun WalletHomeView() {
     val ensureSwapAssetsLoaded = koinInject<EnsureSwapAssetsLoadedUseCase>()
     val swapAssets by swapRepository.assets.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { ensureSwapAssetsLoaded() }
+    LaunchedEffect(chartState) {
+        if (
+            chartState is BalanceChartState.Data ||
+            chartState is BalanceChartState.ZecData ||
+            chartState is BalanceChartState.Empty
+        ) {
+            withFrameNanos { }
+            BalanceChartReadinessTrace.end()
+        }
+    }
 
     val c = ZappTheme.colors
 

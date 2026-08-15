@@ -1,6 +1,8 @@
 package co.electriccoin.zcash.di
 
 import co.electriccoin.zcash.ui.BuildConfig
+import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepository
+import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepositoryImpl
 import co.electriccoin.zcash.ui.common.provider.OrderRecipientUpiStorageProvider
 import co.electriccoin.zcash.ui.common.provider.RelayIdentityStorageProvider
 import co.electriccoin.zcash.ui.common.repository.ApplicationStateRepository
@@ -78,6 +80,7 @@ val repositoryModule =
         singleOf(::EphemeralAddressRepositoryImpl) bind EphemeralAddressRepository::class
         singleOf(::MockOrchardBalanceRepositoryImpl) bind MockOrchardBalanceRepository::class
         singleOf(::LinkPreviewRepository)
+        singleOf(::HistoricalPriceRepositoryImpl) bind HistoricalPriceRepository::class
 
         // UPI offramp data sources + orchestrator.
         single { CircleRouter() }

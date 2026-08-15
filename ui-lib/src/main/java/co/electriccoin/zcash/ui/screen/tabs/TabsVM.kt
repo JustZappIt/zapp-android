@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.sdk.model.FiatCurrency
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.pricing.usecase.PrewarmPortfolioHistoryUseCase
 import co.electriccoin.zcash.ui.common.provider.IsExchangeRateEnabledStorageProvider
 import co.electriccoin.zcash.ui.common.provider.PreferredFiatProvider
 import co.electriccoin.zcash.ui.common.provider.PreferredP2pPaymentMethodProvider
@@ -17,6 +18,7 @@ import co.electriccoin.zcash.ui.screen.chooseserver.ChooseServerArgs
 import co.electriccoin.zcash.ui.screen.restore.seed.RestoreSeedArgs
 import co.electriccoin.zcash.ui.screen.securitysettings.SecuritySettingsArgs
 import co.electriccoin.zcash.ui.screen.settings.p2p.P2pPaymentMethodArgs
+import co.electriccoin.zcash.ui.screen.settings.portfoliochart.PortfolioChartSettingsArgs
 import co.electriccoin.zcash.ui.screen.tor.settings.TorSettingsArgs
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.WhileSubscribed
@@ -25,6 +27,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import xyz.justzappit.offramp.p2p.CurrencyCode
 
+@Suppress("TooManyFunctions")
 class TabsVM(
     private val navigationRouter: NavigationRouter,
     private val isExchangeRateEnabledStorageProvider: IsExchangeRateEnabledStorageProvider,
@@ -32,7 +35,14 @@ class TabsVM(
     preferredP2pPaymentMethodProvider: PreferredP2pPaymentMethodProvider,
     private val navigateToSelectFiatCurrency: NavigateToSelectFiatCurrencyUseCase,
     private val copyToClipboard: CopyToClipboardUseCase,
+    private val prewarmPortfolioHistory: PrewarmPortfolioHistoryUseCase,
 ) : ViewModel() {
+    init {
+        // Chats is the initial tab, so fill the small default price window in parallel with
+        // normal chat use. This does not wait for wallet transactions or trigger an All backfill.
+        viewModelScope.launch { prewarmPortfolioHistory() }
+    }
+
     val localCurrency =
         preferredFiatProvider
             .observe()
@@ -70,11 +80,14 @@ class TabsVM(
 
     fun onP2pPaymentMethodClick() = navigationRouter.forward(P2pPaymentMethodArgs)
 
+    fun onPortfolioChartClick() = navigationRouter.forward(PortfolioChartSettingsArgs)
+
     fun onLocalCurrencyClick() =
         viewModelScope.launch {
             navigateToSelectFiatCurrency(localCurrency.value)?.let {
                 preferredFiatProvider.store(it)
                 isExchangeRateEnabledStorageProvider.store(true)
+                prewarmPortfolioHistory()
             }
         }
 }
