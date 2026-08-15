@@ -372,6 +372,7 @@ internal class BridgeToBaseVM(
                 ).takeIf { isInput },
             feeText =
                 prime.affiliateFeeZec
+                    ?.takeIf { it.value > 0 }
                     ?.let { stringRes(R.string.bridge_to_base_fee_value, zecText(it)) }
                     ?.takeIf { isInput && hasEstimate },
             slippageText =
