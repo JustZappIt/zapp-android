@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
 
-package co.electriccoin.zcash.ui.common.security
+package co.electriccoin.zcash.ui.screen.chat.common
 
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
 import co.electriccoin.zcash.preference.StandardPreferenceProvider
@@ -9,6 +9,7 @@ import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.common.repository.BiometricRequest
 import co.electriccoin.zcash.ui.common.repository.BiometricsCancelledException
 import co.electriccoin.zcash.ui.common.repository.BiometricsFailureException
+import co.electriccoin.zcash.ui.common.security.PinAuthGate
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.preference.AuthMethod
 import co.electriccoin.zcash.ui.preference.getAuthMethod
@@ -21,7 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-data class PinVerifyState(
+data class ChatPinVerifyState(
     val hasError: Boolean,
     val lockoutSecondsRemaining: Int,
     val onPinSubmit: (String) -> Unit,
@@ -37,9 +38,9 @@ class SecretAuthGate(
     private val standardPreferenceProvider: StandardPreferenceProvider,
     private val encryptedPreferenceProvider: EncryptedPreferenceProvider,
 ) {
-    private val prompt = MutableStateFlow<PinVerifyState?>(null)
+    private val prompt = MutableStateFlow<ChatPinVerifyState?>(null)
 
-    val pinPrompt: StateFlow<PinVerifyState?> = prompt.asStateFlow()
+    val pinPrompt: StateFlow<ChatPinVerifyState?> = prompt.asStateFlow()
 
     suspend fun authenticate(promptMessage: StringResource): Boolean =
         when (standardPreferenceProvider().getAuthMethod()) {
@@ -68,7 +69,7 @@ class SecretAuthGate(
                 lockoutSecondsRemaining: Int,
             ) {
                 prompt.value =
-                    PinVerifyState(
+                    ChatPinVerifyState(
                         hasError = hasError,
                         lockoutSecondsRemaining = lockoutSecondsRemaining,
                         onPinSubmit = { pin ->

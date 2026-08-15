@@ -11,7 +11,6 @@ data class AdvancedSettingsState(
 
 data class AdvancedSettingsItem(
     val title: StringResource,
-    val subtitle: StringResource? = null,
     val icon: ImageVector,
     val isEnabled: Boolean = true,
     val onClick: () -> Unit,

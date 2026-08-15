@@ -223,8 +223,6 @@ import co.electriccoin.zcash.ui.screen.transactionprogress.TransactionProgressAr
 import co.electriccoin.zcash.ui.screen.transactionprogress.TransactionProgressScreen
 import co.electriccoin.zcash.ui.screen.unifiedsend.UnifiedSendArgs
 import co.electriccoin.zcash.ui.screen.unifiedsend.UnifiedSendScreen
-import co.electriccoin.zcash.ui.screen.viewingkeyexport.ViewingKeyExportArgs
-import co.electriccoin.zcash.ui.screen.viewingkeyexport.ViewingKeyExportScreen
 import co.electriccoin.zcash.ui.screen.walletbackup.AndroidWalletBackup
 import co.electriccoin.zcash.ui.screen.walletbackup.WalletBackup
 import co.electriccoin.zcash.ui.screen.warning.WrapNotEnoughSpace
@@ -272,7 +270,6 @@ fun NavGraphBuilder.walletNavGraph(
         composable<IronwoodAnnouncementArgs> { IronwoodAnnouncementScreen() }
         composable<MoreArgs> { MoreScreen() }
         composable<AdvancedSettingsArgs> { AdvancedSettingsScreen() }
-        composable<ViewingKeyExportArgs> { ViewingKeyExportScreen() }
         composable<ChooseServerArgs> { ChooseServerScreen() }
         composable<P2pTransactionsArgs> { P2pTransactionsScreen() }
         composable<P2pPaymentMethodArgs> { P2pPaymentMethodScreen() }

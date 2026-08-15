@@ -3,7 +3,7 @@
 
 package co.electriccoin.zcash.ui.screen.chat.p2pkey
 
-import co.electriccoin.zcash.ui.common.security.PinVerifyState
+import co.electriccoin.zcash.ui.screen.chat.common.ChatPinVerifyState
 
 data class ChatP2pKeyState(
     val smartAccountAddress: String?,
@@ -12,7 +12,7 @@ data class ChatP2pKeyState(
     val onCopyClick: (String) -> Unit,
     val onRevealClick: () -> Unit,
     val onBack: () -> Unit,
-    val pinVerify: PinVerifyState?,
+    val pinVerify: ChatPinVerifyState?,
 )
 
 data class ChatP2pOwnerKey(

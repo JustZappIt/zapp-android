@@ -66,7 +66,6 @@ import co.electriccoin.zcash.ui.common.usecase.GetTransactionDetailByIdUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetTransactionFiltersUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetTransactionMetadataUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetTransactionsUseCase
-import co.electriccoin.zcash.ui.common.usecase.GetViewingKeyExportDataUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetWalletAccountsUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetWalletRestoringStateUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetZashiAccountUseCase
@@ -146,7 +145,6 @@ import co.electriccoin.zcash.ui.common.usecase.SetSlippageUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShareImageUseCase
 import co.electriccoin.zcash.ui.common.usecase.SharePCZTUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShareQRUseCase
-import co.electriccoin.zcash.ui.common.usecase.ShareViewingKeyProfileUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShieldFundsFromMessageUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShieldFundsUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShowErrorUseCase
@@ -195,7 +193,6 @@ val useCaseModule =
         singleOf(::ObserveABContactPickedUseCase)
         factoryOf(::CopyToClipboardUseCase)
         factoryOf(::ShareImageUseCase)
-        factoryOf(::ShareViewingKeyProfileUseCase)
         factoryOf(::Zip321BuildUriUseCase)
         factoryOf(::Zip321ParseUriValidationUseCase)
         factoryOf(::GetPersistableWalletUseCase)
@@ -206,7 +203,6 @@ val useCaseModule =
         factoryOf(::SendSupportEmailUseCase)
         factoryOf(::ShowErrorUseCase)
         factoryOf(::GetWalletAccountsUseCase)
-        factoryOf(::GetViewingKeyExportDataUseCase)
         factoryOf(::SelectWalletAccountUseCase)
         factoryOf(::ObserveSelectedWalletAccountUseCase)
         factoryOf(::ObserveZashiAccountUseCase)
