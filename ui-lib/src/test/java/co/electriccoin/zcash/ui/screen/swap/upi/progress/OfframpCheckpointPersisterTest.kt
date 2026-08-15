@@ -168,7 +168,6 @@ class OfframpCheckpointPersisterTest {
                     cause =
                         BridgeTerminallyFailedException(
                             terminalStatus = SwapStatus.REFUNDED,
-                            depositAddress = "near-deposit-abc",
                         ),
                 ),
             )

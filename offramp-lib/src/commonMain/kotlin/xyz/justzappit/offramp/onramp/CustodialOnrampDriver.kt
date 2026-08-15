@@ -180,10 +180,11 @@ private fun OnrampOrder.awaitingPaymentOrFailed(): OnrampStatus {
 private fun OnrampOrder.completedOrFailed(): OnrampStatus {
     val net = netUsdc
     val fiat = fiatAmount
-    return if (net == null || fiat == null) {
+    val recipient = recipientAddress
+    return if (net == null || fiat == null || recipient == null) {
         upstreamFailed()
     } else {
-        OnrampStatus.Completed(id, orderId, net, fiat, paidTx)
+        OnrampStatus.Completed(id, orderId, net, fiat, paidTx, recipient)
     }
 }
 

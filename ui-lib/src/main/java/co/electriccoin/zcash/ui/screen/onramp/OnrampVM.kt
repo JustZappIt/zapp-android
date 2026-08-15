@@ -7,6 +7,9 @@ import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.provider.OnrampCheckpointStorageProvider
+import co.electriccoin.zcash.ui.common.provider.OnrampZecSwapGateway
+import co.electriccoin.zcash.ui.common.provider.ValidatedZecSwapQuote
+import co.electriccoin.zcash.ui.common.provider.costBasisPoints
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
@@ -19,19 +22,25 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.offramp.config.P2pNetworkConfig
 import xyz.justzappit.offramp.onramp.OnrampCheckpoint
+import xyz.justzappit.offramp.onramp.OnrampDestination
 import xyz.justzappit.offramp.onramp.OnrampDriver
 import xyz.justzappit.offramp.onramp.OnrampException
 import xyz.justzappit.offramp.onramp.OnrampFailureCode
 import xyz.justzappit.offramp.onramp.OnrampIntentAmount
 import xyz.justzappit.offramp.onramp.OnrampLimits
-import xyz.justzappit.offramp.onramp.OnrampPaymentInstruction
+import xyz.justzappit.offramp.onramp.OnrampPhase
 import xyz.justzappit.offramp.onramp.OnrampQuote
 import xyz.justzappit.offramp.onramp.OnrampStatus
+import xyz.justzappit.offramp.onramp.OnrampZecDeliveryCheckpoint
+import xyz.justzappit.offramp.onramp.OnrampZecDeliveryDriver
+import xyz.justzappit.offramp.onramp.OnrampZecDeliveryPhase
+import xyz.justzappit.offramp.onramp.OnrampZecDeliveryStatus
 import xyz.justzappit.offramp.onramp.id
 import xyz.justzappit.offramp.onramp.leavesOrderAlive
 import xyz.justzappit.offramp.onramp.orderId
@@ -40,6 +49,8 @@ import xyz.justzappit.offramp.orchestrator.OfframpStatus
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.p2p.getUsdcBalance
+import java.math.BigDecimal
+import java.math.RoundingMode
 import xyz.justzappit.offramp.orchestrator.OfframpDriver as BaseRefundDriver
 
 @Suppress("TooManyFunctions")
@@ -49,6 +60,8 @@ internal class OnrampVM(
     private val rpc: BaseRpcClient,
     private val network: P2pNetworkConfig,
     private val driver: OnrampDriver,
+    private val zecDeliveryDriver: OnrampZecDeliveryDriver,
+    private val zecSwapGateway: OnrampZecSwapGateway,
     private val baseRefundDriver: BaseRefundDriver,
     private val checkpointStorage: OnrampCheckpointStorageProvider,
     private val copyToClipboard: CopyToClipboardUseCase,
@@ -57,22 +70,39 @@ internal class OnrampVM(
     private var limits: OnrampLimits = OnrampLimits.DISABLED
     private var recipient: Address? = null
     private var quote: OnrampQuote? = null
+    private var zecEstimate: ValidatedZecSwapQuote? = null
     private var quoteJob: Job? = null
     private var driverJob: Job? = null
     private var countdownJob: Job? = null
     private var expiryRecheckedFor: String? = null
     private var confirmPaidJob: Job? = null
     private var baseRefundJob: Job? = null
+    private val isZecDestinationEnabled =
+        BuildConfig.P2P_ONRAMP_AUTO_ZEC_ENABLED &&
+            (
+                network.chainId == ChainId.BASE_MAINNET ||
+                    (BuildConfig.DEBUG && BuildConfig.P2P_ONRAMP_USE_FAKE_DRIVER)
+            )
 
     private val mutableState =
         MutableStateFlow(
             OnrampState(
+                // Direct shielded delivery is the product's primary path. Builds without the
+                // rollout flag still fail closed to Base and never expose an unusable selection.
+                destination =
+                    if (isZecDestinationEnabled) {
+                        OnrampDestination.ZCASH
+                    } else {
+                        OnrampDestination.BASE
+                    },
+                isZecDestinationEnabled = isZecDestinationEnabled,
                 currency = currency,
                 paymentRail = currency.paymentRail(),
                 amountInput = NumberTextFieldState(onValueChange = ::onAmountChange),
                 onBack = ::onBack,
                 onRetry = ::onRetry,
                 onContinue = ::onContinue,
+                onDestinationSelected = ::onDestinationSelected,
                 onCopyAccountAddress = ::onCopyAccountAddress,
                 onSendBaseBalanceToZec = ::onSendBaseBalanceToZec,
                 onConfirmSendBaseBalanceToZec = ::onConfirmSendBaseBalanceToZec,
@@ -82,10 +112,18 @@ internal class OnrampVM(
                 onConfirmPaid = ::onConfirmPaid,
                 onDismissPaidConfirm = ::onDismissPaidConfirm,
                 onCancel = ::onCancel,
+                onDeliveryAction = ::onDeliveryAction,
                 onDone = ::onDone,
             ),
         )
     val state: StateFlow<OnrampState> = mutableState
+    private val deliveryCoordinator =
+        OnrampZecDeliveryCoordinator(
+            driver = zecDeliveryDriver,
+            storage = checkpointStorage,
+            scope = viewModelScope,
+            onStatus = ::handleDeliveryStatus,
+        )
 
     init {
         load()
@@ -99,7 +137,7 @@ internal class OnrampVM(
             val address = runCatching { driver.recipientAddress() }.getOrNull()
             recipient = address
             val balance = address?.let { runCatching { rpc.getUsdcBalance(network.usdcAddress, it) }.getOrNull() }
-            val checkpoint = checkpointStorage.get()
+            val checkpoint = readCheckpoint()
             // The service serves one corridor at a time. Its bounds are only this corridor's if it
             // agrees, otherwise they would render under the wrong symbol and precision and the
             // quote would be rejected only after the user had typed an amount.
@@ -111,6 +149,12 @@ internal class OnrampVM(
                             checkpoint != null -> OnrampMode.LOADING
                             servesCorridor && address != null -> OnrampMode.AMOUNT
                             else -> OnrampMode.UNAVAILABLE
+                        },
+                    destination = checkpoint?.destination ?: it.destination,
+                    orderId = checkpoint?.orderId,
+                    quotedNetUsdc =
+                        checkpoint?.zecDelivery?.let { delivery ->
+                            Usdc6(BigInteger(delivery.usdcMicros)).toDisplayString(stripTrailingZeros = true)
                         },
                     accountAddress = address?.checksumHex,
                     addressExplorerUrl = address?.let { addr -> network.addressUrl(addr.checksumHex) },
@@ -140,6 +184,12 @@ internal class OnrampVM(
         }
     }
 
+    private fun onDestinationSelected(destination: OnrampDestination) {
+        if (mutableState.value.mode != OnrampMode.AMOUNT || quoteJob?.isActive == true) return
+        if (destination == OnrampDestination.ZCASH && !mutableState.value.isZecDestinationEnabled) return
+        mutableState.update { it.copy(destination = destination) }
+    }
+
     private fun onContinue() {
         when (mutableState.value.mode) {
             OnrampMode.AMOUNT -> requestQuote()
@@ -162,7 +212,9 @@ internal class OnrampVM(
                     applyQuote(driver.quote(Usdc6.ofWhole(fiatWhole), currency))
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: Throwable) {
+                } catch (
+                    @Suppress("TooGenericExceptionCaught") e: Throwable
+                ) {
                     mutableState.update {
                         it.copy(
                             canContinue = true,
@@ -174,8 +226,10 @@ internal class OnrampVM(
             }
     }
 
-    private fun applyQuote(fresh: OnrampQuote) {
+    private suspend fun applyQuote(fresh: OnrampQuote) {
         quote = fresh
+        zecEstimate = null
+        val needsZecEstimate = mutableState.value.destination == OnrampDestination.ZCASH
         mutableState.update {
             it.copy(
                 mode = OnrampMode.CONFIRMATION,
@@ -184,12 +238,75 @@ internal class OnrampVM(
                 quotedNetUsdc = fresh.netUsdc.toDisplayString(stripTrailingZeros = true),
                 quotedFee = fresh.feeUsdc.toDisplayString(stripTrailingZeros = true),
                 quotedRate = fresh.buyPrice.toFiatString(currency),
-                canContinue = true,
+                isRequestingZecEstimate = needsZecEstimate,
+                estimatedZec = null,
+                estimatedZecValue = null,
+                estimatedConversionCost = null,
+                canContinue = !needsZecEstimate,
                 isRequestingQuote = false,
                 error = null,
             )
         }
         startQuoteCountdown(fresh)
+        if (needsZecEstimate) requestZecEstimate(fresh)
+    }
+
+    /**
+     * Shows the route's real fixed costs before an order is placed. The accepted quote is persisted
+     * with the order and reused if it still has a safe submission window at settlement. If it has
+     * expired, delivery requests a fresh quote rather than depositing to a stale address.
+     */
+    private suspend fun requestZecEstimate(onrampQuote: OnrampQuote) {
+        val account = recipient
+        if (account == null) {
+            showZecEstimateFailure()
+            return
+        }
+        try {
+            applyZecEstimate(onrampQuote, zecSwapGateway.quote(account, onrampQuote.netUsdc))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Throwable
+        ) {
+            Twig.warn { "OnrampVM: ZEC estimate rejected (${e::class.simpleName})" }
+            showZecEstimateFailure()
+        }
+    }
+
+    private fun applyZecEstimate(onrampQuote: OnrampQuote, estimate: ValidatedZecSwapQuote) {
+        zecEstimate = estimate
+        val fiatPerUsdc = onrampQuote.buyPrice.whole
+        val outputFiat = Usdc6.ofWhole(estimate.outputUsd.multiply(fiatPerUsdc)).toFiatString(currency)
+        val costUsd = estimate.inputUsd.subtract(estimate.outputUsd).max(BigDecimal.ZERO)
+        val costFiat = Usdc6.ofWhole(costUsd.multiply(fiatPerUsdc)).toFiatString(currency)
+        val costPercent =
+            costUsd
+                .multiply(PERCENT)
+                .divide(estimate.inputUsd, 1, RoundingMode.HALF_UP)
+                .stripTrailingZeros()
+                .toPlainString()
+        mutableState.update {
+            it.copy(
+                isRequestingZecEstimate = false,
+                estimatedZec = estimate.outputZec,
+                estimatedZecValue = "≈ ${it.currencySymbol}$outputFiat",
+                estimatedConversionCost = "≈ ${it.currencySymbol}$costFiat ($costPercent%)",
+                canContinue = true,
+                error = null,
+            )
+        }
+    }
+
+    private fun showZecEstimateFailure() {
+        zecEstimate = null
+        mutableState.update {
+            it.copy(
+                isRequestingZecEstimate = false,
+                canContinue = false,
+                error = stringRes(R.string.onramp_error_zec_estimate),
+            )
+        }
     }
 
     private fun startQuoteCountdown(fresh: OnrampQuote) {
@@ -205,6 +322,7 @@ internal class OnrampVM(
 
     private fun placeOrder() {
         val active = quote ?: return
+        if (mutableState.value.destination == OnrampDestination.ZCASH && mutableState.value.estimatedZec == null) return
         if (mutableState.value.isSendingBaseBalanceToZec || baseRefundJob?.isActive == true) return
         // Cancelling the collector does not un-send a POST that has already left, so a second tap
         // inside one frame would place a second on-chain BUY.
@@ -236,7 +354,7 @@ internal class OnrampVM(
         driverJob?.cancel()
         driverJob =
             viewModelScope.launch {
-                val stored = checkpointStorage.get() ?: return@launch
+                val stored = readCheckpoint() ?: return@launch
                 driver.confirmPaid(stored).collect(::handleStatus)
             }
         confirmPaidJob = driverJob
@@ -249,7 +367,7 @@ internal class OnrampVM(
         driverJob?.cancel()
         driverJob =
             viewModelScope.launch {
-                val stored = checkpointStorage.get() ?: return@launch
+                val stored = readCheckpoint() ?: return@launch
                 driver.cancel(stored).collect(::handleStatus)
             }
     }
@@ -324,7 +442,9 @@ internal class OnrampVM(
                     }
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: Throwable) {
+                } catch (
+                    @Suppress("TooGenericExceptionCaught") e: Throwable
+                ) {
                     logBaseRefundFailure("driver failed before reporting a status", e)
                     mutableState.update {
                         it.copy(sendBaseBalanceError = stringRes(R.string.onramp_send_to_zec_failed))
@@ -381,17 +501,56 @@ internal class OnrampVM(
     }
 
     private fun onBack() {
-        if (mutableState.value.isSendingBaseBalanceToZec) return
-        navigationRouter.back()
+        val current = mutableState.value
+        if (current.isSendingBaseBalanceToZec) return
+        if (current.mode == OnrampMode.CONFIRMATION) {
+            returnToAmountEntry(current)
+        } else {
+            navigationRouter.back()
+        }
+    }
+
+    /** Confirmation is an in-screen step, so Back edits the order instead of leaving Buy ZEC. */
+    private fun returnToAmountEntry(current: OnrampState) {
+        quoteJob?.cancel()
+        quoteJob = null
+        countdownJob?.cancel()
+        countdownJob = null
+        quote = null
+        zecEstimate = null
+        val fiat =
+            current.amountInput.innerState.amount
+                ?.let(Usdc6::ofWhole)
+        val withinLimits = fiat != null && fiat >= limits.minFiat && fiat <= limits.maxFiat
+        mutableState.update {
+            it.copy(
+                mode = OnrampMode.AMOUNT,
+                amountInput = it.amountInput.copy(isEnabled = true),
+                quotedFiat = null,
+                quotedNetUsdc = null,
+                quotedFee = null,
+                quotedRate = null,
+                isRequestingQuote = false,
+                isRequestingZecEstimate = false,
+                estimatedZec = null,
+                estimatedZecValue = null,
+                estimatedConversionCost = null,
+                quoteSecondsRemaining = null,
+                canContinue = limits.enabled && withinLimits,
+                error = null,
+            )
+        }
     }
 
     private fun onRetry() {
         if (mutableState.value.isSendingBaseBalanceToZec) return
         quote = null
+        zecEstimate = null
         expiryRecheckedFor = null
         quoteJob?.cancel()
         countdownJob?.cancel()
         driverJob?.cancel()
+        deliveryCoordinator.cancel()
         baseRefundJob?.cancel()
         mutableState.update {
             it.copy(
@@ -400,12 +559,21 @@ internal class OnrampVM(
                 quotedNetUsdc = null,
                 quotedFee = null,
                 quotedRate = null,
+                isRequestingZecEstimate = false,
+                estimatedZec = null,
+                estimatedZecValue = null,
+                estimatedConversionCost = null,
                 quoteSecondsRemaining = null,
                 orderId = null,
                 paymentInstruction = null,
                 paymentAmount = null,
                 paymentSecondsRemaining = null,
                 progress = null,
+                delivery = null,
+                receivedUsdc = null,
+                receivedZec = null,
+                fiatPaid = null,
+                transactionExplorerUrl = null,
                 canContinue = false,
                 isRequestingQuote = false,
                 isSendBaseBalanceConfirmVisible = false,
@@ -420,11 +588,20 @@ internal class OnrampVM(
     }
 
     private fun onDone() {
-        viewModelScope.launch { checkpointStorage.clear() }
-        navigationRouter.backToRoot()
+        viewModelScope.launch {
+            checkpointStorage.clear()
+            navigationRouter.backToRoot()
+        }
     }
 
     private fun resume(checkpoint: OnrampCheckpoint) {
+        mutableState.update { it.copy(destination = checkpoint.destination) }
+        if (checkpoint.phase == OnrampPhase.COMPLETED &&
+            checkpoint.destination == OnrampDestination.ZCASH
+        ) {
+            deliveryCoordinator.resume(checkpoint)
+            return
+        }
         driverJob?.cancel()
         driverJob = viewModelScope.launch { driver.resume(checkpoint).collect(::handleStatus) }
     }
@@ -454,7 +631,12 @@ internal class OnrampVM(
 
                 is OnrampStatus.Completed -> {
                     current.copy(
-                        mode = OnrampMode.COMPLETION,
+                        mode =
+                            if (current.destination == OnrampDestination.ZCASH) {
+                                OnrampMode.CONVERTING_TO_ZEC
+                            } else {
+                                OnrampMode.COMPLETION
+                            },
                         receivedUsdc = status.netUsdc.toDisplayString(stripTrailingZeros = true),
                         fiatPaid = status.fiatAmount.toFiatString(currency),
                         transactionExplorerUrl = status.paidTx?.let(network::txUrl),
@@ -491,8 +673,22 @@ internal class OnrampVM(
                 }
             }
         }
-        if (status is OnrampStatus.AwaitingPayment) logIntent(status)
+        startZecDelivery(status)
         startPaymentCountdown(status)
+    }
+
+    private suspend fun startZecDelivery(status: OnrampStatus) {
+        if (status !is OnrampStatus.Completed || mutableState.value.destination != OnrampDestination.ZCASH) return
+        val resume = readCheckpoint()?.zecDelivery
+        deliveryCoordinator.start(status.id, status.recipientAddress, status.netUsdc, resume)
+    }
+
+    private fun handleDeliveryStatus(status: OnrampZecDeliveryStatus) {
+        mutableState.update { it.withDeliveryStatus(status, network::txUrl) }
+    }
+
+    private fun onDeliveryAction() {
+        deliveryCoordinator.retry()
     }
 
     /**
@@ -504,24 +700,6 @@ internal class OnrampVM(
      * nothing validated, while the QR beside it charges another.
      */
     private fun OnrampStatus.AwaitingPayment.payableAmount(): String = fiatAmount.toFiatString(currency)
-
-    private suspend fun logIntent(status: OnrampStatus.AwaitingPayment) {
-        if (!BuildConfig.DEBUG) return
-        val declared = OnrampIntentAmount.declaredAmount(currency, status.instruction)
-        Twig.info {
-            "Onramp payment: order=${status.orderId} fiatAmount=${status.fiatAmount.micros}" +
-                " declared=${declared?.micros} expiresAt=${status.expiresAtMillis}" +
-                " now=${System.currentTimeMillis()} instruction=${status.instruction.debugUri()}"
-        }
-    }
-
-    private fun OnrampPaymentInstruction.debugUri(): String =
-        when (this) {
-            is OnrampPaymentInstruction.Upi -> intentUrl
-            is OnrampPaymentInstruction.Qr -> payload
-            is OnrampPaymentInstruction.Plain -> address
-            is OnrampPaymentInstruction.Fields -> fields.joinToString { "${it.label}=${it.value}" }
-        }
 
     private fun startPaymentCountdown(status: OnrampStatus) {
         if (status !is OnrampStatus.AwaitingPayment) return
@@ -536,7 +714,7 @@ internal class OnrampVM(
                 // its own expiresAt.
                 if (expiryRecheckedFor != status.id) {
                     expiryRecheckedFor = status.id
-                    checkpointStorage.get()?.let(::resume)
+                    readCheckpoint()?.let(::resume)
                 }
             }
     }
@@ -565,23 +743,81 @@ internal class OnrampVM(
 
     private suspend fun persist(status: OnrampStatus) {
         val id = status.id ?: return
-        if (status.isSettled) {
+        if (status.shouldClearCheckpoint) {
             checkpointStorage.clear()
             return
         }
+        val previous = readCheckpoint()
+        val destination = previous?.destination ?: mutableState.value.destination
+        val selectedEstimate = zecEstimate
+        val selectedOnrampQuote = quote
+        val selectedRecipient = recipient
+        val delivery =
+            when {
+                previous?.zecDelivery != null -> {
+                    previous.zecDelivery
+                }
+
+                destination != OnrampDestination.ZCASH -> {
+                    null
+                }
+
+                selectedEstimate != null && selectedOnrampQuote != null && selectedRecipient != null -> {
+                    OnrampZecDeliveryCheckpoint(
+                        phase = OnrampZecDeliveryPhase.QUOTE_READY,
+                        usdcMicros = selectedOnrampQuote.netUsdc.micros.toString(),
+                        baseAccount = selectedRecipient.checksumHex,
+                        zcashRecipient = selectedEstimate.zcashRecipient,
+                        depositAddress = selectedEstimate.depositAddress.checksumHex,
+                        quoteDeadlineMillis = selectedEstimate.deadlineMillis,
+                        acceptedCostBps = selectedEstimate.costBasisPoints,
+                    )
+                }
+
+                status is OnrampStatus.Completed -> {
+                    OnrampZecDeliveryCheckpoint(
+                        phase = OnrampZecDeliveryPhase.FUNDS_ON_BASE,
+                        usdcMicros = status.netUsdc.micros.toString(),
+                        baseAccount = status.recipientAddress.checksumHex,
+                    )
+                }
+
+                else -> {
+                    null
+                }
+            }
         checkpointStorage.store(
             OnrampCheckpoint(
                 id = id,
                 phase = status.phase,
-                orderId = status.orderId ?: checkpointStorage.get()?.orderId,
+                orderId = status.orderId ?: previous?.orderId,
+                destination = destination,
+                zecDelivery = delivery,
             ),
         )
     }
 
-    private val OnrampStatus.isSettled: Boolean
+    /**
+     * A checkpoint this build cannot decode (a downgrade, a future schema) is treated as absent
+     * rather than allowed to escape: it is read on every entry to the screen, so an uncaught decode
+     * failure would make the screen unopenable for good, with no way to reach the action that
+     * clears it.
+     */
+    private suspend fun readCheckpoint(): OnrampCheckpoint? =
+        try {
+            checkpointStorage.get()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Throwable
+        ) {
+            Twig.warn { "OnrampVM: onramp checkpoint could not be read (${e::class.simpleName})" }
+            null
+        }
+
+    private val OnrampStatus.shouldClearCheckpoint: Boolean
         get() =
-            this is OnrampStatus.Completed ||
-                this is OnrampStatus.Cancelled ||
+            this is OnrampStatus.Cancelled ||
                 (this is OnrampStatus.Failed && !leavesOrderAlive)
 
     private fun Throwable.toStringResource(): StringResource =
@@ -648,6 +884,7 @@ internal class OnrampVM(
 
     private companion object {
         const val MILLIS_PER_SECOND = 1_000L
+        val PERCENT: BigDecimal = BigDecimal(100)
 
         // 1e11 ms is 1973; 1e11 s is the year 5138. No real timestamp is ambiguous across it.
         const val SECONDS_THRESHOLD = 100_000_000_000L

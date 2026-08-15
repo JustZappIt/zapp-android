@@ -189,7 +189,7 @@ class NearSwapDataSourceImpl(
         val destinationAsset =
             findAssetByEchoedId(supportedTokens, response.quoteResponse.quoteRequest.destinationAsset)
                 ?: throw TokenNotFoundException(response.quoteResponse.quoteRequest.destinationAsset)
-        log("checkSwapStatus $depositAddress")
+        log("checkSwapStatus")
         return NearSwapQuoteStatus(
             response = response,
             origin = originAsset,

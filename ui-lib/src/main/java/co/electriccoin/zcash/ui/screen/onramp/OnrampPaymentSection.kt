@@ -29,7 +29,7 @@ internal fun PaymentContent(state: OnrampState) {
     val instruction = state.paymentInstruction ?: return
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         // The one screen the user waits on longest was the one screen without the shared spine.
-        ZappStepList(onrampSteps(state.progress))
+        ZappStepList(onrampSteps(state.progress, state.delivery, state.destination))
         BasicText(
             text = stringResource(R.string.onramp_pay_merchant_title),
             style =

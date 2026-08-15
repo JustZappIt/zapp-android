@@ -18,6 +18,8 @@ import co.electriccoin.zcash.ui.common.provider.CrashReportingStorageProvider
 import co.electriccoin.zcash.ui.common.provider.CrashReportingStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.EphemeralAddressStorageProvider
 import co.electriccoin.zcash.ui.common.provider.EphemeralAddressStorageProviderImpl
+import co.electriccoin.zcash.ui.common.provider.Erc4337OnrampZecTransferGateway
+import co.electriccoin.zcash.ui.common.provider.FakeOnrampZecDeliveryDriver
 import co.electriccoin.zcash.ui.common.provider.GetVersionInfoProvider
 import co.electriccoin.zcash.ui.common.provider.GetZcashCurrencyProvider
 import co.electriccoin.zcash.ui.common.provider.HttpClientProvider
@@ -39,7 +41,10 @@ import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProvid
 import co.electriccoin.zcash.ui.common.provider.LightWalletEndpointProvider
 import co.electriccoin.zcash.ui.common.provider.NearApiProvider
 import co.electriccoin.zcash.ui.common.provider.NearBridgeOfframpFunding
+import co.electriccoin.zcash.ui.common.provider.NearOnrampZecDeliveryDriver
+import co.electriccoin.zcash.ui.common.provider.NearOnrampZecSwapGateway
 import co.electriccoin.zcash.ui.common.provider.NearPullbackOfframpRefund
+import co.electriccoin.zcash.ui.common.provider.NoRouteOnrampZecDeliveryDriver
 import co.electriccoin.zcash.ui.common.provider.OfframpBridgeWallet
 import co.electriccoin.zcash.ui.common.provider.OfframpCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.provider.OfframpCheckpointStorageProviderImpl
@@ -48,6 +53,13 @@ import co.electriccoin.zcash.ui.common.provider.OfframpTopUpCheckpointStoragePro
 import co.electriccoin.zcash.ui.common.provider.OfframpTopUpPreview
 import co.electriccoin.zcash.ui.common.provider.OnrampCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.provider.OnrampCheckpointStorageProviderImpl
+import co.electriccoin.zcash.ui.common.provider.OnrampSmartAccountResolver
+import co.electriccoin.zcash.ui.common.provider.OnrampSubmitterFactory
+import co.electriccoin.zcash.ui.common.provider.OnrampUsdcBalanceReader
+import co.electriccoin.zcash.ui.common.provider.OnrampZecDeliveryCheckpointStore
+import co.electriccoin.zcash.ui.common.provider.OnrampZecDeliveryCheckpointStoreImpl
+import co.electriccoin.zcash.ui.common.provider.OnrampZecSwapGateway
+import co.electriccoin.zcash.ui.common.provider.OnrampZecTransferGateway
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProviderImpl
 import co.electriccoin.zcash.ui.common.provider.PreferredFiatProvider
@@ -97,6 +109,7 @@ import org.koin.dsl.module
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.rpc.BundlerClient
 import xyz.justzappit.evm.rpc.RpcHttpClient
+import xyz.justzappit.evm.signer.Erc4337Submitter
 import xyz.justzappit.offramp.account.CachingOfframpAccountProvider
 import xyz.justzappit.offramp.account.DevOfframpAccountProvider
 import xyz.justzappit.offramp.account.OfframpAccountProvider
@@ -114,9 +127,11 @@ import xyz.justzappit.offramp.funding.OfframpTopUp
 import xyz.justzappit.offramp.funding.PreFundedOfframpFunding
 import xyz.justzappit.offramp.onramp.OnrampDeviceSignalsProvider
 import xyz.justzappit.offramp.onramp.OnrampScreeningSessionProvider
+import xyz.justzappit.offramp.onramp.OnrampZecDeliveryDriver
 import xyz.justzappit.offramp.p2p.DirectPixResolver
 import xyz.justzappit.offramp.p2p.DynamicPixResolver
 import xyz.justzappit.offramp.p2p.SubgraphClient
+import xyz.justzappit.offramp.p2p.getUsdcBalance
 import java.util.Locale
 
 const val OFFRAMP_HTTP_CLIENT_QUALIFIER = "offramp_http"
@@ -333,6 +348,53 @@ val providerModule =
                 rpc = get(),
                 accountFactory = cfg.accountFactoryAddress,
             )
+        }
+        single<OnrampZecDeliveryCheckpointStore> {
+            OnrampZecDeliveryCheckpointStoreImpl(storage = get())
+        }
+        single<OnrampZecSwapGateway> {
+            NearOnrampZecSwapGateway(
+                usdc = get<P2pNetworkConfig>().usdcAddress,
+                swapDataSource = get(),
+                wallet = get(),
+            )
+        }
+        single<OnrampZecTransferGateway> {
+            val network = get<P2pNetworkConfig>()
+            val rpc = get<BaseRpcClient>()
+            val bundler = get<BundlerClient>()
+            val accountProvider = get<SmartOfframpAccountProvider>()
+            Erc4337OnrampZecTransferGateway(
+                usdc = network.usdcAddress,
+                accountResolver = OnrampSmartAccountResolver(accountProvider::resolve),
+                balanceReader = OnrampUsdcBalanceReader { rpc.getUsdcBalance(network.usdcAddress, it) },
+                submitterFactory =
+                    OnrampSubmitterFactory { account ->
+                        Erc4337Submitter(
+                            rpc = rpc,
+                            bundler = bundler,
+                            entryPoint = network.entryPointAddress,
+                            accountFactory = network.accountFactoryAddress,
+                            owner = account.owner,
+                            smartAccount = account.address,
+                            chainId = network.chainId,
+                        )
+                    },
+            )
+        }
+        single {
+            NearOnrampZecDeliveryDriver(
+                transfer = get(),
+                swap = get(),
+                checkpoints = get(),
+            )
+        }
+        single<OnrampZecDeliveryDriver> {
+            when {
+                BuildConfig.DEBUG && BuildConfig.P2P_ONRAMP_USE_FAKE_DRIVER -> FakeOnrampZecDeliveryDriver()
+                get<P2pNetworkConfig>().chainId == P2pNetworks.MAINNET_CHAIN_ID -> get<NearOnrampZecDeliveryDriver>()
+                else -> NoRouteOnrampZecDeliveryDriver()
+            }
         }
 
         single<(String, Throwable?) -> Unit>(named("offramp_warn")) {

@@ -66,6 +66,17 @@ class CustodialOnrampDriverTest {
             assertIs<OnrampStatus.ConfirmingPaid>(statuses.first())
             val completed = assertIs<OnrampStatus.Completed>(statuses.last())
             assertEquals("910153", completed.netUsdc.micros.toString())
+            assertEquals(SMART_ACCOUNT.lowercase(), completed.recipientAddress.lowercaseHex)
+        }
+
+    @Test
+    fun `completion without the echoed recipient fails closed`() =
+        runTest {
+            val driver = driverFor(order(PHASE_COMPLETED, withRecipient = false))
+
+            val failed = assertIs<OnrampStatus.Failed>(driver.resume(checkpoint()).toList().last())
+
+            assertEquals(OnrampFailureCode.UPSTREAM_FAILED, failed.code)
         }
 
     @Test
@@ -368,6 +379,7 @@ class CustodialOnrampDriverTest {
         phase: String,
         withInstruction: Boolean = false,
         failureCode: String? = null,
+        withRecipient: Boolean = true,
     ): String {
         val instruction =
             if (withInstruction) {
@@ -377,8 +389,9 @@ class CustodialOnrampDriverTest {
                 ""
             }
         val failure = failureCode?.let { ""","failureCode":"$it"""" }.orEmpty()
+        val recipient = if (withRecipient) ""","recipientAddr":"$SMART_ACCOUNT"""" else ""
         return """{"id":"$ID","orderId":"$ORDER_ID","phase":"$phase","currency":"INR",""" +
-            """"fiatAmount":"99999934","netUsdc":"910153"$instruction$failure}"""
+            """"fiatAmount":"99999934","netUsdc":"910153"$instruction$failure$recipient}"""
     }
 
     private companion object {

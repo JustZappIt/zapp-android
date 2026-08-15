@@ -5,12 +5,17 @@ import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
+import xyz.justzappit.offramp.onramp.FundsLocation
+import xyz.justzappit.offramp.onramp.OnrampDestination
 import xyz.justzappit.offramp.onramp.OnrampPaymentInstruction
 import xyz.justzappit.offramp.onramp.OnrampStatus
+import xyz.justzappit.offramp.onramp.OnrampZecDeliveryStatus
 import xyz.justzappit.offramp.p2p.CurrencyCode
 
 internal data class OnrampState(
     val mode: OnrampMode = OnrampMode.LOADING,
+    val destination: OnrampDestination = OnrampDestination.BASE,
+    val isZecDestinationEnabled: Boolean = true,
     val accountAddress: String? = null,
     val addressExplorerUrl: String? = null,
     val baseBalance: String? = null,
@@ -31,9 +36,14 @@ internal data class OnrampState(
     val quotedNetUsdc: String? = null,
     val quotedFee: String? = null,
     val quotedRate: String? = null,
+    val isRequestingZecEstimate: Boolean = false,
+    val estimatedZec: String? = null,
+    val estimatedZecValue: String? = null,
+    val estimatedConversionCost: String? = null,
     val quoteSecondsRemaining: Long? = null,
     val orderId: String? = null,
     val receivedUsdc: String? = null,
+    val receivedZec: String? = null,
     val fiatPaid: String? = null,
     val transactionExplorerUrl: String? = null,
     val paymentInstruction: OnrampPaymentInstruction? = null,
@@ -41,12 +51,14 @@ internal data class OnrampState(
     val paymentSecondsRemaining: Long? = null,
     val isPaymentAmountUntrusted: Boolean = false,
     val progress: OnrampStatus? = null,
+    val delivery: OnrampZecDeliveryStatus? = null,
     val error: StringResource? = null,
     val canContinue: Boolean = false,
     val isPaidConfirmVisible: Boolean = false,
     val onBack: () -> Unit,
     val onRetry: () -> Unit,
     val onContinue: () -> Unit,
+    val onDestinationSelected: (OnrampDestination) -> Unit,
     val onCopyAccountAddress: () -> Unit,
     val onSendBaseBalanceToZec: () -> Unit,
     val onConfirmSendBaseBalanceToZec: () -> Unit,
@@ -56,6 +68,7 @@ internal data class OnrampState(
     val onConfirmPaid: () -> Unit,
     val onDismissPaidConfirm: () -> Unit,
     val onCancel: () -> Unit,
+    val onDeliveryAction: () -> Unit,
     val onDone: () -> Unit,
 ) {
     /**
@@ -72,6 +85,15 @@ internal data class OnrampState(
     /** The order has settled against the user: nothing is left to cancel, only a way forward. */
     val isSettledAgainstUser: Boolean
         get() = progress is OnrampStatus.Failed || progress is OnrampStatus.Cancelled
+
+    val isDeliveryFailed: Boolean
+        get() = delivery is OnrampZecDeliveryStatus.Failed
+
+    val canRetryDelivery: Boolean
+        get() =
+            (delivery as? OnrampZecDeliveryStatus.Failed)?.let {
+                it.retryable && it.fundsLocation == FundsLocation.BASE_ACCOUNT
+            } == true
 
     /** The single dock CTA for the mode on screen, in the shape every other Zapp dock uses. */
     val primaryAction: ButtonState
@@ -126,6 +148,32 @@ internal data class OnrampState(
                 OnrampMode.COMPLETION -> {
                     ButtonState(stringRes(R.string.onramp_done), onClick = onDone)
                 }
+
+                OnrampMode.CONVERTING_TO_ZEC -> {
+                    ButtonState(stringRes(R.string.onramp_converting_action), isEnabled = false, onClick = {})
+                }
+
+                OnrampMode.REFUNDED_TO_BASE -> {
+                    ButtonState(stringRes(R.string.onramp_done), onClick = onDone)
+                }
+
+                OnrampMode.DELIVERY_NEEDS_ATTENTION -> {
+                    val failure = delivery as? OnrampZecDeliveryStatus.Failed
+                    when {
+                        canRetryDelivery -> {
+                            ButtonState(stringRes(R.string.onramp_try_conversion_again), onClick = onDeliveryAction)
+                        }
+
+                        failure?.fundsLocation == FundsLocation.BASE_ACCOUNT ||
+                            failure?.fundsLocation == FundsLocation.RECIPIENT_MISMATCH -> {
+                            ButtonState(stringRes(R.string.onramp_done), onClick = onDone)
+                        }
+
+                        else -> {
+                            ButtonState(stringRes(R.string.onramp_check_conversion_status), onClick = onDeliveryAction)
+                        }
+                    }
+                }
             }
 
     /**
@@ -177,5 +225,8 @@ internal enum class OnrampMode {
     CONFIRMATION,
     PROGRESS,
     PAYMENT,
+    CONVERTING_TO_ZEC,
     COMPLETION,
+    REFUNDED_TO_BASE,
+    DELIVERY_NEEDS_ATTENTION,
 }

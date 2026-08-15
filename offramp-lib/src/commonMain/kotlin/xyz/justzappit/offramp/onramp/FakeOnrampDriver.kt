@@ -73,6 +73,7 @@ class FakeOnrampDriver(
                     netUsdc = Usdc6.ofMicros(DEMO_NET_USDC_MICROS),
                     fiatAmount = Usdc6.ofMicros(DEMO_FIAT_MICROS),
                     paidTx = null,
+                    recipientAddress = Address.parse(DEMO_RECIPIENT),
                 ),
             )
         }

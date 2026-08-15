@@ -375,7 +375,7 @@ class NearBridgeOfframpFunding(
                     }
                     Twig.warn(e) {
                         "NearBridgeOfframpFunding.pollUntilSettled: transient checkSwapStatus failure " +
-                            "for $depositAddress — retrying in ${pollIntervalMs}ms"
+                            "— retrying in ${pollIntervalMs}ms"
                     }
                     delay(pollIntervalMs)
                     continue
@@ -386,7 +386,7 @@ class NearBridgeOfframpFunding(
                 }
 
                 SwapStatus.REFUNDED, SwapStatus.FAILED, SwapStatus.EXPIRED, SwapStatus.INCOMPLETE_DEPOSIT -> {
-                    throw BridgeTerminallyFailedException(terminalStatus = status, depositAddress = depositAddress)
+                    throw BridgeTerminallyFailedException(terminalStatus = status)
                 }
 
                 else -> {
@@ -410,9 +410,8 @@ class NearBridgeOfframpFunding(
  */
 class BridgeTerminallyFailedException(
     val terminalStatus: SwapStatus,
-    val depositAddress: String,
 ) : RuntimeException(
-        "NEAR bridge for $depositAddress reached terminal state $terminalStatus — the bridge cannot be resumed. " +
+        "NEAR bridge reached terminal state $terminalStatus — the bridge cannot be resumed. " +
             "If your ZEC was refunded by 1-Click it should appear at your wallet's refund address shortly.",
     )
 
@@ -455,26 +454,14 @@ class NearPullbackOfframpRefund(
                 slippage = slippageTolerancePercent,
                 affiliateAddress = AFFILIATE_ADDRESS,
             )
-        // Bypasses RequestSwapQuoteUseCase's validateQuote layer — the returned deposit address is
-        // where the sponsored USDC.transfer sends the user's refund, so assert the quote echo first.
-        requireQuoteMatchesUserAmount(
-            quoted = quote.amountInFormatted,
-            requested = amount.whole,
-            decimals = quote.originAsset.decimals
-        )
-        requireMatchingAddress(
-            name = "refundAddress",
-            expected = account.checksumHex,
-            actual = quote.refundAddress.address
-        )
-        requireMatchingAddress(
-            name = "destinationAddress",
-            expected = destinationAddress,
-            actual = quote.destinationAddress.address
-        )
-        require(quote.amountOut > BigDecimal.ZERO) { "Refund quote must deliver a positive ZEC amount" }
-        require(quote.deadline > Clock.System.now()) { "Refund quote is already expired" }
-        return Address.parse(quote.depositAddress.address)
+        return validateZecSwapQuote(
+            quote = quote,
+            amount = amount,
+            account = account,
+            zcashRecipient = destinationAddress,
+            slippageTolerancePercent = slippageTolerancePercent,
+            now = Clock.System.now(),
+        ).depositAddress
     }
 
     override suspend fun awaitSettlement(handle: String) {
@@ -495,7 +482,7 @@ class NearPullbackOfframpRefund(
                         deterministicFailures++
                         if (deterministicFailures >= MAX_DETERMINISTIC_FAILURES) throw e
                     }
-                    Twig.warn(e) { "Refund bridge status failed for $handle; retrying" }
+                    Twig.warn(e) { "Refund bridge status failed; retrying" }
                     delay(pollIntervalMs)
                     continue
                 }
@@ -506,7 +493,7 @@ class NearPullbackOfframpRefund(
                 SwapStatus.FAILED,
                 SwapStatus.EXPIRED,
                 SwapStatus.INCOMPLETE_DEPOSIT,
-                -> throw BridgeTerminallyFailedException(status, handle)
+                -> throw BridgeTerminallyFailedException(status)
 
                 else -> delay(pollIntervalMs)
             }
@@ -524,20 +511,3 @@ private fun requireMatchingAddress(name: String, expected: String, actual: Strin
         "Swap quote address mismatch: expected $name=$expected but quote returned $actual"
     }
 }
-
-// ---- 1-Click supported-token lookup helpers (shared between funding + refund) ------------------
-
-/** Picks the ZEC entry from the 1-Click supported-token catalog; throws if missing. */
-private fun List<SwapAsset>.zecAsset(): SwapAsset =
-    filterIsInstance<ZecSwapAsset>().firstOrNull()
-        ?: error("ZEC is not in the 1-Click supported-token list")
-
-/**
- * Picks the USDC entry by matching the configured on-chain address against the 1-Click asset id
- * (which embeds the contract, e.g. `nep141:base-0x833589…omft.near`). Lookups by raw address keep
- * the catalog network-agnostic — no hardcoded NEP asset id per network — so adding a new chain to
- * P2pNetworks doesn't drag a new constant in here.
- */
-private fun List<SwapAsset>.usdcAsset(usdc: Address): SwapAsset =
-    firstOrNull { it.assetId.contains(usdc.lowercaseHex.removePrefix("0x"), ignoreCase = true) }
-        ?: error("USDC (${usdc.checksumHex}) is not in the 1-Click supported-token list")

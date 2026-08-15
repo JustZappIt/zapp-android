@@ -10,14 +10,16 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
-import kotlinx.io.IOException
 import kotlinx.coroutines.delay
+import kotlinx.io.IOException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.add
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -143,12 +145,29 @@ class BundlerClient(
             )
         }
 
-    /** The mined transaction receipt for a userOp, or null while it is still pending. */
+    /**
+     * The mined transaction receipt for a userOp, or null while it is still pending.
+     *
+     * The bundle transaction's own `status` is 0x1 whenever `handleOps` itself succeeded — EntryPoint
+     * catches an inner revert and emits `UserOperationRevertReason` rather than reverting the bundle.
+     * Only the response's top-level `success` says whether *this* userOp executed, so it is folded
+     * into the returned receipt's status; callers read [TransactionReceipt.success] and mean the
+     * operation, not the bundle.
+     */
     suspend fun getUserOperationReceipt(userOpHash: TxHash): TransactionReceipt? {
         val result = rpcCall("eth_getUserOperationReceipt", buildJsonArray { add(userOpHash.hex) })
-        // Pending → result is JSON null (or otherwise not an object); not yet mined.
-        val receipt = (result as? JsonObject)?.get("receipt") ?: return null
-        return json.decodeFromJsonElement(TransactionReceipt.serializer(), receipt)
+        // Pending is represented only by JSON null. Any other shape is a malformed mined verdict,
+        // not evidence that the operation is still pending.
+        if (result is JsonNull) return null
+        val response =
+            result as? JsonObject
+                ?: error("Bundler returned a malformed UserOperation receipt")
+        val receipt = response["receipt"] ?: error("Bundler UserOperation result is missing its receipt")
+        val decoded = json.decodeFromJsonElement(TransactionReceipt.serializer(), receipt)
+        val operationSucceeded =
+            response["success"]?.jsonPrimitive?.takeUnless { it.isString }?.booleanOrNull
+                ?: error("Bundler UserOperation receipt is missing a boolean success verdict")
+        return if (operationSucceeded) decoded else decoded.copy(status = FAILED_STATUS)
     }
 
     private fun userOpJson(op: UserOperationV06): JsonObject =
@@ -241,6 +260,7 @@ class BundlerClient(
         private const val HEX_BASE = 16
         private const val NONCE_LAG_MAX_ATTEMPTS = 3
         private const val NONCE_LAG_BASE_BACKOFF_MS = 1_500L
+        private const val FAILED_STATUS = "0x0"
 
         /**
          * Pimlico's bundler + verifying-paymaster URL for [chainId]. The API key is appended as a

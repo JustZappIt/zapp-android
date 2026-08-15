@@ -210,6 +210,14 @@ androidComponents {
             )
         )
         variant.buildConfigFields?.put(
+            "P2P_ONRAMP_AUTO_ZEC_ENABLED",
+            BuildConfigField(
+                type = "boolean",
+                value = project.property("P2P_ONRAMP_AUTO_ZEC_ENABLED").toString().toBoolean().toString(),
+                comment = "Whether new P2P onramps may automatically deliver ZEC"
+            )
+        )
+        variant.buildConfigFields?.put(
             "P2P_RPC_URL_BASE_SEPOLIA",
             BuildConfigField(
                 type = "String",

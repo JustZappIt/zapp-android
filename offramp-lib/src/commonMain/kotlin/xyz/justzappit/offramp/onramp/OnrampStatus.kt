@@ -3,6 +3,7 @@
 
 package xyz.justzappit.offramp.onramp
 
+import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.p2p.Usdc6
 
 sealed interface OnrampStatus {
@@ -43,7 +44,12 @@ sealed interface OnrampStatus {
         val netUsdc: Usdc6,
         val fiatAmount: Usdc6,
         val paidTx: String?,
-    ) : OnrampStatus
+        val recipientAddress: Address,
+    ) : OnrampStatus {
+        override fun toString(): String =
+            "Completed(id=$id, orderId=$orderId, netUsdc=$netUsdc, fiatAmount=$fiatAmount, " +
+                "paidTx=$paidTx, recipientAddress=<redacted>)"
+    }
 
     data class Cancelled(
         val id: String?,
