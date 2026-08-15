@@ -9,6 +9,8 @@ import co.electriccoin.zcash.ui.common.repository.ApplicationStateRepository
 import co.electriccoin.zcash.ui.common.repository.ApplicationStateRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.AutomaticServerRepository
 import co.electriccoin.zcash.ui.common.repository.AutomaticServerRepositoryImpl
+import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepository
+import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.common.repository.BiometricRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.ConfigurationRepository
@@ -25,6 +27,8 @@ import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
 import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepository
 import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepositoryImpl
+import co.electriccoin.zcash.ui.common.repository.PeerCashOutRepository
+import co.electriccoin.zcash.ui.common.repository.PeerCashOutRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.repository.SwapRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.TransactionFilterRepository
@@ -42,8 +46,10 @@ import org.koin.core.module.dsl.singleOf
 import org.koin.core.qualifier.named
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.offramp.account.OfframpAccountProvider
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
+import xyz.justzappit.offramp.config.P2pNetworkConfig
 import xyz.justzappit.offramp.onramp.CustodialOnrampClient
 import xyz.justzappit.offramp.onramp.CustodialOnrampDriver
 import xyz.justzappit.offramp.onramp.FakeOnrampDriver
@@ -60,6 +66,7 @@ import xyz.justzappit.offramp.p2p.OrderRecipientUpiCache
 import xyz.justzappit.offramp.p2p.P2pOrderHistorySource
 import xyz.justzappit.offramp.p2p.RelayIdentityStore
 import xyz.justzappit.offramp.p2p.SubgraphOrderReader
+import xyz.justzappit.offramp.p2p.getUsdcBalance
 
 val repositoryModule =
     module {
@@ -81,6 +88,23 @@ val repositoryModule =
         singleOf(::MockOrchardBalanceRepositoryImpl) bind MockOrchardBalanceRepository::class
         singleOf(::LinkPreviewRepository)
         singleOf(::HistoricalPriceRepositoryImpl) bind HistoricalPriceRepository::class
+        single<BaseBalanceRepository> {
+            val rpc = get<BaseRpcClient>()
+            val network = get<P2pNetworkConfig>()
+            val accountProvider = get<SmartOfframpAccountProvider>()
+            BaseBalanceRepositoryImpl(
+                reader = { rpc.getUsdcBalance(network.usdcAddress, accountProvider.resolve().address) },
+                applicationStateProvider = get(),
+            )
+        }
+        // Constructed manually because its dispatcher is a default rather than a binding.
+        single<PeerCashOutRepository> {
+            PeerCashOutRepositoryImpl(
+                orchestrator = get(),
+                checkpointStorage = get(),
+                payeeHandleProvider = get(),
+            )
+        }
 
         // UPI offramp data sources + orchestrator.
         single { CircleRouter() }
@@ -113,9 +137,8 @@ val repositoryModule =
         factory<OfframpDriver> {
             AaOfframpDriver(
                 rpc = get(),
-                bundler = get(),
                 network = get(),
-                accountProvider = get(),
+                submitters = get(),
                 subgraph = get(),
                 orderReader = get(),
                 funding = get(),

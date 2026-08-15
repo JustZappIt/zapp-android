@@ -104,6 +104,7 @@ android {
                     "src/main/res/ui/tor",
                     "src/main/res/ui/top_up",
                     "src/main/res/ui/offramp",
+                    "src/main/res/ui/peer_offramp",
                     "src/main/res/ui/unified_send",
                 )
             )

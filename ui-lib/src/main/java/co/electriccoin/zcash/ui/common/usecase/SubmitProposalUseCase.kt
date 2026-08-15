@@ -55,8 +55,12 @@ class SubmitProposalUseCase(
      *   UPI offramp's NEAR-bridge funding step so the user stays on the offramp progress screen
      *   while the ZEC deposit submits in the background. The Zashi submit still runs on a
      *   background coroutine either way.
+     * @return true once the proposal is authorized and handed off, false if the user dismissed or
+     *   failed the biometric prompt. A declined prompt submits nothing and emits no
+     *   `SubmitProposalState.Result`, so a caller that awaits that state must check this first or it
+     *   will suspend forever.
      */
-    suspend operator fun invoke(navigateAfter: Boolean = true) {
+    suspend operator fun invoke(navigateAfter: Boolean = true): Boolean =
         try {
             biometricRepository.requestBiometrics(
                 request =
@@ -100,13 +104,15 @@ class SubmitProposalUseCase(
                     }
                 }
             }
+            true
         } catch (_: BiometricsFailureException) {
             // Auth aborted: drop the pending chat latch so it can't attach to the next unrelated send.
             chatSendContext.consume()
+            false
         } catch (_: BiometricsCancelledException) {
             chatSendContext.consume()
+            false
         }
-    }
 
     private fun submitZashiProposal(proposal: TransactionProposal) {
         val pendingChatContext = chatSendContext.consume()

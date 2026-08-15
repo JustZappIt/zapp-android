@@ -10,6 +10,8 @@ import co.electriccoin.zcash.ui.common.provider.OnrampCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.provider.OnrampZecSwapGateway
 import co.electriccoin.zcash.ui.common.provider.ValidatedZecSwapQuote
 import co.electriccoin.zcash.ui.common.provider.costBasisPoints
+import co.electriccoin.zcash.ui.common.repository.BaseBalance
+import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepository
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
@@ -23,7 +25,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.justzappit.evm.math.BigInteger
-import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.offramp.config.P2pNetworkConfig
@@ -48,7 +49,6 @@ import xyz.justzappit.offramp.onramp.phase
 import xyz.justzappit.offramp.orchestrator.OfframpStatus
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.Usdc6
-import xyz.justzappit.offramp.p2p.getUsdcBalance
 import java.math.BigDecimal
 import java.math.RoundingMode
 import xyz.justzappit.offramp.orchestrator.OfframpDriver as BaseRefundDriver
@@ -57,7 +57,7 @@ import xyz.justzappit.offramp.orchestrator.OfframpDriver as BaseRefundDriver
 internal class OnrampVM(
     args: OnrampArgs,
     private val navigationRouter: NavigationRouter,
-    private val rpc: BaseRpcClient,
+    private val baseBalance: BaseBalanceRepository,
     private val network: P2pNetworkConfig,
     private val driver: OnrampDriver,
     private val zecDeliveryDriver: OnrampZecDeliveryDriver,
@@ -127,6 +127,18 @@ internal class OnrampVM(
 
     init {
         load()
+        viewModelScope.launch { baseBalance.balance.collect(::onBaseBalance) }
+    }
+
+    private fun onBaseBalance(read: BaseBalance) {
+        val balance = read.loadedOrNull
+        mutableState.update {
+            it.copy(
+                baseBalance = balance?.toDisplayString(stripTrailingZeros = true),
+                canSendBaseBalanceToZec =
+                    network.chainId == ChainId.BASE_MAINNET && balance != null && balance > Usdc6.ZERO,
+            )
+        }
     }
 
     private fun load() {
@@ -136,7 +148,6 @@ internal class OnrampVM(
             limits = corridor
             val address = runCatching { driver.recipientAddress() }.getOrNull()
             recipient = address
-            val balance = address?.let { runCatching { rpc.getUsdcBalance(network.usdcAddress, it) }.getOrNull() }
             val checkpoint = readCheckpoint()
             // The service serves one corridor at a time. Its bounds are only this corridor's if it
             // agrees, otherwise they would render under the wrong symbol and precision and the
@@ -158,10 +169,7 @@ internal class OnrampVM(
                         },
                     accountAddress = address?.checksumHex,
                     addressExplorerUrl = address?.let { addr -> network.addressUrl(addr.checksumHex) },
-                    baseBalance = balance?.toDisplayString(stripTrailingZeros = true),
                     isBaseRefundSupported = network.chainId == ChainId.BASE_MAINNET,
-                    canSendBaseBalanceToZec =
-                        network.chainId == ChainId.BASE_MAINNET && balance != null && balance > Usdc6.ZERO,
                     minFiat = corridor.minFiat.toFiatString(currency),
                     maxFiat = corridor.maxFiat.toFiatString(currency),
                     dailyLimit = corridor.perUserDailyFiat.toFiatString(currency),
@@ -458,7 +466,6 @@ internal class OnrampVM(
     private suspend fun onBaseBalanceSentToZec(status: OfframpStatus.FundsRecovered) {
         mutableState.update {
             it.copy(
-                baseBalance = Usdc6.ZERO.toDisplayString(stripTrailingZeros = true),
                 canSendBaseBalanceToZec = false,
                 isSendingBaseBalanceToZec = false,
                 sendBaseBalanceSuccess =
@@ -469,22 +476,7 @@ internal class OnrampVM(
                 sendBaseBalanceError = null,
             )
         }
-        refreshBaseBalanceAfterRefund()
-    }
-
-    private suspend fun refreshBaseBalanceAfterRefund() {
-        val address = recipient ?: return
-        val balance =
-            runCatching { rpc.getUsdcBalance(network.usdcAddress, address) }
-                .onFailure { Twig.warn(it) { "OnrampVM: Base balance refresh after refund failed" } }
-                .getOrNull()
-                ?: return
-        mutableState.update {
-            it.copy(
-                baseBalance = balance.toDisplayString(stripTrailingZeros = true),
-                canSendBaseBalanceToZec = network.chainId == ChainId.BASE_MAINNET && balance > Usdc6.ZERO,
-            )
-        }
+        baseBalance.refresh()
     }
 
     private fun logBaseRefundFailure(message: String, cause: Throwable?) {
@@ -685,6 +677,7 @@ internal class OnrampVM(
 
     private fun handleDeliveryStatus(status: OnrampZecDeliveryStatus) {
         mutableState.update { it.withDeliveryStatus(status, network::txUrl) }
+        baseBalance.invalidate()
     }
 
     private fun onDeliveryAction() {

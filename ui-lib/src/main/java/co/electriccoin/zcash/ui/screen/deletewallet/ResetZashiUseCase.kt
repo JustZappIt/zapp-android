@@ -9,6 +9,7 @@ import co.electriccoin.zcash.ui.common.migration.MigrationAppHooks
 import co.electriccoin.zcash.ui.common.provider.ChatBlockedKeysStorageProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.common.repository.AddressBookRepository
+import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepository
 import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.common.repository.BiometricRequest
 import co.electriccoin.zcash.ui.common.repository.BiometricsCancelledException
@@ -16,6 +17,7 @@ import co.electriccoin.zcash.ui.common.repository.BiometricsFailureException
 import co.electriccoin.zcash.ui.common.repository.FlexaRepository
 import co.electriccoin.zcash.ui.common.repository.HomeMessageCacheRepository
 import co.electriccoin.zcash.ui.common.repository.MetadataRepository
+import co.electriccoin.zcash.ui.common.repository.PeerCashOutRepository
 import co.electriccoin.zcash.ui.design.util.stringRes
 import kotlinx.coroutines.flow.first
 import okhttp3.internal.closeQuietly
@@ -31,6 +33,8 @@ class ResetZashiUseCase(
     private val addressBookRepository: AddressBookRepository,
     private val metadataRepository: MetadataRepository,
     private val chatBlockedKeysStorageProvider: ChatBlockedKeysStorageProvider,
+    private val peerCashOutRepository: PeerCashOutRepository,
+    private val baseBalanceRepository: BaseBalanceRepository,
     private val migrationAppHooks: MigrationAppHooks,
 ) {
     @Suppress("TooGenericExceptionCaught", "ThrowsCount")
@@ -42,6 +46,11 @@ class ResetZashiUseCase(
             // 2026-07-30). Cancel while the accounts are still resolvable.
             migrationAppHooks.cancelMigrationWork()
             flexaRepository.disconnect()
+            // App-scoped and wallet-specific. Joining before anything is wiped is the point: an
+            // attempt still running would write its checkpoint back into storage this is about to
+            // clear, and would keep driving the deleted wallet's smart account.
+            peerCashOutRepository.reset()
+            baseBalanceRepository.reset()
             deleteLocalFiles(keepFiles)
             closeSynchronizer()
             clearSDK()

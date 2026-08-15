@@ -6,10 +6,9 @@ package xyz.justzappit.offramp.orchestrator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.rpc.BaseRpcClient
-import xyz.justzappit.evm.rpc.BundlerClient
-import xyz.justzappit.evm.signer.Erc4337Submitter
-import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
+import xyz.justzappit.offramp.account.Erc4337SubmitterProvider
 import xyz.justzappit.offramp.config.P2pNetworkConfig
 import xyz.justzappit.offramp.funding.OfframpFunding
 import xyz.justzappit.offramp.funding.OfframpRefund
@@ -24,7 +23,6 @@ import xyz.justzappit.offramp.p2p.OrderRecipientUpiCache
 import xyz.justzappit.offramp.p2p.RelayIdentityStore
 import xyz.justzappit.offramp.p2p.SubgraphClient
 import xyz.justzappit.offramp.p2p.Usdc6
-import xyz.justzappit.evm.math.BigInteger
 
 /**
  * Production [OfframpDriver] for the ERC-4337 path. The smart-account address needs an async
@@ -34,9 +32,8 @@ import xyz.justzappit.evm.math.BigInteger
  */
 class AaOfframpDriver(
     private val rpc: BaseRpcClient,
-    private val bundler: BundlerClient,
     private val network: P2pNetworkConfig,
-    private val accountProvider: SmartOfframpAccountProvider,
+    private val submitters: Erc4337SubmitterProvider,
     private val subgraph: SubgraphClient,
     private val orderReader: OrderReadSource,
     private val funding: OfframpFunding,
@@ -76,20 +73,10 @@ class AaOfframpDriver(
         }
 
     private suspend fun buildOrchestrator(): OfframpOrchestrator {
-        val account = accountProvider.resolve()
-        val submitter =
-            Erc4337Submitter(
-                rpc = rpc,
-                bundler = bundler,
-                entryPoint = network.entryPointAddress,
-                accountFactory = network.accountFactoryAddress,
-                owner = account.owner,
-                smartAccount = account.address,
-                chainId = network.chainId,
-            )
+        val account = submitters.resolve()
         return OfframpOrchestrator(
             rpc = rpc,
-            submitter = submitter,
+            submitter = account.submitter,
             accountAddress = account.address,
             network = network,
             subgraph = subgraph,

@@ -3,14 +3,20 @@
 
 package xyz.justzappit.evm.abi
 
-import xyz.justzappit.evm.types.Address
-import xyz.justzappit.evm.util.padLeftToWord
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.math.bigIntegerOne
 import xyz.justzappit.evm.math.bigIntegerValueOf
+import xyz.justzappit.evm.types.Address
+import xyz.justzappit.evm.util.padLeftToWord
 
 sealed interface AbiArg {
     val isDynamic: Boolean
+
+    /**
+     * Bytes this arg contributes to its parent's head. One word for everything except a static
+     * tuple, which inlines its components there instead of pointing at a tail.
+     */
+    val headSize: Int get() = WORD
 
     fun head(): ByteArray
 
@@ -178,6 +184,83 @@ data class AbiBytes(
     override fun hashCode(): Int = value.contentHashCode()
 }
 
+data class AbiInt16(
+    val value: Int
+) : AbiArg {
+    init {
+        require(value in INT16_MIN..INT16_MAX) { "int16 out of range: $value" }
+    }
+
+    override val isDynamic = false
+
+    override fun head(): ByteArray {
+        val out = ByteArray(WORD)
+        if (value < 0) out.fill(SIGN_EXTENSION_BYTE)
+        out[WORD - 2] = (value shr Byte.SIZE_BITS).toByte()
+        out[WORD - 1] = value.toByte()
+        return out
+    }
+
+    override fun tail(): ByteArray = EMPTY
+}
+
+data class AbiUint32(
+    val value: Long
+) : AbiArg {
+    init {
+        require(value in 0..UINT32_MAX) { "uint32 out of range: $value" }
+    }
+
+    override val isDynamic = false
+
+    override fun head(): ByteArray {
+        val out = ByteArray(WORD)
+        var remaining = value
+        repeat(UINT32_BYTES) { i ->
+            out[WORD - 1 - i] = (remaining and BYTE_MASK).toByte()
+            remaining = remaining shr Byte.SIZE_BITS
+        }
+        return out
+    }
+
+    override fun tail(): ByteArray = EMPTY
+}
+
+/**
+ * Solidity struct. A tuple is dynamic when any component is, and the distinction changes where its
+ * bytes land: a static tuple contributes its components inline to the parent head, a dynamic one
+ * contributes an offset and encodes its whole body in the tail.
+ */
+data class AbiTuple(
+    val components: List<AbiArg>
+) : AbiArg {
+    override val isDynamic = components.any { it.isDynamic }
+
+    override val headSize: Int = if (isDynamic) WORD else components.sumOf { it.headSize }
+
+    override fun head(): ByteArray = if (isDynamic) ByteArray(WORD) else AbiEncoder.encode(components)
+
+    override fun tail(): ByteArray = if (isDynamic) AbiEncoder.encode(components) else EMPTY
+}
+
+/** Variable-length array of any element type, including tuples and further arrays. */
+data class AbiArray(
+    val items: List<AbiArg>
+) : AbiArg {
+    override val isDynamic = true
+
+    override fun head(): ByteArray = ByteArray(WORD)
+
+    override fun tail(): ByteArray {
+        val body = AbiEncoder.encode(items)
+        val out = ByteArray(WORD + body.size)
+        val lenBytes = bigIntegerValueOf(items.size.toLong()).toByteArray()
+        lenBytes.copyInto(out, WORD - lenBytes.size)
+        body.copyInto(out, WORD)
+        return out
+    }
+}
+
 internal fun padded(size: Int): Int = if (size % WORD == 0) size else size + WORD - (size % WORD)
 
 internal const val WORD = 32
@@ -186,4 +269,10 @@ private const val MAX_UINT_BITS_ARRAY = 256
 private const val MAX_INT_SIGNED_BITS = 255
 private const val ADDRESS_BYTES = 20
 private const val UINT8_MAX = 255
+private const val INT16_MIN = -32_768
+private const val INT16_MAX = 32_767
+private const val UINT32_MAX = 4_294_967_295L
+private const val UINT32_BYTES = 4
+private const val BYTE_MASK = 0xFFL
+private const val SIGN_EXTENSION_BYTE = 0xFF.toByte()
 private val EMPTY = ByteArray(0)

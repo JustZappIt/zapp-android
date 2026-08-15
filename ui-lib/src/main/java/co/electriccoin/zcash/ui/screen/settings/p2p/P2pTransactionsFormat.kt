@@ -1,6 +1,7 @@
 package co.electriccoin.zcash.ui.screen.settings.p2p
 
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.model.P2pProvider
 import co.electriccoin.zcash.ui.design.util.ellipsizeMiddle
 import co.electriccoin.zcash.ui.design.util.stringRes
 import xyz.justzappit.evm.util.hexToBytes
@@ -40,18 +41,22 @@ internal object P2pTransactionsFormat {
     fun timestamp(epochSeconds: Long): String =
         DATE_FORMAT.format(Date(epochSeconds * MILLIS_PER_SECOND))
 
-    /** "1m 32s" / "45s" / "1h 4m" — null when either bound is missing or non-positive. */
-    fun duration(fromEpochSec: Long?, toEpochSec: Long?): String? {
-        if (fromEpochSec == null || toEpochSec == null || toEpochSec <= fromEpochSec) return null
-        val total = toEpochSec - fromEpochSec
-        val hours = total / SECONDS_PER_HOUR
-        val minutes = (total % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE
-        val seconds = total % SECONDS_PER_MINUTE
+    /** "1m 32s" / "45s" / "1h 4m" — null for a missing or non-positive span. */
+    fun duration(totalSeconds: Long?): String? {
+        if (totalSeconds == null || totalSeconds <= 0) return null
+        val hours = totalSeconds / SECONDS_PER_HOUR
+        val minutes = (totalSeconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE
+        val seconds = totalSeconds % SECONDS_PER_MINUTE
         return when {
             hours > 0 -> "${hours}h ${minutes}m"
             minutes > 0 -> "${minutes}m ${seconds}s"
             else -> "${seconds}s"
         }
+    }
+
+    fun duration(fromEpochSec: Long?, toEpochSec: Long?): String? {
+        if (fromEpochSec == null || toEpochSec == null) return null
+        return duration(toEpochSec - fromEpochSec)
     }
 
     fun usdc(value: Usdc6, stripTrailingZeros: Boolean = false): String =
@@ -64,7 +69,6 @@ internal object P2pTransactionsFormat {
 
 internal fun P2pOrderHistoryItem.toRow(network: P2pNetworkConfig): P2pTransactionRow {
     val currency = P2pTransactionsFormat.decodeCurrency(currencyHex)
-    val paidByUpi = paidByForType(orderType)?.let { formatRecipient(it, currency) }
     val tone =
         when (status) {
             OrderStatus.COMPLETED -> P2pTransactionRow.StatusTone.Success
@@ -72,7 +76,9 @@ internal fun P2pOrderHistoryItem.toRow(network: P2pNetworkConfig): P2pTransactio
             OrderStatus.PLACED, OrderStatus.ACCEPTED, OrderStatus.PAID -> P2pTransactionRow.StatusTone.Pending
         }
     return P2pTransactionRow(
-        orderId = orderId.toString(),
+        key = PAY_KEY_PREFIX + orderId,
+        provider = P2pProvider.P2P_ME,
+        logo = P2pProvider.P2P_ME.logo(),
         typeLabel = stringRes(typeLabelRes(orderType)),
         statusLabel = stringRes(statusLabelRes(status)),
         statusTone = tone,
@@ -81,41 +87,81 @@ internal fun P2pOrderHistoryItem.toRow(network: P2pNetworkConfig): P2pTransactio
                 R.string.p2p_transactions_row_amount_usdc,
                 P2pTransactionsFormat.usdc(usdcAmount, stripTrailingZeros = true),
             ),
-        amountFiat =
+        amountSecondary =
             stringRes(
                 R.string.p2p_transactions_row_amount_fiat,
                 fiatAmount.toDisplayString(stripTrailingZeros = true),
                 currency,
             ),
+        reference = stringRes(R.string.p2p_transactions_row_order_id, orderId.toString()),
+        referenceUrl = null,
         timestamp =
             (completedAtEpochSeconds ?: cancelledAtEpochSeconds ?: placedAtEpochSeconds)
                 ?.let { stringRes(P2pTransactionsFormat.timestamp(it)) },
-        explorerUrl = null,
-        detail =
-            TransactionDetail(
-                fee =
-                    fixedFeePaid?.let {
-                        stringRes(
-                            R.string.p2p_transactions_row_amount_usdc,
-                            P2pTransactionsFormat.usdc(it),
-                        )
-                    },
-                paidByUpiPlain = paidByUpi,
-                paidToUpiPlain = paidToForType(orderType)?.let { formatRecipient(it, currency) },
-                merchantAddressShort =
-                    acceptedMerchantAddress
-                        ?.checksumHex
-                        ?.ellipsizeMiddle(prefix = ADDRESS_ELLIPSIS_PREFIX, suffix = ADDRESS_ELLIPSIS_SUFFIX),
-                merchantExplorerUrl = acceptedMerchantAddress?.let { network.addressUrl(it.checksumHex) },
-                duration =
-                    P2pTransactionsFormat
-                        .duration(
-                            fromEpochSec = placedAtEpochSeconds,
-                            toEpochSec = completedAtEpochSeconds ?: cancelledAtEpochSeconds,
-                        )?.let(::stringRes),
-            ),
+        detail = TransactionDetail(rows = detailRows(network, currency)),
     )
 }
+
+private fun P2pOrderHistoryItem.detailRows(
+    network: P2pNetworkConfig,
+    currency: String,
+): List<TransactionDetailRow> =
+    buildList {
+        fixedFeePaid?.let {
+            add(
+                TransactionDetailRow(
+                    label = stringRes(R.string.p2p_transactions_detail_fee),
+                    value = stringRes(R.string.p2p_transactions_row_amount_usdc, P2pTransactionsFormat.usdc(it)),
+                ),
+            )
+        }
+        paidByForType(orderType)?.let { plain ->
+            add(
+                TransactionDetailRow(
+                    label = stringRes(R.string.p2p_transactions_detail_paid_by),
+                    value = stringRes(formatRecipient(plain, currency)),
+                ),
+            )
+        }
+        paidToForType(orderType)?.let { plain ->
+            add(
+                TransactionDetailRow(
+                    label = stringRes(R.string.p2p_transactions_detail_paid_to),
+                    value = stringRes(formatRecipient(plain, currency)),
+                ),
+            )
+        }
+        acceptedMerchantAddress?.let { address ->
+            add(
+                TransactionDetailRow(
+                    label = stringRes(R.string.p2p_transactions_detail_p2p_merchant_address),
+                    value =
+                        stringRes(
+                            address.checksumHex.ellipsizeMiddle(
+                                prefix = ADDRESS_ELLIPSIS_PREFIX,
+                                suffix = ADDRESS_ELLIPSIS_SUFFIX,
+                            ),
+                        ),
+                    url = network.addressUrl(address.checksumHex),
+                ),
+            )
+        }
+        P2pTransactionsFormat
+            .duration(
+                fromEpochSec = placedAtEpochSeconds,
+                toEpochSec = completedAtEpochSeconds ?: cancelledAtEpochSeconds,
+            )?.let {
+                add(
+                    TransactionDetailRow(
+                        label = stringRes(R.string.p2p_transactions_detail_duration),
+                        value = stringRes(it),
+                    ),
+                )
+            }
+    }
+
+// Merchant order ids and Peer deposit ids are both numeric and share one list, so each is namespaced.
+private const val PAY_KEY_PREFIX = "pay:"
 
 private const val ADDRESS_ELLIPSIS_PREFIX = 8
 private const val ADDRESS_ELLIPSIS_SUFFIX = 4

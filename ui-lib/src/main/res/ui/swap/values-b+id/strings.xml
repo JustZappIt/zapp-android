@@ -244,6 +244,7 @@
     <string name="bridge_to_base_adding_amount">Menambahkan ≈ ₹%1$s · %2$s USDC</string>
     <string name="bridge_to_base_added_amount">Menambahkan %1$s USDC ke Base</string>
     <string name="bridge_to_base_failed_terminal">Bridge tidak dapat diselesaikan. Jika ZEC Anda dikembalikan, akan muncul di dompet Anda sebentar lagi.</string>
+    <string name="bridge_to_base_failed_cancelled">Anda tidak menyetujui transfer, jadi tidak ada ZEC yang dikirim. Coba lagi kapan saja.</string>
     <string name="bridge_to_base_failed_generic">Tidak dapat memulai bridge. Periksa koneksi Anda dan coba lagi.</string>
     <string name="bridge_to_base_failed_retry">Bridge masih berlangsung. Coba lagi untuk terus memeriksa transfer yang sama.</string>
     <string name="bridge_to_base_leave_title">Bridge sedang berlangsung</string>
@@ -255,13 +256,9 @@
     <string name="upi_offramp_fiat_amount">%1$s%2$s</string>
     <string name="upi_offramp_ledger_amount_sent">Jumlah terkirim</string>
     <string name="upi_offramp_ledger_rate">Kurs</string>
-    <string name="upi_offramp_ledger_from">Dari</string>
-    <string name="upi_offramp_base">Base</string>
     <string name="bridge_to_base_currency_symbol">₹</string>
-    <string name="bridge_to_base_hero_secondary">%1$s · masuk ke Base</string>
     <string name="bridge_to_base_ledger_you_send">Anda kirim</string>
     <string name="bridge_to_base_ledger_eta">Perkiraan waktu</string>
-    <string name="bridge_to_base_ledger_base_now">Tersedia di Base</string>
     <string name="bridge_to_base_ledger_fees">Total biaya</string>
     <string name="bridge_to_base_ledger_slippage">Slippage maks.</string>
     <string name="bridge_to_base_fee_value">~%1$s ZEC</string>

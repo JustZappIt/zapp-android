@@ -3,6 +3,54 @@ package co.electriccoin.zcash.ui.screen.settings.p2p
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.model.P2pProvider
+import co.electriccoin.zcash.ui.common.model.P2pRail
+import xyz.justzappit.offramp.peer.PeerPlatform
+
+@Composable
+internal fun P2pRail.title(): String =
+    when (this) {
+        is P2pRail.ScanAndPay -> P2pPaymentMethod.fromCurrency(currency).title()
+        is P2pRail.PeerCashOut -> platform.title()
+    }
+
+@Composable
+internal fun P2pRail.subtitle(): String =
+    when (this) {
+        is P2pRail.ScanAndPay -> P2pPaymentMethod.fromCurrency(currency).subtitle()
+        is P2pRail.PeerCashOut -> platform.currencySummary()
+    }
+
+@Composable
+internal fun P2pRail.selectedSubtitle(): String =
+    stringResource(R.string.settings_p2p_payment_method_selected_subtitle, title(), subtitle())
+
+@Composable
+internal fun P2pProvider.title(): String =
+    when (this) {
+        P2pProvider.P2P_ME -> stringResource(R.string.settings_p2p_provider_p2pme)
+        P2pProvider.PEER -> stringResource(R.string.settings_p2p_provider_peer)
+    }
+
+@Composable
+private fun PeerPlatform.title(): String =
+    when (this) {
+        PeerPlatform.REVOLUT -> stringResource(R.string.settings_p2p_rail_revolut)
+        PeerPlatform.ZELLE -> stringResource(R.string.settings_p2p_rail_zelle)
+        PeerPlatform.CHIME -> stringResource(R.string.settings_p2p_rail_chime)
+        PeerPlatform.MONZO -> stringResource(R.string.settings_p2p_rail_monzo)
+    }
+
+@Composable
+private fun PeerPlatform.currencySummary(): String {
+    val shown = defaultCurrencies.joinToString(CURRENCY_SEPARATOR) { it.code }
+    val remaining = currencies.size - defaultCurrencies.size
+    return if (remaining > 0) {
+        stringResource(R.string.settings_p2p_rail_currencies_more, shown, remaining)
+    } else {
+        shown
+    }
+}
 
 @Composable
 internal fun P2pPaymentMethod.title() =
@@ -28,10 +76,4 @@ internal fun P2pPaymentMethod.subtitle() =
         P2pPaymentMethod.TRANSFERENCIA -> stringResource(R.string.settings_p2p_payment_method_transferencia_subtitle)
     }
 
-@Composable
-internal fun P2pPaymentMethod.selectedSubtitle() =
-    stringResource(
-        R.string.settings_p2p_payment_method_selected_subtitle,
-        title(),
-        subtitle(),
-    )
+private const val CURRENCY_SEPARATOR = ", "

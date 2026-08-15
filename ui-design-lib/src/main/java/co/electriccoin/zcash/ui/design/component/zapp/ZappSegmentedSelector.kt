@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicText
@@ -22,8 +23,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -63,6 +66,7 @@ fun ZappSegmentedSelector(
                         ).semantics {
                             role = Role.Tab
                             selected = isSelected
+                            if (segment.iconStandsForLabel) contentDescription = segment.label
                         },
                 contentAlignment = Alignment.Center,
             ) {
@@ -74,19 +78,27 @@ fun ZappSegmentedSelector(
                         Image(
                             painter = painterResource(icon),
                             contentDescription = null,
+                            contentScale = ContentScale.Fit,
                             modifier =
                                 Modifier
-                                    .size(ICON_SIZE.dp)
-                                    .alpha(if (isSelected) 1f else UNSELECTED_ICON_ALPHA),
+                                    .then(
+                                        if (segment.iconStandsForLabel) {
+                                            Modifier.height(LOGO_HEIGHT.dp)
+                                        } else {
+                                            Modifier.size(ICON_SIZE.dp)
+                                        },
+                                    ).alpha(if (isSelected) 1f else UNSELECTED_ICON_ALPHA),
                         )
                     }
-                    BasicText(
-                        text = segment.label,
-                        style =
-                            ZappTheme.typography.caption.copy(
-                                color = if (isSelected) c.text else c.textMuted,
-                            ),
-                    )
+                    if (!segment.iconStandsForLabel) {
+                        BasicText(
+                            text = segment.label,
+                            style =
+                                ZappTheme.typography.caption.copy(
+                                    color = if (isSelected) c.text else c.textMuted,
+                                ),
+                        )
+                    }
                 }
             }
         }
@@ -98,4 +110,5 @@ private const val SEGMENT_GAP = 2
 private const val MIN_TOUCH_TARGET = 48
 private const val ICON_GAP = 8
 private const val ICON_SIZE = 20
+private const val LOGO_HEIGHT = 16
 private const val UNSELECTED_ICON_ALPHA = 0.5f

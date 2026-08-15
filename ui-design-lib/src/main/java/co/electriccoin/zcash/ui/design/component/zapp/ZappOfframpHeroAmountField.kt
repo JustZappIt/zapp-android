@@ -33,7 +33,7 @@ fun ZappOfframpHeroAmountField(
     state: NumberTextFieldState,
     secondaryText: String?,
     modifier: Modifier = Modifier,
-    trailingText: String? = null,
+    balance: ZappFieldBalance? = null,
     isError: Boolean = false,
     flag: Painter? = null,
 ) {
@@ -63,7 +63,7 @@ fun ZappOfframpHeroAmountField(
                 shape = RectangleShape,
                 textStyle =
                     ZappTheme.typography.display.copy(
-                        color = c.text,
+                        color = if (isError) c.danger else c.text,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Start,
                     ),
@@ -82,7 +82,7 @@ fun ZappOfframpHeroAmountField(
                         disabledBorderColor = c.bg,
                         disabledContainerColor = c.bg,
                         disabledPlaceholderColor = c.textSubtle,
-                        errorTextColor = c.text,
+                        errorTextColor = c.danger,
                         errorHintColor = c.textMuted,
                         errorBorderColor = c.bg,
                         errorContainerColor = c.bg,
@@ -98,13 +98,27 @@ fun ZappOfframpHeroAmountField(
                     )
                 },
             )
-            trailingText?.let { text ->
-                BasicText(
-                    text = text,
-                    style = ZappTheme.typography.caption.copy(color = c.textMuted, textAlign = TextAlign.End),
-                    maxLines = 2,
+            balance?.let {
+                Column(
+                    horizontalAlignment = Alignment.End,
                     modifier = Modifier.padding(start = 12.dp),
-                )
+                ) {
+                    BasicText(
+                        text = it.label,
+                        style = ZappTheme.typography.caption.copy(color = c.textSubtle, textAlign = TextAlign.End),
+                        maxLines = 1,
+                    )
+                    BasicText(
+                        text = it.amount,
+                        style =
+                            ZappTheme.typography.caption.copy(
+                                color = c.textMuted,
+                                fontWeight = FontWeight.Medium,
+                                textAlign = TextAlign.End,
+                            ),
+                        maxLines = 1,
+                    )
+                }
             }
         }
         Box(

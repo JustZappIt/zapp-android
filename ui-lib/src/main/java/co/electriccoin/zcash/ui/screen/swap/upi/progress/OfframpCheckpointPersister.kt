@@ -1,7 +1,7 @@
 package co.electriccoin.zcash.ui.screen.swap.upi.progress
 
-import co.electriccoin.zcash.ui.common.provider.BridgeTerminallyFailedException
 import co.electriccoin.zcash.ui.common.provider.OfframpCheckpointStorageProvider
+import co.electriccoin.zcash.ui.common.provider.UnfundableBridgeHandle
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.orchestrator.OfframpCheckpoint
 import xyz.justzappit.offramp.orchestrator.OfframpRequest
@@ -68,7 +68,7 @@ internal class OfframpCheckpointPersister(
                 // handle. Terminal bridge failures and post-funding failures both clear — re-polling
                 // a dead bridge loops forever, and post-funding USDC has settled into the smart
                 // account so a retry hits FundedFromBase.
-                val bridgeTerminallyDead = status.cause is BridgeTerminallyFailedException
+                val bridgeTerminallyDead = status.cause is UnfundableBridgeHandle
                 val transientFundingFailure =
                     !bridgeTerminallyDead &&
                         status.step == OfframpStep.FUNDING &&

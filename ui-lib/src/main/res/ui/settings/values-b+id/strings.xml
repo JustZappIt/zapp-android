@@ -62,7 +62,7 @@
     <string name="settings_p2p_payment_method_info_copied_content_description">Tersalin</string>
 
     <!-- Transaksi P2P (Pengaturan → entri Dompet) -->
-    <string name="p2p_transactions_title">Transaksi P2P</string>
+    <string name="p2p_transactions_title">Aktivitas Base</string>
     <string name="p2p_transactions_balance_label">Saldo di Base</string>
     <string name="p2p_transactions_balance_amount">%1$s USDC</string>
     <string name="p2p_transactions_balance_unavailable">Saldo tidak tersedia</string>
@@ -71,24 +71,37 @@
     <string name="p2p_transactions_refund_in_progress">Mengembalikan…</string>
     <string name="p2p_transactions_refund_retry">Coba kembalikan lagi</string>
     <string name="p2p_transactions_refund_failed">Gagal mengembalikan: %1$s</string>
+    <string name="p2p_transactions_refund_blocked">%1$s USDC dipesan oleh pencairan yang sedang berjalan. Pengembalian dana memindahkan seluruh saldo, jadi selesaikan atau batalkan itu dulu.</string>
     <string name="p2p_transactions_refund_dialog_title">Kembalikan ke ZEC?</string>
     <string name="p2p_transactions_refund_dialog_message">Ini mentransfer %1$s kembali ke dompet ZEC Anda melalui NEAR. Dana biasanya tiba dalam 5–10 menit.</string>
     <string name="p2p_transactions_refund_dialog_confirm">Kembalikan</string>
     <string name="p2p_transactions_refund_dialog_cancel">Batal</string>
     <string name="p2p_transactions_account_label">Akun P2P</string>
-    <string name="p2p_transactions_empty">Belum ada transaksi P2P.</string>
+    <string name="p2p_transactions_empty">Belum ada aktivitas.</string>
     <string name="p2p_transactions_error">Tidak dapat memuat transaksi. Tarik untuk menyegarkan.</string>
     <string name="p2p_transactions_row_amount_usdc">%1$s USDC</string>
     <string name="p2p_transactions_row_amount_fiat">%1$s %2$s</string>
     <string name="p2p_transactions_row_order_id">Pesanan #%1$s</string>
+    <string name="p2p_transactions_row_deposit_id">Deposit #%1$s</string>
     <string name="p2p_transactions_type_buy">Beli</string>
     <string name="p2p_transactions_type_sell">Jual</string>
     <string name="p2p_transactions_type_pay">Bayar</string>
+    <string name="p2p_transactions_type_cash_out">Pencairan · %1$s</string>
+    <string name="p2p_transactions_type_cash_out_unknown_rail">Pencairan</string>
     <string name="p2p_transactions_status_placed">Dibuat</string>
     <string name="p2p_transactions_status_accepted">Diterima</string>
     <string name="p2p_transactions_status_paid">Dibayar</string>
     <string name="p2p_transactions_status_completed">Selesai</string>
     <string name="p2p_transactions_status_cancelled">Dibatalkan</string>
+    <string name="p2p_transactions_status_waiting">Menunggu</string>
+    <string name="p2p_transactions_status_selling">Menjual</string>
+    <string name="p2p_transactions_status_partly_sold">Terjual sebagian</string>
+    <string name="p2p_transactions_status_sold">Terjual</string>
+    <string name="p2p_transactions_status_paused">Dijeda</string>
+    <string name="p2p_transactions_status_closed">Ditutup</string>
+    <string name="p2p_transactions_status_in_progress">Berlangsung</string>
+    <string name="p2p_transactions_status_failed">Gagal</string>
+    <string name="p2p_transactions_filter_all">Semua</string>
 
     <!-- Panel detail (baris transaksi yang diperluas) -->
     <string name="p2p_transactions_detail_fee">Biaya</string>
@@ -96,8 +109,10 @@
     <string name="p2p_transactions_detail_paid_to">Dibayar ke</string>
     <string name="p2p_transactions_detail_p2p_merchant_address">Alamat merchant P2P</string>
     <string name="p2p_transactions_detail_duration">Durasi</string>
+    <string name="p2p_transactions_detail_step">Langkah</string>
     <string name="p2p_transactions_detail_expand_content_description">Tampilkan detail</string>
     <string name="p2p_transactions_detail_collapse_content_description">Sembunyikan detail</string>
+    <string name="p2p_transactions_action_view_progress">Lihat progres</string>
     <string name="settings_portfolio_chart_title">Grafik portofolio</string>
     <string name="settings_portfolio_chart_subtitle">Visibilitas dan privasi</string>
     <string name="settings_portfolio_chart_section">Tampilan</string>
@@ -105,4 +120,16 @@
     <string name="settings_portfolio_chart_toggle_subtitle">Saat nonaktif, Bayar menampilkan riwayat saldo ZEC tanpa meminta harga</string>
     <string name="settings_portfolio_chart_footer">Saat aktif, Zapp meminta harga pasar publik melalui Tor; data dompet tetap berada di perangkat ini. Saat nonaktif, grafik tetap tersedia dalam ZEC.</string>
     <string name="settings_portfolio_chart_save">Simpan perubahan</string>
+
+    <string name="settings_p2p_provider_p2pme">p2p.me</string>
+    <string name="settings_p2p_provider_peer">Peer</string>
+    <string name="settings_p2p_rail_revolut">Revolut</string>
+    <string name="settings_p2p_rail_zelle">Zelle</string>
+    <string name="settings_p2p_rail_chime">Chime</string>
+    <string name="settings_p2p_rail_monzo">Monzo</string>
+    <string name="settings_p2p_rail_currencies_more">%1$s dan %2$d lainnya</string>
+    <string name="settings_p2p_payment_method_info_cash_out">Pencairan bekerja sebaliknya. Anda menawarkan dana Anda kepada pembeli pada kurs pasar, mereka membayar dalam mata uang Anda sendiri, dan dana dilepaskan setelah pembayaran terbukti. Pencocokan bisa memakan waktu, dan tidak ada yang terkunci sampai ada pembeli yang mengambilnya.</string>
+    <string name="settings_base_account_title">Akun Base</string>
+    <string name="settings_base_account_subtitle">Saldo USDC dan aktivitas Anda</string>
+    <string name="settings_base_account_in_progress">Pencairan sedang berlangsung</string>
 </resources>

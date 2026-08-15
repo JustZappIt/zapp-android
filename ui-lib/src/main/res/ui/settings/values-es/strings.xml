@@ -70,7 +70,7 @@
     <string name="settings_p2p_payment_method_info_copied_content_description">Copiado</string>
 
     <!-- Transacciones P2P (Ajustes → entrada de Cartera) -->
-    <string name="p2p_transactions_title">Transacciones P2P</string>
+    <string name="p2p_transactions_title">Actividad en Base</string>
     <string name="p2p_transactions_balance_label">Saldo en Base</string>
     <string name="p2p_transactions_balance_amount">%1$s USDC</string>
     <string name="p2p_transactions_balance_unavailable">Saldo no disponible</string>
@@ -79,24 +79,37 @@
     <string name="p2p_transactions_refund_in_progress">Reembolsando…</string>
     <string name="p2p_transactions_refund_retry">Reintentar reembolso</string>
     <string name="p2p_transactions_refund_failed">Reembolso fallido: %1$s</string>
+    <string name="p2p_transactions_refund_blocked">Un retiro en curso reserva %1$s USDC. El reembolso mueve todo el saldo, así que termina o cancela ese primero.</string>
     <string name="p2p_transactions_refund_dialog_title">¿Reembolsar a ZEC?</string>
     <string name="p2p_transactions_refund_dialog_message">Esto envía %1$s de vuelta a tu billetera ZEC mediante NEAR. Los fondos suelen llegar en 5–10 minutos.</string>
     <string name="p2p_transactions_refund_dialog_confirm">Reembolsar</string>
     <string name="p2p_transactions_refund_dialog_cancel">Cancelar</string>
     <string name="p2p_transactions_account_label">Cuenta P2P</string>
-    <string name="p2p_transactions_empty">Aún no hay transacciones P2P.</string>
+    <string name="p2p_transactions_empty">Aún no hay actividad.</string>
     <string name="p2p_transactions_error">No se pudieron cargar las transacciones. Desliza para actualizar.</string>
     <string name="p2p_transactions_row_amount_usdc">%1$s USDC</string>
     <string name="p2p_transactions_row_amount_fiat">%1$s %2$s</string>
     <string name="p2p_transactions_row_order_id">Orden N.º %1$s</string>
+    <string name="p2p_transactions_row_deposit_id">Depósito N.º %1$s</string>
     <string name="p2p_transactions_type_buy">Compra</string>
     <string name="p2p_transactions_type_sell">Venta</string>
     <string name="p2p_transactions_type_pay">Pago</string>
+    <string name="p2p_transactions_type_cash_out">Retiro · %1$s</string>
+    <string name="p2p_transactions_type_cash_out_unknown_rail">Retiro</string>
     <string name="p2p_transactions_status_placed">Realizada</string>
     <string name="p2p_transactions_status_accepted">Aceptada</string>
     <string name="p2p_transactions_status_paid">Pagada</string>
     <string name="p2p_transactions_status_completed">Completada</string>
     <string name="p2p_transactions_status_cancelled">Cancelada</string>
+    <string name="p2p_transactions_status_waiting">Esperando</string>
+    <string name="p2p_transactions_status_selling">Vendiendo</string>
+    <string name="p2p_transactions_status_partly_sold">Vendido en parte</string>
+    <string name="p2p_transactions_status_sold">Vendido</string>
+    <string name="p2p_transactions_status_paused">En pausa</string>
+    <string name="p2p_transactions_status_closed">Cerrado</string>
+    <string name="p2p_transactions_status_in_progress">En curso</string>
+    <string name="p2p_transactions_status_failed">Falló</string>
+    <string name="p2p_transactions_filter_all">Todo</string>
 
     <!-- Panel de detalle (fila de transacción expandida) -->
     <string name="p2p_transactions_detail_fee">Comisión</string>
@@ -104,6 +117,20 @@
     <string name="p2p_transactions_detail_paid_to">Pagado a</string>
     <string name="p2p_transactions_detail_p2p_merchant_address">Dirección del comerciante P2P</string>
     <string name="p2p_transactions_detail_duration">Duración</string>
+    <string name="p2p_transactions_detail_step">Paso</string>
     <string name="p2p_transactions_detail_expand_content_description">Mostrar detalles</string>
     <string name="p2p_transactions_detail_collapse_content_description">Ocultar detalles</string>
+    <string name="p2p_transactions_action_view_progress">Ver el progreso</string>
+
+    <string name="settings_p2p_provider_p2pme">p2p.me</string>
+    <string name="settings_p2p_provider_peer">Peer</string>
+    <string name="settings_p2p_rail_revolut">Revolut</string>
+    <string name="settings_p2p_rail_zelle">Zelle</string>
+    <string name="settings_p2p_rail_chime">Chime</string>
+    <string name="settings_p2p_rail_monzo">Monzo</string>
+    <string name="settings_p2p_rail_currencies_more">%1$s y %2$d más</string>
+    <string name="settings_p2p_payment_method_info_cash_out">Retirar funciona al revés. Ofreces tus fondos a compradores al tipo de cambio del mercado, ellos te pagan en tu propia moneda y los fondos se liberan cuando se comprueba el pago. Puede tardar en encontrar comprador, y nada queda fijado hasta que alguien lo tome.</string>
+    <string name="settings_base_account_title">Cuenta de Base</string>
+    <string name="settings_base_account_subtitle">Tu saldo de USDC y tu actividad</string>
+    <string name="settings_base_account_in_progress">Retiro en curso</string>
 </resources>

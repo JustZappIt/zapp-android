@@ -6,13 +6,12 @@ package co.electriccoin.zcash.ui.common.provider
 import co.electriccoin.zcash.ui.common.model.SwapStatus
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
-import xyz.justzappit.evm.hd.EvmKeyDerivation
 import xyz.justzappit.evm.rpc.TransactionReceipt
 import xyz.justzappit.evm.signer.TxSubmitter
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.evm.types.Wei
-import xyz.justzappit.offramp.account.OfframpSmartAccount
+import xyz.justzappit.offramp.account.SubmittingAccount
 import xyz.justzappit.offramp.onramp.FundsLocation
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryCheckpoint
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryPhase
@@ -498,15 +497,12 @@ class NearOnrampZecDeliveryDriverTest {
     @Test
     fun `ERC-4337 gateway builds an exact USDC transfer call`() =
         runTest {
-            val key = EvmKeyDerivation.derive(TEST_MNEMONIC)
-            val smartAccount = OfframpSmartAccount(key, ACCOUNT)
             val submitter = RecordingSubmitter()
             val gateway =
                 Erc4337OnrampZecTransferGateway(
                     usdc = USDC,
-                    accountResolver = OnrampSmartAccountResolver { smartAccount },
+                    accountResolver = { SubmittingAccount(ACCOUNT, submitter) },
                     balanceReader = OnrampUsdcBalanceReader { AMOUNT },
-                    submitterFactory = OnrampSubmitterFactory { submitter },
                 )
 
             gateway.submit(ACCOUNT, DEPOSIT, AMOUNT)
@@ -655,8 +651,6 @@ class NearOnrampZecDeliveryDriverTest {
         const val DEADLINE = NOW + 7_200_000L
         const val USER_OPERATION_HASH = "0x1111111111111111111111111111111111111111111111111111111111111111"
         const val BASE_TRANSACTION_HASH = "0x2222222222222222222222222222222222222222222222222222222222222222"
-        const val TEST_MNEMONIC =
-            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
         val ACCOUNT: Address = Address.parse("0x0000000000000000000000000000000000000001")
         val OTHER_ACCOUNT: Address = Address.parse("0x0000000000000000000000000000000000000002")
         val DEPOSIT: Address = Address.parse("0x0000000000000000000000000000000000000003")

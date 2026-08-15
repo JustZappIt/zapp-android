@@ -44,6 +44,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationBottomSheet
+import co.electriccoin.zcash.ui.design.component.zapp.ZappFieldBalance
 import co.electriccoin.zcash.ui.design.component.zapp.ZappOfframpHeroAmountField
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSettlementLedger
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSettlementLedgerRow
@@ -103,6 +104,13 @@ internal fun UpiOfframpView(
                     symbol = state.currency.symbol,
                     state = state.inrInput,
                     flag = painterResource(corridor.flag),
+                    balance =
+                        ZappFieldBalance(
+                            label = stringResource(R.string.offramp_field_balance_on_base),
+                            amount =
+                                state.baseBalanceText?.getValue()
+                                    ?: stringResource(R.string.offramp_field_balance_pending),
+                        ),
                     secondaryText =
                         state.usdcEquivalent?.let {
                             stringResource(R.string.upi_offramp_hero_secondary, it.getValue())
@@ -120,10 +128,6 @@ internal fun UpiOfframpView(
                             ZappSettlementLedgerRow(
                                 stringResource(R.string.upi_offramp_ledger_rate),
                                 state.rateText.getValue(),
-                            ),
-                            ZappSettlementLedgerRow(
-                                stringResource(R.string.upi_offramp_ledger_from),
-                                state.baseBalanceText?.getValue() ?: stringResource(R.string.upi_offramp_base),
                             ),
                         ),
                     notice = state.fundingPlanText?.getValue().takeIf { state.isTopUpNeeded },

@@ -68,10 +68,10 @@ interface OfframpBridgeWallet {
  * state for the deposit tx id. The swap UI flow itself is not modified — only its repositories/use case
  * are reused, exactly as `RequestSwapQuoteUseCase` builds and submits a swap.
  *
- * MAINNET-VALIDATION: a cancelled biometric prompt never resolves [submitState], so the await relies on
- * the surrounding offramp flow being cancelled by the user. Keystone signing still routes through the
- * QR sign screen — pre-Keystone-support [navigateAfter=false] is Zashi-only; the Keystone path will
- * need a separate seam.
+ * A cancelled biometric prompt submits nothing and never resolves [submitState], so the authorization
+ * result is checked before that state is awaited and raised as [BridgeAuthorizationCancelledException].
+ * Keystone signing still routes through the QR sign screen — pre-Keystone-support [navigateAfter=false]
+ * is Zashi-only; the Keystone path will need a separate seam.
  */
 class RealOfframpBridgeWallet(
     private val accountDataSource: AccountDataSource,
@@ -110,7 +110,9 @@ class RealOfframpBridgeWallet(
         // default replace(TransactionProgressArgs) the standard send/swap UX relies on — see
         // SubmitProposalUseCase.invoke kdoc. The Zashi submit still runs on a background coroutine
         // and `submitState` resolves the same way.
-        submitProposal(navigateAfter = false)
+        // A declined prompt submits nothing and never emits a Result, so the await below would
+        // suspend for the life of the process. Turn it into a terminal failure the caller can clear.
+        if (!submitProposal(navigateAfter = false)) throw BridgeAuthorizationCancelledException()
         val result = submitState.filterIsInstance<SubmitProposalState.Result>().first().submitResult
         return when (result) {
             is SubmitResult.Success -> {
@@ -404,6 +406,12 @@ class NearBridgeOfframpFunding(
 }
 
 /**
+ * A failure whose deposit handle can never be funded, so resuming it would poll an address nothing
+ * will ever arrive at. Callers clear the checkpoint on this instead of offering a retry.
+ */
+interface UnfundableBridgeHandle
+
+/**
  * Surfaces a non-recoverable terminal 1-Click [SwapStatus] from [NearBridgeOfframpFunding]. The
  * type is the structural signal `OfframpCheckpointPersister` uses to clear the checkpoint —
  * substring-matching `Failed.message` would be fragile to copy edits.
@@ -413,7 +421,17 @@ class BridgeTerminallyFailedException(
 ) : RuntimeException(
         "NEAR bridge reached terminal state $terminalStatus — the bridge cannot be resumed. " +
             "If your ZEC was refunded by 1-Click it should appear at your wallet's refund address shortly.",
-    )
+    ),
+    UnfundableBridgeHandle
+
+/**
+ * The user dismissed the send authorization, so no ZEC was ever broadcast. The handle is already
+ * persisted by then, and resuming it would poll an address that can never receive a deposit, so this
+ * is unfundable rather than retryable.
+ */
+class BridgeAuthorizationCancelledException :
+    RuntimeException("The ZEC deposit was not authorized, so no ZEC was sent and the bridge never opened."),
+    UnfundableBridgeHandle
 
 /**
  * The wallet's spendable ZEC can't cover the bridge's required input. Thrown before any deposit handle

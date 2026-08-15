@@ -1,5 +1,9 @@
 package co.electriccoin.zcash.ui.screen.settings.p2p
 
+import androidx.annotation.DrawableRes
+import co.electriccoin.zcash.ui.common.model.P2pProvider
+import co.electriccoin.zcash.ui.design.component.ButtonState
+import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationState
 import co.electriccoin.zcash.ui.design.util.StringResource
 
 data class P2pTransactionsState(
@@ -9,9 +13,12 @@ data class P2pTransactionsState(
     val balance: BalanceState,
     val refund: RefundUiState,
     val confirmRefund: ConfirmRefundDialog?,
+    /** Null when only one kind of activity can exist on this build, which is every non-mainnet one. */
+    val filter: FilterState?,
     val rows: List<P2pTransactionRow>,
     val emptyMessage: StringResource?,
     val errorMessage: StringResource?,
+    val confirmation: ZappConfirmationState?,
 )
 
 sealed interface BalanceState {
@@ -37,6 +44,11 @@ sealed interface RefundUiState {
         val onClick: () -> Unit
     ) : RefundUiState
 
+    /** A cash-out has a claim on this balance, and the refund moves all of it or none. */
+    data class Blocked(
+        val reason: StringResource
+    ) : RefundUiState
+
     data object InProgress : RefundUiState
 
     data class FailedRetry(
@@ -51,31 +63,43 @@ data class ConfirmRefundDialog(
     val onDismiss: () -> Unit,
 )
 
+data class FilterState(
+    val options: List<P2pActivityFilter>,
+    val selected: P2pActivityFilter,
+    val onSelect: (P2pActivityFilter) -> Unit,
+)
+
+enum class P2pActivityFilter { ALL, PEER, P2P_ME }
+
+/**
+ * One activity, whichever provider it came from. A cash-out and a merchant payment are the same
+ * shape on screen: what it was, how it went, how much, and an expandable panel of specifics.
+ */
 data class P2pTransactionRow(
-    val orderId: String,
+    val key: String,
+    val provider: P2pProvider,
+    @param:DrawableRes val logo: Int?,
     val typeLabel: StringResource,
     val statusLabel: StringResource,
     val statusTone: StatusTone,
     val amountUsdc: StringResource,
-    val amountFiat: StringResource,
+    val amountSecondary: StringResource?,
+    val reference: StringResource?,
+    val referenceUrl: String?,
     val timestamp: StringResource?,
-    val explorerUrl: String?,
     val detail: TransactionDetail?,
 ) {
     enum class StatusTone { Pending, Success, Cancelled, Failed }
 }
 
-/**
- * Extra fields revealed when the user expands a transaction row. Sourced from the same
- * [xyz.justzappit.offramp.p2p.P2pOrderHistoryItem]. `paidByUpiPlain` comes from the
- * user-decryptable `encMerchantUpi` when the merchant supplied it; `paidToUpiPlain` is the
- * locally cached scanned payment address for PAY/SELL orders.
- */
+/** Revealed when the user expands a row: the specifics, then whatever can still be done about it. */
 data class TransactionDetail(
-    val fee: StringResource?,
-    val paidByUpiPlain: String?,
-    val paidToUpiPlain: String?,
-    val merchantAddressShort: String?,
-    val merchantExplorerUrl: String?,
-    val duration: StringResource?,
+    val rows: List<TransactionDetailRow>,
+    val actions: List<ButtonState> = emptyList(),
+)
+
+data class TransactionDetailRow(
+    val label: StringResource,
+    val value: StringResource,
+    val url: String? = null,
 )

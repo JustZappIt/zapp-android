@@ -8,6 +8,7 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.provider.OfframpCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
+import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepository
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
@@ -36,8 +37,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import xyz.justzappit.evm.rpc.BaseRpcClient
-import xyz.justzappit.evm.types.Address
-import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
 import xyz.justzappit.offramp.config.P2pNetworkConfig
 import xyz.justzappit.offramp.config.P2pNetworks
 import xyz.justzappit.offramp.orchestrator.OfframpCheckpoint
@@ -46,7 +45,6 @@ import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.p2p.getPriceConfig
 import xyz.justzappit.offramp.p2p.getSmallOrderFixedFeePay
 import xyz.justzappit.offramp.p2p.getSmallOrderThreshold
-import xyz.justzappit.offramp.p2p.getUsdcBalance
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.RoundingMode
@@ -56,7 +54,7 @@ internal class UpiOfframpVM(
     private val navigationRouter: NavigationRouter,
     private val rpc: BaseRpcClient,
     private val network: P2pNetworkConfig,
-    private val accountProvider: SmartOfframpAccountProvider,
+    private val baseBalance: BaseBalanceRepository,
     private val checkpointStorage: OfframpCheckpointStorageProvider,
     private val currency: CurrencyCode,
     private val prescanned: PrescannedMerchantQr = PrescannedMerchantQr.EMPTY,
@@ -70,9 +68,8 @@ internal class UpiOfframpVM(
         )
     private val pricing = MutableStateFlow(Pricing(rate = fallbackRate(currency)))
     private val inFlight = MutableStateFlow<OfframpCheckpoint?>(null)
-    private val baseBalance = MutableStateFlow<Usdc6?>(null)
 
-    // The two contract reads that drive the order math, polled together so buildState sees a consistent
+    // The two contract reads that drive the order math, held together so buildState sees a consistent
     // pair: the sell rate (INR→USDC) and the fixed fee the Diamond pulls on top of the placed amount.
     private data class Pricing(
         val rate: BigDecimal,
@@ -87,11 +84,8 @@ internal class UpiOfframpVM(
     // Set on the main thread before launching the async re-quote so a double-tap can't run it twice.
     private var reQuoting = false
 
-    // Deterministic from the owner key, so resolve once. Null until the first factory call returns.
-    private var smartAccountAddress: Address? = null
-
-    // Driven by onStart/onCompletion on the state flow; the rate/balance pollers run only while
-    // this is > 0, so a backgrounded screen doesn't burn RPC quota.
+    // Driven by onStart/onCompletion on the state flow; the rate poller runs only while this is > 0,
+    // so a backgrounded screen doesn't burn RPC quota.
     private val activeSubscribers = MutableStateFlow(0)
 
     val state: StateFlow<UpiOfframpState> =
@@ -99,13 +93,13 @@ internal class UpiOfframpVM(
             inrState,
             pricing,
             inFlight,
-            baseBalance,
+            baseBalance.balance,
         ) { inr, currentPricing, checkpoint, balance ->
             buildState(
                 inr = inr,
                 pricing = currentPricing,
                 inFlightCheckpoint = checkpoint,
-                balance = balance,
+                balance = balance.loadedOrNull,
             )
         }.onStart { activeSubscribers.update { it + 1 } }
             .onCompletion { activeSubscribers.update { (it - 1).coerceAtLeast(0) } }
@@ -117,7 +111,7 @@ internal class UpiOfframpVM(
                         inr = inrState.value,
                         pricing = pricing.value,
                         inFlightCheckpoint = inFlight.value,
-                        balance = baseBalance.value,
+                        balance = baseBalance.balance.value.loadedOrNull,
                     ),
             )
 
@@ -144,59 +138,29 @@ internal class UpiOfframpVM(
                     pollPricing()
                 }
         }
-        viewModelScope.launch {
-            activeSubscribers
-                .map { it > 0 }
-                .distinctUntilChanged()
-                .collectLatest { isSubscribed ->
-                    if (!isSubscribed) return@collectLatest
-                    pollBalance()
-                }
-        }
     }
 
-    // Refetch every 30s so the quote tracks the rate (and fee) the contract will stamp at order time.
+    // The rate moves; the fee schedule is Diamond config, so it is read once per visit and again at
+    // commit time, where a stale one would atomic-cancel the order.
     private suspend fun pollPricing() =
         coroutineScope {
+            refreshFees()
             while (isActive) {
-                refreshPricing()
+                refreshRate()
                 delay(RATE_REFRESH_INTERVAL_MS)
             }
         }
 
-    // Surfaces the Base USDC balance (reusable from prior cancelled orders). Resolves the smart
-    // account lazily on first subscription; a provider-level cache keeps repeat resolves cheap.
-    private suspend fun pollBalance() =
-        coroutineScope {
-            if (smartAccountAddress == null) {
-                smartAccountAddress =
-                    runCatching { accountProvider.resolve().address }
-                        .onFailure { Twig.warn(it) { "UpiOfframpVM: smart account resolve failed" } }
-                        .getOrNull()
-            }
-            if (smartAccountAddress == null) return@coroutineScope
-            while (isActive) {
-                refreshBaseBalance()
-                delay(BALANCE_REFRESH_INTERVAL_MS)
-            }
-        }
-
-    private suspend fun refreshBaseBalance() {
-        val account = smartAccountAddress ?: return
-        val fetched =
-            runCatching { rpc.getUsdcBalance(network.usdcAddress, account) }
-                .onFailure { Twig.warn(it) { "UpiOfframpVM: getUsdcBalance failed" } }
-                .getOrNull() ?: return
-        baseBalance.update { fetched }
-    }
-
-    // Rate and fee are separate diamond reads; update each independently so one failing doesn't stale the other.
-    private suspend fun refreshPricing() {
+    private suspend fun refreshRate() {
         runCatching { rpc.getPriceConfig(network.diamondAddress, currency).sellPriceAsRate() }
             .onSuccess { newRate ->
                 Twig.info { "UpiOfframpVM: live sellPrice for ${currency.code} = $newRate" }
                 pricing.update { it.copy(rate = newRate) }
             }.onFailure { Twig.warn(it) { "UpiOfframpVM: getPriceConfig(${currency.code}) failed" } }
+    }
+
+    // Separate diamond reads; update each independently so one failing doesn't stale the other.
+    private suspend fun refreshFees() {
         runCatching { rpc.getSmallOrderThreshold(network.diamondAddress, currency) }
             .onSuccess { threshold -> pricing.update { it.copy(smallOrderThreshold = threshold) } }
             .onFailure { Twig.warn(it) { "UpiOfframpVM: getSmallOrderThreshold(${currency.code}) failed" } }
@@ -361,7 +325,8 @@ internal class UpiOfframpVM(
         val requiredUsdc = Usdc6.ofWhole(aligned)
         val fiatMicro = Usdc6.ofWhole(snappedInr).micros
         val fiatLimitMicro = fiatAmountLimit(requiredUsdc, pricing.rate)
-        val balance = refreshBaseBalanceNow()
+        baseBalance.refresh()
+        val balance = baseBalance.balance.value.loadedOrNull
         when {
             // The order pulls placed + fee from the Base balance, so confirm pay-from-Base only when it
             // covers both; a balance of exactly `placed` would make setSellOrderUpi atomic-cancel.
@@ -484,21 +449,9 @@ internal class UpiOfframpVM(
     }
 
     private suspend fun refreshPricingNow(): Pricing {
-        refreshPricing()
+        refreshRate()
+        refreshFees()
         return pricing.value
-    }
-
-    private suspend fun refreshBaseBalanceNow(): Usdc6? {
-        val account =
-            smartAccountAddress
-                ?: runCatching { accountProvider.resolve().address }.getOrNull()?.also { smartAccountAddress = it }
-                ?: return baseBalance.value
-        val fetched =
-            runCatching { rpc.getUsdcBalance(network.usdcAddress, account) }
-                .onFailure { Twig.warn(it) { "UpiOfframpVM: re-quote getUsdcBalance failed" } }
-                .getOrNull()
-        if (fetched != null) baseBalance.update { fetched }
-        return fetched ?: baseBalance.value
     }
 
     companion object {
@@ -526,6 +479,5 @@ internal class UpiOfframpVM(
         private const val USDC_INPUT_SCALE = 6
 
         private const val RATE_REFRESH_INTERVAL_MS = 30_000L
-        private const val BALANCE_REFRESH_INTERVAL_MS = 30_000L
     }
 }

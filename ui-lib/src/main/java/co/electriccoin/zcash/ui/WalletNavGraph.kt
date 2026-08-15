@@ -186,6 +186,12 @@ import co.electriccoin.zcash.ui.screen.swap.lock.EphemeralLockArgs
 import co.electriccoin.zcash.ui.screen.swap.lock.EphemeralLockScreen
 import co.electriccoin.zcash.ui.screen.swap.orconfirmation.ORSwapConfirmationArgs
 import co.electriccoin.zcash.ui.screen.swap.orconfirmation.ORSwapConfirmationScreen
+import co.electriccoin.zcash.ui.screen.swap.peer.PeerCashOutArgs
+import co.electriccoin.zcash.ui.screen.swap.peer.PeerCashOutScreen
+import co.electriccoin.zcash.ui.screen.swap.peer.order.PeerOrderArgs
+import co.electriccoin.zcash.ui.screen.swap.peer.order.PeerOrderScreen
+import co.electriccoin.zcash.ui.screen.swap.peer.progress.PeerCashOutProgressArgs
+import co.electriccoin.zcash.ui.screen.swap.peer.progress.PeerCashOutProgressScreen
 import co.electriccoin.zcash.ui.screen.swap.picker.SwapAssetPickerArgs
 import co.electriccoin.zcash.ui.screen.swap.picker.SwapAssetPickerScreen
 import co.electriccoin.zcash.ui.screen.swap.picker.SwapBlockchainPickerArgs
@@ -367,6 +373,9 @@ fun NavGraphBuilder.walletNavGraph(
             )
         }
         composable<UpiOfframpProgressArgs> { UpiOfframpProgressScreen(it.toRoute()) }
+        composable<PeerCashOutArgs> { PeerCashOutScreen(it.toRoute()) }
+        composable<PeerCashOutProgressArgs> { PeerCashOutProgressScreen(it.toRoute()) }
+        composable<PeerOrderArgs> { PeerOrderScreen(it.toRoute()) }
         composable<BridgeToBaseArgs> { BridgeToBaseScreen(it.toRoute()) }
         composable<ScanUpiArgs> { ScanUpiScreen(it.toRoute()) }
         dialogComposable<SwapSlippageArgs> { SwapSlippageScreen(it.toRoute()) }

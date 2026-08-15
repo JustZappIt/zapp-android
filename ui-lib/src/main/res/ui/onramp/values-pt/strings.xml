@@ -21,8 +21,6 @@
     <string name="onramp_account_label">Destino de USDC</string>
     <string name="onramp_refund_account_label">Endereço de reembolso de USDC</string>
     <string name="onramp_refund_account_explanation">Usado somente se a conversão para ZEC não puder começar ou o provedor devolver seus USDC.</string>
-    <string name="onramp_base_balance_label">Saldo na Base</string>
-    <string name="onramp_base_balance_amount">%1$s USDC</string>
     <string name="onramp_base_balance_unavailable">—</string>
     <string name="onramp_send_to_zec">Enviar para ZEC</string>
     <string name="onramp_send_to_zec_in_progress">Enviando…</string>

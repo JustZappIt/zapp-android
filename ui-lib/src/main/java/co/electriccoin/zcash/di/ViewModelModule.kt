@@ -104,6 +104,7 @@ import co.electriccoin.zcash.ui.screen.walletbackup.WalletBackupViewModel
 import co.electriccoin.zcash.ui.screen.warning.viewmodel.StorageCheckViewModel
 import co.electriccoin.zcash.ui.screen.welcome.WelcomeGateVM
 import co.electriccoin.zcash.ui.screen.whatsnew.viewmodel.WhatsNewViewModel
+import org.koin.core.module.dsl.viewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
@@ -125,7 +126,21 @@ val viewModelModule =
         viewModelOf(::SupportViewModel)
         viewModelOf(::WhatsNewViewModel)
         viewModelOf(::ChooseServerVM)
-        viewModelOf(::P2pTransactionsVM)
+        // Constructed manually because its clock is a default rather than a binding.
+        viewModel {
+            P2pTransactionsVM(
+                navigationRouter = get(),
+                network = get(),
+                baseBalance = get(),
+                getBaseAddress = get(),
+                getHistory = get(),
+                getPeerHistory = get(),
+                peerConfigProvider = get(),
+                peerRepository = get(),
+                observeCommitted = get(),
+                driver = get(),
+            )
+        }
         viewModelOf(::P2pPaymentMethodVM)
         viewModelOf(::ReceiveVM)
         viewModelOf(::QrCodeVM)

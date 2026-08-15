@@ -21,8 +21,6 @@
     <string name="onramp_account_label">Tujuan USDC</string>
     <string name="onramp_refund_account_label">Alamat pengembalian USDC</string>
     <string name="onramp_refund_account_explanation">Hanya digunakan jika konversi ZEC tidak dapat dimulai atau penyedia mengembalikan USDC Anda.</string>
-    <string name="onramp_base_balance_label">Saldo di Base</string>
-    <string name="onramp_base_balance_amount">%1$s USDC</string>
     <string name="onramp_base_balance_unavailable">—</string>
     <string name="onramp_send_to_zec">Kirim ke ZEC</string>
     <string name="onramp_send_to_zec_in_progress">Mengirim…</string>
