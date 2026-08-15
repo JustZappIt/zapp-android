@@ -23,15 +23,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPreparationDetails
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPreparationStepDetail
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ZashiButton
 import co.electriccoin.zcash.ui.design.component.ZashiScreenModalBottomSheet
+import co.electriccoin.zcash.ui.design.component.zapp.ZappModalBottomSheetDragHandle
+import co.electriccoin.zcash.ui.design.component.zapp.zappAccentButtonColors
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
-import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
-import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.R as DesignR
@@ -56,7 +57,11 @@ import co.electriccoin.zcash.ui.design.R as DesignR
 @Composable
 fun MigrationPreparationDetailsBottomSheet(details: MigrationPreparationDetails?) {
     if (details == null) return
-    ZashiScreenModalBottomSheet(onDismissRequest = details.onDismiss) { contentPadding ->
+    ZashiScreenModalBottomSheet(
+        onDismissRequest = details.onDismiss,
+        containerColor = ZappTheme.colors.surface,
+        dragHandle = { ZappModalBottomSheetDragHandle() },
+    ) { contentPadding ->
         Column(
             modifier =
                 Modifier
@@ -80,7 +85,7 @@ fun MigrationPreparationDetailsBottomSheet(details: MigrationPreparationDetails?
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .background(ZappTheme.colors.bg, RectangleShape)
+                        .background(ZappTheme.colors.surfaceAlt, RectangleShape)
                         .padding(16.dp),
             ) {
                 Text(
@@ -103,7 +108,7 @@ fun MigrationPreparationDetailsBottomSheet(details: MigrationPreparationDetails?
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .background(ZappTheme.colors.surface, RectangleShape)
+                        .background(ZappTheme.colors.surfaceAlt, RectangleShape)
                         .padding(12.dp),
             ) {
                 Text(
@@ -127,6 +132,7 @@ fun MigrationPreparationDetailsBottomSheet(details: MigrationPreparationDetails?
                         onClick = details.onDismiss
                     ),
                 modifier = Modifier.fillMaxWidth(),
+                defaultPrimaryColors = zappAccentButtonColors(),
             )
         }
     }
@@ -202,7 +208,7 @@ private fun PreparationStepRow(
             }
         }
         Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.weight(TITLE_COLUMN_WEIGHT)) {
             Text(
                 text = step.title.getValue(),
                 style = ZappTheme.typography.body,
@@ -215,11 +221,17 @@ private fun PreparationStepRow(
                 color = ZappTheme.colors.textMuted,
             )
         }
+        Spacer(Modifier.width(8.dp))
+        // Weighted, not a bare align: unweighted Row children measure first at full width, so a
+        // long "Waits on steps 1, 2, ..., 14" squeezed the title column into one character per line.
         Text(
             text = step.statusLabel.getValue(),
             style = ZappTheme.typography.caption,
             color = ZappTheme.colors.textMuted,
-            modifier = Modifier.align(Alignment.CenterVertically),
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f).align(Alignment.CenterVertically),
         )
     }
 }
+
+private const val TITLE_COLUMN_WEIGHT = 1.3f

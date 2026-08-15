@@ -25,13 +25,14 @@ private fun BlankBgScaffoldComposablePreview() {
 @Composable
 fun BlankBgScaffold(
     modifier: Modifier = Modifier,
+    containerColor: Color = ZashiColors.Surfaces.bgPrimary,
     topBar: @Composable () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     snackbarHost: @Composable () -> Unit = {},
     content: @Composable (PaddingValues) -> Unit
 ) {
     Scaffold(
-        containerColor = ZashiColors.Surfaces.bgPrimary,
+        containerColor = containerColor,
         topBar = topBar,
         snackbarHost = snackbarHost,
         bottomBar = bottomBar,

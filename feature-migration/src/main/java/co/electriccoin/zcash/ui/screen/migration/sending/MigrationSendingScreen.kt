@@ -19,14 +19,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.BlankBgScaffold
-import co.electriccoin.zcash.ui.design.component.CircularScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.component.ZashiSmallTopAppBar
 import co.electriccoin.zcash.ui.design.component.ZashiTopAppBarCloseNavigation
+import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenProgressIndicator
+import co.electriccoin.zcash.ui.design.component.zapp.zappTopAppBarColors
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
-import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
-import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.orDark
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -47,7 +46,7 @@ fun MigrationSendingScreen() {
     BackHandler { vm.onBack() }
     LceRenderer(
         state = state,
-        loading = { isLoading -> if (isLoading && state.content == null) CircularScreenProgressIndicator() },
+        loading = { isLoading -> if (isLoading && state.content == null) ZappScreenProgressIndicator() },
     ) { MigrationSendingView(it) }
 }
 
@@ -57,8 +56,10 @@ fun MigrationSendingScreen() {
 @Composable
 fun MigrationSendingView(state: MigrationSendingState) {
     BlankBgScaffold(
+        containerColor = ZappTheme.colors.bg,
         topBar = {
             ZashiSmallTopAppBar(
+                colors = zappTopAppBarColors(),
                 navigationAction = { ZashiTopAppBarCloseNavigation(onBack = state.onBack) },
             )
         }

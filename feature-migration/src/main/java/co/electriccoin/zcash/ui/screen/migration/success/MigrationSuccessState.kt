@@ -22,15 +22,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.ButtonState
-import co.electriccoin.zcash.ui.design.component.CircularScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.component.GradientBgScaffold
 import co.electriccoin.zcash.ui.design.component.ZashiButton
-import co.electriccoin.zcash.ui.design.component.ZashiButtonDefaults
+import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenProgressIndicator
+import co.electriccoin.zcash.ui.design.component.zapp.zappAccentButtonColors
+import co.electriccoin.zcash.ui.design.component.zapp.zappSecondaryButtonColors
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
-import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
-import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.scaffoldPadding
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -50,7 +49,7 @@ fun MigrationSuccessScreen(args: MigrationSuccessArgs) {
     val state by vm.state.collectAsStateWithLifecycle()
     LceRenderer(
         state = state,
-        loading = { isLoading -> if (isLoading && state.content == null) CircularScreenProgressIndicator() },
+        loading = { isLoading -> if (isLoading && state.content == null) ZappScreenProgressIndicator() },
     ) { MigrationSuccessView(it) }
 }
 
@@ -106,13 +105,14 @@ fun MigrationSuccessView(state: MigrationSuccessState) {
                             onClick = onView
                         ),
                     modifier = Modifier.fillMaxWidth(),
-                    defaultPrimaryColors = ZashiButtonDefaults.secondaryColors(),
+                    defaultPrimaryColors = zappSecondaryButtonColors(),
                 )
                 Spacer(Modifier.height(8.dp))
             }
             ZashiButton(
                 state = ButtonState(text = stringRes(DesignR.string.general_close), onClick = state.onClose),
                 modifier = Modifier.fillMaxWidth(),
+                defaultPrimaryColors = zappAccentButtonColors(),
             )
         }
     }

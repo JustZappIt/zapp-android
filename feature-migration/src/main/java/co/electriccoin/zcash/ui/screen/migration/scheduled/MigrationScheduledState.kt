@@ -28,15 +28,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.compose.DisableScreenTimeout
 import co.electriccoin.zcash.ui.design.component.ButtonState
-import co.electriccoin.zcash.ui.design.component.CircularScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.component.GradientBgScaffold
 import co.electriccoin.zcash.ui.design.component.ZashiButton
 import co.electriccoin.zcash.ui.design.component.ZashiTextOrShimmer
+import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenProgressIndicator
+import co.electriccoin.zcash.ui.design.component.zapp.zappAccentButtonColors
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
-import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
-import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.scaffoldPadding
@@ -65,7 +64,7 @@ fun MigrationScheduledScreen() {
     } else {
         LceRenderer(
             state = state,
-            loading = { isLoading -> if (isLoading && state.content == null) CircularScreenProgressIndicator() },
+            loading = { isLoading -> if (isLoading && state.content == null) ZappScreenProgressIndicator() },
         ) { MigrationScheduledView(it) }
     }
     MigrationFailureBottomSheet(failureSheet)
@@ -142,6 +141,7 @@ internal fun MigrationSchedulingView() {
                         onClick = {},
                     ),
                 modifier = Modifier.fillMaxWidth(),
+                defaultPrimaryColors = zappAccentButtonColors(),
             )
         }
     }
@@ -246,6 +246,7 @@ fun MigrationScheduledView(state: MigrationScheduledState) {
             ZashiButton(
                 state = ButtonState(text = stringRes(DesignR.string.migration_status_done), onClick = state.onDone),
                 modifier = Modifier.fillMaxWidth(),
+                defaultPrimaryColors = zappAccentButtonColors(),
             )
         }
     }

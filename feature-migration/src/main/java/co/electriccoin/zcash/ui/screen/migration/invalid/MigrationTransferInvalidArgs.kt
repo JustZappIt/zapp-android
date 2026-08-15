@@ -26,15 +26,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.electriccoin.zcash.ui.common.model.migration.MigrationAttentionKind
 import co.electriccoin.zcash.ui.design.component.BlankBgScaffold
 import co.electriccoin.zcash.ui.design.component.ButtonState
-import co.electriccoin.zcash.ui.design.component.CircularScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.component.ZashiButton
 import co.electriccoin.zcash.ui.design.component.ZashiSmallTopAppBar
 import co.electriccoin.zcash.ui.design.component.ZashiTopAppBarBackNavigation
+import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenProgressIndicator
+import co.electriccoin.zcash.ui.design.component.zapp.zappAccentButtonColors
+import co.electriccoin.zcash.ui.design.component.zapp.zappTopAppBarColors
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
-import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
-import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.scaffoldPadding
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -52,7 +52,7 @@ fun MigrationTransferInvalidScreen() {
     val state by vm.state.collectAsStateWithLifecycle()
     LceRenderer(
         state = state,
-        loading = { isLoading -> if (isLoading && state.content == null) CircularScreenProgressIndicator() },
+        loading = { isLoading -> if (isLoading && state.content == null) ZappScreenProgressIndicator() },
     ) { s ->
         BackHandler { s.onBack() }
         MigrationTransferInvalidView(s)
@@ -62,8 +62,10 @@ fun MigrationTransferInvalidScreen() {
 @Composable
 fun MigrationTransferInvalidView(state: MigrationTransferInvalidState) {
     BlankBgScaffold(
+        containerColor = ZappTheme.colors.bg,
         topBar = {
             ZashiSmallTopAppBar(
+                colors = zappTopAppBarColors(),
                 navigationAction = { ZashiTopAppBarBackNavigation(onBack = state.onBack) },
             )
         }
@@ -156,6 +158,7 @@ fun MigrationTransferInvalidView(state: MigrationTransferInvalidState) {
                         onClick = state.onContinue
                     ),
                 modifier = Modifier.fillMaxWidth(),
+                defaultPrimaryColors = zappAccentButtonColors(),
             )
         }
     }

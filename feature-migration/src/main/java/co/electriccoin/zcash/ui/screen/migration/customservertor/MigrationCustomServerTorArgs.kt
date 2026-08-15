@@ -21,15 +21,14 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationMode
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.Spacer
 import co.electriccoin.zcash.ui.design.component.ZashiButton
-import co.electriccoin.zcash.ui.design.component.ZashiButtonDefaults
 import co.electriccoin.zcash.ui.design.component.ZashiScreenModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.rememberScreenModalBottomSheetState
+import co.electriccoin.zcash.ui.design.component.zapp.ZappModalBottomSheetDragHandle
+import co.electriccoin.zcash.ui.design.component.zapp.zappAccentButtonColors
+import co.electriccoin.zcash.ui.design.component.zapp.zappDangerButtonColors
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
-import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
-import co.electriccoin.zcash.ui.design.theme.dimensions.ZashiDimensions
-import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
 import kotlinx.serialization.Serializable
@@ -59,6 +58,8 @@ fun MigrationCustomServerTorView(
     ZashiScreenModalBottomSheet(
         state = state,
         sheetState = sheetState,
+        containerColor = ZappTheme.colors.surface,
+        dragHandle = { ZappModalBottomSheetDragHandle() },
     ) { innerState, contentPadding ->
         Column(
             modifier =
@@ -91,7 +92,7 @@ fun MigrationCustomServerTorView(
                         onClick = innerState.onContinueWithoutTor
                     ),
                 modifier = Modifier.fillMaxWidth(),
-                defaultPrimaryColors = ZashiButtonDefaults.destructive1Colors(),
+                defaultPrimaryColors = zappDangerButtonColors(),
             )
             Spacer(8.dp)
             ZashiButton(
@@ -101,6 +102,7 @@ fun MigrationCustomServerTorView(
                         onClick = innerState.onSwitchServer
                     ),
                 modifier = Modifier.fillMaxWidth(),
+                defaultPrimaryColors = zappAccentButtonColors(),
             )
         }
     }
@@ -109,6 +111,7 @@ fun MigrationCustomServerTorView(
 @Composable
 private fun RiskCard(title: String, body: String) {
     Surface(
+        color = ZappTheme.colors.surfaceAlt,
         border = BorderStroke(1.dp, ZappTheme.colors.borderStrong),
         shape = RectangleShape,
     ) {

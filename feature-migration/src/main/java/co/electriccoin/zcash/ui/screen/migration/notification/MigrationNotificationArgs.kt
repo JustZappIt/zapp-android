@@ -25,16 +25,16 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.electriccoin.zcash.ui.design.component.BlankBgScaffold
 import co.electriccoin.zcash.ui.design.component.ButtonState
-import co.electriccoin.zcash.ui.design.component.CircularScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.component.ZashiButton
-import co.electriccoin.zcash.ui.design.component.ZashiButtonDefaults
 import co.electriccoin.zcash.ui.design.component.ZashiSmallTopAppBar
 import co.electriccoin.zcash.ui.design.component.ZashiTopAppBarBackNavigation
+import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenProgressIndicator
+import co.electriccoin.zcash.ui.design.component.zapp.zappAccentButtonColors
+import co.electriccoin.zcash.ui.design.component.zapp.zappAccentSoftButtonColors
+import co.electriccoin.zcash.ui.design.component.zapp.zappTopAppBarColors
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
-import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
-import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.scaffoldPadding
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -52,7 +52,7 @@ fun MigrationNotificationScreen() {
     val state by vm.state.collectAsStateWithLifecycle()
     LceRenderer(
         state = state,
-        loading = { isLoading -> if (isLoading && state.content == null) CircularScreenProgressIndicator() },
+        loading = { isLoading -> if (isLoading && state.content == null) ZappScreenProgressIndicator() },
     ) { s ->
         BackHandler { s.onBack() }
         val launcher =
@@ -73,8 +73,10 @@ fun MigrationNotificationScreen() {
 @Composable
 fun MigrationNotificationView(state: MigrationNotificationState) {
     BlankBgScaffold(
+        containerColor = ZappTheme.colors.bg,
         topBar = {
             ZashiSmallTopAppBar(
+                colors = zappTopAppBarColors(),
                 navigationAction = { ZashiTopAppBarBackNavigation(onBack = state.onBack) },
                 regularActions = {},
             )
@@ -136,16 +138,13 @@ fun MigrationNotificationView(state: MigrationNotificationState) {
             ZashiButton(
                 state = ButtonState(text = stringRes(DesignR.string.migration_common_skip), onClick = state.onSkip),
                 modifier = Modifier.fillMaxWidth(),
-                defaultPrimaryColors =
-                    ZashiButtonDefaults.secondaryColors(
-                        contentColor = ZappTheme.colors.accentText,
-                        borderColor = ZappTheme.colors.accentSoft,
-                    ),
+                defaultPrimaryColors = zappAccentSoftButtonColors(),
             )
             Spacer(Modifier.height(12.dp))
             ZashiButton(
                 state = ButtonState(text = stringRes(DesignR.string.migration_common_allow), onClick = state.onAllow),
                 modifier = Modifier.fillMaxWidth(),
+                defaultPrimaryColors = zappAccentButtonColors(),
             )
         }
     }

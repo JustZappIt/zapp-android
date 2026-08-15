@@ -46,15 +46,15 @@ import co.electriccoin.zcash.ui.common.model.migration.MigrationPreparationDetai
 import co.electriccoin.zcash.ui.common.model.migration.MigrationPreparationStepDetail
 import co.electriccoin.zcash.ui.design.component.BlankBgScaffold
 import co.electriccoin.zcash.ui.design.component.ButtonState
-import co.electriccoin.zcash.ui.design.component.CircularScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.component.ZashiButton
 import co.electriccoin.zcash.ui.design.component.ZashiSmallTopAppBar
 import co.electriccoin.zcash.ui.design.component.ZashiTopAppBarBackNavigation
+import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenProgressIndicator
+import co.electriccoin.zcash.ui.design.component.zapp.zappAccentButtonColors
+import co.electriccoin.zcash.ui.design.component.zapp.zappTopAppBarColors
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
-import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
-import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.scaffoldPadding
@@ -82,7 +82,7 @@ fun MigrationReviewScreen(args: MigrationReviewArgs) {
         // MOB-1623: the default loading slot is empty, so this screen showed a black frame while
         // the plan proposal/fetch was in flight. Guarded on content == null so a later
         // isLoading=true (e.g. a retry) doesn't flash the spinner back over content already shown.
-        loading = { isLoading -> if (isLoading && state.content == null) CircularScreenProgressIndicator() },
+        loading = { isLoading -> if (isLoading && state.content == null) ZappScreenProgressIndicator() },
     ) { s ->
         MigrationReviewView(s)
     }
@@ -94,8 +94,10 @@ fun MigrationReviewView(state: MigrationReviewState) {
     // hoisted local state for the same shared sheet.
     var isShowingPreparationDetails by remember { mutableStateOf(false) }
     BlankBgScaffold(
+        containerColor = ZappTheme.colors.bg,
         topBar = {
             ZashiSmallTopAppBar(
+                colors = zappTopAppBarColors(),
                 navigationAction = { ZashiTopAppBarBackNavigation(onBack = state.onBack) },
             )
         }
@@ -181,6 +183,7 @@ private fun ImmediateReviewContent(state: MigrationReviewState) {
                     onClick = state.onConfirm,
                 ),
             modifier = Modifier.fillMaxWidth(),
+            defaultPrimaryColors = zappAccentButtonColors(),
         )
     }
 }
@@ -356,6 +359,7 @@ private fun PrivacyReviewContent(
                     onClick = state.onConfirm,
                 ),
             modifier = Modifier.fillMaxWidth(),
+            defaultPrimaryColors = zappAccentButtonColors(),
         )
     }
 }
