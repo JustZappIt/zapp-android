@@ -12,14 +12,17 @@ import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.zapp.ZappCompactButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappOfframpHeroAmountField
+import co.electriccoin.zcash.ui.design.component.zapp.ZappSegment
+import co.electriccoin.zcash.ui.design.component.zapp.ZappSegmentedSelector
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSummaryRow
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.getValue
+import xyz.justzappit.offramp.onramp.OnrampDestination
 
 @Composable
 internal fun AmountContent(state: OnrampState) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        IntroCopy()
+        IntroCopy(state.destination)
         BasicText(
             text = stringResource(R.string.onramp_amount_label),
             style = ZappTheme.typography.eyebrow.copy(color = ZappTheme.colors.textMuted),
@@ -35,6 +38,9 @@ internal fun AmountContent(state: OnrampState) {
                         state.baseBalance ?: stringResource(R.string.onramp_base_balance_unavailable),
                     ),
         )
+        if (state.isZecDestinationEnabled) {
+            DestinationSelector(state)
+        }
         if (state.minFiat != null && state.maxFiat != null) {
             ZappSummaryRow(
                 stringResource(R.string.onramp_limits_label),
@@ -44,7 +50,6 @@ internal fun AmountContent(state: OnrampState) {
         state.dailyLimit?.let {
             ZappSummaryRow(stringResource(R.string.onramp_daily_limit_label), "${state.currencySymbol}$it")
         }
-        ZappSummaryRow(stringResource(R.string.onramp_network_label), stringResource(R.string.onramp_base_network))
         ZappSummaryRow(stringResource(R.string.onramp_payment_rail_label), state.paymentRail.getValue())
         Notice(stringResource(R.string.onramp_quote_disclaimer))
         if (state.isBaseRefundSupported) {
@@ -89,6 +94,33 @@ internal fun AmountContent(state: OnrampState) {
     }
 }
 
+@Composable
+private fun DestinationSelector(state: OnrampState) {
+    BasicText(
+        text = stringResource(R.string.onramp_destination_label),
+        style = ZappTheme.typography.eyebrow.copy(color = ZappTheme.colors.textMuted),
+    )
+    ZappSegmentedSelector(
+        segments =
+            listOf(
+                ZappSegment(
+                    label = stringResource(R.string.onramp_destination_zcash),
+                    icon = co.electriccoin.zcash.ui.design.R.drawable.ic_token_zec,
+                ),
+                ZappSegment(
+                    label = stringResource(R.string.onramp_destination_base),
+                    icon = co.electriccoin.zcash.ui.design.R.drawable.ic_token_usdc,
+                ),
+            ),
+        selectedIndex = if (state.destination == OnrampDestination.ZCASH) 0 else 1,
+        onSelect = { index ->
+            state.onDestinationSelected(
+                if (index == 0) OnrampDestination.ZCASH else OnrampDestination.BASE,
+            )
+        },
+    )
+}
+
 /** Everything here is the service's quote, not what the user typed: it quantises the amount. */
 @Composable
 internal fun ConfirmationContent(state: OnrampState) {
@@ -101,7 +133,25 @@ internal fun ConfirmationContent(state: OnrampState) {
             stringResource(R.string.onramp_you_pay_label),
             state.quotedFiat?.let { "${state.currencySymbol}$it" } ?: "—",
         )
-        ZappSummaryRow(stringResource(R.string.onramp_you_receive_label), state.quotedNetUsdc?.plus(" USDC") ?: "—")
+        ZappSummaryRow(
+            stringResource(R.string.onramp_you_receive_label),
+            if (state.destination == OnrampDestination.ZCASH) {
+                state.estimatedZec?.let { "≈ $it ZEC" }
+                    ?: stringResource(R.string.onramp_zec_estimate_loading)
+            } else {
+                state.quotedNetUsdc?.plus(" USDC") ?: "—"
+            },
+        )
+        if (state.destination == OnrampDestination.ZCASH) {
+            ZappSummaryRow(
+                stringResource(R.string.onramp_estimated_value_label),
+                state.estimatedZecValue ?: "—",
+            )
+            ZappSummaryRow(
+                stringResource(R.string.onramp_estimated_conversion_cost_label),
+                state.estimatedConversionCost ?: "—",
+            )
+        }
         ZappSummaryRow(stringResource(R.string.onramp_fee_label), state.quotedFee?.plus(" USDC") ?: "—")
         ZappSummaryRow(
             stringResource(R.string.onramp_rate_label),
@@ -111,7 +161,9 @@ internal fun ConfirmationContent(state: OnrampState) {
             ZappSummaryRow(stringResource(R.string.onramp_quote_expires_in_label), "${it}s")
         }
         ZappSummaryRow(stringResource(R.string.onramp_payment_rail_label), state.paymentRail.getValue())
-        Notice(stringResource(R.string.onramp_quote_refresh_notice))
+        if (state.destination == OnrampDestination.BASE) {
+            Notice(stringResource(R.string.onramp_quote_refresh_notice))
+        }
         ErrorText(state)
     }
 }

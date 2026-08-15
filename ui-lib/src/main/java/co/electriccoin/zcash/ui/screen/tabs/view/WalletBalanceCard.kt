@@ -50,6 +50,7 @@ import co.electriccoin.zcash.ui.design.component.chart.SparkChartData
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
+import co.electriccoin.zcash.ui.design.component.zapp.ZappSegment
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSegmentedSelector
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.TickerLocation
@@ -380,11 +381,11 @@ private fun PeriodSelector(state: BalanceChartState) {
     val selectedPeriod = state.periodOrDefault()
     val onClick = state.onPeriodClickOrNoop()
     val periods = BalanceChartPeriod.entries
-    val labels = periods.map { it.label() }
+    val segments = periods.map { ZappSegment(it.label()) }
     val index = periods.indexOf(selectedPeriod).coerceAtLeast(0)
 
     ZappSegmentedSelector(
-        options = labels,
+        segments = segments,
         selectedIndex = index,
         onSelect = { i -> onClick(periods[i]) },
     )

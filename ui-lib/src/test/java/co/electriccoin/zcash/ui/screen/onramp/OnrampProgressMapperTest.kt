@@ -3,9 +3,12 @@
 
 package co.electriccoin.zcash.ui.screen.onramp
 
+import xyz.justzappit.evm.types.Address
+import xyz.justzappit.offramp.onramp.OnrampDestination
 import xyz.justzappit.offramp.onramp.OnrampFailureCode
 import xyz.justzappit.offramp.onramp.OnrampPhase
 import xyz.justzappit.offramp.onramp.OnrampStatus
+import xyz.justzappit.offramp.onramp.OnrampZecDeliveryStatus
 import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -68,23 +71,80 @@ class OnrampProgressMapperTest {
     }
 
     @Test
-    fun `completion marks every visible step complete`() {
-        val mapped =
+    fun `a Base order ends at the USDC step with every one of them complete`() {
+        val mapped = mapOnrampProgress(completed())
+
+        assertEquals(
+            listOf(
+                OnrampVisibleStep.ORDER_PLACED,
+                OnrampVisibleStep.MERCHANT_MATCHED,
+                OnrampVisibleStep.PAY_MERCHANT,
+                OnrampVisibleStep.PAYMENT_CONFIRMED,
+                OnrampVisibleStep.RECEIVING_USDC,
+                OnrampVisibleStep.USDC_RECEIVED,
+            ),
+            mapped.map { it.step },
+        )
+        assertEquals(mapped.size, mapped.count { it.state == OnrampStepState.COMPLETED })
+    }
+
+    @Test
+    fun `Zcash delivery adds conversion steps after Base settlement`() {
+        val completed = completed()
+        val converting =
             mapOnrampProgress(
-                OnrampStatus.Completed(
-                    id = ID,
-                    orderId = ORDER_ID,
-                    netUsdc = Usdc6.ofMicros(910_153),
-                    fiatAmount = Usdc6.ofMicros(99_999_934),
-                    paidTx = null,
-                ),
+                status = completed,
+                delivery = OnrampZecDeliveryStatus.AwaitingZec(AMOUNT),
+                destination = OnrampDestination.ZCASH,
             )
 
-        assertEquals(OnrampVisibleStep.entries.size, mapped.count { it.state == OnrampStepState.COMPLETED })
+        assertEquals(OnrampStepState.COMPLETED, converting[OnrampVisibleStep.USDC_RECEIVED.ordinal].state)
+        assertEquals(OnrampStepState.IN_PROGRESS, converting[OnrampVisibleStep.CONVERTING_TO_ZEC.ordinal].state)
+        assertEquals(OnrampStepState.PENDING, converting[OnrampVisibleStep.ZEC_RECEIVED.ordinal].state)
+
+        val delivered =
+            mapOnrampProgress(
+                status = completed,
+                delivery = OnrampZecDeliveryStatus.Delivered(AMOUNT, "0.019", null),
+                destination = OnrampDestination.ZCASH,
+            )
+
+        assertEquals(delivered.size, delivered.count { it.state == OnrampStepState.COMPLETED })
     }
+
+    @Test
+    fun `a refund fails the conversion step rather than completing it`() {
+        val mapped =
+            mapOnrampProgress(
+                status = completed(),
+                delivery =
+                    OnrampZecDeliveryStatus.RefundedToBase(
+                        inputUsdc = AMOUNT,
+                        refundedUsdc = AMOUNT,
+                        baseAccount = Address.parse(RECIPIENT),
+                    ),
+                destination = OnrampDestination.ZCASH,
+            )
+
+        assertEquals(OnrampStepState.COMPLETED, mapped[OnrampVisibleStep.USDC_RECEIVED.ordinal].state)
+        assertEquals(OnrampStepState.FAILED, mapped[OnrampVisibleStep.CONVERTING_TO_ZEC.ordinal].state)
+        assertEquals(OnrampStepState.PENDING, mapped[OnrampVisibleStep.ZEC_RECEIVED.ordinal].state)
+    }
+
+    private fun completed() =
+        OnrampStatus.Completed(
+            id = ID,
+            orderId = ORDER_ID,
+            netUsdc = AMOUNT,
+            fiatAmount = Usdc6.ofMicros(99_999_934),
+            paidTx = null,
+            recipientAddress = Address.parse(RECIPIENT),
+        )
 
     private companion object {
         const val ID = "00000000-0000-4000-8000-000000000000"
         const val ORDER_ID = "659007"
+        const val RECIPIENT = "0x0000000000000000000000000000000000000001"
+        val AMOUNT: Usdc6 = Usdc6.ofMicros(910_153)
     }
 }

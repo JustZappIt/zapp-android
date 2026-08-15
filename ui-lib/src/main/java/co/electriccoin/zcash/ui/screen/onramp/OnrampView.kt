@@ -48,6 +48,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import kotlinx.coroutines.delay
+import xyz.justzappit.offramp.onramp.OnrampDestination
 
 // Deliberately not SecureScreen: FLAG_SECURE blanks screenshots, and on a single phone that is the
 // only way to get the QR into a payment app — you cannot scan your own screen, so the user
@@ -61,7 +62,7 @@ internal fun OnrampView(state: OnrampState) {
     val scrollState = rememberScrollState()
     // Reveal the success moment: on completion, glide back to the top so the badge + headline land.
     LaunchedEffect(state.mode) {
-        if (state.mode == OnrampMode.COMPLETION) {
+        if (state.mode == OnrampMode.COMPLETION || state.mode == OnrampMode.REFUNDED_TO_BASE) {
             delay(COMPLETION_SCROLL_DELAY_MS)
             scrollState.animateScrollTo(0)
         }
@@ -100,21 +101,54 @@ internal fun OnrampView(state: OnrampState) {
                     .verticalScroll(scrollState)
                     .padding(horizontal = HORIZONTAL_PADDING.dp, vertical = VERTICAL_PADDING.dp),
         ) {
-            when (state.mode) {
-                OnrampMode.LOADING -> LoadingContent()
-                OnrampMode.UNAVAILABLE -> UnavailableContent(state)
-                OnrampMode.AMOUNT -> AmountContent(state)
-                OnrampMode.CONFIRMATION -> ConfirmationContent(state)
-                OnrampMode.PROGRESS -> ProgressContent(state)
-                OnrampMode.PAYMENT -> PaymentContent(state)
-                OnrampMode.COMPLETION -> CompletionContent(state)
-            }
+            OnrampModeContent(state)
         }
         BottomDock(state)
     }
     if (showInfo) OnrampInfoSheet(state) { showInfo = false }
     if (state.isPaidConfirmVisible) PaidConfirmSheet(state)
     if (state.isSendBaseBalanceConfirmVisible) BaseRefundConfirmSheet(state)
+}
+
+@Composable
+private fun OnrampModeContent(state: OnrampState) {
+    when (state.mode) {
+        OnrampMode.LOADING -> {
+            LoadingContent()
+        }
+
+        OnrampMode.UNAVAILABLE -> {
+            UnavailableContent(state)
+        }
+
+        OnrampMode.AMOUNT -> {
+            AmountContent(state)
+        }
+
+        OnrampMode.CONFIRMATION -> {
+            ConfirmationContent(state)
+        }
+
+        OnrampMode.PROGRESS -> {
+            ProgressContent(state)
+        }
+
+        OnrampMode.PAYMENT -> {
+            PaymentContent(state)
+        }
+
+        OnrampMode.CONVERTING_TO_ZEC,
+        OnrampMode.DELIVERY_NEEDS_ATTENTION,
+        -> {
+            ProgressContent(state)
+        }
+
+        OnrampMode.COMPLETION,
+        OnrampMode.REFUNDED_TO_BASE,
+        -> {
+            CompletionContent(state)
+        }
+    }
 }
 
 /**
@@ -212,7 +246,7 @@ private fun BottomDock(state: OnrampState) {
         onBack = state.onBack,
         isBackEnabled = !state.isSendingBaseBalanceToZec,
         primaryAction = {
-            if (state.mode == OnrampMode.COMPLETION) {
+            if (state.mode == OnrampMode.COMPLETION || state.mode == OnrampMode.REFUNDED_TO_BASE) {
                 ZappDoneButton(
                     text = action.text.getValue(),
                     modifier = Modifier.weight(1f).padding(start = BOTTOM_BAR_GAP.dp),
@@ -241,36 +275,6 @@ internal fun Notice(text: String) {
 internal fun ErrorText(state: OnrampState) {
     state.error?.let {
         BasicText(it.getValue(), style = ZappTheme.typography.body.copy(color = ZappTheme.colors.danger))
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun OnrampInfoSheet(state: OnrampState, onDismiss: () -> Unit) {
-    ZashiScreenModalBottomSheet(onDismissRequest = onDismiss) { padding ->
-        Column(
-            modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = padding.calculateBottomPadding()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            BasicText(
-                stringResource(R.string.onramp_info_title),
-                style = ZappTheme.typography.sectionTitle.copy(color = ZappTheme.colors.text),
-            )
-            BasicText(
-                stringResource(R.string.onramp_info_body),
-                style = ZappTheme.typography.body.copy(color = ZappTheme.colors.textMuted),
-            )
-            BasicText(
-                stringResource(R.string.onramp_info_custody),
-                style = ZappTheme.typography.body.copy(color = ZappTheme.colors.textMuted),
-            )
-            OnrampDestinationInfo(state)
-            ZappButton(
-                text = stringResource(co.electriccoin.zcash.ui.design.R.string.general_ok),
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
     }
 }
 

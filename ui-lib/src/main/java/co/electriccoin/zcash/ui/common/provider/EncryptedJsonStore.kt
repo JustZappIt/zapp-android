@@ -7,7 +7,6 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
 /**
@@ -45,10 +44,14 @@ internal class EncryptedJsonStore<T>(
             emitAll(encryptedPreferenceProvider().observe(key).map { raw -> raw?.let(::decode) })
         }
 
+    // IllegalArgumentException, not SerializationException: kotlinx derives the latter from the
+    // former, and a model whose `init` rejects the decoded values (a version it doesn't know, a
+    // phase missing its recovery handles) throws a plain IAE. Both mean present-but-undecodable;
+    // letting the IAE escape raw would crash whichever screen reads the key, on every launch.
     private fun decode(raw: String): T =
         try {
             json.decodeFromString(serializer, raw)
-        } catch (e: SerializationException) {
+        } catch (e: IllegalArgumentException) {
             // Don't interpolate e.message or chain the cause: kotlinx embeds a "JSON input:"
             // snippet of the raw input — here the DECRYPTED blob (relay private key, recipient
             // UPI data) — and callers legitimately Twig.warn this exception.

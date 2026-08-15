@@ -25,7 +25,9 @@ import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
+import xyz.justzappit.offramp.onramp.OnrampDestination
 import xyz.justzappit.offramp.onramp.OnrampStatus
+import xyz.justzappit.offramp.onramp.OnrampZecDeliveryStatus
 
 @Composable
 internal fun ProgressContent(state: OnrampState) {
@@ -39,8 +41,8 @@ internal fun ProgressContent(state: OnrampState) {
             style = ZappTheme.typography.body.copy(color = ZappTheme.colors.textMuted),
         )
         OrderSummaryCard(state)
-        ZappStepList(onrampSteps(state.progress))
-        if (state.isSettledAgainstUser) {
+        ZappStepList(onrampSteps(state.progress, state.delivery, state.destination))
+        if (state.isSettledAgainstUser || state.isDeliveryFailed) {
             FailureCard(state)
         } else {
             ErrorText(state)
@@ -52,11 +54,11 @@ internal fun ProgressContent(state: OnrampState) {
 internal fun CompletionContent(state: OnrampState) {
     Column(verticalArrangement = Arrangement.spacedBy(GAP_LG.dp)) {
         ZappSuccessHeader(
-            title = stringRes(R.string.onramp_completion_title),
-            subtitle = stringRes(R.string.onramp_completion_subtitle),
+            title = completionTitle(state),
+            subtitle = completionSubtitle(state),
         )
         ZappBorderedCard(verticalArrangement = Arrangement.spacedBy(GAP_SM.dp)) {
-            ZappSummaryRow(stringResource(R.string.onramp_received_label), state.receivedUsdc?.plus(" USDC") ?: "—")
+            ZappSummaryRow(stringResource(R.string.onramp_received_label), receivedAmount(state))
             state.fiatPaid?.let {
                 ZappSummaryRow(stringResource(R.string.onramp_fiat_paid_label), "${state.currencySymbol}$it")
             }
@@ -71,7 +73,20 @@ internal fun CompletionContent(state: OnrampState) {
                 onClick = { uriHandler.openUri(url) },
             )
         }
-        Notice(stringResource(R.string.onramp_convert_later))
+        when {
+            state.mode == OnrampMode.REFUNDED_TO_BASE -> {
+                Notice(stringResource(R.string.onramp_refunded_notice))
+                ZappButton(
+                    text = stringResource(R.string.onramp_try_conversion_again),
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = state.onDeliveryAction,
+                )
+            }
+
+            state.destination == OnrampDestination.BASE -> {
+                Notice(stringResource(R.string.onramp_convert_later))
+            }
+        }
     }
 }
 
@@ -107,21 +122,29 @@ private fun FailureCard(state: OnrampState) {
 }
 
 private fun failureHeader(state: OnrampState): StringResource =
-    if (state.progress is OnrampStatus.Cancelled) {
-        stringRes(R.string.onramp_cancelled_header)
-    } else {
-        stringRes(R.string.onramp_failure_header)
+    when {
+        state.progress is OnrampStatus.Cancelled -> stringRes(R.string.onramp_cancelled_header)
+        state.isDeliveryFailed -> stringRes(R.string.onramp_conversion_attention_title)
+        else -> stringRes(R.string.onramp_failure_header)
     }
 
 private fun progressSubtitle(state: OnrampState): StringResource =
     when {
+        state.mode == OnrampMode.CONVERTING_TO_ZEC -> stringRes(R.string.onramp_converting_subtitle)
+        state.isDeliveryFailed -> deliveryFailureMessage(state)
         state.isSettledAgainstUser -> stringRes(R.string.onramp_progress_subtitle_settled)
         state.progress is OnrampStatus.AwaitingMerchant -> stringRes(R.string.onramp_progress_subtitle_matching)
         else -> stringRes(R.string.onramp_progress_subtitle_working)
     }
 
-internal fun onrampSteps(status: OnrampStatus?): List<ZappStep> =
-    mapOnrampProgress(status).map { ZappStep(label = it.step.label(), status = it.state.toStepStatus()) }
+internal fun onrampSteps(
+    status: OnrampStatus?,
+    delivery: OnrampZecDeliveryStatus?,
+    destination: OnrampDestination,
+): List<ZappStep> =
+    mapOnrampProgress(status, delivery, destination).map {
+        ZappStep(label = it.step.label(), status = it.state.toStepStatus())
+    }
 
 private fun OnrampVisibleStep.label(): StringResource =
     when (this) {
@@ -131,6 +154,8 @@ private fun OnrampVisibleStep.label(): StringResource =
         OnrampVisibleStep.PAYMENT_CONFIRMED -> stringRes(R.string.onramp_step_payment_confirmed)
         OnrampVisibleStep.RECEIVING_USDC -> stringRes(R.string.onramp_step_receiving)
         OnrampVisibleStep.USDC_RECEIVED -> stringRes(R.string.onramp_step_received)
+        OnrampVisibleStep.CONVERTING_TO_ZEC -> stringRes(R.string.onramp_step_converting_to_zec)
+        OnrampVisibleStep.ZEC_RECEIVED -> stringRes(R.string.onramp_step_zec_received)
     }
 
 private fun OnrampStepState.toStepStatus(): ZappStepStatus =

@@ -95,9 +95,10 @@ class HttpClientProviderImpl(
         }
         install(Logging) {
             logger = KtorLogger()
-            // MOB-1346: full request/response bodies (swap recipient + refund addresses + amounts,
-            // offramp funding payloads) must not reach logcat/bugreports in release. Bodies only in debug.
-            level = if (BuildConfig.DEBUG) LogLevel.ALL else LogLevel.NONE
+            // Request and response bodies contain wallet addresses, payment instructions, and
+            // amounts. Keep them out of logcat in every build; debug logs retain only request
+            // metadata, with sensitive query parameters redacted by KtorLogger.
+            level = if (BuildConfig.DEBUG) LogLevel.INFO else LogLevel.NONE
             sanitizeHeader { header -> header in SANITIZED_HEADERS }
         }
         expectSuccess = true
@@ -129,7 +130,7 @@ class ClearnetExchangeRateBlockedError :
 
 private class KtorLogger : Logger {
     override fun log(message: String) {
-        message.chunked(MAX_LOG_CHUNK).forEach { Log.d("HttpClient", it) }
+        sanitizeHttpLogMessage(message).chunked(MAX_LOG_CHUNK).forEach { Log.d("HttpClient", it) }
     }
 
     private companion object {
@@ -137,9 +138,14 @@ private class KtorLogger : Logger {
     }
 }
 
+internal fun sanitizeHttpLogMessage(message: String): String =
+    SENSITIVE_QUERY_PARAMETER.replace(message) { match -> "${match.groupValues[1]}=<redacted>" }
+
 private const val MAX_RETRIES = 4
 private const val DEFAULT_REQUEST_TIMEOUT_MILLIS = 120_000L
 private const val DEFAULT_CONNECT_TIMEOUT_MILLIS = 15_000L
+
+private val SENSITIVE_QUERY_PARAMETER = Regex("(?i)(depositAddress|recipient|refundTo|refundAddress)=[^&\\s]+")
 
 // Credential-bearing headers redacted from logs even in debug. The shared client also serves the
 // CMC quote API (X-CMC_PRO_API_KEY); X-Helper-Token is upstream's voting-helper credential.

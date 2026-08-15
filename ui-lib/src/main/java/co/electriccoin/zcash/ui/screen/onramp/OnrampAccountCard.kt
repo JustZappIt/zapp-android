@@ -27,9 +27,10 @@ import co.electriccoin.zcash.ui.design.component.zapp.ADDRESS_ELLIPSIS_PREFIX
 import co.electriccoin.zcash.ui.design.component.zapp.ADDRESS_ELLIPSIS_SUFFIX
 import co.electriccoin.zcash.ui.design.component.zapp.ZappExplorerLink
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
+import xyz.justzappit.offramp.onramp.OnrampDestination
 
 @Composable
-internal fun IntroCopy() {
+internal fun IntroCopy(destination: OnrampDestination) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         BasicText(
             text = stringResource(R.string.onramp_eyebrow).uppercase(),
@@ -40,7 +41,14 @@ internal fun IntroCopy() {
             style = ZappTheme.typography.display.copy(color = ZappTheme.colors.text, fontWeight = FontWeight.Black),
         )
         BasicText(
-            text = stringResource(R.string.onramp_subtitle),
+            text =
+                stringResource(
+                    if (destination == OnrampDestination.ZCASH) {
+                        R.string.onramp_zcash_subtitle
+                    } else {
+                        R.string.onramp_subtitle
+                    },
+                ),
             style = ZappTheme.typography.body.copy(color = ZappTheme.colors.textMuted),
         )
     }
@@ -56,7 +64,14 @@ internal fun OnrampDestinationInfo(state: OnrampState) {
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         BasicText(
-            text = stringResource(R.string.onramp_account_label).uppercase(),
+            text =
+                stringResource(
+                    if (state.destination == OnrampDestination.ZCASH) {
+                        R.string.onramp_refund_account_label
+                    } else {
+                        R.string.onramp_account_label
+                    },
+                ).uppercase(),
             style =
                 ZappTheme.typography.eyebrow.copy(
                     color = colors.textMuted,
@@ -94,6 +109,12 @@ internal fun OnrampDestinationInfo(state: OnrampState) {
                         .clickable(onClick = state.onCopyAccountAddress)
                         .semantics { role = Role.Button }
                         .padding(15.dp),
+            )
+        }
+        if (state.destination == OnrampDestination.ZCASH) {
+            BasicText(
+                text = stringResource(R.string.onramp_refund_account_explanation),
+                style = ZappTheme.typography.caption.copy(color = colors.textMuted),
             )
         }
     }

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
 
+@file:Suppress("TooManyFunctions")
+
 package co.electriccoin.zcash.ui.screen.onramp
 
 import androidx.compose.runtime.Composable
@@ -10,10 +12,13 @@ import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
+import xyz.justzappit.evm.types.Address
+import xyz.justzappit.offramp.onramp.OnrampDestination
 import xyz.justzappit.offramp.onramp.OnrampFailureCode
 import xyz.justzappit.offramp.onramp.OnrampPaymentInstruction
 import xyz.justzappit.offramp.onramp.OnrampPhase
 import xyz.justzappit.offramp.onramp.OnrampStatus
+import xyz.justzappit.offramp.onramp.OnrampZecDeliveryStatus
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.Usdc6
 import java.math.BigDecimal
@@ -107,13 +112,16 @@ private fun PreviewCompletion() =
                 netUsdc = Usdc6.ofWhole(BigDecimal("0.910153")),
                 fiatAmount = Usdc6.ofWhole(BigDecimal("100")),
                 paidTx = null,
+                recipientAddress = Address.parse(PREVIEW_ADDRESS),
             ),
     )
 
 @Composable
-private fun PreviewOnramp(
+internal fun PreviewOnramp(
     mode: OnrampMode,
     progress: OnrampStatus? = null,
+    delivery: OnrampZecDeliveryStatus? = null,
+    destination: OnrampDestination = OnrampDestination.BASE,
     isSendingBaseBalanceToZec: Boolean = false,
     sendBaseBalanceSuccess: StringResource? = null,
     sendBaseBalanceError: StringResource? = null,
@@ -121,6 +129,7 @@ private fun PreviewOnramp(
     OnrampView(
         OnrampState(
             mode = mode,
+            destination = destination,
             accountAddress = PREVIEW_ADDRESS,
             addressExplorerUrl = null,
             baseBalance = "4.5",
@@ -146,18 +155,21 @@ private fun PreviewOnramp(
             quoteSecondsRemaining = 72,
             orderId = PREVIEW_ORDER_ID,
             receivedUsdc = "0.910153",
+            receivedZec = "0.019",
             fiatPaid = "100",
             transactionExplorerUrl = null,
             paymentInstruction = PREVIEW_INSTRUCTION.takeIf { mode == OnrampMode.PAYMENT },
             paymentAmount = "100",
             paymentSecondsRemaining = 540,
             progress = progress,
+            delivery = delivery,
             error = null,
             canContinue = true,
             isPaidConfirmVisible = false,
             onBack = {},
             onRetry = {},
             onContinue = {},
+            onDestinationSelected = {},
             onCopyAccountAddress = {},
             onSendBaseBalanceToZec = {},
             onConfirmSendBaseBalanceToZec = {},
@@ -167,15 +179,16 @@ private fun PreviewOnramp(
             onConfirmPaid = {},
             onDismissPaidConfirm = {},
             onCancel = {},
+            onDeliveryAction = {},
             onDone = {},
         ),
     )
 }
 
-private const val PREVIEW_ID = "00000000-0000-4000-8000-000000000000"
-private const val PREVIEW_ORDER_ID = "659007"
-private const val PREVIEW_ADDRESS = "0x2c7536E3605D9C16a7a3D7b1898e529396a65c23"
-private val PREVIEW_INSTRUCTION =
+internal const val PREVIEW_ID = "00000000-0000-4000-8000-000000000000"
+internal const val PREVIEW_ORDER_ID = "659007"
+internal const val PREVIEW_ADDRESS = "0x2c7536E3605D9C16a7a3D7b1898e529396a65c23"
+internal val PREVIEW_INSTRUCTION =
     OnrampPaymentInstruction.Upi(
         address = "merchant@upi",
         intentUrl = "upi://pay?pa=merchant@upi&pn=Merchant&am=100.00&cu=INR&tr=659007",
