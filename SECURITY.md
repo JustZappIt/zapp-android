@@ -8,7 +8,7 @@ appreciate responsible disclosure.
 **Please do not open a public GitHub issue for security vulnerabilities.**
 
 Report Zapp-specific security issues privately via GitHub's
-["Report a vulnerability"](https://github.com/JustZappIt/android-zapp/security/advisories/new)
+["Report a vulnerability"](https://github.com/JustZappIt/zapp-android/security/advisories/new)
 (Security advisories) on this repository.
 
 For vulnerabilities in upstream Zcash / Zodl / the Zcash Android SDK, please

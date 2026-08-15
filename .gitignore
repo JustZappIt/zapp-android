@@ -64,19 +64,62 @@ id_ed25519
 # Dependencies
 **/node_modules/
 
-# Maintainer-only notes: kept on local disk, never published.
-# Release operations reference account state; the audits list unfixed findings.
+# ---------------------------------------------------------------------------
+# Publication boundary
+#
+# This repository is the published mirror of a private development repository.
+# Everything below exists there and is deliberately not published here. The
+# rules are what enforce that: without them a routine `git add -A` after a sync
+# silently republishes material that was removed on purpose. If you are adding
+# something to the private tree that must not ship here, add it here too.
+# ---------------------------------------------------------------------------
+
+# Continuous integration. Every job depends on a checkout of the private
+# zappMessaging sibling and on repository secrets, so the workflows could only
+# ever be red here. They also name the secrets they consume.
+.github/workflows/
+.github/actions/
+.github/scripts/
+.github/dependabot.yml
+.github/java-upgrade/
+.github/modernize/
+
+# Release operations reference account state; the audits and the parity ledger
+# record unfixed findings, embargoed upstream security work, unreleased branch
+# names and internal ticket numbers.
 docs/PLAY_PUBLISHING.md
 docs/RELEASE_SIGNING.md
-docs/audits/FORK-AUDIT.md
-docs/audits/AUDIT-2026-05-31.md
-docs/audits/FORK-CODE-STYLE-AUDIT-2026-06-10.md
+docs/audits/
 docs/notifications/PUSH_NOTIFICATION_AUDIT.md
+docs/FORK_MAINTENANCE_GUIDE.md
+docs/UPSTREAM_SECURITY_SYNC_GUIDE.md
+docs/CI.md
 BLIND_PEER_DEBUG.md
 docs/android/
+docs/play/
+docs/GooglePlayStoreListing/
+
+# In-flight planning documents. These describe work before it is decided, and
+# routinely contain conclusions that were later reversed.
+docs/*_PLAN.md
+docs/HACKATHON.md
+docs/HANDOVER_UI_CLEANUP.md
+
+# Agent and assistant configuration, and local scratch clones.
+.claude/
+.claude-flow/
+CLAUDE.md
+
+# Solves a captcha to drip testnet funds. Not something to hand out.
+scripts/testnet-faucet.mjs
 
 # Design prototypes: raw capture dumps, not a build input
 design/
+
+# Store artwork inherited from upstream, removed rather than republished as
+# this project's own. See stores/solana/media/README.md.
+stores/solana/media/*.png
+fastlane/metadata/android/*/images/
 
 # Solana dApp Store config (stored privately in GCS)
 stores/config.yaml

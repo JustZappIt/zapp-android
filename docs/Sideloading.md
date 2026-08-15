@@ -3,7 +3,7 @@ This documentation describes how to sideload a Debug or Universal release APK cr
 Integration. It also provides details on how to install an Android emulator on a desktop machine for non-Android users.
 
 1. Obtain binary
-    1. Look under the [GitHub Actions tab](https://github.com/JustZappIt/android-zapp/actions). Every 
+    1. Look under the [GitHub Actions tab](https://github.com/JustZappIt/zapp-android/actions). Every 
        pull request and merge to the Main branch will trigger a workflow that generates builds of the app. The 
        workflows are called _Pull Request_ and _Deploy_.
     1. Click on a successful workflow

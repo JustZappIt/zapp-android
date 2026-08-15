@@ -29,4 +29,4 @@ This is a brief checklist to ensure all the necessary pre-release and post-relea
 
 **Important**: Later, once the Google Play build is public in the Production track, do these steps:
   - [ ] Tag the release commit (with format [version-name]-[version-code], e.g., 1.4-876)
-  - [ ] Open a new GitHub release (https://github.com/JustZappIt/android-zapp/releases)
+  - [ ] Open a new GitHub release (https://github.com/JustZappIt/zapp-android/releases)

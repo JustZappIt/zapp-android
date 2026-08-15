@@ -6,10 +6,8 @@ a deliberate product difference.
 
 This page is organised by **area**, not by commit. The fork carries several hundred commits on top
 of upstream and the published history is squashed, so a per-commit list would go stale the day it
-was written. Read this for the shape of the divergence, then read
-[`docs/audits/UPSTREAM-PARITY.md`](docs/audits/UPSTREAM-PARITY.md) for the live tracking record of
-which specific upstream patches have been taken, which are still owed, and which were examined and
-ruled out.
+was written. Read this for the shape of the divergence, then read section 9 for how the fork stays
+close to upstream and which files conflict on every merge.
 
 ---
 
@@ -222,9 +220,9 @@ Unchanged on purpose, and not to be "tidied":
 Fork-only modules take a fork-only package (`xyz.justzappit.evm`, `xyz.justzappit.offramp`) because
 they have no upstream counterpart to collide with.
 
-The live record of what has been ported, what is outstanding, and what was investigated and
-correctly rejected is [`docs/audits/UPSTREAM-PARITY.md`](docs/audits/UPSTREAM-PARITY.md). It is a
-living document: edit it, do not start a new dated snapshot beside it.
+The ledger of what has been ported, what is outstanding, and what was investigated and correctly
+rejected is kept privately. It records unreleased branches, embargoed upstream security fixes and
+unfixed findings, so it is not published alongside the source.
 
 ### Merge procedure
 
@@ -254,7 +252,7 @@ Conflicts cluster in a predictable set:
 | `ui-lib/.../screen/tabs/` | entirely fork-authored |
 | `ui-lib/.../screen/unifiedsend/` | replaces upstream's `screen/pay/` |
 | `ui-design-lib/.../theme/`, `.../component/zapp/` | the Zapp design system |
-| `.github/workflows/` | the sibling-checkout and `.zapp-deps` verification steps |
 
-Before starting, read the parity document's "How to run the next parity sweep" section. It records
-which apparent gaps have already been chased down and refuted, which saves a day of rediscovery.
+Continuous integration is not part of this repository. Every job depends on a checkout of the
+private `zappMessaging` sibling and on repository secrets, so the workflows would only ever be
+red here and are omitted rather than published broken.

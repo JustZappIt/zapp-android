@@ -10,8 +10,8 @@ itself a fork of Electric Coin Company's
 [Zashi](https://github.com/Electric-Coin-Company/zashi-android). The fork diverged at upstream
 commit [`2409c4d7`](https://github.com/zodl-inc/zodl-android/commit/2409c4d7104c44ba72fe05343e0a20585b156be9)
 (the zodl 3.3.1 release merge) and carries roughly 500 commits of divergence on top of it. What the
-fork has taken from upstream since, and what it still owes, is tracked in
-[docs/audits/UPSTREAM-PARITY.md](docs/audits/UPSTREAM-PARITY.md).
+fork changes on purpose, and what it deliberately keeps in lockstep, is described in
+[ZAPP_CHANGES.md](ZAPP_CHANGES.md).
 
 ## What is different from upstream
 
@@ -263,7 +263,7 @@ Upgrade it, or delete `~/.android/debug.keystore` and let it regenerate.
 | Component | Version |
 | --- | --- |
 | `compileSdk` | 36 (`ANDROID_COMPILE_SDK_VERSION`) |
-| `targetSdk` | 35 (`ANDROID_TARGET_SDK_VERSION`) |
+| `targetSdk` | 36 (`ANDROID_TARGET_SDK_VERSION`) |
 | `minSdk` | 27 (`ANDROID_MIN_SDK_VERSION`) |
 | NDK, this repository | 27.0.12077973 (`ANDROID_NDK_VERSION`) |
 | NDK, `bare-kit` module | 28.2.13676358 (declared in `../bare-kit/android/build.gradle`) |
@@ -343,12 +343,16 @@ No sibling SDK clone and no local Rust build are needed. To build against a loca
 
 ## Tracking upstream
 
-Upstream plumbing parity is deliberate, and drift is expensive. Before porting anything, read
-[docs/audits/UPSTREAM-PARITY.md](docs/audits/UPSTREAM-PARITY.md), which is the single living record
-of what has been taken from upstream, what is still owed, and what was investigated and dismissed.
-Process for a sync lives in [docs/FORK_MAINTENANCE_GUIDE.md](docs/FORK_MAINTENANCE_GUIDE.md), and
-security-relevant upstream changes have their own procedure in
-[docs/UPSTREAM_SECURITY_SYNC_GUIDE.md](docs/UPSTREAM_SECURITY_SYNC_GUIDE.md).
+Upstream plumbing parity is deliberate, and drift is expensive. The fork changes product and
+leaves plumbing alone, because the cheaper an upstream merge is, the faster a Zcash security fix
+reaches Zapp users. [ZAPP_CHANGES.md](ZAPP_CHANGES.md) describes what is intentionally different
+and lists the files that conflict on every upstream merge; section 9 there carries the merge
+procedure.
+
+The ledger of which specific upstream patches have been taken, which are still owed, and which
+were examined and ruled out is kept privately, along with the security-sync procedure for
+upstream changes that are embargoed at the time we take them. That record names unreleased
+branches and unfixed findings, so it is not published.
 
 ## Known issues
 
@@ -376,9 +380,9 @@ If you are forking to build a different app rather than to contribute back:
    [strings.xml](ui-lib/src/main/res/ui/non_translatable/values/strings.xml).
 4. Remove the copyrighted Zcash and Zapp icons and logos, which live under
    `ui-lib/src/main/res/ui/common/` and `ui-lib/src/main/ic_launcher-playstore.png`.
-5. Optionally, configure [Continuous Integration](docs/CI.md) secrets, and Firebase keys at
-   `app/src/debug/google-services.json` and `app/src/release/google-services.json` if you want the
-   `store` flavor.
+5. Supply your own Firebase keys at `app/src/debug/google-services.json` and
+   `app/src/release/google-services.json` if you want the `store` flavor. Neither file is in this
+   repository. The `foss` flavor needs neither.
 
 # License
 

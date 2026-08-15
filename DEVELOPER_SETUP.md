@@ -336,5 +336,4 @@ model/  repository/  view/     # models, repositories, composables (incl. view/b
   the native runtime. `ChatBootstrap` uses `MainScope()` for this reason; keep it that way
 
 For which module owns what, and how the fork's surfaces map onto upstream's, see
-[`ZAPP_CHANGES.md`](ZAPP_CHANGES.md) and
-[`docs/FORK_MAINTENANCE_GUIDE.md`](docs/FORK_MAINTENANCE_GUIDE.md).
+[`ZAPP_CHANGES.md`](ZAPP_CHANGES.md).

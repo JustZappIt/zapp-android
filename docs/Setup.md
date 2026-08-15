@@ -47,7 +47,7 @@ Start by making sure the command line with Gradle works first, because **all the
     1. To check out a git repo from GitHub, there are three authentication methods: SSH, HTTPS, and GitHub API.  We recommend SSH.
     1. Create a new SSH key, following [GitHub's instructions](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent)
     1. Add the SSH key under [GitHub account settings](https://github.com/settings/keys)
-    1. Clone repo in a terminal on your computer `git clone git@github.com:JustZappIt/android-zapp.git`
+    1. Clone repo in a terminal on your computer `git clone git@github.com:JustZappIt/zapp-android.git`
 1. Compile from the command line
     1. Navigate to the repo checkout in a terminal
     1. Compile the application with the gradle command `./gradlew assemble`
@@ -140,7 +140,7 @@ There are some limitations of included builds:
 ### Firebase Test Lab
 This section is optional.
 
-For Continuous Integration, see [CI.md](CI.md).  The rest of this section is regarding local development.
+This section is regarding local development.
 
 1. Configure or request access to a Firebase Test Lab project
     1. If you are an Electric Coin Co team member: Make an IT request to add your Google account to the existing Firebase Test Lab project 
@@ -157,7 +157,7 @@ The Firebase Test Lab tasks DO NOT build the app, so they rely on existing build
 ### Emulator WTF
 This section is optional.  
 
-For Continuous Integration, see [CI.md](CI.md).  The rest of this section is regarding local development.
+This section is regarding local development.
 
 1. Configure or request access to emulator.wtf
     1. If you are an Electric Coin Co team member: We are still setting up a process for this, because emulator.wtf does not yet support individual API tokens
