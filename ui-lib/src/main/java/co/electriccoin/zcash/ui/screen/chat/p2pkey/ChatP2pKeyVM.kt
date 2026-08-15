@@ -9,13 +9,13 @@ import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.common.security.PinVerifyState
-import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.ExportP2pWalletKeyUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOfframpBaseAddressUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.chat.common.ChatPinVerifyState
 import co.electriccoin.zcash.ui.screen.chat.common.CopyFeedback
+import co.electriccoin.zcash.ui.screen.chat.common.SecretAuthGate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -61,7 +61,7 @@ class ChatP2pKeyVM(
         account: String?,
         key: ChatP2pOwnerKey?,
         copied: String?,
-        pin: PinVerifyState?,
+        pin: ChatPinVerifyState?,
     ) = ChatP2pKeyState(
         smartAccountAddress = account,
         ownerKey = key,

@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
@@ -45,7 +44,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -82,8 +80,6 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import xyz.justzappit.offramp.p2p.CurrencyCode
 
-private const val DISABLED_ROW_ALPHA = 0.45f
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SettingsTabContent(
@@ -98,8 +94,6 @@ internal fun SettingsTabContent(
     onChatSettingsClick: () -> Unit,
     onCopyPublicKeyClick: (String) -> Unit,
     onP2pPaymentMethodClick: () -> Unit,
-    onViewingKeyExportClick: () -> Unit,
-    isWalletRestoring: Boolean,
     walletViewModel: WalletViewModel = koinViewModel(),
 ) {
     val scope = rememberCoroutineScope()
@@ -242,16 +236,6 @@ internal fun SettingsTabContent(
                             )
                             ZappRowDivider(inset = true)
                         }
-                        ZappRow(
-                            title = stringResource(R.string.advanced_settings_viewing_key_export),
-                            subtitle = stringResource(R.string.advanced_settings_viewing_key_export_subtitle),
-                            icon = Icons.Default.Visibility,
-                            iconTint = c.accentText,
-                            iconBackground = c.accentSoft,
-                            onClick = if (isWalletRestoring) null else onViewingKeyExportClick,
-                            modifier = Modifier.alpha(if (isWalletRestoring) DISABLED_ROW_ALPHA else 1f),
-                        )
-                        ZappRowDivider(inset = true)
                         ZappRow(
                             title = stringResource(R.string.choose_server_title),
                             subtitle = stringResource(R.string.settings_server_subtitle),

@@ -87,7 +87,7 @@ import co.electriccoin.zcash.ui.common.push.ChatNotificationTiming
 import co.electriccoin.zcash.ui.common.push.ChatPushBackend
 import co.electriccoin.zcash.ui.common.push.ChatPushBackendImpl
 import co.electriccoin.zcash.ui.common.push.PushRegistrar
-import co.electriccoin.zcash.ui.common.security.SecretAuthGate
+import co.electriccoin.zcash.ui.screen.chat.common.SecretAuthGate
 import io.ktor.client.HttpClient
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf

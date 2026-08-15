@@ -11,8 +11,6 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.common.security.PinVerifyState
-import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.DeleteChatIdentityUseCase
 import co.electriccoin.zcash.ui.common.usecase.ExportChatSeedPhraseUseCase
@@ -20,8 +18,10 @@ import co.electriccoin.zcash.ui.common.usecase.ObserveChatIdentityUseCase
 import co.electriccoin.zcash.ui.common.usecase.UpdateChatDisplayNameUseCase
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.chat.common.ChatPinVerifyState
 import co.electriccoin.zcash.ui.screen.chat.common.ChatResult
 import co.electriccoin.zcash.ui.screen.chat.common.CopyFeedback
+import co.electriccoin.zcash.ui.screen.chat.common.SecretAuthGate
 import co.electriccoin.zcash.ui.screen.chat.common.UsernameRules
 import co.electriccoin.zcash.ui.screen.chat.p2pkey.ChatP2pKeyArgs
 import co.electriccoin.zcash.ui.screen.chat.walletaddress.ChatWalletAddressArgs
@@ -102,7 +102,7 @@ class ChatProfileVM(
         id: ChatProfileIdentity?,
         copiedValue: String?,
         dialogs: DialogSnapshot,
-        pinPrompt: PinVerifyState?,
+        pinPrompt: ChatPinVerifyState?,
         seed: String?,
     ): ChatProfileState =
         ChatProfileState(

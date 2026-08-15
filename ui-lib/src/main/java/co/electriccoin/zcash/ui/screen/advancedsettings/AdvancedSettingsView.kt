@@ -81,7 +81,6 @@ fun AdvancedSettings(state: AdvancedSettingsState) {
                 state.items.forEachIndexed { index, item ->
                     ZappRow(
                         title = item.title.getValue(),
-                        subtitle = item.subtitle?.getValue(),
                         icon = item.icon,
                         onClick = if (item.isEnabled) item.onClick else null,
                         modifier = Modifier.alpha(if (item.isEnabled) 1f else 0.45f),

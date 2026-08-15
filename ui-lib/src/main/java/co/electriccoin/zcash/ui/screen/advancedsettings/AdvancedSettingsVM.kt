@@ -9,7 +9,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.UsbOff
-import androidx.compose.material.icons.filled.Visibility
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
@@ -32,7 +31,6 @@ import co.electriccoin.zcash.ui.screen.advancedsettings.debug.DebugArgs
 import co.electriccoin.zcash.ui.screen.disconnect.DisconnectArgs
 import co.electriccoin.zcash.ui.screen.hotfix.enhancement.EnhancementHotfixArgs
 import co.electriccoin.zcash.ui.screen.hotfix.ephemeral.EphemeralHotfixArgs
-import co.electriccoin.zcash.ui.screen.viewingkeyexport.ViewingKeyExportArgs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -105,13 +103,6 @@ class AdvancedSettingsVM(
                         onClick = ::onTaxExportClick,
                     ),
                     AdvancedSettingsItem(
-                        title = stringRes(R.string.advanced_settings_viewing_key_export),
-                        subtitle = stringRes(R.string.advanced_settings_viewing_key_export_subtitle),
-                        icon = Icons.Default.Visibility,
-                        isEnabled = !restoring,
-                        onClick = ::onViewingKeyExportClick,
-                    ),
-                    AdvancedSettingsItem(
                         title = stringRes(R.string.advanced_settings_discover_funds),
                         icon = Icons.Default.Search,
                         onClick = ::onDiscoverFundsClick,
@@ -151,8 +142,6 @@ class AdvancedSettingsVM(
     private fun onExportPrivateDataClick() = viewModelScope.launch { navigateToExportPrivateData() }
 
     private fun onTaxExportClick() = viewModelScope.launch { navigateToTaxExport() }
-
-    private fun onViewingKeyExportClick() = navigationRouter.forward(ViewingKeyExportArgs)
 
     private fun onDiscoverFundsClick() = navigationRouter.forward(EphemeralHotfixArgs(address = null))
 
