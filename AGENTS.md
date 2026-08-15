@@ -64,9 +64,10 @@ crashes in the biometric gate on emulators. `adb shell pm clear <package>` recov
 
 ## Upstream & sibling coupling (landmines)
 
-- `.zapp-deps` pins the `zappMessaging`, `bare-kit`, and `zcashAndroidWalletSdk` SHAs.
-  CI verifies siblings against it. Bumping requires updating BOTH `.zapp-deps` and the
-  `ZAPP_MESSAGING_REF`/`BARE_KIT_REF` env values in `.github/workflows/pull-request.yml`.
+- `.zapp-deps` pins the `zappMessaging`, `bare-kit`, and `zcashAndroidWalletSdk` SHAs. Bumping one
+  means checking out the new SHA in the sibling as well; nothing in this repository does it for
+  you. The `.zapp-deps` comments refer to a CI check that runs on the private repository, which is
+  where the workflows live.
 - The local `../zappMessaging` may deliberately sit on a feature branch ahead of the pin.
   Do not reset it or touch `.zapp-deps` as a side effect of unrelated work.
 - All P2P logic lives in `zappMessaging/core/` (JS). After any JS change there, run
@@ -77,7 +78,7 @@ crashes in the biometric gate on emulators. `adb shell pm clear <package>` recov
   message types in `ipc-handler.js` need mirroring in the Kotlin AND Swift SDK wrappers.
 - Don't bump `SDK_INCLUDED_BUILD_PATH` / `ZCASH_SDK_VERSION` outside coordinated
   upstream-sync work. Upstream merges are cherry-pick (security/crypto), never full-merge.
-  See `ZAPP_CHANGES.md` and `docs/FORK_MAINTENANCE_GUIDE.md` for conflict hotspots.
+  See `ZAPP_CHANGES.md` section 9 for conflict hotspots.
 
 ## Architecture map
 

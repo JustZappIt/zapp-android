@@ -21,7 +21,7 @@ remain under the **MIT** license. See [../LICENSE](../LICENSE) and
 [../NOTICE](../NOTICE).
 
 ## Getting Started
-Our backlog has many items [tagged with "good first issue"](https://github.com/JustZappIt/android-zapp/labels/good%20first%20issue).  If you'd like to pick one of these up, please fork the repo and make a pull request for us to review.
+Our backlog has many items [tagged with "good first issue"](https://github.com/JustZappIt/zapp-android/labels/good%20first%20issue).  If you'd like to pick one of these up, please fork the repo and make a pull request for us to review.
 
 Our [Architecture.md](Architecture.md) documentation is a good reference get oriented on the structure of the codebase.
 
