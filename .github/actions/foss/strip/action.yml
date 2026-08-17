@@ -1,0 +1,8 @@
+name: 'Strip Non-FOSS Components'
+description: "Remove all non-FOSS aligned code fragments and dependencies"
+runs:
+  using: "composite"
+  steps:
+    - name: Strip non-FOSS components
+      shell: bash
+      run: ./scripts/prepare-foss-build.sh

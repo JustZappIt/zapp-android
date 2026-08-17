@@ -1,0 +1,36 @@
+name: 'Free runner disk space'
+description: 'Removes unused hosted-runner toolchains before native Android builds'
+runs:
+  using: "composite"
+  steps:
+    - name: Free disk space
+      shell: bash
+      run: |
+        echo "Disk before cleanup"
+        df -h
+
+        sudo rm -rf \
+          /opt/ghc \
+          /opt/hostedtoolcache/CodeQL \
+          /opt/hostedtoolcache/go \
+          /opt/hostedtoolcache/PyPy \
+          /opt/hostedtoolcache/Python \
+          /opt/hostedtoolcache/Ruby \
+          /usr/local/.ghcup \
+          /usr/local/lib/android/sdk/system-images \
+          /usr/local/share/boost \
+          /usr/local/share/chromium \
+          /usr/local/share/powershell \
+          /usr/share/dotnet \
+          /usr/share/swift
+
+        if [ -d /usr/local/lib/android/sdk/ndk ]; then
+          find /usr/local/lib/android/sdk/ndk -mindepth 1 -maxdepth 1 ! -name "27.0.12077973" -exec sudo rm -rf {} +
+        fi
+
+        sudo docker image prune --all --force || true
+        sudo docker builder prune --all --force || true
+        sudo apt-get clean
+
+        echo "Disk after cleanup"
+        df -h

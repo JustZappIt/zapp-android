@@ -1,0 +1,57 @@
+# Expected secrets
+
+# The blind-push deployment vendors its relay and invite-mailbox modules from
+# zappMessaging, because the VPS installs that directory with `npm ci` and cannot
+# reach a sibling repository. This is what stops the deployed server from
+# diverging from the client it has to interoperate with.
+#
+# Separate from pull-request.yml on purpose: that workflow ignores `docs/**`, and
+# the vendored files live in the deployment directory under docs/. Editing them
+# there is precisely the change that must not go unchecked.
+
+name: Vendored blind-push server
+
+on:
+  pull_request:
+    paths:
+      - '.zapp-deps'
+      - '.github/workflows/pull-request.yml'
+      - '.github/workflows/vendored-blind-push-server.yml'
+      - 'scripts/vendor-blind-push-server.js'
+      - 'docs/notifications/deployment/blind-push/vendor/**'
+      - 'docs/notifications/deployment/blind-push/package.json'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check_vendored_server:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Read the pinned messaging commit
+        id: pin
+        timeout-minutes: 1
+        run: |
+          ref="$(sed -n 's/^zappMessaging=\([0-9a-f]\{40\}\)$/\1/p' .zapp-deps)"
+          if [ -z "$ref" ]; then
+            echo "::error::.zapp-deps has no zappMessaging commit"
+            exit 1
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+      - name: Checkout zappMessaging
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zappmessaging-sdk
+          ref: ${{ steps.pin.outputs.ref }}
+          path: zappMessaging
+      # Also asserts that .zapp-deps and pull-request.yml name the same commit.
+      - name: Vendored server matches the pinned messaging commit
+        timeout-minutes: 1
+        run: node scripts/vendor-blind-push-server.js --check

@@ -1,0 +1,20 @@
+name: 'Setup bare-kit npm dependencies'
+description: 'Installs bare-kit npm dependencies required by its CMake build'
+inputs:
+  working-directory:
+    description: 'Directory containing bare-kit package-lock.json'
+    required: false
+    default: 'bare-kit'
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Node
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        cache: 'npm'
+        cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+    - name: Install npm dependencies
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: npm ci

@@ -1,0 +1,1007 @@
+# Expected secrets
+# EMULATOR_WTF_API_KEY - Optional API key for emulator.wtf
+# FIREBASE_TEST_LAB_SERVICE_ACCOUNT - Email address of Firebase Test Lab service account
+# FIREBASE_TEST_LAB_WORKLOAD_IDENTITY_PROVIDER - Workload identity provider to generate temporary service account key
+# FIREBASE_DEBUG_JSON_BASE64 - Optional JSON to enable Firebase (e.g. Crashlytics) for debug builds
+# FIREBASE_RELEASE_JSON_BASE64 - Optional JSON to enable Firebase (e.g. Crashlytics) for release builds
+
+# Expected variables
+# FIREBASE_TEST_LAB_PROJECT - Firebase Test Lab project name
+
+name: Pull Request
+
+on:
+  pull_request:
+    paths-ignore:
+      - '.github/ISSUE_TEMPLATE/*'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - 'LICENSE'
+      - 'README.md'
+      - 'docs/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The messaging SDK is consumed from its published mirror, which is public and so
+  # needs no token: every job here runs on a pull request from a fork, where secrets
+  # are unavailable. The mirror's history is squashed, so this commit id is its own
+  # and will not match one in the repository it is published from. Keep it in step
+  # with .zapp-deps; verify_composite_build fails when the two disagree.
+  ZAPP_MESSAGING_REF: a8b88ed4f6cc22382a4c79167340031aa12c42b1
+  BARE_KIT_REF: 15a3569f3d704de7151761051c8d9cc2e299414f
+
+jobs:
+  validate_gradle_wrapper:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0 # to fetch all commits
+      - name: Gradle Wrapper Validation
+        timeout-minutes: 1
+        uses: gradle/actions/wrapper-validation@v5
+
+  check_firebase_secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      has-secrets: ${{ steps.check_firebase_secrets.outputs.defined }}
+    steps:
+      - id: check_firebase_secrets
+        env:
+          FIREBASE_TEST_LAB_PROJECT: ${{ vars.FIREBASE_TEST_LAB_PROJECT }}
+          FIREBASE_TEST_LAB_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_TEST_LAB_SERVICE_ACCOUNT }}
+          FIREBASE_TEST_LAB_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.FIREBASE_TEST_LAB_WORKLOAD_IDENTITY_PROVIDER }}
+        if: "${{ env.FIREBASE_TEST_LAB_PROJECT != '' && env.FIREBASE_TEST_LAB_SERVICE_ACCOUNT != '' && env.FIREBASE_TEST_LAB_WORKLOAD_IDENTITY_PROVIDER != '' }}"
+        run: echo "defined=true" >> $GITHUB_OUTPUT
+
+  check_emulator_wtf_secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      has-secrets: ${{ steps.check_emulator_wtf_secrets.outputs.defined }}
+    steps:
+      - id: check_emulator_wtf_secrets
+        env:
+          EMULATOR_WTF_API_KEY: ${{ secrets.EMULATOR_WTF_API_KEY }}
+        if: "${{ env.EMULATOR_WTF_API_KEY != '' }}"
+        run: echo "defined=true" >> $GITHUB_OUTPUT
+
+  check_properties:
+    needs: validate_gradle_wrapper
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+      - name: Set up Java
+        uses: ./.github/actions/setup-java
+        timeout-minutes: 1
+      - name: Set up Gradle
+        uses: ./.github/actions/setup-gradle
+        timeout-minutes: 5
+      - name: Check properties
+        timeout-minutes: 4
+        run: |
+          ./gradlew checkProperties
+
+  static_analysis_detekt:
+    needs: validate_gradle_wrapper
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0 # to fetch all commits
+      - name: Set up Java
+        uses: ./.github/actions/setup-java
+        timeout-minutes: 1
+      - name: Set up Gradle
+        uses: ./.github/actions/setup-gradle
+        timeout-minutes: 5
+      - name: Detekt
+        timeout-minutes: 10
+        run: |
+          ./gradlew detektAll
+      - name: Collect Artifacts
+        timeout-minutes: 1
+        if: ${{ always() }}
+        run: |
+          export ARTIFACTS_DIR_PATH=~/artifacts
+          export REPORTS_ZIP_PATH=${ARTIFACTS_DIR_PATH}/static_analysis_detekt.zip
+
+          mkdir ${ARTIFACTS_DIR_PATH}
+
+          zip -r ${REPORTS_ZIP_PATH} . -i build/reports/detekt/*
+      - name: Upload Artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        timeout-minutes: 1
+        with:
+          name: Detekt static analysis results
+          path: ~/artifacts
+
+  static_analysis_ktlint:
+    needs: validate_gradle_wrapper
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0 # to fetch all commits
+      - name: Set up Java
+        uses: ./.github/actions/setup-java
+        timeout-minutes: 1
+      - name: Set up Gradle
+        uses: ./.github/actions/setup-gradle
+        timeout-minutes: 5
+      - name: Ktlint
+        timeout-minutes: 10
+        run: |
+          ./gradlew ktlint
+      - name: Collect Artifacts
+        timeout-minutes: 1
+        if: ${{ always() }}
+        run: |
+          export ARTIFACTS_DIR_PATH=~/artifacts
+          export REPORTS_ZIP_PATH=${ARTIFACTS_DIR_PATH}/static_analysis_ktlint.zip
+
+          mkdir ${ARTIFACTS_DIR_PATH}
+
+          zip -r ${REPORTS_ZIP_PATH} . -i build/reports/ktlint/\*
+      - name: Upload Artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        timeout-minutes: 1
+        with:
+          name: Ktlint static analysis results
+          path: ~/artifacts
+
+  static_analysis_android_lint:
+    needs: validate_gradle_wrapper
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0 # to fetch all commits
+      - name: Checkout zappMessaging
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zappmessaging-sdk
+          ref: ${{ env.ZAPP_MESSAGING_REF }}
+          path: zappMessaging
+      - name: Checkout bare-kit
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: holepunchto/bare-kit
+          ref: ${{ env.BARE_KIT_REF }}
+          path: bare-kit
+      - name: Free runner disk space
+        uses: ./.github/actions/free-disk-space
+        timeout-minutes: 5
+      - name: Set up bare-kit npm dependencies
+        uses: ./.github/actions/setup-bare-kit
+        timeout-minutes: 10
+      - name: Set up Java
+        uses: ./.github/actions/setup-java
+        timeout-minutes: 1
+      - name: Set up Gradle
+        uses: ./.github/actions/setup-gradle
+        timeout-minutes: 5
+      - name: Android Lint
+        timeout-minutes: 45
+        env:
+          # Disable minify, since it makes lint run faster
+          ORG_GRADLE_PROJECT_IS_MINIFY_ENABLED: false
+        run: |
+          ./gradlew :app:lintZcashmainnetStoreRelease
+      - name: Collect Artifacts
+        if: ${{ always() }}
+        timeout-minutes: 1
+        run: |
+          export ARTIFACTS_DIR_PATH=~/artifacts
+          export LINT_ZIP_PATH=${ARTIFACTS_DIR_PATH}/android_lint.zip
+
+          mkdir ${ARTIFACTS_DIR_PATH}
+          
+          zip -r ${LINT_ZIP_PATH} . -i \*build/reports/\*
+      - name: Upload Artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        timeout-minutes: 1
+        with:
+          name: Android Lint static analysis results
+          path: ~/artifacts
+
+  test_kotlin_modules:
+    needs: validate_gradle_wrapper
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0 # to fetch all commits
+      - name: Set up Java
+        uses: ./.github/actions/setup-java
+        timeout-minutes: 1
+      - name: Set up Gradle
+        uses: ./.github/actions/setup-gradle
+        timeout-minutes: 5
+      - name: Test
+        timeout-minutes: 10
+        run: |
+          # Note that we explicitly check just the Kotlin modules, to avoid compiling the Android modules here
+          ./gradlew :configuration-api-lib:check :crash-lib:check :preference-api-lib:check :spackle-lib:check
+      - name: Collect Artifacts
+        if: ${{ always() }}
+        timeout-minutes: 1
+        run: |
+          export ARTIFACTS_DIR_PATH=~/artifacts
+          export RESULTS_ZIP_PATH=${ARTIFACTS_DIR_PATH}/test_kotlin.zip
+
+          mkdir ${ARTIFACTS_DIR_PATH}
+
+          zip -r ${RESULTS_ZIP_PATH} . -i \*build/reports/\* \*/build/kover/html/\* \*/build/kover/xml/report.xml
+      - name: Upload Artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        timeout-minutes: 1
+        with:
+          name: Test Kotlin modules results
+          path: ~/artifacts
+
+# Emulator.wtf is preferred if it has an API key.
+  test_android_modules_ftl:
+    if: needs.check_firebase_secrets.outputs.has-secrets == 'true' && needs.check_emulator_wtf_secrets.outputs.has-secrets == 'false'
+    needs: [validate_gradle_wrapper, check_firebase_secrets, check_emulator_wtf_secrets]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0 # to fetch all commits
+      - name: Checkout zappMessaging
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zappmessaging-sdk
+          ref: ${{ env.ZAPP_MESSAGING_REF }}
+          path: zappMessaging
+      - name: Checkout bare-kit
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: holepunchto/bare-kit
+          ref: ${{ env.BARE_KIT_REF }}
+          path: bare-kit
+      - name: Set up bare-kit npm dependencies
+        uses: ./.github/actions/setup-bare-kit
+        timeout-minutes: 10
+      - name: Set up Java
+        uses: ./.github/actions/setup-java
+        timeout-minutes: 1
+      - name: Set up Gradle
+        uses: ./.github/actions/setup-gradle
+        timeout-minutes: 5
+      - name: Build
+        timeout-minutes: 20
+        run: |
+          ./gradlew assembleZcashmainnetStoreDebug assembleZcashtestnetStoreDebug assembleAndroidTest
+      - name: Authenticate to Google Cloud for Firebase Test Lab
+        id: auth_test_lab
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          create_credentials_file: true
+          project_id: ${{ vars.FIREBASE_TEST_LAB_PROJECT }}
+          service_account: ${{ secrets.FIREBASE_TEST_LAB_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.FIREBASE_TEST_LAB_WORKLOAD_IDENTITY_PROVIDER }}
+          access_token_lifetime: '1200s'
+      - name: Test
+        timeout-minutes: 30
+        env:
+          # Force blank suffix for screenshot tests
+          ORG_GRADLE_PROJECT_ZCASH_DEBUG_APP_NAME_SUFFIX: ""
+          # Used by Flank, since the temporary token is missing the project name
+          GOOGLE_CLOUD_PROJECT: ${{ vars.FIREBASE_TEST_LAB_PROJECT }}
+          ORG_GRADLE_PROJECT_ZCASH_FIREBASE_TEST_LAB_API_KEY_PATH: ${{ steps.auth_test_lab.outputs.credentials_file_path }}
+          # Because Fulladle doesn't allow Test Orchestrator to be enabled/disabled for a specific submodule, it must be enabled for all modules
+          ORG_GRADLE_PROJECT_IS_USE_TEST_ORCHESTRATOR: true
+          ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
+          ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
+        run: |
+          ./gradlew runFlank
+      - name: Collect Artifacts
+        if: ${{ always() }}
+        timeout-minutes: 1
+        run: |
+          export ARTIFACTS_DIR_PATH=~/artifacts
+          export TEST_RESULTS_ZIP_PATH=${ARTIFACTS_DIR_PATH}/test_results.zip
+
+          mkdir ${ARTIFACTS_DIR_PATH}
+
+          zip -r ${TEST_RESULTS_ZIP_PATH} . -i build/fladle/\* \*/build/outputs/androidTest-results/\*
+      - name: Upload Artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        timeout-minutes: 1
+        with:
+          name: Test Android modules with FTL results
+          path: ~/artifacts
+
+  test_android_modules_wtf_coverage:
+    if: needs.check_emulator_wtf_secrets.outputs.has-secrets == 'true'
+    needs: [ validate_gradle_wrapper, check_emulator_wtf_secrets]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0 # to fetch all commits
+      - name: Checkout zappMessaging
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zappmessaging-sdk
+          ref: ${{ env.ZAPP_MESSAGING_REF }}
+          path: zappMessaging
+      - name: Checkout bare-kit
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: holepunchto/bare-kit
+          ref: ${{ env.BARE_KIT_REF }}
+          path: bare-kit
+      - name: Set up bare-kit npm dependencies
+        uses: ./.github/actions/setup-bare-kit
+        timeout-minutes: 10
+      - name: Set up Java
+        uses: ./.github/actions/setup-java
+        timeout-minutes: 1
+      - name: Set up Gradle
+        uses: ./.github/actions/setup-gradle
+        timeout-minutes: 5
+      - name: Build and test
+        timeout-minutes: 30
+        env:
+          # Force blank suffix for screenshot tests
+          ORG_GRADLE_PROJECT_ZCASH_DEBUG_APP_NAME_SUFFIX: ""
+          ORG_GRADLE_PROJECT_ZCASH_EMULATOR_WTF_API_KEY: ${{ secrets.EMULATOR_WTF_API_KEY }}
+          ORG_GRADLE_PROJECT_IS_ANDROID_INSTRUMENTATION_TEST_COVERAGE_ENABLED: true
+          ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
+          ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
+        run: |
+          ./gradlew testDebugWithEmulatorWtf :ui-integration-test:testZcashmainnetStoreDebugWithEmulatorWtf
+      - name: Collect Artifacts
+        if: ${{ always() }}
+        timeout-minutes: 1
+        run: |
+          export ARTIFACTS_DIR_PATH=~/artifacts
+          export TEST_RESULTS_ZIP_PATH=${ARTIFACTS_DIR_PATH}/test_results.zip
+
+          mkdir ${ARTIFACTS_DIR_PATH}
+
+          zip -r ${TEST_RESULTS_ZIP_PATH} . -i \*/build/test-results/\*
+      - name: Upload Artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        timeout-minutes: 1
+        with:
+          name: Test Android libs with WTF results
+          path: ~/artifacts
+
+  test_android_modules_wtf_no_coverage:
+    if: needs.check_emulator_wtf_secrets.outputs.has-secrets == 'true'
+    needs: [ validate_gradle_wrapper, check_emulator_wtf_secrets]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0 # to fetch all commits
+      - name: Checkout zappMessaging
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zappmessaging-sdk
+          ref: ${{ env.ZAPP_MESSAGING_REF }}
+          path: zappMessaging
+      - name: Checkout bare-kit
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: holepunchto/bare-kit
+          ref: ${{ env.BARE_KIT_REF }}
+          path: bare-kit
+      - name: Set up bare-kit npm dependencies
+        uses: ./.github/actions/setup-bare-kit
+        timeout-minutes: 10
+      - name: Set up Java
+        uses: ./.github/actions/setup-java
+        timeout-minutes: 1
+      - name: Set up Gradle
+        uses: ./.github/actions/setup-gradle
+        timeout-minutes: 5
+      - name: Build and test
+        timeout-minutes: 30
+        env:
+          # Force blank suffix for screenshot tests
+          ORG_GRADLE_PROJECT_ZCASH_DEBUG_APP_NAME_SUFFIX: ""
+          ORG_GRADLE_PROJECT_ZCASH_EMULATOR_WTF_API_KEY: ${{ secrets.EMULATOR_WTF_API_KEY }}
+          ORG_GRADLE_PROJECT_IS_ANDROID_INSTRUMENTATION_TEST_COVERAGE_ENABLED: false
+          ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
+          ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
+        run: |
+          ./gradlew :app:testZcashmainnetStoreDebugWithEmulatorWtf :ui-screenshot-test:testZcashmainnetStoreDebugWithEmulatorWtf
+      - name: Collect Artifacts
+        if: ${{ always() }}
+        timeout-minutes: 1
+        run: |
+          export ARTIFACTS_DIR_PATH=~/artifacts
+          export TEST_RESULTS_ZIP_PATH=${ARTIFACTS_DIR_PATH}/test_results.zip
+
+          mkdir ${ARTIFACTS_DIR_PATH}
+
+          zip -r ${TEST_RESULTS_ZIP_PATH} . -i \*/build/test-results/\*
+      - name: Upload Artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        timeout-minutes: 1
+        with:
+          name: Test Android app with WTF results
+          path: ~/artifacts
+
+  # Performs a button mash test on the debug build of the app with strict mode enabled
+  test_robo_debug:
+    if: needs.check_firebase_secrets.outputs.has-secrets == 'true'
+    needs: [check_firebase_secrets]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0 # to fetch all commits
+      - name: Checkout zappMessaging
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zappmessaging-sdk
+          ref: ${{ env.ZAPP_MESSAGING_REF }}
+          path: zappMessaging
+      - name: Checkout bare-kit
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: holepunchto/bare-kit
+          ref: ${{ env.BARE_KIT_REF }}
+          path: bare-kit
+      - name: Set up bare-kit npm dependencies
+        uses: ./.github/actions/setup-bare-kit
+        timeout-minutes: 10
+      - name: Set up Java
+        uses: ./.github/actions/setup-java
+        timeout-minutes: 1
+      - name: Set up Gradle
+        uses: ./.github/actions/setup-gradle
+        timeout-minutes: 5
+      - name: Export Google Services JSON
+        env:
+          FIREBASE_DEBUG_JSON_BASE64: ${{ secrets.FIREBASE_DEBUG_JSON_BASE64 }}
+          FIREBASE_RELEASE_JSON_BASE64: ${{ secrets.FIREBASE_RELEASE_JSON_BASE64 }}
+        if: "${{ env.FIREBASE_DEBUG_JSON_BASE64 != '' && env.FIREBASE_RELEASE_JSON_BASE64 != '' }}"
+        shell: bash
+        run: |
+          mkdir -p app/src/debug/
+          mkdir -p app/src/release/
+          echo ${FIREBASE_DEBUG_JSON_BASE64} | base64 --decode > app/src/debug/google-services.json
+          echo ${FIREBASE_RELEASE_JSON_BASE64} | base64 --decode > app/src/release/google-services.json
+      - name: Build
+        timeout-minutes: 20
+        env:
+          ORG_GRADLE_PROJECT_IS_CRASH_ON_STRICT_MODE_VIOLATION: true
+          ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
+          ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
+        run: |
+          ./gradlew :app:assembleZcashmainnetStoreDebug :app:assembleZcashtestnetStoreDebug
+      - name: Authenticate to Google Cloud for Firebase Test Lab
+        id: auth_test_lab
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          create_credentials_file: true
+          project_id: ${{ vars.FIREBASE_TEST_LAB_PROJECT }}
+          service_account: ${{ secrets.FIREBASE_TEST_LAB_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.FIREBASE_TEST_LAB_WORKLOAD_IDENTITY_PROVIDER }}
+          access_token_lifetime: '900s'
+      - name: Robo test
+        timeout-minutes: 20
+        env:
+          # This first environment variable is used by Flank, since the temporary token is missing the project name
+          GOOGLE_CLOUD_PROJECT: ${{ vars.FIREBASE_TEST_LAB_PROJECT }}
+          ORG_GRADLE_PROJECT_ZCASH_FIREBASE_TEST_LAB_API_KEY_PATH: ${{ steps.auth_test_lab.outputs.credentials_file_path }}
+        run: |
+          ./gradlew :app:runFlankSanityConfigDebug
+
+  verify_composite_build:
+    # Verifies that the composite build (zapp-android + zappMessaging + bare-kit)
+    # compiles cleanly. Requires sibling repos to be checked out at the paths
+    # referenced in settings.gradle.kts (../zappMessaging/android and ../bare-kit/android).
+    needs: [validate_gradle_wrapper]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout zapp-android
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          path: zapp-android
+          fetch-depth: 0
+      - name: Checkout zappMessaging
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zappmessaging-sdk
+          ref: ${{ env.ZAPP_MESSAGING_REF }}
+          path: zappMessaging
+      - name: Checkout bare-kit
+        # bare-kit is a direct clone of holepunchto/bare-kit v2.0.0 with no Zapp modifications.
+        # Pinned to 15a3569f3d704de7151761051c8d9cc2e299414f (tag: v2.0.0).
+        # Update the ref and .zapp-deps when upgrading bare-kit.
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: holepunchto/bare-kit
+          ref: ${{ env.BARE_KIT_REF }}
+          path: bare-kit
+      - name: Free runner disk space
+        uses: ./zapp-android/.github/actions/free-disk-space
+        timeout-minutes: 5
+      - name: Verify sibling SHAs match .zapp-deps
+        working-directory: zapp-android
+        shell: bash
+        run: |
+          verify_sha() {
+            local name="$1" path="$2"
+            local expected actual
+            expected=$(grep "^${name}=" .zapp-deps | cut -d= -f2)
+            actual=$(git -C "$path" rev-parse HEAD)
+            if [ "$expected" != "$actual" ]; then
+              echo "::error::${name} SHA mismatch: expected ${expected}, got ${actual}"
+              echo "Update .zapp-deps and the 'ref:' in the ${name} checkout step."
+              return 1
+            fi
+            echo "${name} SHA verified: ${actual}"
+          }
+          verify_sha zappMessaging ../zappMessaging
+          verify_sha bare-kit ../bare-kit
+      - name: Set up bare-kit npm dependencies
+        uses: ./zapp-android/.github/actions/setup-bare-kit
+        timeout-minutes: 10
+      - name: Set up Java
+        uses: ./zapp-android/.github/actions/setup-java
+        timeout-minutes: 1
+        with:
+          working-directory: zapp-android
+      - name: Set up Gradle
+        uses: ./zapp-android/.github/actions/setup-gradle
+        timeout-minutes: 5
+      - name: Verify composite build compiles
+        timeout-minutes: 60
+        working-directory: zapp-android
+        run: |
+          ./gradlew :app:assembleZcashmainnetStoreDebug --no-daemon
+
+  build_store:
+    needs: [validate_gradle_wrapper]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: store-debug
+            gradle_tasks: ":app:assembleZcashmainnetStoreDebug :app:assembleZcashtestnetStoreDebug"
+          - name: store-mainnet-release
+            gradle_tasks: ":app:bundleZcashmainnetStoreRelease :app:packageZcashmainnetStoreReleaseUniversalApk"
+          - name: store-testnet-release
+            gradle_tasks: ":app:bundleZcashtestnetStoreRelease"
+    steps:
+      - name: Checkout
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0 # to fetch all commits
+      - name: Checkout zappMessaging
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zappmessaging-sdk
+          ref: ${{ env.ZAPP_MESSAGING_REF }}
+          path: zappMessaging
+      - name: Checkout bare-kit
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: holepunchto/bare-kit
+          ref: ${{ env.BARE_KIT_REF }}
+          path: bare-kit
+      - name: Free runner disk space
+        uses: ./.github/actions/free-disk-space
+        timeout-minutes: 5
+      - name: Set up bare-kit npm dependencies
+        uses: ./.github/actions/setup-bare-kit
+        timeout-minutes: 10
+      - name: Set up Java
+        uses: ./.github/actions/setup-java
+        timeout-minutes: 1
+      - name: Set up Gradle
+        uses: ./.github/actions/setup-gradle
+        timeout-minutes: 5
+      - name: Export Google Services JSON
+        env:
+          FIREBASE_DEBUG_JSON_BASE64: ${{ secrets.FIREBASE_DEBUG_JSON_BASE64 }}
+          FIREBASE_RELEASE_JSON_BASE64: ${{ secrets.FIREBASE_RELEASE_JSON_BASE64 }}
+        if: "${{ env.FIREBASE_DEBUG_JSON_BASE64 != '' && env.FIREBASE_RELEASE_JSON_BASE64 != '' }}"
+        shell: bash
+        run: |
+          mkdir -p app/src/debug/
+          mkdir -p app/src/release/
+          echo ${FIREBASE_DEBUG_JSON_BASE64} | base64 --decode > app/src/debug/google-services.json
+          echo ${FIREBASE_RELEASE_JSON_BASE64} | base64 --decode > app/src/release/google-services.json
+      - name: Set Env
+        shell: bash
+        run: |
+          echo "home=${HOME}" >> "$GITHUB_ENV"
+      # A fake signing key to satisfy creating a "release" build
+      - name: Export Signing Key
+        env:
+          SIGNING_KEY_PATH: ${{ format('{0}/release.jks', env.home) }}
+        shell: bash
+        run: |
+          keytool -genkey -v -keystore $SIGNING_KEY_PATH -keypass android -storepass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 100000 -dname "CN=, OU=, O=Test, L=, S=, C=" -noprompt
+      - name: Build Store ${{ matrix.name }}
+        timeout-minutes: 75
+        env:
+          ORG_GRADLE_PROJECT_ZCASH_RELEASE_KEYSTORE_PATH: ${{ format('{0}/release.jks', env.home) }}
+          ORG_GRADLE_PROJECT_ZCASH_RELEASE_KEYSTORE_PASSWORD: android
+          ORG_GRADLE_PROJECT_ZCASH_RELEASE_KEY_ALIAS: androiddebugkey
+          ORG_GRADLE_PROJECT_ZCASH_RELEASE_KEY_ALIAS_PASSWORD: android
+          ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
+          ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
+        run: |
+          ./gradlew ${{ matrix.gradle_tasks }}
+
+      - name: Collect Artifacts
+        if: ${{ always() }}
+        timeout-minutes: 5
+        env:
+          ARTIFACTS_DIR_PATH: ${{ format('{0}/artifacts', env.home) }}
+          BINARIES_ZIP_PATH: ${{ format('{0}/artifacts/binaries.zip', env.home) }}
+          MAPPINGS_ZIP_PATH: ${{ format('{0}/artifacts/mappings.zip', env.home) }}
+          COMPOSE_METRICS_ZIP_PATH: ${{ format('{0}/artifacts/compose_metrics.zip', env.home) }}
+        run: |
+          mkdir -p "${ARTIFACTS_DIR_PATH}"
+
+          zip_from_find() {
+            local zip_path="$1"
+            shift
+            local list
+            list="$(mktemp)"
+            "$@" > "$list"
+            if [ -s "$list" ]; then
+              zip -q -@ "$zip_path" < "$list"
+            fi
+            rm -f "$list"
+          }
+
+          if [ -d app/build/outputs ]; then
+            zip_from_find "${BINARIES_ZIP_PATH}" find app/build/outputs -type f \( -path '*/apk/*/*/*.apk' -o -path '*/apk_from_bundle/*/*.apk' -o -path '*/bundle/*/*.aab' \)
+          fi
+          if [ -d app/build/outputs/mapping ]; then
+            zip_from_find "${MAPPINGS_ZIP_PATH}" find app/build/outputs/mapping -type f -name mapping.txt
+          fi
+          zip_from_find "${COMPOSE_METRICS_ZIP_PATH}" find . -type f \( -path '*/build/compose-metrics/*' -o -path '*/build/compose-reports/*' \)
+
+      - name: Upload Artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        timeout-minutes: 5
+        with:
+          name: Binaries-${{ github.run_attempt }}-${{ matrix.name }}
+          path: ~/artifacts
+
+  build_foss:
+    needs: [validate_gradle_wrapper]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0 # to fetch all commits
+      - name: Checkout zappMessaging
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zappmessaging-sdk
+          ref: ${{ env.ZAPP_MESSAGING_REF }}
+          path: zappMessaging
+      - name: Checkout bare-kit
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: holepunchto/bare-kit
+          ref: ${{ env.BARE_KIT_REF }}
+          path: bare-kit
+      - name: Free runner disk space
+        uses: ./.github/actions/free-disk-space
+        timeout-minutes: 5
+      - name: Set up bare-kit npm dependencies
+        uses: ./.github/actions/setup-bare-kit
+        timeout-minutes: 10
+      - name: Set up Java
+        uses: ./.github/actions/setup-java
+        timeout-minutes: 1
+      - name: Set up Gradle
+        uses: ./.github/actions/setup-gradle
+        timeout-minutes: 5
+      - name: Export Google Services JSON
+        env:
+          FIREBASE_DEBUG_JSON_BASE64: ${{ secrets.FIREBASE_DEBUG_JSON_BASE64 }}
+          FIREBASE_RELEASE_JSON_BASE64: ${{ secrets.FIREBASE_RELEASE_JSON_BASE64 }}
+        if: "${{ env.FIREBASE_DEBUG_JSON_BASE64 != '' && env.FIREBASE_RELEASE_JSON_BASE64 != '' }}"
+        shell: bash
+        run: |
+          mkdir -p app/src/debug/
+          mkdir -p app/src/release/
+          echo ${FIREBASE_DEBUG_JSON_BASE64} | base64 --decode > app/src/debug/google-services.json
+          echo ${FIREBASE_RELEASE_JSON_BASE64} | base64 --decode > app/src/release/google-services.json
+      - name: Set Env
+        shell: bash
+        run: |
+          echo "home=${HOME}" >> "$GITHUB_ENV"
+      - name: Export Signing Key
+        env:
+          SIGNING_KEY_PATH: ${{ format('{0}/release.jks', env.home) }}
+        shell: bash
+        run: |
+          keytool -genkey -v -keystore $SIGNING_KEY_PATH -keypass android -storepass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 100000 -dname "CN=, OU=, O=Test, L=, S=, C=" -noprompt
+
+      - name: Strip non-FOSS libraries
+        timeout-minutes: 10
+        uses: ./.github/actions/foss/strip
+
+      - name: Build FOSS APK
+        timeout-minutes: 75
+        env:
+          ORG_GRADLE_PROJECT_ZCASH_RELEASE_KEYSTORE_PATH: ${{ format('{0}/release.jks', env.home) }}
+          ORG_GRADLE_PROJECT_ZCASH_RELEASE_KEYSTORE_PASSWORD: android
+          ORG_GRADLE_PROJECT_ZCASH_RELEASE_KEY_ALIAS: androiddebugkey
+          ORG_GRADLE_PROJECT_ZCASH_RELEASE_KEY_ALIAS_PASSWORD: android
+          # TODO [#1789] Re-enable Flexa integrations for FOSS variant
+          # ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
+        run: |
+          ./gradlew clean :app:assembleZcashmainnetFossRelease
+
+      - name: Collect Artifacts
+        if: ${{ always() }}
+        timeout-minutes: 5
+        env:
+          ARTIFACTS_DIR_PATH: ${{ format('{0}/artifacts', env.home) }}
+          BINARIES_ZIP_PATH: ${{ format('{0}/artifacts/binaries.zip', env.home) }}
+          MAPPINGS_ZIP_PATH: ${{ format('{0}/artifacts/mappings.zip', env.home) }}
+          COMPOSE_METRICS_ZIP_PATH: ${{ format('{0}/artifacts/compose_metrics.zip', env.home) }}
+        run: |
+          mkdir -p "${ARTIFACTS_DIR_PATH}"
+
+          zip_from_find() {
+            local zip_path="$1"
+            shift
+            local list
+            list="$(mktemp)"
+            "$@" > "$list"
+            if [ -s "$list" ]; then
+              zip -q -@ "$zip_path" < "$list"
+            fi
+            rm -f "$list"
+          }
+
+          if [ -d app/build/outputs ]; then
+            zip_from_find "${BINARIES_ZIP_PATH}" find app/build/outputs -type f \( -path '*/apk/*/*/*.apk' -o -path '*/apk_from_bundle/*/*.apk' -o -path '*/bundle/*/*.aab' \)
+          fi
+          if [ -d app/build/outputs/mapping ]; then
+            zip_from_find "${MAPPINGS_ZIP_PATH}" find app/build/outputs/mapping -type f -name mapping.txt
+          fi
+          zip_from_find "${COMPOSE_METRICS_ZIP_PATH}" find . -type f \( -path '*/build/compose-metrics/*' -o -path '*/build/compose-reports/*' \)
+
+      - name: Upload Artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        timeout-minutes: 5
+        with:
+          name: Binaries-${{ github.run_attempt }}-foss
+          path: ~/artifacts
+
+  build:
+    if: ${{ always() }}
+    needs: [build_store, build_foss]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Fail if a build shard failed
+        if: ${{ needs.build_store.result != 'success' || needs.build_foss.result != 'success' }}
+        run: exit 1
+      - name: Download binary artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        timeout-minutes: 10
+        with:
+          pattern: Binaries-${{ github.run_attempt }}-*
+          path: artifact-parts
+      - name: Merge Artifacts
+        timeout-minutes: 15
+        run: |
+          mkdir -p artifact-merge/binaries artifact-merge/mappings artifact-merge/compose "${HOME}/artifacts"
+
+          merge_zip() {
+            local source_name="$1"
+            local destination_dir="$2"
+            while IFS= read -r zip_file; do
+              unzip -oq "$zip_file" -d "$destination_dir"
+            done < <(find artifact-parts -name "$source_name" -type f)
+          }
+
+          zip_dir() {
+            local source_dir="$1"
+            local zip_path="$2"
+            if [ -n "$(find "$source_dir" -type f -print -quit)" ]; then
+              (cd "$source_dir" && zip -qr "$zip_path" .)
+            fi
+          }
+
+          merge_zip binaries.zip artifact-merge/binaries
+          merge_zip mappings.zip artifact-merge/mappings
+          merge_zip compose_metrics.zip artifact-merge/compose
+
+          zip_dir artifact-merge/binaries "${HOME}/artifacts/binaries.zip"
+          zip_dir artifact-merge/mappings "${HOME}/artifacts/mappings.zip"
+          zip_dir artifact-merge/compose "${HOME}/artifacts/compose_metrics.zip"
+
+          if [ ! -f "${HOME}/artifacts/binaries.zip" ]; then
+            echo "::error::No binary outputs were collected from build shards"
+            exit 1
+          fi
+
+      - name: Check APK size
+        timeout-minutes: 1
+        run: |
+          echo "## APK Size Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Variant | Size (MB) | Path |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-----------|------|" >> $GITHUB_STEP_SUMMARY
+
+          for apk in artifact-merge/binaries/app/build/outputs/apk_from_bundle/*/*/*.apk artifact-merge/binaries/app/build/outputs/apk/*/*/*.apk; do
+            if [ -f "$apk" ]; then
+              SIZE_BYTES=$(stat -c%s "$apk" 2>/dev/null || stat -f%z "$apk")
+              SIZE_MB=$(echo "scale=2; $SIZE_BYTES / 1048576" | bc)
+              BASENAME=$(basename "$apk")
+              echo "| $BASENAME | $SIZE_MB | \`$apk\` |" >> $GITHUB_STEP_SUMMARY
+
+              # Warn if APK exceeds 100MB
+              if [ $(echo "$SIZE_MB > 100" | bc) -eq 1 ]; then
+                echo "::warning::APK $BASENAME is larger than 100MB ($SIZE_MB MB)"
+              fi
+            fi
+          done
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        timeout-minutes: 10
+        with:
+          name: Binaries
+          path: ~/artifacts
+
+  # Performs a button mash test on the release build of the app
+  test_robo_release:
+    if: needs.check_firebase_secrets.outputs.has-secrets == 'true'
+    needs: [build, check_firebase_secrets]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0 # to fetch all commits
+      - name: Checkout zappMessaging
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zappmessaging-sdk
+          ref: ${{ env.ZAPP_MESSAGING_REF }}
+          path: zappMessaging
+      - name: Checkout bare-kit
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: holepunchto/bare-kit
+          ref: ${{ env.BARE_KIT_REF }}
+          path: bare-kit
+      - name: Set up bare-kit npm dependencies
+        uses: ./.github/actions/setup-bare-kit
+        timeout-minutes: 10
+      - name: Set up Java
+        uses: ./.github/actions/setup-java
+        timeout-minutes: 1
+      - name: Set up Gradle
+        uses: ./.github/actions/setup-gradle
+        timeout-minutes: 5
+      - name: Authenticate to Google Cloud for Firebase Test Lab
+        id: auth_test_lab
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          create_credentials_file: true
+          project_id: ${{ vars.FIREBASE_TEST_LAB_PROJECT }}
+          service_account: ${{ secrets.FIREBASE_TEST_LAB_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.FIREBASE_TEST_LAB_WORKLOAD_IDENTITY_PROVIDER }}
+          access_token_lifetime: '900s'
+      - name: Download a single artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: Binaries
+      - name: Robo test
+        timeout-minutes: 25
+        env:
+          # Path depends on `release_build` job, plus path of `Download a single artifact` step
+          BINARIES_ZIP_PATH: binaries.zip
+          # This first environment variable is used by Flank, since the temporary token is missing the project name
+          GOOGLE_CLOUD_PROJECT: ${{ vars.FIREBASE_TEST_LAB_PROJECT }}
+          ORG_GRADLE_PROJECT_ZCASH_FIREBASE_TEST_LAB_API_KEY_PATH: ${{ steps.auth_test_lab.outputs.credentials_file_path }}
+          ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
+          ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
+        run: |
+          unzip ${BINARIES_ZIP_PATH}
+          ./gradlew :app:runFlankSanityConfigRelease
