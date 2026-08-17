@@ -12,10 +12,10 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
-import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.math.bigIntegerOne
 import xyz.justzappit.evm.math.bigIntegerValueOf
+import xyz.justzappit.evm.types.Address
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -56,7 +56,11 @@ class OrderFeeDetailsDecoderTest {
     @Test
     fun `getAdditionalOrderDetailsCalldata uses correct selector and arg encoding`() {
         // selector(getAdditionalOrderDetails(uint256)) padded to 4 bytes ||  orderId padded to 32.
-        val calldata = DiamondCalls.getAdditionalOrderDetailsCalldata(xyz.justzappit.evm.math.bigIntegerValueOf(42))
+        val calldata =
+            DiamondCalls.getAdditionalOrderDetailsCalldata(
+                xyz.justzappit.evm.math
+                    .bigIntegerValueOf(42)
+            )
         // Sanity: 4-byte selector + 32-byte arg = 36 bytes total.
         assertEquals(36, calldata.size)
         // Last 32 bytes should be uint256(42) = 0x...2a

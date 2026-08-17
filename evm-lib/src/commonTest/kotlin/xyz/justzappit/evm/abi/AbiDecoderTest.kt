@@ -3,11 +3,11 @@
 
 package xyz.justzappit.evm.abi
 
-import xyz.justzappit.evm.types.Address
-import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.evm.math.bigIntegerZero
+import xyz.justzappit.evm.types.Address
+import xyz.justzappit.evm.util.hexToBytes
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFails

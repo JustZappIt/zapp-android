@@ -2,8 +2,10 @@
 # CI verifies that the checked-out zappMessaging SHA matches before building.
 # Update when intentionally bumping a sibling dependency.
 
-# GitHub: https://github.com/JustZappIt/zappMessaging
-zappMessaging=db6ae33fd049b600e8095a0c772ab8022917bacb
+# The published SDK, whose history is squashed and so carries its own commit ids:
+# this repository pins the mirror, not the development repo it is published from.
+# GitHub: https://github.com/JustZappIt/zappmessaging-sdk
+zappMessaging=a8b88ed4f6cc22382a4c79167340031aa12c42b1
 
 # bare-kit is a direct clone of holepunchto/bare-kit v2.0.0 with no Zapp modifications.
 # GitHub: https://github.com/holepunchto/bare-kit

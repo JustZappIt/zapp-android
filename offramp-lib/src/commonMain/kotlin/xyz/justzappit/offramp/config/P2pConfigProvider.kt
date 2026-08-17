@@ -3,7 +3,6 @@
 
 package xyz.justzappit.offramp.config
 
-
 class P2pConfigProvider(
     private val networkName: String,
     private val rpcUrlOverride: String? = null,

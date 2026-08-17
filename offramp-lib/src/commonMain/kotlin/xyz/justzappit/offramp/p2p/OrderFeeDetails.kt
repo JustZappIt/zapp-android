@@ -4,9 +4,9 @@
 package xyz.justzappit.offramp.p2p
 
 import xyz.justzappit.evm.abi.AbiDecoder
+import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.types.Address
-import xyz.justzappit.evm.math.BigInteger
 
 /**
  * Post-execution detail bundle the p2p.me Diamond returns from `getAdditionalOrderDetails(uint256)`.

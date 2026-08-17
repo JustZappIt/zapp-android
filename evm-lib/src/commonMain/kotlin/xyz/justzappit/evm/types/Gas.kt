@@ -3,10 +3,10 @@
 
 package xyz.justzappit.evm.types
 
-import kotlin.jvm.JvmInline
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.math.div
 import xyz.justzappit.evm.math.times
+import kotlin.jvm.JvmInline
 
 /**
  * A gas-unit count (a gas limit or estimate). Typed apart from [Wei] (price-per-gas / value) and

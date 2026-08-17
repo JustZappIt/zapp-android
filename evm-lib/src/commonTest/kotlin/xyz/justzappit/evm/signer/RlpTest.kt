@@ -3,8 +3,8 @@
 
 package xyz.justzappit.evm.signer
 
-import xyz.justzappit.evm.util.toHex
 import xyz.justzappit.evm.math.bigIntegerValueOf
+import xyz.justzappit.evm.util.toHex
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

@@ -14,6 +14,14 @@ import kotlinx.serialization.json.put
 import xyz.justzappit.evm.abi.AbiEncoder
 import xyz.justzappit.evm.abi.keccak256
 import xyz.justzappit.evm.crypto.Ecies
+import xyz.justzappit.evm.math.BigDecimal
+import xyz.justzappit.evm.math.BigInteger
+import xyz.justzappit.evm.math.DecimalRounding
+import xyz.justzappit.evm.math.bigIntegerValueOf
+import xyz.justzappit.evm.math.decimalMultiply
+import xyz.justzappit.evm.math.decimalSetScale
+import xyz.justzappit.evm.math.minus
+import xyz.justzappit.evm.math.plus
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.rpc.RpcException
 import xyz.justzappit.evm.signer.EcdsaSigner
@@ -54,14 +62,6 @@ import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.p2p.getOrCreate
 import xyz.justzappit.offramp.p2p.getPayFeeConfig
 import xyz.justzappit.offramp.p2p.getUsdcBalance
-import xyz.justzappit.evm.math.BigInteger
-import xyz.justzappit.evm.math.BigDecimal
-import xyz.justzappit.evm.math.DecimalRounding
-import xyz.justzappit.evm.math.bigIntegerValueOf
-import xyz.justzappit.evm.math.decimalMultiply
-import xyz.justzappit.evm.math.decimalSetScale
-import xyz.justzappit.evm.math.minus
-import xyz.justzappit.evm.math.plus
 
 interface OfframpDriver {
     fun run(

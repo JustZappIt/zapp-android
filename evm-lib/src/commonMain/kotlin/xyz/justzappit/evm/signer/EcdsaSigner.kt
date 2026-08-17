@@ -44,9 +44,13 @@ object EcdsaSigner {
 }
 
 internal expect fun secpSignRecoverable(messageHash: ByteArray, privateKey: ByteArray): ByteArray
+
 internal expect fun secpRecoverPublicKey(messageHash: ByteArray, signature: ByteArray, recId: Int): ByteArray?
+
 internal expect fun secpPublicKeyUncompressed(privateKey: ByteArray): ByteArray
+
 internal expect fun secpNormalizePublicKeyUncompressed(publicKey: ByteArray): ByteArray
+
 internal expect fun secpEcdh(privateKey: ByteArray, publicKey: ByteArray): ByteArray
 
 internal fun BigInteger.toUnsignedFieldBytes(): ByteArray {

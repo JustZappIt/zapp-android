@@ -4,11 +4,11 @@
 package xyz.justzappit.offramp.orchestrator
 
 import xyz.justzappit.evm.abi.Selector4
+import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.p2p.OrderStatus
 import xyz.justzappit.offramp.p2p.Usdc6
-import xyz.justzappit.evm.math.BigInteger
 
 sealed class OfframpStatus {
     object Idle : OfframpStatus()

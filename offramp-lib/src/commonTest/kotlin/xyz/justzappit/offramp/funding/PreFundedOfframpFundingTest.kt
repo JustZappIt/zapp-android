@@ -11,13 +11,13 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
+import xyz.justzappit.evm.math.BigInteger
+import xyz.justzappit.evm.math.bigIntegerOne
+import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.orchestrator.OfframpRequest
 import xyz.justzappit.offramp.p2p.Usdc6
-import xyz.justzappit.evm.math.BigInteger
-import xyz.justzappit.evm.math.bigIntegerOne
-import xyz.justzappit.evm.math.bigIntegerValueOf
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue

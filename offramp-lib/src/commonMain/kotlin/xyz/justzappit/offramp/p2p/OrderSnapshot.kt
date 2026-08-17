@@ -3,9 +3,9 @@
 
 package xyz.justzappit.offramp.p2p
 
+import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
-import xyz.justzappit.evm.math.BigInteger
 
 data class OrderSnapshot(
     val orderId: BigInteger,

@@ -3,8 +3,8 @@
 
 package xyz.justzappit.offramp.p2p
 
-import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.evm.math.BigDecimal
+import xyz.justzappit.evm.util.hexToBytes
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

@@ -4,10 +4,10 @@
 package xyz.justzappit.offramp.orchestrator
 
 import kotlinx.serialization.Serializable
+import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.Usdc6
-import xyz.justzappit.evm.math.BigInteger
 
 /**
  * Resumable snapshot of an in-flight offramp order. Persisted after every on-chain checkpoint so

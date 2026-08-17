@@ -37,9 +37,8 @@ class CachingOfframpAccountProvider(
     private var cached: EvmKey? = null
     private val mutex = Mutex()
 
-    override suspend fun nextOfframpAccount(): EvmKey {
-        return mutex.withLock {
+    override suspend fun nextOfframpAccount(): EvmKey =
+        mutex.withLock {
             cached ?: delegate.nextOfframpAccount().also { cached = it }
         }
-    }
 }

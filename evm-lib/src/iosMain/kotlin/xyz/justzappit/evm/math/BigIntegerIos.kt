@@ -3,8 +3,8 @@
 
 package xyz.justzappit.evm.math
 
-import com.ionspin.kotlin.bignum.integer.BigInteger as KmpBigInteger
 import com.ionspin.kotlin.bignum.integer.Sign
+import com.ionspin.kotlin.bignum.integer.BigInteger as KmpBigInteger
 
 actual class BigInteger internal constructor(
     internal val value: KmpBigInteger
@@ -23,17 +23,29 @@ actual class BigInteger internal constructor(
     )
 
     actual fun add(other: BigInteger): BigInteger = BigInteger(value + other.value)
+
     actual fun subtract(other: BigInteger): BigInteger = BigInteger(value - other.value)
+
     actual fun multiply(other: BigInteger): BigInteger = BigInteger(value * other.value)
+
     actual fun divide(other: BigInteger): BigInteger = BigInteger(value / other.value)
+
     actual fun remainder(other: BigInteger): BigInteger = BigInteger(value % other.value)
+
     actual fun mod(modulus: BigInteger): BigInteger = BigInteger(value.mod(modulus.value))
+
     actual fun modInverse(modulus: BigInteger): BigInteger = BigInteger(value.modInverse(modulus.value))
+
     actual fun negate(): BigInteger = BigInteger(-value)
+
     actual fun pow(exponent: Int): BigInteger = BigInteger(value.pow(exponent))
+
     actual fun shiftLeft(distance: Int): BigInteger = BigInteger(value shl distance)
+
     actual fun shiftRight(distance: Int): BigInteger = BigInteger(value shr distance)
+
     actual fun signum(): Int = value.signum()
+
     actual fun bitLength(): Int =
         if (value.signum() < 0) {
             (-value - KmpBigInteger.ONE).bitLength()
@@ -63,18 +75,23 @@ actual class BigInteger internal constructor(
     }
 
     actual fun toInt(): Int = value.intValue(exactRequired = false)
+
     actual fun toLong(): Long = value.longValue(exactRequired = false)
+
     actual fun toString(radix: Int): String = value.toString(radix)
+
     actual override fun compareTo(other: BigInteger): Int = value.compareTo(other.value)
 
     override fun equals(other: Any?): Boolean = other is BigInteger && value == other.value
-    override fun hashCode(): Int = value.hashCode()
-    override fun toString(): String = value.toString()
 
+    override fun hashCode(): Int = value.hashCode()
+
+    override fun toString(): String = value.toString()
 }
 
 actual val bigIntegerZero: BigInteger = BigInteger("0")
 actual val bigIntegerOne: BigInteger = BigInteger("1")
+
 actual fun bigIntegerValueOf(value: Long): BigInteger = BigInteger(value.toString())
 
 private const val DECIMAL_RADIX = 10

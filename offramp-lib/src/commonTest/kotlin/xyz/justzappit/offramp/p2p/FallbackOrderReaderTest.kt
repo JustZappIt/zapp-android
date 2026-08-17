@@ -4,10 +4,10 @@
 package xyz.justzappit.offramp.p2p
 
 import kotlinx.coroutines.test.runTest
-import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.math.bigIntegerOne
 import xyz.justzappit.evm.math.bigIntegerValueOf
+import xyz.justzappit.evm.types.Address
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

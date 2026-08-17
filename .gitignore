@@ -74,11 +74,14 @@ id_ed25519
 # something to the private tree that must not ship here, add it here too.
 # ---------------------------------------------------------------------------
 
-# Continuous integration. Every job depends on a checkout of the private
-# zappMessaging sibling and on repository secrets, so the workflows could only
-# ever be red here. They also name the secrets they consume.
-.github/workflows/
-.github/actions/
+# Continuous integration runs here. It builds against the published messaging
+# SDK rather than the private sibling it is released from, so the pull request
+# pipeline and the composite actions it calls are part of this repository and
+# stay green on contributions from forks, which never receive secrets. The
+# optional device-test jobs still read secrets and skip when they are absent.
+#
+# Deployment and release remain unpublished: they carry signing material and
+# store account state that has no counterpart here.
 .github/scripts/
 .github/dependabot.yml
 .github/java-upgrade/

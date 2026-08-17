@@ -3,8 +3,8 @@
 
 package xyz.justzappit.evm.abi
 
-import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.math.BigInteger
+import xyz.justzappit.evm.types.Address
 
 /**
  * Minimal ABI return-data reader — the decode-side counterpart to [AbiEncoder]. Wraps a buffer and
