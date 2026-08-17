@@ -17,6 +17,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import xyz.justzappit.evm.hd.EvmKeyDerivation
+import xyz.justzappit.evm.math.BigInteger
+import xyz.justzappit.evm.math.bigIntegerOne
+import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.signer.EoaSigner
 import xyz.justzappit.evm.types.Address
@@ -35,9 +38,6 @@ import xyz.justzappit.offramp.p2p.OrderStatus
 import xyz.justzappit.offramp.p2p.OrderType
 import xyz.justzappit.offramp.p2p.SubgraphClient
 import xyz.justzappit.offramp.p2p.Usdc6
-import xyz.justzappit.evm.math.BigInteger
-import xyz.justzappit.evm.math.bigIntegerOne
-import xyz.justzappit.evm.math.bigIntegerValueOf
 import kotlin.random.Random
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -484,14 +484,16 @@ class OfframpOrchestratorTest {
                 )
 
             val statuses =
-                orchestrator.bridgeFundsBackToZec(
-                    orderId = null,
-                    resume = RefundResume(
-                        pullback.checksumHex,
-                        Usdc6.ofMicros(5_000_000),
-                        transferStarted = true,
-                    ),
-                ).toList()
+                orchestrator
+                    .bridgeFundsBackToZec(
+                        orderId = null,
+                        resume =
+                            RefundResume(
+                                pullback.checksumHex,
+                                Usdc6.ofMicros(5_000_000),
+                                transferStarted = true,
+                            ),
+                    ).toList()
 
             assertIs<OfframpStatus.FundsRecovered>(statuses.last())
             assertEquals(0, rawTxLog.size, "already-funded bridge must not transfer USDC twice")

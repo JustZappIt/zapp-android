@@ -3,10 +3,10 @@
 
 package xyz.justzappit.evm.abi
 
-import kotlin.test.Test
-import kotlin.test.assertEquals
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.util.toHex
+import kotlin.test.Test
+import kotlin.test.assertEquals
 
 class KeccakParityTest {
     @Test

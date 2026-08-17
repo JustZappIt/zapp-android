@@ -3,9 +3,9 @@
 
 package xyz.justzappit.offramp.orchestrator
 
-import xyz.justzappit.offramp.p2p.OrderSnapshot
 import xyz.justzappit.evm.math.BigDecimal
 import xyz.justzappit.evm.math.BigInteger
+import xyz.justzappit.offramp.p2p.OrderSnapshot
 
 /**
  * Merchant payment details captured after a PAY order is accepted.

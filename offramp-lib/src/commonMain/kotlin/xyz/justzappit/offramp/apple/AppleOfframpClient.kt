@@ -59,8 +59,8 @@ import xyz.justzappit.offramp.p2p.DirectPixResolver
 import xyz.justzappit.offramp.p2p.FallbackOrderReader
 import xyz.justzappit.offramp.p2p.OnChainOrderReader
 import xyz.justzappit.offramp.p2p.OrderStatus
-import xyz.justzappit.offramp.p2p.P2pOrderLimits
 import xyz.justzappit.offramp.p2p.P2pOrderHistorySource
+import xyz.justzappit.offramp.p2p.P2pOrderLimits
 import xyz.justzappit.offramp.p2p.PaymentQrError
 import xyz.justzappit.offramp.p2p.PaymentQrParseResult
 import xyz.justzappit.offramp.p2p.PaymentQrParser
@@ -119,21 +119,24 @@ class AppleOfframpClient private constructor(
     suspend fun parsePaymentQr(currencyCode: String, rawPayload: String): ApplePaymentQrResult {
         val currency = CurrencyCode.fromCode(currencyCode)
         return when (
-            val parsed = PaymentQrParser.parse(
-                currency = currency,
-                qrData = rawPayload,
-                dynamicPixResolver = dynamicPixResolver,
-            )
+            val parsed =
+                PaymentQrParser.parse(
+                    currency = currency,
+                    qrData = rawPayload,
+                    dynamicPixResolver = dynamicPixResolver,
+                )
         ) {
-            is PaymentQrParseResult.Success ->
+            is PaymentQrParseResult.Success -> {
                 ApplePaymentQrResult(
                     isValid = true,
                     paymentAddress = parsed.parsed.paymentAddress,
                     fiatAmount = parsed.parsed.fiatAmount?.let(::decimalToPlainString),
                 )
+            }
 
-            is PaymentQrParseResult.Failure ->
+            is PaymentQrParseResult.Failure -> {
                 ApplePaymentQrResult(isValid = false, errorCode = parsed.error.appleCode())
+            }
         }
     }
 
@@ -287,14 +290,19 @@ class AppleOfframpClient private constructor(
                         }
                     }
 
-                    is BridgeToBaseStatus.Complete -> storage.clearTopUpCheckpoint()
+                    is BridgeToBaseStatus.Complete -> {
+                        storage.clearTopUpCheckpoint()
+                    }
+
                     is BridgeToBaseStatus.Failed -> {
                         if (status.cause is AppleBridgeTerminalException || status.depositAddress == null) {
                             storage.clearTopUpCheckpoint()
                         }
                     }
 
-                    BridgeToBaseStatus.Idle -> Unit
+                    BridgeToBaseStatus.Idle -> {
+                        Unit
+                    }
                 }
                 emit(status.toAppleStatus())
             }
@@ -308,22 +316,28 @@ class AppleOfframpClient private constructor(
                     "A different refund bridge is already in progress. Resume it before recovering another order."
                 }
             }
-            val resume = stored?.let {
-                RefundResume(
-                    handle = it.depositAddress,
-                    amount = usdcFromMicros(it.usdcMicros),
-                    transferStarted = it.transferStarted,
-                    txHash = it.txHash?.let(xyz.justzappit.evm.types.TxHash::fromHex),
-                )
-            }
+            val resume =
+                stored?.let {
+                    RefundResume(
+                        handle = it.depositAddress,
+                        amount = usdcFromMicros(it.usdcMicros),
+                        transferStarted = it.transferStarted,
+                        txHash = it.txHash?.let(xyz.justzappit.evm.types.TxHash::fromHex),
+                    )
+                }
             driver.bridgeFundsBackToZec(orderId?.let(::BigInteger), resume).collect { status ->
                 when (status) {
-                    is OfframpStatus.FundsRecovered -> storage.clearRefundCheckpoint()
+                    is OfframpStatus.FundsRecovered -> {
+                        storage.clearRefundCheckpoint()
+                    }
+
                     is OfframpStatus.Failed -> {
                         if (status.cause is AppleBridgeTerminalException) storage.clearRefundCheckpoint()
                     }
 
-                    else -> Unit
+                    else -> {
+                        Unit
+                    }
                 }
                 emit(status.toAppleStatus())
             }
@@ -568,7 +582,9 @@ private class AppleCheckpointPersister(
             is OfframpStatus.Completed,
             is OfframpStatus.Cancelled,
             is OfframpStatus.FundsRecovered,
-            -> storage.clearCheckpoint()
+            -> {
+                storage.clearCheckpoint()
+            }
 
             is OfframpStatus.Failed -> {
                 val resumable =
@@ -586,9 +602,10 @@ private class AppleCheckpointPersister(
     }
 
     private suspend fun persist(orderId: String?, status: OfframpStatus) {
-        val previous = storage.checkpointJson().value?.let {
-            runCatching { json.decodeFromString(OfframpCheckpoint.serializer(), it) }.getOrNull()
-        }
+        val previous =
+            storage.checkpointJson().value?.let {
+                runCatching { json.decodeFromString(OfframpCheckpoint.serializer(), it) }.getOrNull()
+            }
         val checkpoint =
             OfframpCheckpoint(
                 orderId = orderId,
@@ -666,23 +683,36 @@ internal data class AppleRefundCheckpoint(
 
 private fun OfframpStatus.toAppleStatus(): AppleOfframpStatus =
     when (this) {
-        OfframpStatus.Idle -> AppleOfframpStatus("idle", step.name, "Preparing payment")
-        is OfframpStatus.SelectingCircle ->
+        OfframpStatus.Idle -> {
+            AppleOfframpStatus("idle", step.name, "Preparing payment")
+        }
+
+        is OfframpStatus.SelectingCircle -> {
             AppleOfframpStatus("selecting_circle", step.name, "Finding an available merchant")
-        is OfframpStatus.BridgingFunds ->
+        }
+
+        is OfframpStatus.BridgingFunds -> {
             AppleOfframpStatus(
                 "bridging_funds",
                 step.name,
                 "Adding funds to Base",
                 bridgeDepositAddress = depositAddress,
             )
-        is OfframpStatus.FundedFromBase ->
+        }
+
+        is OfframpStatus.FundedFromBase -> {
             AppleOfframpStatus("funded_from_base", step.name, "Using Base balance")
-        is OfframpStatus.ApprovingUsdc ->
+        }
+
+        is OfframpStatus.ApprovingUsdc -> {
             AppleOfframpStatus("approving_usdc", step.name, "Approving USDC", txHash = txHash.hex)
-        is OfframpStatus.PlacingOrder ->
+        }
+
+        is OfframpStatus.PlacingOrder -> {
             AppleOfframpStatus("placing_order", step.name, "Placing order", txHash = txHash.hex)
-        is OfframpStatus.WaitingForMerchantAcceptance ->
+        }
+
+        is OfframpStatus.WaitingForMerchantAcceptance -> {
             AppleOfframpStatus(
                 "waiting_for_merchant",
                 step.name,
@@ -690,7 +720,9 @@ private fun OfframpStatus.toAppleStatus(): AppleOfframpStatus =
                 detail = if (stalled) "This is taking longer than usual" else null,
                 orderId = orderId.toString(),
             )
-        is OfframpStatus.WaitingForPaymentDetails ->
+        }
+
+        is OfframpStatus.WaitingForPaymentDetails -> {
             AppleOfframpStatus(
                 "waiting_for_payment_details",
                 step.name,
@@ -698,7 +730,9 @@ private fun OfframpStatus.toAppleStatus(): AppleOfframpStatus =
                 detail = "Merchant QR is ready",
                 orderId = orderId.toString(),
             )
-        is OfframpStatus.SendingEncryptedUpi ->
+        }
+
+        is OfframpStatus.SendingEncryptedUpi -> {
             AppleOfframpStatus(
                 "sending_payment_details",
                 step.name,
@@ -706,7 +740,9 @@ private fun OfframpStatus.toAppleStatus(): AppleOfframpStatus =
                 orderId = orderId.toString(),
                 txHash = txHash.hex,
             )
-        is OfframpStatus.WaitingForCompletion ->
+        }
+
+        is OfframpStatus.WaitingForCompletion -> {
             AppleOfframpStatus(
                 "waiting_for_completion",
                 step.name,
@@ -714,7 +750,9 @@ private fun OfframpStatus.toAppleStatus(): AppleOfframpStatus =
                 detail = if (stalled) "This is taking longer than usual" else null,
                 orderId = orderId.toString(),
             )
-        is OfframpStatus.Completed ->
+        }
+
+        is OfframpStatus.Completed -> {
             AppleOfframpStatus(
                 "completed",
                 step.name,
@@ -723,7 +761,9 @@ private fun OfframpStatus.toAppleStatus(): AppleOfframpStatus =
                 isTerminal = true,
                 isSuccess = true,
             )
-        is OfframpStatus.Cancelled ->
+        }
+
+        is OfframpStatus.Cancelled -> {
             AppleOfframpStatus(
                 "cancelled",
                 step.name,
@@ -731,7 +771,9 @@ private fun OfframpStatus.toAppleStatus(): AppleOfframpStatus =
                 orderId = orderId.toString(),
                 isTerminal = true,
             )
-        is OfframpStatus.FundsRecovered ->
+        }
+
+        is OfframpStatus.FundsRecovered -> {
             AppleOfframpStatus(
                 "funds_recovered",
                 step.name,
@@ -740,7 +782,9 @@ private fun OfframpStatus.toAppleStatus(): AppleOfframpStatus =
                 isTerminal = true,
                 isSuccess = true,
             )
-        is OfframpStatus.Failed ->
+        }
+
+        is OfframpStatus.Failed -> {
             AppleOfframpStatus(
                 "failed",
                 step.name,
@@ -750,19 +794,25 @@ private fun OfframpStatus.toAppleStatus(): AppleOfframpStatus =
                 txHash = txHash?.hex,
                 isTerminal = true,
             )
+        }
     }
 
 private fun BridgeToBaseStatus.toAppleStatus(): AppleOfframpStatus =
     when (this) {
-        BridgeToBaseStatus.Idle -> AppleOfframpStatus("idle", "FUNDING", "Preparing transfer")
-        is BridgeToBaseStatus.Bridging ->
+        BridgeToBaseStatus.Idle -> {
+            AppleOfframpStatus("idle", "FUNDING", "Preparing transfer")
+        }
+
+        is BridgeToBaseStatus.Bridging -> {
             AppleOfframpStatus(
                 "bridging_funds",
                 "FUNDING",
                 "Adding funds to Base",
                 bridgeDepositAddress = depositAddress,
             )
-        is BridgeToBaseStatus.Complete ->
+        }
+
+        is BridgeToBaseStatus.Complete -> {
             AppleOfframpStatus(
                 "completed",
                 "FUNDING",
@@ -770,7 +820,9 @@ private fun BridgeToBaseStatus.toAppleStatus(): AppleOfframpStatus =
                 isTerminal = true,
                 isSuccess = true,
             )
-        is BridgeToBaseStatus.Failed ->
+        }
+
+        is BridgeToBaseStatus.Failed -> {
             AppleOfframpStatus(
                 "failed",
                 "FUNDING",
@@ -779,9 +831,15 @@ private fun BridgeToBaseStatus.toAppleStatus(): AppleOfframpStatus =
                 bridgeDepositAddress = depositAddress,
                 isTerminal = true,
             )
+        }
     }
 
 private fun currencyCodeFromBytes32(value: String): String =
     runCatching {
-        value.removePrefix("0x").hexToBytes().takeWhile { it != 0.toByte() }.toByteArray().decodeToString()
+        value
+            .removePrefix("0x")
+            .hexToBytes()
+            .takeWhile { it != 0.toByte() }
+            .toByteArray()
+            .decodeToString()
     }.getOrDefault("")

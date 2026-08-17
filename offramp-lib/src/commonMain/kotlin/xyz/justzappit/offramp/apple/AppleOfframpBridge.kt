@@ -45,13 +45,16 @@ data class AppleBridgeExecution(
     val message: String? = null,
 )
 
-class AppleBridgeTerminalException(message: String) : IllegalStateException(message)
+class AppleBridgeTerminalException(
+    message: String
+) : IllegalStateException(message)
 
 internal class AppleBridgeFunding(
     private val rpc: BaseRpcClient,
     private val usdc: Address,
     private val bridge: AppleOfframpBridge,
-) : OfframpFunding, OfframpTopUp {
+) : OfframpFunding,
+    OfframpTopUp {
     override suspend fun ensureFunded(
         account: Address,
         request: OfframpRequest,

@@ -25,6 +25,7 @@ data class P2pNetworkConfig(
     }
 
     fun addressUrl(addressHex: String): String = baseExplorerUrl.trimEnd('/') + "/address/" + addressHex
+
     fun txUrl(txHash: String): String = baseExplorerUrl.trimEnd('/') + "/tx/" + txHash
 }
 

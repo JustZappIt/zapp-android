@@ -3,8 +3,8 @@
 
 package xyz.justzappit.evm.types
 
-import kotlin.jvm.JvmInline
 import kotlinx.serialization.Serializable
+import kotlin.jvm.JvmInline
 
 @JvmInline
 @Serializable

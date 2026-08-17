@@ -3,12 +3,12 @@
 
 package xyz.justzappit.evm.signer
 
+import xyz.justzappit.evm.math.bigIntegerOne
+import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.evm.util.toHex
-import xyz.justzappit.evm.math.bigIntegerOne
-import xyz.justzappit.evm.math.bigIntegerValueOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

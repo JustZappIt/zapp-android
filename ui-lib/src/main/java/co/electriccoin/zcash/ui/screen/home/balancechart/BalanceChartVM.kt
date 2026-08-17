@@ -158,12 +158,24 @@ internal fun createZecChartState(
     period: BalanceChartPeriod,
     now: Instant = Instant.now(),
     onPeriodClick: (BalanceChartPeriod) -> Unit = {},
-): BalanceChartState {
-    return when {
-        history == null -> BalanceChartState.Loading
-        history !is BalanceHistory.Reconciled -> BalanceChartState.Hidden
-        history.confirmedBalance.value <= 0L -> BalanceChartState.Hidden
-        history.points.none { it.balance.value > 0L } -> BalanceChartState.Hidden
+): BalanceChartState =
+    when {
+        history == null -> {
+            BalanceChartState.Loading
+        }
+
+        history !is BalanceHistory.Reconciled -> {
+            BalanceChartState.Hidden
+        }
+
+        history.confirmedBalance.value <= 0L -> {
+            BalanceChartState.Hidden
+        }
+
+        history.points.none { it.balance.value > 0L } -> {
+            BalanceChartState.Hidden
+        }
+
         else -> {
             val windowed = windowForPeriod(history.points, period, now)
             if (windowed.size < MIN_POINTS_FOR_CHART) {
@@ -186,7 +198,6 @@ internal fun createZecChartState(
             }
         }
     }
-}
 
 private fun windowForPeriod(
     history: List<BalanceHistoryPoint>,

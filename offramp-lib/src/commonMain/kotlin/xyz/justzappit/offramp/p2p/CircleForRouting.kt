@@ -4,8 +4,8 @@
 package xyz.justzappit.offramp.p2p
 
 import kotlinx.serialization.Serializable
-import kotlin.jvm.JvmInline
 import xyz.justzappit.evm.math.BigInteger
+import kotlin.jvm.JvmInline
 
 @Serializable
 data class CircleForRouting(

@@ -134,7 +134,6 @@ class PixQrParserTest {
         runTest {
             val inner = tlv("00", "01") + tlv("53", "360") + tlv("58", "ID") + tlv("59", "LOJA")
             assertIs<PaymentQrError.InvalidFormat>(error(withCrc(inner)))
-
         }
 
     // -- real-world EMVCo MPM fixtures from the SDK suite --------------------------------------

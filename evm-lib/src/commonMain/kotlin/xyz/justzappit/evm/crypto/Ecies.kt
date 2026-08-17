@@ -127,7 +127,11 @@ object Ecies {
      * counterparty — do NOT "fix" this without coordinating a hard fork of the relay protocol.
      */
     private fun deriveKeys(sharedSecret: ByteArray): Pair<ByteArray, ByteArray> {
-        val hash = CryptographyProvider.Default.get(SHA512).hasher().hashBlocking(sharedSecret)
+        val hash =
+            CryptographyProvider.Default
+                .get(SHA512)
+                .hasher()
+                .hashBlocking(sharedSecret)
         return hash.copyOfRange(0, FIELD_BYTES) to hash.copyOfRange(FIELD_BYTES, hash.size)
     }
 

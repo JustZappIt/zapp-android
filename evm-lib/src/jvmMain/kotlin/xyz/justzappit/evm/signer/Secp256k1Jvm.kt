@@ -29,7 +29,11 @@ internal actual fun secpSignRecoverable(messageHash: ByteArray, privateKey: Byte
     val generated = signer.generateSignature(messageHash)
     val r = generated[0]
     val s = if (generated[1] > halfN) curve.n.subtract(generated[1]) else generated[1]
-    val expected = curve.g.multiply(privateScalar).normalize().getEncoded(false)
+    val expected =
+        curve.g
+            .multiply(privateScalar)
+            .normalize()
+            .getEncoded(false)
     val compact = r.toFieldBytes() + s.toFieldBytes()
     for (recId in 0..1) {
         if (secpRecoverPublicKey(messageHash, compact, recId)?.contentEquals(expected) == true) {
@@ -58,13 +62,23 @@ internal actual fun secpRecoverPublicKey(messageHash: ByteArray, signature: Byte
 }
 
 internal actual fun secpPublicKeyUncompressed(privateKey: ByteArray): ByteArray =
-    curve.g.multiply(BigInteger(1, privateKey)).normalize().getEncoded(false)
+    curve.g
+        .multiply(BigInteger(1, privateKey))
+        .normalize()
+        .getEncoded(false)
 
 internal actual fun secpNormalizePublicKeyUncompressed(publicKey: ByteArray): ByteArray =
-    curve.curve.decodePoint(publicKey).normalize().getEncoded(false)
+    curve.curve
+        .decodePoint(publicKey)
+        .normalize()
+        .getEncoded(false)
 
 internal actual fun secpEcdh(privateKey: ByteArray, publicKey: ByteArray): ByteArray {
-    val point = curve.curve.decodePoint(publicKey).multiply(BigInteger(1, privateKey)).normalize()
+    val point =
+        curve.curve
+            .decodePoint(publicKey)
+            .multiply(BigInteger(1, privateKey))
+            .normalize()
     return point.affineXCoord.encoded
 }
 

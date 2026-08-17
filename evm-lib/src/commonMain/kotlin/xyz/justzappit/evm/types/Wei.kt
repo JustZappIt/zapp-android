@@ -10,12 +10,12 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlin.jvm.JvmInline
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.evm.math.bigIntegerZero
 import xyz.justzappit.evm.math.plus
 import xyz.justzappit.evm.math.times
+import kotlin.jvm.JvmInline
 
 /**
  * Atomic wei amount — i.e. ETH * 10^18 on Ethereum / Base / any EVM chain. Distinguished from

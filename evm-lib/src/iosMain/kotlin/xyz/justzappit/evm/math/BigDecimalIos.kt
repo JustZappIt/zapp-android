@@ -3,9 +3,9 @@
 
 package xyz.justzappit.evm.math
 
-import com.ionspin.kotlin.bignum.decimal.BigDecimal as KmpBigDecimal
 import com.ionspin.kotlin.bignum.decimal.DecimalMode
 import com.ionspin.kotlin.bignum.decimal.RoundingMode
+import com.ionspin.kotlin.bignum.decimal.BigDecimal as KmpBigDecimal
 
 actual class BigDecimal internal constructor(
     internal val value: KmpBigDecimal
@@ -13,10 +13,13 @@ actual class BigDecimal internal constructor(
     actual constructor(value: String) : this(KmpBigDecimal.parseString(value))
 
     actual fun signum(): Int = value.signum()
+
     actual override fun compareTo(other: BigDecimal): Int = value.compareTo(other.value)
 
     override fun equals(other: Any?): Boolean = other is BigDecimal && value.compareTo(other.value) == 0
+
     override fun hashCode(): Int = value.toStringExpanded().hashCode()
+
     override fun toString(): String = value.toStringExpanded()
 }
 

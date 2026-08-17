@@ -3,9 +3,9 @@
 
 package xyz.justzappit.offramp.orchestrator
 
+import xyz.justzappit.evm.math.bigIntegerValueOf
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
-import xyz.justzappit.evm.math.bigIntegerValueOf
 
 class QrAmountPolicyTest {
     @Test

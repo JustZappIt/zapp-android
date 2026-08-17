@@ -61,14 +61,15 @@ internal class TopicSubscriptionReconciler(
     }
 
     /** A refreshed FCM token must explicitly reassert every desired topic. */
-    suspend fun forceResubscribe() = mutex.withLock {
-        if (!store.isDeliveryEnabled()) return@withLock
-        val subscribed = store.subscribedTopics().toMutableSet()
-        for (topic in store.desiredBindings().keys) {
-            runCatching { client.subscribe(topic) }
-                .onSuccess { subscribed.add(topic) }
-                .onFailure { onFailure(TopicOperation.SUBSCRIBE) }
+    suspend fun forceResubscribe() =
+        mutex.withLock {
+            if (!store.isDeliveryEnabled()) return@withLock
+            val subscribed = store.subscribedTopics().toMutableSet()
+            for (topic in store.desiredBindings().keys) {
+                runCatching { client.subscribe(topic) }
+                    .onSuccess { subscribed.add(topic) }
+                    .onFailure { onFailure(TopicOperation.SUBSCRIBE) }
+            }
+            store.replaceSubscribedTopics(subscribed)
         }
-        store.replaceSubscribedTopics(subscribed)
-    }
 }

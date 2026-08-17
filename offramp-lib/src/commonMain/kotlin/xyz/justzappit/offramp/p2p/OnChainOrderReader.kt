@@ -3,9 +3,9 @@
 
 package xyz.justzappit.offramp.p2p
 
+import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.offramp.config.P2pNetworkConfig
-import xyz.justzappit.evm.math.BigInteger
 
 class OnChainOrderReader(
     private val rpc: BaseRpcClient,

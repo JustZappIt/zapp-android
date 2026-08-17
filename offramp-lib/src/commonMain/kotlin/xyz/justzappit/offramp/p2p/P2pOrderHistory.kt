@@ -8,10 +8,10 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.config.P2pNetworkConfig
-import xyz.justzappit.evm.math.BigInteger
 
 /**
  * Display-ready row for the P2P transactions screen.

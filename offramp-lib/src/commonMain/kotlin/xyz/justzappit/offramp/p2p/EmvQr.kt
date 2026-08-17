@@ -4,7 +4,10 @@
 package xyz.justzappit.offramp.p2p
 
 object EmvQr {
-    data class TlvEntry(val tag: String, val value: String)
+    data class TlvEntry(
+        val tag: String,
+        val value: String
+    )
 
     fun parseTlv(data: String): List<TlvEntry> {
         val entries = mutableListOf<TlvEntry>()
@@ -72,6 +75,7 @@ object EmvQr {
     }
 
     private fun Char.isAsciiDigit(): Boolean = this in '0'..'9'
+
     private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
 
     private const val TAG_LEN = 2

@@ -11,10 +11,10 @@ import xyz.justzappit.evm.abi.AbiString
 import xyz.justzappit.evm.abi.AbiUint
 import xyz.justzappit.evm.abi.AbiUint8
 import xyz.justzappit.evm.abi.AbiUintArray
-import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.evm.math.bigIntegerZero
+import xyz.justzappit.evm.types.Address
 
 enum class OrderType(
     val onChain: Int

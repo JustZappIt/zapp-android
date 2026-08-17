@@ -6,9 +6,9 @@ package xyz.justzappit.offramp.p2p
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
-import xyz.justzappit.evm.math.BigInteger
 
 internal object SubgraphOrderParser {
     fun parse(node: JsonObject): OrderSnapshot {

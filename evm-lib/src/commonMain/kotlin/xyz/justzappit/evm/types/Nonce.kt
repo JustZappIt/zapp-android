@@ -3,8 +3,8 @@
 
 package xyz.justzappit.evm.types
 
-import kotlin.jvm.JvmInline
 import xyz.justzappit.evm.math.BigInteger
+import kotlin.jvm.JvmInline
 
 /**
  * An account transaction nonce — a monotonic per-account counter. Typed apart from [Wei] amounts

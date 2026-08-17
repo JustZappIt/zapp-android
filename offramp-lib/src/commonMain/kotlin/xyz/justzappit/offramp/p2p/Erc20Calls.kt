@@ -6,10 +6,10 @@ package xyz.justzappit.offramp.p2p
 import xyz.justzappit.evm.abi.AbiAddress
 import xyz.justzappit.evm.abi.AbiEncoder
 import xyz.justzappit.evm.abi.AbiUint
-import xyz.justzappit.evm.rpc.BaseRpcClient
-import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.math.bigIntegerZero
+import xyz.justzappit.evm.rpc.BaseRpcClient
+import xyz.justzappit.evm.types.Address
 
 object Erc20Calls {
     fun approveCalldata(spender: Address, amount: Usdc6): ByteArray =

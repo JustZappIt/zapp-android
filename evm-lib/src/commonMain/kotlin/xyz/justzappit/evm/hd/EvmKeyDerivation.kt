@@ -198,10 +198,12 @@ object EvmKeyDerivation {
 }
 
 internal expect fun platformNormalizeNfkd(value: String): String
+
 internal expect fun platformPbkdf2Sha512(
     password: ByteArray,
     salt: ByteArray,
     iterations: Int,
     outputBytes: Int,
 ): ByteArray
+
 internal expect fun platformHmacSha512(key: ByteArray, data: ByteArray): ByteArray

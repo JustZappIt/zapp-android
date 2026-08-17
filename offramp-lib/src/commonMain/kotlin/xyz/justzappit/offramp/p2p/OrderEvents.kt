@@ -5,12 +5,12 @@ package xyz.justzappit.offramp.p2p
 
 import xyz.justzappit.evm.abi.AbiAddress
 import xyz.justzappit.evm.abi.keccak256
+import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.rpc.EvmLog
 import xyz.justzappit.evm.rpc.TransactionReceipt
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.evm.util.toHex
-import xyz.justzappit.evm.math.BigInteger
 
 object OrderEvents {
     val ORDER_PLACED_TOPIC: String =

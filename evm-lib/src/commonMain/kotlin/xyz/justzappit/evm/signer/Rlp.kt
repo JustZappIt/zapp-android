@@ -3,9 +3,9 @@
 
 package xyz.justzappit.evm.signer
 
-import kotlin.jvm.JvmInline
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.math.bigIntegerValueOf
+import kotlin.jvm.JvmInline
 
 sealed interface RlpItem {
     @JvmInline
