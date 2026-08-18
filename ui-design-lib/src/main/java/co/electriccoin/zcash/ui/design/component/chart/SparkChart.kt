@@ -314,17 +314,18 @@ private fun DrawScope.drawCrosshair(
     markerBackground: Color,
     guideEffect: PathEffect,
 ) {
+    val guides = crosshairGuides(selectedOffset = selectedOffset, size = size)
     drawLine(
         color = lineColor.copy(alpha = 0.5f),
-        start = Offset(selectedOffset.x, 0f),
-        end = Offset(selectedOffset.x, size.height),
+        start = guides.verticalStart,
+        end = guides.verticalEnd,
         strokeWidth = 1.dp.toPx(),
         pathEffect = guideEffect,
     )
     drawLine(
         color = lineColor.copy(alpha = 0.5f),
-        start = Offset(0f, selectedOffset.y),
-        end = Offset(size.width, selectedOffset.y),
+        start = guides.horizontalStart,
+        end = guides.horizontalEnd,
         strokeWidth = 1.dp.toPx(),
         pathEffect = guideEffect,
     )
@@ -341,6 +342,29 @@ private fun DrawScope.drawCrosshair(
         size = Size(markerInner, markerInner),
     )
 }
+
+/**
+ * Endpoints of the two selection guides. Each guide runs from the selected point toward the axis
+ * that labels it — left to the price readout, down to the date readout. The segments above and to
+ * the right of the point are deliberately omitted: they label nothing and box the marker in.
+ */
+internal data class CrosshairGuides(
+    val verticalStart: Offset,
+    val verticalEnd: Offset,
+    val horizontalStart: Offset,
+    val horizontalEnd: Offset,
+)
+
+internal fun crosshairGuides(
+    selectedOffset: Offset,
+    size: Size,
+): CrosshairGuides =
+    CrosshairGuides(
+        verticalStart = selectedOffset,
+        verticalEnd = Offset(selectedOffset.x, size.height),
+        horizontalStart = Offset(0f, selectedOffset.y),
+        horizontalEnd = selectedOffset,
+    )
 
 private fun DrawScope.drawAxisReadouts(
     selectedOffset: Offset,
