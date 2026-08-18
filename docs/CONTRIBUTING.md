@@ -13,12 +13,17 @@ We **love** pull requests!
 
 Pull requests should adhere to our [Code Review Guidelines](CODE_REVIEW_GUIDELINES.md) and [Code of Conduct](CONDUCT.md).
 
-Contributions to **Zapp-original code** (files marked with an
-`SPDX-License-Identifier: MIT OR Apache-2.0` header, e.g. the `evm-lib` /
-`offramp-lib` modules and the P2P chat feature) are accepted under the
-**`MIT OR Apache-2.0`** dual license. Contributions to upstream-derived code
-remain under the **MIT** license. See [../LICENSE](../LICENSE) and
-[../NOTICE](../NOTICE).
+Zapp is licensed **`AGPL-3.0-only`**, because the app links the AGPL-3.0-only
+ZODL Slipstream sync engine. Contributions are accepted under that same license,
+and new files carry the header:
+
+```
+// SPDX-License-Identifier: AGPL-3.0-only
+```
+
+Note this is version 3 **only**. Do not add an "or any later version" clause.
+Upstream code inherited from Zashi/Zodl keeps its MIT copyright notice. See
+[../LICENSE](../LICENSE) and [../NOTICE](../NOTICE).
 
 ## Getting Started
 Our backlog has many items [tagged with "good first issue"](https://github.com/JustZappIt/zapp-android/labels/good%20first%20issue).  If you'd like to pick one of these up, please fork the repo and make a pull request for us to review.
@@ -122,8 +127,7 @@ Let the machines do their work.
 
 ## Developer's Certificate of Origin
 
-Contributions are licensed as described above (MIT for upstream-derived code;
-`MIT OR Apache-2.0` for Zapp-original code).
+Contributions are licensed `AGPL-3.0-only`, as described above.
 
 By making a contribution to this project, I certify that:
 

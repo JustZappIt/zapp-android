@@ -29,9 +29,14 @@ internal fun AboutScreen() {
         configInfo = configInfo,
         versionInfo = versionInfo,
         onPrivacyPolicy = { navigationRouter.forward(ExternalUrl("https://justzappit.xyz/privacy")) },
-        onTermsOfUse = { navigationRouter.forward(ExternalUrl("https://justzappit.xyz/legal/terms")) }
+        onTermsOfUse = { navigationRouter.forward(ExternalUrl("https://justzappit.xyz/legal/terms")) },
+        onLicense = { navigationRouter.forward(ExternalUrl(LICENSE_URL)) },
+        onSourceCode = { navigationRouter.forward(ExternalUrl(SOURCE_CODE_URL)) }
     )
 }
+
+private const val SOURCE_CODE_URL = "https://github.com/JustZappIt/zapp-android"
+private const val LICENSE_URL = "https://github.com/JustZappIt/zapp-android/blob/main/LICENSE-AGPL"
 
 @Serializable
 data object AboutArgs

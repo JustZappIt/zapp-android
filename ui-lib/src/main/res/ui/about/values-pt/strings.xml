@@ -13,4 +13,7 @@
 
     <string name="about_unable_to_web_browser">Não foi possível encontrar um app de navegador da web.</string>
     <string name="about_button_privacy_policy">Política de Privacidade</string>
+    <string name="about_button_license">Licença (AGPL-3.0-only)</string>
+    <string name="about_button_source_code">Código-fonte</string>
+    <string name="about_legal_notice">Copyright © 2021-2025 Zcash. Copyright © 2025-2026 The Zapp Contributors.\n\nO Zapp é software livre, licenciado sob a GNU Affero General Public License, versão 3 apenas. Você pode redistribuí-lo sob esses termos. O Zapp é fornecido SEM NENHUMA GARANTIA, na medida permitida por lei. Abra Licença abaixo para ler os termos completos, ou Código-fonte para obter o código-fonte correspondente completo.</string>
 </resources>
