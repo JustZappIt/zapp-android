@@ -4,6 +4,41 @@ Copyright (c) 2025-2026 The Zapp Contributors
 This product includes software developed as part of the Zcash ecosystem.
 
 ================================================================================
+License of the work as a whole (AGPL-3.0-only)
+================================================================================
+
+Zapp, as conveyed in either binary or source form, is licensed under the GNU
+Affero General Public License, version 3 only (AGPL-3.0-only).
+
+    SPDX-License-Identifier: AGPL-3.0-only
+
+This is version 3 only. No "or any later version" option is offered. See
+LICENSE-AGPL for the full license text and LICENSE for why the whole work is
+AGPL.
+
+The complete corresponding source is available at
+https://github.com/JustZappIt/zapp-android.
+
+================================================================================
+ZODL Slipstream (AGPL-3.0-only)
+================================================================================
+
+    Copyright (c) 2026 Znewco, Inc. (d/b/a Zcash Open Development Lab)
+    https://github.com/zodl-inc/slipstream
+    Licensed under the GNU Affero General Public License, version 3 only.
+
+The ZODL Slipstream sync engine is statically linked into the native library
+`libzcashwalletsdk.so` distributed in the Zcash Android SDK artifact
+`cash.z.ecc.android:zcash-android-backend`, which this application bundles and
+calls over JNI. Slipstream's AGPL-3.0-only license is the reason Zapp as a whole
+is conveyed under AGPL-3.0-only.
+
+"Zodl", "ZODL", "ZODL Slipstream" and "Zcash Open Development Lab" are
+trademarks of Znewco, Inc. They appear here for attribution only. Zapp is an
+independent project, is not an official ZODL release, and is not endorsed by or
+affiliated with Znewco, Inc.
+
+================================================================================
 Upstream lineage (MIT License)
 ================================================================================
 
@@ -14,27 +49,32 @@ itself a fork of the Electric Coin Company's Zashi wallet
     Copyright (c) 2021-2025 Zcash
     Licensed under the MIT License. See LICENSE-MIT.
 
-All code inherited or derived from Zashi/Zodl remains under the MIT License and
-retains the upstream copyright notice above.
+Upstream's own code remains under the MIT License and retains the upstream
+copyright notice above. The MIT License permits sublicensing, which is what
+allows that code to be conveyed as part of this AGPL-licensed combined work.
+Modifications made by the Zapp Contributors to files inherited from upstream are
+licensed AGPL-3.0-only.
 
 ================================================================================
-Zapp-original contributions (MIT OR Apache-2.0)
+Zapp contributions (AGPL-3.0-only)
 ================================================================================
 
-Code authored by the Zapp Contributors — including (but not limited to) the
+Code authored by the Zapp Contributors, including (but not limited to) the
 `evm-lib` and `offramp-lib` modules and the P2P chat feature under
-`ui-lib/.../ui/screen/chat/` — is dual-licensed and may be used under the terms
-of EITHER the MIT License (LICENSE-MIT) OR the Apache License, Version 2.0
-(LICENSE-APACHE), at your option. Such files carry an SPDX header:
+`ui-lib/.../ui/screen/chat/`, is licensed AGPL-3.0-only and carries an SPDX
+header:
 
-    SPDX-License-Identifier: MIT OR Apache-2.0
+    SPDX-License-Identifier: AGPL-3.0-only
+
+Earlier published versions of this code were offered under `MIT OR Apache-2.0`.
+That grant is not withdrawn for copies already received under it. See LICENSE.
 
 ================================================================================
 Bundled fonts (SIL Open Font License 1.1)
 ================================================================================
 
-    Inter   — https://fonts.google.com/specimen/Inter
-    Archivo — https://fonts.google.com/specimen/Archivo
+    Inter   https://fonts.google.com/specimen/Inter
+    Archivo https://fonts.google.com/specimen/Archivo
 
 Both are licensed under the SIL Open Font License, Version 1.1
 (https://scripts.sil.org/OFL). See docs/Third party licenses.md.
@@ -44,6 +84,6 @@ Third-party dependencies
 ================================================================================
 
 This product depends on third-party libraries resolved at build time (AndroidX,
-Jetpack Compose, Koin, Coil, the Zcash Android SDK, and others), each under its
-own license. See docs/Third party licenses.md and the dependency declarations in
-gradle.properties / settings.gradle.kts.
+Jetpack Compose, Koin, Coil, the Zcash Android SDK, zappMessaging, bare-kit, and
+others), each under its own license. See docs/Third party licenses.md and the
+dependency declarations in gradle.properties / settings.gradle.kts.

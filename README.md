@@ -66,7 +66,7 @@ repository and have not been replaced yet.
 
 ## Building
 
-### Known limitation: this cannot be configured outside the org today
+### Sibling checkouts
 
 `settings.gradle.kts` includes two sibling projects **by path**, so both must be checked out next
 to this repository on disk:
@@ -78,19 +78,19 @@ include(":bare-kit")
 project(":bare-kit").projectDir = externalProjectDir("../bare-kit/android", "bare-kit/android")
 ```
 
-`bare-kit` is public: it is an unmodified clone of [holepunchto/bare-kit](https://github.com/holepunchto/bare-kit)
-at the commit pinned in [`.zapp-deps`](.zapp-deps) (a v2.0.0 checkout).
+Both are public and both are Apache-2.0:
 
-`JustZappIt/zappMessaging` is **private at the time of writing**. Gradle fails at configuration
-time if it is missing, and there is no flag that stubs the messaging module out, so people outside
-the JustZappIt org cannot currently configure or build this project. CI works only because it
-checks the repository out with a read token (`ZAPP_MESSAGING_READ_TOKEN`). This is a known
-limitation, stated here rather than worked around.
+- `zappmessaging` comes from [JustZappIt/zappmessaging-sdk](https://github.com/JustZappIt/zappmessaging-sdk),
+  the published mirror of the messaging SDK.
+- `bare-kit` is an unmodified clone of [holepunchto/bare-kit](https://github.com/holepunchto/bare-kit)
+  (a v2.0.0 checkout).
 
-For the same reason, this repository ships without the GitHub Actions workflows: every job depends
-on that private checkout and on repository secrets, so none of them could run here. The references
-to CI elsewhere in this document describe the internal repository, not something you can run from
-this tree.
+Both are pinned by commit in [`.zapp-deps`](.zapp-deps). Gradle fails at configuration time if
+either is missing, and there is no flag that stubs the messaging module out, so check them out
+before the first build. Neither checkout needs a token.
+
+Release and deployment tooling is not published here, because it carries signing material and
+store account state. It is not needed to build the application.
 
 ### Prerequisites
 
@@ -111,8 +111,8 @@ Exact versions of everything else are in
 
 ```
 <some-dir>/
-  zodl-android/        <-- this repository
-  zappMessaging/       <-- required, currently private
+  zapp-android/        <-- this repository
+  zappMessaging/       <-- required, public
   bare-kit/            <-- required, public
 ```
 
@@ -120,7 +120,7 @@ From the repository root, with both siblings pinned to the SHAs recorded in
 [`.zapp-deps`](.zapp-deps):
 
 ```sh
-git clone https://github.com/JustZappIt/zappMessaging.git ../zappMessaging
+git clone https://github.com/JustZappIt/zappmessaging-sdk.git ../zappMessaging
 git -C ../zappMessaging checkout "$(grep '^zappMessaging=' .zapp-deps | cut -d= -f2)"
 
 git clone https://github.com/holepunchto/bare-kit.git ../bare-kit
@@ -294,7 +294,7 @@ are the versions in play.
 | Location | `com.google.android.gms:play-services-location` | 21.3.0 |
 | QR scan (`store`) | `com.google.mlkit:barcode-scanning` | 17.3.0 |
 | QR render | `com.google.zxing:core` | 3.5.4 |
-| Zcash | `cash.z.ecc.android:zcash-android-sdk` | 3.0.1-SNAPSHOT (Ironwood / NU6.3, the Slipstream sync engine, and the Orchard migration SDK) |
+| Zcash | `cash.z.ecc.android:zcash-android-sdk` | 3.0.1-SNAPSHOT (Ironwood / NU6.3, the Slipstream sync engine, and the Orchard migration SDK). MIT, but its native library statically links **AGPL-3.0-only** [ZODL Slipstream](https://github.com/zodl-inc/slipstream). See [License](#license). |
 | Zcash | `cash.z.ecc.android:kotlin-bip39` | 1.0.9 |
 | Crypto | `com.google.crypto.tink:tink-android` | 1.20.0 |
 | Keystone | `com.github.KeystoneHQ:keystone-sdk-android` | 0.8.3 |
@@ -386,17 +386,46 @@ If you are forking to build a different app rather than to contribute back:
 
 # License
 
-Zapp is a fork of the MIT-licensed [Zashi](https://github.com/Electric-Coin-Company/zashi-android)
-/ [Zodl](https://github.com/zodl-inc/zodl-android) Zcash wallet, so the project as
-a whole is available under the **MIT License** ([LICENSE-MIT](LICENSE-MIT)); all
-code inherited or derived from upstream (© 2021-2025 Zcash) stays MIT and keeps
-the upstream copyright notice.
+Zapp as a whole, as conveyed in either binary or source form, is licensed under the
+**GNU Affero General Public License, version 3 only** (`AGPL-3.0-only`).
 
-**Zapp-original contributions**, including the `evm-lib` and `offramp-lib`
-modules and the P2P chat feature, are **dual-licensed under `MIT OR Apache-2.0`**
-([LICENSE-APACHE](LICENSE-APACHE)), matching the wider Zcash/Rust ecosystem
-convention and adding an explicit patent grant on Zapp's own code. Such files
-carry an `SPDX-License-Identifier: MIT OR Apache-2.0` header; treat any
-unmarked file as MIT-only. See [LICENSE](LICENSE) and [NOTICE](NOTICE) for the
-full breakdown, and [docs/Third party licenses.md](docs/Third%20party%20licenses.md)
-for bundled fonts and third-party dependencies.
+```
+SPDX-License-Identifier: AGPL-3.0-only
+```
+
+This is version 3 **only**. No "or any later version" option is offered.
+
+**Why.** The app links the [ZODL Slipstream](https://github.com/zodl-inc/slipstream) sync engine,
+which Znewco, Inc. (d/b/a Zcash Open Development Lab) licenses under AGPL-3.0-only. Slipstream is
+statically linked into `libzcashwalletsdk.so`, the native library shipped inside the Zcash Android
+SDK artifact this project resolves, and the app calls into it over JNI in its own process. That
+makes the app and Slipstream a single combined work, so section 5 of the AGPL requires the whole
+thing to be conveyed under the AGPL.
+
+**Upstream code.** Zapp is a fork of [Zodl](https://github.com/zodl-inc/zodl-android), itself a
+fork of [Zashi](https://github.com/Electric-Coin-Company/zashi-android). Upstream's own code
+remains under the **MIT License** ([LICENSE-MIT](LICENSE-MIT)) and keeps the upstream copyright
+notice (© 2021-2025 Zcash). Modifications by the Zapp Contributors, including modifications to
+files inherited from upstream, are AGPL-3.0-only. To take upstream code under MIT alone, take it
+from the upstream projects rather than from here.
+
+**Earlier versions.** Releases published before this change were MIT, with Zapp-original
+contributions additionally offered under `MIT OR Apache-2.0`. Those grants are not withdrawn:
+anyone who received a copy under them keeps them for that copy. This and later versions are
+AGPL-3.0-only.
+
+See [LICENSE](LICENSE) for the full statement, [LICENSE-AGPL](LICENSE-AGPL) for the license text,
+[NOTICE](NOTICE) for attribution, and
+[docs/Third party licenses.md](docs/Third%20party%20licenses.md) for per-dependency licenses.
+
+## Source code
+
+The complete corresponding source for any Zapp binary is this repository:
+
+    https://github.com/JustZappIt/zapp-android
+
+Building it needs the two sibling checkouts described in [Building](#building), both of which are
+public, plus the prerequisites listed there. The `foss` flavor builds from this tree with no
+credentials of any kind and is the variant to build if you want to reproduce a binary. The `store`
+and `internal` flavors additionally need your own `google-services.json`; Firebase API keys are
+credentials rather than source, and are not part of the corresponding source.

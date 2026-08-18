@@ -18,7 +18,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material3.DropdownMenu
@@ -56,6 +58,8 @@ fun About(
     configInfo: ConfigInfo,
     onPrivacyPolicy: () -> Unit,
     onTermsOfUse: () -> Unit,
+    onLicense: () -> Unit,
+    onSourceCode: () -> Unit,
     versionInfo: VersionInfo,
 ) {
     val c = ZappTheme.colors
@@ -120,10 +124,33 @@ fun About(
                     icon = Icons.Default.Description,
                     onClick = onTermsOfUse,
                 )
+                ZappRowDivider(inset = true)
+                ZappRow(
+                    title = stringResource(R.string.about_button_license),
+                    icon = Icons.Default.Gavel,
+                    onClick = onLicense,
+                )
+                ZappRowDivider(inset = true)
+                ZappRow(
+                    title = stringResource(R.string.about_button_source_code),
+                    icon = Icons.Default.Code,
+                    onClick = onSourceCode,
+                )
             }
 
             Spacer(Modifier.weight(1f))
             Spacer(Modifier.height(20.dp))
+
+            BasicText(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp),
+                text = stringResource(R.string.about_legal_notice),
+                style = ZappTheme.typography.rowSubtitle.copy(color = c.textSubtle),
+            )
+
+            Spacer(Modifier.height(12.dp))
 
             BasicText(
                 modifier =
@@ -203,6 +230,8 @@ private fun AboutPreview() =
             configInfo = ConfigInfoFixture.new(),
             onPrivacyPolicy = {},
             versionInfo = VersionInfoFixture.new(),
-            onTermsOfUse = {}
+            onTermsOfUse = {},
+            onLicense = {},
+            onSourceCode = {}
         )
     }

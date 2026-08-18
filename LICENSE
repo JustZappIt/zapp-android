@@ -1,21 +1,83 @@
-Zapp Android Wallet — Licensing
-================================
+Zapp Android Wallet: Licensing
+==============================
 
-This project is a fork of the MIT-licensed Zashi/Zodl Zcash wallet, with
-Zapp-original contributions added on top.
+The work as a whole, as conveyed in either binary or source form, is licensed
+under the GNU Affero General Public License, version 3 only (AGPL-3.0-only).
+The full text is in LICENSE-AGPL.
 
-* The project as a whole is available under the MIT License (see LICENSE-MIT).
-  All code inherited or derived from upstream Zashi/Zodl (© 2021-2025 Zcash)
-  remains MIT-licensed and retains the upstream copyright notice.
+    SPDX-License-Identifier: AGPL-3.0-only
 
-* Zapp-ORIGINAL contributions are additionally available under the Apache
-  License, Version 2.0 (see LICENSE-APACHE). These files are dual-licensed —
-  you may use them under EITHER the MIT License OR the Apache License 2.0, at
-  your option — and are marked with an SPDX header:
+This is version 3 ONLY. No "or any later version" option is offered anywhere in
+this project, because the license that compels it does not offer one.
 
-      SPDX-License-Identifier: MIT OR Apache-2.0
 
-Unless a file carries the dual-license SPDX header above, treat it as MIT-only.
+Why the whole work is AGPL
+--------------------------
 
-See NOTICE for attribution details and docs/Third party licenses.md for bundled
-fonts and third-party dependency licenses.
+The application links the ZODL Slipstream sync engine, which Znewco, Inc.
+(d/b/a Zcash Open Development Lab) licenses under AGPL-3.0-only. Slipstream is
+statically linked into the native library `libzcashwalletsdk.so` that ships
+inside the APK, and the application calls into it over JNI in its own process.
+That makes the application and Slipstream a single combined work rather than an
+aggregation of separate programs, so section 5 of the AGPL requires the entire
+combined work to be conveyed under the AGPL to every recipient.
+
+
+What this covers
+----------------
+
+The AGPL statement above covers the Zapp Android application: every Gradle module
+in this repository and the binaries built from them.
+
+It does not cover third-party code that is vendored or bundled here and carries
+its own license. In particular, the blind-push relay server under
+`docs/notifications/deployment/blind-push/` is vendored verbatim from
+zappMessaging (Apache-2.0), is a separate program from the application, and
+remains under Apache-2.0. See docs/Third party licenses.md.
+
+
+Upstream code
+-------------
+
+Zapp is a fork of Zodl (https://github.com/zodl-inc/zodl-android), which is
+itself a fork of Zashi
+(https://github.com/Electric-Coin-Company/zashi-android).
+
+Upstream's own code remains under the MIT License and retains the upstream
+copyright notice (Copyright (c) 2021-2025 Zcash). That grant belongs to
+upstream and nothing here affects it. See LICENSE-MIT. The MIT License permits
+sublicensing, which is what allows upstream code to be conveyed as part of this
+AGPL-licensed combined work.
+
+Modifications made by the Zapp Contributors, including modifications to files
+inherited from upstream, are licensed AGPL-3.0-only. To obtain upstream code
+under MIT alone, take it from the upstream projects rather than from this
+repository.
+
+
+Previously published versions
+-----------------------------
+
+Versions of this project published before this change were released under the
+MIT License, with Zapp-original contributions additionally offered under
+`MIT OR Apache-2.0`. Those grants were made and are not being withdrawn.
+Anyone who already received a copy under those terms keeps those terms for that
+copy. This change applies to this version and to versions published after it,
+which are conveyed under AGPL-3.0-only.
+
+LICENSE-APACHE is retained for that reason, and because bundled third-party
+dependencies are themselves licensed under Apache-2.0.
+
+
+Source code
+-----------
+
+The complete corresponding source for this application is available at:
+
+    https://github.com/JustZappIt/zapp-android
+
+See README.md for what is required to build it.
+
+
+See NOTICE for attribution details, and docs/Third party licenses.md for
+bundled fonts and third-party dependency licenses.
