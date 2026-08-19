@@ -6,8 +6,6 @@
     <string name="peer_offramp_currencies_label">Moedas que você aceita</string>
     <string name="peer_offramp_currency_label">Moeda</string>
     <string name="peer_offramp_sizing_warning">Compradores levam cerca de %1$s USDC por vez, então isso será preenchido em várias partes ao longo de algumas horas.</string>
-    <string name="peer_offramp_duration_minutes">%1$d min</string>
-    <string name="peer_offramp_duration_hours">%1$s h</string>
     <string name="peer_offramp_active_orders_label">Ordens em andamento</string>
     <string name="peer_offramp_in_flight_title">%1$s USDC para %2$s</string>
     <string name="peer_offramp_in_flight_unfinished">Não concluído</string>
@@ -118,13 +116,11 @@
     <string name="peer_offramp_amount_label">Valor</string>
     <string name="peer_offramp_hero_secondary">≈ %1$s %2$s</string>
     <string name="peer_offramp_ledger_rate">Taxa</string>
-    <string name="peer_offramp_ledger_wait">Espera habitual</string>
     <string name="peer_offramp_ledger_in_progress">Em andamento</string>
     <string name="peer_offramp_ledger_paid_to">Pago para</string>
     <string name="peer_offramp_ledger_currencies">Moedas</string>
     <string name="peer_offramp_rate_value">1 USDC ≈ %1$s %2$s</string>
     <string name="peer_offramp_rate_unavailable">Indisponível</string>
-    <string name="peer_offramp_wait_band">%1$s a %2$s</string>
     <string name="peer_offramp_usdc_amount">%1$s USDC</string>
     <string name="peer_offramp_top_up_button">Recarregar com ZEC</string>
     <string name="peer_offramp_info_content_description">Como funciona o saque</string>
