@@ -12,6 +12,7 @@
     <string name="balance_widget_available">Saldo disponível:</string>
 
     <string name="hide_balances_content_description">Ocultar saldos</string>
+    <string name="show_balances_content_description">Mostrar saldos</string>
 
     <string name="unable_to_open_email">Não foi possível abrir o app de e-mail.</string>
 

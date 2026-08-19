@@ -12,6 +12,7 @@
     <string name="balance_widget_available">Saldo tersedia:</string>
 
     <string name="hide_balances_content_description">Sembunyikan saldo</string>
+    <string name="show_balances_content_description">Tampilkan saldo</string>
 
     <string name="unable_to_open_email">Tidak dapat membuka aplikasi email.</string>
 

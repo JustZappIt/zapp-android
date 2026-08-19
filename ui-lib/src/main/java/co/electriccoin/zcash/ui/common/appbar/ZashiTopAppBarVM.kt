@@ -78,7 +78,14 @@ class ZashiTopAppBarVM(
                             R.drawable.ic_app_bar_balances_show
                         },
                     onClick = ::onShowOrHideBalancesClicked,
-                    contentDescription = stringRes(co.electriccoin.zcash.ui.R.string.hide_balances_content_description),
+                    contentDescription =
+                        stringRes(
+                            if (isHideBalances == true) {
+                                co.electriccoin.zcash.ui.R.string.show_balances_content_description
+                            } else {
+                                co.electriccoin.zcash.ui.R.string.hide_balances_content_description
+                            },
+                        ),
                     hapticFeedbackType =
                         if (isHideBalances == true) {
                             HapticFeedbackType.ToggleOn

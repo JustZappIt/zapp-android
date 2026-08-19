@@ -24,7 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import co.electriccoin.zcash.di.koinActivityViewModel
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.appbar.ZashiTopAppBarVM
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.usecase.EnsureSwapAssetsLoadedUseCase
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
@@ -45,6 +47,7 @@ import org.koin.core.parameter.parametersOf
 
 @Composable
 internal fun WalletHomeView() {
+    val topAppBarVM = koinActivityViewModel<ZashiTopAppBarVM>()
     val balanceVM: BalanceWidgetVM =
         koinViewModel {
             parametersOf(
@@ -62,6 +65,7 @@ internal fun WalletHomeView() {
     val chartVM: BalanceChartVM = koinViewModel()
     val syncVM: WalletSyncStateVM = koinViewModel()
 
+    val topAppBarState by topAppBarVM.state.collectAsStateWithLifecycle()
     val balanceState by balanceVM.state.collectAsStateWithLifecycle()
     val homeState by homeVM.state.collectAsStateWithLifecycle()
     // Side-effect-only subscription. The pipeline drives sync-error + restore-success
@@ -134,6 +138,7 @@ internal fun WalletHomeView() {
                     zecUsdPrice = swapAssets.zecAsset?.usdPrice,
                     showZecAsPrimary = showZecAsPrimary,
                     onToggleBalanceDisplay = { showZecAsPrimary = !showZecAsPrimary },
+                    onToggleBalanceVisibility = topAppBarState.balanceVisibilityButton.onClick,
                     modifier = Modifier.padding(horizontal = 18.dp),
                 )
                 Spacer(Modifier.height(20.dp))

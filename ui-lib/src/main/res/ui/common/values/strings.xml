@@ -12,6 +12,7 @@
     <string name="balance_widget_available">Available Balance:</string>
 
     <string name="hide_balances_content_description">Hide balances</string>
+    <string name="show_balances_content_description">Show balances</string>
 
     <string name="unable_to_open_email">Unable to launch email app.</string>
 
