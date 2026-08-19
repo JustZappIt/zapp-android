@@ -322,7 +322,6 @@ private fun PeerCashOutPreview() =
                     ledger =
                         listOf(
                             PeerLedgerRow(stringRes("Rate"), stringRes("1 USDC ≈ 0.86 GBP")),
-                            PeerLedgerRow(stringRes("Typical wait"), stringRes("24 min to 2.0 h")),
                             PeerLedgerRow(stringRes("In progress"), stringRes("1.60 USDC")),
                             PeerLedgerRow(stringRes("Paid to"), stringRes("Revolut")),
                         ),

@@ -6,8 +6,6 @@
     <string name="peer_offramp_currencies_label">Currencies you accept</string>
     <string name="peer_offramp_currency_label">Currency</string>
     <string name="peer_offramp_sizing_warning">Buyers take about %1$s USDC at a time, so this will fill in several pieces over a few hours.</string>
-    <string name="peer_offramp_duration_minutes">%1$d min</string>
-    <string name="peer_offramp_duration_hours">%1$s h</string>
     <string name="peer_offramp_active_orders_label">Orders in progress</string>
     <string name="peer_offramp_in_flight_title">%1$s USDC to %2$s</string>
     <string name="peer_offramp_in_flight_unfinished">Unfinished</string>
@@ -118,13 +116,11 @@
     <string name="peer_offramp_amount_label">Amount</string>
     <string name="peer_offramp_hero_secondary">≈ %1$s %2$s</string>
     <string name="peer_offramp_ledger_rate">Rate</string>
-    <string name="peer_offramp_ledger_wait">Typical wait</string>
     <string name="peer_offramp_ledger_in_progress">In progress</string>
     <string name="peer_offramp_ledger_paid_to">Paid to</string>
     <string name="peer_offramp_ledger_currencies">Currencies</string>
     <string name="peer_offramp_rate_value">1 USDC ≈ %1$s %2$s</string>
     <string name="peer_offramp_rate_unavailable">Unavailable</string>
-    <string name="peer_offramp_wait_band">%1$s to %2$s</string>
     <string name="peer_offramp_usdc_amount">%1$s USDC</string>
     <string name="peer_offramp_top_up_button">Top up from ZEC</string>
     <string name="peer_offramp_info_content_description">How cash out works</string>

@@ -22,7 +22,6 @@ import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.component.TextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.design.util.stringResByNumber
 import co.electriccoin.zcash.ui.screen.swap.peer.order.PeerOrderArgs
 import co.electriccoin.zcash.ui.screen.swap.peer.progress.PeerCashOutProgressArgs
 import co.electriccoin.zcash.ui.screen.swap.upi.bridge.BridgeToBaseArgs
@@ -48,7 +47,6 @@ import xyz.justzappit.offramp.peer.PeerCashOutRequest
 import xyz.justzappit.offramp.peer.PeerCurrency
 import xyz.justzappit.offramp.peer.PeerCurrencySelection
 import xyz.justzappit.offramp.peer.PeerMarketSnapshot
-import xyz.justzappit.offramp.peer.PeerMarketVerdict
 import xyz.justzappit.offramp.peer.PeerNetworks
 import xyz.justzappit.offramp.peer.PeerOracleRate
 import xyz.justzappit.offramp.peer.PeerOrderSnapshot
@@ -56,7 +54,6 @@ import xyz.justzappit.offramp.peer.PeerPlatform
 import xyz.justzappit.offramp.peer.PeerRateQuote
 import xyz.justzappit.offramp.peer.PeerSpendable
 import java.math.BigDecimal
-import kotlin.math.roundToLong
 
 @Suppress("TooManyFunctions")
 internal class PeerCashOutVM(
@@ -293,9 +290,6 @@ internal class PeerCashOutVM(
                         } ?: stringRes(R.string.peer_offramp_rate_unavailable),
                 ),
             )
-            orders.market.waitBand()?.let {
-                add(PeerLedgerRow(label = stringRes(R.string.peer_offramp_ledger_wait), value = it))
-            }
             // Available lives in the amount field; this row only explains why it is lower than the
             // account balance.
             (spendable as? PeerSpendable.Ready)?.takeIf { it.hasCommitment }?.let {
@@ -320,19 +314,6 @@ internal class PeerCashOutVM(
                     ),
                 )
             }
-        }
-
-    /**
-     * Only a measured band. "Little recent activity" and "Unknown" are not waits, and a row labelled
-     * "Typical wait" that answers with neither is worth less than no row at all.
-     */
-    private fun PeerMarketSnapshot?.waitBand(): StringResource? =
-        (this?.verdict as? PeerMarketVerdict.Band)?.let {
-            stringRes(
-                R.string.peer_offramp_wait_band,
-                it.lowSeconds.toDurationRes(),
-                it.highSeconds.toDurationRes(),
-            )
         }
 
     private fun fiatEquivalentOf(usdc: Usdc6?, quote: PeerRateQuote?): StringResource? {
@@ -454,18 +435,3 @@ internal class PeerCashOutVM(
         const val CURRENCY_SEPARATOR = ", "
     }
 }
-
-/** Bands are shown in whole minutes below an hour and one decimal of an hour above it. */
-private fun Long.toDurationRes(): StringResource {
-    val minutes = (this / SECONDS_PER_MINUTE.toDouble()).roundToLong()
-    return if (minutes < MINUTES_PER_HOUR) {
-        stringRes(R.string.peer_offramp_duration_minutes, minutes.toInt())
-    } else {
-        val hours = this / SECONDS_PER_HOUR.toDouble()
-        stringRes(R.string.peer_offramp_duration_hours, stringResByNumber(hours, minDecimals = 1, maxDecimals = 1))
-    }
-}
-
-private const val SECONDS_PER_MINUTE = 60
-private const val MINUTES_PER_HOUR = 60
-private const val SECONDS_PER_HOUR = 3_600

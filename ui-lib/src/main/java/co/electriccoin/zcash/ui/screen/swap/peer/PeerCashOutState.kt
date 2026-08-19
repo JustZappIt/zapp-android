@@ -16,7 +16,7 @@ internal data class PeerCashOutState(
     val availableBalance: StringResource,
     /** The typed amount in the primary currency, the way the UPI offramp shows its USDC equivalent. */
     val fiatEquivalent: StringResource?,
-    /** Rate, typical wait and what is spendable, as labelled rows rather than prose. */
+    /** Rate and what is spendable, as labelled rows rather than prose. */
     val ledger: List<PeerLedgerRow>,
     /** Shown inside the ledger so an error never displaces the amount field above it. */
     val notice: StringResource?,

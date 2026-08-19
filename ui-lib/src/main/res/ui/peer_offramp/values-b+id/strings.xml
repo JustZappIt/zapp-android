@@ -6,8 +6,6 @@
     <string name="peer_offramp_currencies_label">Mata uang yang Anda terima</string>
     <string name="peer_offramp_currency_label">Mata uang</string>
     <string name="peer_offramp_sizing_warning">Pembeli mengambil sekitar %1$s USDC sekaligus, jadi ini akan terisi dalam beberapa bagian selama beberapa jam.</string>
-    <string name="peer_offramp_duration_minutes">%1$d mnt</string>
-    <string name="peer_offramp_duration_hours">%1$s j</string>
     <string name="peer_offramp_active_orders_label">Pesanan berjalan</string>
     <string name="peer_offramp_in_flight_title">%1$s USDC ke %2$s</string>
     <string name="peer_offramp_in_flight_unfinished">Belum selesai</string>
@@ -118,13 +116,11 @@
     <string name="peer_offramp_amount_label">Jumlah</string>
     <string name="peer_offramp_hero_secondary">≈ %1$s %2$s</string>
     <string name="peer_offramp_ledger_rate">Kurs</string>
-    <string name="peer_offramp_ledger_wait">Perkiraan tunggu</string>
     <string name="peer_offramp_ledger_in_progress">Sedang berjalan</string>
     <string name="peer_offramp_ledger_paid_to">Dibayar ke</string>
     <string name="peer_offramp_ledger_currencies">Mata uang</string>
     <string name="peer_offramp_rate_value">1 USDC ≈ %1$s %2$s</string>
     <string name="peer_offramp_rate_unavailable">Tidak tersedia</string>
-    <string name="peer_offramp_wait_band">%1$s sampai %2$s</string>
     <string name="peer_offramp_usdc_amount">%1$s USDC</string>
     <string name="peer_offramp_top_up_button">Isi saldo dari ZEC</string>
     <string name="peer_offramp_info_content_description">Cara kerja pencairan</string>
