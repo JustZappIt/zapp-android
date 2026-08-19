@@ -92,11 +92,12 @@ object PeerNetworks {
     const val ORDERBOOK_MIN_VISIBLE_MICROS: Long = 5_000_000L
 
     /**
-     * The UI gates here, at the point an order is visible to buyers at all. It also has to stay
-     * above [INTENT_AMOUNT_FLOOR_MICROS], or `intentAmountMin == intentAmountMax` and only a request
-     * for the exact amount can match.
+     * The UI gates here. It sits above [ORDERBOOK_MIN_VISIBLE_MICROS] rather than on it, so an order
+     * can sell most of the way down and still be listed instead of going dark partway through. It
+     * also has to stay above [INTENT_AMOUNT_FLOOR_MICROS], or `intentAmountMin == intentAmountMax`
+     * and only a request for the exact amount can match.
      */
-    const val RECOMMENDED_MIN_CASHOUT_MICROS: Long = ORDERBOOK_MIN_VISIBLE_MICROS
+    const val RECOMMENDED_MIN_CASHOUT_MICROS: Long = 20_000_000L
 
     /** Buyers take any slice down to this, so small buyers can nibble a large order. */
     const val INTENT_AMOUNT_FLOOR_MICROS: Long = 1_000_000L
