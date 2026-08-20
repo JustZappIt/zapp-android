@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
 
+@file:Suppress("TooManyFunctions") // The expect API intentionally keeps all decimal operations in one parity surface.
+
 package xyz.justzappit.evm.math
 
 expect class BigDecimal : Comparable<BigDecimal> {

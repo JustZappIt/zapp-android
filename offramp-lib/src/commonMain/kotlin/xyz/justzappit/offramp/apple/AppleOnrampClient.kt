@@ -67,6 +67,7 @@ import xyz.justzappit.offramp.p2p.getUsdcBalance
 import kotlin.time.Clock
 
 /** Swift-friendly facade over the shared custodial on-ramp and durable ZEC delivery drivers. */
+@Suppress("TooManyFunctions") // The facade mirrors the complete order and delivery protocol surfaces for Swift.
 class AppleOnrampClient private constructor(
     private val httpClient: HttpClient,
     private val network: P2pNetworkConfig,
@@ -305,7 +306,10 @@ class AppleOnrampClient private constructor(
                     checkpoints = checkpointStore,
                     owner = checkNotNull(owner),
                 )
-            } catch (error: Throwable) {
+            } catch (
+                // Every construction failure must zero the owner key and close the HTTP client.
+                @Suppress("TooGenericExceptionCaught") error: Throwable,
+            ) {
                 owner?.zeroize()
                 http.close()
                 throw error
@@ -326,7 +330,7 @@ private class AppleOnrampCheckpointStore(
         } catch (error: CancellationException) {
             throw error
         } catch (
-            @Suppress("TooGenericExceptionCaught") error: Throwable,
+            @Suppress("SwallowedException", "TooGenericExceptionCaught") error: Throwable,
         ) {
             null
         }
@@ -452,11 +456,13 @@ private class AppleOnrampSwapGatewayAdapter(
         val value = host.status(checkpoint.depositAddress.orEmpty())
         require(value.mode.equals(EXACT_INPUT, ignoreCase = true)) { "Swap status is not exact-input" }
         require(value.inputUsdcMicros == checkpoint.usdcMicros) { "Swap status amount mismatch" }
-        require(Address.parseOrNull(value.refundAddress)?.checksumHex == Address.parse(checkpoint.baseAccount).checksumHex) {
+        val expectedRefundAddress = Address.parse(checkpoint.baseAccount).checksumHex
+        require(Address.parseOrNull(value.refundAddress)?.checksumHex == expectedRefundAddress) {
             "Swap status refund address mismatch"
         }
         require(value.destinationAddress == checkpoint.zcashRecipient) { "Swap status destination mismatch" }
-        require(Address.parseOrNull(value.depositAddress)?.checksumHex == Address.parse(checkpoint.depositAddress.orEmpty()).checksumHex) {
+        val expectedDepositAddress = Address.parse(checkpoint.depositAddress.orEmpty()).checksumHex
+        require(Address.parseOrNull(value.depositAddress)?.checksumHex == expectedDepositAddress) {
             "Swap status deposit address mismatch"
         }
         val status =
@@ -618,7 +624,11 @@ private fun OnrampZecDeliveryStatus.toApple(): AppleOnrampDeliveryStatus =
         }
 
         is OnrampZecDeliveryStatus.Submitting -> {
-            AppleOnrampDeliveryStatus("submitting", OnrampZecDeliveryPhase.TRANSFER_STARTING.name, usdc.micros.toString())
+            AppleOnrampDeliveryStatus(
+                "submitting",
+                OnrampZecDeliveryPhase.TRANSFER_STARTING.name,
+                usdc.micros.toString(),
+            )
         }
 
         is OnrampZecDeliveryStatus.AwaitingZec -> {
