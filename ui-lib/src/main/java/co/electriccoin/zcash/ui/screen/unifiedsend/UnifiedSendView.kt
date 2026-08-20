@@ -100,6 +100,10 @@ internal fun UnifiedSendView(
         ZappScreenHeader(
             title = stringResource(R.string.unified_send_title),
             titleStyle = ZappTheme.typography.displaySecondary,
+            right =
+                state.infoButton?.let { info ->
+                    { ZashiImageButton(modifier = Modifier.size(36.dp), state = info) }
+                },
         )
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -162,7 +166,8 @@ internal fun UnifiedSendView(
                     }
                 }
                 Box(modifier = Modifier.shake(amountErrorText)) {
-                    AmountFields(state)
+                    val payEstimate = state.payEstimate
+                    if (payEstimate == null) AmountFields(state) else PayEstimateRow(payEstimate)
                 }
                 AnimatedVisibility(visible = amountErrorText != null) {
                     Column {
@@ -176,9 +181,9 @@ internal fun UnifiedSendView(
                 }
                 Spacer(12.dp)
 
-                // ── Swap mode: "They receive ≈ X TOKEN" ─────────────────────
-                if (state.theyReceiveLabel != null) {
-                    TheyReceiveRow(state.theyReceiveLabel)
+                // ── Swap mode: the destination amount ────────────────────────
+                if (state.theyReceive != null) {
+                    TheyReceiveRow(state.theyReceive)
                     Spacer(8.dp)
                 }
 
@@ -287,23 +292,74 @@ private fun CtaButton(btn: PrimaryButtonState, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * The destination amount. Editing it is what turns the payment into an exact-output one, so the
+ * field stays editable in both modes — in exact-input it simply carries the estimate.
+ */
 @Composable
-private fun TheyReceiveRow(label: StringResource) {
-    Row(verticalAlignment = CenterVertically) {
-        Image(
-            modifier = Modifier.size(20.dp),
-            painter = painterResource(R.drawable.ic_zec_round_full),
-            contentDescription = null
-        )
-        Spacer(8.dp)
-        Text(
-            text = label.getValue(),
-            style = ZappTheme.typography.caption,
-            fontWeight = FontWeight.Medium,
-            color = ZappTheme.colors.text,
-            modifier = Modifier.weight(1f),
-        )
+private fun TheyReceiveRow(state: TheyReceiveState) {
+    Column {
+        Row(verticalAlignment = CenterVertically) {
+            Text(
+                text = state.label.getValue(),
+                style = ZappTheme.typography.caption,
+                fontWeight = FontWeight.Medium,
+                color = ZappTheme.colors.text,
+            )
+            Spacer(8.dp)
+            ZashiNumberTextField(
+                modifier = Modifier.weight(1f),
+                state = state.amount,
+                textStyle =
+                    ZappTheme.typography.caption.copy(
+                        color = ZappTheme.colors.text,
+                        fontWeight = FontWeight.Medium,
+                    ),
+                placeholder = {
+                    ZashiNumberTextFieldDefaults.Placeholder(
+                        style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.textSubtle),
+                        fontWeight = FontWeight.Normal,
+                        text = "0.00"
+                    )
+                },
+                suffix = {
+                    Text(
+                        text = state.ticker,
+                        style = ZappTheme.typography.caption,
+                        fontWeight = FontWeight.Medium,
+                        color = ZappTheme.colors.textMuted,
+                    )
+                },
+            )
+        }
+        if (state.fiatEquivalent != null) {
+            Spacer(6.dp)
+            Text(
+                text = state.fiatEquivalent.getValue(),
+                style = ZappTheme.typography.caption,
+                color = ZappTheme.colors.textSubtle,
+                textAlign = TextAlign.End,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
+}
+
+/**
+ * Stands in for the editable pay fields while the destination amount is the binding one. Tapping it
+ * hands authority back to the pay side.
+ */
+@Composable
+private fun PayEstimateRow(state: PayEstimateState) {
+    Text(
+        text = state.text.getValue(),
+        style = ZappTheme.typography.rowTitle.copy(fontWeight = FontWeight.Black),
+        color = ZappTheme.colors.textMuted,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = state.onClick),
+    )
 }
 
 @Composable
