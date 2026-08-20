@@ -6,6 +6,7 @@ package co.electriccoin.zcash.ui.screen.viewingkeyexport
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +30,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -36,13 +38,19 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.compose.SecureScreen
@@ -70,6 +78,8 @@ internal fun ViewingKeyExportView(
 ) {
     val c = ZappTheme.colors
     val spacing = ZappTheme.spacing
+    val infoContentDescription = stringResource(R.string.viewing_key_export_info_content_description)
+    var showInfo by remember { mutableStateOf(false) }
 
     if (shouldSecureScreen) {
         SecureScreen()
@@ -82,7 +92,27 @@ internal fun ViewingKeyExportView(
                 .background(c.bg)
                 .windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.displayCutout)),
         containerColor = c.bg,
-        topBar = { ZappScreenHeader(title = stringResource(R.string.viewing_key_export_title)) },
+        topBar = {
+            ZappScreenHeader(
+                title = stringResource(R.string.viewing_key_export_title),
+                subtitle = stringResource(R.string.viewing_key_export_subtitle),
+                right = {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(spacing.xl6)
+                                .clickable { showInfo = true }
+                                .semantics {
+                                    role = Role.Button
+                                    contentDescription = infoContentDescription
+                                },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = null, tint = c.text)
+                    }
+                },
+            )
+        },
         bottomBar = {
             ZappBottomActionBar(
                 onBack = state.onBack,
@@ -132,8 +162,6 @@ internal fun ViewingKeyExportView(
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState()),
                 ) {
-                    IntroSection()
-
                     if (state.accounts.size > 1) {
                         AccountPicker(state)
                     }
@@ -148,40 +176,15 @@ internal fun ViewingKeyExportView(
 
                     state.error?.let { ErrorMessage(it) }
 
-                    BasicText(
-                        text = stringResource(R.string.viewing_key_export_compatibility_note),
-                        style = ZappTheme.typography.caption.copy(color = c.textMuted),
-                        modifier = Modifier.padding(horizontal = spacing.xl2, vertical = spacing.xl),
-                    )
+                    Spacer(Modifier.height(spacing.xl))
                 }
             }
         }
     }
 
     state.pinVerify?.let { PinVerifyOverlay(state = it) }
-}
 
-@Composable
-private fun IntroSection() {
-    val c = ZappTheme.colors
-    val spacing = ZappTheme.spacing
-    ZappBorderedCard(
-        modifier = Modifier.padding(horizontal = spacing.xl, vertical = spacing.sm),
-        verticalArrangement = Arrangement.spacedBy(spacing.md),
-    ) {
-        BasicText(
-            text = stringResource(R.string.viewing_key_export_cannot_spend),
-            style = ZappTheme.typography.sectionTitle.copy(color = c.text),
-        )
-        BasicText(
-            text = stringResource(R.string.viewing_key_export_intro),
-            style = ZappTheme.typography.body.copy(color = c.textMuted),
-        )
-        BasicText(
-            text = stringResource(R.string.viewing_key_export_irrevocable_warning),
-            style = ZappTheme.typography.body.copy(color = c.danger),
-        )
-    }
+    if (showInfo) ViewingKeyExportInfoSheet { showInfo = false }
 }
 
 @Composable
@@ -229,20 +232,9 @@ private fun AccessLevelPicker(state: ViewingKeyExportState) {
                             ViewingKeyType.UIVK -> R.string.viewing_key_export_uivk_description
                         }
                     ),
-                supporting =
-                    if (available) {
-                        stringResource(
-                            when (keyType) {
-                                ViewingKeyType.UFVK -> R.string.viewing_key_export_ufvk_warning
-                                ViewingKeyType.UIVK -> R.string.viewing_key_export_uivk_warning
-                            }
-                        )
-                    } else {
-                        stringResource(R.string.viewing_key_export_unavailable)
-                    },
+                supporting = stringResource(R.string.viewing_key_export_unavailable).takeIf { !available },
                 selected = state.selectedKeyType == keyType,
                 enabled = available && state.revealedKey == null && !state.isAuthenticating,
-                isWarning = keyType == ViewingKeyType.UFVK,
                 onClick = { state.onKeyTypeSelected(keyType) },
             )
         }
@@ -257,7 +249,6 @@ private fun SelectionCard(
     enabled: Boolean,
     onClick: () -> Unit,
     supporting: String? = null,
-    isWarning: Boolean = false,
 ) {
     val c = ZappTheme.colors
     val spacing = ZappTheme.spacing
@@ -296,15 +287,7 @@ private fun SelectionCard(
             supporting?.let {
                 BasicText(
                     text = it,
-                    style =
-                        ZappTheme.typography.caption.copy(
-                            color =
-                                when {
-                                    !enabled -> c.textSubtle
-                                    isWarning -> c.danger
-                                    else -> c.textMuted
-                                }
-                        ),
+                    style = ZappTheme.typography.caption.copy(color = c.textSubtle),
                 )
             }
         }

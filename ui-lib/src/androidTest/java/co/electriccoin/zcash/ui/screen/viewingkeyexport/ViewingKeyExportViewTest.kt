@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.test.filters.MediumTest
 import cash.z.ecc.android.sdk.fixture.AccountFixture
 import co.electriccoin.zcash.test.UiTestPrerequisites
@@ -57,14 +58,44 @@ class ViewingKeyExportViewTest : UiTestPrerequisites() {
 
     @Test
     @MediumTest
-    fun fullAndIncomingWarningsAreDifferent() {
+    fun keyTypesAreDistinguishableWithoutOpeningTheDetail() {
         setContent(state())
 
         composeTestRule
-            .onNodeWithText(getStringResource(R.string.viewing_key_export_ufvk_warning))
+            .onNodeWithText(getStringResource(R.string.viewing_key_export_ufvk_description))
             .assertExists()
         composeTestRule
-            .onNodeWithText(getStringResource(R.string.viewing_key_export_uivk_warning))
+            .onNodeWithText(getStringResource(R.string.viewing_key_export_uivk_description))
+            .assertExists()
+    }
+
+    /**
+     * The screen carries the choice, not the explanation. What each key reveals, and that the
+     * disclosure is irreversible, has to stay reachable rather than merely be dropped.
+     */
+    @Test
+    @MediumTest
+    fun detailIsAbsentUntilTheInfoSheetIsOpened() {
+        setContent(state())
+
+        composeTestRule
+            .onNodeWithText(getStringResource(R.string.viewing_key_export_info_irrevocable_body))
+            .assertDoesNotExist()
+
+        composeTestRule
+            .onNodeWithContentDescription(
+                getStringResource(R.string.viewing_key_export_info_content_description)
+            ).performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule
+            .onNodeWithText(getStringResource(R.string.viewing_key_export_info_ufvk_body))
+            .assertExists()
+        composeTestRule
+            .onNodeWithText(getStringResource(R.string.viewing_key_export_info_uivk_body))
+            .assertExists()
+        composeTestRule
+            .onNodeWithText(getStringResource(R.string.viewing_key_export_info_irrevocable_body))
             .assertExists()
     }
 
