@@ -61,6 +61,28 @@ enum class FundsLocation {
 }
 
 /**
+ * The durable checkpoint outranks the exception: only it can say whether the transfer was started,
+ * so a failure raised outside the driver is described from state rather than from a message.
+ */
+fun onrampDeliveryFailure(
+    latest: OnrampZecDeliveryCheckpoint?,
+    resumed: OnrampZecDeliveryCheckpoint? = null,
+) = OnrampZecDeliveryStatus.Failed(
+    stage = latest?.phase ?: resumed?.phase ?: OnrampZecDeliveryPhase.NEEDS_ATTENTION,
+    fundsLocation = latest?.fundsLocation ?: FundsLocation.TRANSFER_AMBIGUOUS,
+    retryable = latest != null && !latest.transferStarted,
+)
+
+/** A confirmed refund is a new starting balance on Base, not the amount the order settled for. */
+fun OnrampZecDeliveryCheckpoint.restartedAfterRefund() =
+    OnrampZecDeliveryCheckpoint(
+        phase = OnrampZecDeliveryPhase.FUNDS_ON_BASE,
+        usdcMicros = requireNotNull(refundedUsdcMicros),
+        baseAccount = baseAccount,
+        acceptedCostBps = acceptedCostBps,
+    )
+
+/**
  * Where a checkpoint proves the money is, from durable evidence alone. A mined Base transaction is
  * the only proof the deposit reached the intent; a started-but-unproven transfer stays ambiguous so
  * no caller can claim either side of it.

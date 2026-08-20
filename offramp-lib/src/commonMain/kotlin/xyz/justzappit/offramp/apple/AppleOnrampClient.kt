@@ -3,26 +3,18 @@
 
 package xyz.justzappit.offramp.apple
 
-import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
-import xyz.justzappit.evm.hd.EvmKey
-import xyz.justzappit.evm.hd.EvmKeyDerivation
 import xyz.justzappit.evm.math.BigDecimal
 import xyz.justzappit.evm.math.decimalToPlainString
-import xyz.justzappit.evm.rpc.BaseRpcClient
-import xyz.justzappit.evm.rpc.BundlerClient
-import xyz.justzappit.evm.rpc.RpcHttpClient
 import xyz.justzappit.evm.types.Address
-import xyz.justzappit.offramp.account.Erc4337SubmitterProvider
-import xyz.justzappit.offramp.account.OfframpAccountProvider
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
-import xyz.justzappit.offramp.config.P2pConfigProvider
 import xyz.justzappit.offramp.config.P2pNetworkConfig
 import xyz.justzappit.offramp.onramp.CustodialOnrampClient
 import xyz.justzappit.offramp.onramp.CustodialOnrampDriver
@@ -35,6 +27,7 @@ import xyz.justzappit.offramp.onramp.OnrampCheckpoint
 import xyz.justzappit.offramp.onramp.OnrampDestination
 import xyz.justzappit.offramp.onramp.OnrampDeviceSignals
 import xyz.justzappit.offramp.onramp.OnrampDeviceSignalsProvider
+import xyz.justzappit.offramp.onramp.OnrampFailureCode
 import xyz.justzappit.offramp.onramp.OnrampIntentAmount
 import xyz.justzappit.offramp.onramp.OnrampPaymentInstruction
 import xyz.justzappit.offramp.onramp.OnrampPhase
@@ -59,8 +52,10 @@ import xyz.justzappit.offramp.onramp.fundsLocation
 import xyz.justzappit.offramp.onramp.id
 import xyz.justzappit.offramp.onramp.isTerminal
 import xyz.justzappit.offramp.onramp.leavesOrderAlive
+import xyz.justzappit.offramp.onramp.onrampDeliveryFailure
 import xyz.justzappit.offramp.onramp.orderId
 import xyz.justzappit.offramp.onramp.phase
+import xyz.justzappit.offramp.onramp.restartedAfterRefund
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.p2p.getUsdcBalance
@@ -69,14 +64,12 @@ import kotlin.time.Clock
 /** Swift-friendly facade over the shared custodial on-ramp and durable ZEC delivery drivers. */
 @Suppress("TooManyFunctions") // The facade mirrors the complete order and delivery protocol surfaces for Swift.
 class AppleOnrampClient private constructor(
-    private val httpClient: HttpClient,
     private val network: P2pNetworkConfig,
     private val smartAccountProvider: SmartOfframpAccountProvider,
     private val driver: CustodialOnrampDriver,
     private val deliveryDriver: OnrampZecDeliveryDriver,
     private val swapGateway: OnrampZecSwapGateway?,
     private val checkpoints: AppleOnrampCheckpointStore,
-    private val owner: EvmKey,
 ) {
     val networkName: String get() = network.name
     val explorerUrl: String get() = network.baseExplorerUrl
@@ -113,7 +106,7 @@ class AppleOnrampClient private constructor(
         destination: String,
         zecEstimate: AppleOnrampZecEstimate? = null,
     ): Flow<AppleOnrampStatus> =
-        flow {
+        statusFlow {
             val nativeQuote = quote.toShared()
             val nativeDestination = OnrampDestination.valueOf(destination.uppercase())
             require(nativeDestination != OnrampDestination.ZCASH || zecEstimate != null) {
@@ -134,7 +127,7 @@ class AppleOnrampClient private constructor(
     fun cancel(): Flow<AppleOnrampStatus> = persistedFlow(driver::cancel)
 
     fun deliverToZec(orderId: String, recipient: String, usdcMicros: String): Flow<AppleOnrampDeliveryStatus> =
-        flow {
+        deliveryFlow {
             val checkpoint = requireNotNull(checkpoints.getOrNull()) { "No on-ramp order is available" }
             require(checkpoint.id == orderId) { "On-ramp checkpoint belongs to another order" }
             deliveryDriver
@@ -146,29 +139,11 @@ class AppleOnrampClient private constructor(
                 ).collect { emit(it.toApple()) }
         }
 
-    fun retryDelivery(): Flow<AppleOnrampDeliveryStatus> =
-        flow {
-            var checkpoint = requireNotNull(checkpoints.getOrNull()) { "No ZEC delivery is available to retry" }
-            val delivery = requireNotNull(checkpoint.zecDelivery) { "No ZEC delivery is available to retry" }
-            if (delivery.phase == OnrampZecDeliveryPhase.REFUNDED_TO_BASE) {
-                val restarted =
-                    OnrampZecDeliveryCheckpoint(
-                        phase = OnrampZecDeliveryPhase.FUNDS_ON_BASE,
-                        usdcMicros = requireNotNull(delivery.refundedUsdcMicros),
-                        baseAccount = delivery.baseAccount,
-                        acceptedCostBps = delivery.acceptedCostBps,
-                    )
-                checkpoint = checkpoint.copy(zecDelivery = restarted)
-                checkpoints.store(checkpoint)
-            }
-            deliveryDriver
-                .deliver(
-                    orderId = checkpoint.id,
-                    recipient = Address.parse(requireNotNull(checkpoint.zecDelivery).baseAccount),
-                    amount = usdcFromMicros(requireNotNull(checkpoint.zecDelivery).usdcMicros),
-                    resume = checkpoint.zecDelivery,
-                ).collect { emit(it.toApple()) }
-        }
+    /** Picks the recorded delivery back up. A confirmed refund is replayed here, never respent. */
+    fun resumeDelivery(): Flow<AppleOnrampDeliveryStatus> = continueDelivery(restartAfterRefund = false)
+
+    /** The user's explicit "convert again". Only this may spend a refund back into the swap. */
+    fun retryDelivery(): Flow<AppleOnrampDeliveryStatus> = continueDelivery(restartAfterRefund = true)
 
     @Throws(Exception::class)
     suspend fun checkpoint(): AppleOnrampCheckpoint? = checkpoints.getOrNull()?.toApple()
@@ -193,15 +168,10 @@ class AppleOnrampClient private constructor(
 
     fun addressUrl(address: String): String = network.addressUrl(address)
 
-    fun close() {
-        owner.zeroize()
-        httpClient.close()
-    }
-
     private fun persistedFlow(
         operation: (OnrampCheckpoint) -> Flow<OnrampStatus>,
     ): Flow<AppleOnrampStatus> =
-        flow {
+        statusFlow {
             val checkpoint = requireNotNull(checkpoints.getOrNull()) { "No on-ramp order is available" }
             val persister = AppleOnrampPersister(checkpoints, checkpoint.destination)
             operation(checkpoint).collect { status ->
@@ -210,110 +180,137 @@ class AppleOnrampClient private constructor(
             }
         }
 
+    private fun continueDelivery(restartAfterRefund: Boolean): Flow<AppleOnrampDeliveryStatus> =
+        deliveryFlow {
+            val stored = requireNotNull(checkpoints.getOrNull()) { "No ZEC delivery is available" }
+            val recorded = requireNotNull(stored.zecDelivery) { "No ZEC delivery is available" }
+            val delivery =
+                if (restartAfterRefund && recorded.phase == OnrampZecDeliveryPhase.REFUNDED_TO_BASE) {
+                    recorded.restartedAfterRefund().also { checkpoints.store(stored.copy(zecDelivery = it)) }
+                } else {
+                    recorded
+                }
+            deliveryDriver
+                .deliver(
+                    orderId = stored.id,
+                    recipient = Address.parse(delivery.baseAccount),
+                    amount = usdcFromMicros(delivery.usdcMicros),
+                    resume = delivery,
+                ).collect { emit(it.toApple()) }
+        }
+
+    /**
+     * Swift's Kotlin flow bridge cannot carry an exception, so a flow that fails outside the
+     * driver's own handling would reach the reducer as an ordinary end of stream. Report it as the
+     * transient failure it is instead — NETWORK_UNAVAILABLE leaves the order, and its resume
+     * checkpoint, alive — and describe it from the checkpoint rather than from the exception.
+     */
+    private fun statusFlow(
+        block: suspend FlowCollector<AppleOnrampStatus>.() -> Unit,
+    ): Flow<AppleOnrampStatus> =
+        flow {
+            try {
+                block()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (
+                @Suppress("SwallowedException", "TooGenericExceptionCaught") error: Throwable,
+            ) {
+                val checkpoint = runCatching { checkpoints.getOrNull() }.getOrNull()
+                emit(
+                    OnrampStatus
+                        .Failed(
+                            code = OnrampFailureCode.NETWORK_UNAVAILABLE,
+                            phase = checkpoint?.phase ?: OnrampPhase.PLACING,
+                            id = checkpoint?.id,
+                            orderId = checkpoint?.orderId,
+                        ).toApple(),
+                )
+            }
+        }
+
+    /**
+     * The same bridge limit for the delivery leg, where the disposition of funds may never be
+     * inferred from an exception: only the durable checkpoint knows whether a transfer started.
+     */
+    private fun deliveryFlow(
+        block: suspend FlowCollector<AppleOnrampDeliveryStatus>.() -> Unit,
+    ): Flow<AppleOnrampDeliveryStatus> =
+        flow {
+            try {
+                block()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (
+                @Suppress("SwallowedException", "TooGenericExceptionCaught") error: Throwable,
+            ) {
+                val latest = runCatching { checkpoints.getOrNull() }.getOrNull()?.zecDelivery
+                emit(onrampDeliveryFailure(latest).toApple())
+            }
+        }
+
     companion object {
         @Throws(Exception::class)
         @Suppress("LongParameterList")
         suspend fun create(
-            networkName: String,
-            seedPhrase: String,
-            pimlicoApiKey: String,
+            account: AppleBaseAccount,
             onrampBaseUrl: String,
-            onrampAppId: String = OnrampRequestSigner.DEFAULT_APP_ID,
             storage: AppleOnrampStorage,
             deviceSignals: AppleOnrampDeviceSignals,
+            onrampAppId: String = OnrampRequestSigner.DEFAULT_APP_ID,
             swapGateway: AppleOnrampZecSwapGateway? = null,
-            rpcUrl: String? = null,
-            subgraphUrl: String? = null,
-            sponsorshipPolicyId: String? = null,
             useFakeDeliveryDriver: Boolean = false,
         ): AppleOnrampClient {
-            require(seedPhrase.isNotBlank()) { "seedPhrase must not be blank" }
             require(onrampBaseUrl.isNotBlank()) { "onrampBaseUrl must not be blank" }
-            val http = RpcHttpClient.create()
-            var owner: EvmKey? = null
-            try {
-                val network = P2pConfigProvider(networkName, rpcUrl, subgraphUrl).current()
-                val rpc = BaseRpcClient(http, network.rpcUrl)
-                val mnemonic = seedPhrase.toCharArray()
-                owner =
-                    try {
-                        EvmKeyDerivation.derive(mnemonic, accountIndex = 0)
-                    } finally {
-                        mnemonic.fill('\u0000')
+            val network = account.network
+            val checkpoints = AppleOnrampCheckpointStore(storage)
+            val swap = swapGateway?.let(::AppleOnrampSwapGatewayAdapter)
+            val delivery =
+                when {
+                    useFakeDeliveryDriver -> {
+                        FakeOnrampZecDeliveryDriver()
                     }
-                val accountProvider =
-                    object : OfframpAccountProvider {
-                        override suspend fun nextOfframpAccount() = checkNotNull(owner)
-                    }
-                val smartAccount = SmartOfframpAccountProvider(accountProvider, rpc, network.accountFactoryAddress)
-                val bundler =
-                    BundlerClient(
-                        httpClient = http,
-                        bundlerUrl = BundlerClient.urlFor(network.chainId, pimlicoApiKey),
-                        entryPoint = network.entryPointAddress,
-                        chainId = network.chainId,
-                        sponsorshipPolicyId = sponsorshipPolicyId?.takeIf { it.isNotBlank() },
-                    )
-                val submitters = Erc4337SubmitterProvider(rpc, bundler, network, smartAccount)
-                val checkpointStore = AppleOnrampCheckpointStore(storage)
-                val sharedSwap = swapGateway?.let(::AppleOnrampSwapGatewayAdapter)
-                val delivery =
-                    when {
-                        useFakeDeliveryDriver -> {
-                            FakeOnrampZecDeliveryDriver()
-                        }
 
-                        sharedSwap != null -> {
-                            NearOnrampZecDeliveryDriver(
-                                transfer =
-                                    Erc4337OnrampZecTransferGateway(
-                                        usdc = network.usdcAddress,
-                                        accountResolver = submitters::resolve,
-                                        balanceReader =
-                                            OnrampUsdcBalanceReader {
-                                                rpc.getUsdcBalance(network.usdcAddress, it)
-                                            },
-                                    ),
-                                swap = sharedSwap,
-                                checkpoints = checkpointStore,
-                            )
-                        }
-
-                        else -> {
-                            NoRouteOnrampZecDeliveryDriver()
-                        }
+                    swap != null -> {
+                        NearOnrampZecDeliveryDriver(
+                            transfer =
+                                Erc4337OnrampZecTransferGateway(
+                                    usdc = network.usdcAddress,
+                                    accountResolver = account.submitters::resolve,
+                                    balanceReader =
+                                        OnrampUsdcBalanceReader {
+                                            account.rpc.getUsdcBalance(network.usdcAddress, it)
+                                        },
+                                ),
+                            swap = swap,
+                            checkpoints = checkpoints,
+                        )
                     }
-                val client =
-                    CustodialOnrampClient(
-                        httpClient = http,
-                        baseUrl = onrampBaseUrl,
-                        signerProvider = OnrampSignerProvider { OnrampRequestSigner(checkNotNull(owner), onrampAppId) },
-                        appId = onrampAppId,
-                    )
-                val driver =
+
+                    else -> {
+                        NoRouteOnrampZecDeliveryDriver()
+                    }
+                }
+            val client =
+                CustodialOnrampClient(
+                    httpClient = account.httpClient,
+                    baseUrl = onrampBaseUrl,
+                    signerProvider = OnrampSignerProvider { OnrampRequestSigner(account.owner, onrampAppId) },
+                    appId = onrampAppId,
+                )
+            return AppleOnrampClient(
+                network = network,
+                smartAccountProvider = account.smartAccounts,
+                driver =
                     CustodialOnrampDriver(
                         client = client,
                         deviceSignals = OnrampDeviceSignalsProvider { deviceSignals.collect().toShared() },
-                        recipientProvider = OnrampRecipientProvider { smartAccount.resolve().address },
-                    )
-                return AppleOnrampClient(
-                    httpClient = http,
-                    network = network,
-                    smartAccountProvider = smartAccount,
-                    driver = driver,
-                    deliveryDriver = delivery,
-                    swapGateway = sharedSwap,
-                    checkpoints = checkpointStore,
-                    owner = checkNotNull(owner),
-                )
-            } catch (
-                // Every construction failure must zero the owner key and close the HTTP client.
-                @Suppress("TooGenericExceptionCaught") error: Throwable,
-            ) {
-                owner?.zeroize()
-                http.close()
-                throw error
-            }
+                        recipientProvider = OnrampRecipientProvider { account.smartAccounts.resolve().address },
+                    ),
+                deliveryDriver = delivery,
+                swapGateway = swap,
+                checkpoints = checkpoints,
+            )
         }
     }
 }
@@ -324,15 +321,23 @@ private class AppleOnrampCheckpointStore(
     private val json = Json { ignoreUnknownKeys = true }
     private val mutex = Mutex()
 
-    suspend fun getOrNull(): OnrampCheckpoint? =
+    /**
+     * Only an absent value means "no order". A checkpoint this build cannot read is still the
+     * recovery authority for funds that may already have settled, so the failure has to surface
+     * rather than open a fresh Buy screen whose next order would overwrite it.
+     */
+    suspend fun getOrNull(): OnrampCheckpoint? = storage.checkpointJson().value?.let(::decode)
+
+    private fun decode(value: String): OnrampCheckpoint =
         try {
-            storage.checkpointJson().value?.let { json.decodeFromString(OnrampCheckpoint.serializer(), it) }
-        } catch (error: CancellationException) {
-            throw error
+            json.decodeFromString(OnrampCheckpoint.serializer(), value)
         } catch (
-            @Suppress("SwallowedException", "TooGenericExceptionCaught") error: Throwable,
+            @Suppress("TooGenericExceptionCaught") error: Exception,
         ) {
-            null
+            throw IllegalStateException(
+                "The saved Buy order is incompatible or corrupted. Its recovery data was preserved.",
+                error,
+            )
         }
 
     suspend fun store(checkpoint: OnrampCheckpoint) {
