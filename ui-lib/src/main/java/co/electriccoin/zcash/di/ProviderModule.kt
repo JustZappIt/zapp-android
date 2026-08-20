@@ -22,6 +22,10 @@ import co.electriccoin.zcash.ui.common.provider.EphemeralAddressStorageProvider
 import co.electriccoin.zcash.ui.common.provider.EphemeralAddressStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.GetVersionInfoProvider
 import co.electriccoin.zcash.ui.common.provider.GetZcashCurrencyProvider
+import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
+import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProviderImpl
+import co.electriccoin.zcash.ui.common.provider.GiftKeyProvider
+import co.electriccoin.zcash.ui.common.provider.GiftKeyProviderImpl
 import co.electriccoin.zcash.ui.common.provider.HttpClientProvider
 import co.electriccoin.zcash.ui.common.provider.HttpClientProviderImpl
 import co.electriccoin.zcash.ui.common.provider.IsBackgroundExecutionAvailableProvider
@@ -215,6 +219,11 @@ val providerModule =
         singleOf(::OfframpTopUpCheckpointStorageProviderImpl) bind OfframpTopUpCheckpointStorageProvider::class
         singleOf(::PeerCashOutCheckpointStorageProviderImpl) bind PeerCashOutCheckpointStorageProvider::class
         singleOf(::PeerPayeeHandleProviderImpl) bind PeerPayeeHandleProvider::class
+
+        // Gift cards. The storage provider is custody-critical: for a card whose link was never
+        // shared, its encrypted record is the only route back to the funds.
+        singleOf(::GiftCardStorageProviderImpl) bind GiftCardStorageProvider::class
+        singleOf(::GiftKeyProviderImpl) bind GiftKeyProvider::class
         single<HttpClient>(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)) {
             // Pipe ktor's Logging plugin output through Twig so subgraph + RPC errors land in
             // logcat under our "Twig" tag with the OfframpHttp prefix. Without this, transport

@@ -13,6 +13,7 @@ import co.electriccoin.zcash.ui.common.usecase.ConfirmResyncUseCase
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.CreateChatGroupUseCase
 import co.electriccoin.zcash.ui.common.usecase.CreateFlexaTransactionUseCase
+import co.electriccoin.zcash.ui.common.usecase.CreateGiftCardUseCase
 import co.electriccoin.zcash.ui.common.usecase.CreateIncreaseEphemeralGapLimitProposalUseCase
 import co.electriccoin.zcash.ui.common.usecase.CreateKeystoneAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.CreateKeystoneProposalPCZTEncoderUseCase
@@ -207,6 +208,7 @@ val useCaseModule =
         factoryOf(::CopyToClipboardUseCase)
         factoryOf(::ShareImageUseCase)
         factoryOf(::ShareViewingKeyUseCase)
+        factoryOf(::CreateGiftCardUseCase)
         factoryOf(::Zip321BuildUriUseCase)
         factoryOf(::Zip321ParseUriValidationUseCase)
         factoryOf(::GetPersistableWalletUseCase)
