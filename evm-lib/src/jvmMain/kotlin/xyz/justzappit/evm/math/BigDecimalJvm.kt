@@ -11,6 +11,8 @@ actual fun bigDecimalFromBigInteger(value: BigInteger): BigDecimal = BigDecimal(
 
 actual fun decimalMultiply(left: BigDecimal, right: BigDecimal): BigDecimal = left.multiply(right)
 
+actual fun decimalSubtract(left: BigDecimal, right: BigDecimal): BigDecimal = left.subtract(right)
+
 actual fun decimalDivide(
     dividend: BigDecimal,
     divisor: BigDecimal,
@@ -37,4 +39,5 @@ private fun DecimalRounding.toJvm(): RoundingMode =
     when (this) {
         DecimalRounding.HALF_UP -> RoundingMode.HALF_UP
         DecimalRounding.DOWN -> RoundingMode.DOWN
+        DecimalRounding.UP -> RoundingMode.UP
     }

@@ -29,6 +29,9 @@ actual fun bigDecimalFromBigInteger(value: BigInteger): BigDecimal =
 actual fun decimalMultiply(left: BigDecimal, right: BigDecimal): BigDecimal =
     BigDecimal(left.value.multiply(right.value))
 
+actual fun decimalSubtract(left: BigDecimal, right: BigDecimal): BigDecimal =
+    BigDecimal(left.value.subtract(right.value))
+
 actual fun decimalDivide(
     dividend: BigDecimal,
     divisor: BigDecimal,
@@ -76,6 +79,7 @@ private fun DecimalRounding.toIos(): RoundingMode =
     when (this) {
         DecimalRounding.HALF_UP -> RoundingMode.ROUND_HALF_AWAY_FROM_ZERO
         DecimalRounding.DOWN -> RoundingMode.TOWARDS_ZERO
+        DecimalRounding.UP -> RoundingMode.AWAY_FROM_ZERO
     }
 
 private fun KmpBigDecimal.javaCompatibleScale(): Long = if (usingScale) scale else 0

@@ -8,6 +8,7 @@ import xyz.justzappit.offramp.onramp.OnrampCheckpoint
 import xyz.justzappit.offramp.onramp.OnrampDestination
 import xyz.justzappit.offramp.onramp.OnrampPhase
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryCheckpoint
+import xyz.justzappit.offramp.onramp.OnrampZecDeliveryCheckpointStore
 
 interface OnrampCheckpointStorageProvider {
     suspend fun get(): OnrampCheckpoint?

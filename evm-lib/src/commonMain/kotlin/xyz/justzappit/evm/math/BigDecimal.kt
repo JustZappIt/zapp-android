@@ -14,11 +14,14 @@ expect class BigDecimal : Comparable<BigDecimal> {
 enum class DecimalRounding {
     HALF_UP,
     DOWN,
+    UP,
 }
 
 expect fun bigDecimalFromBigInteger(value: BigInteger): BigDecimal
 
 expect fun decimalMultiply(left: BigDecimal, right: BigDecimal): BigDecimal
+
+expect fun decimalSubtract(left: BigDecimal, right: BigDecimal): BigDecimal
 
 expect fun decimalDivide(
     dividend: BigDecimal,

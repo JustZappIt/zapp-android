@@ -8,37 +8,14 @@ import co.electriccoin.zcash.ui.common.model.SwapMode
 import co.electriccoin.zcash.ui.common.model.SwapQuote
 import co.electriccoin.zcash.ui.common.model.ZecSwapAsset
 import co.electriccoin.zcash.ui.common.model.near.requireQuoteMatchesUserAmount
+import xyz.justzappit.evm.math.BigDecimal
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryCheckpoint
+import xyz.justzappit.offramp.onramp.ValidatedZecSwapQuote
+import xyz.justzappit.offramp.onramp.ZEC_QUOTE_EXPIRY_MARGIN_MILLIS
 import xyz.justzappit.offramp.p2p.Usdc6
-import java.math.BigDecimal
-import java.math.RoundingMode
 import kotlin.time.Instant
-
-/** The only fields of a validated USDC → ZEC quote worth keeping: enough to send, poll, and resume. */
-internal data class ValidatedZecSwapQuote(
-    val depositAddress: Address,
-    val zcashRecipient: String,
-    val deadlineMillis: Long,
-    val outputZec: String,
-    val inputUsd: BigDecimal,
-    val outputUsd: BigDecimal,
-)
-
-/**
- * What the route costs, as basis points of the input's dollar value. Both sides are priced at quote
- * time, so this is comparable across quotes minutes apart: the market moving carries input and
- * output together, while a worse route or a higher fixed withdrawal fee widens the gap.
- */
-internal val ValidatedZecSwapQuote.costBasisPoints: Int
-    get() =
-        inputUsd
-            .subtract(outputUsd)
-            .max(BigDecimal.ZERO)
-            .multiply(BigDecimal(OnrampZecDeliveryCheckpoint.MAX_BPS))
-            .divide(inputUsd, 0, RoundingMode.CEILING)
-            .toInt()
 
 /**
  * Fail-closed echo check for every Base-USDC → ZEC quote, shared by the onramp delivery leg and the
@@ -100,8 +77,6 @@ internal fun validateZecSwapStatus(
 private fun requireEvmAddressMatches(expected: Address, actual: String, name: String) {
     require(Address.parseOrNull(actual) == expected) { "Swap $name address mismatch" }
 }
-
-internal const val ZEC_QUOTE_EXPIRY_MARGIN_MILLIS = 60_000L
 
 /** Picks the ZEC entry from the 1-Click supported-token catalog; throws if missing. */
 internal fun List<SwapAsset>.zecAsset(): SwapAsset =

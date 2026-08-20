@@ -13,6 +13,13 @@ class BigDecimalParityTest {
         assertEquals("-12.35", scaled("-12.345", DecimalRounding.HALF_UP))
         assertEquals("12.34", scaled("12.349", DecimalRounding.DOWN))
         assertEquals("-12.34", scaled("-12.349", DecimalRounding.DOWN))
+        assertEquals("12.35", scaled("12.341", DecimalRounding.UP))
+        assertEquals("-12.35", scaled("-12.341", DecimalRounding.UP))
+    }
+
+    @Test
+    fun `subtraction matches Java`() {
+        assertEquals("7.5", decimalToPlainString(decimalSubtract(BigDecimal("10"), BigDecimal("2.5"))))
     }
 
     @Test
