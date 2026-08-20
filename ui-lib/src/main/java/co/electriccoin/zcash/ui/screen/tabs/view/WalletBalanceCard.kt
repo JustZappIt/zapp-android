@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,9 +35,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -43,6 +47,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selectableGroup
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -58,6 +63,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
+import co.electriccoin.zcash.ui.design.theme.balances.LocalBalancesAvailable
 import co.electriccoin.zcash.ui.design.util.TickerLocation
 import co.electriccoin.zcash.ui.design.util.getString
 import co.electriccoin.zcash.ui.design.util.orHiddenString
@@ -66,6 +72,7 @@ import co.electriccoin.zcash.ui.screen.balances.BalanceWidgetState
 import co.electriccoin.zcash.ui.screen.balances.ShieldBreakdownState
 import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartPeriod
 import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartState
+import kotlinx.coroutines.delay
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.DecimalFormat
@@ -77,6 +84,7 @@ import java.time.format.FormatStyle
 import java.util.Currency
 import java.util.Locale
 import kotlin.math.absoluteValue
+import co.electriccoin.zcash.ui.design.R as DesignR
 
 @Composable
 internal fun BalanceCard(
@@ -85,9 +93,11 @@ internal fun BalanceCard(
     zecUsdPrice: BigDecimal? = null,
     showZecAsPrimary: Boolean? = null,
     onToggleBalanceDisplay: (() -> Unit)? = null,
+    onToggleBalanceVisibility: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val hasBalance = balanceState.totalBalance.value > 0L
+    val balancesAvailable = LocalBalancesAvailable.current
 
     Column(
         modifier =
@@ -103,9 +113,10 @@ internal fun BalanceCard(
             zecUsdPrice = zecUsdPrice,
             showZecAsPrimary = showZecAsPrimary,
             onToggleBalanceDisplay = onToggleBalanceDisplay,
+            onToggleBalanceVisibility = onToggleBalanceVisibility,
         )
 
-        if (hasBalance && chartState !is BalanceChartState.Hidden) {
+        if (balancesAvailable && hasBalance && chartState !is BalanceChartState.Hidden) {
             Spacer(Modifier.height(10.dp))
             if (chartState is BalanceChartState.Data) {
                 BalanceDelta(chartState = chartState)
@@ -264,8 +275,11 @@ private fun BalanceAmount(
     zecUsdPrice: BigDecimal?,
     showZecAsPrimary: Boolean? = null,
     onToggleBalanceDisplay: (() -> Unit)? = null,
+    onToggleBalanceVisibility: (() -> Unit)? = null,
 ) {
     val c = ZappTheme.colors
+    val isBalanceHidden = LocalBalancesAvailable.current.not()
+    val hiddenBalance = stringResource(DesignR.string.hide_balance_placeholder)
     val fiat = balanceState.formattedFiat(zecUsdPrice)
     val context = LocalContext.current
     val zec =
@@ -303,15 +317,16 @@ private fun BalanceAmount(
 
     // Null the absolute lineHeight/letterSpacing so the line box and tracking scale with autoSize.
     // Ticker-style transition: the hero slides up a third of its height when the balance changes.
-    val zecHero = @Composable {
+    val zecHero = @Composable { showVisibilityButton: Boolean ->
         AnimatedContent(
             targetState = zec,
             transitionSpec = { heroTickerTransition() },
             label = "zecHero",
         ) { zecText ->
-            Row {
+            val displayText = rememberScrambledBalanceText(zecText, hiddenBalance, isBalanceHidden)
+            Row(modifier = Modifier.fillMaxWidth()) {
                 BasicText(
-                    text = zecText,
+                    text = displayText,
                     style = wholeStyle.copy(lineHeight = TextUnit.Unspecified, letterSpacing = TextUnit.Unspecified),
                     maxLines = 1,
                     softWrap = false,
@@ -323,6 +338,13 @@ private fun BalanceAmount(
                     style = tickerStyle,
                     modifier = Modifier.alignByBaseline().padding(start = 6.dp),
                 )
+                if (showVisibilityButton && onToggleBalanceVisibility != null) {
+                    BalanceVisibilityButton(
+                        isHidden = isBalanceHidden,
+                        onClick = onToggleBalanceVisibility,
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                    )
+                }
             }
         }
     }
@@ -339,26 +361,179 @@ private fun BalanceAmount(
                 ) { onToggle() },
         ) {
             if (showZec) {
-                zecHero()
+                zecHero(false)
                 Spacer(Modifier.height(2.dp))
-                BasicText(text = "${fiat.whole}${fiat.fraction}", style = captionStyle)
+                SecondaryBalanceLine(
+                    clearText = "${fiat.whole}${fiat.fraction}",
+                    hiddenText = hiddenBalance,
+                    isHidden = isBalanceHidden,
+                    style = captionStyle,
+                    onToggleBalanceVisibility = onToggleBalanceVisibility,
+                )
             } else {
                 AnimatedContent(
                     targetState = fiat.whole to fiat.fraction,
                     transitionSpec = { heroTickerTransition() },
                     label = "fiatHero",
                 ) { (whole, fraction) ->
-                    Row {
-                        BasicText(text = whole, style = wholeStyle, modifier = Modifier.alignByBaseline())
-                        BasicText(text = fraction, style = fractionStyle, modifier = Modifier.alignByBaseline())
+                    val displayWhole = rememberScrambledBalanceText(whole, hiddenBalance, isBalanceHidden)
+                    val displayFraction = rememberScrambledBalanceText(fraction, "", isBalanceHidden)
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        BasicText(
+                            text = displayWhole,
+                            style =
+                                wholeStyle.copy(
+                                    lineHeight = TextUnit.Unspecified,
+                                    letterSpacing = TextUnit.Unspecified,
+                                ),
+                            maxLines = 1,
+                            softWrap = false,
+                            autoSize = TextAutoSize.StepBased(minFontSize = 18.sp, maxFontSize = 52.sp),
+                            modifier = Modifier.weight(1f, fill = false).alignByBaseline(),
+                        )
+                        BasicText(text = displayFraction, style = fractionStyle, modifier = Modifier.alignByBaseline())
                     }
                 }
                 Spacer(Modifier.height(2.dp))
-                BasicText(text = "$zec ZEC", style = captionStyle)
+                SecondaryBalanceLine(
+                    clearText = "$zec ZEC",
+                    hiddenText = "$hiddenBalance ZEC",
+                    isHidden = isBalanceHidden,
+                    style = captionStyle,
+                    onToggleBalanceVisibility = onToggleBalanceVisibility,
+                )
             }
         }
     } else {
-        zecHero()
+        zecHero(true)
+    }
+}
+
+@Composable
+private fun SecondaryBalanceLine(
+    clearText: String,
+    hiddenText: String,
+    isHidden: Boolean,
+    style: TextStyle,
+    onToggleBalanceVisibility: (() -> Unit)?,
+) {
+    val displayText = rememberScrambledBalanceText(clearText, hiddenText, isHidden)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        BasicText(text = displayText, style = style, maxLines = 1)
+        onToggleBalanceVisibility?.let { onToggle ->
+            BalanceVisibilityButton(
+                isHidden = isHidden,
+                onClick = onToggle,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BalanceVisibilityButton(
+    isHidden: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val description =
+        stringResource(
+            if (isHidden) R.string.show_balances_content_description else R.string.hide_balances_content_description,
+        )
+    Box(
+        modifier =
+            modifier
+                .size(40.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClick,
+                ).semantics {
+                    role = Role.Button
+                    contentDescription = description
+                },
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            painter =
+                painterResource(
+                    if (isHidden) {
+                        DesignR.drawable.ic_app_bar_balances_hide
+                    } else {
+                        DesignR.drawable.ic_app_bar_balances_show
+                    },
+                ),
+            contentDescription = null,
+            colorFilter = ColorFilter.tint(ZappTheme.colors.textMuted),
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun rememberScrambledBalanceText(
+    clearText: String,
+    hiddenText: String,
+    isHidden: Boolean,
+): String {
+    var displayedText by
+        remember(clearText, hiddenText) {
+            mutableStateOf(if (isHidden) hiddenText else clearText)
+        }
+    var previousHiddenState by remember(clearText, hiddenText) { mutableStateOf(isHidden) }
+
+    LaunchedEffect(clearText, hiddenText, isHidden) {
+        val visibilityChanged = previousHiddenState != isHidden
+        previousHiddenState = isHidden
+        if (!visibilityChanged) {
+            displayedText = if (isHidden) hiddenText else clearText
+            return@LaunchedEffect
+        }
+
+        repeat(SCRAMBLE_FRAME_COUNT) { frame ->
+            displayedText = scrambledBalanceFrame(clearText, frame, revealing = !isHidden)
+            delay(SCRAMBLE_FRAME_DELAY_MS.toLong())
+        }
+        displayedText = if (isHidden) hiddenText else clearText
+    }
+
+    return displayedText
+}
+
+internal fun scrambledBalanceFrame(
+    clearText: String,
+    frame: Int,
+    revealing: Boolean,
+): String {
+    val digitCount = clearText.count(Char::isDigit)
+    if (digitCount == 0) return clearText
+
+    val boundedFrame = frame.coerceIn(0, SCRAMBLE_FRAME_COUNT - 1)
+    val transitionedDigits =
+        if (revealing) {
+            boundedFrame * digitCount / (SCRAMBLE_FRAME_COUNT - 1)
+        } else {
+            ((boundedFrame + 1) * digitCount + SCRAMBLE_FRAME_COUNT - 1) / SCRAMBLE_FRAME_COUNT
+        }
+    var digitIndex = 0
+    return buildString(clearText.length) {
+        clearText.forEachIndexed { characterIndex, character ->
+            if (!character.isDigit()) {
+                append(character)
+            } else {
+                val showClearCharacter =
+                    if (revealing) digitIndex < transitionedDigits else digitIndex >= transitionedDigits
+                append(
+                    if (showClearCharacter) {
+                        character
+                    } else {
+                        SCRAMBLE_GLYPHS[
+                            (characterIndex + boundedFrame * SCRAMBLE_GLYPH_FRAME_OFFSET) % SCRAMBLE_GLYPHS.length
+                        ]
+                    },
+                )
+                digitIndex++
+            }
+        }
     }
 }
 
@@ -619,6 +794,10 @@ private fun Zatoshi.convertZatoshiToZec(): BigDecimal =
     BigDecimal(value).divide(BigDecimal(100_000_000L), 8, RoundingMode.HALF_UP)
 
 private const val HERO_TICKER_SLIDE_DIVISOR = 3
+private const val SCRAMBLE_FRAME_COUNT = 8
+private const val SCRAMBLE_FRAME_DELAY_MS = ZappMotion.REVEAL_MS / SCRAMBLE_FRAME_COUNT
+private const val SCRAMBLE_GLYPH_FRAME_OFFSET = 3
+private const val SCRAMBLE_GLYPHS = "#%&?*+=§"
 
 private data class BalanceDeltaResult(
     val valueText: String,
