@@ -6,6 +6,8 @@
     <string name="unified_send_address_placeholder">o endereço de alguém…</string>
     <string name="unified_send_memo_hint">Adicione uma nota (opcional)</string>
     <string name="unified_send_they_receive_approx">Recebem ≈</string>
+    <string name="unified_send_they_receive_exact">Recebem exatamente</string>
+    <string name="unified_send_crosspay_info">Sobre o CrossPay</string>
     <string name="unified_send_top_up">Adicionar saldo</string>
     <string name="unified_send_title">Enviar</string>
     <string name="unified_send_available_balance">Saldo disponível</string>

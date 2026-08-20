@@ -427,8 +427,13 @@ private const val ADDRESS_MAX_LENGTH_ABBREVIATED = 20
 
 enum class TickerLocation { BEFORE, AFTER, HIDDEN }
 
+/**
+ * Rounds to the shortest number of decimals that still represents this value to within 0.5%, which
+ * is how [stringResByDynamicNumber] decides what to render. Public so a caller that has to keep a
+ * displayed figure and its underlying amount in step can round the amount the same way first.
+ */
 @Suppress("ReturnCount", "MagicNumber")
-private fun BigDecimal.stripFractionsDynamically(): BigDecimal {
+fun BigDecimal.stripFractionsDynamically(): BigDecimal {
     val tolerance = BigDecimal(".005")
     val minDecimals = 2
     val maxDecimals = 8

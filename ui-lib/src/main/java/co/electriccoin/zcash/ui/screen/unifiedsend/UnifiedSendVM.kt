@@ -51,14 +51,16 @@ import co.electriccoin.zcash.ui.design.component.TextSelection
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.imageRes
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicNumber
 import co.electriccoin.zcash.ui.design.util.stringResByNumber
+import co.electriccoin.zcash.ui.design.util.stripFractionsDynamically
 import co.electriccoin.zcash.ui.screen.swap.SwapCancelState
 import co.electriccoin.zcash.ui.screen.swap.SwapErrorFooterState
+import co.electriccoin.zcash.ui.screen.swap.info.CrossPayInfoArgs
 import co.electriccoin.zcash.ui.screen.swap.picker.SwapAssetPickerArgs
 import co.electriccoin.zcash.ui.screen.swap.slippage.SwapSlippageArgs
 import co.electriccoin.zcash.ui.screen.topup.TopUpArgs
+import co.electriccoin.zcash.ui.util.CURRENCY_TICKER
 import co.electriccoin.zcash.ui.util.isServiceUnavailable
 import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -111,6 +113,16 @@ internal class UnifiedSendVM(
     private val fiatAmountInner = MutableStateFlow(NumberTextFieldInnerState())
     private val fiatWasLastEdited = MutableStateFlow(false)
 
+    /** Swap: the destination-denominated amount. Non-empty means the user is paying an exact output. */
+    private val tokenAmountInner = MutableStateFlow(NumberTextFieldInnerState())
+
+    /**
+     * Which side of the swap the user last typed into. Everything downstream — the quote screen,
+     * the slippage copy, review, progress and history — already branches on the quote's own mode,
+     * so this is the only place the app has to make the choice.
+     */
+    private val swapMode = MutableStateFlow(SwapMode.EXACT_INPUT)
+
     /** ZEC-direct: zcash address (string) + validated type */
     private val zcashAddress = MutableStateFlow(args.recipientAddress ?: "")
     private val zcashAddressType = MutableStateFlow<AddressType?>(null)
@@ -137,6 +149,12 @@ internal class UnifiedSendVM(
     private val swapAssetsWithRate =
         combine(getSwapAssetsUseCase.observe(), exchangeRateRepository.state) { assets, rate ->
             assets to rate
+        }
+
+    /** The three amount fields plus the mode they imply, reduced to one flow for the main combine. */
+    private val amountInputs =
+        combine(zecAmountInner, fiatAmountInner, tokenAmountInner, swapMode) { zec, fiat, token, mode ->
+            AmountInputs(zec = zec, fiat = fiat, token = token, mode = mode)
         }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -180,8 +198,7 @@ internal class UnifiedSendVM(
     private val coreState =
         co.electriccoin.zcash.ui.design.util.combine(
             selectedAsset,
-            zecAmountInner,
-            fiatAmountInner,
+            amountInputs,
             zcashRecipient,
             swapAddress,
             swapContact,
@@ -193,8 +210,7 @@ internal class UnifiedSendVM(
             isRequestingQuote,
         ) {
             asset,
-            zecAmount,
-            fiatAmount,
+            amounts,
             (zcashAddr, zcashType),
             swapAddr,
             contact,
@@ -215,16 +231,29 @@ internal class UnifiedSendVM(
             val fiatPrice = fiatRate?.pricePerZec
             val fiatCurrency = fiatRate?.currency
             val spendable = account?.spendableShieldedBalance
-            val zecValue = zecAmount.amount
+            val mode = if (isSwap) amounts.mode else SwapMode.EXACT_INPUT
+            val tokenValue = amounts.token.amount
+            // Exact-output: how much ZEC leaves the wallet is only known once NEAR quotes it, so
+            // the balance check runs against a USD-price estimate. Deliberately un-padded, as
+            // upstream does — a user close to their ceiling passes here and is caught by the
+            // InsufficientFundsException branch of RequestSwapQuoteUseCase once the quote lands.
+            val zecValue =
+                if (mode == SwapMode.EXACT_OUTPUT) {
+                    estimateZecFromToken(tokenValue, effectiveAsset?.usdPrice, zecUsdPrice)
+                } else {
+                    amounts.zec.amount
+                }
             val zatoshi = zecValue?.convertZecToZatoshi()
             val hasFunds = zatoshi == null || spendable == null || spendable >= zatoshi
             val hasZeroBalance = spendable != null && spendable.value == 0L
 
             buildFormState(
                 isSwap = isSwap,
+                mode = mode,
                 asset = effectiveAsset,
-                zecAmount = zecAmount,
-                fiatAmount = fiatAmount,
+                zecAmount = amounts.zec,
+                fiatAmount = amounts.fiat,
+                tokenAmount = amounts.token,
                 zcashAddr = zcashAddr,
                 zcashType = zcashType,
                 swapAddr = swapAddr,
@@ -236,6 +265,7 @@ internal class UnifiedSendVM(
                 fiatPrice = fiatPrice,
                 fiatCurrency = fiatCurrency,
                 zecValue = zecValue,
+                tokenValue = tokenValue,
                 hasFunds = hasFunds,
                 hasZeroBalance = hasZeroBalance,
                 abHintVisible = abHintVisible,
@@ -270,6 +300,7 @@ internal class UnifiedSendVM(
                 zcashAddressType.update { null }
                 swapAddress.update { "" }
                 swapContact.update { null }
+                clearTokenAmount()
             }.launchIn(viewModelScope)
 
         exchangeRateRepository.state
@@ -338,6 +369,7 @@ internal class UnifiedSendVM(
                 memoText.update { "" }
                 swapAddress.update { "" }
                 swapContact.update { null }
+                clearTokenAmount()
             }.launchIn(viewModelScope)
 
         preselectSwapAsset.observe().launchIn(viewModelScope)
@@ -353,6 +385,7 @@ internal class UnifiedSendVM(
     fun onZecAmountChange(inner: NumberTextFieldInnerState) {
         zecAmountInner.update { inner }
         fiatWasLastEdited.update { false }
+        swapMode.update { SwapMode.EXACT_INPUT }
         val rate = currentFiatRate() ?: return
         updateFiatAmount(inner.amount, rate)
     }
@@ -360,8 +393,48 @@ internal class UnifiedSendVM(
     fun onFiatAmountChange(inner: NumberTextFieldInnerState) {
         fiatAmountInner.update { inner }
         fiatWasLastEdited.update { true }
+        swapMode.update { SwapMode.EXACT_INPUT }
         val rate = currentFiatRate() ?: return
         updateZecAmount(inner.amount, rate)
+    }
+
+    /**
+     * The destination amount. Typing here makes this the side the quote is pinned to; emptying the
+     * field hands authority back to the ZEC amount above it.
+     */
+    fun onTokenAmountChange(inner: NumberTextFieldInnerState) {
+        val decimals = selectedAsset.value?.decimals
+        // Drop precision the destination chain cannot settle instead of rewriting what the user
+        // sees mid-keystroke. NEAR truncates the same way when it builds the quote request, so a
+        // finer amount could never reach the recipient anyway.
+        if (decimals != null && inner.exceedsAssetDecimals(decimals)) return
+        tokenAmountInner.update { inner }
+        swapMode.update { if (inner.isBlankInput()) SwapMode.EXACT_INPUT else SwapMode.EXACT_OUTPUT }
+    }
+
+    /**
+     * Hands authority back to the pay side, carrying the ZEC estimate over so the amount survives
+     * the switch. Without this the only way out of exact-output would be to empty the destination
+     * field, which the pay row — now just text — gives no hint of.
+     */
+    fun onPayEstimateClick() {
+        val estimate =
+            estimateZecFromToken(
+                token = tokenAmountInner.value.amount,
+                tokenUsdPrice = selectedAsset.value?.usdPrice,
+                zecUsdPrice =
+                    swapRepository.assets.value.zecAsset
+                        ?.usdPrice
+            )
+        // onZecAmountChange already returns the form to exact-input; do it explicitly too so a
+        // missing price (null estimate) still gets the user out.
+        swapMode.update { SwapMode.EXACT_INPUT }
+        if (estimate != null) onZecAmountChange(estimate.stripFractionsDynamically().toAmountState())
+    }
+
+    private fun clearTokenAmount() {
+        tokenAmountInner.update { NumberTextFieldInnerState() }
+        swapMode.update { SwapMode.EXACT_INPUT }
     }
 
     private fun updateFiatAmount(zec: BigDecimal?, rate: ZecFiatRate) {
@@ -431,6 +504,9 @@ internal class UnifiedSendVM(
                 swapAddress.update { result.address }
                 zcashAddress.update { result.address }
                 zcashAddressType.update { validateAddress(result.address) }
+                // A scanned recipient starts a fresh payment: any exact-output amount typed for the
+                // previous one no longer applies. ZIP-321 amounts are ZEC, so they pin the pay side.
+                clearTokenAmount()
                 if (result.amount != null) {
                     onZecAmountChange(NumberTextFieldInnerState.fromAmount(result.amount))
                 }
@@ -464,16 +540,25 @@ internal class UnifiedSendVM(
     // ── Private submission helpers ────────────────────────────────────────────
 
     private fun requestSwapQuoteClick() {
-        val zecAmt = zecAmountInner.value.amount ?: return
         val addr = swapContact.value?.address ?: swapAddress.value
         if (addr.isBlank()) return
+        val isExactOutput = swapMode.value == SwapMode.EXACT_OUTPUT
+        val amount = (if (isExactOutput) tokenAmountInner else zecAmountInner).value.amount ?: return
         viewModelScope.launch {
             isRequestingQuote.update { true }
-            requestSwapQuote.requestExactInput(
-                amount = zecAmt,
-                address = addr,
-                canNavigateToSwapQuote = { !isCancelStateVisible.value }
-            )
+            if (isExactOutput) {
+                requestSwapQuote.requestExactOutput(
+                    amount = amount,
+                    address = addr,
+                    canNavigateToSwapQuote = { !isCancelStateVisible.value }
+                )
+            } else {
+                requestSwapQuote.requestExactInput(
+                    amount = amount,
+                    address = addr,
+                    canNavigateToSwapQuote = { !isCancelStateVisible.value }
+                )
+            }
             isRequestingQuote.update { false }
         }
     }
@@ -538,14 +623,18 @@ internal class UnifiedSendVM(
 
     private fun onTopUpClick() = navigationRouter.forward(TopUpArgs)
 
+    private fun onCrossPayInfoClick() = navigationRouter.forward(CrossPayInfoArgs)
+
     // ── State builder ─────────────────────────────────────────────────────────
 
-    @Suppress("CyclomaticComplexMethod")
+    @Suppress("CyclomaticComplexMethod", "LongMethod")
     private fun buildFormState(
         isSwap: Boolean,
+        mode: SwapMode,
         asset: SwapAsset?,
         zecAmount: NumberTextFieldInnerState,
         fiatAmount: NumberTextFieldInnerState,
+        tokenAmount: NumberTextFieldInnerState,
         zcashAddr: String,
         zcashType: AddressType?,
         swapAddr: String,
@@ -557,13 +646,18 @@ internal class UnifiedSendVM(
         fiatPrice: BigDecimal?,
         fiatCurrency: FiatCurrency?,
         zecValue: BigDecimal?,
+        tokenValue: BigDecimal?,
         hasFunds: Boolean,
         hasZeroBalance: Boolean,
         abHintVisible: Boolean,
         isRequesting: Boolean,
     ): UnifiedSendState {
-        val hasAmount = zecValue != null && zecValue > BigDecimal.ZERO
-        val isAmountValid = !zecAmount.isError && hasAmount
+        val isExactOutput = mode == SwapMode.EXACT_OUTPUT
+        // Whichever side the user typed into is the one that has to hold a usable number.
+        val authoritativeAmount = if (isExactOutput) tokenValue else zecValue
+        val authoritativeField = if (isExactOutput) tokenAmount else zecAmount
+        val hasAmount = authoritativeAmount != null && authoritativeAmount > BigDecimal.ZERO
+        val isAmountValid = !authoritativeField.isError && hasAmount
         val isAddressValid =
             if (isSwap) {
                 (contact?.address ?: swapAddr).isNotBlank()
@@ -572,7 +666,26 @@ internal class UnifiedSendVM(
             }
         val isMemoValid = zcashType == AddressType.Transparent || memo.toByteArray().size <= 512
 
-        val theyReceiveLabel = computeTheyReceiveLabel(isSwap, asset, zecValue, zecUsdPrice)
+        val showAmountError = !hasFunds && hasAmount
+        val theyReceive =
+            buildTheyReceiveState(
+                isSwap = isSwap,
+                isExactOutput = isExactOutput,
+                asset = asset,
+                tokenAmount = tokenAmount,
+                zecValue = zecValue,
+                zecUsdPrice = zecUsdPrice,
+                showAmountError = showAmountError,
+                isRequesting = isRequesting,
+            )
+        // The USD figure the slippage percentage is quoted against. In exact-output it comes off
+        // the recipient's amount rather than the ZEC estimate, so it is exact rather than derived.
+        val originUsd =
+            if (isExactOutput) {
+                estimateUsdFromToken(tokenValue, asset?.usdPrice)
+            } else {
+                zecValue?.multiply(zecUsdPrice ?: BigDecimal.ZERO, MathContext.DECIMAL128)
+            }
         val slippageLabel: StringResource? =
             if (isSwap) {
                 stringResByNumber(slippage, minDecimals = 0) + stringRes("%")
@@ -628,35 +741,47 @@ internal class UnifiedSendVM(
                     onClick = ::onQrScannerClick,
                     isEnabled = !isRequesting
                 ),
+            infoButton =
+                if (isSwap) {
+                    IconButtonState(
+                        icon = R.drawable.ic_help,
+                        contentDescription = stringRes(R.string.unified_send_crosspay_info),
+                        onClick = ::onCrossPayInfoClick,
+                        isEnabled = !isRequesting
+                    )
+                } else {
+                    null
+                },
             isABHintVisible = abHintVisible,
             zecAmount =
                 NumberTextFieldState(
                     innerState = zecAmount,
                     onValueChange = ::onZecAmountChange,
                     isEnabled = !isRequesting,
-                    explicitError = if (!hasFunds && hasAmount) stringRes("") else null
+                    explicitError = if (showAmountError) stringRes("") else null
                 ),
             fiatAmount =
                 NumberTextFieldState(
                     innerState = fiatAmount,
                     onValueChange = ::onFiatAmountChange,
                     isEnabled = !isRequesting && fiatPrice != null,
-                    explicitError = if (!hasFunds && hasAmount) stringRes("") else null
+                    explicitError = if (showAmountError) stringRes("") else null
                 ),
             fiatCurrency = fiatCurrency,
             isAmountSwapped = fiatPrice != null,
             onAmountSwap = ::onAmountSwap,
             amountError =
-                if (!hasFunds && hasAmount) {
+                if (showAmountError) {
                     stringRes(R.string.send_amount_insufficient_balance)
                 } else {
                     null
                 },
-            theyReceiveLabel = theyReceiveLabel,
+            theyReceive = theyReceive,
+            payEstimate = if (isExactOutput) buildPayEstimate(zecValue, isRequesting) else null,
             slippage = slippageLabel,
             onSlippageClick =
                 if (isSwap) {
-                    { onSlippageClick(zecValue) }
+                    { onSlippageClick(originUsd, mode) }
                 } else {
                     null
                 },
@@ -696,34 +821,94 @@ internal class UnifiedSendVM(
         )
     }
 
-    private fun computeTheyReceiveLabel(
+    /**
+     * The destination row. The field is editable in both modes: in exact-input it shows the
+     * client-side estimate and typing over it flips the form to exact-output, which is the only
+     * way into "the recipient gets exactly X".
+     */
+    private fun buildTheyReceiveState(
         isSwap: Boolean,
+        isExactOutput: Boolean,
         asset: SwapAsset?,
+        tokenAmount: NumberTextFieldInnerState,
         zecValue: BigDecimal?,
         zecUsdPrice: BigDecimal?,
-    ): StringResource? {
-        if (!isSwap || asset == null || zecValue == null || zecUsdPrice == null) return null
-        val tokenPrice = asset.usdPrice ?: return null
-        if (tokenPrice == BigDecimal.ZERO) return null
-        val tokenAmount =
-            zecValue
-                .multiply(zecUsdPrice, MathContext.DECIMAL128)
-                .divide(tokenPrice, MathContext.DECIMAL128)
-        return stringRes(R.string.unified_send_they_receive_approx) + " " +
-            stringResByDynamicCurrencyNumber(tokenAmount, asset.tokenTicker)
+        showAmountError: Boolean,
+        isRequesting: Boolean,
+    ): TheyReceiveState? {
+        if (!isSwap || asset == null) return null
+        val innerState =
+            if (isExactOutput) {
+                tokenAmount
+            } else {
+                // Round to what the field will actually render, so tapping in and adopting the
+                // estimate quotes exactly the number the user was looking at.
+                estimateTokenFromZec(zecValue, zecUsdPrice, asset.usdPrice)
+                    ?.truncateToAssetDecimals(asset.decimals)
+                    ?.stripFractionsDynamically()
+                    ?.truncateToAssetDecimals(asset.decimals)
+                    .toAmountState()
+            }
+        return TheyReceiveState(
+            label =
+                stringRes(
+                    if (isExactOutput) {
+                        R.string.unified_send_they_receive_exact
+                    } else {
+                        R.string.unified_send_they_receive_approx
+                    }
+                ),
+            ticker = asset.tokenTicker,
+            amount =
+                NumberTextFieldState(
+                    innerState = innerState,
+                    onValueChange = ::onTokenAmountChange,
+                    isEnabled = !isRequesting,
+                    explicitError = if (isExactOutput && showAmountError) stringRes("") else null
+                ),
+            fiatEquivalent =
+                if (isExactOutput) {
+                    estimateUsdFromToken(tokenAmount.amount, asset.usdPrice)?.let { usd ->
+                        stringRes(
+                            R.string.unified_send_estimated_equivalent,
+                            stringResByDynamicNumber(usd),
+                            FiatCurrency.USD.code
+                        )
+                    }
+                } else {
+                    null
+                },
+        )
     }
 
-    private fun onSlippageClick(zecValue: BigDecimal?) =
+    /** The greyed "≈ 0.42 ZEC" that stands in for the pay fields while exact-output is in force. */
+    private fun buildPayEstimate(zecValue: BigDecimal?, isRequesting: Boolean): PayEstimateState =
+        PayEstimateState(
+            text =
+                stringRes(
+                    R.string.unified_send_estimated_equivalent,
+                    // Prices have not loaded yet. The payment still works — NEAR prices it — so
+                    // say the cost is unknown rather than dropping the "I'll pay" row entirely.
+                    zecValue?.let { stringResByDynamicNumber(it) } ?: stringRes("—"),
+                    CURRENCY_TICKER
+                ),
+            onClick =
+                if (isRequesting) {
+                    {}
+                } else {
+                    ::onPayEstimateClick
+                }
+        )
+
+    /**
+     * [originUsd] is the USD value the slippage percentage is quoted against — the ZEC being spent
+     * in exact-input, and the recipient's amount in exact-output (upstream's `getOriginFiatAmount`).
+     */
+    private fun onSlippageClick(originUsd: BigDecimal?, mode: SwapMode) =
         navigationRouter.forward(
             SwapSlippageArgs(
-                fiatAmount =
-                    zecValue
-                        ?.multiply(
-                            swapRepository.assets.value.zecAsset
-                                ?.usdPrice ?: BigDecimal.ZERO,
-                            MathContext.DECIMAL128
-                        )?.toPlainString(),
-                mode = SwapMode.EXACT_INPUT
+                fiatAmount = originUsd?.toPlainString(),
+                mode = mode
             )
         )
 
@@ -826,3 +1011,11 @@ internal class UnifiedSendVM(
         }
     }
 }
+
+/** The three amount fields plus the swap mode they imply. */
+private data class AmountInputs(
+    val zec: NumberTextFieldInnerState,
+    val fiat: NumberTextFieldInnerState,
+    val token: NumberTextFieldInnerState,
+    val mode: SwapMode,
+)
