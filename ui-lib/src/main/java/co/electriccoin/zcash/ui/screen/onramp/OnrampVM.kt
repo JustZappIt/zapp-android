@@ -7,9 +7,6 @@ import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.provider.OnrampCheckpointStorageProvider
-import co.electriccoin.zcash.ui.common.provider.OnrampZecSwapGateway
-import co.electriccoin.zcash.ui.common.provider.ValidatedZecSwapQuote
-import co.electriccoin.zcash.ui.common.provider.costBasisPoints
 import co.electriccoin.zcash.ui.common.repository.BaseBalance
 import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepository
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
@@ -42,6 +39,9 @@ import xyz.justzappit.offramp.onramp.OnrampZecDeliveryCheckpoint
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryDriver
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryPhase
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryStatus
+import xyz.justzappit.offramp.onramp.OnrampZecSwapGateway
+import xyz.justzappit.offramp.onramp.ValidatedZecSwapQuote
+import xyz.justzappit.offramp.onramp.costBasisPoints
 import xyz.justzappit.offramp.onramp.id
 import xyz.justzappit.offramp.onramp.leavesOrderAlive
 import xyz.justzappit.offramp.onramp.orderId

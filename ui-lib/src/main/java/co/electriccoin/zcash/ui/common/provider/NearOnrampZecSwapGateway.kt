@@ -6,28 +6,18 @@ package co.electriccoin.zcash.ui.common.provider
 import co.electriccoin.zcash.ui.common.datasource.AFFILIATE_ADDRESS
 import co.electriccoin.zcash.ui.common.datasource.SwapDataSource
 import co.electriccoin.zcash.ui.common.model.SwapMode
-import co.electriccoin.zcash.ui.common.model.SwapStatus
+import xyz.justzappit.evm.math.BigDecimal
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryCheckpoint
+import xyz.justzappit.offramp.onramp.OnrampZecSwapGateway
+import xyz.justzappit.offramp.onramp.OnrampZecSwapResult
+import xyz.justzappit.offramp.onramp.SwapStatus
+import xyz.justzappit.offramp.onramp.ValidatedZecSwapQuote
 import xyz.justzappit.offramp.p2p.Usdc6
-import java.math.BigDecimal
 import kotlin.time.Clock
 import kotlin.time.Instant
-
-internal data class OnrampZecSwapResult(
-    val status: SwapStatus,
-    val outputZec: String,
-    val refundedUsdc: Usdc6?,
-)
-
-internal interface OnrampZecSwapGateway {
-    suspend fun quote(account: Address, amount: Usdc6): ValidatedZecSwapQuote
-
-    suspend fun notifyDeposit(baseTransactionHash: String, depositAddress: Address)
-
-    suspend fun status(checkpoint: OnrampZecDeliveryCheckpoint): OnrampZecSwapResult
-}
+import co.electriccoin.zcash.ui.common.model.SwapStatus as AndroidSwapStatus
 
 internal class NearOnrampZecSwapGateway(
     private val usdc: Address,
@@ -69,11 +59,11 @@ internal class NearOnrampZecSwapGateway(
         val tokens = swapDataSource.getSupportedTokens()
         val current = swapDataSource.checkSwapStatus(checkpoint.depositAddress.orEmpty(), tokens)
         validateZecSwapStatus(current.quote, checkpoint)
-        if (current.status == SwapStatus.SUCCESS) {
+        if (current.status == AndroidSwapStatus.SUCCESS) {
             require(current.amountOutFormatted.signum() > 0) { "Swap status has non-positive ZEC output" }
         }
         val refundedUsdc =
-            if (current.status == SwapStatus.REFUNDED) {
+            if (current.status == AndroidSwapStatus.REFUNDED) {
                 val rawRefund = requireNotNull(current.refunded) { "Refunded swap is missing its raw USDC amount" }
                 val refund =
                     Usdc6(
@@ -97,7 +87,7 @@ internal class NearOnrampZecSwapGateway(
                 null
             }
         return OnrampZecSwapResult(
-            status = current.status,
+            status = SwapStatus.valueOf(current.status.name),
             outputZec = current.amountOutFormatted.stripTrailingZeros().toPlainString(),
             refundedUsdc = refundedUsdc,
         )

@@ -3,14 +3,11 @@
 
 package xyz.justzappit.offramp.apple
 
-import io.ktor.client.HttpClient
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import xyz.justzappit.evm.hd.EvmKey
-import xyz.justzappit.evm.hd.EvmKeyDerivation
 import xyz.justzappit.evm.math.BigDecimal
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.math.DecimalRounding
@@ -26,14 +23,9 @@ import xyz.justzappit.evm.math.minus
 import xyz.justzappit.evm.math.plus
 import xyz.justzappit.evm.math.times
 import xyz.justzappit.evm.rpc.BaseRpcClient
-import xyz.justzappit.evm.rpc.BundlerClient
-import xyz.justzappit.evm.rpc.RpcHttpClient
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.evm.util.hexToBytes
-import xyz.justzappit.offramp.account.Erc4337SubmitterProvider
-import xyz.justzappit.offramp.account.OfframpAccountProvider
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
-import xyz.justzappit.offramp.config.P2pConfigProvider
 import xyz.justzappit.offramp.config.P2pNetworkConfig
 import xyz.justzappit.offramp.config.P2pNetworks
 import xyz.justzappit.offramp.funding.NoRouteOfframpRefund
@@ -76,7 +68,6 @@ import xyz.justzappit.offramp.p2p.getUsdcBalance
  * decimal string or a 6-decimal micro-unit string; no Kotlin inline value class is exposed as Any.
  */
 class AppleOfframpClient private constructor(
-    private val httpClient: HttpClient,
     private val rpc: BaseRpcClient,
     private val network: P2pNetworkConfig,
     private val smartAccountProvider: SmartOfframpAccountProvider,
@@ -84,7 +75,6 @@ class AppleOfframpClient private constructor(
     private val historySource: P2pOrderHistorySource,
     private val dynamicPixResolver: DirectPixResolver,
     private val storage: AppleOfframpStorage,
-    private val owner: EvmKey,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -366,11 +356,6 @@ class AppleOfframpClient private constructor(
 
     fun transactionUrl(txHash: String): String = network.txUrl(txHash)
 
-    fun close() {
-        owner.zeroize()
-        httpClient.close()
-    }
-
     private fun decodeCheckpoint(value: String): OfframpCheckpoint =
         try {
             json.decodeFromString(OfframpCheckpoint.serializer(), value)
@@ -404,93 +389,55 @@ class AppleOfframpClient private constructor(
     companion object {
         @Throws(Exception::class)
         suspend fun create(
-            networkName: String,
-            seedPhrase: String,
-            pimlicoApiKey: String,
+            account: AppleBaseAccount,
             storage: AppleOfframpStorage,
             bridge: AppleOfframpBridge? = null,
-            rpcUrl: String? = null,
-            subgraphUrl: String? = null,
-            sponsorshipPolicyId: String? = null,
         ): AppleOfframpClient {
-            require(seedPhrase.isNotBlank()) { "seedPhrase must not be blank" }
-            // Use the same production client defaults as Android. A bare native Ktor client has
-            // no ContentNegotiation plugin, so JsonObject RPC/subgraph request bodies fail before
-            // reaching the network.
-            val http = RpcHttpClient.create()
-            try {
-                val network = P2pConfigProvider(networkName, rpcUrl, subgraphUrl).current()
-                val rpc = BaseRpcClient(http, network.rpcUrl)
-                val subgraph = SubgraphClient(http, network.subgraphUrl)
-                val mnemonic = seedPhrase.toCharArray()
-                val owner =
-                    try {
-                        // Keep this explicit and symmetric with Android's
-                        // StaticOfframpAccountProvider fixedAccountIndex default. The same Zcash
-                        // wallet mnemonic must always recover the same Base owner at
-                        // m/44'/60'/0'/0/0 on both platforms.
-                        EvmKeyDerivation.derive(mnemonic, accountIndex = 0)
-                    } finally {
-                        mnemonic.fill('\u0000')
-                    }
-                val accountProvider =
-                    object : OfframpAccountProvider {
-                        override suspend fun nextOfframpAccount() = owner
-                    }
-                val smartAccount = SmartOfframpAccountProvider(accountProvider, rpc, network.accountFactoryAddress)
-                val relayStore = AppleRelayIdentityStore(storage)
-                val recipientCache = AppleOrderRecipientCache(storage)
-                val onChainReader = OnChainOrderReader(rpc, network)
-                val subgraphReader = SubgraphOrderReader(subgraph)
-                val orderReader = FallbackOrderReader(subgraphReader, onChainReader)
-                val funding: OfframpFunding
-                val refund: OfframpRefund
-                val topUp: OfframpTopUp
-                if (network.chainId == P2pNetworks.MAINNET_CHAIN_ID) {
-                    val host = requireNotNull(bridge) { "Mainnet requires an AppleOfframpBridge" }
-                    val hostFunding = AppleBridgeFunding(rpc, network.usdcAddress, host)
-                    funding = hostFunding
-                    topUp = hostFunding
-                    refund =
-                        AppleBridgeRefund(host) { amount, handle, transferStarted, txHash ->
-                            storage.storeRefundCheckpointJson(
-                                Json.encodeToString(
-                                    AppleRefundCheckpoint.serializer(),
-                                    AppleRefundCheckpoint(
-                                        usdcMicros = amount.micros.toString(),
-                                        depositAddress = handle,
-                                        orderId = null,
-                                        createdAtMillis = platformCurrentTimeMillis(),
-                                        transferStarted = transferStarted,
-                                        txHash = txHash,
-                                    ),
+            val network = account.network
+            val rpc = account.rpc
+            val subgraph = SubgraphClient(account.httpClient, network.subgraphUrl)
+            val relayStore = AppleRelayIdentityStore(storage)
+            val recipientCache = AppleOrderRecipientCache(storage)
+            val onChainReader = OnChainOrderReader(rpc, network)
+            val orderReader = FallbackOrderReader(SubgraphOrderReader(subgraph), onChainReader)
+            val funding: OfframpFunding
+            val refund: OfframpRefund
+            val topUp: OfframpTopUp
+            if (network.chainId == P2pNetworks.MAINNET_CHAIN_ID) {
+                val host = requireNotNull(bridge) { "Mainnet requires an AppleOfframpBridge" }
+                val hostFunding = AppleBridgeFunding(rpc, network.usdcAddress, host)
+                funding = hostFunding
+                topUp = hostFunding
+                refund =
+                    AppleBridgeRefund(host) { amount, handle, transferStarted, txHash ->
+                        storage.storeRefundCheckpointJson(
+                            Json.encodeToString(
+                                AppleRefundCheckpoint.serializer(),
+                                AppleRefundCheckpoint(
+                                    usdcMicros = amount.micros.toString(),
+                                    depositAddress = handle,
+                                    orderId = null,
+                                    createdAtMillis = platformCurrentTimeMillis(),
+                                    transferStarted = transferStarted,
+                                    txHash = txHash,
                                 ),
-                            )
-                        }
-                } else {
-                    funding = PreFundedOfframpFunding(rpc, network.usdcAddress)
-                    topUp = NoRouteOfframpTopUp()
-                    refund = NoRouteOfframpRefund()
-                }
-                val bundler =
-                    BundlerClient(
-                        httpClient = http,
-                        bundlerUrl = BundlerClient.urlFor(network.chainId, pimlicoApiKey),
-                        entryPoint = network.entryPointAddress,
-                        chainId = network.chainId,
-                        sponsorshipPolicyId = sponsorshipPolicyId?.takeIf { it.isNotBlank() },
-                    )
-                val driver =
+                            ),
+                        )
+                    }
+            } else {
+                funding = PreFundedOfframpFunding(rpc, network.usdcAddress)
+                topUp = NoRouteOfframpTopUp()
+                refund = NoRouteOfframpRefund()
+            }
+            return AppleOfframpClient(
+                rpc = rpc,
+                network = network,
+                smartAccountProvider = account.smartAccounts,
+                driver =
                     AaOfframpDriver(
                         rpc = rpc,
                         network = network,
-                        submitters =
-                            Erc4337SubmitterProvider(
-                                rpc = rpc,
-                                bundler = bundler,
-                                network = network,
-                                accountProvider = smartAccount,
-                            ),
+                        submitters = account.submitters,
                         subgraph = subgraph,
                         orderReader = orderReader,
                         funding = funding,
@@ -498,8 +445,8 @@ class AppleOfframpClient private constructor(
                         topUp = topUp,
                         relayIdentityStore = relayStore,
                         orderRecipientUpiCache = recipientCache,
-                    )
-                val history =
+                    ),
+                historySource =
                     P2pOrderHistorySource(
                         subgraph = subgraph,
                         relayIdentityStore = relayStore,
@@ -507,22 +454,10 @@ class AppleOfframpClient private constructor(
                         onChainOrderReader = onChainReader,
                         rpc = rpc,
                         network = network,
-                    )
-                return AppleOfframpClient(
-                    httpClient = http,
-                    rpc = rpc,
-                    network = network,
-                    smartAccountProvider = smartAccount,
-                    driver = driver,
-                    historySource = history,
-                    dynamicPixResolver = DirectPixResolver(http),
-                    storage = storage,
-                    owner = owner,
-                )
-            } catch (error: Throwable) {
-                http.close()
-                throw error
-            }
+                    ),
+                dynamicPixResolver = DirectPixResolver(account.httpClient),
+                storage = storage,
+            )
         }
 
         private val MICROS_PER_UNIT = bigIntegerValueOf(1_000_000L)

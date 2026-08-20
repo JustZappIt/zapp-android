@@ -11,13 +11,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.types.Address
-import xyz.justzappit.offramp.onramp.FundsLocation
 import xyz.justzappit.offramp.onramp.OnrampCheckpoint
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryCheckpoint
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryDriver
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryPhase
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryStatus
-import xyz.justzappit.offramp.onramp.fundsLocation
+import xyz.justzappit.offramp.onramp.onrampDeliveryFailure
+import xyz.justzappit.offramp.onramp.restartedAfterRefund
 import xyz.justzappit.offramp.p2p.Usdc6
 
 internal class OnrampZecDeliveryCoordinator(
@@ -51,16 +51,7 @@ internal class OnrampZecDeliveryCoordinator(
                         "OnrampZecDeliveryCoordinator: delivery failed outside driver handling " +
                             "(${e::class.simpleName})"
                     }
-                    // The durable checkpoint outranks the exception: only it can say whether the
-                    // transfer was started, so the failure is described from state, not from a message.
-                    val latest = latestDeliveryCheckpoint()
-                    onStatus(
-                        OnrampZecDeliveryStatus.Failed(
-                            stage = latest?.phase ?: resume?.phase ?: OnrampZecDeliveryPhase.NEEDS_ATTENTION,
-                            fundsLocation = latest?.fundsLocation ?: FundsLocation.TRANSFER_AMBIGUOUS,
-                            retryable = latest != null && !latest.transferStarted,
-                        ),
-                    )
+                    onStatus(onrampDeliveryFailure(latestDeliveryCheckpoint(), resume))
                 }
             }
     }
@@ -83,7 +74,7 @@ internal class OnrampZecDeliveryCoordinator(
             val delivery = checkpoint.zecDelivery
             val resumable =
                 if (delivery?.phase == OnrampZecDeliveryPhase.REFUNDED_TO_BASE) {
-                    checkpoint.copy(zecDelivery = delivery.restartAfterRefund()).also { storage.store(it) }
+                    checkpoint.copy(zecDelivery = delivery.restartedAfterRefund()).also { storage.store(it) }
                 } else {
                     checkpoint
                 }
@@ -113,12 +104,4 @@ internal class OnrampZecDeliveryCoordinator(
             Twig.warn { "OnrampZecDeliveryCoordinator: checkpoint could not be read (${e::class.simpleName})" }
             null
         }
-
-    private fun OnrampZecDeliveryCheckpoint.restartAfterRefund() =
-        OnrampZecDeliveryCheckpoint(
-            phase = OnrampZecDeliveryPhase.FUNDS_ON_BASE,
-            usdcMicros = requireNotNull(refundedUsdcMicros),
-            baseAccount = baseAccount,
-            acceptedCostBps = acceptedCostBps,
-        )
 }

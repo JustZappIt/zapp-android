@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
 
+@file:Suppress("TooManyFunctions") // The expect API intentionally keeps all decimal operations in one parity surface.
+
 package xyz.justzappit.evm.math
 
 expect class BigDecimal : Comparable<BigDecimal> {
@@ -14,11 +16,14 @@ expect class BigDecimal : Comparable<BigDecimal> {
 enum class DecimalRounding {
     HALF_UP,
     DOWN,
+    UP,
 }
 
 expect fun bigDecimalFromBigInteger(value: BigInteger): BigDecimal
 
 expect fun decimalMultiply(left: BigDecimal, right: BigDecimal): BigDecimal
+
+expect fun decimalSubtract(left: BigDecimal, right: BigDecimal): BigDecimal
 
 expect fun decimalDivide(
     dividend: BigDecimal,

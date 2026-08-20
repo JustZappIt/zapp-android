@@ -61,13 +61,39 @@ enum class FundsLocation {
 }
 
 /**
- * Where a checkpoint proves the money is, from durable evidence alone. A mined Base transaction is
- * the only proof the deposit reached the intent; a started-but-unproven transfer stays ambiguous so
- * no caller can claim either side of it.
+ * The durable checkpoint outranks the exception: only it can say whether the transfer was started,
+ * so a failure raised outside the driver is described from state rather than from a message.
+ */
+fun onrampDeliveryFailure(
+    latest: OnrampZecDeliveryCheckpoint?,
+    resumed: OnrampZecDeliveryCheckpoint? = null,
+) = OnrampZecDeliveryStatus.Failed(
+    stage = latest?.phase ?: resumed?.phase ?: OnrampZecDeliveryPhase.NEEDS_ATTENTION,
+    fundsLocation = latest?.fundsLocation ?: FundsLocation.TRANSFER_AMBIGUOUS,
+    retryable = latest != null && !latest.transferStarted,
+)
+
+/** A confirmed refund is a new starting balance on Base, not the amount the order settled for. */
+fun OnrampZecDeliveryCheckpoint.restartedAfterRefund() =
+    OnrampZecDeliveryCheckpoint(
+        phase = OnrampZecDeliveryPhase.FUNDS_ON_BASE,
+        usdcMicros = requireNotNull(refundedUsdcMicros),
+        baseAccount = baseAccount,
+        acceptedCostBps = acceptedCostBps,
+    )
+
+/**
+ * Where a checkpoint proves the money is, from durable evidence alone. A phase the delivery already
+ * settled into outranks the hashes that got it there, so a delivered or refunded checkpoint is never
+ * described as still in flight. Below that, a mined Base transaction is the only proof the deposit
+ * reached the intent; a started-but-unproven transfer stays ambiguous so no caller can claim either
+ * side of it.
  */
 val OnrampZecDeliveryCheckpoint.fundsLocation: FundsLocation
     get() =
         when {
+            phase == OnrampZecDeliveryPhase.DELIVERED -> FundsLocation.ZCASH_WALLET
+            phase == OnrampZecDeliveryPhase.REFUNDED_TO_BASE -> FundsLocation.BASE_REFUND_CONFIRMED
             baseTransactionHash != null -> FundsLocation.NEAR_INTENT
             transferStarted -> FundsLocation.TRANSFER_AMBIGUOUS
             else -> FundsLocation.BASE_ACCOUNT

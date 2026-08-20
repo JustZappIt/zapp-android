@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
 
-package co.electriccoin.zcash.ui.common.provider
+package xyz.justzappit.offramp.onramp
 
-import co.electriccoin.zcash.spackle.Twig
-import co.electriccoin.zcash.ui.common.model.SwapStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -12,6 +10,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.rpc.TransactionReceipt
@@ -19,22 +19,16 @@ import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.evm.types.Wei
 import xyz.justzappit.offramp.account.SubmittingAccount
-import xyz.justzappit.offramp.onramp.FundsLocation
-import xyz.justzappit.offramp.onramp.OnrampZecDeliveryCheckpoint
-import xyz.justzappit.offramp.onramp.OnrampZecDeliveryDriver
-import xyz.justzappit.offramp.onramp.OnrampZecDeliveryPhase
-import xyz.justzappit.offramp.onramp.OnrampZecDeliveryStatus
-import xyz.justzappit.offramp.onramp.fundsLocation
 import xyz.justzappit.offramp.p2p.Erc20Calls
 import xyz.justzappit.offramp.p2p.Usdc6
-import java.util.concurrent.atomic.AtomicReference
+import kotlin.time.Clock
 
-internal data class OnrampBaseTransferReceipt(
+data class OnrampBaseTransferReceipt(
     val success: Boolean,
     val transactionHash: String,
 )
 
-internal interface OnrampZecTransferGateway {
+interface OnrampZecTransferGateway {
     suspend fun resolveAccount(): Address
 
     suspend fun balance(account: Address): Usdc6
@@ -44,11 +38,11 @@ internal interface OnrampZecTransferGateway {
     suspend fun awaitReceipt(account: Address, userOperationHash: String): OnrampBaseTransferReceipt
 }
 
-internal fun interface OnrampZecDeliveryCheckpointStore {
+fun interface OnrampZecDeliveryCheckpointStore {
     suspend fun save(orderId: String, checkpoint: OnrampZecDeliveryCheckpoint)
 }
 
-internal fun interface OnrampUsdcBalanceReader {
+fun interface OnrampUsdcBalanceReader {
     suspend fun balance(account: Address): Usdc6
 }
 
@@ -57,12 +51,13 @@ internal fun interface OnrampUsdcBalanceReader {
  * submitter here instead would give this rail its own nonce cursor, and it spends from the same
  * smart account as every cash-out and top-up.
  */
-internal class Erc4337OnrampZecTransferGateway(
+class Erc4337OnrampZecTransferGateway(
     private val usdc: Address,
     private val accountResolver: suspend () -> SubmittingAccount,
     private val balanceReader: OnrampUsdcBalanceReader,
 ) : OnrampZecTransferGateway {
-    private val resolvedAccount = AtomicReference<SubmittingAccount?>()
+    private val accountMutex = Mutex()
+    private var resolvedAccount: SubmittingAccount? = null
 
     override suspend fun resolveAccount(): Address = account().address
 
@@ -90,13 +85,15 @@ internal class Erc4337OnrampZecTransferGateway(
     }
 
     private suspend fun account(): SubmittingAccount =
-        resolvedAccount.get() ?: accountResolver().also(resolvedAccount::set)
+        accountMutex.withLock {
+            resolvedAccount ?: accountResolver().also { resolvedAccount = it }
+        }
 
     private fun TransactionReceipt.toOnrampReceipt() = OnrampBaseTransferReceipt(success, transactionHash)
 }
 
 @Suppress("TooManyFunctions")
-internal class NearOnrampZecDeliveryDriver(
+class NearOnrampZecDeliveryDriver(
     private val transfer: OnrampZecTransferGateway,
     private val swap: OnrampZecSwapGateway,
     private val checkpoints: OnrampZecDeliveryCheckpointStore,
@@ -105,7 +102,8 @@ internal class NearOnrampZecDeliveryDriver(
     private val statusPollIntervalMillis: Long = DEFAULT_STATUS_POLL_INTERVAL_MILLIS,
     private val maxStatusFailures: Int = DEFAULT_MAX_STATUS_FAILURES,
     private val requoteCostToleranceBps: Int = DEFAULT_REQUOTE_COST_TOLERANCE_BPS,
-    private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val nowMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
+    private val warn: (String, Throwable?) -> Unit = { _, _ -> },
 ) : OnrampZecDeliveryDriver {
     override fun deliver(
         orderId: String,
@@ -309,10 +307,11 @@ internal class NearOnrampZecDeliveryDriver(
         if (acceptedCostBps == null) return false
         val exceeds = costBasisPoints > acceptedCostBps + requoteCostToleranceBps
         if (exceeds) {
-            Twig.warn {
+            warn(
                 "NearOnrampZecDeliveryDriver: re-quote costs ${costBasisPoints}bps against an " +
-                    "accepted ${acceptedCostBps}bps; not depositing"
-            }
+                    "accepted ${acceptedCostBps}bps; not depositing",
+                null,
+            )
         }
         return exceeds
     }
@@ -495,7 +494,7 @@ internal class NearOnrampZecDeliveryDriver(
         } catch (
             @Suppress("TooGenericExceptionCaught") e: Throwable
         ) {
-            Twig.warn { "NearOnrampZecDeliveryDriver: $step failed (${e::class.simpleName})" }
+            warn("NearOnrampZecDeliveryDriver: $step failed (${e::class.simpleName})", e)
             null
         }
 
@@ -557,7 +556,7 @@ internal class NearOnrampZecDeliveryDriver(
     }
 }
 
-internal class FakeOnrampZecDeliveryDriver : OnrampZecDeliveryDriver {
+class FakeOnrampZecDeliveryDriver : OnrampZecDeliveryDriver {
     override fun deliver(
         orderId: String,
         recipient: Address,
@@ -576,7 +575,7 @@ internal class FakeOnrampZecDeliveryDriver : OnrampZecDeliveryDriver {
     }
 }
 
-internal class NoRouteOnrampZecDeliveryDriver : OnrampZecDeliveryDriver {
+class NoRouteOnrampZecDeliveryDriver : OnrampZecDeliveryDriver {
     override fun deliver(
         orderId: String,
         recipient: Address,

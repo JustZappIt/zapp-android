@@ -20,8 +20,6 @@ import co.electriccoin.zcash.ui.common.provider.CrashReportingStorageProvider
 import co.electriccoin.zcash.ui.common.provider.CrashReportingStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.EphemeralAddressStorageProvider
 import co.electriccoin.zcash.ui.common.provider.EphemeralAddressStorageProviderImpl
-import co.electriccoin.zcash.ui.common.provider.Erc4337OnrampZecTransferGateway
-import co.electriccoin.zcash.ui.common.provider.FakeOnrampZecDeliveryDriver
 import co.electriccoin.zcash.ui.common.provider.GetVersionInfoProvider
 import co.electriccoin.zcash.ui.common.provider.GetZcashCurrencyProvider
 import co.electriccoin.zcash.ui.common.provider.HttpClientProvider
@@ -45,10 +43,8 @@ import co.electriccoin.zcash.ui.common.provider.LastNetworkActivityStorageProvid
 import co.electriccoin.zcash.ui.common.provider.LightWalletEndpointProvider
 import co.electriccoin.zcash.ui.common.provider.NearApiProvider
 import co.electriccoin.zcash.ui.common.provider.NearBridgeOfframpFunding
-import co.electriccoin.zcash.ui.common.provider.NearOnrampZecDeliveryDriver
 import co.electriccoin.zcash.ui.common.provider.NearOnrampZecSwapGateway
 import co.electriccoin.zcash.ui.common.provider.NearPullbackOfframpRefund
-import co.electriccoin.zcash.ui.common.provider.NoRouteOnrampZecDeliveryDriver
 import co.electriccoin.zcash.ui.common.provider.OfframpBridgeWallet
 import co.electriccoin.zcash.ui.common.provider.OfframpCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.provider.OfframpCheckpointStorageProviderImpl
@@ -57,11 +53,7 @@ import co.electriccoin.zcash.ui.common.provider.OfframpTopUpCheckpointStoragePro
 import co.electriccoin.zcash.ui.common.provider.OfframpTopUpPreview
 import co.electriccoin.zcash.ui.common.provider.OnrampCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.provider.OnrampCheckpointStorageProviderImpl
-import co.electriccoin.zcash.ui.common.provider.OnrampUsdcBalanceReader
-import co.electriccoin.zcash.ui.common.provider.OnrampZecDeliveryCheckpointStore
 import co.electriccoin.zcash.ui.common.provider.OnrampZecDeliveryCheckpointStoreImpl
-import co.electriccoin.zcash.ui.common.provider.OnrampZecSwapGateway
-import co.electriccoin.zcash.ui.common.provider.OnrampZecTransferGateway
 import co.electriccoin.zcash.ui.common.provider.PeerCashOutCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.provider.PeerCashOutCheckpointStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.PeerPayeeHandleProvider
@@ -132,9 +124,17 @@ import xyz.justzappit.offramp.funding.OfframpRefund
 import xyz.justzappit.offramp.funding.OfframpTopUp
 import xyz.justzappit.offramp.funding.PreFundedOfframpFunding
 import xyz.justzappit.offramp.funding.SingleFlightOfframpTopUp
+import xyz.justzappit.offramp.onramp.Erc4337OnrampZecTransferGateway
+import xyz.justzappit.offramp.onramp.FakeOnrampZecDeliveryDriver
+import xyz.justzappit.offramp.onramp.NearOnrampZecDeliveryDriver
+import xyz.justzappit.offramp.onramp.NoRouteOnrampZecDeliveryDriver
 import xyz.justzappit.offramp.onramp.OnrampDeviceSignalsProvider
 import xyz.justzappit.offramp.onramp.OnrampScreeningSessionProvider
+import xyz.justzappit.offramp.onramp.OnrampUsdcBalanceReader
+import xyz.justzappit.offramp.onramp.OnrampZecDeliveryCheckpointStore
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryDriver
+import xyz.justzappit.offramp.onramp.OnrampZecSwapGateway
+import xyz.justzappit.offramp.onramp.OnrampZecTransferGateway
 import xyz.justzappit.offramp.p2p.DirectPixResolver
 import xyz.justzappit.offramp.p2p.DynamicPixResolver
 import xyz.justzappit.offramp.p2p.SubgraphClient
@@ -442,6 +442,7 @@ val providerModule =
                 transfer = get(),
                 swap = get(),
                 checkpoints = get(),
+                warn = get(named("offramp_warn")),
             )
         }
         single<OnrampZecDeliveryDriver> {

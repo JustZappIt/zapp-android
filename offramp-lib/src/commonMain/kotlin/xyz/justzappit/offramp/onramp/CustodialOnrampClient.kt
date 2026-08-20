@@ -58,10 +58,7 @@ class CustodialOnrampClient(
     // default (doNotTrack) is always sent, as an explicit null, because omitting it 500s the
     // service; a field defaulted to null (seonSession) is omitted entirely, which is the honest
     // encoding of "this device has no such signal". encodeDefaults = false is what draws that line.
-    private val requestJson =
-        Json {
-            encodeDefaults = false
-        }
+    private val requestJson = ONRAMP_REQUEST_JSON
 
     /**
      * Corridor configuration. [currency] is required to get the right one: the service serves every
@@ -244,6 +241,11 @@ class CustodialOnrampClient(
         const val HEADER_SIGNATURE = "x-p2p-signature"
     }
 }
+
+internal val ONRAMP_REQUEST_JSON =
+    Json {
+        encodeDefaults = false
+    }
 
 @Serializable
 internal data class QuoteRequestDto(

@@ -3,7 +3,6 @@
 
 package co.electriccoin.zcash.ui.common.provider
 
-import co.electriccoin.zcash.ui.common.model.SwapStatus
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import xyz.justzappit.evm.rpc.TransactionReceipt
@@ -12,10 +11,20 @@ import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.evm.types.Wei
 import xyz.justzappit.offramp.account.SubmittingAccount
+import xyz.justzappit.offramp.onramp.Erc4337OnrampZecTransferGateway
 import xyz.justzappit.offramp.onramp.FundsLocation
+import xyz.justzappit.offramp.onramp.NearOnrampZecDeliveryDriver
+import xyz.justzappit.offramp.onramp.OnrampBaseTransferReceipt
+import xyz.justzappit.offramp.onramp.OnrampUsdcBalanceReader
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryCheckpoint
+import xyz.justzappit.offramp.onramp.OnrampZecDeliveryCheckpointStore
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryPhase
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryStatus
+import xyz.justzappit.offramp.onramp.OnrampZecSwapGateway
+import xyz.justzappit.offramp.onramp.OnrampZecSwapResult
+import xyz.justzappit.offramp.onramp.OnrampZecTransferGateway
+import xyz.justzappit.offramp.onramp.SwapStatus
+import xyz.justzappit.offramp.onramp.ValidatedZecSwapQuote
 import xyz.justzappit.offramp.p2p.Erc20Calls
 import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.test.Test
