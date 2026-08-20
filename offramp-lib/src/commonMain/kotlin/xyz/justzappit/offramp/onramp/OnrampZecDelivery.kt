@@ -83,13 +83,17 @@ fun OnrampZecDeliveryCheckpoint.restartedAfterRefund() =
     )
 
 /**
- * Where a checkpoint proves the money is, from durable evidence alone. A mined Base transaction is
- * the only proof the deposit reached the intent; a started-but-unproven transfer stays ambiguous so
- * no caller can claim either side of it.
+ * Where a checkpoint proves the money is, from durable evidence alone. A phase the delivery already
+ * settled into outranks the hashes that got it there, so a delivered or refunded checkpoint is never
+ * described as still in flight. Below that, a mined Base transaction is the only proof the deposit
+ * reached the intent; a started-but-unproven transfer stays ambiguous so no caller can claim either
+ * side of it.
  */
 val OnrampZecDeliveryCheckpoint.fundsLocation: FundsLocation
     get() =
         when {
+            phase == OnrampZecDeliveryPhase.DELIVERED -> FundsLocation.ZCASH_WALLET
+            phase == OnrampZecDeliveryPhase.REFUNDED_TO_BASE -> FundsLocation.BASE_REFUND_CONFIRMED
             baseTransactionHash != null -> FundsLocation.NEAR_INTENT
             transferStarted -> FundsLocation.TRANSFER_AMBIGUOUS
             else -> FundsLocation.BASE_ACCOUNT

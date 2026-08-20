@@ -135,6 +135,34 @@ class OnrampCheckpointTest {
         }
     }
 
+    @Test
+    fun `a settled phase outranks the transfer hash that got it there`() {
+        assertEquals(
+            FundsLocation.ZCASH_WALLET,
+            validCheckpoint(OnrampZecDeliveryPhase.DELIVERED).fundsLocation,
+        )
+        assertEquals(
+            FundsLocation.BASE_REFUND_CONFIRMED,
+            validCheckpoint(OnrampZecDeliveryPhase.REFUNDED_TO_BASE).fundsLocation,
+        )
+    }
+
+    @Test
+    fun `an unsettled phase is still located by its durable evidence`() {
+        assertEquals(
+            FundsLocation.NEAR_INTENT,
+            validCheckpoint(OnrampZecDeliveryPhase.AWAITING_ZEC).fundsLocation,
+        )
+        assertEquals(
+            FundsLocation.TRANSFER_AMBIGUOUS,
+            validCheckpoint(OnrampZecDeliveryPhase.TRANSFER_STARTING).fundsLocation,
+        )
+        assertEquals(
+            FundsLocation.BASE_ACCOUNT,
+            validCheckpoint(OnrampZecDeliveryPhase.FUNDS_ON_BASE).fundsLocation,
+        )
+    }
+
     private fun validCheckpoint(
         phase: OnrampZecDeliveryPhase,
         version: Int = 1,
