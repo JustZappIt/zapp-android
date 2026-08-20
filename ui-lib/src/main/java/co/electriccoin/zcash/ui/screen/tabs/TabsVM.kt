@@ -24,6 +24,7 @@ import co.electriccoin.zcash.ui.screen.settings.p2p.P2pPaymentMethodArgs
 import co.electriccoin.zcash.ui.screen.settings.p2p.P2pTransactionsArgs
 import co.electriccoin.zcash.ui.screen.settings.portfoliochart.PortfolioChartSettingsArgs
 import co.electriccoin.zcash.ui.screen.tor.settings.TorSettingsArgs
+import co.electriccoin.zcash.ui.screen.viewingkeyexport.ViewingKeyExportArgs
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
@@ -100,6 +101,8 @@ class TabsVM(
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
             initialValue = false
         )
+
+    fun onViewingKeyExportClick() = navigationRouter.forward(ViewingKeyExportArgs)
 
     fun onRestoreWalletClick() = navigationRouter.forward(RestoreSeedArgs)
 

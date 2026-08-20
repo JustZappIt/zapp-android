@@ -3,8 +3,8 @@
 
 package co.electriccoin.zcash.ui.screen.chat.profile
 
+import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.design.util.StringResource
-import co.electriccoin.zcash.ui.screen.chat.common.ChatPinVerifyState
 
 data class ChatProfileState(
     val title: StringResource,
@@ -21,7 +21,7 @@ data class ChatProfileState(
     val editNameDialog: ChatProfileEditNameDialogState?,
     val deleteDialog: ChatProfileDeleteDialogState?,
     val seedPhraseDialog: ChatProfileSeedPhraseDialogState?,
-    val pinVerify: ChatPinVerifyState?,
+    val pinVerify: PinVerifyState?,
 )
 
 data class ChatProfileEditNameDialogState(

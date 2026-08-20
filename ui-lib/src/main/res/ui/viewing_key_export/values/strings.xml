@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_viewing_key_export">Export viewing key</string>
+    <string name="settings_viewing_key_export_subtitle">Create view-only access for dashboards and accounting tools</string>
+
+    <string name="viewing_key_export_title">Export viewing key</string>
+    <string name="viewing_key_export_cannot_spend">Viewing keys cannot spend funds.</string>
+    <string name="viewing_key_export_intro">A viewing key lets a compatible dashboard or accounting tool scan some or all activity for this account.</string>
+    <string name="viewing_key_export_irrevocable_warning">A full viewing key reveals past and future account activity. Access continues for future activity and cannot be revoked without moving funds to a new wallet account.</string>
+    <string name="viewing_key_export_account_label">Account</string>
+    <string name="viewing_key_export_account_index">Account %1$d</string>
+    <string name="viewing_key_export_access_level_label">Access level</string>
+    <string name="viewing_key_export_ufvk_title">Full viewing key (UFVK)</string>
+    <string name="viewing_key_export_ufvk_description">Incoming and outgoing activity, spentness and balances. Appropriate for accounting.</string>
+    <string name="viewing_key_export_ufvk_warning">Exposes incoming and outgoing activity, including future activity, and cannot be revoked.</string>
+    <string name="viewing_key_export_uivk_title">Incoming viewing key (UIVK)</string>
+    <string name="viewing_key_export_uivk_description">Incoming payments only. A safer choice for payment dashboards.</string>
+    <string name="viewing_key_export_uivk_warning">Incoming-only access may not calculate an accurate spendable balance.</string>
+    <string name="viewing_key_export_unavailable">This key type is not available for the selected account.</string>
+    <string name="viewing_key_export_acknowledgement">I understand what this viewing key reveals, that access continues for future activity, and that disclosure cannot be revoked.</string>
+    <string name="viewing_key_export_reveal">Authenticate and reveal</string>
+    <string name="viewing_key_export_authenticating">Authenticating…</string>
+    <string name="viewing_key_export_auth_prompt">Authenticate to reveal your Zcash viewing key</string>
+    <string name="viewing_key_export_revealed_label">Viewing key</string>
+    <string name="viewing_key_export_copy">Copy raw key</string>
+    <string name="viewing_key_export_share">Share viewing key</string>
+    <string name="viewing_key_export_share_picker">Share viewing key</string>
+    <string name="viewing_key_export_hide">Hide key</string>
+    <string name="viewing_key_export_compatibility_note">Make sure the receiving dashboard supports Zcash unified viewing keys.</string>
+    <string name="viewing_key_export_load_failed">Viewing-key details could not be loaded.</string>
+    <string name="viewing_key_export_auth_failed">Authentication was not completed. The key remains hidden.</string>
+    <string name="viewing_key_export_key_unavailable">The selected viewing key is unavailable.</string>
+    <string name="viewing_key_export_share_failed">The viewing key could not be shared.</string>
+</resources>

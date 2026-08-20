@@ -106,6 +106,7 @@ android {
                     "src/main/res/ui/offramp",
                     "src/main/res/ui/peer_offramp",
                     "src/main/res/ui/unified_send",
+                    "src/main/res/ui/viewing_key_export",
                 )
             )
         }
