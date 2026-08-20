@@ -168,6 +168,7 @@ private fun ZappTabsScaffoldContent() {
                         onP2pPaymentMethodClick = tabsVM::onP2pPaymentMethodClick,
                         onBaseAccountClick = tabsVM::onBaseAccountClick,
                         onPortfolioChartClick = tabsVM::onPortfolioChartClick,
+                        onViewingKeyExportClick = tabsVM::onViewingKeyExportClick,
                     )
                 }
             }

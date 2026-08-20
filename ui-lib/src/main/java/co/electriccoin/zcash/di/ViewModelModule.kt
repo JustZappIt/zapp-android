@@ -100,6 +100,7 @@ import co.electriccoin.zcash.ui.screen.transactionhistory.widget.ActivityWidgetV
 import co.electriccoin.zcash.ui.screen.transactionnote.viewmodel.TransactionNoteViewModel
 import co.electriccoin.zcash.ui.screen.transactionprogress.TransactionProgressVM
 import co.electriccoin.zcash.ui.screen.unifiedsend.UnifiedSendVM
+import co.electriccoin.zcash.ui.screen.viewingkeyexport.ViewingKeyExportVM
 import co.electriccoin.zcash.ui.screen.walletbackup.WalletBackupViewModel
 import co.electriccoin.zcash.ui.screen.warning.viewmodel.StorageCheckViewModel
 import co.electriccoin.zcash.ui.screen.welcome.WelcomeGateVM
@@ -123,6 +124,7 @@ val viewModelModule =
         viewModelOf(::RestoreSeedVM)
         viewModelOf(::MoreVM)
         viewModelOf(::AdvancedSettingsVM)
+        viewModelOf(::ViewingKeyExportVM)
         viewModelOf(::SupportViewModel)
         viewModelOf(::WhatsNewViewModel)
         viewModelOf(::ChooseServerVM)

@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
@@ -98,6 +99,7 @@ internal fun SettingsTabContent(
     onP2pPaymentMethodClick: () -> Unit,
     onBaseAccountClick: () -> Unit,
     onPortfolioChartClick: () -> Unit,
+    onViewingKeyExportClick: () -> Unit,
     walletViewModel: WalletViewModel = koinViewModel(),
 ) {
     val scope = rememberCoroutineScope()
@@ -267,6 +269,15 @@ internal fun SettingsTabContent(
                             )
                             ZappRowDivider(inset = true)
                         }
+                        ZappRow(
+                            title = stringResource(R.string.settings_viewing_key_export),
+                            subtitle = stringResource(R.string.settings_viewing_key_export_subtitle),
+                            icon = Icons.Default.Visibility,
+                            iconTint = c.accentText,
+                            iconBackground = c.accentSoft,
+                            onClick = onViewingKeyExportClick,
+                        )
+                        ZappRowDivider(inset = true)
                         ZappRow(
                             title = stringResource(R.string.choose_server_title),
                             subtitle = stringResource(R.string.settings_server_subtitle),

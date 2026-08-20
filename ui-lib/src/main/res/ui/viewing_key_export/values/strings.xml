@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_viewing_key_export">Export viewing key</string>
+    <string name="settings_viewing_key_export_subtitle">Create view-only access for dashboards and accounting tools</string>
+
+    <string name="viewing_key_export_title">Export viewing key</string>
+    <string name="viewing_key_export_subtitle">Read-only access. Cannot spend funds.</string>
+    <string name="viewing_key_export_info_content_description">About viewing keys</string>
+    <string name="viewing_key_export_account_label">Account</string>
+    <string name="viewing_key_export_account_index">Account %1$d</string>
+    <string name="viewing_key_export_access_level_label">Access level</string>
+    <string name="viewing_key_export_ufvk_title">Full viewing key (UFVK)</string>
+    <string name="viewing_key_export_ufvk_description">All activity, spends and balances</string>
+    <string name="viewing_key_export_uivk_title">Incoming viewing key (UIVK)</string>
+    <string name="viewing_key_export_uivk_description">Incoming payments only</string>
+    <string name="viewing_key_export_unavailable">Not available for this account</string>
+    <string name="viewing_key_export_acknowledgement">I understand what this reveals, and that it cannot be undone.</string>
+    <string name="viewing_key_export_reveal">Authenticate and reveal</string>
+    <string name="viewing_key_export_authenticating">Authenticating…</string>
+    <string name="viewing_key_export_auth_prompt">Authenticate to reveal your Zcash viewing key</string>
+    <string name="viewing_key_export_revealed_label">Viewing key</string>
+    <string name="viewing_key_export_copy">Copy raw key</string>
+    <string name="viewing_key_export_share">Share viewing key</string>
+    <string name="viewing_key_export_share_picker">Share viewing key</string>
+    <string name="viewing_key_export_hide">Hide key</string>
+
+    <!-- Info sheet. The detail the screen itself deliberately does not carry. -->
+    <string name="viewing_key_export_info_title">About viewing keys</string>
+    <string name="viewing_key_export_info_intro">A viewing key gives a dashboard or accounting tool read-only access to this account. It can never spend your funds.</string>
+    <string name="viewing_key_export_info_ufvk_body">Shows incoming and outgoing payments, spends and balances. Appropriate for accounting.</string>
+    <string name="viewing_key_export_info_uivk_body">Shows incoming payments only. It cannot see what you spend, so a balance calculated from it may read higher than it is.</string>
+    <string name="viewing_key_export_info_irrevocable_title">This cannot be undone</string>
+    <string name="viewing_key_export_info_irrevocable_body">Access continues for all future activity. The only way to revoke it is to move your funds to a new wallet account.</string>
+    <string name="viewing_key_export_info_compatibility">Make sure the receiving tool supports Zcash unified viewing keys.</string>
+
+    <string name="viewing_key_export_load_failed">Viewing-key details could not be loaded.</string>
+    <string name="viewing_key_export_auth_failed">Authentication was not completed. The key remains hidden.</string>
+    <string name="viewing_key_export_key_unavailable">The selected viewing key is unavailable.</string>
+    <string name="viewing_key_export_share_failed">The viewing key could not be shared.</string>
+</resources>

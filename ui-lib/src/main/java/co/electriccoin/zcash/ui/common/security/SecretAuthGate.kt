@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
 
-package co.electriccoin.zcash.ui.screen.chat.common
+package co.electriccoin.zcash.ui.common.security
 
+import androidx.biometric.BiometricManager
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
 import co.electriccoin.zcash.preference.StandardPreferenceProvider
 import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.common.repository.BiometricRequest
 import co.electriccoin.zcash.ui.common.repository.BiometricsCancelledException
 import co.electriccoin.zcash.ui.common.repository.BiometricsFailureException
-import co.electriccoin.zcash.ui.common.security.PinAuthGate
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.preference.AuthMethod
 import co.electriccoin.zcash.ui.preference.getAuthMethod
@@ -22,12 +22,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-data class ChatPinVerifyState(
+data class PinVerifyState(
     val hasError: Boolean,
     val lockoutSecondsRemaining: Int,
     val onPinSubmit: (String) -> Unit,
     val onCancel: () -> Unit,
 )
+
+enum class SecretAuthPolicy {
+    ALLOW_UNCONFIGURED,
+    REQUIRE_AUTHENTICATION,
+}
 
 /**
  * Gates a secret reveal behind whichever app lock the user configured. [pinPrompt] carries the PIN
@@ -35,29 +40,47 @@ data class ChatPinVerifyState(
  */
 class SecretAuthGate(
     private val biometricRepository: BiometricRepository,
+    private val biometricManager: BiometricManager,
     private val standardPreferenceProvider: StandardPreferenceProvider,
     private val encryptedPreferenceProvider: EncryptedPreferenceProvider,
 ) {
-    private val prompt = MutableStateFlow<ChatPinVerifyState?>(null)
+    private val prompt = MutableStateFlow<PinVerifyState?>(null)
 
-    val pinPrompt: StateFlow<ChatPinVerifyState?> = prompt.asStateFlow()
+    val pinPrompt: StateFlow<PinVerifyState?> = prompt.asStateFlow()
 
-    suspend fun authenticate(promptMessage: StringResource): Boolean =
+    suspend fun authenticate(
+        promptMessage: StringResource,
+        policy: SecretAuthPolicy = SecretAuthPolicy.ALLOW_UNCONFIGURED,
+    ): Boolean =
         when (standardPreferenceProvider().getAuthMethod()) {
-            AuthMethod.BIOMETRIC -> authenticateWithBiometrics(promptMessage)
+            AuthMethod.BIOMETRIC -> authenticateWithBiometrics(promptMessage, policy)
             AuthMethod.PIN -> authenticateWithPin()
-            AuthMethod.NONE -> true
+            AuthMethod.NONE -> policy == SecretAuthPolicy.ALLOW_UNCONFIGURED
         }
 
-    private suspend fun authenticateWithBiometrics(promptMessage: StringResource): Boolean =
-        try {
-            biometricRepository.requestBiometrics(BiometricRequest(message = promptMessage))
-            true
-        } catch (_: BiometricsFailureException) {
+    private suspend fun authenticateWithBiometrics(
+        promptMessage: StringResource,
+        policy: SecretAuthPolicy,
+    ): Boolean =
+        if (
+            policy == SecretAuthPolicy.REQUIRE_AUTHENTICATION &&
+            !isBiometricAuthenticationAvailable()
+        ) {
             false
-        } catch (_: BiometricsCancelledException) {
-            false
+        } else {
+            try {
+                biometricRepository.requestBiometrics(BiometricRequest(message = promptMessage))
+                policy == SecretAuthPolicy.ALLOW_UNCONFIGURED || isBiometricAuthenticationAvailable()
+            } catch (_: BiometricsFailureException) {
+                false
+            } catch (_: BiometricsCancelledException) {
+                false
+            }
         }
+
+    private fun isBiometricAuthenticationAvailable(): Boolean =
+        biometricManager.canAuthenticate(biometricRepository.allowedAuthenticators) ==
+            BiometricManager.BIOMETRIC_SUCCESS
 
     private suspend fun authenticateWithPin(): Boolean =
         coroutineScope {
@@ -69,7 +92,7 @@ class SecretAuthGate(
                 lockoutSecondsRemaining: Int,
             ) {
                 prompt.value =
-                    ChatPinVerifyState(
+                    PinVerifyState(
                         hasError = hasError,
                         lockoutSecondsRemaining = lockoutSecondsRemaining,
                         onPinSubmit = { pin ->

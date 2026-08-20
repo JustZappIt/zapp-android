@@ -26,6 +26,8 @@ class AboutViewTestSetup(
                     configInfo = configInfo,
                     onPrivacyPolicy = {},
                     onTermsOfUse = {},
+                    onLicense = {},
+                    onSourceCode = {},
                     versionInfo = versionInfo,
                 )
             }
