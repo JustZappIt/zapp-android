@@ -100,6 +100,7 @@ class GiftClaimVM(
                             },
                         amount = Zatoshi(preview.payload.amountZatoshi.toLong()),
                         message = preview.payload.message,
+                        expiry = preview.payload.expiresAt.toGiftExpiryDisplay(),
                         blocksToScan = (preview.verdict as? GiftBirthdayVerdict.NeedsConsent)?.blocksToScan,
                         error = null,
                     )
@@ -178,6 +179,7 @@ class GiftClaimVM(
             stage = stage,
             amount = amount,
             message = message,
+            expiry = expiry,
             blocksToScan = blocksToScan,
             progressFraction = progressFraction,
             blocksRemaining = blocksRemaining,
@@ -218,6 +220,7 @@ private data class GiftClaimSnapshot(
     val stage: GiftClaimStage = GiftClaimStage.LOADING,
     val amount: Zatoshi? = null,
     val message: String? = null,
+    val expiry: GiftExpiryDisplay? = null,
     val blocksToScan: Long? = null,
     val progressFraction: Float? = null,
     val blocksRemaining: Long? = null,

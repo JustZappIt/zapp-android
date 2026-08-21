@@ -97,23 +97,23 @@ object GiftCardLedger {
         }
 
     /**
+     * Marks a card as collected, once its own wallet has been observed empty. Requires a funding
+     * txid: a card with no transaction behind it was never claimable, so an empty wallet there
+     * means it was never funded, not that somebody took it.
+     */
+    fun markClaimed(cards: List<StoredGiftCard>, id: String, at: String): List<StoredGiftCard> =
+        cards.replacing(id) { card ->
+            ensure(card.fundingTxid != null, "Gift card $id has not been funded yet")
+            card.advancedTo(GiftCardStatus.CLAIMED, at)
+        }
+
+    /**
      * Hides a card from the active list. Deliberately keeps the record and its key material: for an
      * unshared card this is the only path back to the funds, and archiving is a tidying gesture,
      * not a decision to burn money.
      */
     fun archive(cards: List<StoredGiftCard>, id: String, at: String): List<StoredGiftCard> =
         cards.replacing(id) { card -> card.copy(archivedAt = card.archivedAt ?: at, updatedAt = at) }
-
-    /**
-     * Whether [accountUuid] — or any account, when it is null — still owns funds that only this
-     * device knows how to reach. That is the condition that must block deleting the account, and
-     * with a null [accountUuid] the one that must block wiping the wallet, which clears them all.
-     *
-     * Archived cards count. Archiving hides a card; it does not move its money, and there is no
-     * reclaim, so treating an archived card as settled would let the funds be destroyed silently.
-     */
-    fun hasUnsharedFunds(cards: List<StoredGiftCard>, accountUuid: String? = null): Boolean =
-        cards.any { it.isUnsharedFunds && (accountUuid == null || it.sourceAccountUuid == accountUuid) }
 
     private fun List<StoredGiftCard>.replacing(
         id: String,
@@ -134,3 +134,14 @@ object GiftCardLedger {
         if (!condition) throw GiftCardTransitionException(message)
     }
 }
+
+/**
+ * Whether [accountUuid] — or any account, when it is null — still owns funds that only this device
+ * knows how to reach. That is the condition that must block deleting the account, and with a null
+ * [accountUuid] the one that must block wiping the wallet, which clears them all.
+ *
+ * Archived cards count. Archiving hides a card; it does not move its money, and there is no
+ * reclaim, so treating an archived card as settled would let the funds be destroyed silently.
+ */
+fun hasUnsharedFunds(cards: List<StoredGiftCard>, accountUuid: String? = null): Boolean =
+    cards.any { it.isUnsharedFunds && (accountUuid == null || it.sourceAccountUuid == accountUuid) }

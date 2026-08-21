@@ -69,6 +69,8 @@ import co.electriccoin.zcash.ui.common.provider.PreferredFiatProviderImpl
 import co.electriccoin.zcash.ui.common.provider.PreferredP2pPaymentMethodProvider
 import co.electriccoin.zcash.ui.common.provider.PreferredP2pPaymentMethodProviderImpl
 import co.electriccoin.zcash.ui.common.provider.RealOfframpBridgeWallet
+import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
+import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.RestoreTimestampStorageProvider
 import co.electriccoin.zcash.ui.common.provider.RestoreTimestampStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.SelectedAccountUUIDProvider
@@ -226,6 +228,7 @@ val providerModule =
         singleOf(::GiftCardStorageProviderImpl) bind GiftCardStorageProvider::class
         singleOf(::GiftKeyProviderImpl) bind GiftKeyProvider::class
         singleOf(::PendingGiftLinkStore)
+        singleOf(::ReceivedGiftStorageProviderImpl) bind ReceivedGiftStorageProvider::class
         single<HttpClient>(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)) {
             // Pipe ktor's Logging plugin output through Twig so subgraph + RPC errors land in
             // logcat under our "Twig" tag with the OfframpHttp prefix. Without this, transport

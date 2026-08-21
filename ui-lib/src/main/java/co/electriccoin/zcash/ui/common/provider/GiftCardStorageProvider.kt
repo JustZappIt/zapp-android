@@ -6,6 +6,7 @@ package co.electriccoin.zcash.ui.common.provider
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
 import co.electriccoin.zcash.ui.screen.gift.model.GiftCardLedger
 import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
+import co.electriccoin.zcash.ui.screen.gift.model.hasUnsharedFunds
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
@@ -20,7 +21,11 @@ import kotlinx.serialization.builtins.ListSerializer
  * the funds. It is also excluded from Android Auto Backup by construction — the backup configs are
  * allowlists naming only `address_book`, so `domain="sharedpref"` is not backed up. Never add a
  * `sharedpref` include.
+ *
+ * One method per legal ledger transition. Collapsing them into a generic mutator is what the
+ * per-transition guards exist to prevent.
  */
+@Suppress("TooManyFunctions")
 interface GiftCardStorageProvider {
     fun observe(): Flow<List<StoredGiftCard>>
 
@@ -41,17 +46,25 @@ interface GiftCardStorageProvider {
 
     suspend fun markShared(id: String, at: String)
 
+    /** Records that the card's own wallet was observed empty, so its funds are settled. */
+    suspend fun markClaimed(id: String, at: String)
+
     suspend fun archive(id: String, at: String)
 
     /**
      * True while [accountUuid] — or any account, when it is null — owns funded cards whose links
      * were never shared. Blocks deleting that account, and blocks the wallet wipe, which clears
      * this whole store.
+     *
+     * Stays a member rather than an extension so tests can substitute it.
      */
     suspend fun hasUnsharedFunds(accountUuid: String? = null): Boolean =
-        GiftCardLedger.hasUnsharedFunds(getAll(), accountUuid)
+        hasUnsharedFunds(getAll(), accountUuid)
 }
 
+// One method per legal ledger transition. Collapsing them into a generic mutator is what the
+// per-transition guards exist to prevent.
+@Suppress("TooManyFunctions")
 internal class GiftCardStorageProviderImpl(
     encryptedPreferenceProvider: EncryptedPreferenceProvider,
 ) : GiftCardStorageProvider {
@@ -84,6 +97,8 @@ internal class GiftCardStorageProviderImpl(
         mutate { GiftCardLedger.markFunded(it, id, fundingTxid, at) }
 
     override suspend fun markShared(id: String, at: String) = mutate { GiftCardLedger.markShared(it, id, at) }
+
+    override suspend fun markClaimed(id: String, at: String) = mutate { GiftCardLedger.markClaimed(it, id, at) }
 
     override suspend fun archive(id: String, at: String) = mutate { GiftCardLedger.archive(it, id, at) }
 

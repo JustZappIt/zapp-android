@@ -181,10 +181,10 @@ class GiftCardLedgerTest {
         val funded = GiftCardLedger.markFunded(listOf(card(id = "funded")), "funded", TXID, LATER)
         val shared = GiftCardLedger.markShared(funded, "funded", LATER)
 
-        assertFalse(GiftCardLedger.hasUnsharedFunds(listOf(draft), ACCOUNT))
-        assertTrue(GiftCardLedger.hasUnsharedFunds(submitted, ACCOUNT))
-        assertTrue(GiftCardLedger.hasUnsharedFunds(funded, ACCOUNT))
-        assertFalse(GiftCardLedger.hasUnsharedFunds(shared, ACCOUNT))
+        assertFalse(hasUnsharedFunds(listOf(draft), ACCOUNT))
+        assertTrue(hasUnsharedFunds(submitted, ACCOUNT))
+        assertTrue(hasUnsharedFunds(funded, ACCOUNT))
+        assertFalse(hasUnsharedFunds(shared, ACCOUNT))
     }
 
     @Test
@@ -194,15 +194,15 @@ class GiftCardLedgerTest {
         val archived = GiftCardLedger.archive(funded, ID, LATER)
 
         // Archiving hides a card. It does not move its money, and there is no reclaim.
-        assertTrue(GiftCardLedger.hasUnsharedFunds(archived, ACCOUNT))
+        assertTrue(hasUnsharedFunds(archived, ACCOUNT))
     }
 
     @Test
     fun `scopes unshared funds to the owning account`() {
         val funded = GiftCardLedger.markFunded(listOf(card()), ID, TXID, LATER)
 
-        assertTrue(GiftCardLedger.hasUnsharedFunds(funded, ACCOUNT))
-        assertFalse(GiftCardLedger.hasUnsharedFunds(funded, "some-other-account"))
+        assertTrue(hasUnsharedFunds(funded, ACCOUNT))
+        assertFalse(hasUnsharedFunds(funded, "some-other-account"))
     }
 
     @Test
@@ -210,10 +210,10 @@ class GiftCardLedgerTest {
         val funded = GiftCardLedger.markFunded(listOf(card()), ID, TXID, LATER)
 
         // What a wallet wipe has to ask: it clears every account's cards at once.
-        assertTrue(GiftCardLedger.hasUnsharedFunds(funded))
-        assertFalse(GiftCardLedger.hasUnsharedFunds(GiftCardLedger.markShared(funded, ID, LATER)))
-        assertFalse(GiftCardLedger.hasUnsharedFunds(listOf(card())))
-        assertFalse(GiftCardLedger.hasUnsharedFunds(emptyList()))
+        assertTrue(hasUnsharedFunds(funded))
+        assertFalse(hasUnsharedFunds(GiftCardLedger.markShared(funded, ID, LATER)))
+        assertFalse(hasUnsharedFunds(listOf(card())))
+        assertFalse(hasUnsharedFunds(emptyList()))
     }
 
     @Test
@@ -223,8 +223,8 @@ class GiftCardLedgerTest {
         // No txid was ever written, but the money may already have left. Guessing "unfunded" here
         // is what would let the wallet be wiped out from under it.
         assertNull(attempted.single().fundingTxid)
-        assertTrue(GiftCardLedger.hasUnsharedFunds(attempted))
-        assertTrue(GiftCardLedger.hasUnsharedFunds(attempted, ACCOUNT))
+        assertTrue(hasUnsharedFunds(attempted))
+        assertTrue(hasUnsharedFunds(attempted, ACCOUNT))
     }
 
     @Test
@@ -236,12 +236,46 @@ class GiftCardLedgerTest {
         assertNull(GiftCardLedger.markFunded(attempted, ID, TXID, LATER).single().fundingAttemptedAt)
         // And a rejection clears it outright: nothing was sent.
         assertNull(GiftCardLedger.setFundingAttemptedAt(attempted, ID, null).single().fundingAttemptedAt)
-        assertFalse(GiftCardLedger.hasUnsharedFunds(GiftCardLedger.setFundingAttemptedAt(attempted, ID, null)))
+        assertFalse(hasUnsharedFunds(GiftCardLedger.setFundingAttemptedAt(attempted, ID, null)))
     }
 
     @Test
     fun `keeps the mnemonic out of toString`() {
         assertFalse(card().toString().contains(MNEMONIC))
+    }
+
+    @Test
+    fun `marks a shared card collected`() {
+        val cards = listOf(card(status = GiftCardStatus.SHARED, txid = TXID))
+
+        val claimed = GiftCardLedger.markClaimed(cards, ID, LATER).single()
+
+        assertEquals(GiftCardStatus.CLAIMED, claimed.status)
+    }
+
+    @Test
+    fun `refuses to mark an unfunded card collected`() {
+        // An empty wallet on a card that was never funded means nobody took anything.
+        assertFailsWith<GiftCardTransitionException> {
+            GiftCardLedger.markClaimed(listOf(card()), ID, LATER)
+        }
+    }
+
+    @Test
+    fun `a collected card no longer holds unshared funds`() {
+        val cards = GiftCardLedger.markClaimed(listOf(card(status = GiftCardStatus.SHARED, txid = TXID)), ID, LATER)
+
+        // Blocking a wallet reset over money somebody already took would be a false alarm.
+        assertFalse(hasUnsharedFunds(cards))
+    }
+
+    @Test
+    fun `a collected card cannot regress to shared`() {
+        val cards = GiftCardLedger.markClaimed(listOf(card(status = GiftCardStatus.SHARED, txid = TXID)), ID, LATER)
+
+        val reshared = GiftCardLedger.markShared(cards, ID, LATEST).single()
+
+        assertEquals(GiftCardStatus.CLAIMED, reshared.status)
     }
 
     private fun card(

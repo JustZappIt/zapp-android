@@ -112,6 +112,7 @@
     <string name="gift_claim_error_failed">The gift could not be claimed. Nothing was lost; try again.</string>
     <string name="gift_claim_error_not_ready">Zapp is still connecting to the Zcash network. Your gift is fine — try again in a moment.</string>
     <string name="gift_claim_error_expired">This gift link is no longer open. Tap it again where you received it.</string>
+    <string name="gift_claim_expired_note">This card is past its suggested expiry. That is advisory only — it still claims for the full amount.</string>
     <string name="gift_claim_progress_remaining">%1$d blocks left</string>
     <string name="gift_claim_pending_count">%1$d / %2$d confirmations</string>
 
@@ -120,19 +121,27 @@
     <string name="gift_card_list_open">Your gift cards</string>
     <string name="gift_card_list_empty">No gift cards yet. Cards you create stay here until you have shared their links.</string>
     <string name="gift_card_list_warning">These links are the only way to reach the funds. Zapp cannot rebuild them from your recovery phrase.</string>
+    <string name="gift_card_list_received_title">Gifts you collected</string>
+    <string name="gift_card_list_received_on">Collected %1$s</string>
     <string name="gift_card_list_status_unfunded">Not funded</string>
     <string name="gift_card_list_status_unresolved">Funding status unknown — check before re-funding</string>
     <string name="gift_card_list_status_submitted">Funding, not yet mined</string>
     <string name="gift_card_list_status_funded">Ready to share</string>
     <string name="gift_card_list_status_shared">Link shared</string>
+    <string name="gift_card_list_expires">Expires %1$s</string>
+    <string name="gift_card_list_expired">Expired %1$s — still claimable</string>
+    <string name="gift_card_list_status_claimed">Collected</string>
     <string name="gift_card_list_copy">Copy gift link</string>
     <string name="gift_card_list_share">Share link</string>
     <string name="gift_card_list_share_picker">Share gift link</string>
     <string name="gift_card_list_archive">Archive</string>
+    <string name="gift_card_list_check">Check if collected</string>
+    <string name="gift_card_list_checking">Checking…</string>
     <string name="gift_card_list_archived_badge">Archived</string>
     <string name="gift_card_list_show_archived">Show archived</string>
     <string name="gift_card_list_hide_archived">Hide archived</string>
     <string name="gift_card_list_error_link">This card\'s link could not be rebuilt. Do not reset your wallet — contact support.</string>
     <string name="gift_card_list_error_share">The share sheet could not be opened. Copy the link instead.</string>
+    <string name="gift_card_list_error_check">Zapp could not finish checking this card. That says nothing about whether it was collected — try again later.</string>
     <string name="gift_card_list_corrupted">Your gift card records could not be read. Do not reset your wallet — contact support.</string>
 </resources>

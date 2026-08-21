@@ -180,7 +180,15 @@ private fun PreviewSection(state: GiftClaimState) {
         state.message?.let {
             ZappSummaryRow(label = stringResource(R.string.gift_claim_message_label), value = it)
         }
+        state.expiry?.let { expiry ->
+            ZappSummaryRow(
+                label = stringResource(R.string.gift_card_review_expiry_label),
+                value = expiry.date.getValue(),
+            )
+        }
     }
+    // An expiry is advisory: nothing on chain enforces it, so a card past its date still claims.
+    if (state.expiry?.isPast == true) Caption(R.string.gift_claim_expired_note)
     Caption(R.string.gift_claim_note)
 }
 
@@ -239,6 +247,7 @@ private fun GiftClaimPreview() =
                     stage = GiftClaimStage.PREVIEW,
                     amount = Zatoshi(10_000L),
                     message = "happy birthday",
+                    expiry = null,
                     blocksToScan = null,
                     progressFraction = 0.42f,
                     blocksRemaining = 12_340L,

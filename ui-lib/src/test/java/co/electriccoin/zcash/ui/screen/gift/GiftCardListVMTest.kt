@@ -6,11 +6,14 @@ package co.electriccoin.zcash.ui.screen.gift
 import cash.z.ecc.android.sdk.model.ZcashNetwork
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
+import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
+import co.electriccoin.zcash.ui.common.usecase.CheckGiftCardClaimedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
 import co.electriccoin.zcash.ui.screen.gift.model.GiftCardStatus
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkCodec
+import co.electriccoin.zcash.ui.screen.gift.model.ReceivedGift
 import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -110,6 +113,55 @@ class GiftCardListVMTest {
         }
 
     @Test
+    fun `refuses to hand out a card that was already collected`() =
+        runTest {
+            val fixture = fixture(card(fundingTxid = TXID, status = GiftCardStatus.CLAIMED))
+
+            val item = collectState(fixture).items.single()
+
+            // Its link is spent; passing it on hands the recipient a dead card.
+            assertEquals(GiftCardListStatus.CLAIMED, item.status)
+            assertNull(item.onCopy)
+            assertNull(item.onShare)
+            // Nothing left to check either.
+            assertNull(item.onCheck)
+        }
+
+    @Test
+    fun `offers a collected check only once a card has been funded`() =
+        runTest {
+            val unfunded = fixture(card())
+            assertNull(collectState(unfunded).items.single().onCheck)
+
+            val funded = fixture(card(fundingTxid = TXID))
+            assertNotNull(collectState(funded).items.single().onCheck)
+        }
+
+    @Test
+    fun `lists gifts collected from other people`() =
+        runTest {
+            val fixture =
+                fixture(
+                    card = card(),
+                    received =
+                        listOf(
+                            ReceivedGift(
+                                address = "u1someoneelsesgiftcardaddress",
+                                network = "main",
+                                amountZatoshi = 50_000_000L,
+                                claimedAt = "2026-08-21T09:00:00Z",
+                                claimTxids = listOf(TXID),
+                                message = "happy birthday",
+                            )
+                        ),
+                )
+
+            val received = collectState(fixture).received.single()
+
+            assertEquals("happy birthday", received.message)
+        }
+
+    @Test
     fun `renders rather than throwing when the store will not decode`() =
         runTest {
             val fixture = fixture(card(), storeThrows = true)
@@ -121,9 +173,13 @@ class GiftCardListVMTest {
         }
 
     /** The main dispatcher has to be in place before `viewModelScope` is touched. */
-    private fun TestScope.fixture(card: StoredGiftCard, storeThrows: Boolean = false): Fixture {
+    private fun TestScope.fixture(
+        card: StoredGiftCard,
+        storeThrows: Boolean = false,
+        received: List<ReceivedGift> = emptyList(),
+    ): Fixture {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        return Fixture(card, storeThrows)
+        return Fixture(card, storeThrows, received)
     }
 
     private fun TestScope.collectState(fixture: Fixture): GiftCardListState {
@@ -135,9 +191,16 @@ class GiftCardListVMTest {
     private class Fixture(
         card: StoredGiftCard,
         storeThrows: Boolean,
+        received: List<ReceivedGift> = emptyList(),
     ) {
         val copiedLink = slot<String>()
         val shareGiftLink = mockk<ShareGiftLinkUseCase>(relaxed = true)
+        val checkGiftCardClaimed = mockk<CheckGiftCardClaimedUseCase>(relaxed = true)
+
+        private val receivedStorage =
+            mockk<ReceivedGiftStorageProvider>().also {
+                every { it.observe() } returns MutableStateFlow(received)
+            }
 
         private val storage =
             mockk<GiftCardStorageProvider>().also { storage ->
@@ -159,6 +222,8 @@ class GiftCardListVMTest {
             GiftCardListVM(
                 giftCardStorageProvider = storage,
                 confirmGiftCardFunding = mockk<ConfirmGiftCardFundingUseCase>(relaxed = true),
+                checkGiftCardClaimed = checkGiftCardClaimed,
+                receivedGiftStorageProvider = receivedStorage,
                 shareGiftLink = shareGiftLink,
                 copyToClipboard = copyToClipboard,
                 navigationRouter = mockk<NavigationRouter>(relaxed = true),

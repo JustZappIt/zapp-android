@@ -10,13 +10,16 @@ import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
+import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
+import co.electriccoin.zcash.ui.common.usecase.CheckGiftCardClaimedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
+import co.electriccoin.zcash.ui.common.usecase.GiftCardCheckResult
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.design.util.stringResByDateTime
 import co.electriccoin.zcash.ui.screen.gift.model.GiftCardStatus
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkCodec
+import co.electriccoin.zcash.ui.screen.gift.model.ReceivedGift
 import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
 import co.electriccoin.zcash.ui.screen.gift.model.toLinkPayload
 import kotlinx.coroutines.CancellationException
@@ -30,8 +33,6 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.ZonedDateTime
-import java.time.format.DateTimeParseException
 import kotlin.time.Clock
 
 /**
@@ -45,6 +46,8 @@ import kotlin.time.Clock
 class GiftCardListVM(
     private val giftCardStorageProvider: GiftCardStorageProvider,
     private val confirmGiftCardFunding: ConfirmGiftCardFundingUseCase,
+    private val checkGiftCardClaimed: CheckGiftCardClaimedUseCase,
+    receivedGiftStorageProvider: ReceivedGiftStorageProvider,
     private val shareGiftLink: ShareGiftLinkUseCase,
     private val copyToClipboard: CopyToClipboardUseCase,
     private val navigationRouter: NavigationRouter,
@@ -53,6 +56,7 @@ class GiftCardListVM(
     private val copiedId = MutableStateFlow<String?>(null)
     private val errorFlow = MutableStateFlow<GiftCardListError?>(null)
     private val isCorrupted = MutableStateFlow(false)
+    private val checkingId = MutableStateFlow<String?>(null)
 
     private var copyFeedbackJob: Job? = null
     private var shareJob: Job? = null
@@ -68,17 +72,27 @@ class GiftCardListVM(
                 emit(emptyList())
             }
 
+    private val received =
+        receivedGiftStorageProvider
+            .observe()
+            .catch { throwable ->
+                // A receipt list that will not decode loses history, never money — render without.
+                Twig.warn(throwable) { "Received gift list could not be read" }
+                emit(emptyList())
+            }
+
     internal val state: StateFlow<GiftCardListState?> =
         combine(
             cards,
-            isShowingArchived,
-            copiedId,
+            combine(isShowingArchived, received) { showArchived, receipts -> showArchived to receipts },
+            combine(copiedId, checkingId) { copied, checking -> copied to checking },
             errorFlow,
             isCorrupted,
-        ) { all, showArchived, copied, err, corrupted ->
+        ) { all, (showArchived, receipts), (copied, checking), err, corrupted ->
             val visible = all.filter { showArchived || it.archivedAt == null }
             GiftCardListState(
-                items = visible.sortedWith(DISPLAY_ORDER).map { toItem(it, copied) },
+                items = visible.sortedWith(DISPLAY_ORDER).map { toItem(it, copied, checking) },
+                received = receipts.map { it.toReceivedItem() },
                 isCorrupted = corrupted,
                 hasArchived = all.any { it.archivedAt != null },
                 isShowingArchived = showArchived,
@@ -97,20 +111,25 @@ class GiftCardListVM(
         viewModelScope.launch { runCatching { confirmGiftCardFunding.reconcile() } }
     }
 
-    private fun toItem(card: StoredGiftCard, copiedId: String?): GiftCardListItem {
+    private fun toItem(card: StoredGiftCard, copiedId: String?, checkingId: String?): GiftCardListItem {
         val status = card.listStatus()
-        // An unfunded draft encodes into a link that looks real and pays nothing, and the recipient
-        // has no way to tell. Unresolved counts as handable: the money may already have gone, and
-        // if it has, the link is the only route to it.
-        val canHandOff = status != GiftCardListStatus.UNFUNDED
+        // An unfunded draft encodes into a link that looks real and pays nothing, and a collected
+        // card's link is spent — both hand the recipient something worthless. Unresolved counts as
+        // handable: the money may already have gone, and if it has, the link is the only route.
+        val canHandOff = status != GiftCardListStatus.UNFUNDED && status != GiftCardListStatus.CLAIMED
+        // One at a time: each check is a full scan of that card's wallet.
+        val canCheck = card.fundingTxid != null && status != GiftCardListStatus.CLAIMED && checkingId == null
         return GiftCardListItem(
             id = card.id,
             amount = stringRes(Zatoshi(card.amountZatoshi)),
-            createdAt = card.createdAt.toDisplayDate(),
+            createdAt = card.createdAt.toGiftDisplayDate(),
             message = card.message,
             status = status,
+            expiry = card.expiresAt.toGiftExpiryDisplay(),
             isArchived = card.archivedAt != null,
             isCopied = card.id == copiedId,
+            onCheck = { onCheck(card.id) }.takeIf { canCheck || card.id == checkingId },
+            isChecking = card.id == checkingId,
             onCopy = { onCopy(card.id) }.takeIf { canHandOff },
             onShare = { picker: String -> onShare(card.id, picker) }.takeIf { canHandOff },
             // Archiving a card that still counts as unshared funds would hide the very record that
@@ -145,6 +164,25 @@ class GiftCardListVM(
                     errorFlow.value = GiftCardListError.SHARE_FAILED
                 }
             }
+    }
+
+    private fun onCheck(cardId: String) {
+        if (checkingId.value != null) return
+        viewModelScope.launch {
+            checkingId.value = cardId
+            try {
+                val card = runCatching { giftCardStorageProvider.get(cardId) }.getOrNull()
+                val result =
+                    if (card == null) {
+                        GiftCardCheckResult.UNKNOWN
+                    } else {
+                        checkGiftCardClaimed(card) { }
+                    }
+                errorFlow.value = GiftCardListError.CHECK_FAILED.takeIf { result == GiftCardCheckResult.UNKNOWN }
+            } finally {
+                checkingId.value = null
+            }
+        }
     }
 
     private fun onArchive(cardId: String) {
@@ -184,19 +222,20 @@ class GiftCardListVM(
     }
 }
 
+private fun ReceivedGift.toReceivedItem() =
+    ReceivedGiftItem(
+        address = address,
+        amount = stringRes(Zatoshi(amountZatoshi)),
+        claimedAt = claimedAt.toGiftDisplayDate(),
+        message = message,
+    )
+
 private fun StoredGiftCard.listStatus(): GiftCardListStatus =
     when {
+        status == GiftCardStatus.CLAIMED -> GiftCardListStatus.CLAIMED
         status == GiftCardStatus.SHARED -> GiftCardListStatus.SHARED
         status == GiftCardStatus.FUNDED -> GiftCardListStatus.FUNDED
         fundingTxid != null -> GiftCardListStatus.SUBMITTED
         fundingAttemptedAt != null -> GiftCardListStatus.UNRESOLVED
         else -> GiftCardListStatus.UNFUNDED
-    }
-
-// A record written by a build that stamped something else must not take the screen down with it.
-private fun String.toDisplayDate() =
-    try {
-        stringResByDateTime(ZonedDateTime.parse(this), useFullFormat = true)
-    } catch (_: DateTimeParseException) {
-        null
     }

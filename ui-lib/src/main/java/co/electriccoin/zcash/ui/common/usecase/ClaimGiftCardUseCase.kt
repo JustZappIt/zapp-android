@@ -3,21 +3,26 @@
 
 package co.electriccoin.zcash.ui.common.usecase
 
+import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimOutcome
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimProgress
 import co.electriccoin.zcash.ui.common.provider.GiftKeyProvider
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
+import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.screen.gift.model.GiftBirthdayVerdict
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkCodec
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkError
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkException
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkPayload
+import co.electriccoin.zcash.ui.screen.gift.model.ReceivedGift
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -54,6 +59,7 @@ class ClaimGiftCardUseCase(
     private val persistableWalletProvider: PersistableWalletProvider,
     private val giftKeyProvider: GiftKeyProvider,
     private val giftClaimDataSource: GiftClaimDataSource,
+    private val receivedGiftStorageProvider: ReceivedGiftStorageProvider,
 ) {
     /**
      * Parses and validates [uri] and decides what claiming it would cost.
@@ -112,13 +118,39 @@ class ClaimGiftCardUseCase(
         // server the user chose for everything else.
         val endpoint = persistableWalletProvider.requirePersistableWallet().endpoint
 
-        return giftClaimDataSource.claim(
-            payload = payload,
-            network = synchronizer.network,
-            endpoint = endpoint,
-            recipientAddress = recipient,
-            onProgress = onProgress,
-        )
+        val outcome =
+            giftClaimDataSource.claim(
+                payload = payload,
+                network = synchronizer.network,
+                endpoint = endpoint,
+                recipientAddress = recipient,
+                onProgress = onProgress,
+            )
+
+        if (outcome is GiftClaimOutcome.Claimed) recordReceipt(payload, outcome)
+        return outcome
+    }
+
+    /**
+     * Best effort, and deliberately so. The money is already in the wallet by this point; a store
+     * that will not take the receipt costs the recipient a row in a list, not their gift.
+     */
+    private suspend fun recordReceipt(payload: GiftLinkPayload, outcome: GiftClaimOutcome.Claimed) {
+        runCatching {
+            receivedGiftStorageProvider.record(
+                ReceivedGift(
+                    address = payload.address,
+                    network = payload.network,
+                    amountZatoshi = outcome.amount.value,
+                    claimedAt = Clock.System.now().toString(),
+                    claimTxids = outcome.txIds,
+                    message = payload.message,
+                )
+            )
+        }.onFailure { throwable ->
+            if (throwable is CancellationException) throw throwable
+            Twig.warn { "Claimed gift could not be recorded" }
+        }
     }
 
     private companion object {

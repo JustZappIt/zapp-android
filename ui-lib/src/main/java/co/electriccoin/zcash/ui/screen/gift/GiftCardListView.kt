@@ -35,6 +35,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappCopyIconButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappGroupHeader
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
@@ -90,6 +91,10 @@ internal fun GiftCardListView(
                 item { Banner(stringResource(R.string.gift_card_list_warning), c.textMuted) }
             }
             items(state.items, key = { it.id }) { GiftCardRow(it) }
+            if (state.received.isNotEmpty()) {
+                item { ZappGroupHeader(text = stringResource(R.string.gift_card_list_received_title)) }
+                items(state.received, key = { it.address }) { ReceivedGiftRow(it) }
+            }
         }
     }
 }
@@ -145,6 +150,20 @@ private fun GiftCardRow(item: GiftCardListItem) {
         item.createdAt?.let {
             BasicText(text = it.getValue(), style = ZappTheme.typography.caption.copy(color = c.textSubtle))
         }
+        item.expiry?.let { expiry ->
+            BasicText(
+                text =
+                    stringResource(
+                        if (expiry.isPast) {
+                            R.string.gift_card_list_expired
+                        } else {
+                            R.string.gift_card_list_expires
+                        },
+                        expiry.date.getValue(),
+                    ),
+                style = ZappTheme.typography.caption.copy(color = c.textSubtle),
+            )
+        }
         item.message?.let {
             BasicText(text = it, style = ZappTheme.typography.body.copy(color = c.textMuted))
         }
@@ -163,6 +182,21 @@ private fun GiftCardRow(item: GiftCardListItem) {
                 onClick = { item.onShare?.invoke(sharePickerText) },
                 modifier = Modifier.weight(1f),
             )
+            item.onCheck?.let {
+                ZappButton(
+                    text =
+                        stringResource(
+                            if (item.isChecking) {
+                                R.string.gift_card_list_checking
+                            } else {
+                                R.string.gift_card_list_check
+                            }
+                        ),
+                    variant = ZappButtonVariant.Ghost,
+                    enabled = !item.isChecking,
+                    onClick = it,
+                )
+            }
             item.onArchive?.let {
                 ZappButton(
                     text = stringResource(R.string.gift_card_list_archive),
@@ -170,6 +204,28 @@ private fun GiftCardRow(item: GiftCardListItem) {
                     onClick = it,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ReceivedGiftRow(item: ReceivedGiftItem) {
+    val c = ZappTheme.colors
+    val spacing = ZappTheme.spacing
+
+    ZappBorderedCard(verticalArrangement = Arrangement.spacedBy(spacing.xs)) {
+        BasicText(
+            text = item.amount.getValue(),
+            style = ZappTheme.typography.sectionTitle.copy(color = c.text),
+        )
+        item.claimedAt?.let {
+            BasicText(
+                text = stringResource(R.string.gift_card_list_received_on, it.getValue()),
+                style = ZappTheme.typography.caption.copy(color = c.textSubtle),
+            )
+        }
+        item.message?.let {
+            BasicText(text = it, style = ZappTheme.typography.body.copy(color = c.textMuted))
         }
     }
 }
@@ -209,12 +265,14 @@ private fun GiftCardListStatus.labelRes() =
         GiftCardListStatus.SUBMITTED -> R.string.gift_card_list_status_submitted
         GiftCardListStatus.FUNDED -> R.string.gift_card_list_status_funded
         GiftCardListStatus.SHARED -> R.string.gift_card_list_status_shared
+        GiftCardListStatus.CLAIMED -> R.string.gift_card_list_status_claimed
     }
 
 private fun GiftCardListError.messageRes() =
     when (this) {
         GiftCardListError.LINK_FAILED -> R.string.gift_card_list_error_link
         GiftCardListError.SHARE_FAILED -> R.string.gift_card_list_error_share
+        GiftCardListError.CHECK_FAILED -> R.string.gift_card_list_error_check
     }
 
 internal object GiftCardListTag {

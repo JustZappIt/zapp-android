@@ -84,6 +84,21 @@ private suspend fun CloseableSynchronizer.closeAndAwait() {
     if (this is SdkSynchronizer) closeFlow().first() else close()
 }
 
+// Sums every shielded pool: a card is funded to a unified address and the sender's wallet picks
+// the pool, so reading one would report a perfectly good card as empty the moment that changed.
+private fun AccountBalance.shieldedAvailable() = sapling.available + orchard.available + ironwood.available
+
+private fun AccountBalance.shieldedTotal() = sapling.total + orchard.total + ironwood.total
+
+/** What a minted card's own wallet holds right now. */
+data class GiftCardHoldings(
+    val available: Zatoshi,
+    val total: Zatoshi,
+) {
+    /** Nothing left. For a card known to have been funded, that means somebody collected it. */
+    val isEmpty: Boolean get() = total == Zatoshi.ZERO
+}
+
 /** What the card's own wallet turned out to hold. */
 sealed interface GiftClaimOutcome {
     /** The funds are now in the recipient's wallet. */
@@ -140,6 +155,19 @@ interface GiftClaimDataSource {
         recipientAddress: String,
         onProgress: (GiftClaimProgress) -> Unit,
     ): GiftClaimOutcome
+
+    /**
+     * Syncs the card's wallet and reports what it holds, spending nothing.
+     *
+     * This is the only way to learn whether a card was collected: the note is shielded, so nothing
+     * short of scanning with the card's own viewing key can see it spent.
+     */
+    suspend fun inspect(
+        payload: GiftLinkPayload,
+        network: ZcashNetwork,
+        endpoint: LightWalletEndpoint,
+        onProgress: (GiftClaimProgress) -> Unit,
+    ): GiftCardHoldings
 }
 
 internal class GiftClaimDataSourceImpl(
@@ -171,6 +199,34 @@ internal class GiftClaimDataSourceImpl(
             deleteWallet(alias, network)
         }
         return outcome
+    }
+
+    override suspend fun inspect(
+        payload: GiftLinkPayload,
+        network: ZcashNetwork,
+        endpoint: LightWalletEndpoint,
+        onProgress: (GiftClaimProgress) -> Unit,
+    ): GiftCardHoldings {
+        val alias = giftAlias(payload)
+        val synchronizer = open(payload, network, endpoint, alias)
+        val holdings =
+            try {
+                awaitSynced(synchronizer, onProgress)
+                val account = synchronizer.getAccounts().first()
+                val balance =
+                    synchronizer.walletBalances
+                        .filterNotNull()
+                        .first()
+                        .getValue(account.accountUuid)
+                GiftCardHoldings(available = balance.shieldedAvailable(), total = balance.shieldedTotal())
+            } finally {
+                withContext(NonCancellable) { synchronizer.closeAndAwait() }
+            }
+
+        // Retained while anything is left, so the next check resumes instead of rescanning from the
+        // card's birthday. An emptied card is terminal and there is nothing to resume for.
+        if (holdings.isEmpty) deleteWallet(alias, network)
+        return holdings
     }
 
     /**
@@ -349,11 +405,6 @@ internal class GiftClaimDataSourceImpl(
                 status == Synchronizer.Status.SYNCED
             }
     }
-
-    private fun AccountBalance.shieldedAvailable() =
-        sapling.available + orchard.available + ironwood.available
-
-    private fun AccountBalance.shieldedTotal() = sapling.total + orchard.total + ironwood.total
 
     private companion object {
         const val GIFT_ACCOUNT_NAME = "gift"

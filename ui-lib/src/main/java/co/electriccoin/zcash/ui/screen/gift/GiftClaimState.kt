@@ -55,6 +55,7 @@ internal data class GiftClaimState(
     val stage: GiftClaimStage,
     val amount: Zatoshi?,
     val message: String?,
+    val expiry: GiftExpiryDisplay?,
     val blocksToScan: Long?,
     val progressFraction: Float?,
     val blocksRemaining: Long?,

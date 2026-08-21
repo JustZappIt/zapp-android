@@ -20,11 +20,17 @@ internal enum class GiftCardListStatus {
     SUBMITTED,
     FUNDED,
     SHARED,
+
+    /** Collected by whoever held the link. Terminal: nothing left to hand out or to lose. */
+    CLAIMED,
 }
 
 internal enum class GiftCardListError {
     LINK_FAILED,
     SHARE_FAILED,
+
+    /** The scan could not finish, which says nothing about whether the card was collected. */
+    CHECK_FAILED,
 }
 
 /**
@@ -37,16 +43,29 @@ internal data class GiftCardListItem(
     val createdAt: StringResource?,
     val message: String?,
     val status: GiftCardListStatus,
+    val expiry: GiftExpiryDisplay?,
     val isArchived: Boolean,
     val isCopied: Boolean,
+    /** Null once a card is settled, or while another card is being checked. */
+    val onCheck: (() -> Unit)?,
+    val isChecking: Boolean,
     /** Both null while the card holds nothing to hand over — see `GiftCardListVM.toItem`. */
     val onCopy: (() -> Unit)?,
     val onShare: ((String) -> Unit)?,
     val onArchive: (() -> Unit)?,
 )
 
+/** A gift collected from someone else. A receipt only — it carries no key material. */
+internal data class ReceivedGiftItem(
+    val address: String,
+    val amount: StringResource,
+    val claimedAt: StringResource?,
+    val message: String?,
+)
+
 internal data class GiftCardListState(
     val items: List<GiftCardListItem>,
+    val received: List<ReceivedGiftItem>,
     val isCorrupted: Boolean,
     val hasArchived: Boolean,
     val isShowingArchived: Boolean,
