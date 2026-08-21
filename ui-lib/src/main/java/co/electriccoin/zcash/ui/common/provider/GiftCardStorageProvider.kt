@@ -31,6 +31,9 @@ interface GiftCardStorageProvider {
     /** Persists a freshly minted card. Must complete before its funding transaction is submitted. */
     suspend fun add(card: StoredGiftCard)
 
+    /** Flags a broadcast as in flight, or clears the flag with a null [at] once it is resolved. */
+    suspend fun setFundingAttemptedAt(id: String, at: String?)
+
     /** Records a submitted funding txid. The card stays a draft until the transaction mines. */
     suspend fun recordFundingSubmitted(id: String, fundingTxid: String, at: String)
 
@@ -40,8 +43,13 @@ interface GiftCardStorageProvider {
 
     suspend fun archive(id: String, at: String)
 
-    /** True while [accountUuid] owns funded cards whose links were never shared. Blocks deletion. */
-    suspend fun hasUnsharedFunds(accountUuid: String): Boolean
+    /**
+     * True while [accountUuid] — or any account, when it is null — owns funded cards whose links
+     * were never shared. Blocks deleting that account, and blocks the wallet wipe, which clears
+     * this whole store.
+     */
+    suspend fun hasUnsharedFunds(accountUuid: String? = null): Boolean =
+        GiftCardLedger.hasUnsharedFunds(getAll(), accountUuid)
 }
 
 internal class GiftCardStorageProviderImpl(
@@ -66,6 +74,9 @@ internal class GiftCardStorageProviderImpl(
 
     override suspend fun add(card: StoredGiftCard) = mutate { GiftCardLedger.add(it, card) }
 
+    override suspend fun setFundingAttemptedAt(id: String, at: String?) =
+        mutate { GiftCardLedger.setFundingAttemptedAt(it, id, at) }
+
     override suspend fun recordFundingSubmitted(id: String, fundingTxid: String, at: String) =
         mutate { GiftCardLedger.recordFundingSubmitted(it, id, fundingTxid, at) }
 
@@ -75,9 +86,6 @@ internal class GiftCardStorageProviderImpl(
     override suspend fun markShared(id: String, at: String) = mutate { GiftCardLedger.markShared(it, id, at) }
 
     override suspend fun archive(id: String, at: String) = mutate { GiftCardLedger.archive(it, id, at) }
-
-    override suspend fun hasUnsharedFunds(accountUuid: String): Boolean =
-        GiftCardLedger.hasUnsharedFunds(getAll(), accountUuid)
 
     // store.get() throws StoreCorruptedException rather than returning null for a blob that is
     // present but will not decode, and that is deliberately not caught here: treating corrupt as

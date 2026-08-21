@@ -20,15 +20,13 @@ internal fun GiftClaimScreen(args: GiftClaimArgs) {
 }
 
 /**
- * Carries the whole gift URI, fragment included.
+ * Carries a `PendingGiftLinkStore` token, never the link.
  *
- * The fragment is the bearer secret, so this route argument is money. It is never logged and never
- * put in a notification; `MainActivity` consumes the intent that produced it exactly once so a
- * recreation or a Recents re-entry cannot re-enqueue the same claim (§3.7).
+ * The link's fragment is the bearer secret, and a typed route argument is serialised into the back
+ * stack entry and into saved instance state, so the link itself stays in memory and only this token
+ * travels (§3.7). It is meaningless once taken.
  */
 @Serializable
 data class GiftClaimArgs(
-    val uri: String,
-) {
-    override fun toString(): String = "GiftClaimArgs(redacted)"
-}
+    val token: String,
+)

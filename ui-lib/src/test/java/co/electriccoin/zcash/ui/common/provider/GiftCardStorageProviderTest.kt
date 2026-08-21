@@ -100,6 +100,20 @@ class GiftCardStorageProviderTest {
         }
 
     @Test
+    fun `blocks the wallet wipe while any account holds unshared funds`() =
+        runTest {
+            val storage = storage()
+            storage.add(card())
+
+            assertFalse(storage.hasUnsharedFunds())
+            storage.recordFundingSubmitted(ID, TXID, NOW)
+            // Submitted is enough: the money has already left the sender's wallet.
+            assertTrue(storage.hasUnsharedFunds())
+            storage.markShared(ID, NOW)
+            assertFalse(storage.hasUnsharedFunds())
+        }
+
+    @Test
     fun `serialises concurrent mutations instead of losing cards`() =
         runTest {
             val storage = storage()

@@ -111,6 +111,28 @@
     <string name="gift_claim_error_not_broadcast">Zapp no pudo confirmar que la transferencia llegara a la red. Tu regalo sigue a salvo en la tarjeta: inténtalo en un momento.</string>
     <string name="gift_claim_error_failed">No se pudo reclamar el regalo. No se ha perdido nada; inténtalo de nuevo.</string>
     <string name="gift_claim_error_not_ready">Zapp todavía se está conectando a la red Zcash. Tu regalo está bien: inténtalo en un momento.</string>
+    <string name="gift_claim_error_expired">Este enlace de regalo ya no está abierto. Tócalo de nuevo donde lo recibiste.</string>
     <string name="gift_claim_progress_remaining">Quedan %1$d bloques</string>
     <string name="gift_claim_pending_count">%1$d / %2$d confirmaciones</string>
+
+    <string name="gift_card_list_title">Tus tarjetas regalo</string>
+    <string name="gift_card_list_subtitle">Recupera y vuelve a compartir cualquier enlace</string>
+    <string name="gift_card_list_open">Tus tarjetas regalo</string>
+    <string name="gift_card_list_empty">Aún no hay tarjetas regalo. Las que crees permanecerán aquí hasta que compartas sus enlaces.</string>
+    <string name="gift_card_list_warning">Estos enlaces son la única forma de acceder a los fondos. Zapp no puede recuperarlos con tu frase de recuperación.</string>
+    <string name="gift_card_list_status_unfunded">Sin fondos</string>
+    <string name="gift_card_list_status_unresolved">Estado de financiación desconocido — comprueba antes de volver a financiar</string>
+    <string name="gift_card_list_status_submitted">Enviando fondos, aún sin minar</string>
+    <string name="gift_card_list_status_funded">Lista para compartir</string>
+    <string name="gift_card_list_status_shared">Enlace compartido</string>
+    <string name="gift_card_list_copy">Copiar enlace de regalo</string>
+    <string name="gift_card_list_share">Compartir enlace</string>
+    <string name="gift_card_list_share_picker">Compartir enlace de regalo</string>
+    <string name="gift_card_list_archive">Archivar</string>
+    <string name="gift_card_list_archived_badge">Archivada</string>
+    <string name="gift_card_list_show_archived">Ver archivadas</string>
+    <string name="gift_card_list_hide_archived">Ocultar archivadas</string>
+    <string name="gift_card_list_error_link">No se pudo recuperar el enlace de esta tarjeta. No restablezcas tu monedero — contacta con soporte.</string>
+    <string name="gift_card_list_error_share">No se pudo abrir el menú de compartir. Copia el enlace en su lugar.</string>
+    <string name="gift_card_list_corrupted">No se pudieron leer tus registros de tarjetas regalo. No restablezcas tu monedero — contacta con soporte.</string>
 </resources>

@@ -54,7 +54,7 @@ import co.electriccoin.zcash.ui.screen.authentication.WrapAuthentication
 import co.electriccoin.zcash.ui.screen.chat.ChatRoomArgs
 import co.electriccoin.zcash.ui.screen.gift.GiftClaimArgs
 import co.electriccoin.zcash.ui.screen.gift.model.GIFT_LINK_HOST
-import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkIntake
+import co.electriccoin.zcash.ui.screen.gift.model.PendingGiftLinkStore
 import co.electriccoin.zcash.ui.screen.scan.thirdparty.ThirdPartyScan
 import co.electriccoin.zcash.ui.screen.splash.ZappSplashAnimation
 import co.electriccoin.zcash.ui.screen.warning.viewmodel.StorageCheckViewModel
@@ -92,9 +92,7 @@ class MainActivity : FragmentActivity() {
 
     private val chatNotificationTiming: ChatNotificationTiming by inject()
 
-    // Activity-scoped on purpose: coalescing duplicates only has to survive as long as the task
-    // that keeps re-delivering them.
-    private val giftIntake = GiftLinkIntake()
+    private val pendingGiftLinks: PendingGiftLinkStore by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -136,9 +134,7 @@ class MainActivity : FragmentActivity() {
             // Consume once, exactly as the chat notification path does, so Activity recreation
             // cannot re-enqueue a claim that is already on the back stack.
             intent.data = null
-            if (giftIntake.accept(raw)) {
-                navigationRouter.forward(GiftClaimArgs(raw))
-            }
+            pendingGiftLinks.put(raw)?.let { token -> navigationRouter.forward(GiftClaimArgs(token)) }
             return
         }
 

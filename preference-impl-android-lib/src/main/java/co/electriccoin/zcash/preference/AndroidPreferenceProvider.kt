@@ -8,6 +8,7 @@ import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import co.electriccoin.zcash.preference.api.PreferenceProvider
+import co.electriccoin.zcash.preference.api.PreferenceWriteFailedException
 import co.electriccoin.zcash.preference.model.entry.PreferenceKey
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -60,9 +61,10 @@ class AndroidPreferenceProvider(
 
             editor.putString(key.key, value)
 
-            editor.commit()
-
-            Unit
+            // commit() updates the in-memory map whether or not the disk write lands, so a caller
+            // that writes and reads back to prove durability would be reassured by a failed write.
+            // Callers store money-critical material here; a dropped write has to be loud.
+            if (!editor.commit()) throw PreferenceWriteFailedException(key)
         }
     }
 
@@ -76,9 +78,7 @@ class AndroidPreferenceProvider(
 
             editor.putStringSet(key.key, value)
 
-            editor.commit()
-
-            Unit
+            if (!editor.commit()) throw PreferenceWriteFailedException(key)
         }
     }
 
@@ -95,8 +95,7 @@ class AndroidPreferenceProvider(
             } else {
                 editor.remove(key.key)
             }
-            editor.commit()
-            Unit
+            if (!editor.commit()) throw PreferenceWriteFailedException(key)
         }
     }
 

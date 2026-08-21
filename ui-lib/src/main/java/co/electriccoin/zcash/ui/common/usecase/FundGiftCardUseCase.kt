@@ -132,9 +132,16 @@ class FundGiftCardUseCase(
      * exists, not that it mined. Advancing it to funded is [ConfirmGiftCardFundingUseCase]'s job,
      * once there is a block behind it.
      *
+     * The broadcast divides this method: everything before it fails as
+     * [GiftFundingError.PROPOSAL_FAILED], and every failure from it onwards — the storage writes
+     * included — becomes [GiftFundingError.SUBMIT_UNCERTAIN]. Only a rejection may say nothing was
+     * sent, because it is the only outcome that proves it.
+     *
      * @return the funding txid.
      */
     suspend fun submit(quote: GiftFundingQuote): String {
+        markAttempted(quote.card.id)
+
         val result =
             runCatching {
                 proposalDataSource.submitTransaction(
@@ -145,22 +152,69 @@ class FundGiftCardUseCase(
 
         val txid =
             when (result) {
-                is SubmitResult.Success -> result.txIds.firstOrNull()
+                is SubmitResult.Success -> {
+                    result.txIds.firstOrNull()
+                }
 
-                is SubmitResult.Failure -> fail(GiftFundingError.SUBMIT_REJECTED)
+                // Rejected is the only answer that means the network never took it, so it is the
+                // only one that may clear the attempt. Everything else stays flagged as unresolved.
+                is SubmitResult.Failure -> {
+                    clearAttempt(quote.card.id)
+                    fail(GiftFundingError.SUBMIT_REJECTED)
+                }
 
                 is SubmitResult.Partial,
                 is SubmitResult.GrpcFailure,
                 is SubmitResult.Error,
-                -> fail(GiftFundingError.SUBMIT_UNCERTAIN)
+                -> {
+                    fail(GiftFundingError.SUBMIT_UNCERTAIN)
+                }
             } ?: fail(GiftFundingError.SUBMIT_UNCERTAIN)
 
-        giftCardStorageProvider.recordFundingSubmitted(
-            id = quote.card.id,
-            fundingTxid = txid,
-            at = Clock.System.now().toString(),
-        )
+        recordSubmitted(cardId = quote.card.id, txid = txid)
         return txid
+    }
+
+    /**
+     * Flags the card as mid-broadcast, before the broadcast rather than after.
+     *
+     * The txid only exists once submit returns, so a process killed in between would otherwise
+     * leave a record indistinguishable from a card that was never funded — and nothing would count
+     * the money that had in fact left.
+     */
+    private suspend fun markAttempted(cardId: String) {
+        runCatching {
+            giftCardStorageProvider.setFundingAttemptedAt(id = cardId, at = Clock.System.now().toString())
+        }.getOrElse { throwable -> throw proposalFailure(throwable) }
+    }
+
+    /**
+     * Unflags a card the network refused. A store that will not take the clear leaves the card
+     * unresolved, which overstates the risk rather than hiding it; nothing was sent either way.
+     */
+    private suspend fun clearAttempt(cardId: String) {
+        runCatching { giftCardStorageProvider.setFundingAttemptedAt(id = cardId, at = null) }
+            .onFailure { throwable ->
+                if (throwable is CancellationException) throw throwable
+                Twig.warn { "Gift card $cardId funding attempt could not be cleared" }
+            }
+    }
+
+    /**
+     * Records the txid, clearing the attempt flag as a side effect: a txid is a stronger record of
+     * the same fact.
+     *
+     * Past the broadcast, so a store that refuses this has not stopped the money leaving, only the
+     * record of where it went. It cannot be reported as a funding that never happened.
+     */
+    private suspend fun recordSubmitted(cardId: String, txid: String) {
+        runCatching {
+            giftCardStorageProvider.recordFundingSubmitted(
+                id = cardId,
+                fundingTxid = txid,
+                at = Clock.System.now().toString(),
+            )
+        }.getOrElse { throwable -> throw recordFailure(throwable) }
     }
 
     private fun proposalFailure(throwable: Throwable): Throwable =
@@ -174,7 +228,7 @@ class FundGiftCardUseCase(
             }
 
             else -> {
-                Twig.error(throwable) { "Gift card funding proposal failed" }
+                Twig.error(throwable) { "Gift card funding could not start" }
                 GiftFundingException(GiftFundingError.PROPOSAL_FAILED)
             }
         }
@@ -186,6 +240,14 @@ class FundGiftCardUseCase(
             throwable
         } else {
             Twig.error(throwable) { "Gift card funding submit threw" }
+            GiftFundingException(GiftFundingError.SUBMIT_UNCERTAIN)
+        }
+
+    private fun recordFailure(throwable: Throwable): Throwable =
+        if (throwable is CancellationException) {
+            throwable
+        } else {
+            Twig.error(throwable) { "Gift card funding txid could not be recorded" }
             GiftFundingException(GiftFundingError.SUBMIT_UNCERTAIN)
         }
 

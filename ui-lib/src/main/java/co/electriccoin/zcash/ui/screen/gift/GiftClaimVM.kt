@@ -19,6 +19,7 @@ import co.electriccoin.zcash.ui.screen.gift.model.GiftBirthdayVerdict
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkError
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkException
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkPayload
+import co.electriccoin.zcash.ui.screen.gift.model.PendingGiftLinkStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -42,11 +43,15 @@ import kotlin.time.Duration.Companion.seconds
  * regardless, because a card with no reclaim must never be left in "did that send?".
  */
 class GiftClaimVM(
-    private val args: GiftClaimArgs,
+    args: GiftClaimArgs,
+    pendingGiftLinks: PendingGiftLinkStore,
     private val claimGiftCard: ClaimGiftCardUseCase,
     private val applicationStateProvider: ApplicationStateProvider,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
+    /** Taken once. Retries and confirmation re-checks re-read it from here, not from the store. */
+    private val uri: String? = pendingGiftLinks.take(args.token)
+
     private val snapshot = MutableStateFlow(GiftClaimSnapshot())
 
     private var claimJob: Job? = null
@@ -76,7 +81,14 @@ class GiftClaimVM(
     }
 
     private suspend fun load() {
-        runCatching { claimGiftCard.preview(args.uri) }
+        // Only reachable when the process died with the claim on the back stack: the token survives
+        // in saved instance state, the in-memory link does not.
+        val link =
+            uri ?: return snapshot.update {
+                it.copy(stage = GiftClaimStage.PREVIEW, error = GiftClaimError.LINK_EXPIRED)
+            }
+
+        runCatching { claimGiftCard.preview(link) }
             .onSuccess { preview ->
                 payload = preview.payload
                 snapshot.update {
@@ -99,7 +111,9 @@ class GiftClaimVM(
     }
 
     private fun onClaim() {
-        if (claimJob?.isActive == true) return
+        // isCompleted, not isActive: a cancelled claim stays incomplete while its NonCancellable
+        // broadcast runs on, and a second claim started there would try to spend the same note.
+        if (claimJob?.isCompleted == false) return
         val current = payload ?: return
         snapshot.update { it.copy(stage = GiftClaimStage.CLAIMING, progressFraction = null, error = null) }
         claimJob = viewModelScope.launch { claim(current) }
@@ -134,9 +148,12 @@ class GiftClaimVM(
     private fun onProgress(progress: GiftClaimProgress) = snapshot.update { it.applying(progress) }
 
     private fun stopClaim() {
-        if (claimJob?.isActive != true) return
-        claimJob?.cancel()
-        claimJob = null
+        val job = claimJob ?: return
+        if (job.isCompleted) return
+        job.cancel()
+        // The handle is kept rather than cleared. Cancelling only abandons the scan — a broadcast
+        // already inside NonCancellable runs on, and onClaim() needs the handle to refuse a second
+        // claim until it finishes.
         // Back to the preview so the recipient can restart deliberately. Nothing was lost: the
         // scan is resumable against the same per-card database on the next attempt.
         snapshot.update { it.copy(stage = GiftClaimStage.PREVIEW, progressFraction = null) }

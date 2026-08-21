@@ -21,13 +21,14 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.model.SubmitResult
 import co.electriccoin.zcash.ui.common.provider.GiftKeyProvider
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkPayload
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.security.MessageDigest
 
 /**
@@ -56,9 +57,27 @@ data class GiftClaimProgress(
  */
 const val REQUIRED_CONFIRMATIONS = 10
 
+/** The SDK's own spelling of its no-backup subdirectory — `Files.NO_BACKUP_SUBDIRECTORY`, one `c`. */
+private const val SDK_NO_BACKUP_SUBDIRECTORY = "co.electricoin.zcash"
+
+/**
+ * Everything `DatabaseCoordinator` creates for [alias], named relative to the SDK's no-backup
+ * subdirectory. It is SDK-internal layout, so it lives in one tested function rather than inline.
+ */
+internal fun giftWalletFileNames(alias: String, networkName: String): List<String> {
+    val prefix = "${alias}_${networkName}_"
+    return listOf(
+        "${prefix}fs_cache",
+        "${prefix}data.sqlite3",
+        "${prefix}data.sqlite3-journal",
+        "${prefix}data.sqlite3-wal",
+        "${prefix}data.sqlite3-shm",
+    )
+}
+
 /** What the card's own wallet turned out to hold. */
 sealed interface GiftClaimOutcome {
-    /** The funds are now in the recipient's wallet. Only this erases the isolated database. */
+    /** The funds are now in the recipient's wallet. */
     data class Claimed(
         val amount: Zatoshi,
         val txIds: List<String>,
@@ -82,7 +101,7 @@ sealed interface GiftClaimOutcome {
     /** Nothing ever arrived, or it has already been claimed by whoever else held the link. */
     data object Empty : GiftClaimOutcome
 
-    /** The broadcast did not unambiguously succeed. The isolated database is retained. */
+    /** The broadcast did not unambiguously succeed. */
     data class NotBroadcast(
         val result: SubmitResult,
     ) : GiftClaimOutcome
@@ -131,48 +150,51 @@ internal class GiftClaimDataSourceImpl(
             try {
                 claimFrom(synchronizer, payload, recipientAddress, onProgress)
             } finally {
-                // Always, on every path. An engine left running holds its database files open,
-                // which both leaks a bearer seed into a background scan and makes erase fail.
+                // Always, on every path. An engine left running holds its database files
+                // open and leaks a bearer seed into a background scan.
                 synchronizer.close()
             }
 
-        // Erase on a clean success and on nothing else (§5). Every other outcome — a partial
-        // broadcast, a transport failure that may still land, funds not yet confirmed — leaves
-        // money reachable only through this database, and erasing it would strand that money for
-        // good. A retained database costs disk; an erased one costs the card.
-        if (outcome is GiftClaimOutcome.Claimed) {
-            withContext(NonCancellable) {
-                // After close, or the erase races the engine still holding the files (§7.1).
-                delay(CLOSE_SETTLE_MILLIS)
-                val erased = Synchronizer.erase(context, network, alias)
-                Twig.info { "Gift claim: isolated wallet erased=$erased" }
-            }
-        }
+        // Only on a clean success (§5). Anything less may have left funds on the card, and the
+        // retained database is what lets the next attempt resume instead of rescanning.
+        if (outcome is GiftClaimOutcome.Claimed) deleteWallet(alias, network)
         return outcome
     }
 
     /**
-     * Opens the card's wallet, recreating it from scratch if the database on disk belongs to
-     * someone else.
+     * Deletes the card's wallet by file rather than through `Synchronizer.erase`.
      *
-     * A mismatched database is the cheap version of "verify it holds one account whose address
-     * matches": `Synchronizer.new` fails closed with [InitializeException.SeedNotRelevant] rather
-     * than silently opening the wrong wallet (confirmed on device, §7.1). Erasing here is safe
-     * precisely *because* the seed does not match — no funds of this card can be in it.
+     * `erase` takes an alias, but only its database deletion honours it: first it calls
+     * `StandardPreferenceProvider(context).clear()` and `EncryptedPreferenceProvider(context)
+     * .clear()`, both SDK-wide. The main wallet's `PendingSubmitPlanStore` lives in that same
+     * encrypted file — namespaced inside the blob, not by file — so erasing a card would drop
+     * resubmission metadata for unrelated transactions. Verified in the 3.0.1-SNAPSHOT AAR. The
+     * alias is ours alone, so deleting its files reclaims the disk without touching anything shared.
+     */
+    private suspend fun deleteWallet(alias: String, network: ZcashNetwork) =
+        withContext(Dispatchers.IO) {
+            val root = File(context.noBackupFilesDir, SDK_NO_BACKUP_SUBDIRECTORY)
+            giftWalletFileNames(alias, network.networkName).forEach { name ->
+                runCatching { File(root, name).deleteRecursively() }
+                    .onFailure { Twig.warn { "Gift claim: $name could not be deleted" } }
+            }
+        }
+
+    /**
+     * Opens the card's wallet.
+     *
+     * `Synchronizer.new` fails closed with [InitializeException.SeedNotRelevant] rather than
+     * silently opening the wrong wallet (confirmed on device, §7.1), and that is left to
+     * propagate. Recovering by erasing the alias would take the main wallet's preferences with it
+     * — see [claim] — and the alias is a SHA-256 of the card's network and address, so a database
+     * under it holding a different seed is not a case that can arise from any real card.
      */
     private suspend fun open(
         payload: GiftLinkPayload,
         network: ZcashNetwork,
         endpoint: LightWalletEndpoint,
         alias: String,
-    ): CloseableSynchronizer =
-        try {
-            create(payload, network, endpoint, alias, WalletInitMode.RestoreWallet)
-        } catch (_: InitializeException.SeedNotRelevant) {
-            Twig.warn { "Gift claim: isolated database for $alias belongs to another seed; recreating" }
-            Synchronizer.erase(context, network, alias)
-            create(payload, network, endpoint, alias, WalletInitMode.RestoreWallet)
-        }
+    ): CloseableSynchronizer = create(payload, network, endpoint, alias, WalletInitMode.RestoreWallet)
 
     private suspend fun create(
         payload: GiftLinkPayload,
@@ -228,29 +250,31 @@ internal class GiftClaimDataSourceImpl(
         val proposal = synchronizer.proposeTransfer(account, recipientAddress, amount, "")
         val usk = giftKeyProvider.deriveSpendingKey(payload.mnemonic, synchronizer.network)
 
-        // NonCancellable from here down. The sync above is abandonable — that is what stopping on
-        // app-lock cancels — but a broadcast is not: cancelling between submitting and reading the
-        // outcome leaves nobody knowing whether the money moved, on a card with no reclaim. Once
-        // this starts it runs to a verdict.
-        val result =
-            withContext(NonCancellable) {
+        // NonCancellable from here down, and it covers the verdict rather than just the broadcast.
+        // The sync above is abandonable — that is what stopping on app-lock cancels — but a
+        // broadcast is not: cancelling between submitting and returning leaves nobody knowing
+        // whether the money moved, on a card with no reclaim. Once this starts it runs to a
+        // verdict, and the refreshes inside it are best-effort for the same reason: a failed
+        // refresh must not turn a claim that succeeded into no answer at all.
+        return withContext(NonCancellable) {
+            val result =
                 synchronizer
                     .createProposedTransactions(proposal, usk)
                     .toList()
                     .toSubmitResult()
-            }
 
-        return if (result !is SubmitResult.Success) {
-            // Retained on purpose. A partial or unreachable broadcast may still land, and the
-            // database is the only key to whatever is left — erasing it strands the funds (§5).
-            Twig.warn { "Gift claim: broadcast was not a clean success; retaining the isolated database" }
-            GiftClaimOutcome.NotBroadcast(result)
-        } else {
-            if (synchronizer is SdkSynchronizer) {
-                synchronizer.refreshTransactions()
-                synchronizer.refreshAllBalances()
+            if (result !is SubmitResult.Success) {
+                Twig.warn { "Gift claim: broadcast was not a clean success" }
+                GiftClaimOutcome.NotBroadcast(result)
+            } else {
+                if (synchronizer is SdkSynchronizer) {
+                    runCatching {
+                        synchronizer.refreshTransactions()
+                        synchronizer.refreshAllBalances()
+                    }.onFailure { Twig.warn { "Gift claim: post-claim refresh failed" } }
+                }
+                GiftClaimOutcome.Claimed(amount = amount, txIds = result.txIds)
             }
-            GiftClaimOutcome.Claimed(amount = amount, txIds = result.txIds)
         }
     }
 
@@ -319,9 +343,6 @@ internal class GiftClaimDataSourceImpl(
     private companion object {
         const val GIFT_ACCOUNT_NAME = "gift"
         const val ALIAS_HASH_CHARS = 48
-
-        /** Long enough for the closed engine to release its database files before erase. */
-        const val CLOSE_SETTLE_MILLIS = 1_000L
 
         /**
          * A stable per-card alias, so an interrupted claim resumes against the same database

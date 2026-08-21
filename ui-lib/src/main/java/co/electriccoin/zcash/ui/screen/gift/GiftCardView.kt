@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.screen.gift
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +55,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappInputField
 import co.electriccoin.zcash.ui.design.component.zapp.ZappOfframpHeroAmountField
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenProgressIndicator
+import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStepList
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
@@ -99,6 +101,17 @@ internal fun GiftCardView(
                             GiftCardStage.READY -> R.string.gift_card_subtitle_ready
                         }
                     ),
+                // The way back to a card whose link was never handed out, including one this
+                // process never saw. Only offered where the stage has a way out at all.
+                right = {
+                    state.onOpenSavedCards?.let { onOpen ->
+                        ZappSectionLabel(
+                            text = stringResource(R.string.gift_card_list_open),
+                            color = ZappTheme.colors.accentText,
+                            modifier = Modifier.clickable(onClick = onOpen),
+                        )
+                    }
+                },
             )
         },
         bottomBar = { GiftCardBottomBar(state) },
@@ -158,7 +171,7 @@ private fun GiftCardBottomBar(state: GiftCardState) {
                                     stringResource(R.string.gift_card_review_confirm)
                                 },
                             leadingIcon = Icons.Default.CardGiftcard,
-                            enabled = !state.isAuthenticating,
+                            enabled = state.canConfirm,
                             onClick = state.onConfirm,
                             modifier =
                                 Modifier
@@ -469,6 +482,7 @@ private fun GiftCardPreview() =
                     onShare = {},
                     onDone = {},
                     onBack = {},
+                    onOpenSavedCards = null,
                 )
         )
     }

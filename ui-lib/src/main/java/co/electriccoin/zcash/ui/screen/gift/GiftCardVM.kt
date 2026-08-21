@@ -12,6 +12,7 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
+import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.common.security.SecretAuthPolicy
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
@@ -36,6 +37,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -59,6 +61,7 @@ class GiftCardVM(
     private val copyToClipboard: CopyToClipboardUseCase,
     private val secretAuthGate: SecretAuthGate,
     accountDataSource: AccountDataSource,
+    giftCardStorageProvider: GiftCardStorageProvider,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     private val snapshot = MutableStateFlow(GiftCardSnapshot())
@@ -75,7 +78,16 @@ class GiftCardVM(
             snapshot,
             secretAuthGate.pinPrompt,
             accountDataSource.selectedAccount,
-        ) { current, pin, account ->
+            giftCardStorageProvider.observe().catch { emit(emptyList()) },
+        ) { current, pin, account, storedCards ->
+            // From DETAILS, and from the one REVIEW the sender cannot fund their way out of.
+            val canOpenSavedCards =
+                storedCards.isNotEmpty() &&
+                    when (current.stage) {
+                        GiftCardStage.DETAILS -> true
+                        GiftCardStage.REVIEW -> current.error == GiftCardError.SUBMIT_UNCERTAIN
+                        else -> false
+                    }
             GiftCardState(
                 stage = current.stage,
                 amount =
@@ -103,6 +115,7 @@ class GiftCardVM(
                 onShare = ::onShare,
                 onDone = navigationRouter::back,
                 onBack = ::onBack,
+                onOpenSavedCards = { navigationRouter.forward(GiftCardListArgs) }.takeIf { canOpenSavedCards },
             )
         }.stateIn(
             scope = viewModelScope,
@@ -168,7 +181,12 @@ class GiftCardVM(
 
     private fun onConfirm() {
         val current = snapshot.value
-        if (fundJob?.isActive == true || current.stage != GiftCardStage.REVIEW) return
+        if (fundJob?.isActive == true ||
+            current.stage != GiftCardStage.REVIEW ||
+            current.error == GiftCardError.SUBMIT_UNCERTAIN
+        ) {
+            return
+        }
         val quote = current.quote ?: return
         fundJob = viewModelScope.launch { fund(quote) }
     }
@@ -321,4 +339,5 @@ private fun createInitialState() =
         onShare = {},
         onDone = {},
         onBack = {},
+        onOpenSavedCards = null,
     )

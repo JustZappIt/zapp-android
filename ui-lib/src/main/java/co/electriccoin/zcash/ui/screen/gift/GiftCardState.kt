@@ -79,6 +79,8 @@ internal data class GiftCardState(
     val onShare: (String) -> Unit,
     val onDone: () -> Unit,
     val onBack: () -> Unit,
+    /** Null when nothing is stored, or when the stage has no way out. */
+    val onOpenSavedCards: (() -> Unit)?,
 ) {
     /**
      * Whether the sender may leave. Funding is irreversible and the ready screen holds the only
@@ -90,6 +92,14 @@ internal data class GiftCardState(
                 GiftCardStage.DETAILS, GiftCardStage.REVIEW -> !isAuthenticating
                 GiftCardStage.PREPARING, GiftCardStage.FUNDING, GiftCardStage.READY -> false
             }
+
+    /**
+     * [GiftCardError.SUBMIT_UNCERTAIN] latches funding off for good: the note may already be spent,
+     * and a live button invites the retry its copy is asking the sender not to make. The way on is
+     * the saved-cards list, where the card is waiting as unresolved.
+     */
+    val canConfirm: Boolean
+        get() = !isAuthenticating && error != GiftCardError.SUBMIT_UNCERTAIN
 
     /**
      * Both message bounds, not just the counter's: a note can sit well under 128 clusters and still

@@ -36,6 +36,17 @@ object GiftCardLedger {
     }
 
     /**
+     * Marks that a funding broadcast is about to be attempted, or — with a null [at] — that its
+     * outcome is now known.
+     *
+     * This is what makes the broadcast crash-safe. The txid only exists once submit returns, so a
+     * process killed mid-broadcast would otherwise leave a draft indistinguishable from one that
+     * was never funded, and [hasUnsharedFunds] would not count money that had in fact left.
+     */
+    fun setFundingAttemptedAt(cards: List<StoredGiftCard>, id: String, at: String?): List<StoredGiftCard> =
+        cards.replacing(id) { card -> card.copy(fundingAttemptedAt = at, updatedAt = at ?: card.updatedAt) }
+
+    /**
      * Records the txid of a submitted funding transaction, leaving the card [GiftCardStatus.DRAFT]
      * until it mines. Idempotent for the same txid so a retried submit is not an error.
      */
@@ -51,7 +62,7 @@ object GiftCardLedger {
                 card.fundingTxid == null || card.fundingTxid == fundingTxid,
                 "Gift card $id is already funded by a different transaction"
             )
-            card.copy(fundingTxid = fundingTxid, updatedAt = at)
+            card.copy(fundingTxid = fundingTxid, fundingAttemptedAt = null, updatedAt = at)
         }
 
     /**
@@ -71,7 +82,7 @@ object GiftCardLedger {
                 card.fundingTxid == null || card.fundingTxid == fundingTxid,
                 "Gift card $id is already funded by a different transaction"
             )
-            card.advancedTo(GiftCardStatus.FUNDED, at).copy(fundingTxid = fundingTxid)
+            card.advancedTo(GiftCardStatus.FUNDED, at).copy(fundingTxid = fundingTxid, fundingAttemptedAt = null)
         }
 
     /**
@@ -94,16 +105,15 @@ object GiftCardLedger {
         cards.replacing(id) { card -> card.copy(archivedAt = card.archivedAt ?: at, updatedAt = at) }
 
     /**
-     * Whether [accountUuid] still owns funds that only this device knows how to reach, which is the
-     * condition that must block deleting the account.
+     * Whether [accountUuid] — or any account, when it is null — still owns funds that only this
+     * device knows how to reach. That is the condition that must block deleting the account, and
+     * with a null [accountUuid] the one that must block wiping the wallet, which clears them all.
      *
      * Archived cards count. Archiving hides a card; it does not move its money, and there is no
      * reclaim, so treating an archived card as settled would let the funds be destroyed silently.
      */
-    fun hasUnsharedFunds(cards: List<StoredGiftCard>, accountUuid: String): Boolean =
-        cards.any {
-            it.sourceAccountUuid == accountUuid && it.fundingTxid != null && it.status != GiftCardStatus.SHARED
-        }
+    fun hasUnsharedFunds(cards: List<StoredGiftCard>, accountUuid: String? = null): Boolean =
+        cards.any { it.isUnsharedFunds && (accountUuid == null || it.sourceAccountUuid == accountUuid) }
 
     private fun List<StoredGiftCard>.replacing(
         id: String,

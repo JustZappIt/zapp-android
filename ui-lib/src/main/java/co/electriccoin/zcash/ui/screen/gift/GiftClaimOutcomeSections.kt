@@ -148,6 +148,7 @@ internal fun GiftClaimError.messageRes(): Int =
         GiftClaimError.TAMPERED -> R.string.gift_claim_error_tampered
         GiftClaimError.BIRTHDAY_ABOVE_TIP -> R.string.gift_claim_error_future
         GiftClaimError.WALLET_NOT_READY -> R.string.gift_claim_error_not_ready
+        GiftClaimError.LINK_EXPIRED -> R.string.gift_claim_error_expired
         GiftClaimError.NOT_BROADCAST -> R.string.gift_claim_error_not_broadcast
         GiftClaimError.FAILED -> R.string.gift_claim_error_failed
     }

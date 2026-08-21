@@ -8,6 +8,7 @@ import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.repository.SendTransaction
 import co.electriccoin.zcash.ui.common.repository.TransactionRepository
 import co.electriccoin.zcash.ui.screen.gift.model.GiftCardStatus
+import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
@@ -44,23 +45,43 @@ class ConfirmGiftCardFundingUseCase(
      * Sweeps every submitted-but-unconfirmed card against transactions already on chain.
      *
      * This is what recovers a card whose [invoke] never got to finish, because the process died or
-     * the sender left the screen between broadcast and the next block.
+     * the sender left the screen between broadcast and the next block — and, for a card flagged
+     * [StoredGiftCard.fundingAttemptedAt], one killed before its txid was ever written down.
      */
     suspend fun reconcile() {
-        val pending =
-            giftCardStorageProvider.getAll().filter {
-                it.status == GiftCardStatus.DRAFT && it.fundingTxid != null
-            }
-        if (pending.isEmpty()) return
+        val drafts = giftCardStorageProvider.getAll().filter { it.status == GiftCardStatus.DRAFT }
+        val submitted = drafts.filter { it.fundingTxid != null }
+        // Broadcast started, outcome never seen — the process died mid-submit, or submit came back
+        // uncertain. There is no txid to look up, so these are matched by destination instead.
+        val unresolved = drafts.filter { it.fundingTxid == null && it.fundingAttemptedAt != null }
+        if (submitted.isEmpty() && unresolved.isEmpty()) return
 
+        val sends = transactionRepository.getTransactions().filterIsInstance<SendTransaction>()
         val minedTxIds =
-            transactionRepository
-                .getTransactions()
+            sends
                 .filterIsInstance<SendTransaction.Success>()
                 .mapTo(mutableSetOf()) { it.id.txIdString() }
 
-        pending.forEach { card ->
+        submitted.forEach { card ->
             val txid = card.fundingTxid ?: return@forEach
+            if (txid in minedTxIds) markFunded(card.id, txid)
+        }
+
+        unresolved.forEach { card ->
+            // The card's address is single-use and was minted for this one transaction, so a send
+            // to it is that broadcast and nothing else. A pending one counts: the money has left.
+            val funding = sends.firstOrNull { it.recipient == card.address } ?: return@forEach
+            val txid = funding.id.txIdString()
+            runCatching {
+                giftCardStorageProvider.recordFundingSubmitted(
+                    id = card.id,
+                    fundingTxid = txid,
+                    at = Clock.System.now().toString(),
+                )
+            }.onFailure { throwable ->
+                if (throwable is CancellationException) throw throwable
+                Twig.warn { "Gift card ${card.id} funding could not be reattached" }
+            }
             if (txid in minedTxIds) markFunded(card.id, txid)
         }
     }

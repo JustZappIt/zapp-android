@@ -102,6 +102,7 @@ import co.electriccoin.zcash.ui.common.push.ChatPushBackend
 import co.electriccoin.zcash.ui.common.push.ChatPushBackendImpl
 import co.electriccoin.zcash.ui.common.push.PushRegistrar
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
+import co.electriccoin.zcash.ui.screen.gift.model.PendingGiftLinkStore
 import io.ktor.client.HttpClient
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
@@ -224,6 +225,7 @@ val providerModule =
         // shared, its encrypted record is the only route back to the funds.
         singleOf(::GiftCardStorageProviderImpl) bind GiftCardStorageProvider::class
         singleOf(::GiftKeyProviderImpl) bind GiftKeyProvider::class
+        singleOf(::PendingGiftLinkStore)
         single<HttpClient>(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)) {
             // Pipe ktor's Logging plugin output through Twig so subgraph + RPC errors land in
             // logcat under our "Twig" tag with the OfframpHttp prefix. Without this, transport

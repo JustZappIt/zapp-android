@@ -33,6 +33,7 @@ import co.electriccoin.zcash.ui.screen.exchangerate.picker.CurrencyConversionPic
 import co.electriccoin.zcash.ui.screen.exchangerate.settings.ExchangeRateSettingsVM
 import co.electriccoin.zcash.ui.screen.feedback.FeedbackVM
 import co.electriccoin.zcash.ui.screen.flexa.FlexaViewModel
+import co.electriccoin.zcash.ui.screen.gift.GiftCardListVM
 import co.electriccoin.zcash.ui.screen.gift.GiftCardVM
 import co.electriccoin.zcash.ui.screen.gift.GiftClaimVM
 import co.electriccoin.zcash.ui.screen.home.HomeVM
@@ -128,10 +129,12 @@ val viewModelModule =
         viewModelOf(::AdvancedSettingsVM)
         viewModelOf(::ViewingKeyExportVM)
         viewModelOf(::GiftCardVM)
-        // Constructed manually: the link arrives as a navigation argument, not a binding.
+        viewModelOf(::GiftCardListVM)
+        // Constructed manually: the claim token arrives as a navigation argument, not a binding.
         viewModel { params ->
             GiftClaimVM(
                 args = params.get(),
+                pendingGiftLinks = get(),
                 claimGiftCard = get(),
                 applicationStateProvider = get(),
                 navigationRouter = get(),

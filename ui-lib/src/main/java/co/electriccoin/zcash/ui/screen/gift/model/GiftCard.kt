@@ -76,8 +76,24 @@ data class StoredGiftCard(
     val expiresAt: String? = null,
     val message: String? = null,
     val fundingTxid: String? = null,
+    /**
+     * Set immediately before the funding transaction is broadcast and cleared once the outcome is
+     * known. A record still carrying it is a card whose money may or may not have moved — the
+     * process died mid-broadcast, or the submit came back uncertain.
+     */
+    val fundingAttemptedAt: String? = null,
     val archivedAt: String? = null,
 ) {
+    /**
+     * Money has left the sender's wallet — or may have — and the link has not left the device, so
+     * this record is the only route back to it. A txid rather than [GiftCardStatus.FUNDED], because
+     * a submitted transaction is already spent; [fundingAttemptedAt] too, because a broadcast whose
+     * outcome nobody saw has to be assumed to have landed; archived cards included, because
+     * archiving moves no money.
+     */
+    val isUnsharedFunds: Boolean
+        get() = (fundingTxid != null || fundingAttemptedAt != null) && status != GiftCardStatus.SHARED
+
     // Same reasoning as GiftLinkPayload.toString.
     override fun toString(): String = "StoredGiftCard(id=$id, status=$status, redacted)"
 }

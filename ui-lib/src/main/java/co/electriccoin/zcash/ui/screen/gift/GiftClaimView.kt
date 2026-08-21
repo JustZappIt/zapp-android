@@ -103,13 +103,20 @@ private fun GiftClaimBottomBar(state: GiftClaimState) {
                         // a way forward rather than a no-op.
                         ZappButton(
                             text =
-                                if (state.isLoaded) {
-                                    stringResource(R.string.gift_claim_claim)
-                                } else {
-                                    stringResource(R.string.gift_claim_retry)
-                                },
+                                stringResource(
+                                    when {
+                                        state.isLoaded -> R.string.gift_claim_claim
+                                        state.isRetryable -> R.string.gift_claim_retry
+                                        else -> R.string.gift_claim_done
+                                    }
+                                ),
                             leadingIcon = Icons.Default.CardGiftcard.takeIf { state.isLoaded },
-                            onClick = if (state.isLoaded) state.onClaim else state.onRetry,
+                            onClick =
+                                when {
+                                    state.isLoaded -> state.onClaim
+                                    state.isRetryable -> state.onRetry
+                                    else -> state.onBack
+                                },
                             modifier =
                                 Modifier
                                     .weight(1f)

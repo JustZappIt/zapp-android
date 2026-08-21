@@ -206,6 +206,40 @@ class GiftCardLedgerTest {
     }
 
     @Test
+    fun `sees unshared funds in any account when asked wallet-wide`() {
+        val funded = GiftCardLedger.markFunded(listOf(card()), ID, TXID, LATER)
+
+        // What a wallet wipe has to ask: it clears every account's cards at once.
+        assertTrue(GiftCardLedger.hasUnsharedFunds(funded))
+        assertFalse(GiftCardLedger.hasUnsharedFunds(GiftCardLedger.markShared(funded, ID, LATER)))
+        assertFalse(GiftCardLedger.hasUnsharedFunds(listOf(card())))
+        assertFalse(GiftCardLedger.hasUnsharedFunds(emptyList()))
+    }
+
+    @Test
+    fun `counts a broadcast whose outcome was never seen as unshared funds`() {
+        val attempted = GiftCardLedger.setFundingAttemptedAt(listOf(card()), ID, LATER)
+
+        // No txid was ever written, but the money may already have left. Guessing "unfunded" here
+        // is what would let the wallet be wiped out from under it.
+        assertNull(attempted.single().fundingTxid)
+        assertTrue(GiftCardLedger.hasUnsharedFunds(attempted))
+        assertTrue(GiftCardLedger.hasUnsharedFunds(attempted, ACCOUNT))
+    }
+
+    @Test
+    fun `clears the attempt once its outcome is known`() {
+        val attempted = GiftCardLedger.setFundingAttemptedAt(listOf(card()), ID, LATER)
+
+        // A txid is a stronger record of the same fact, so recording one supersedes the flag.
+        assertNull(GiftCardLedger.recordFundingSubmitted(attempted, ID, TXID, LATER).single().fundingAttemptedAt)
+        assertNull(GiftCardLedger.markFunded(attempted, ID, TXID, LATER).single().fundingAttemptedAt)
+        // And a rejection clears it outright: nothing was sent.
+        assertNull(GiftCardLedger.setFundingAttemptedAt(attempted, ID, null).single().fundingAttemptedAt)
+        assertFalse(GiftCardLedger.hasUnsharedFunds(GiftCardLedger.setFundingAttemptedAt(attempted, ID, null)))
+    }
+
+    @Test
     fun `keeps the mnemonic out of toString`() {
         assertFalse(card().toString().contains(MNEMONIC))
     }
