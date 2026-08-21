@@ -81,3 +81,23 @@ data class StoredGiftCard(
     // Same reasoning as GiftLinkPayload.toString.
     override fun toString(): String = "StoredGiftCard(id=$id, status=$status, redacted)"
 }
+
+/**
+ * Rebuilds the shareable payload from the persisted record.
+ *
+ * The record is the source of truth for the link, not the other way round: a funded card is
+ * re-shared by encoding this again, which is why [StoredGiftCard] carries [StoredGiftCard.network]
+ * and [StoredGiftCard.birthdayHeight] rather than using them once at creation.
+ */
+fun StoredGiftCard.toLinkPayload(): GiftLinkPayload =
+    GiftLinkPayload(
+        v = GiftLinkCodec.VERSION,
+        network = network,
+        address = address,
+        amountZatoshi = amountZatoshi.toString(),
+        mnemonic = mnemonic,
+        birthdayHeight = birthdayHeight,
+        createdAt = createdAt,
+        expiresAt = expiresAt,
+        message = message,
+    )

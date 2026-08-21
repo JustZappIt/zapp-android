@@ -5,7 +5,9 @@ package co.electriccoin.zcash.ui.common.provider
 
 import cash.z.ecc.android.bip39.Mnemonics
 import cash.z.ecc.android.bip39.toEntropy
+import cash.z.ecc.android.sdk.Synchronizer
 import cash.z.ecc.android.sdk.model.SeedPhrase
+import cash.z.ecc.android.sdk.model.UnifiedSpendingKey
 import cash.z.ecc.android.sdk.model.ZcashNetwork
 import cash.z.ecc.android.sdk.model.Zip32AccountIndex
 import cash.z.ecc.android.sdk.tool.DerivationTool
@@ -39,6 +41,23 @@ interface GiftKeyProvider {
      * against the link's own mnemonic before it acts on either.
      */
     suspend fun deriveAddress(mnemonic: String, network: ZcashNetwork): String
+
+    /**
+     * The raw seed behind a phrase, for standing up the card's own isolated [Synchronizer].
+     *
+     * Returns a fresh array each call; the caller owns it and must zero it when done. There is no
+     * way around handing the seed out — `Synchronizer.new` takes one — but nothing should hold it
+     * longer than the claim.
+     */
+    suspend fun deriveSeed(mnemonic: String): ByteArray
+
+    /**
+     * The spending key for a card's throwaway wallet, which is what authorises moving its funds out.
+     *
+     * `Synchronizer.importAccount` is not an alternative: it takes a UFVK, so it can watch a card
+     * but can never spend from one.
+     */
+    suspend fun deriveSpendingKey(mnemonic: String, network: ZcashNetwork): UnifiedSpendingKey
 }
 
 internal class GiftKeyProviderImpl : GiftKeyProvider {
@@ -53,6 +72,23 @@ internal class GiftKeyProviderImpl : GiftKeyProvider {
                     code.close()
                 }
             EphemeralGiftKeys(mnemonic = phrase.joinToString(), address = deriveAddress(phrase.joinToString(), network))
+        }
+
+    override suspend fun deriveSeed(mnemonic: String): ByteArray =
+        withContext(Dispatchers.IO) { SeedPhrase.new(mnemonic).toByteArray() }
+
+    override suspend fun deriveSpendingKey(mnemonic: String, network: ZcashNetwork): UnifiedSpendingKey =
+        withContext(Dispatchers.IO) {
+            val seed = SeedPhrase.new(mnemonic).toByteArray()
+            try {
+                DerivationTool.getInstance().deriveUnifiedSpendingKey(
+                    seed = seed,
+                    network = network,
+                    accountIndex = Zip32AccountIndex.new(0)
+                )
+            } finally {
+                seed.fill(0)
+            }
         }
 
     override suspend fun deriveAddress(mnemonic: String, network: ZcashNetwork): String =

@@ -160,6 +160,7 @@ internal fun WalletHomeView() {
             onSwap = homeVM::onSwapClick,
             onReceive = { homeState?.firstButton?.onClick?.invoke() },
             onBuyUsdc = homeVM::onBuyUsdcClick,
+            onGift = homeVM::onGiftClick,
             modifier = Modifier.fillMaxSize(),
         )
     }

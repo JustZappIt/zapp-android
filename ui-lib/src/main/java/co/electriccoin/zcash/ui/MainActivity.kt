@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
 import androidx.activity.enableEdgeToEdge
@@ -51,6 +52,9 @@ import co.electriccoin.zcash.ui.screen.ScreenTimeoutVM
 import co.electriccoin.zcash.ui.screen.authentication.AuthenticationUseCase
 import co.electriccoin.zcash.ui.screen.authentication.WrapAuthentication
 import co.electriccoin.zcash.ui.screen.chat.ChatRoomArgs
+import co.electriccoin.zcash.ui.screen.gift.GiftClaimArgs
+import co.electriccoin.zcash.ui.screen.gift.model.GIFT_LINK_HOST
+import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkIntake
 import co.electriccoin.zcash.ui.screen.scan.thirdparty.ThirdPartyScan
 import co.electriccoin.zcash.ui.screen.splash.ZappSplashAnimation
 import co.electriccoin.zcash.ui.screen.warning.viewmodel.StorageCheckViewModel
@@ -88,6 +92,10 @@ class MainActivity : FragmentActivity() {
 
     private val chatNotificationTiming: ChatNotificationTiming by inject()
 
+    // Activity-scoped on purpose: coalescing duplicates only has to survive as long as the task
+    // that keeps re-delivering them.
+    private val giftIntake = GiftLinkIntake()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Twig.debug { "Activity state: Create" }
@@ -100,10 +108,7 @@ class MainActivity : FragmentActivity() {
 
         monitorForBackgroundSync()
 
-        if (intent.data != null) {
-            navigationRouter.forward(ThirdPartyScan)
-        }
-
+        forwardUriIntent(intent)
         forwardChatNotificationIntent(intent)
         handleMigrationIntent(intent)
     }
@@ -112,13 +117,40 @@ class MainActivity : FragmentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
 
-        if (intent.data != null) {
-            navigationRouter.forward(ThirdPartyScan)
-        }
-
+        forwardUriIntent(intent)
         forwardChatNotificationIntent(intent)
         handleMigrationIntent(intent)
     }
+
+    /**
+     * Routes an incoming URI, recognising gift links before the blanket forward to the scanner.
+     *
+     * A gift link is bearer money, so every rejection here is deliberate (§3.7). The URI is never
+     * logged at any level, including error paths.
+     */
+    private fun forwardUriIntent(intent: Intent) {
+        val data = intent.data ?: return
+
+        if (isGiftUri(data)) {
+            val raw = intent.dataString ?: data.toString()
+            // Consume once, exactly as the chat notification path does, so Activity recreation
+            // cannot re-enqueue a claim that is already on the back stack.
+            intent.data = null
+            if (giftIntake.accept(raw)) {
+                navigationRouter.forward(GiftClaimArgs(raw))
+            }
+            return
+        }
+
+        navigationRouter.forward(ThirdPartyScan)
+    }
+
+    private fun isGiftUri(data: Uri): Boolean =
+        intent.action == Intent.ACTION_VIEW &&
+            // Recents re-delivers the original intent; without this, reopening from the task
+            // switcher re-enqueues an already-handled claim.
+            (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0 &&
+            GIFT_LINK_HOST.equals(data.host, ignoreCase = true)
 
     private fun forwardChatNotificationIntent(intent: Intent) {
         intent.getStringExtra(CHAT_CONVERSATION_ID_EXTRA)?.let { conversationId ->

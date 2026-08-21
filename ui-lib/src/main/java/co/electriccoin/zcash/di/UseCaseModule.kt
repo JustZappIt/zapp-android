@@ -9,6 +9,8 @@ import co.electriccoin.zcash.ui.common.usecase.ApplyTransactionFulltextFiltersUs
 import co.electriccoin.zcash.ui.common.usecase.CancelProposalFlowUseCase
 import co.electriccoin.zcash.ui.common.usecase.CancelSwapQuoteUseCase
 import co.electriccoin.zcash.ui.common.usecase.CancelSwapUseCase
+import co.electriccoin.zcash.ui.common.usecase.ClaimGiftCardUseCase
+import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmResyncUseCase
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.CreateChatGroupUseCase
@@ -34,6 +36,7 @@ import co.electriccoin.zcash.ui.common.usecase.FilterSwapBlockchainsUseCase
 import co.electriccoin.zcash.ui.common.usecase.FixEnhancementUseCase
 import co.electriccoin.zcash.ui.common.usecase.FixEphemeralAddressUseCase
 import co.electriccoin.zcash.ui.common.usecase.FlipTransactionBookmarkUseCase
+import co.electriccoin.zcash.ui.common.usecase.FundGiftCardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetABContactByIdUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetABContactsUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetABSwapContactsUseCase
@@ -154,6 +157,7 @@ import co.electriccoin.zcash.ui.common.usecase.SendEmailUseCase
 import co.electriccoin.zcash.ui.common.usecase.SendSupportEmailUseCase
 import co.electriccoin.zcash.ui.common.usecase.SendTransactionAgainUseCase
 import co.electriccoin.zcash.ui.common.usecase.SetSlippageUseCase
+import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShareImageUseCase
 import co.electriccoin.zcash.ui.common.usecase.SharePCZTUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShareQRUseCase
@@ -209,6 +213,10 @@ val useCaseModule =
         factoryOf(::ShareImageUseCase)
         factoryOf(::ShareViewingKeyUseCase)
         factoryOf(::CreateGiftCardUseCase)
+        factoryOf(::FundGiftCardUseCase)
+        factoryOf(::ConfirmGiftCardFundingUseCase)
+        factoryOf(::ClaimGiftCardUseCase)
+        factoryOf(::ShareGiftLinkUseCase)
         factoryOf(::Zip321BuildUriUseCase)
         factoryOf(::Zip321ParseUriValidationUseCase)
         factoryOf(::GetPersistableWalletUseCase)

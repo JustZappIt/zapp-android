@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallReceived
+import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Wallet
@@ -26,6 +27,7 @@ internal fun PayActionSpeedDial(
     onSwap: () -> Unit,
     onReceive: () -> Unit,
     onBuyUsdc: () -> Unit,
+    onGift: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -53,6 +55,11 @@ internal fun PayActionSpeedDial(
                     icon = Icons.Default.SwapHoriz,
                     label = stringResource(R.string.home_button_swap),
                     onClick = onSwap,
+                ),
+                ZappSpeedDialAction(
+                    icon = Icons.Default.CardGiftcard,
+                    label = stringResource(R.string.gift_card_speed_dial),
+                    onClick = onGift,
                 ),
                 ZappSpeedDialAction(
                     icon = Icons.AutoMirrored.Filled.CallReceived,

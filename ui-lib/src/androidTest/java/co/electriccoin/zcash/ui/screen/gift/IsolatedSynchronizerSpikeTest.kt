@@ -228,7 +228,8 @@ class IsolatedSynchronizerSpikeTest {
         if (network == ZcashNetwork.Mainnet) {
             LightWalletEndpoint(host = "zec.rocks", port = 443, isSecure = true)
         } else {
-            LightWalletEndpoint(host = "lightwalletd.testnet.cipherscan.app", port = 443, isSecure = true)
+            // Mirrors LightWalletEndpointProvider; cipherscan cannot serve gRPC (no ALPN h2).
+            LightWalletEndpoint(host = "testnet.zec.rocks", port = 443, isSecure = true)
         }
 
     private companion object {
