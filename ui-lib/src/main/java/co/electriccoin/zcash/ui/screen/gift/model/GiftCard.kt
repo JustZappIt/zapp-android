@@ -85,6 +85,14 @@ data class StoredGiftCard(
     val archivedAt: String? = null,
 ) {
     /**
+     * A broadcast was started for this card. Whether it landed is a separate question — and an
+     * unanswerable one for [fundingAttemptedAt] — so this card must never be funded a second time:
+     * the note may already be spent, and paying twice for one gift is money gone twice.
+     */
+    val hasFundingAttempt: Boolean
+        get() = fundingTxid != null || fundingAttemptedAt != null
+
+    /**
      * Money has left the sender's wallet — or may have — and the link has not left the device, so
      * this record is the only route back to it. A txid rather than [GiftCardStatus.FUNDED], because
      * a submitted transaction is already spent; [fundingAttemptedAt] too, because a broadcast whose
@@ -92,7 +100,7 @@ data class StoredGiftCard(
      * archiving moves no money.
      */
     val isUnsharedFunds: Boolean
-        get() = (fundingTxid != null || fundingAttemptedAt != null) && status != GiftCardStatus.SHARED
+        get() = hasFundingAttempt && status != GiftCardStatus.SHARED
 
     // Same reasoning as GiftLinkPayload.toString.
     override fun toString(): String = "StoredGiftCard(id=$id, status=$status, redacted)"

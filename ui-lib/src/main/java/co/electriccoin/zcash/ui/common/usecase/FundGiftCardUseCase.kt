@@ -82,7 +82,8 @@ class FundGiftCardUseCase(
      * Mints a card — or re-prices [existing] — and builds its funding proposal.
      *
      * Pass [existing] to re-price a card the sender already minted but backed out of reviewing:
-     * without it, every trip through the review screen would strand another unfunded draft.
+     * without it, every trip through the review screen would strand another unfunded draft. An
+     * [existing] card that already carries a funding attempt is refused outright.
      */
     suspend fun prepare(
         amount: Zatoshi,
@@ -90,6 +91,10 @@ class FundGiftCardUseCase(
         expiresAt: Instant? = null,
         existing: StoredGiftCard? = null,
     ): GiftFundingQuote {
+        // The durable gate on double funding. The screen's error state cannot be it: stepping back
+        // to the details and continuing again clears that error and lands here with the same card.
+        if (existing?.hasFundingAttempt == true) fail(GiftFundingError.SUBMIT_UNCERTAIN)
+
         val account = accountDataSource.getSelectedAccount()
         val fundingAmount = amount + CLAIM_FEE_RESERVE
 

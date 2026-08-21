@@ -4,11 +4,9 @@ import cash.z.ecc.android.sdk.CloseableSynchronizer
 import cash.z.ecc.android.sdk.WalletCoordinator
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
 import co.electriccoin.zcash.preference.StandardPreferenceProvider
-import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.migration.MigrationAppHooks
 import co.electriccoin.zcash.ui.common.provider.ChatBlockedKeysStorageProvider
-import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.common.repository.AddressBookRepository
 import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepository
@@ -20,13 +18,10 @@ import co.electriccoin.zcash.ui.common.repository.FlexaRepository
 import co.electriccoin.zcash.ui.common.repository.HomeMessageCacheRepository
 import co.electriccoin.zcash.ui.common.repository.MetadataRepository
 import co.electriccoin.zcash.ui.common.repository.PeerCashOutRepository
+import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnsharedGiftFundsUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import okhttp3.internal.closeQuietly
-
-/** Thrown before anything is deleted, so an unhandled one leaves the wallet intact. */
-class UnsharedGiftFundsException : IllegalStateException("Unshared gift cards would lose their funds")
 
 class ResetZashiUseCase(
     private val walletCoordinator: WalletCoordinator,
@@ -42,7 +37,7 @@ class ResetZashiUseCase(
     private val peerCashOutRepository: PeerCashOutRepository,
     private val baseBalanceRepository: BaseBalanceRepository,
     private val migrationAppHooks: MigrationAppHooks,
-    private val giftCardStorageProvider: GiftCardStorageProvider,
+    private val ensureNoUnsharedGiftFunds: EnsureNoUnsharedGiftFundsUseCase,
 ) {
     @Suppress("TooGenericExceptionCaught", "ThrowsCount")
     suspend operator fun invoke(keepFiles: Boolean) {
@@ -71,18 +66,6 @@ class ResetZashiUseCase(
         } catch (_: BiometricsCancelledException) {
             // do nothing
         }
-    }
-
-    // An unreadable store blocks rather than passes: guessing "empty" wrong destroys money.
-    private suspend fun ensureNoUnsharedGiftFunds() {
-        val blocked =
-            runCatching { giftCardStorageProvider.hasUnsharedFunds() }
-                .getOrElse { throwable ->
-                    if (throwable is CancellationException) throw throwable
-                    Twig.error(throwable) { "Gift card store could not be read; refusing to wipe the wallet" }
-                    true
-                }
-        if (blocked) throw UnsharedGiftFundsException()
     }
 
     private suspend fun requestBiometrics() {

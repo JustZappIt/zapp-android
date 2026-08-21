@@ -26,6 +26,7 @@ import co.electriccoin.zcash.ui.common.usecase.DeleteChatIdentityUseCase
 import co.electriccoin.zcash.ui.common.usecase.DeleteTransactionNoteUseCase
 import co.electriccoin.zcash.ui.common.usecase.DeriveKeystoneAccountUnifiedAddressUseCase
 import co.electriccoin.zcash.ui.common.usecase.DisconnectUseCase
+import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnsharedGiftFundsUseCase
 import co.electriccoin.zcash.ui.common.usecase.EnsureSwapAssetsLoadedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.common.usecase.ExportChatSeedPhraseUseCase
@@ -353,6 +354,7 @@ val useCaseModule =
         singleOf(::SubmitIncreaseEphemeralGapLimitUseCase)
         factoryOf(::CreateIncreaseEphemeralGapLimitProposalUseCase)
         factoryOf(::ResetZashiUseCase)
+        factoryOf(::EnsureNoUnsharedGiftFundsUseCase)
         factoryOf(::PreselectSwapAssetUseCase)
         factoryOf(::GetSwapStatusUseCase)
         factoryOf(::ExecuteDebugDBQueryUseCase)

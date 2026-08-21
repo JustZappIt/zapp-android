@@ -75,6 +75,15 @@ internal fun giftWalletFileNames(alias: String, networkName: String): List<Strin
     )
 }
 
+/**
+ * [Synchronizer.close] returns before shutdown finishes — it launches the teardown and documents
+ * that it continues asynchronously — and the database files stay open until it does. Deleting them
+ * in that window races the block-cache teardown and the WAL checkpoint.
+ */
+private suspend fun CloseableSynchronizer.closeAndAwait() {
+    if (this is SdkSynchronizer) closeFlow().first() else close()
+}
+
 /** What the card's own wallet turned out to hold. */
 sealed interface GiftClaimOutcome {
     /** The funds are now in the recipient's wallet. */
@@ -151,13 +160,16 @@ internal class GiftClaimDataSourceImpl(
                 claimFrom(synchronizer, payload, recipientAddress, onProgress)
             } finally {
                 // Always, on every path. An engine left running holds its database files
-                // open and leaks a bearer seed into a background scan.
-                synchronizer.close()
+                // open and leaks a bearer seed into a background scan. NonCancellable because a
+                // cancelled claim still has to shut its engine down, and this suspends.
+                withContext(NonCancellable) { synchronizer.closeAndAwait() }
             }
 
-        // Only on a clean success (§5). Anything less may have left funds on the card, and the
-        // retained database is what lets the next attempt resume instead of rescanning.
-        if (outcome is GiftClaimOutcome.Claimed) deleteWallet(alias, network)
+        // Terminal outcomes only (§5). NotYetSpendable and NotBroadcast both resume against this
+        // database, and rescanning from the card's birthday is the cost of throwing it away.
+        if (outcome is GiftClaimOutcome.Claimed || outcome is GiftClaimOutcome.Empty) {
+            deleteWallet(alias, network)
+        }
         return outcome
     }
 
@@ -175,8 +187,11 @@ internal class GiftClaimDataSourceImpl(
         withContext(Dispatchers.IO) {
             val root = File(context.noBackupFilesDir, SDK_NO_BACKUP_SUBDIRECTORY)
             giftWalletFileNames(alias, network.networkName).forEach { name ->
-                runCatching { File(root, name).deleteRecursively() }
-                    .onFailure { Twig.warn { "Gift claim: $name could not be deleted" } }
+                val file = File(root, name)
+                // deleteRecursively reports failure by returning false, not by throwing, so a
+                // runCatching around it would never see the ordinary case.
+                val deleted = runCatching { !file.exists() || file.deleteRecursively() }.getOrDefault(false)
+                if (!deleted) Twig.warn { "Gift claim: $name could not be deleted" }
             }
         }
 

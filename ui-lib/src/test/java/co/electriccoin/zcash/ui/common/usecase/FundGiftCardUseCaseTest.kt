@@ -105,10 +105,44 @@ class FundGiftCardUseCaseTest {
             assertEquals(GiftFundingError.SUBMIT_UNCERTAIN, thrown.error)
         }
 
+    @Test
+    fun `refuses to re-prepare a card whose broadcast was already attempted`() =
+        runTest {
+            val fixture = Fixture(submitResult = SubmitResult.Success(listOf(TXID)))
+
+            val thrown =
+                assertFailsWith<GiftFundingException> {
+                    fixture.useCase.prepare(
+                        amount = Zatoshi(AMOUNT),
+                        existing = CARD.copy(fundingAttemptedAt = "2026-08-20T12:00:01Z"),
+                    )
+                }
+
+            // Stepping back to the details and continuing again clears the screen's error and
+            // lands here with the same card; only the record can refuse it.
+            assertEquals(GiftFundingError.SUBMIT_UNCERTAIN, thrown.error)
+            coVerify(exactly = 0) { fixture.accountDataSource.getSelectedAccount() }
+        }
+
+    @Test
+    fun `refuses to re-prepare a card that already has a funding txid`() =
+        runTest {
+            val fixture = Fixture(submitResult = SubmitResult.Success(listOf(TXID)))
+
+            val thrown =
+                assertFailsWith<GiftFundingException> {
+                    fixture.useCase.prepare(amount = Zatoshi(AMOUNT), existing = CARD.copy(fundingTxid = TXID))
+                }
+
+            assertEquals(GiftFundingError.SUBMIT_UNCERTAIN, thrown.error)
+            coVerify(exactly = 0) { fixture.accountDataSource.getSelectedAccount() }
+        }
+
     private class Fixture(
         submitResult: SubmitResult,
     ) {
         val storage = mockk<GiftCardStorageProvider>(relaxed = true)
+        val accountDataSource = mockk<AccountDataSource>(relaxed = true)
 
         val proposalDataSource =
             mockk<ProposalDataSource>(relaxed = true).also {
@@ -126,7 +160,7 @@ class FundGiftCardUseCaseTest {
         val useCase =
             FundGiftCardUseCase(
                 createGiftCard = mockk<CreateGiftCardUseCase>(relaxed = true),
-                accountDataSource = mockk<AccountDataSource>(relaxed = true),
+                accountDataSource = accountDataSource,
                 proposalDataSource = proposalDataSource,
                 zashiSpendingKeyDataSource = mockk<ZashiSpendingKeyDataSource>(relaxed = true),
                 giftCardStorageProvider = storage,
@@ -136,6 +170,7 @@ class FundGiftCardUseCaseTest {
     private companion object {
         const val ID = "6f1c0f6e-0b6b-4f2e-9a5a-6f1c0f6e0b6b"
         const val TXID = "f00d"
+        const val AMOUNT = 100_000_000L
 
         /** BIP-39 test vector for all-zero entropy. Never a real wallet. */
         const val MNEMONIC =
@@ -149,7 +184,7 @@ class FundGiftCardUseCaseTest {
                 network = "main",
                 address = "u1exampleunifiedaddressforgiftcardtests",
                 mnemonic = MNEMONIC,
-                amountZatoshi = 100_000_000L,
+                amountZatoshi = AMOUNT,
                 birthdayHeight = 2_800_000L,
                 sourceAccountUuid = "account-uuid",
                 createdAt = "2026-08-20T12:00:00Z",

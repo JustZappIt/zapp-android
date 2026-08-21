@@ -37,6 +37,8 @@ data class ChatProfileEditNameDialogState(
 data class ChatProfileDeleteDialogState(
     val onConfirm: () -> Unit,
     val onDismiss: () -> Unit,
+    /** A refusal rather than a confirmation: [onConfirm] reviews the cards instead of deleting. */
+    val isBlockedByGiftCards: Boolean = false,
 )
 
 data class ChatProfileSeedPhraseDialogState(
