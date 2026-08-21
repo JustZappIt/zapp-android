@@ -98,7 +98,6 @@ class GiftCardLedgerTest {
                 .status
         )
         assertEquals(GiftCardStatus.SHARED, GiftCardLedger.markFunded(shared, ID, TXID, LATEST).single().status)
-        assertEquals(GiftCardStatus.SHARED, GiftCardLedger.archive(shared, ID, LATEST).single().status)
     }
 
     @Test
@@ -133,30 +132,9 @@ class GiftCardLedgerTest {
     }
 
     @Test
-    fun `archiving keeps the record and its key material`() {
-        val funded = GiftCardLedger.markFunded(listOf(card()), ID, TXID, LATER)
-
-        val archived = GiftCardLedger.archive(funded, ID, LATER)
-
-        assertEquals(LATER, archived.single().archivedAt)
-        assertEquals(MNEMONIC, archived.single().mnemonic)
-        assertEquals(GiftCardStatus.FUNDED, archived.single().status)
-    }
-
-    @Test
-    fun `archiving twice keeps the first timestamp`() {
-        val funded = GiftCardLedger.markFunded(listOf(card()), ID, TXID, LATER)
-
-        val archived = GiftCardLedger.archive(GiftCardLedger.archive(funded, ID, LATER), ID, LATEST)
-
-        assertEquals(LATER, archived.single().archivedAt)
-    }
-
-    @Test
     fun `rejects a mutation naming a card that is not there`() {
         assertFailsWith<GiftCardTransitionException> { GiftCardLedger.markFunded(listOf(card()), "nope", TXID, LATER) }
         assertFailsWith<GiftCardTransitionException> { GiftCardLedger.markShared(listOf(card()), "nope", LATER) }
-        assertFailsWith<GiftCardTransitionException> { GiftCardLedger.archive(listOf(card()), "nope", LATER) }
         assertFailsWith<GiftCardTransitionException> {
             GiftCardLedger.recordFundingSubmitted(listOf(card()), "nope", TXID, LATER)
         }
@@ -185,16 +163,6 @@ class GiftCardLedgerTest {
         assertTrue(hasUnsharedFunds(submitted, ACCOUNT))
         assertTrue(hasUnsharedFunds(funded, ACCOUNT))
         assertFalse(hasUnsharedFunds(shared, ACCOUNT))
-    }
-
-    @Test
-    fun `counts archived cards as unshared funds`() {
-        val funded = GiftCardLedger.markFunded(listOf(card()), ID, TXID, LATER)
-
-        val archived = GiftCardLedger.archive(funded, ID, LATER)
-
-        // Archiving hides a card. It does not move its money, and there is no reclaim.
-        assertTrue(hasUnsharedFunds(archived, ACCOUNT))
     }
 
     @Test
@@ -242,6 +210,18 @@ class GiftCardLedgerTest {
     @Test
     fun `keeps the mnemonic out of toString`() {
         assertFalse(card().toString().contains(MNEMONIC))
+    }
+
+    @Test
+    fun `records a check without moving the card`() {
+        val shared = GiftCardLedger.markShared(GiftCardLedger.markFunded(listOf(card()), ID, TXID, LATER), ID, LATER)
+
+        val checked = GiftCardLedger.recordChecked(shared, ID, LATEST).single()
+
+        // The only new fact is when we last confirmed the funds were still there.
+        assertEquals(LATEST, checked.lastCheckedAt)
+        assertEquals(GiftCardStatus.SHARED, checked.status)
+        assertEquals(TXID, checked.fundingTxid)
     }
 
     @Test

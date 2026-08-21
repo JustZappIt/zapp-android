@@ -46,10 +46,11 @@ interface GiftCardStorageProvider {
 
     suspend fun markShared(id: String, at: String)
 
+    /** Records that the card's own wallet was scanned and still held its funds. */
+    suspend fun recordChecked(id: String, at: String)
+
     /** Records that the card's own wallet was observed empty, so its funds are settled. */
     suspend fun markClaimed(id: String, at: String)
-
-    suspend fun archive(id: String, at: String)
 
     /**
      * True while [accountUuid] — or any account, when it is null — owns funded cards whose links
@@ -98,9 +99,9 @@ internal class GiftCardStorageProviderImpl(
 
     override suspend fun markShared(id: String, at: String) = mutate { GiftCardLedger.markShared(it, id, at) }
 
-    override suspend fun markClaimed(id: String, at: String) = mutate { GiftCardLedger.markClaimed(it, id, at) }
+    override suspend fun recordChecked(id: String, at: String) = mutate { GiftCardLedger.recordChecked(it, id, at) }
 
-    override suspend fun archive(id: String, at: String) = mutate { GiftCardLedger.archive(it, id, at) }
+    override suspend fun markClaimed(id: String, at: String) = mutate { GiftCardLedger.markClaimed(it, id, at) }
 
     // store.get() throws StoreCorruptedException rather than returning null for a blob that is
     // present but will not decode, and that is deliberately not caught here: treating corrupt as

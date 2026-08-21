@@ -25,9 +25,36 @@ internal enum class GiftCardListStatus {
     CLAIMED,
 }
 
+/**
+ * How far a running check has got.
+ *
+ * Its existence is the signal that the scan has started: no progress is reported until the card's
+ * wallet has reached the server, so a null here means connecting and a non-null one means scanning.
+ * [fraction] stays null until the SDK measures something, which is a while into a scan.
+ */
+internal data class GiftCheckProgress(
+    val fraction: Float?,
+)
+
+/** Why a check cannot run right now. A greyed button with no reason reads as a broken button. */
+internal enum class GiftCheckBlocked {
+    /**
+     * No transaction id was ever recorded, so there is nothing to look for. True of a card that was
+     * never funded, and of one whose broadcast outcome was never seen — money may have left for
+     * that second one, which is why the copy must not claim nothing was sent.
+     */
+    NO_TRANSACTION,
+
+    /** Another card is being checked, and each check is a full chain scan. */
+    ANOTHER_RUNNING,
+}
+
 internal enum class GiftCardListError {
     LINK_FAILED,
     SHARE_FAILED,
+
+    /** The card's server was unreachable, so the scan never started. */
+    CHECK_UNREACHABLE,
 
     /** The scan could not finish, which says nothing about whether the card was collected. */
     CHECK_FAILED,
@@ -44,15 +71,20 @@ internal data class GiftCardListItem(
     val message: String?,
     val status: GiftCardListStatus,
     val expiry: GiftExpiryDisplay?,
-    val isArchived: Boolean,
-    val isCopied: Boolean,
-    /** Null once a card is settled, or while another card is being checked. */
+    /** When this card was last confirmed to still hold its funds. Null until one check completes. */
+    val lastCheckedAt: StringResource?,
+    /** Whether the control is shown at all. Hidden only once a card is settled. */
+    val isCheckable: Boolean,
+    /** Starts a check, or stops the one running. Null renders the control disabled rather than
+     *  absent, so rows do not silently differ. */
     val onCheck: (() -> Unit)?,
+    /** Non-null exactly when [onCheck] is null and [isCheckable] is true. */
+    val checkBlockedReason: GiftCheckBlocked?,
     val isChecking: Boolean,
-    /** Both null while the card holds nothing to hand over — see `GiftCardListVM.toItem`. */
-    val onCopy: (() -> Unit)?,
+    /** Null while still connecting — see [GiftCheckProgress]. */
+    val checkProgress: GiftCheckProgress?,
+    /** Null while the card holds nothing to hand over — see `GiftCardListVM.toItem`. */
     val onShare: ((String) -> Unit)?,
-    val onArchive: (() -> Unit)?,
 )
 
 /** A gift collected from someone else. A receipt only — it carries no key material. */
@@ -67,9 +99,6 @@ internal data class GiftCardListState(
     val items: List<GiftCardListItem>,
     val received: List<ReceivedGiftItem>,
     val isCorrupted: Boolean,
-    val hasArchived: Boolean,
-    val isShowingArchived: Boolean,
     val error: GiftCardListError?,
-    val onToggleArchived: () -> Unit,
     val onBack: () -> Unit,
 )

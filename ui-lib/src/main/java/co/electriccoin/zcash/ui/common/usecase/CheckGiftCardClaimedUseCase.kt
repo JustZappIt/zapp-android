@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.common.usecase
 
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.datasource.GiftCardHoldings
+import co.electriccoin.zcash.ui.common.datasource.GiftCardUnreachableException
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimProgress
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
@@ -25,6 +26,9 @@ enum class GiftCardCheckResult {
 
     /** The card was never funded, so there is nothing to have been collected. */
     NOT_FUNDED,
+
+    /** The card's server could not be reached, so the scan never started. */
+    UNREACHABLE,
 
     /** The scan could not finish. Says nothing about the card either way. */
     UNKNOWN,
@@ -52,38 +56,65 @@ class CheckGiftCardClaimedUseCase(
         // there. Only a funded card can be reported collected.
         if (card.fundingTxid == null) return GiftCardCheckResult.NOT_FUNDED
 
-        val holdings = inspect(card, onProgress)
-        return when {
-            holdings == null -> {
-                GiftCardCheckResult.UNKNOWN
+        return when (val outcome = inspect(card, onProgress)) {
+            is CheckOutcome.Failed -> {
+                outcome.result
             }
 
-            !holdings.isEmpty -> {
-                GiftCardCheckResult.WAITING
-            }
-
-            else -> {
-                markClaimed(card)
-                GiftCardCheckResult.COLLECTED
+            is CheckOutcome.Read -> {
+                if (outcome.holdings.isEmpty) {
+                    markClaimed(card)
+                    GiftCardCheckResult.COLLECTED
+                } else {
+                    recordChecked(card)
+                    GiftCardCheckResult.WAITING
+                }
             }
         }
     }
 
-    private suspend fun inspect(card: StoredGiftCard, onProgress: (GiftClaimProgress) -> Unit): GiftCardHoldings? {
+    private sealed interface CheckOutcome {
+        data class Read(
+            val holdings: GiftCardHoldings,
+        ) : CheckOutcome
+
+        data class Failed(
+            val result: GiftCardCheckResult,
+        ) : CheckOutcome
+    }
+
+    private suspend fun inspect(card: StoredGiftCard, onProgress: (GiftClaimProgress) -> Unit): CheckOutcome {
         val synchronizer = synchronizerProvider.getSynchronizer()
         val endpoint = persistableWalletProvider.requirePersistableWallet().endpoint
         return runCatching {
-            giftClaimDataSource.inspect(
-                payload = card.toLinkPayload(),
-                network = synchronizer.network,
-                endpoint = endpoint,
-                onProgress = onProgress,
+            CheckOutcome.Read(
+                giftClaimDataSource.inspect(
+                    payload = card.toLinkPayload(),
+                    network = synchronizer.network,
+                    endpoint = endpoint,
+                    onProgress = onProgress,
+                )
             )
         }.getOrElse { throwable ->
             if (throwable is CancellationException) throw throwable
             Twig.error(throwable) { "Gift card ${card.id} could not be checked" }
-            null
+            // Separated because the two need different copy: one is "you are offline", the other
+            // is "something went wrong". Neither says anything about the card.
+            if (throwable is GiftCardUnreachableException) {
+                CheckOutcome.Failed(GiftCardCheckResult.UNREACHABLE)
+            } else {
+                CheckOutcome.Failed(GiftCardCheckResult.UNKNOWN)
+            }
         }
+    }
+
+    /** Best effort for the same reason as [markClaimed]: it is a note about the past, not the card. */
+    private suspend fun recordChecked(card: StoredGiftCard) {
+        runCatching { giftCardStorageProvider.recordChecked(id = card.id, at = Clock.System.now().toString()) }
+            .onFailure { throwable ->
+                if (throwable is CancellationException) throw throwable
+                Twig.warn { "Gift card ${card.id} check time could not be recorded" }
+            }
     }
 
     /**

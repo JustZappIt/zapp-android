@@ -28,8 +28,10 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.security.MessageDigest
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * How far a claim has got, for a progress screen that would otherwise sit on a blank spinner.
@@ -89,6 +91,9 @@ private suspend fun CloseableSynchronizer.closeAndAwait() {
 private fun AccountBalance.shieldedAvailable() = sapling.available + orchard.available + ironwood.available
 
 private fun AccountBalance.shieldedTotal() = sapling.total + orchard.total + ironwood.total
+
+/** The card's server could not be reached at all, so nothing was learned about the card. */
+class GiftCardUnreachableException : RuntimeException("Card wallet could not reach its server")
 
 /** What a minted card's own wallet holds right now. */
 data class GiftCardHoldings(
@@ -211,6 +216,7 @@ internal class GiftClaimDataSourceImpl(
         val synchronizer = open(payload, network, endpoint, alias)
         val holdings =
             try {
+                awaitReachable(synchronizer)
                 awaitSynced(synchronizer, onProgress)
                 val account = synchronizer.getAccounts().first()
                 val balance =
@@ -386,6 +392,21 @@ internal class GiftClaimDataSourceImpl(
         }
     }
 
+    /**
+     * Bounds only the part that can hang forever: reaching the server at all.
+     *
+     * The scan that follows is deliberately unbounded — a legitimate one runs for minutes (§11.1)
+     * and the screen offers a stop instead — but a check is optional, so an unreachable server has
+     * to fail it rather than freeze it.
+     */
+    private suspend fun awaitReachable(synchronizer: Synchronizer) {
+        withTimeoutOrNull(SERVER_TIMEOUT) {
+            synchronizer.status.first {
+                it != Synchronizer.Status.INITIALIZING && it != Synchronizer.Status.DISCONNECTED
+            }
+        } ?: throw GiftCardUnreachableException()
+    }
+
     private suspend fun awaitSynced(
         synchronizer: Synchronizer,
         onProgress: (GiftClaimProgress) -> Unit,
@@ -407,6 +428,13 @@ internal class GiftClaimDataSourceImpl(
     }
 
     private companion object {
+        /**
+         * Generous on purpose. This waits out a *cold* isolated synchronizer, which creates its
+         * database and connects from scratch, so a short bound fails checks that would have
+         * worked. Only the unreachable case needs catching — a stop button covers the rest.
+         */
+        val SERVER_TIMEOUT = 90.seconds
+
         const val GIFT_ACCOUNT_NAME = "gift"
         const val ALIAS_HASH_CHARS = 48
 

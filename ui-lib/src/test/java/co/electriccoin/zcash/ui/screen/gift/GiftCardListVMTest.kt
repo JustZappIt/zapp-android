@@ -9,7 +9,6 @@ import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
 import co.electriccoin.zcash.ui.common.usecase.CheckGiftCardClaimedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
-import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
 import co.electriccoin.zcash.ui.screen.gift.model.GiftCardStatus
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkCodec
@@ -58,8 +57,6 @@ class GiftCardListVMTest {
 
             val item = state.items.single()
             assertEquals(GiftCardListStatus.SUBMITTED, item.status)
-            // Archiving would hide the very record that blocks the wallet wipe.
-            assertNull(item.onArchive)
         }
 
     @Test
@@ -68,35 +65,21 @@ class GiftCardListVMTest {
             val fixture = fixture(card(fundingTxid = TXID))
             val state = collectState(fixture)
 
-            assertNotNull(state.items.single().onCopy).invoke()
+            assertNotNull(state.items.single().onShare).invoke("share")
             advanceUntilIdle()
 
-            assertEquals(MNEMONIC, GiftLinkCodec.decode(fixture.copiedLink.captured, ZcashNetwork.Mainnet).mnemonic)
-            coVerify(exactly = 1) { fixture.shareGiftLink.markHandedOut(ID) }
+            assertEquals(MNEMONIC, GiftLinkCodec.decode(fixture.sharedLink.captured, ZcashNetwork.Mainnet).mnemonic)
+            coVerify(exactly = 1) { fixture.shareGiftLink(cardId = ID, link = any(), sharePickerText = any()) }
         }
 
     @Test
-    fun `offers archive only once the link has left the device`() =
-        runTest {
-            val fixture = fixture(card(fundingTxid = TXID, status = GiftCardStatus.SHARED))
-
-            val state = collectState(fixture)
-
-            assertEquals(GiftCardListStatus.SHARED, state.items.single().status)
-            assertNotNull(state.items.single().onArchive)
-        }
-
-    @Test
-    fun `refuses to hand out a draft that was never funded`() =
+    fun `hides a draft that was never funded`() =
         runTest {
             val fixture = fixture(card())
 
-            val item = collectState(fixture).items.single()
-
-            // The link would encode and look real, and pay the recipient nothing.
-            assertEquals(GiftCardListStatus.UNFUNDED, item.status)
-            assertNull(item.onCopy)
-            assertNull(item.onShare)
+            // Minting happens before funding, so backing out of the review screen strands a draft
+            // nothing was ever sent to. It cannot be handed out, checked, or recovered from.
+            assertTrue(collectState(fixture).items.isEmpty())
         }
 
     @Test
@@ -108,7 +91,6 @@ class GiftCardListVMTest {
 
             // The money may already have gone, and then this link is the only route to it.
             assertEquals(GiftCardListStatus.UNRESOLVED, item.status)
-            assertNotNull(item.onCopy)
             assertNotNull(item.onShare)
         }
 
@@ -121,20 +103,44 @@ class GiftCardListVMTest {
 
             // Its link is spent; passing it on hands the recipient a dead card.
             assertEquals(GiftCardListStatus.CLAIMED, item.status)
-            assertNull(item.onCopy)
             assertNull(item.onShare)
             // Nothing left to check either.
             assertNull(item.onCheck)
         }
 
     @Test
-    fun `offers a collected check only once a card has been funded`() =
+    fun `disables the collected check until there is a transaction to look for`() =
         runTest {
-            val unfunded = fixture(card())
-            assertNull(collectState(unfunded).items.single().onCheck)
+            val unresolved = fixture(card(fundingAttemptedAt = ATTEMPTED_AT))
+
+            val pending = collectState(unresolved).items.single()
+
+            // Money may well have left for this card, so the reason must not claim otherwise.
+            assertEquals(GiftCardListStatus.UNRESOLVED, pending.status)
+            assertNull(pending.onCheck)
+            assertEquals(GiftCheckBlocked.NO_TRANSACTION, pending.checkBlockedReason)
 
             val funded = fixture(card(fundingTxid = TXID))
             assertNotNull(collectState(funded).items.single().onCheck)
+        }
+
+    @Test
+    fun `shows when a card was last confirmed unclaimed`() =
+        runTest {
+            val fixture = fixture(card(fundingTxid = TXID, lastCheckedAt = ATTEMPTED_AT))
+
+            // Without this the scan finishes and the row looks exactly as it did before it ran.
+            assertNotNull(collectState(fixture).items.single().lastCheckedAt)
+        }
+
+    @Test
+    fun `drops the last-checked note once a card is collected`() =
+        runTest {
+            val fixture =
+                fixture(card(fundingTxid = TXID, lastCheckedAt = ATTEMPTED_AT, status = GiftCardStatus.CLAIMED))
+
+            // "Collected" already says everything; a stale "still on the card" beside it would lie.
+            assertNull(collectState(fixture).items.single().lastCheckedAt)
         }
 
     @Test
@@ -193,8 +199,12 @@ class GiftCardListVMTest {
         storeThrows: Boolean,
         received: List<ReceivedGift> = emptyList(),
     ) {
-        val copiedLink = slot<String>()
-        val shareGiftLink = mockk<ShareGiftLinkUseCase>(relaxed = true)
+        val sharedLink = slot<String>()
+
+        val shareGiftLink =
+            mockk<ShareGiftLinkUseCase>(relaxed = true).also {
+                coEvery { it(cardId = any(), link = capture(sharedLink), sharePickerText = any()) } returns true
+            }
         val checkGiftCardClaimed = mockk<CheckGiftCardClaimedUseCase>(relaxed = true)
 
         private val receivedStorage =
@@ -213,11 +223,6 @@ class GiftCardListVMTest {
                 coEvery { storage.get(card.id) } returns card
             }
 
-        private val copyToClipboard =
-            mockk<CopyToClipboardUseCase>().also {
-                every { it.invoke(capture(copiedLink), any()) } returns Unit
-            }
-
         val vm =
             GiftCardListVM(
                 giftCardStorageProvider = storage,
@@ -225,7 +230,6 @@ class GiftCardListVMTest {
                 checkGiftCardClaimed = checkGiftCardClaimed,
                 receivedGiftStorageProvider = receivedStorage,
                 shareGiftLink = shareGiftLink,
-                copyToClipboard = copyToClipboard,
                 navigationRouter = mockk<NavigationRouter>(relaxed = true),
             )
     }
@@ -244,6 +248,7 @@ class GiftCardListVMTest {
         fun card(
             fundingTxid: String? = null,
             fundingAttemptedAt: String? = null,
+            lastCheckedAt: String? = null,
             status: GiftCardStatus = GiftCardStatus.DRAFT,
         ) = StoredGiftCard(
             id = ID,
@@ -258,6 +263,7 @@ class GiftCardListVMTest {
             status = status,
             fundingTxid = fundingTxid,
             fundingAttemptedAt = fundingAttemptedAt,
+            lastCheckedAt = lastCheckedAt,
         )
     }
 }

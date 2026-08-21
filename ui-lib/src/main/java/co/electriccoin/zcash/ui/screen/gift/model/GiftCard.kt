@@ -88,7 +88,12 @@ data class StoredGiftCard(
      * process died mid-broadcast, or the submit came back uncertain.
      */
     val fundingAttemptedAt: String? = null,
-    val archivedAt: String? = null,
+    /**
+     * When the card's own wallet was last scanned and found to still hold its funds. Only a
+     * conclusive look sets it, so it is evidence of "still unclaimed as of then" rather than of
+     * having tried.
+     */
+    val lastCheckedAt: String? = null,
 ) {
     /**
      * A broadcast was started for this card. Whether it landed is a separate question — and an
@@ -102,8 +107,7 @@ data class StoredGiftCard(
      * Money has left the sender's wallet — or may have — and the link has not left the device, so
      * this record is the only route back to it. A txid rather than [GiftCardStatus.FUNDED], because
      * a submitted transaction is already spent; [fundingAttemptedAt] too, because a broadcast whose
-     * outcome nobody saw has to be assumed to have landed; archived cards included, because
-     * archiving moves no money.
+     * outcome nobody saw has to be assumed to have landed.
      */
     val isUnsharedFunds: Boolean
         get() = hasFundingAttempt && status < GiftCardStatus.SHARED

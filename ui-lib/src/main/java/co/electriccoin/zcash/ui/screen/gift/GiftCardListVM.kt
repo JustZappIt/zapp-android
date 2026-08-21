@@ -13,7 +13,6 @@ import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
 import co.electriccoin.zcash.ui.common.usecase.CheckGiftCardClaimedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
-import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GiftCardCheckResult
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -24,7 +23,6 @@ import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
 import co.electriccoin.zcash.ui.screen.gift.model.toLinkPayload
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -49,17 +47,15 @@ class GiftCardListVM(
     private val checkGiftCardClaimed: CheckGiftCardClaimedUseCase,
     receivedGiftStorageProvider: ReceivedGiftStorageProvider,
     private val shareGiftLink: ShareGiftLinkUseCase,
-    private val copyToClipboard: CopyToClipboardUseCase,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
-    private val isShowingArchived = MutableStateFlow(false)
-    private val copiedId = MutableStateFlow<String?>(null)
     private val errorFlow = MutableStateFlow<GiftCardListError?>(null)
     private val isCorrupted = MutableStateFlow(false)
     private val checkingId = MutableStateFlow<String?>(null)
+    private val checkProgress = MutableStateFlow<GiftCheckProgress?>(null)
 
-    private var copyFeedbackJob: Job? = null
     private var shareJob: Job? = null
+    private var checkJob: Job? = null
 
     private val cards =
         giftCardStorageProvider
@@ -84,20 +80,19 @@ class GiftCardListVM(
     internal val state: StateFlow<GiftCardListState?> =
         combine(
             cards,
-            combine(isShowingArchived, received) { showArchived, receipts -> showArchived to receipts },
-            combine(copiedId, checkingId) { copied, checking -> copied to checking },
+            received,
+            combine(checkingId, checkProgress) { checking, progress -> checking to progress },
             errorFlow,
             isCorrupted,
-        ) { all, (showArchived, receipts), (copied, checking), err, corrupted ->
-            val visible = all.filter { showArchived || it.archivedAt == null }
+        ) { all, receipts, (checking, progress), err, corrupted ->
+            // A draft nothing was ever sent to is an artefact of minting before funding, not a card
+            // the sender made. It cannot be handed out, checked, or recovered from — only clutter.
+            val visible = all.filter { it.hasFundingAttempt }
             GiftCardListState(
-                items = visible.sortedWith(DISPLAY_ORDER).map { toItem(it, copied, checking) },
+                items = visible.sortedWith(DISPLAY_ORDER).map { toItem(it, checking, progress) },
                 received = receipts.map { it.toReceivedItem() },
                 isCorrupted = corrupted,
-                hasArchived = all.any { it.archivedAt != null },
-                isShowingArchived = showArchived,
                 error = err,
-                onToggleArchived = { isShowingArchived.value = !isShowingArchived.value },
                 onBack = navigationRouter::back,
             )
         }.stateIn(
@@ -111,14 +106,26 @@ class GiftCardListVM(
         viewModelScope.launch { runCatching { confirmGiftCardFunding.reconcile() } }
     }
 
-    private fun toItem(card: StoredGiftCard, copiedId: String?, checkingId: String?): GiftCardListItem {
+    private fun toItem(
+        card: StoredGiftCard,
+        checkingId: String?,
+        checkProgress: GiftCheckProgress?,
+    ): GiftCardListItem {
         val status = card.listStatus()
         // An unfunded draft encodes into a link that looks real and pays nothing, and a collected
         // card's link is spent — both hand the recipient something worthless. Unresolved counts as
         // handable: the money may already have gone, and if it has, the link is the only route.
         val canHandOff = status != GiftCardListStatus.UNFUNDED && status != GiftCardListStatus.CLAIMED
-        // One at a time: each check is a full scan of that card's wallet.
-        val canCheck = card.fundingTxid != null && status != GiftCardListStatus.CLAIMED && checkingId == null
+        // Shown for everything still in play, so rows do not silently differ; enabled only where
+        // there is a funding to look for, and one at a time because each check is a full scan.
+        val isCheckable = status != GiftCardListStatus.CLAIMED
+        val blockedReason =
+            when {
+                card.fundingTxid == null -> GiftCheckBlocked.NO_TRANSACTION
+                checkingId != null && card.id != checkingId -> GiftCheckBlocked.ANOTHER_RUNNING
+                else -> null
+            }
+        val canCheck = isCheckable && blockedReason == null
         return GiftCardListItem(
             id = card.id,
             amount = stringRes(Zatoshi(card.amountZatoshi)),
@@ -126,32 +133,14 @@ class GiftCardListVM(
             message = card.message,
             status = status,
             expiry = card.expiresAt.toGiftExpiryDisplay(),
-            isArchived = card.archivedAt != null,
-            isCopied = card.id == copiedId,
+            lastCheckedAt = card.lastCheckedAt?.toGiftDisplayDate().takeIf { status != GiftCardListStatus.CLAIMED },
+            isCheckable = isCheckable,
             onCheck = { onCheck(card.id) }.takeIf { canCheck || card.id == checkingId },
+            checkBlockedReason = blockedReason.takeIf { isCheckable && card.id != checkingId },
             isChecking = card.id == checkingId,
-            onCopy = { onCopy(card.id) }.takeIf { canHandOff },
+            checkProgress = checkProgress.takeIf { card.id == checkingId },
             onShare = { picker: String -> onShare(card.id, picker) }.takeIf { canHandOff },
-            // Archiving a card that still counts as unshared funds would hide the very record that
-            // blocks the wallet wipe, so that card stays on the list until its link is handed out.
-            onArchive = { onArchive(card.id) }.takeIf { card.archivedAt == null && !card.isUnsharedFunds },
         )
-    }
-
-    private fun onCopy(cardId: String) {
-        viewModelScope.launch {
-            val link = linkFor(cardId) ?: return@launch
-            copyToClipboard(link, isSensitive = true)
-            shareGiftLink.markHandedOut(cardId)
-            errorFlow.value = null
-            copiedId.value = cardId
-            copyFeedbackJob?.cancel()
-            copyFeedbackJob =
-                viewModelScope.launch {
-                    delay(COPY_FEEDBACK_DURATION_MS)
-                    copiedId.value = null
-                }
-        }
     }
 
     private fun onShare(cardId: String, sharePickerText: String) {
@@ -166,33 +155,40 @@ class GiftCardListVM(
             }
     }
 
+    /** Starts a check, or stops the one already running on this card. */
     private fun onCheck(cardId: String) {
-        if (checkingId.value != null) return
-        viewModelScope.launch {
-            checkingId.value = cardId
-            try {
-                val card = runCatching { giftCardStorageProvider.get(cardId) }.getOrNull()
-                val result =
-                    if (card == null) {
-                        GiftCardCheckResult.UNKNOWN
-                    } else {
-                        checkGiftCardClaimed(card) { }
-                    }
-                errorFlow.value = GiftCardListError.CHECK_FAILED.takeIf { result == GiftCardCheckResult.UNKNOWN }
-            } finally {
-                checkingId.value = null
-            }
+        if (checkJob?.isActive == true) {
+            // The scan can legitimately run for minutes (§11.1), so a stop is the only honest
+            // control: there is no duration at which giving up is automatically right.
+            checkJob?.cancel()
+            return
         }
-    }
-
-    private fun onArchive(cardId: String) {
-        viewModelScope.launch {
-            runCatching { giftCardStorageProvider.archive(id = cardId, at = Clock.System.now().toString()) }
-                .onFailure { throwable ->
-                    if (throwable is CancellationException) throw throwable
-                    Twig.warn { "Gift card $cardId could not be archived" }
+        checkJob =
+            viewModelScope.launch {
+                checkingId.value = cardId
+                checkProgress.value = null
+                errorFlow.value = null
+                try {
+                    val card = runCatching { giftCardStorageProvider.get(cardId) }.getOrNull()
+                    val result =
+                        if (card == null) {
+                            GiftCardCheckResult.UNKNOWN
+                        } else {
+                            checkGiftCardClaimed(card) { progress ->
+                                checkProgress.value = GiftCheckProgress(progress.fraction.takeIf { it > 0f })
+                            }
+                        }
+                    errorFlow.value =
+                        when (result) {
+                            GiftCardCheckResult.UNREACHABLE -> GiftCardListError.CHECK_UNREACHABLE
+                            GiftCardCheckResult.UNKNOWN -> GiftCardListError.CHECK_FAILED
+                            else -> null
+                        }
+                } finally {
+                    checkingId.value = null
+                    checkProgress.value = null
                 }
-        }
+            }
     }
 
     /**
@@ -213,8 +209,6 @@ class GiftCardListVM(
         }
 
     private companion object {
-        const val COPY_FEEDBACK_DURATION_MS = 2_000L
-
         /** Cards that still need a hand-off first, then newest first within each group. */
         val DISPLAY_ORDER =
             compareByDescending<StoredGiftCard> { it.isUnsharedFunds }
