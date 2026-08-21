@@ -16,12 +16,16 @@ class GiftCardTransitionException(
  *
  *  - Status only ever advances. A card that regresses is a card the UI stops accounting for.
  *  - A card is never recorded [GiftCardStatus.FUNDED] without a funding txid.
+ *  - A card is never recorded settled without evidence its funding reached the card.
  *  - A mutation never drops a record or rewrites its key material.
  *
- * There is a fourth state implied by the flow and absent from the enum: funding submitted but not
- * yet mined. It is represented as [GiftCardStatus.DRAFT] carrying a
- * [StoredGiftCard.fundingTxid] — see [recordFundingSubmitted]. That is what lets a sender share a
- * card in the ~75 seconds before its funding mines without the record claiming it has mined.
+ * The status is a *delivery* ordinal, not a description of the money. Funding submitted but not yet
+ * mined has no rank of its own: it is [GiftCardStatus.DRAFT] carrying a [StoredGiftCard.fundingTxid]
+ * — see [recordFundingSubmitted] — which is what lets a sender share a card in the ~75 seconds
+ * before its funding mines without the record claiming it has mined. Because sharing outranks
+ * [GiftCardStatus.FUNDED] and the ordinal only climbs, the confirmation itself is kept off the enum
+ * entirely, in [StoredGiftCard.fundingMinedAt]. Every caller that needs to know whether the money is
+ * really on the card asks [StoredGiftCard.isFundingMined], never the status.
  */
 object GiftCardLedger {
     /**
@@ -69,6 +73,12 @@ object GiftCardLedger {
      * Marks a card funded once its transaction has mined. Requires the txid, which is the whole
      * point of the guard: a card recorded as funded with no transaction behind it is a card the
      * sender believes exists and the recipient cannot claim.
+     *
+     * Records [StoredGiftCard.fundingMinedAt] as well as advancing the status, and that is the half
+     * that survives a card already past [GiftCardStatus.FUNDED]: a sender who shared during the
+     * submit-to-mine window still gets the confirmation written down, where the status has no room
+     * for it. First observation wins — the field is when the funding was *seen* to have mined, and
+     * a second sweep over the same transaction is not a new event.
      */
     fun markFunded(
         cards: List<StoredGiftCard>,
@@ -82,17 +92,30 @@ object GiftCardLedger {
                 card.fundingTxid == null || card.fundingTxid == fundingTxid,
                 "Gift card $id is already funded by a different transaction"
             )
-            card.advancedTo(GiftCardStatus.FUNDED, at).copy(fundingTxid = fundingTxid, fundingAttemptedAt = null)
+            card
+                .advancedTo(GiftCardStatus.FUNDED, at)
+                .copy(
+                    fundingTxid = fundingTxid,
+                    fundingAttemptedAt = null,
+                    fundingMinedAt = card.fundingMinedAt ?: at,
+                )
         }
 
     /**
-     * Marks the link as handed out. Requires a funding txid rather than [GiftCardStatus.FUNDED],
-     * because the sender may share in the window between submit and the funding mining — but never
-     * before there is a transaction at all, which would hand out a link to an empty address.
+     * Marks the link as handed out. Requires only that a broadcast was *started* — not a mined
+     * funding, and not even a txid.
+     *
+     * The weakest of the three guards, deliberately. A sender may share in the window between
+     * submit and the funding mining, and a card whose broadcast outcome was never seen
+     * ([StoredGiftCard.fundingAttemptedAt] with no txid) has to be shareable too: its money may
+     * already have gone, and then the link is the only route to it. Refusing that case would leave
+     * the sender a card the UI offers to hand out and the ledger will not record — permanently
+     * unshareable, permanently blocking the reset guard. What stays forbidden is the one case that
+     * hands out a link to an address nothing was ever sent to.
      */
     fun markShared(cards: List<StoredGiftCard>, id: String, at: String): List<StoredGiftCard> =
         cards.replacing(id) { card ->
-            ensure(card.fundingTxid != null, "Gift card $id has not been funded yet")
+            ensure(card.hasFundingAttempt, "Gift card $id has not been funded yet")
             card.advancedTo(GiftCardStatus.SHARED, at)
         }
 
@@ -104,14 +127,25 @@ object GiftCardLedger {
         cards.replacing(id) { card -> card.copy(lastCheckedAt = at, updatedAt = at) }
 
     /**
-     * Marks a card as collected, once its own wallet has been observed empty. Requires a funding
-     * txid: a card with no transaction behind it was never claimable, so an empty wallet there
-     * means it was never funded, not that somebody took it.
+     * Marks a card as collected, once its own wallet has been observed empty *having first held the
+     * funding*.
+     *
+     * Both halves of that are load-bearing, and this is the transition where getting it wrong costs
+     * money: settling is terminal, and a settled card can no longer be handed out, re-checked or
+     * counted by the reset guard. An empty wallet on its own does not distinguish "somebody took
+     * it" from "the funding never arrived" — a transaction still in the mempool, or one that was
+     * dropped and may yet mine before it expires — so the caller must establish that the money
+     * reached the card before calling this, and `CheckGiftCardClaimedUseCase` does that from the
+     * card's own transaction history rather than from the status.
+     *
+     * The txid guard stays as the local half of the same check, and the observation is itself proof
+     * the funding mined, so it backfills [StoredGiftCard.fundingMinedAt] for a card settled before
+     * anything got round to confirming it.
      */
     fun markClaimed(cards: List<StoredGiftCard>, id: String, at: String): List<StoredGiftCard> =
         cards.replacing(id) { card ->
             ensure(card.fundingTxid != null, "Gift card $id has not been funded yet")
-            card.advancedTo(GiftCardStatus.CLAIMED, at)
+            card.advancedTo(GiftCardStatus.CLAIMED, at).copy(fundingMinedAt = card.fundingMinedAt ?: at)
         }
 
     private fun List<StoredGiftCard>.replacing(

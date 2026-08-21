@@ -37,7 +37,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Throwaway spike for `docs/GIFT_CARDS_PLAN.md` §7.1.
+ * Throwaway spike for `docs/gift-cards.md` §7.1.
  *
  * The claim flow needs a second [Synchronizer] running against a bearer seed while the wallet's own
  * one keeps going. The SDK documents that as supported — [Synchronizer.new] throws only for a

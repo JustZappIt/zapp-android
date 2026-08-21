@@ -69,12 +69,27 @@ interface GiftCardStorageProvider {
 internal class GiftCardStorageProviderImpl(
     encryptedPreferenceProvider: EncryptedPreferenceProvider,
 ) : GiftCardStorageProvider {
-    // One versioned key holding the whole list, rather than a key per card: EncryptedJsonStore is
-    // single-key, and a list makes each mutation a single atomic write. Schema changes bump the
-    // key; they never loosen the decode, because a decode that shrugs at a field it does not
-    // recognise is a decode that can quietly drop a card.
+    // One key holding the whole list, rather than a key per card: EncryptedJsonStore is single-key,
+    // and a list makes each mutation a single atomic write.
+    //
+    // Strict, unlike every other store on EncryptedJsonStore. A tolerant decode drops a field it
+    // does not recognise and then writes the record back without it, which on this store means an
+    // older build silently discarding part of the only copy of a card's recovery data. Failing the
+    // read instead is safe: `mutate` reads before it writes, so a refused read refuses the write
+    // too, and the list screen renders its corrupted state rather than a list with a card missing.
+    //
+    // The corollary is that the key must NOT be versioned. Bumping it reads back an absent key,
+    // which is indistinguishable from "no cards" — every stored seed orphaned behind a name nothing
+    // looks up any more, with no reclaim and no derivation from the wallet seed to fall back on.
+    // Additive fields with defaults are the supported change; anything else needs a migration that
+    // reads the old key and writes the new one before this constructor is reached.
     private val store =
-        EncryptedJsonStore(encryptedPreferenceProvider, PREF_KEY, ListSerializer(StoredGiftCard.serializer()))
+        EncryptedJsonStore(
+            encryptedPreferenceProvider,
+            PREF_KEY,
+            ListSerializer(StoredGiftCard.serializer()),
+            strict = true,
+        )
 
     // Every mutation is read-modify-write over the whole list, so concurrent ones would otherwise
     // interleave and lose a card.
@@ -110,6 +125,7 @@ internal class GiftCardStorageProviderImpl(
         mutex.withLock { store.set(transform(store.get().orEmpty())) }
 
     private companion object {
+        /** Never bump this without a migration that carries the records across — see [store]. */
         const val PREF_KEY = "gift_cards_v1"
     }
 }

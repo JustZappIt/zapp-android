@@ -70,6 +70,44 @@ class ConfirmGiftCardFundingUseCaseTest {
             coVerify(exactly = 1) { storage.markFunded(id = ID, fundingTxid = TXID, at = any()) }
         }
 
+    @Test
+    fun `confirms a card whose link was handed out before its funding mined`() =
+        runTest {
+            val storage = storage(card(fundingTxid = TXID, status = GiftCardStatus.SHARED))
+            val useCase = useCase(storage, listOf(send(TXID, recipient = ADDRESS, mined = true)))
+
+            useCase.reconcile()
+
+            // Sharing outranks funded and the status only climbs, so a sweep scoped to drafts never
+            // looked at this card again — leaving the one card that had money on it and no record
+            // saying so. Nothing else can tell it from a card whose funding was dropped.
+            coVerify(exactly = 1) { storage.markFunded(id = ID, fundingTxid = TXID, at = any()) }
+        }
+
+    @Test
+    fun `leaves a card whose funding is already confirmed alone`() =
+        runTest {
+            val storage = storage(card(fundingTxid = TXID, fundingMinedAt = NOW, status = GiftCardStatus.SHARED))
+            val useCase = useCase(storage, listOf(send(TXID, recipient = ADDRESS, mined = true)))
+
+            useCase.reconcile()
+
+            coVerify(exactly = 0) { storage.markFunded(any(), any(), any()) }
+        }
+
+    @Test
+    fun `reattaches an unresolved broadcast on a card whose link already went out`() =
+        runTest {
+            val storage = storage(card(fundingAttemptedAt = NOW, status = GiftCardStatus.SHARED))
+            val useCase = useCase(storage, listOf(send(TXID, recipient = ADDRESS, mined = true)))
+
+            useCase.reconcile()
+
+            // Handing out an unresolved card is allowed, so the sweep cannot stop at drafts here
+            // either: this is the only thing that ever writes the txid down.
+            coVerify(exactly = 1) { storage.recordFundingSubmitted(id = ID, fundingTxid = TXID, at = any()) }
+        }
+
     private fun storage(vararg cards: StoredGiftCard) =
         mockk<GiftCardStorageProvider>(relaxed = true).also { coEvery { it.getAll() } returns cards.toList() }
 
@@ -95,6 +133,8 @@ class ConfirmGiftCardFundingUseCaseTest {
     private fun card(
         fundingTxid: String? = null,
         fundingAttemptedAt: String? = null,
+        fundingMinedAt: String? = null,
+        status: GiftCardStatus = GiftCardStatus.DRAFT,
     ) = StoredGiftCard(
         id = ID,
         network = "main",
@@ -105,9 +145,10 @@ class ConfirmGiftCardFundingUseCaseTest {
         sourceAccountUuid = "account-1",
         createdAt = NOW,
         updatedAt = NOW,
-        status = GiftCardStatus.DRAFT,
+        status = status,
         fundingTxid = fundingTxid,
         fundingAttemptedAt = fundingAttemptedAt,
+        fundingMinedAt = fundingMinedAt,
     )
 
     private companion object {

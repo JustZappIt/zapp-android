@@ -27,6 +27,13 @@ enum class GiftCardCheckResult {
     /** The card was never funded, so there is nothing to have been collected. */
     NOT_FUNDED,
 
+    /**
+     * The card's own wallet was scanned and its funding has never arrived, so nothing can have been
+     * taken from it. The transaction is still in the mempool, or was dropped — and a dropped one can
+     * still mine until it expires, which is exactly why this is not [COLLECTED].
+     */
+    FUNDING_PENDING,
+
     /** The card's server could not be reached, so the scan never started. */
     UNREACHABLE,
 
@@ -41,6 +48,13 @@ enum class GiftCardCheckResult {
  * spent is a scan with the card's own viewing key — the same minutes-long sync a claim performs
  * (§11.1). That cost is why this is one card at a time on request, and never a background sweep
  * across the list.
+ *
+ * An empty wallet is not on its own an answer, and treating it as one is how a card gets settled
+ * while its money is still on the way. The scan therefore reads the card wallet's own history
+ * alongside its balance, and only the pair — funding arrived, balance now zero — reports collected.
+ * That evidence comes from the card's wallet rather than the sender's records on purpose: it stays
+ * correct on a device that has never seen the funding transaction, and it is the same evidence
+ * whether the card was minted here or restored from somewhere else.
  */
 class CheckGiftCardClaimedUseCase(
     private val synchronizerProvider: SynchronizerProvider,
@@ -62,12 +76,23 @@ class CheckGiftCardClaimedUseCase(
             }
 
             is CheckOutcome.Read -> {
-                if (outcome.holdings.isEmpty) {
-                    markClaimed(card)
-                    GiftCardCheckResult.COLLECTED
-                } else {
-                    recordChecked(card)
-                    GiftCardCheckResult.WAITING
+                when {
+                    outcome.holdings.isCollected -> {
+                        markClaimed(card)
+                        GiftCardCheckResult.COLLECTED
+                    }
+
+                    // Scanned to the tip and the funding is not there. Deliberately not recorded as
+                    // a check: `lastCheckedAt` claims the card still held its funds, and this says
+                    // the opposite — that they never reached it.
+                    outcome.holdings.isEmpty -> {
+                        GiftCardCheckResult.FUNDING_PENDING
+                    }
+
+                    else -> {
+                        recordChecked(card)
+                        GiftCardCheckResult.WAITING
+                    }
                 }
             }
         }

@@ -432,6 +432,9 @@ private fun ErrorBanner(error: GiftCardError) {
     )
 }
 
+// A lookup table, not a decision: one arm per case, no nesting, and exhaustive so a new error
+// cannot be added without landing here. Same reasoning as `SubmitResultFold`.
+@Suppress("CyclomaticComplexMethod")
 @StringRes
 private fun GiftCardError.messageRes(): Int =
     when (this) {
@@ -448,6 +451,7 @@ private fun GiftCardError.messageRes(): Int =
         GiftCardError.SUBMIT_REJECTED -> R.string.gift_card_error_submit
         GiftCardError.SUBMIT_UNCERTAIN -> R.string.gift_card_error_submit_uncertain
         GiftCardError.SHARE_FAILED -> R.string.gift_card_error_share
+        GiftCardError.HANDOFF_FAILED -> R.string.gift_card_error_handoff
     }
 
 internal object GiftCardTag {

@@ -95,13 +95,29 @@ private fun AccountBalance.shieldedTotal() = sapling.total + orchard.total + iro
 /** The card's server could not be reached at all, so nothing was learned about the card. */
 class GiftCardUnreachableException : RuntimeException("Card wallet could not reach its server")
 
-/** What a minted card's own wallet holds right now. */
+/** What a minted card's own wallet holds right now, and whether it ever held anything. */
 data class GiftCardHoldings(
     val available: Zatoshi,
     val total: Zatoshi,
+    /**
+     * Whether the card's own wallet has a mined transaction in it.
+     *
+     * The card's wallet is created for one card and has no history before its funding, so a single
+     * mined transaction anywhere in it is proof the money arrived — the funding itself, or the
+     * claim that spent it. False means the funding has not mined: still in the mempool, or dropped
+     * and possibly yet to mine before it expires.
+     */
+    val hasFundingArrived: Boolean,
 ) {
-    /** Nothing left. For a card known to have been funded, that means somebody collected it. */
+    /** Nothing left. On its own this does not say why — see [isCollected]. */
     val isEmpty: Boolean get() = total == Zatoshi.ZERO
+
+    /**
+     * Somebody took the money. The only reading of an empty wallet that settles a card, and it
+     * needs both halves: an empty wallet that never held the funding was not collected, it was
+     * never funded, and settling it would strand the card if its funding mined afterwards.
+     */
+    val isCollected: Boolean get() = hasFundingArrived && isEmpty
 }
 
 /** What the card's own wallet turned out to hold. */
@@ -142,7 +158,7 @@ sealed interface GiftClaimOutcome {
  * The card's wallet is a second, entirely separate [Synchronizer] — never the app's own. The main
  * one is owned by `WalletCoordinator` and must not be extended or repointed: it holds the user's
  * real funds and a bearer seed has no business inside it. Running two concurrently was verified on
- * device before any of this was written (see `docs/GIFT_CARDS_PLAN.md` §7.1): no SQLite contention,
+ * device before any of this was written (see `docs/gift-cards.md` §7.1): no SQLite contention,
  * per-alias database and block-cache paths, and a duplicate alias rejected outright.
  */
 interface GiftClaimDataSource {
@@ -224,14 +240,24 @@ internal class GiftClaimDataSourceImpl(
                         .filterNotNull()
                         .first()
                         .getValue(account.accountUuid)
-                GiftCardHoldings(available = balance.shieldedAvailable(), total = balance.shieldedTotal())
+                GiftCardHoldings(
+                    available = balance.shieldedAvailable(),
+                    total = balance.shieldedTotal(),
+                    // A zero balance is ambiguous and the balance alone cannot resolve it, so the
+                    // wallet's own history is read in the same breath: this is what separates
+                    // "collected" from "the funding never landed". Same reasoning as
+                    // `withConfirmations` — this wallet exists for one card and starts empty.
+                    hasFundingArrived = synchronizer.allTransactions.first().any { it.minedHeight != null },
+                )
             } finally {
                 withContext(NonCancellable) { synchronizer.closeAndAwait() }
             }
 
-        // Retained while anything is left, so the next check resumes instead of rescanning from the
-        // card's birthday. An emptied card is terminal and there is nothing to resume for.
-        if (holdings.isEmpty) deleteWallet(alias, network)
+        // Retained unless the card is settled, so the next check resumes instead of rescanning from
+        // the card's birthday. Only a collected card is terminal — an empty wallet whose funding has
+        // not arrived is one this will be asked about again, and rescanning it would be the whole
+        // multi-minute sync over again.
+        if (holdings.isCollected) deleteWallet(alias, network)
         return holdings
     }
 

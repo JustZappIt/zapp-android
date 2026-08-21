@@ -9,6 +9,8 @@ import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
 import co.electriccoin.zcash.ui.common.usecase.CheckGiftCardClaimedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
+import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
+import co.electriccoin.zcash.ui.common.usecase.GiftCardCheckResult
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
 import co.electriccoin.zcash.ui.screen.gift.model.GiftCardStatus
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkCodec
@@ -19,6 +21,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,7 +72,39 @@ class GiftCardListVMTest {
             advanceUntilIdle()
 
             assertEquals(MNEMONIC, GiftLinkCodec.decode(fixture.sharedLink.captured, ZcashNetwork.Mainnet).mnemonic)
-            coVerify(exactly = 1) { fixture.shareGiftLink(cardId = ID, link = any(), sharePickerText = any()) }
+            verify(exactly = 1) { fixture.shareGiftLink(cardId = ID, link = any(), sharePickerText = any()) }
+            // Opening the sheet is not the hand-off. The chooser reports the target the sender
+            // picked, and only that marks the card — a cancelled sheet must leave it protected.
+            coVerify(exactly = 0) { fixture.shareGiftLink.markHandedOut(any()) }
+        }
+
+    @Test
+    fun `copying the link records the hand-off itself`() =
+        runTest {
+            val fixture = fixture(card(fundingTxid = TXID))
+            val state = collectState(fixture)
+
+            assertNotNull(state.items.single().onCopy).invoke()
+            advanceUntilIdle()
+
+            // The route that cannot fail to report. A chooser that never tells us which target was
+            // picked would otherwise leave the card blocking a wallet reset with no way out.
+            coVerify(exactly = 1) { fixture.shareGiftLink.markHandedOut(ID) }
+        }
+
+    @Test
+    fun `says so when a copied link could not be recorded as handed out`() =
+        runTest {
+            val fixture = fixture(card(fundingTxid = TXID))
+            coEvery { fixture.shareGiftLink.markHandedOut(any()) } returns false
+            val state = collectState(fixture)
+
+            assertNotNull(state.items.single().onCopy).invoke()
+            advanceUntilIdle()
+
+            // The link is out and the card still counts as unshared. Only the sender can act on
+            // that, and only if they are told.
+            assertEquals(GiftCardListError.HANDOFF_FAILED, collectState(fixture).error)
         }
 
     @Test
@@ -101,11 +136,31 @@ class GiftCardListVMTest {
 
             val item = collectState(fixture).items.single()
 
-            // Its link is spent; passing it on hands the recipient a dead card.
+            // Its link is spent; passing it on hands the recipient a dead card. Both hand-off
+            // controls go, and the row hides them rather than grey them: a settled card is a
+            // receipt, and a disabled button on it offers something there is no version of.
             assertEquals(GiftCardListStatus.CLAIMED, item.status)
             assertNull(item.onShare)
+            assertNull(item.onCopy)
             // Nothing left to check either.
             assertNull(item.onCheck)
+        }
+
+    @Test
+    fun `reports a funding that has not reached the card as a finding, not a collection`() =
+        runTest {
+            val fixture = fixture(card(fundingTxid = TXID))
+            coEvery { fixture.checkGiftCardClaimed(any(), any()) } returns GiftCardCheckResult.FUNDING_PENDING
+            val state = collectState(fixture)
+
+            assertNotNull(state.items.single().onCheck).invoke()
+            advanceUntilIdle()
+
+            val settled = collectState(fixture)
+            // An empty wallet whose funding never arrived is not a collected card. Saying otherwise
+            // settles it terminally — no re-share, no re-check — while the money may still land.
+            assertEquals(GiftCardListNotice.CHECK_FUNDING_PENDING, settled.notice)
+            assertNull(settled.error)
         }
 
     @Test
@@ -203,8 +258,10 @@ class GiftCardListVMTest {
 
         val shareGiftLink =
             mockk<ShareGiftLinkUseCase>(relaxed = true).also {
-                coEvery { it(cardId = any(), link = capture(sharedLink), sharePickerText = any()) } returns true
+                every { it(cardId = any(), link = capture(sharedLink), sharePickerText = any()) } returns true
+                coEvery { it.markHandedOut(any()) } returns true
             }
+        val copyToClipboard = mockk<CopyToClipboardUseCase>(relaxed = true)
         val checkGiftCardClaimed = mockk<CheckGiftCardClaimedUseCase>(relaxed = true)
 
         private val receivedStorage =
@@ -230,6 +287,7 @@ class GiftCardListVMTest {
                 checkGiftCardClaimed = checkGiftCardClaimed,
                 receivedGiftStorageProvider = receivedStorage,
                 shareGiftLink = shareGiftLink,
+                copyToClipboard = copyToClipboard,
                 navigationRouter = mockk<NavigationRouter>(relaxed = true),
             )
     }

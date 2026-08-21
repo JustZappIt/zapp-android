@@ -55,6 +55,13 @@ internal enum class GiftCardError {
     /** Broadcast outcome unknown. The copy must not invite a retry — see `GiftFundingError`. */
     SUBMIT_UNCERTAIN,
     SHARE_FAILED,
+
+    /**
+     * The link is on the clipboard but the record of the hand-off did not save. The sender needs to
+     * know: the card still counts as unshared, and that is what stands between it and a wallet
+     * reset that would erase its only seed.
+     */
+    HANDOFF_FAILED,
 }
 
 internal data class GiftCardState(

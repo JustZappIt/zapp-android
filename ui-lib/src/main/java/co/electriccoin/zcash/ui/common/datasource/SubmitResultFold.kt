@@ -12,7 +12,7 @@ import co.electriccoin.zcash.ui.common.model.SubmitResult
  * A proposal can contain several transactions, so `createProposedTransactions` returns one result
  * per transaction and "did it send?" is not a boolean. Distinguishing the partial and
  * never-reached-the-server cases from success is what stops the gift claim erasing an isolated
- * wallet database whose funds have not actually moved (see `docs/GIFT_CARDS_PLAN.md` §5).
+ * wallet database whose funds have not actually moved (see `docs/gift-cards.md` §5).
  *
  * Extracted from `ProposalDataSourceImpl.submitTransactionInternal` — which hardcodes the *main*
  * synchronizer and so cannot be reused for a claim — precisely so that the claim does not grow a

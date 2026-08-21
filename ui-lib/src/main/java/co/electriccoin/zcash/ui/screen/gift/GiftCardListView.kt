@@ -83,6 +83,9 @@ internal fun GiftCardListView(
             state.error?.let { error ->
                 item { Banner(stringResource(error.messageRes()), c.danger) }
             }
+            state.notice?.let { notice ->
+                item { Banner(stringResource(notice.messageRes()), c.textMuted) }
+            }
             if (state.items.isEmpty()) {
                 item { Banner(stringResource(R.string.gift_card_list_empty), c.textMuted) }
             } else {
@@ -124,8 +127,14 @@ private fun GiftCardListError.messageRes() =
     when (this) {
         GiftCardListError.LINK_FAILED -> R.string.gift_card_list_error_link
         GiftCardListError.SHARE_FAILED -> R.string.gift_card_list_error_share
+        GiftCardListError.HANDOFF_FAILED -> R.string.gift_card_list_error_handoff
         GiftCardListError.CHECK_UNREACHABLE -> R.string.gift_card_list_error_unreachable
         GiftCardListError.CHECK_FAILED -> R.string.gift_card_list_error_check
+    }
+
+private fun GiftCardListNotice.messageRes() =
+    when (this) {
+        GiftCardListNotice.CHECK_FUNDING_PENDING -> R.string.gift_card_list_notice_funding_pending
     }
 
 internal object GiftCardListTag {

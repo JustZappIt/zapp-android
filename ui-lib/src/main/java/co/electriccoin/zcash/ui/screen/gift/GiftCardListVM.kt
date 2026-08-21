@@ -13,6 +13,7 @@ import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
 import co.electriccoin.zcash.ui.common.usecase.CheckGiftCardClaimedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
+import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GiftCardCheckResult
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -47,9 +48,11 @@ class GiftCardListVM(
     private val checkGiftCardClaimed: CheckGiftCardClaimedUseCase,
     receivedGiftStorageProvider: ReceivedGiftStorageProvider,
     private val shareGiftLink: ShareGiftLinkUseCase,
+    private val copyToClipboard: CopyToClipboardUseCase,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     private val errorFlow = MutableStateFlow<GiftCardListError?>(null)
+    private val noticeFlow = MutableStateFlow<GiftCardListNotice?>(null)
     private val isCorrupted = MutableStateFlow(false)
     private val checkingId = MutableStateFlow<String?>(null)
     private val checkProgress = MutableStateFlow<GiftCheckProgress?>(null)
@@ -82,9 +85,10 @@ class GiftCardListVM(
             cards,
             received,
             combine(checkingId, checkProgress) { checking, progress -> checking to progress },
-            errorFlow,
+            // Paired only to stay inside combine's typed arity; they are unrelated slots.
+            combine(errorFlow, noticeFlow) { err, notice -> err to notice },
             isCorrupted,
-        ) { all, receipts, (checking, progress), err, corrupted ->
+        ) { all, receipts, (checking, progress), (err, notice), corrupted ->
             // A draft nothing was ever sent to is an artefact of minting before funding, not a card
             // the sender made. It cannot be handed out, checked, or recovered from — only clutter.
             val visible = all.filter { it.hasFundingAttempt }
@@ -93,6 +97,7 @@ class GiftCardListVM(
                 received = receipts.map { it.toReceivedItem() },
                 isCorrupted = corrupted,
                 error = err,
+                notice = notice,
                 onBack = navigationRouter::back,
             )
         }.stateIn(
@@ -140,6 +145,7 @@ class GiftCardListVM(
             isChecking = card.id == checkingId,
             checkProgress = checkProgress.takeIf { card.id == checkingId },
             onShare = { picker: String -> onShare(card.id, picker) }.takeIf { canHandOff },
+            onCopy = { onCopy(card.id) }.takeIf { canHandOff },
         )
     }
 
@@ -148,9 +154,31 @@ class GiftCardListVM(
         shareJob =
             viewModelScope.launch {
                 val link = linkFor(cardId) ?: return@launch
-                errorFlow.value = null
+                clearMessages()
+                // Only that the sheet went up. Whether the card counts as handed out is settled
+                // later, by the chooser reporting the target the sender picked.
                 if (!shareGiftLink(cardId = cardId, link = link, sharePickerText = sharePickerText)) {
                     errorFlow.value = GiftCardListError.SHARE_FAILED
+                }
+            }
+    }
+
+    /**
+     * The hand-off that reports its own outcome.
+     *
+     * Sharing depends on the system telling us which target was picked, and a chooser that never
+     * does leaves the card counted as unshared — still blocking the wallet reset. This is the route
+     * the sender always has: the copy is an affirmative act, so the record follows it directly.
+     */
+    private fun onCopy(cardId: String) {
+        if (shareJob?.isActive == true) return
+        shareJob =
+            viewModelScope.launch {
+                val link = linkFor(cardId) ?: return@launch
+                clearMessages()
+                copyToClipboard(link, isSensitive = true)
+                if (!shareGiftLink.markHandedOut(cardId)) {
+                    errorFlow.value = GiftCardListError.HANDOFF_FAILED
                 }
             }
     }
@@ -167,7 +195,7 @@ class GiftCardListVM(
             viewModelScope.launch {
                 checkingId.value = cardId
                 checkProgress.value = null
-                errorFlow.value = null
+                clearMessages()
                 try {
                     val card = runCatching { giftCardStorageProvider.get(cardId) }.getOrNull()
                     val result =
@@ -184,11 +212,20 @@ class GiftCardListVM(
                             GiftCardCheckResult.UNKNOWN -> GiftCardListError.CHECK_FAILED
                             else -> null
                         }
+                    // Not an error: the scan worked and the answer is "the money is not there yet".
+                    noticeFlow.value =
+                        GiftCardListNotice.CHECK_FUNDING_PENDING
+                            .takeIf { result == GiftCardCheckResult.FUNDING_PENDING }
                 } finally {
                     checkingId.value = null
                     checkProgress.value = null
                 }
             }
+    }
+
+    private fun clearMessages() {
+        errorFlow.value = null
+        noticeFlow.value = null
     }
 
     /**

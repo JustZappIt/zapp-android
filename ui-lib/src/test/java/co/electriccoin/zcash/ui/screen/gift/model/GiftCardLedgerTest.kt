@@ -123,6 +123,47 @@ class GiftCardLedgerTest {
     }
 
     @Test
+    fun `shares a card whose broadcast outcome was never seen`() {
+        val unresolved = listOf(card(attemptedAt = LATER))
+
+        // The money may already have left for this card, and then the link is the only route to it.
+        // Refusing here left the list offering a hand-off the ledger would not record: shared in the
+        // chooser, unshared on disk, and blocking a wallet reset for good.
+        assertEquals(GiftCardStatus.SHARED, GiftCardLedger.markShared(unresolved, ID, LATER).single().status)
+    }
+
+    @Test
+    fun `records that funding mined on a card already shared`() {
+        val shared = GiftCardLedger.markShared(submitted(), ID, LATER)
+
+        val funded = GiftCardLedger.markFunded(shared, ID, TXID, LATEST).single()
+
+        // The status cannot regress out of SHARED to say this, so the confirmation lives beside it.
+        // Without it nothing could ever tell a shared card holding money from one whose funding was
+        // still in the mempool — and a collection check turns on exactly that difference.
+        assertEquals(GiftCardStatus.SHARED, funded.status)
+        assertEquals(LATEST, funded.fundingMinedAt)
+        assertTrue(funded.isFundingMined)
+    }
+
+    @Test
+    fun `keeps the first confirmation when funding is swept twice`() {
+        val funded = GiftCardLedger.markFunded(listOf(card(txid = TXID)), ID, TXID, LATER)
+
+        // When it was seen to have mined, not when something last looked.
+        assertEquals(LATER, GiftCardLedger.markFunded(funded, ID, TXID, LATEST).single().fundingMinedAt)
+    }
+
+    @Test
+    fun `a shared card is not evidence its funding mined`() {
+        val shared = GiftCardLedger.markShared(submitted(), ID, LATER)
+
+        // Sharing is legal in the window between submit and the funding mining, so the rank says
+        // only that the link went out.
+        assertFalse(shared.single().isFundingMined)
+    }
+
+    @Test
     fun `sharing twice is not an error`() {
         val once = GiftCardLedger.markShared(GiftCardLedger.markFunded(listOf(card()), ID, TXID, LATER), ID, LATER)
 
@@ -234,6 +275,17 @@ class GiftCardLedgerTest {
     }
 
     @Test
+    fun `settling a card records that its funding must have mined`() {
+        val cards = listOf(card(status = GiftCardStatus.SHARED, txid = TXID))
+
+        val claimed = GiftCardLedger.markClaimed(cards, ID, LATER).single()
+
+        // An emptied wallet cannot have been emptied before it was filled, so the observation
+        // backfills the confirmation nothing got round to recording.
+        assertEquals(LATER, claimed.fundingMinedAt)
+    }
+
+    @Test
     fun `refuses to mark an unfunded card collected`() {
         // An empty wallet on a card that was never funded means nobody took anything.
         assertFailsWith<GiftCardTransitionException> {
@@ -258,11 +310,16 @@ class GiftCardLedgerTest {
         assertEquals(GiftCardStatus.CLAIMED, reshared.status)
     }
 
+    /** One draft carrying a submitted funding txid — the state a card shares from. */
+    private fun submitted() = GiftCardLedger.recordFundingSubmitted(listOf(card()), ID, TXID, LATER)
+
     private fun card(
         id: String = ID,
         amount: Long = 100_000_000L,
         status: GiftCardStatus = GiftCardStatus.DRAFT,
         txid: String? = null,
+        attemptedAt: String? = null,
+        minedAt: String? = null,
     ) = StoredGiftCard(
         id = id,
         network = "main",
@@ -275,6 +332,8 @@ class GiftCardLedgerTest {
         updatedAt = CREATED,
         status = status,
         fundingTxid = txid,
+        fundingAttemptedAt = attemptedAt,
+        fundingMinedAt = minedAt,
     )
 
     private companion object {

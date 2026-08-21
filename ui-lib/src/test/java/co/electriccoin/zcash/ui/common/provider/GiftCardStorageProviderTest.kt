@@ -139,6 +139,19 @@ class GiftCardStorageProviderTest {
         }
 
     @Test
+    fun `refuses a record carrying a field this build does not know`() =
+        runTest {
+            val preferences = InMemoryPreferenceProvider()
+            preferences.putString(PreferenceKey("gift_cards_v1"), NEWER_SCHEMA_BLOB)
+
+            // Tolerating the unknown field would decode the record without it and drop it on the
+            // next write — an older build silently deleting part of the only copy of a card's
+            // recovery data. Refusing costs nothing: a mutation that cannot read does not write.
+            assertFailsWith<StoreCorruptedException> { storage(preferences).getAll() }
+            assertEquals(NEWER_SCHEMA_BLOB, preferences.getString(PreferenceKey("gift_cards_v1")))
+        }
+
+    @Test
     fun `keeps a corrupt blob rather than overwriting it`() =
         runTest {
             val preferences = InMemoryPreferenceProvider()
@@ -212,6 +225,14 @@ class GiftCardStorageProviderTest {
         const val TXID = "f00d"
         const val NOW = "2026-08-20T12:00:00Z"
         const val CONCURRENT = 25
+
+        /** A valid card as some later build would write it, plus one field this one has never seen. */
+        val NEWER_SCHEMA_BLOB =
+            """
+            [{"id":"$ID","network":"main","address":"u1example","mnemonic":"$MNEMONIC",
+            "amountZatoshi":100000000,"birthdayHeight":2800000,"sourceAccountUuid":"$ACCOUNT",
+            "createdAt":"$NOW","updatedAt":"$NOW","status":"DRAFT","reclaimedAt":"$NOW"}]
+            """.trimIndent()
 
         /** BIP-39 test vector for all-zero entropy. Never a real wallet. */
         const val MNEMONIC =

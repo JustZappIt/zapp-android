@@ -30,13 +30,25 @@ internal fun GiftCardRow(item: GiftCardListItem) {
     ZappBorderedCard(verticalArrangement = Arrangement.spacedBy(spacing.md)) {
         GiftCardHeading(item)
         GiftCardDetails(item)
-        ZappButton(
-            text = stringResource(R.string.gift_card_list_share),
-            variant = ZappButtonVariant.Secondary,
-            enabled = item.onShare != null,
-            onClick = { item.onShare?.invoke(sharePickerText) },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        // Absent rather than disabled once a card is collected. A greyed-out Share on a settled card
+        // is an offer to do something there is no version of: its link is spent, and the row is a
+        // receipt now. The check control below hides on the same condition.
+        item.onShare?.let { onShare ->
+            ZappButton(
+                text = stringResource(R.string.gift_card_list_share),
+                variant = ZappButtonVariant.Secondary,
+                onClick = { onShare(sharePickerText) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        item.onCopy?.let { onCopy ->
+            ZappButton(
+                text = stringResource(R.string.gift_card_list_copy),
+                variant = ZappButtonVariant.Ghost,
+                onClick = onCopy,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         // Its own row rather than a button beside Share: the label is a sentence, and squeezed
         // into a shared row it wrapped one character per line.
         if (item.isCheckable) GiftCardCheckAction(item)

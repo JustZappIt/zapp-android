@@ -72,6 +72,7 @@
     <string name="gift_card_error_submit">La financiación falló. No salió nada de tu monedero: inténtalo de nuevo.</string>
     <string name="gift_card_error_submit_uncertain">Zapp no pudo confirmar si la transacción de financiación se difundió. Revisa tu lista de transacciones antes de volver a financiar.</string>
     <string name="gift_card_error_share">No se pudo abrir el panel para compartir. Copia el enlace en su lugar.</string>
+    <string name="gift_card_error_handoff">El enlace está copiado, pero Zapp no pudo registrar que lo compartiste. Esta tarjeta sigue contando como no compartida y seguirá bloqueando el restablecimiento de la billetera.</string>
 
     <string name="gift_claim_title">Tarjeta de regalo</string>
     <string name="gift_claim_subtitle_preview">Alguien te ha enviado ZEC</string>
@@ -133,6 +134,7 @@
     <string name="gift_card_list_status_claimed">Cobrada</string>
     <string name="gift_card_list_share">Compartir enlace</string>
     <string name="gift_card_list_share_picker">Compartir enlace de regalo</string>
+    <string name="gift_card_list_copy">Copiar enlace</string>
     <string name="gift_card_list_check">Comprobar si se cobró</string>
     <string name="gift_card_list_check_stop">Detener comprobación</string>
     <string name="gift_card_list_check_connecting">Conectando con la red…</string>
@@ -143,6 +145,8 @@
     <string name="gift_card_list_check_blocked_busy">Se está comprobando otra tarjeta. Cada comprobación analiza la cadena de bloques, así que se hacen de una en una.</string>
     <string name="gift_card_list_error_link">No se pudo recuperar el enlace de esta tarjeta. No restablezcas tu monedero — contacta con soporte.</string>
     <string name="gift_card_list_error_share">No se pudo abrir el menú de compartir. Inténtalo de nuevo.</string>
+    <string name="gift_card_list_error_handoff">El enlace está copiado, pero Zapp no pudo registrar que lo compartiste. Esta tarjeta sigue contando como no compartida y seguirá bloqueando el restablecimiento de la billetera.</string>
+    <string name="gift_card_list_notice_funding_pending">La financiación de esta tarjeta aún no ha llegado, así que nadie ha podido cobrarla. Vuelve a comprobarlo cuando la transacción se haya minado.</string>
     <string name="gift_card_list_error_check">Zapp no pudo terminar de comprobar esta tarjeta. Eso no indica si se cobró o no: inténtalo más tarde.</string>
     <string name="gift_card_list_error_unreachable">Zapp no pudo conectarse a la red Zcash, así que esta tarjeta no se comprobó. Eso no indica si se cobró o no: inténtalo cuando tengas conexión.</string>
     <string name="gift_card_list_corrupted">No se pudieron leer tus registros de tarjetas regalo. No restablezcas tu monedero — contacta con soporte.</string>

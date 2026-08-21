@@ -72,6 +72,7 @@
     <string name="gift_card_error_submit">Funding failed. Nothing left your wallet — try again.</string>
     <string name="gift_card_error_submit_uncertain">Zapp could not confirm whether the funding transaction was broadcast. Check your transaction list before funding again.</string>
     <string name="gift_card_error_share">The share sheet could not be opened. Copy the link instead.</string>
+    <string name="gift_card_error_handoff">The link is copied, but Zapp could not record that you shared it. This card still counts as unshared and will keep blocking a wallet reset.</string>
 
     <string name="gift_claim_title">Gift card</string>
     <string name="gift_claim_subtitle_preview">Someone sent you ZEC</string>
@@ -133,6 +134,7 @@
     <string name="gift_card_list_status_claimed">Collected</string>
     <string name="gift_card_list_share">Share link</string>
     <string name="gift_card_list_share_picker">Share gift link</string>
+    <string name="gift_card_list_copy">Copy link</string>
     <string name="gift_card_list_check">Check if collected</string>
     <string name="gift_card_list_check_stop">Stop checking</string>
     <string name="gift_card_list_check_connecting">Connecting to the network…</string>
@@ -143,6 +145,8 @@
     <string name="gift_card_list_check_blocked_busy">Another card is being checked. Each check scans the blockchain, so they run one at a time.</string>
     <string name="gift_card_list_error_link">This card\'s link could not be rebuilt. Do not reset your wallet — contact support.</string>
     <string name="gift_card_list_error_share">The share sheet could not be opened. Try again.</string>
+    <string name="gift_card_list_error_handoff">The link is copied, but Zapp could not record that you shared it. This card still counts as unshared and will keep blocking a wallet reset.</string>
+    <string name="gift_card_list_notice_funding_pending">This card\'s funding has not reached it yet, so nobody can have collected it. Check again once the transaction has mined.</string>
     <string name="gift_card_list_error_check">Zapp could not finish checking this card. That says nothing about whether it was collected — try again later.</string>
     <string name="gift_card_list_error_unreachable">Zapp could not reach the Zcash network, so this card was never checked. That says nothing about whether it was collected — try again when you are connected.</string>
     <string name="gift_card_list_corrupted">Your gift card records could not be read. Do not reset your wallet — contact support.</string>

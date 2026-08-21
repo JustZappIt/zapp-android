@@ -10,7 +10,7 @@ import kotlinx.serialization.Serializable
  *
  * This shape is normative and shared with iOS — a card minted on one platform must claim on the
  * other — so the field names, the integer height and the decimal-string amount are all part of the
- * wire contract, not local implementation choices. See `docs/GIFT_CARDS_PLAN.md` §2.
+ * wire contract, not local implementation choices. See `docs/gift-cards.md` §2.
  *
  * [amountZatoshi] is a string because JSON numbers decode to doubles in too many parsers, which
  * would silently round a large card.
@@ -44,7 +44,15 @@ enum class GiftCardStatus {
     /** Key material generated and persisted; nothing on chain yet. */
     DRAFT,
 
-    /** The funding transaction has mined. Never set without a txid. */
+    /**
+     * The funding transaction has mined. Never set without a txid.
+     *
+     * A card can reach [SHARED] without passing through here — sharing is legal from the moment
+     * there is a broadcast — and because the status only ever advances, a later confirmation cannot
+     * write this rank back. That is why "the funding mined" is *also* recorded as its own fact in
+     * [StoredGiftCard.fundingMinedAt]: this rank answers "how far has the card got", and that field
+     * answers "is the money actually on it", which is the question a collection check turns on.
+     */
     FUNDED,
 
     /** The link has been handed to the share sheet at least once. */
@@ -89,6 +97,15 @@ data class StoredGiftCard(
      */
     val fundingAttemptedAt: String? = null,
     /**
+     * When the funding transaction was first observed with a block behind it.
+     *
+     * Orthogonal to [status] on purpose. Delivery and settlement advance that enum, and it only
+     * ever advances, so a card shared before its funding mined has nowhere left to record the
+     * confirmation. Money-on-the-card is a fact about the chain rather than a stage of the flow,
+     * and this is where it lives — see [isFundingMined].
+     */
+    val fundingMinedAt: String? = null,
+    /**
      * When the card's own wallet was last scanned and found to still hold its funds. Only a
      * conclusive look sets it, so it is evidence of "still unclaimed as of then" rather than of
      * having tried.
@@ -102,6 +119,18 @@ data class StoredGiftCard(
      */
     val hasFundingAttempt: Boolean
         get() = fundingTxid != null || fundingAttemptedAt != null
+
+    /**
+     * The funding is known to have mined, so the card really does hold its money.
+     *
+     * [GiftCardStatus.SHARED] is deliberately not evidence: a sender may share in the window
+     * between submit and the funding mining, so that rank says only that the link went out. Records
+     * written before [fundingMinedAt] existed fall back to the ranks that could only ever have been
+     * set from a confirmation — a [GiftCardStatus.SHARED] one reads as unconfirmed and gets picked
+     * up by the next reconciliation, which costs a lookup and never a wrong answer.
+     */
+    val isFundingMined: Boolean
+        get() = fundingMinedAt != null || status == GiftCardStatus.FUNDED || status == GiftCardStatus.CLAIMED
 
     /**
      * Money has left the sender's wallet — or may have — and the link has not left the device, so

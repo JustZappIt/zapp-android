@@ -221,10 +221,16 @@ class GiftCardVM(
         val link = current.link.takeIf { current.stage == GiftCardStage.READY } ?: return
         val cardId = current.quote?.card?.id ?: return
         copyToClipboard(link, isSensitive = true)
-        // The clipboard is a hand-off too. Recording it is what eventually unblocks deleting the
-        // source account for a card that has in fact already been given away.
-        viewModelScope.launch { shareGiftLink.markHandedOut(cardId) }
         snapshot.update { it.copy(isCopied = true, error = null) }
+        // The clipboard is a hand-off too. Recording it is what eventually unblocks deleting the
+        // source account for a card that has in fact already been given away — and if that record
+        // does not save, the sender is the only one who can do anything about it. Launched after
+        // the copy feedback is set, so a failure lands on top of it rather than under it.
+        viewModelScope.launch {
+            if (!shareGiftLink.markHandedOut(cardId)) {
+                snapshot.update { it.copy(error = GiftCardError.HANDOFF_FAILED) }
+            }
+        }
         copyFeedbackJob?.cancel()
         copyFeedbackJob =
             viewModelScope.launch {

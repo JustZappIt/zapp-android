@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
 /**
  * The gift claim erases its isolated wallet database only when this returns
  * [SubmitResult.Success], and that database holds the only key to the card's funds — so every case
- * that is *not* an unambiguous success has to stay not-a-success. See `GIFT_CARDS_PLAN.md` §5.
+ * that is *not* an unambiguous success has to stay not-a-success. See `docs/gift-cards.md` §5.
  */
 class SubmitResultFoldTest {
     @Test

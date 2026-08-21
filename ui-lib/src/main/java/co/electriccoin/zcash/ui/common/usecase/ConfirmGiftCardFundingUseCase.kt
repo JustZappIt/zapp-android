@@ -7,7 +7,6 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.repository.SendTransaction
 import co.electriccoin.zcash.ui.common.repository.TransactionRepository
-import co.electriccoin.zcash.ui.screen.gift.model.GiftCardStatus
 import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.filterIsInstance
@@ -42,18 +41,24 @@ class ConfirmGiftCardFundingUseCase(
     }
 
     /**
-     * Sweeps every submitted-but-unconfirmed card against transactions already on chain.
+     * Sweeps every card whose funding is not yet known to have mined against transactions already on
+     * chain.
      *
      * This is what recovers a card whose [invoke] never got to finish, because the process died or
      * the sender left the screen between broadcast and the next block — and, for a card flagged
      * [StoredGiftCard.fundingAttemptedAt], one killed before its txid was ever written down.
+     *
+     * Scoped by [StoredGiftCard.isFundingMined] rather than by status, because the two are not the
+     * same question and a status-scoped sweep skipped the cards that needed it most: sharing
+     * outranks funded, so a sender who handed the link over in the submit-to-mine window left a card
+     * that no pass would ever look at again.
      */
     suspend fun reconcile() {
-        val drafts = giftCardStorageProvider.getAll().filter { it.status == GiftCardStatus.DRAFT }
-        val submitted = drafts.filter { it.fundingTxid != null }
+        val cards = giftCardStorageProvider.getAll()
+        val submitted = cards.filter { it.fundingTxid != null && !it.isFundingMined }
         // Broadcast started, outcome never seen — the process died mid-submit, or submit came back
         // uncertain. There is no txid to look up, so these are matched by destination instead.
-        val unresolved = drafts.filter { it.fundingTxid == null && it.fundingAttemptedAt != null }
+        val unresolved = cards.filter { it.fundingTxid == null && it.fundingAttemptedAt != null }
         if (submitted.isEmpty() && unresolved.isEmpty()) return
 
         val sends = transactionRepository.getTransactions().filterIsInstance<SendTransaction>()

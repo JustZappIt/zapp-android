@@ -53,11 +53,30 @@ internal enum class GiftCardListError {
     LINK_FAILED,
     SHARE_FAILED,
 
+    /**
+     * The link is on the clipboard but the record of that did not save, so the card still counts as
+     * unshared and still blocks a wallet reset. Worth saying out loud: the sender has done their
+     * part and would otherwise never learn that Zapp did not.
+     */
+    HANDOFF_FAILED,
+
     /** The card's server was unreachable, so the scan never started. */
     CHECK_UNREACHABLE,
 
     /** The scan could not finish, which says nothing about whether the card was collected. */
     CHECK_FAILED,
+}
+
+/**
+ * A finding rather than a failure. Rendered muted, not in the danger colour: nothing went wrong,
+ * the answer is just not the one the sender was asking for.
+ */
+internal enum class GiftCardListNotice {
+    /**
+     * The scan finished and the card's funding has not reached it. Ordinary in the couple of minutes
+     * after funding, and the reason a check cannot report "collected" from an empty wallet alone.
+     */
+    CHECK_FUNDING_PENDING,
 }
 
 /**
@@ -83,8 +102,19 @@ internal data class GiftCardListItem(
     val isChecking: Boolean,
     /** Null while still connecting — see [GiftCheckProgress]. */
     val checkProgress: GiftCheckProgress?,
-    /** Null while the card holds nothing to hand over — see `GiftCardListVM.toItem`. */
+    /**
+     * Null while the card holds nothing to hand over — see `GiftCardListVM.toItem`. The row hides
+     * the control rather than disabling it: unlike a blocked check, this is not a "not right now".
+     */
     val onShare: ((String) -> Unit)?,
+    /**
+     * Copies the link and records the hand-off. Non-null exactly when [onShare] is.
+     *
+     * Kept beside the share sheet rather than folded into it because it is the route that cannot
+     * fail to report: the chooser only marks a card handed off if the system tells us a target was
+     * picked, and this is what the sender has if it never does.
+     */
+    val onCopy: (() -> Unit)?,
 )
 
 /** A gift collected from someone else. A receipt only — it carries no key material. */
@@ -100,5 +130,6 @@ internal data class GiftCardListState(
     val received: List<ReceivedGiftItem>,
     val isCorrupted: Boolean,
     val error: GiftCardListError?,
+    val notice: GiftCardListNotice?,
     val onBack: () -> Unit,
 )
