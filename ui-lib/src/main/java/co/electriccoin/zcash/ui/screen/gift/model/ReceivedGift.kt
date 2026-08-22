@@ -6,14 +6,12 @@ package co.electriccoin.zcash.ui.screen.gift.model
 import kotlinx.serialization.Serializable
 
 /**
- * A gift this wallet collected.
+ * A gift this wallet collected. A receipt, not a recovery path — losing it costs nothing but the
+ * record.
  *
- * Deliberately carries **no mnemonic**. Once a card is claimed its funds are ordinary wallet funds,
- * so keeping the bearer secret afterwards would be retaining a key that unlocks nothing and leaks
- * everything. This is a receipt, not a recovery path — losing it costs nothing but the record.
- *
- * [address] is the identity: a card is one ephemeral address, and claiming the same link twice must
- * not produce two receipts.
+ * Carries **no mnemonic**: once a card is claimed its funds are ordinary wallet funds, so keeping
+ * the bearer secret would retain a key that unlocks nothing and leaks everything. [address] is the
+ * identity, so claiming the same link twice cannot produce two receipts.
  */
 @Serializable
 data class ReceivedGift(
@@ -24,7 +22,7 @@ data class ReceivedGift(
     val claimTxids: List<String>,
     val message: String? = null,
 ) {
-    // The message is the sender's words and the amount is money; neither belongs in a log line.
+    // The sender's words and an amount; neither belongs in a log line.
     override fun toString(): String = "ReceivedGift(network=$network, redacted)"
 }
 

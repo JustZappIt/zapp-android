@@ -4,6 +4,7 @@
 package co.electriccoin.zcash.ui.common.usecase
 
 import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.common.bestEffort
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.repository.SendTransaction
 import co.electriccoin.zcash.ui.common.repository.TransactionRepository
@@ -77,15 +78,12 @@ class ConfirmGiftCardFundingUseCase(
             // to it is that broadcast and nothing else. A pending one counts: the money has left.
             val funding = sends.firstOrNull { it.recipient == card.address } ?: return@forEach
             val txid = funding.id.txIdString()
-            runCatching {
+            bestEffort("Gift card ${card.id} funding could not be reattached") {
                 giftCardStorageProvider.recordFundingSubmitted(
                     id = card.id,
                     fundingTxid = txid,
                     at = Clock.System.now().toString(),
                 )
-            }.onFailure { throwable ->
-                if (throwable is CancellationException) throw throwable
-                Twig.warn { "Gift card ${card.id} funding could not be reattached" }
             }
             if (txid in minedTxIds) markFunded(card.id, txid)
         }
@@ -94,15 +92,12 @@ class ConfirmGiftCardFundingUseCase(
     private suspend fun markFunded(cardId: String, fundingTxid: String) {
         // A losing race with another writer is a legitimate outcome, not a failure: the ledger
         // advances by maximum, so whichever call lands second is a no-op on an already-funded card.
-        runCatching {
+        bestEffort("Gift card $cardId could not be marked funded") {
             giftCardStorageProvider.markFunded(
                 id = cardId,
                 fundingTxid = fundingTxid,
                 at = Clock.System.now().toString(),
             )
-        }.onFailure { throwable ->
-            if (throwable is CancellationException) throw throwable
-            Twig.warn { "Gift card $cardId could not be marked funded" }
         }
     }
 }

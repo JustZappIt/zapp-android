@@ -341,7 +341,6 @@ class GiftLinkCodecTest {
             append("}")
         }
 
-    @Suppress("LongParameterList")
     private fun payload(
         v: Int = GiftLinkCodec.VERSION,
         network: String = "main",

@@ -49,8 +49,14 @@ class GiftClaimVM(
     private val applicationStateProvider: ApplicationStateProvider,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
-    /** Taken once. Retries and confirmation re-checks re-read it from here, not from the store. */
-    private val uri: String? = pendingGiftLinks.take(args.token)
+    /**
+     * Taken once. Retries and confirmation re-checks re-read it from here, not from the store.
+     *
+     * Null covers both ways there is nothing to open: the store refused the link (no token), and
+     * the process died with the claim on the back stack, where the token survives in saved instance
+     * state and the in-memory link does not.
+     */
+    private val uri: String? = args.token?.let { pendingGiftLinks.take(it) }
 
     private val snapshot = MutableStateFlow(GiftClaimSnapshot())
 
@@ -81,11 +87,9 @@ class GiftClaimVM(
     }
 
     private suspend fun load() {
-        // Only reachable when the process died with the claim on the back stack: the token survives
-        // in saved instance state, the in-memory link does not.
         val link =
             uri ?: return snapshot.update {
-                it.copy(stage = GiftClaimStage.PREVIEW, error = GiftClaimError.LINK_EXPIRED)
+                it.copy(stage = GiftClaimStage.PREVIEW, error = GiftClaimError.LINK_UNAVAILABLE)
             }
 
         runCatching { claimGiftCard.preview(link) }

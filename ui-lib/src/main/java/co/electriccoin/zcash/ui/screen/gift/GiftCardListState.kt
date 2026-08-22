@@ -80,6 +80,47 @@ internal enum class GiftCardListNotice {
 }
 
 /**
+ * The check control on one row.
+ *
+ * A sealed type rather than a bag of nullables because the combinations are what matter: shown but
+ * disabled, shown and running, hidden entirely. Spread across an `isCheckable` flag and three
+ * independently-nullable fields, "disabled with no reason" and "running with no way to stop" were
+ * both representable, and only a doc comment said they must not happen.
+ */
+internal sealed interface GiftCheckControl {
+    /** Settled card: nothing left to look for, so no control at all. */
+    data object Hidden : GiftCheckControl
+
+    /** Shown disabled, with [reason] beside it. A greyed button with no reason reads as broken. */
+    data class Blocked(
+        val reason: GiftCheckBlocked,
+    ) : GiftCheckControl
+
+    data class Ready(
+        val onCheck: () -> Unit,
+    ) : GiftCheckControl
+
+    /** [progress] is null while the card's wallet is still reaching its server. */
+    data class Running(
+        val progress: GiftCheckProgress?,
+        val onStop: () -> Unit,
+    ) : GiftCheckControl
+}
+
+/**
+ * Handing the link over. Both routes or neither — a card either has something worth giving away or
+ * it does not.
+ *
+ * [onCopy] is kept beside [onShare] rather than folded into it because it is the route that cannot
+ * fail to report: the chooser only marks a card handed off if the system tells us a target was
+ * picked, and this is what the sender has if it never does.
+ */
+internal data class GiftHandOff(
+    val onShare: (String) -> Unit,
+    val onCopy: () -> Unit,
+)
+
+/**
  * One row. Deliberately carries no mnemonic and no link: the link is rebuilt from storage only when
  * the sender asks for it, so a screenshot or a state dump of this list is not a bearer secret.
  */
@@ -92,29 +133,12 @@ internal data class GiftCardListItem(
     val expiry: GiftExpiryDisplay?,
     /** When this card was last confirmed to still hold its funds. Null until one check completes. */
     val lastCheckedAt: StringResource?,
-    /** Whether the control is shown at all. Hidden only once a card is settled. */
-    val isCheckable: Boolean,
-    /** Starts a check, or stops the one running. Null renders the control disabled rather than
-     *  absent, so rows do not silently differ. */
-    val onCheck: (() -> Unit)?,
-    /** Non-null exactly when [onCheck] is null and [isCheckable] is true. */
-    val checkBlockedReason: GiftCheckBlocked?,
-    val isChecking: Boolean,
-    /** Null while still connecting — see [GiftCheckProgress]. */
-    val checkProgress: GiftCheckProgress?,
+    val check: GiftCheckControl,
     /**
-     * Null while the card holds nothing to hand over — see `GiftCardListVM.toItem`. The row hides
-     * the control rather than disabling it: unlike a blocked check, this is not a "not right now".
+     * Null while the card holds nothing to hand over. The row hides the controls rather than
+     * disabling them: unlike a blocked check, this is not a "not right now".
      */
-    val onShare: ((String) -> Unit)?,
-    /**
-     * Copies the link and records the hand-off. Non-null exactly when [onShare] is.
-     *
-     * Kept beside the share sheet rather than folded into it because it is the route that cannot
-     * fail to report: the chooser only marks a card handed off if the system tells us a target was
-     * picked, and this is what the sender has if it never does.
-     */
-    val onCopy: (() -> Unit)?,
+    val handOff: GiftHandOff?,
 )
 
 /** A gift collected from someone else. A receipt only — it carries no key material. */

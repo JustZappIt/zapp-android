@@ -6,25 +6,19 @@ package co.electriccoin.zcash.ui.screen.gift.model
 import java.text.BreakIterator
 
 /**
- * Limits on the optional note a sender attaches to a card.
- *
- * Both bounds are part of the link format shared with iOS, and both are enforced as the sender
- * types as well as on decode.
+ * Limits on the optional note a sender attaches to a card. Both bounds are part of the link format
+ * shared with iOS, and both are enforced as the sender types as well as on decode.
  */
 object GiftMessage {
     /** Longest message, in grapheme clusters — what a reader would call "characters". */
     const val MAX_GRAPHEMES = 128
 
-    /**
-     * Longest message in UTF-8 bytes. A separate bound because clusters say nothing about size: 128
-     * emoji are well under the cluster limit and well over this one.
-     */
+    /** Separate bound, because clusters say nothing about size: 128 emoji clear one and not the other. */
     const val MAX_UTF8_BYTES = 512
 
     /**
-     * Counts grapheme clusters. `String.length` counts UTF-16 code units, which makes one emoji 2
-     * and a family emoji 7 or more — using it would reject messages that look far shorter than the
-     * limit, and it is what a "128 characters left" counter would show the sender.
+     * `String.length` counts UTF-16 code units, making one emoji 2 and a family emoji 7 or more, so
+     * it would both reject short-looking messages and show the sender a nonsense counter.
      */
     fun graphemeCount(value: String): Int {
         val iterator = BreakIterator.getCharacterInstance()

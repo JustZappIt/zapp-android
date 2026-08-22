@@ -83,7 +83,7 @@ internal fun GiftClaimView(
                 GiftClaimStage.PENDING_CONFIRMATIONS -> OutcomeSection(state)
                 GiftClaimStage.EMPTY -> OutcomeSection(state)
             }
-            state.error?.let { ErrorBanner(it) }
+            state.error?.let { ErrorBanner(it.messageRes()) }
             Spacer(Modifier.height(spacing.xl))
         }
     }

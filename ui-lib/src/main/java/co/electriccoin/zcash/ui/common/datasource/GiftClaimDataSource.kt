@@ -36,12 +36,9 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * How far a claim has got, for a progress screen that would otherwise sit on a blank spinner.
  *
- * [fraction] comes from the SDK rather than being derived from heights here, and that is
- * load-bearing. **The scan does not start at the card's birthday.** `Synchronizer.new` snaps the
- * requested birthday down to a lower usable height — measured on testnet: a card born at 4,289,190
- * produced an account whose `birthday_height` was 4,235,171, some 54,000 blocks lower. Computing
- * `(scanned - birthday) / (tip - birthday)` therefore stays negative, clamps to zero for the whole
- * scan and then snaps to 100%, which is exactly the "stuck at 0%" the first build shipped.
+ * [fraction] must come from the SDK, never from these heights: `Synchronizer.new` snaps the
+ * birthday down (54,000 blocks, measured on testnet), so a height-derived fraction is negative for
+ * the whole scan and then snaps to 100%. §7.2.
  */
 data class GiftClaimProgress(
     val status: Synchronizer.Status,
@@ -51,21 +48,15 @@ data class GiftClaimProgress(
 )
 
 /**
- * Confirmations a shielded note needs before it can be spent.
- *
- * `ConfirmationsPolicy::default()` is `untrusted: 10`, and a gift note arrives on the external
- * scope from a third party, so it takes that branch. No Android API exposes the policy, so this is
- * a mirror of the Rust default rather than something read from the SDK — see §4.
+ * Confirmations a shielded note needs before it can be spent. A gift note is untrusted, so
+ * `ConfirmationsPolicy::default()` gives it 10. Mirrored from Rust — no Android API exposes it (§4).
  */
 const val REQUIRED_CONFIRMATIONS = 10
 
 /** The SDK's own spelling of its no-backup subdirectory — `Files.NO_BACKUP_SUBDIRECTORY`, one `c`. */
 private const val SDK_NO_BACKUP_SUBDIRECTORY = "co.electricoin.zcash"
 
-/**
- * Everything `DatabaseCoordinator` creates for [alias], named relative to the SDK's no-backup
- * subdirectory. It is SDK-internal layout, so it lives in one tested function rather than inline.
- */
+/** SDK-internal layout, so it lives in one tested function rather than inline. */
 internal fun giftWalletFileNames(alias: String, networkName: String): List<String> {
     val prefix = "${alias}_${networkName}_"
     return listOf(
@@ -78,25 +69,22 @@ internal fun giftWalletFileNames(alias: String, networkName: String): List<Strin
 }
 
 /**
- * [Synchronizer.close] returns before shutdown finishes — it launches the teardown and documents
- * that it continues asynchronously — and the database files stay open until it does. Deleting them
- * in that window races the block-cache teardown and the WAL checkpoint.
+ * [Synchronizer.close] returns before shutdown finishes and the database files stay open until it
+ * does, so deleting them in that window races the block-cache teardown and the WAL checkpoint.
  */
 private suspend fun CloseableSynchronizer.closeAndAwait() {
     if (this is SdkSynchronizer) closeFlow().first() else close()
 }
 
 /**
- * Whether [txid] is in this wallet's history with a block behind it.
- *
- * Mined, not merely present: a transaction the wallet knows about but has not seen in a block is
- * the mempool case, and that is the one thing an empty card must never be settled on.
+ * Mined, not merely present: a transaction the wallet knows of but has not seen in a block is the
+ * mempool case, and that is the one thing an empty card must never be settled on.
  */
 private suspend fun Synchronizer.hasMined(txid: String): Boolean =
     allTransactions.first().any { it.minedHeight != null && it.txId.txIdString() == txid }
 
-// Sums every shielded pool: a card is funded to a unified address and the sender's wallet picks
-// the pool, so reading one would report a perfectly good card as empty the moment that changed.
+// Every shielded pool: the card is funded to a unified address and the *sender's* wallet picks
+// which, so reading one pool would report a good card as empty the moment that changed.
 private fun AccountBalance.shieldedAvailable() = sapling.available + orchard.available + ironwood.available
 
 private fun AccountBalance.shieldedTotal() = sapling.total + orchard.total + ironwood.total
@@ -111,16 +99,10 @@ data class GiftCardHoldings(
     /**
      * Whether the card's funding transaction — that one, by txid — has mined.
      *
-     * "Any mined transaction" is the cheaper test and it is wrong. The card's address is plaintext
-     * in the link, so anybody can send to it, and a *transparent* send mines into this wallet's
-     * history while leaving [total] at zero, because only the shielded pools are counted. That pair
-     * is indistinguishable from a collected card, and settling is terminal — a card marked claimed
-     * can no longer be handed out, re-checked or counted by the reset guard
-     * (`GiftCardLedger.markClaimed`). Matching the txid the sender already recorded costs a string
-     * comparison and removes the whole class.
-     *
-     * False means the funding has not mined: still in the mempool, or dropped and possibly yet to
-     * mine before it expires.
+     * "Any mined transaction" is cheaper and wrong: the address is plaintext in the link, so a
+     * *transparent* send from anyone mines into this history while leaving [total] at zero —
+     * indistinguishable from a collected card, and settling is terminal. False means the funding is
+     * still in the mempool, or dropped and possibly yet to mine before it expires.
      */
     val hasFundingArrived: Boolean,
 ) {
@@ -128,9 +110,9 @@ data class GiftCardHoldings(
     val isEmpty: Boolean get() = total == Zatoshi.ZERO
 
     /**
-     * Somebody took the money. The only reading of an empty wallet that settles a card, and it
-     * needs both halves: an empty wallet that never held the funding was not collected, it was
-     * never funded, and settling it would strand the card if its funding mined afterwards.
+     * Somebody took the money — the only reading of an empty wallet that settles a card. Both halves
+     * are needed: one that never held the funding was never funded, and settling it would strand
+     * the card if the funding mined afterwards.
      */
     val isCollected: Boolean get() = hasFundingArrived && isEmpty
 }
@@ -144,12 +126,9 @@ sealed interface GiftClaimOutcome {
     ) : GiftClaimOutcome
 
     /**
-     * The money is there but not yet spendable — a shielded note needs ten confirmations, roughly
-     * 12.5 minutes on mainnet. Telling the recipient the card is empty here would be a lie about a
-     * perfectly good card, so this is deliberately its own case (§4.1).
-     *
-     * [confirmations] is how many the funding transaction has so far, when it can be worked out,
-     * so the wait can be shown as progress rather than as a bare "try again".
+     * The money is there but not yet spendable — ten confirmations, roughly 12.5 minutes on mainnet.
+     * Its own case because calling a perfectly good card empty here would be a lie (§4.1), and
+     * [confirmations] lets the wait render as progress rather than a bare "try again".
      */
     data class NotYetSpendable(
         val available: Zatoshi,
@@ -170,11 +149,10 @@ sealed interface GiftClaimOutcome {
 /**
  * Runs a gift card's own throwaway wallet, long enough to move its funds into this one.
  *
- * The card's wallet is a second, entirely separate [Synchronizer] — never the app's own. The main
- * one is owned by `WalletCoordinator` and must not be extended or repointed: it holds the user's
- * real funds and a bearer seed has no business inside it. Running two concurrently was verified on
- * device before any of this was written (see `docs/gift-cards.md` §7.1): no SQLite contention,
- * per-alias database and block-cache paths, and a duplicate alias rejected outright.
+ * A second, entirely separate [Synchronizer] — never the app's own, which holds the user's real
+ * funds and has no business hosting a bearer seed. Running two concurrently was verified on device
+ * first: no SQLite contention, per-alias database and block-cache paths, duplicate aliases rejected
+ * outright (`docs/gift-cards.md` §7.1).
  */
 interface GiftClaimDataSource {
     /**
@@ -193,15 +171,12 @@ interface GiftClaimDataSource {
     ): GiftClaimOutcome
 
     /**
-     * Syncs the card's wallet and reports what it holds, spending nothing.
+     * Syncs the card's wallet and reports what it holds, spending nothing. The only way to learn
+     * whether a card was collected: the note is shielded, so nothing short of scanning with the
+     * card's own viewing key can see it spent.
      *
-     * This is the only way to learn whether a card was collected: the note is shielded, so nothing
-     * short of scanning with the card's own viewing key can see it spent.
-     *
-     * [fundingTxid] is the transaction the sender recorded when funding this card, and it is
-     * required rather than optional — see [GiftCardHoldings.hasFundingArrived] for what a scan
-     * without it cannot tell apart. A caller with no txid has a card that was never funded, and
-     * there is nothing for this to find.
+     * [fundingTxid] is required, not optional — see [GiftCardHoldings.hasFundingArrived]. A caller
+     * without one has a card that was never funded.
      */
     suspend fun inspect(
         payload: GiftLinkPayload,
@@ -229,21 +204,19 @@ internal class GiftClaimDataSourceImpl(
             try {
                 claimFrom(synchronizer, payload, recipientAddress, onProgress)
             } finally {
-                // Always, on every path. An engine left running holds its database files
-                // open and leaks a bearer seed into a background scan. NonCancellable because a
-                // cancelled claim still has to shut its engine down, and this suspends.
+                // Every path: an engine left running holds its database files open and leaks a
+                // bearer seed into a background scan. NonCancellable because a cancelled claim
+                // still has to shut its engine down, and this suspends.
                 withContext(NonCancellable) { synchronizer.closeAndAwait() }
             }
 
-        // Terminal outcomes only (§5). NotYetSpendable and NotBroadcast both resume against this
+        // Terminal outcomes only (§5). NotYetSpendable and NotBroadcast resume against this
         // database, and rescanning from the card's birthday is the cost of throwing it away.
         //
-        // The delete is [NonCancellable] itself, which is the half that is easy to miss. The
-        // broadcast above runs to a verdict regardless — but it hands that verdict back into a
-        // context that may have been cancelled while it ran, and every suspension point after it
-        // then throws. A claim that moved real money would return `CancellationException` instead
-        // of its outcome, leaving a spent card's bearer seed on disk. `ClaimGiftCardUseCase`
-        // carries the same reasoning through to the receipt.
+        // The delete is NonCancellable itself, which is the easy half to miss: the broadcast runs
+        // to a verdict regardless, but hands it back into a context that may have been cancelled
+        // meanwhile, so every later suspension point throws. A claim that moved real money would
+        // return CancellationException instead of its outcome, leaving a bearer seed on disk.
         if (outcome is GiftClaimOutcome.Claimed || outcome is GiftClaimOutcome.Empty) {
             deleteWallet(alias, network)
         }
@@ -272,21 +245,17 @@ internal class GiftClaimDataSourceImpl(
                 GiftCardHoldings(
                     available = balance.shieldedAvailable(),
                     total = balance.shieldedTotal(),
-                    // A zero balance is ambiguous and the balance alone cannot resolve it, so the
-                    // wallet's own history is read in the same breath: this is what separates
-                    // "collected" from "the funding never landed". Still the card's own wallet
-                    // rather than the sender's records — the txid only says which transaction in
-                    // that history counts.
+                    // A zero balance cannot resolve itself, so the wallet's own history is read in
+                    // the same breath: that is what separates "collected" from "never landed". The
+                    // txid only says which transaction in that history counts.
                     hasFundingArrived = synchronizer.hasMined(fundingTxid),
                 )
             } finally {
                 withContext(NonCancellable) { synchronizer.closeAndAwait() }
             }
 
-        // Retained unless the card is settled, so the next check resumes instead of rescanning from
-        // the card's birthday. Only a collected card is terminal — an empty wallet whose funding has
-        // not arrived is one this will be asked about again, and rescanning it would be the whole
-        // multi-minute sync over again.
+        // Retained unless settled, so the next check resumes instead of rescanning from the card's
+        // birthday. An empty wallet whose funding has not arrived will be asked about again.
         if (holdings.isCollected) deleteWallet(alias, network)
         return holdings
     }
@@ -294,16 +263,14 @@ internal class GiftClaimDataSourceImpl(
     /**
      * Deletes the card's wallet by file rather than through `Synchronizer.erase`.
      *
-     * `erase` takes an alias, but only its database deletion honours it: first it calls
+     * `erase` takes an alias, but only its database deletion honours it: it first calls
      * `StandardPreferenceProvider(context).clear()` and `EncryptedPreferenceProvider(context)
-     * .clear()`, both SDK-wide. The main wallet's `PendingSubmitPlanStore` lives in that same
-     * encrypted file — namespaced inside the blob, not by file — so erasing a card would drop
-     * resubmission metadata for unrelated transactions. Verified in the 3.0.1-SNAPSHOT AAR. The
-     * alias is ours alone, so deleting its files reclaims the disk without touching anything shared.
+     * .clear()`, both SDK-wide. The main wallet's `PendingSubmitPlanStore` lives in that encrypted
+     * file — namespaced inside the blob, not by file — so erasing a card would drop resubmission
+     * metadata for unrelated transactions. Verified in the 3.0.1-SNAPSHOT AAR.
      *
-     * [NonCancellable] because by the time this is called the decision to delete is already made:
-     * a cancelled caller would otherwise throw on the way in and strand a bearer seed on disk, on
-     * exactly the path that has just spent the card.
+     * [NonCancellable] because the decision to delete is already made by the time this runs, and a
+     * cancelled caller would throw on the way in and strand a bearer seed on disk.
      */
     private suspend fun deleteWallet(alias: String, network: ZcashNetwork) =
         withContext(NonCancellable + Dispatchers.IO) {
@@ -321,24 +288,16 @@ internal class GiftClaimDataSourceImpl(
      * Opens the card's wallet.
      *
      * `Synchronizer.new` fails closed with [InitializeException.SeedNotRelevant] rather than
-     * silently opening the wrong wallet (confirmed on device, §7.1), and that is left to
-     * propagate. Recovering by erasing the alias would take the main wallet's preferences with it
-     * — see [claim] — and the alias is a SHA-256 of the card's network and address, so a database
-     * under it holding a different seed is not a case that can arise from any real card.
+     * silently opening the wrong wallet (confirmed on device, §7.1), and that is left to propagate:
+     * recovering by erasing the alias would take the main wallet's preferences with it — see
+     * [deleteWallet] — and the alias is a SHA-256 of the card's network and address, so a database
+     * under it holding a different seed cannot arise from any real card.
      */
     private suspend fun open(
         payload: GiftLinkPayload,
         network: ZcashNetwork,
         endpoint: LightWalletEndpoint,
         alias: String,
-    ): CloseableSynchronizer = create(payload, network, endpoint, alias, WalletInitMode.RestoreWallet)
-
-    private suspend fun create(
-        payload: GiftLinkPayload,
-        network: ZcashNetwork,
-        endpoint: LightWalletEndpoint,
-        alias: String,
-        initMode: WalletInitMode,
     ): CloseableSynchronizer {
         val seed = giftKeyProvider.deriveSeed(payload.mnemonic)
         return try {
@@ -353,7 +312,7 @@ internal class GiftClaimDataSourceImpl(
                         keySource = null,
                         seed = FirstClassByteArray(seed),
                     ),
-                walletInitMode = initMode,
+                walletInitMode = WalletInitMode.RestoreWallet,
                 zcashNetwork = network,
                 // A bearer card is already public to whoever holds the link, and Tor here would
                 // add a second circuit alongside the wallet's own for no privacy the link has not
@@ -387,12 +346,10 @@ internal class GiftClaimDataSourceImpl(
         val proposal = synchronizer.proposeTransfer(account, recipientAddress, amount, "")
         val usk = giftKeyProvider.deriveSpendingKey(payload.mnemonic, synchronizer.network)
 
-        // NonCancellable from here down, and it covers the verdict rather than just the broadcast.
-        // The sync above is abandonable — that is what stopping on app-lock cancels — but a
-        // broadcast is not: cancelling between submitting and returning leaves nobody knowing
-        // whether the money moved, on a card with no reclaim. Once this starts it runs to a
-        // verdict, and the refreshes inside it are best-effort for the same reason: a failed
-        // refresh must not turn a claim that succeeded into no answer at all.
+        // NonCancellable covers the verdict, not just the broadcast. The sync above is abandonable;
+        // a broadcast is not — cancelling between submitting and returning leaves nobody knowing
+        // whether the money moved, on a card with no reclaim. The refreshes inside are best-effort
+        // for the same reason.
         return withContext(NonCancellable) {
             val result =
                 synchronizer
@@ -415,14 +372,10 @@ internal class GiftClaimDataSourceImpl(
         }
     }
 
-    /**
-     * Counts confirmations on the card's funding transaction, so a wait can be rendered as a bar
-     * that fills rather than a dead end the recipient has to keep poking.
-     */
+    /** Renders the wait as a bar that fills rather than a dead end the recipient keeps poking. */
     private suspend fun GiftClaimOutcome.withConfirmations(synchronizer: Synchronizer): GiftClaimOutcome {
         if (this !is GiftClaimOutcome.NotYetSpendable) return this
-        // The earliest mined transaction in this wallet is the funding one: the card's wallet is
-        // created for one card and has no history before it.
+        // The earliest mined transaction here is the funding one: this wallet has no prior history.
         val mined =
             synchronizer.allTransactions
                 .first()
@@ -434,14 +387,7 @@ internal class GiftClaimDataSourceImpl(
         return copy(confirmations = confirmations)
     }
 
-    /**
-     * Why the card cannot be spent right now, or null when it can.
-     *
-     * Sums every shielded pool, because a card is funded to a unified address and the *sender's*
-     * wallet picks the pool. In practice a fresh account receives Ironwood — ZIP 326 reuses the
-     * Orchard receiver, so an ordinary scan finds it — but reading a single pool would report a
-     * perfectly good card as empty the moment that changed.
-     */
+    /** Why the card cannot be spent right now, or null when it can. */
     private fun unspendable(balance: AccountBalance, amount: Zatoshi): GiftClaimOutcome? {
         val available = balance.shieldedAvailable()
         val total = balance.shieldedTotal()
@@ -453,11 +399,9 @@ internal class GiftClaimDataSourceImpl(
     }
 
     /**
-     * Bounds only the part that can hang forever: reaching the server at all.
-     *
-     * The scan that follows is deliberately unbounded — a legitimate one runs for minutes (§11.1)
-     * and the screen offers a stop instead — but a check is optional, so an unreachable server has
-     * to fail it rather than freeze it.
+     * Bounds only the part that can hang forever: reaching the server at all. The scan that follows
+     * is deliberately unbounded — a legitimate one runs for minutes (§11.1) and the screen offers a
+     * stop — but a check is optional, so an unreachable server must fail it rather than freeze it.
      */
     private suspend fun awaitReachable(synchronizer: Synchronizer) {
         withTimeoutOrNull(SERVER_TIMEOUT) {
@@ -471,8 +415,7 @@ internal class GiftClaimDataSourceImpl(
         synchronizer: Synchronizer,
         onProgress: (GiftClaimProgress) -> Unit,
     ) {
-        // Both are plain Flows, not StateFlows — there is no `.value` to poll, so the wait is the
-        // collection itself.
+        // Plain Flows, not StateFlows: no `.value` to poll, so the wait is the collection itself.
         combine(synchronizer.status, synchronizer.progress) { status, progress -> status to progress }
             .first { (status, progress) ->
                 onProgress(
@@ -489,9 +432,8 @@ internal class GiftClaimDataSourceImpl(
 
     private companion object {
         /**
-         * Generous on purpose. This waits out a *cold* isolated synchronizer, which creates its
-         * database and connects from scratch, so a short bound fails checks that would have
-         * worked. Only the unreachable case needs catching — a stop button covers the rest.
+         * Generous on purpose: this waits out a *cold* isolated synchronizer creating its database
+         * and connecting from scratch, so a short bound fails checks that would have worked.
          */
         val SERVER_TIMEOUT = 90.seconds
 
@@ -499,12 +441,12 @@ internal class GiftClaimDataSourceImpl(
         const val ALIAS_HASH_CHARS = 48
 
         /**
-         * A stable per-card alias, so an interrupted claim resumes against the same database
-         * instead of rescanning from the card's birthday every time.
+         * A stable per-card alias, so an interrupted claim resumes against the same database rather
+         * than rescanning from the card's birthday.
          *
-         * Derived from the **address, not the mnemonic**: the address already identifies the card,
-         * and this becomes a filesystem path component. `ZcashSdk` requires 1..99 characters of
-         * letters, digits, hyphens and underscores; this is 53 and hex.
+         * From the **address, not the mnemonic**: the address already identifies the card, and this
+         * becomes a filesystem path component. `ZcashSdk` wants 1..99 characters of letters, digits,
+         * hyphens and underscores; this is 53 and hex.
          */
         fun giftAlias(payload: GiftLinkPayload): String {
             val digest = MessageDigest.getInstance("SHA-256")

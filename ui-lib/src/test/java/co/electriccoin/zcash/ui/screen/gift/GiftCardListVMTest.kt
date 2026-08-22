@@ -37,6 +37,7 @@ import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -68,7 +69,7 @@ class GiftCardListVMTest {
             val fixture = fixture(card(fundingTxid = TXID))
             val state = collectState(fixture)
 
-            assertNotNull(state.items.single().onShare).invoke("share")
+            assertNotNull(state.items.single().handOff).onShare("share")
             advanceUntilIdle()
 
             assertEquals(MNEMONIC, GiftLinkCodec.decode(fixture.sharedLink.captured, ZcashNetwork.Mainnet).mnemonic)
@@ -84,7 +85,7 @@ class GiftCardListVMTest {
             val fixture = fixture(card(fundingTxid = TXID))
             val state = collectState(fixture)
 
-            assertNotNull(state.items.single().onCopy).invoke()
+            assertNotNull(state.items.single().handOff).onCopy()
             advanceUntilIdle()
 
             // The route that cannot fail to report. A chooser that never tells us which target was
@@ -99,7 +100,7 @@ class GiftCardListVMTest {
             coEvery { fixture.shareGiftLink.markHandedOut(any()) } returns false
             val state = collectState(fixture)
 
-            assertNotNull(state.items.single().onCopy).invoke()
+            assertNotNull(state.items.single().handOff).onCopy()
             advanceUntilIdle()
 
             // The link is out and the card still counts as unshared. Only the sender can act on
@@ -126,7 +127,7 @@ class GiftCardListVMTest {
 
             // The money may already have gone, and then this link is the only route to it.
             assertEquals(GiftCardListStatus.UNRESOLVED, item.status)
-            assertNotNull(item.onShare)
+            assertNotNull(item.handOff)
         }
 
     @Test
@@ -140,10 +141,9 @@ class GiftCardListVMTest {
             // controls go, and the row hides them rather than grey them: a settled card is a
             // receipt, and a disabled button on it offers something there is no version of.
             assertEquals(GiftCardListStatus.CLAIMED, item.status)
-            assertNull(item.onShare)
-            assertNull(item.onCopy)
+            assertNull(item.handOff)
             // Nothing left to check either.
-            assertNull(item.onCheck)
+            assertEquals(GiftCheckControl.Hidden, item.check)
         }
 
     @Test
@@ -153,7 +153,7 @@ class GiftCardListVMTest {
             coEvery { fixture.checkGiftCardClaimed(any(), any()) } returns GiftCardCheckResult.FUNDING_PENDING
             val state = collectState(fixture)
 
-            assertNotNull(state.items.single().onCheck).invoke()
+            assertIs<GiftCheckControl.Ready>(state.items.single().check).onCheck()
             advanceUntilIdle()
 
             val settled = collectState(fixture)
@@ -172,11 +172,10 @@ class GiftCardListVMTest {
 
             // Money may well have left for this card, so the reason must not claim otherwise.
             assertEquals(GiftCardListStatus.UNRESOLVED, pending.status)
-            assertNull(pending.onCheck)
-            assertEquals(GiftCheckBlocked.NO_TRANSACTION, pending.checkBlockedReason)
+            assertEquals(GiftCheckControl.Blocked(GiftCheckBlocked.NO_TRANSACTION), pending.check)
 
             val funded = fixture(card(fundingTxid = TXID))
-            assertNotNull(collectState(funded).items.single().onCheck)
+            assertIs<GiftCheckControl.Ready>(collectState(funded).items.single().check)
         }
 
     @Test

@@ -16,13 +16,12 @@ import kotlinx.serialization.builtins.ListSerializer
 /**
  * The local half of every gift card this wallet has minted.
  *
- * Custody-critical. The ephemeral seed is random rather than derived from the wallet seed and there
- * is no reclaim, so for a card whose link has not been shared this store is the only route back to
- * the funds. It is also excluded from Android Auto Backup by construction — the backup configs are
- * allowlists naming only `address_book`, so `domain="sharedpref"` is not backed up. Never add a
- * `sharedpref` include.
+ * Custody-critical: for a card whose link has not been shared, this store is the only route back to
+ * the funds. Excluded from Android Auto Backup by construction — the backup configs are allowlists
+ * naming only `address_book`, so `domain="sharedpref"` is not backed up. Never add a `sharedpref`
+ * include.
  *
- * One method per legal ledger transition. Collapsing them into a generic mutator is what the
+ * One method per legal ledger transition; collapsing them into a generic mutator is what the
  * per-transition guards exist to prevent.
  */
 @Suppress("TooManyFunctions")
@@ -63,26 +62,22 @@ interface GiftCardStorageProvider {
         hasUnsharedFunds(getAll(), accountUuid)
 }
 
-// One method per legal ledger transition. Collapsing them into a generic mutator is what the
-// per-transition guards exist to prevent.
 @Suppress("TooManyFunctions")
 internal class GiftCardStorageProviderImpl(
     encryptedPreferenceProvider: EncryptedPreferenceProvider,
 ) : GiftCardStorageProvider {
-    // One key holding the whole list, rather than a key per card: EncryptedJsonStore is single-key,
-    // and a list makes each mutation a single atomic write.
+    // One key holding the whole list: EncryptedJsonStore is single-key, and a list makes each
+    // mutation a single atomic write.
     //
-    // Strict, unlike every other store on EncryptedJsonStore. A tolerant decode drops a field it
-    // does not recognise and then writes the record back without it, which on this store means an
-    // older build silently discarding part of the only copy of a card's recovery data. Failing the
-    // read instead is safe: `mutate` reads before it writes, so a refused read refuses the write
-    // too, and the list screen renders its corrupted state rather than a list with a card missing.
+    // Strict, unlike every other store on EncryptedJsonStore. A tolerant decode drops an unknown
+    // field and writes the record back without it, which here means an older build silently
+    // discarding part of the only copy of a card's recovery data. Failing the read is safe:
+    // `mutate` reads before it writes, so a refused read refuses the write too.
     //
-    // The corollary is that the key must NOT be versioned. Bumping it reads back an absent key,
-    // which is indistinguishable from "no cards" — every stored seed orphaned behind a name nothing
-    // looks up any more, with no reclaim and no derivation from the wallet seed to fall back on.
-    // Additive fields with defaults are the supported change; anything else needs a migration that
-    // reads the old key and writes the new one before this constructor is reached.
+    // The corollary is that the key must NOT be versioned — bumping it reads back an absent key,
+    // indistinguishable from "no cards", orphaning every stored seed behind a name nothing looks up
+    // any more. Additive fields with defaults are the supported change; anything else needs a
+    // migration that reads the old key and writes the new one before this constructor is reached.
     private val store =
         EncryptedJsonStore(
             encryptedPreferenceProvider,

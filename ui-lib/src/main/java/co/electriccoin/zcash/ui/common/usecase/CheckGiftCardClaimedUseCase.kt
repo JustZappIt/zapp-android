@@ -4,6 +4,7 @@
 package co.electriccoin.zcash.ui.common.usecase
 
 import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.common.bestEffort
 import co.electriccoin.zcash.ui.common.datasource.GiftCardHoldings
 import co.electriccoin.zcash.ui.common.datasource.GiftCardUnreachableException
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimDataSource
@@ -143,11 +144,9 @@ class CheckGiftCardClaimedUseCase(
 
     /** Best effort for the same reason as [markClaimed]: it is a note about the past, not the card. */
     private suspend fun recordChecked(card: StoredGiftCard) {
-        runCatching { giftCardStorageProvider.recordChecked(id = card.id, at = Clock.System.now().toString()) }
-            .onFailure { throwable ->
-                if (throwable is CancellationException) throw throwable
-                Twig.warn { "Gift card ${card.id} check time could not be recorded" }
-            }
+        bestEffort("Gift card ${card.id} check time could not be recorded") {
+            giftCardStorageProvider.recordChecked(id = card.id, at = Clock.System.now().toString())
+        }
     }
 
     /**
@@ -155,10 +154,8 @@ class CheckGiftCardClaimedUseCase(
      * here must not be reported back as "still waiting".
      */
     private suspend fun markClaimed(card: StoredGiftCard) {
-        runCatching { giftCardStorageProvider.markClaimed(id = card.id, at = Clock.System.now().toString()) }
-            .onFailure { throwable ->
-                if (throwable is CancellationException) throw throwable
-                Twig.warn { "Gift card ${card.id} could not be marked claimed" }
-            }
+        bestEffort("Gift card ${card.id} could not be marked claimed") {
+            giftCardStorageProvider.markClaimed(id = card.id, at = Clock.System.now().toString())
+        }
     }
 }

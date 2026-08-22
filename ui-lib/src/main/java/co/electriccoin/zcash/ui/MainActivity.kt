@@ -54,6 +54,7 @@ import co.electriccoin.zcash.ui.screen.authentication.WrapAuthentication
 import co.electriccoin.zcash.ui.screen.chat.ChatRoomArgs
 import co.electriccoin.zcash.ui.screen.gift.GiftClaimArgs
 import co.electriccoin.zcash.ui.screen.gift.model.GIFT_LINK_HOST
+import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkIntake
 import co.electriccoin.zcash.ui.screen.gift.model.PendingGiftLinkStore
 import co.electriccoin.zcash.ui.screen.scan.thirdparty.ThirdPartyScan
 import co.electriccoin.zcash.ui.screen.splash.ZappSplashAnimation
@@ -129,24 +130,33 @@ class MainActivity : FragmentActivity() {
     private fun forwardUriIntent(intent: Intent) {
         val data = intent.data ?: return
 
-        if (isGiftUri(data)) {
-            val raw = intent.dataString ?: data.toString()
-            // Consume once, exactly as the chat notification path does, so Activity recreation
-            // cannot re-enqueue a claim that is already on the back stack.
-            intent.data = null
-            pendingGiftLinks.put(raw)?.let { token -> navigationRouter.forward(GiftClaimArgs(token)) }
-            return
-        }
+        // Recents re-delivers the original intent. Nothing here may act on it twice: for a gift
+        // link that would re-enqueue a claim already on the back stack, and for anything else it
+        // would reopen the scanner over whatever the user came back to.
+        if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return
 
-        navigationRouter.forward(ThirdPartyScan)
+        if (isGiftUri(intent, data)) openGiftClaim(intent, data) else navigationRouter.forward(ThirdPartyScan)
     }
 
-    private fun isGiftUri(data: Uri): Boolean =
-        intent.action == Intent.ACTION_VIEW &&
-            // Recents re-delivers the original intent; without this, reopening from the task
-            // switcher re-enqueues an already-handled claim.
-            (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0 &&
-            GIFT_LINK_HOST.equals(data.host, ignoreCase = true)
+    private fun openGiftClaim(intent: Intent, data: Uri) {
+        val raw = intent.dataString ?: data.toString()
+        // Consume once, exactly as the chat notification path does, so Activity recreation cannot
+        // re-enqueue a claim that is already on the back stack.
+        intent.data = null
+        when (val intake = pendingGiftLinks.put(raw)) {
+            is GiftLinkIntake.Accepted -> navigationRouter.forward(GiftClaimArgs(intake.token))
+
+            // The claim this would open is already on its way in; a second screen for one card
+            // would be two attempts to spend the same note.
+            GiftLinkIntake.AlreadyPending -> Unit
+
+            // Nothing to open, but the tap still has to land somewhere it can be explained.
+            GiftLinkIntake.Refused -> navigationRouter.forward(GiftClaimArgs())
+        }
+    }
+
+    private fun isGiftUri(intent: Intent, data: Uri): Boolean =
+        intent.action == Intent.ACTION_VIEW && GIFT_LINK_HOST.equals(data.host, ignoreCase = true)
 
     private fun forwardChatNotificationIntent(intent: Intent) {
         intent.getStringExtra(CHAT_CONVERSATION_ID_EXTRA)?.let { conversationId ->

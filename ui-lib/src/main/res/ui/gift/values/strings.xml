@@ -112,7 +112,7 @@
     <string name="gift_claim_error_not_broadcast">Zapp could not confirm the transfer reached the network. Your gift is safe on the card — try again in a moment.</string>
     <string name="gift_claim_error_failed">The gift could not be claimed. Nothing was lost; try again.</string>
     <string name="gift_claim_error_not_ready">Zapp is still connecting to the Zcash network. Your gift is fine — try again in a moment.</string>
-    <string name="gift_claim_error_expired">This gift link is no longer open. Tap it again where you received it.</string>
+    <string name="gift_claim_error_unavailable">This gift link is no longer open. Tap it again where you received it.</string>
     <string name="gift_claim_expired_note">This card is past its suggested expiry. That is advisory only — it still claims for the full amount.</string>
     <string name="gift_claim_progress_remaining">%1$d blocks left</string>
     <string name="gift_claim_pending_count">%1$d / %2$d confirmations</string>

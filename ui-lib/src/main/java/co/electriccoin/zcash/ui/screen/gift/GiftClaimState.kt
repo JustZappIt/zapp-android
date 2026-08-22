@@ -43,8 +43,11 @@ internal enum class GiftClaimError {
     /** Zapp has not reached the chain tip yet, so the card cannot be judged. Retry, do not blame the card. */
     WALLET_NOT_READY,
 
-    /** The process died holding this claim. The link never reached the card, so nothing was lost. */
-    LINK_EXPIRED,
+    /**
+     * There is no link behind this screen — the store refused it, or the process died holding the
+     * claim. Nothing reached the card either way, so nothing was lost.
+     */
+    LINK_UNAVAILABLE,
 
     /** The transfer may or may not have reached the network. The card is untouched either way. */
     NOT_BROADCAST,
@@ -82,9 +85,9 @@ internal data class GiftClaimState(
     val isLoaded: Boolean
         get() = amount != null
 
-    /** An expired link cannot be reloaded from here — it has to be opened again where it arrived. */
+    /** A link we never held cannot be reloaded from here — it has to be opened again where it arrived. */
     val isRetryable: Boolean
-        get() = error != GiftClaimError.LINK_EXPIRED
+        get() = error != GiftClaimError.LINK_UNAVAILABLE
 
     /** 0..1 across the confirmations a freshly funded card still owes, when they are known. */
     val confirmationFraction: Float?

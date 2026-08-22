@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.common.bestEffort
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimOutcome
@@ -29,10 +30,9 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * A link that has been checked as far as it can be without touching the network.
- *
- * [verdict] is what the recipient still has to agree to: a card old enough to need a long
- * foreground scan is their decision, not something to spring on them (§3.6).
+ * A link checked as far as it can be without touching the network. [verdict] is what the recipient
+ * still has to agree to — a long foreground scan is their decision, not something to spring on
+ * them (§3.6).
  */
 data class GiftClaimPreview(
     val payload: GiftLinkPayload,
@@ -42,10 +42,9 @@ data class GiftClaimPreview(
 /**
  * The wallet does not yet know the chain tip, so how far back this card sits cannot be judged.
  *
- * Deliberately distinct from [GiftLinkError.BIRTHDAY_ABOVE_TIP]: that one means the *card* is
- * wrong, this one means *we* are not ready. Telling a recipient their perfectly good card claims to
- * be from the future — and offering no way to retry — is the kind of message that makes someone
- * think a real gift is fake.
+ * Distinct from [GiftLinkError.BIRTHDAY_ABOVE_TIP] on purpose: that means the *card* is wrong, this
+ * means *we* are not ready. Telling a recipient their good card claims to be from the future, with
+ * no way to retry, is how a real gift comes to look fake.
  */
 class GiftClaimNotReadyException : RuntimeException("Chain tip unknown")
 
@@ -72,19 +71,16 @@ class ClaimGiftCardUseCase(
     suspend fun preview(uri: String): GiftClaimPreview {
         val synchronizer = synchronizerProvider.getSynchronizer()
 
-        // Rejects a wrong network, a bad version, an unparseable amount and an over-long message,
-        // all offline.
+        // Wrong network, bad version, unparseable amount, over-long message — all offline.
         val payload = GiftLinkCodec.decode(uri, synchronizer.network)
 
-        // Then the one check that needs key derivation: the address in the link must be the one
-        // its own mnemonic produces. A mismatch means the link was rewritten, and scanning for a
-        // note at an address we cannot spend from would be pure wasted work.
+        // The one check needing key derivation. A mismatch means the link was rewritten, and
+        // scanning for a note at an address we cannot spend from is pure wasted work.
         val derived = giftKeyProvider.deriveAddress(payload.mnemonic, synchronizer.network)
         GiftLinkCodec.verifyAddressMatches(payload, derived)
 
-        // Wait rather than fail. On a cold start — which is exactly what an App Link produces —
-        // the synchronizer has not connected yet and networkHeight is still null for a second or
-        // two. Reading `.value` once would reject every link opened from a chat app.
+        // Wait rather than fail. On the cold start an App Link produces, networkHeight is null for
+        // a second or two, and reading `.value` once would reject every link opened from a chat.
         val tip =
             withTimeoutOrNull(TIP_TIMEOUT) {
                 synchronizer.networkHeight
@@ -146,14 +142,11 @@ class ClaimGiftCardUseCase(
 
     /**
      * The receipt for this card, rebuilt as the outcome it came from, or null if there is none.
+     * Keyed on the address, which is the card's identity.
      *
-     * Keyed on the card's address, which is its identity: one card is one ephemeral wallet, and
-     * `ReceivedGift` already keeps one receipt per address however many times a link is opened.
-     *
-     * The narrow case this reads wrong is a card whose address is funded a second time and emptied
-     * again — it would report the first collection rather than the second. Nothing in the app can
-     * re-fund a spent card, it would take a hand-built transaction to that address, and the answer
-     * it gives then is still closer to true than "nothing left on this card".
+     * Reads wrong only for an address funded a second time and emptied again, reporting the first
+     * collection rather than the second. Nothing in the app can re-fund a spent card, and that
+     * answer is still closer to true than "nothing left on this card".
      */
     private suspend fun collectedEarlier(payload: GiftLinkPayload): GiftClaimOutcome.Claimed? =
         runCatching {
@@ -174,7 +167,7 @@ class ClaimGiftCardUseCase(
      * that will not take the receipt costs the recipient a row in a list, not their gift.
      */
     private suspend fun recordReceipt(payload: GiftLinkPayload, outcome: GiftClaimOutcome.Claimed) {
-        runCatching {
+        bestEffort("Claimed gift could not be recorded") {
             receivedGiftStorageProvider.record(
                 ReceivedGift(
                     address = payload.address,
@@ -185,9 +178,6 @@ class ClaimGiftCardUseCase(
                     message = payload.message,
                 )
             )
-        }.onFailure { throwable ->
-            if (throwable is CancellationException) throw throwable
-            Twig.warn { "Claimed gift could not be recorded" }
         }
     }
 

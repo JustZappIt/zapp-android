@@ -8,6 +8,7 @@ import cash.z.ecc.android.sdk.model.WalletAddress
 import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.android.sdk.model.ZecSend
 import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.common.bestEffort
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.InsufficientFundsException
 import co.electriccoin.zcash.ui.common.datasource.ProposalDataSource
@@ -21,11 +22,9 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 
 /**
- * What funding a card costs, priced against a real proposal.
- *
- * [card] is already persisted when this exists — see [FundGiftCardUseCase.prepare]. The sender pays
- * [networkFee] *and* [claimFeeReserve] on top of [StoredGiftCard.amountZatoshi], so the recipient
- * nets exactly the card amount.
+ * What funding a card costs, priced against a real proposal. [card] is already persisted when this
+ * exists. The sender pays [networkFee] *and* [claimFeeReserve] on top of the card amount, so the
+ * recipient nets exactly what the card says.
  */
 data class GiftFundingQuote(
     val card: StoredGiftCard,
@@ -65,11 +64,10 @@ class GiftFundingException(
 /**
  * Moves money onto a minted gift card.
  *
- * Split in two on purpose. [prepare] mints and persists the card and prices the send without
- * spending anything, so the review screen can show real numbers; [submit] is the only call that
- * moves money. The order between them is load-bearing and must not be collapsed: the encrypted
- * record carries the only copy of the ephemeral seed and there is no reclaim, so funding an address
- * whose record had not been written yet would burn the funds permanently.
+ * Split in two on purpose: [prepare] mints, persists and prices without spending, so the review
+ * screen can show real numbers, and [submit] is the only call that moves money. The order is
+ * load-bearing and must not be collapsed — the encrypted record holds the only copy of the
+ * ephemeral seed, so funding an address whose record was not yet written burns the funds.
  */
 class FundGiftCardUseCase(
     private val createGiftCard: CreateGiftCardUseCase,
@@ -81,9 +79,9 @@ class FundGiftCardUseCase(
     /**
      * Mints a card — or re-prices [existing] — and builds its funding proposal.
      *
-     * Pass [existing] to re-price a card the sender already minted but backed out of reviewing:
-     * without it, every trip through the review screen would strand another unfunded draft. An
-     * [existing] card that already carries a funding attempt is refused outright.
+     * Pass [existing] for a card the sender minted but backed out of reviewing; without it, every
+     * trip through the review screen strands another unfunded draft. One already carrying a funding
+     * attempt is refused outright.
      */
     suspend fun prepare(
         amount: Zatoshi,
@@ -137,10 +135,9 @@ class FundGiftCardUseCase(
      * exists, not that it mined. Advancing it to funded is [ConfirmGiftCardFundingUseCase]'s job,
      * once there is a block behind it.
      *
-     * The broadcast divides this method: everything before it fails as
-     * [GiftFundingError.PROPOSAL_FAILED], and every failure from it onwards — the storage writes
-     * included — becomes [GiftFundingError.SUBMIT_UNCERTAIN]. Only a rejection may say nothing was
-     * sent, because it is the only outcome that proves it.
+     * The broadcast divides this method: before it, failures are [GiftFundingError.PROPOSAL_FAILED];
+     * from it onwards — storage writes included — [GiftFundingError.SUBMIT_UNCERTAIN]. Only a
+     * rejection may say nothing was sent, because it is the only outcome that proves it.
      *
      * @return the funding txid.
      */
@@ -181,11 +178,9 @@ class FundGiftCardUseCase(
     }
 
     /**
-     * Flags the card as mid-broadcast, before the broadcast rather than after.
-     *
-     * The txid only exists once submit returns, so a process killed in between would otherwise
-     * leave a record indistinguishable from a card that was never funded — and nothing would count
-     * the money that had in fact left.
+     * Flags the card as mid-broadcast, before the broadcast rather than after. The txid only exists
+     * once submit returns, so a process killed in between would otherwise leave a record
+     * indistinguishable from a card that was never funded.
      */
     private suspend fun markAttempted(cardId: String) {
         runCatching {
@@ -193,24 +188,17 @@ class FundGiftCardUseCase(
         }.getOrElse { throwable -> throw proposalFailure(throwable) }
     }
 
-    /**
-     * Unflags a card the network refused. A store that will not take the clear leaves the card
-     * unresolved, which overstates the risk rather than hiding it; nothing was sent either way.
-     */
+    /** Unflags a card the network refused. A failed clear overstates the risk rather than hiding it. */
     private suspend fun clearAttempt(cardId: String) {
-        runCatching { giftCardStorageProvider.setFundingAttemptedAt(id = cardId, at = null) }
-            .onFailure { throwable ->
-                if (throwable is CancellationException) throw throwable
-                Twig.warn { "Gift card $cardId funding attempt could not be cleared" }
-            }
+        bestEffort("Gift card $cardId funding attempt could not be cleared") {
+            giftCardStorageProvider.setFundingAttemptedAt(id = cardId, at = null)
+        }
     }
 
     /**
      * Records the txid, clearing the attempt flag as a side effect: a txid is a stronger record of
-     * the same fact.
-     *
-     * Past the broadcast, so a store that refuses this has not stopped the money leaving, only the
-     * record of where it went. It cannot be reported as a funding that never happened.
+     * the same fact. Past the broadcast, so a refusal here loses the record of where the money went,
+     * not the money — and cannot be reported as a funding that never happened.
      */
     private suspend fun recordSubmitted(cardId: String, txid: String) {
         runCatching {
@@ -262,14 +250,13 @@ class FundGiftCardUseCase(
         /**
          * What the sender prepays so the recipient's claim costs them nothing.
          *
-         * ZIP 317 Rev 0 is active: `fee = 5_000 x max(2, logical_actions)`. A claim spends the one
-         * funding note into one output with no change, so `logical_actions = 1` and the fee floors
-         * at 10,000 zatoshi — the same value as the SDK's (deprecated) `ZcashSdk.MINERS_FEE`, which
-         * is not referenced directly because this module treats warnings as errors. It is a floor
-         * rather than a constant; Rev 1 is drafted against NU6.3 and would raise it.
+         * ZIP 317 Rev 0: `fee = 5_000 x max(2, logical_actions)`. A claim spends one funding note
+         * into one output with no change, so the fee floors at 10,000 zatoshi — the same value as
+         * the SDK's deprecated `ZcashSdk.MINERS_FEE`, not referenced directly because this module
+         * treats warnings as errors. A floor, not a constant: Rev 1 against NU6.3 would raise it.
          *
-         * Unlike [GiftFundingQuote.networkFee] this cannot be derived from a real proposal: at
-         * funding time the card holds no notes, so there is nothing to propose a claim over.
+         * Unlike [GiftFundingQuote.networkFee] this cannot come from a real proposal — at funding
+         * time the card holds no notes, so there is nothing to propose a claim over.
          */
         const val CLAIM_FEE_RESERVE_ZATOSHI = 10_000L
 

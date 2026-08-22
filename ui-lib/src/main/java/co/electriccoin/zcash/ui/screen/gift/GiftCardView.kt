@@ -34,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.TextFieldValue
@@ -130,7 +131,7 @@ internal fun GiftCardView(
                 GiftCardStage.FUNDING -> FundingSection()
                 GiftCardStage.READY -> ReadySection(state)
             }
-            state.error?.let { ErrorBanner(it) }
+            state.error?.let { ErrorBanner(it.messageRes()) }
             Spacer(Modifier.height(spacing.xl))
         }
     }
@@ -138,66 +139,72 @@ internal fun GiftCardView(
     state.pinVerify?.let { PinVerifyOverlay(state = it) }
 }
 
+/** The one button a stage offers, or null where there is nothing to press. */
+private data class GiftCardAction(
+    @param:StringRes val text: Int,
+    val icon: ImageVector? = null,
+    val isEnabled: Boolean = true,
+    val onClick: () -> Unit,
+)
+
 @Composable
 private fun GiftCardBottomBar(state: GiftCardState) {
     val spacing = ZappTheme.spacing
     val sharePickerText = stringResource(R.string.gift_card_ready_share_picker)
+    val action =
+        when (state.stage) {
+            GiftCardStage.DETAILS -> {
+                GiftCardAction(
+                    text = R.string.gift_card_continue,
+                    isEnabled = state.canContinue,
+                    onClick = state.onContinue,
+                )
+            }
+
+            GiftCardStage.REVIEW -> {
+                GiftCardAction(
+                    text =
+                        if (state.isAuthenticating) {
+                            R.string.gift_card_authenticating
+                        } else {
+                            R.string.gift_card_review_confirm
+                        },
+                    icon = Icons.Default.CardGiftcard,
+                    isEnabled = state.canConfirm,
+                    onClick = state.onConfirm,
+                )
+            }
+
+            GiftCardStage.READY -> {
+                GiftCardAction(
+                    text = R.string.gift_card_ready_share,
+                    icon = Icons.Default.Share,
+                    onClick = { state.onShare(sharePickerText) },
+                )
+            }
+
+            // Nothing to press while the card is being minted or broadcast, and no way back.
+            GiftCardStage.PREPARING, GiftCardStage.FUNDING -> {
+                null
+            }
+        }
+
     ZappBottomActionBar(
         onBack = state.onBack,
         isBackEnabled = state.isBackEnabled,
         primaryAction =
-            when (state.stage) {
-                GiftCardStage.DETAILS -> {
-                    {
-                        ZappButton(
-                            text = stringResource(R.string.gift_card_continue),
-                            enabled = state.canContinue,
-                            onClick = state.onContinue,
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .padding(start = spacing.lg),
-                        )
-                    }
-                }
-
-                GiftCardStage.REVIEW -> {
-                    {
-                        ZappButton(
-                            text =
-                                if (state.isAuthenticating) {
-                                    stringResource(R.string.gift_card_authenticating)
-                                } else {
-                                    stringResource(R.string.gift_card_review_confirm)
-                                },
-                            leadingIcon = Icons.Default.CardGiftcard,
-                            enabled = state.canConfirm,
-                            onClick = state.onConfirm,
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .padding(start = spacing.lg),
-                        )
-                    }
-                }
-
-                GiftCardStage.READY -> {
-                    {
-                        ZappButton(
-                            text = stringResource(R.string.gift_card_ready_share),
-                            leadingIcon = Icons.Default.Share,
-                            onClick = { state.onShare(sharePickerText) },
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .padding(start = spacing.lg),
-                        )
-                    }
-                }
-
-                // Nothing to press while the card is being minted or broadcast, and no way back.
-                GiftCardStage.PREPARING, GiftCardStage.FUNDING -> {
-                    null
+            action?.let {
+                {
+                    ZappButton(
+                        text = stringResource(it.text),
+                        leadingIcon = it.icon,
+                        enabled = it.isEnabled,
+                        onClick = it.onClick,
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .padding(start = spacing.lg),
+                    )
                 }
             },
     )
@@ -419,17 +426,6 @@ private fun WarningRow(
             modifier = Modifier.padding(start = ZappTheme.spacing.lg),
         )
     }
-}
-
-@Composable
-private fun ErrorBanner(error: GiftCardError) {
-    val c = ZappTheme.colors
-    val spacing = ZappTheme.spacing
-    BasicText(
-        text = stringResource(error.messageRes()),
-        style = ZappTheme.typography.body.copy(color = c.danger),
-        modifier = Modifier.padding(horizontal = spacing.xl, vertical = spacing.md),
-    )
 }
 
 // A lookup table, not a decision: one arm per case, no nesting, and exhaustive so a new error

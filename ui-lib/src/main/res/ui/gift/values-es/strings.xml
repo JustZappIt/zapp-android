@@ -112,7 +112,7 @@
     <string name="gift_claim_error_not_broadcast">Zapp no pudo confirmar que la transferencia llegara a la red. Tu regalo sigue a salvo en la tarjeta: inténtalo en un momento.</string>
     <string name="gift_claim_error_failed">No se pudo reclamar el regalo. No se ha perdido nada; inténtalo de nuevo.</string>
     <string name="gift_claim_error_not_ready">Zapp todavía se está conectando a la red Zcash. Tu regalo está bien: inténtalo en un momento.</string>
-    <string name="gift_claim_error_expired">Este enlace de regalo ya no está abierto. Tócalo de nuevo donde lo recibiste.</string>
+    <string name="gift_claim_error_unavailable">Este enlace de regalo ya no está abierto. Tócalo de nuevo donde lo recibiste.</string>
     <string name="gift_claim_expired_note">Esta tarjeta pasó su fecha de caducidad sugerida. Eso es solo informativo: aún se reclama por el importe completo.</string>
     <string name="gift_claim_progress_remaining">Quedan %1$d bloques</string>
     <string name="gift_claim_pending_count">%1$d / %2$d confirmaciones</string>

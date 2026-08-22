@@ -13,6 +13,7 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
+import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.common.security.SecretAuthPolicy
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
@@ -26,6 +27,7 @@ import co.electriccoin.zcash.ui.common.usecase.GiftFundingQuote
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
+import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkCodec
 import co.electriccoin.zcash.ui.screen.gift.model.GiftMessage
@@ -54,6 +56,7 @@ import kotlin.time.Duration.Companion.days
  * funds nobody could ever reach, and there is no reclaim, so it has to be caught while the money is
  * still in the sender's wallet.
  */
+@Suppress("TooManyFunctions")
 class GiftCardVM(
     private val fundGiftCard: FundGiftCardUseCase,
     private val confirmGiftCardFunding: ConfirmGiftCardFundingUseCase,
@@ -80,48 +83,63 @@ class GiftCardVM(
             accountDataSource.selectedAccount,
             giftCardStorageProvider.observe().catch { emit(emptyList()) },
         ) { current, pin, account, storedCards ->
-            // From DETAILS, and from the one REVIEW the sender cannot fund their way out of.
-            val canOpenSavedCards =
-                storedCards.isNotEmpty() &&
-                    when (current.stage) {
-                        GiftCardStage.DETAILS -> true
-                        GiftCardStage.REVIEW -> current.error == GiftCardError.SUBMIT_UNCERTAIN
-                        else -> false
-                    }
-            GiftCardState(
-                stage = current.stage,
-                amount =
-                    NumberTextFieldState(
-                        innerState = current.amount,
-                        isEnabled = current.stage == GiftCardStage.DETAILS,
-                        onValueChange = ::onAmountChange,
-                    ),
-                spendableBalance = account?.spendableShieldedBalance?.let { stringRes(it) },
-                message = current.message,
-                messageGraphemes = GiftMessage.graphemeCount(current.message),
-                expiry = current.expiry,
-                quote = current.quote,
-                link = current.link,
-                isCopied = current.isCopied,
-                isAuthenticating = current.isAuthenticating,
-                error = current.error,
+            current.toState(
                 pinVerify = pin,
-                onAmountChange = ::onAmountChange,
-                onMessageChange = ::onMessageChange,
-                onExpiryChange = ::onExpiryChange,
-                onContinue = ::onContinue,
-                onConfirm = ::onConfirm,
-                onCopy = ::onCopy,
-                onShare = ::onShare,
-                onDone = navigationRouter::back,
-                onBack = ::onBack,
-                onOpenSavedCards = { navigationRouter.forward(GiftCardListArgs) }.takeIf { canOpenSavedCards },
+                spendableBalance = account?.spendableShieldedBalance?.let { stringRes(it) },
+                hasStoredCards = storedCards.isNotEmpty(),
             )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-            initialValue = createInitialState(),
+            // The same mapper, so a field added to the state cannot reach the screen wired here
+            // and unwired before the first emission.
+            initialValue =
+                GiftCardSnapshot().toState(pinVerify = null, spendableBalance = null, hasStoredCards = false),
         )
+
+    private fun GiftCardSnapshot.toState(
+        pinVerify: PinVerifyState?,
+        spendableBalance: StringResource?,
+        hasStoredCards: Boolean,
+    ): GiftCardState {
+        // From DETAILS, and from the one REVIEW the sender cannot fund their way out of.
+        val canOpenSavedCards =
+            hasStoredCards &&
+                when (stage) {
+                    GiftCardStage.DETAILS -> true
+                    GiftCardStage.REVIEW -> error == GiftCardError.SUBMIT_UNCERTAIN
+                    else -> false
+                }
+        return GiftCardState(
+            stage = stage,
+            amount =
+                NumberTextFieldState(
+                    innerState = amount,
+                    isEnabled = stage == GiftCardStage.DETAILS,
+                    onValueChange = ::onAmountChange,
+                ),
+            spendableBalance = spendableBalance,
+            message = message,
+            messageGraphemes = GiftMessage.graphemeCount(message),
+            expiry = expiry,
+            quote = quote,
+            link = link,
+            isCopied = isCopied,
+            isAuthenticating = isAuthenticating,
+            error = error,
+            pinVerify = pinVerify,
+            onAmountChange = ::onAmountChange,
+            onMessageChange = ::onMessageChange,
+            onExpiryChange = ::onExpiryChange,
+            onContinue = ::onContinue,
+            onConfirm = ::onConfirm,
+            onCopy = ::onCopy,
+            onShare = ::onShare,
+            onDone = navigationRouter::back,
+            onBack = ::onBack,
+            onOpenSavedCards = { navigationRouter.forward(GiftCardListArgs) }.takeIf { canOpenSavedCards },
+        )
+    }
 
     init {
         // Picks up any card whose funding mined while nothing was watching, because a previous run
@@ -321,29 +339,3 @@ private fun Throwable.toGiftCardError(): GiftCardError =
             GiftCardError.MINT_FAILED
         }
     }
-
-private fun createInitialState() =
-    GiftCardState(
-        stage = GiftCardStage.DETAILS,
-        amount = NumberTextFieldState(onValueChange = {}),
-        spendableBalance = null,
-        message = "",
-        messageGraphemes = 0,
-        expiry = GiftExpiry.NEVER,
-        quote = null,
-        link = null,
-        isCopied = false,
-        isAuthenticating = false,
-        error = null,
-        pinVerify = null,
-        onAmountChange = {},
-        onMessageChange = {},
-        onExpiryChange = {},
-        onContinue = {},
-        onConfirm = {},
-        onCopy = {},
-        onShare = {},
-        onDone = {},
-        onBack = {},
-        onOpenSavedCards = null,
-    )

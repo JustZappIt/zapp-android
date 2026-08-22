@@ -19,7 +19,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 
-/** [GiftCardListItem.checkProgress] is 0..1; the string shows whole percent. */
+/** [GiftCheckProgress.fraction] is 0..1; the string shows whole percent. */
 private const val PERCENT = 100
 
 @Composable
@@ -32,26 +32,24 @@ internal fun GiftCardRow(item: GiftCardListItem) {
         GiftCardDetails(item)
         // Absent rather than disabled once a card is collected. A greyed-out Share on a settled card
         // is an offer to do something there is no version of: its link is spent, and the row is a
-        // receipt now. The check control below hides on the same condition.
-        item.onShare?.let { onShare ->
+        // receipt now. The check control hides on the same condition.
+        item.handOff?.let { handOff ->
             ZappButton(
                 text = stringResource(R.string.gift_card_list_share),
                 variant = ZappButtonVariant.Secondary,
-                onClick = { onShare(sharePickerText) },
+                onClick = { handOff.onShare(sharePickerText) },
                 modifier = Modifier.fillMaxWidth(),
             )
-        }
-        item.onCopy?.let { onCopy ->
             ZappButton(
                 text = stringResource(R.string.gift_card_list_copy),
                 variant = ZappButtonVariant.Ghost,
-                onClick = onCopy,
+                onClick = handOff.onCopy,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
         // Its own row rather than a button beside Share: the label is a sentence, and squeezed
         // into a shared row it wrapped one character per line.
-        if (item.isCheckable) GiftCardCheckAction(item)
+        GiftCardCheckAction(item.check)
     }
 }
 
@@ -87,8 +85,8 @@ private fun GiftCardDetails(item: GiftCardListItem) {
     item.lastCheckedAt?.let {
         BasicText(text = stringResource(R.string.gift_card_list_checked_unclaimed, it.getValue()), style = caption)
     }
-    if (item.isChecking) {
-        ZappSectionLabel(text = item.checkProgress.progressText(), color = c.accentText)
+    (item.check as? GiftCheckControl.Running)?.let {
+        ZappSectionLabel(text = it.progress.progressText(), color = c.accentText)
     }
 }
 
@@ -102,17 +100,25 @@ private fun GiftCheckProgress?.progressText(): String =
     }
 
 @Composable
-private fun GiftCardCheckAction(item: GiftCardListItem) {
-    val label = if (item.isChecking) R.string.gift_card_list_check_stop else R.string.gift_card_list_check
+private fun GiftCardCheckAction(check: GiftCheckControl) {
+    if (check is GiftCheckControl.Hidden) return
+
+    val isRunning = check is GiftCheckControl.Running
     ZappButton(
-        text = stringResource(label),
+        text = stringResource(if (isRunning) R.string.gift_card_list_check_stop else R.string.gift_card_list_check),
         variant = ZappButtonVariant.Ghost,
-        enabled = item.onCheck != null,
-        onClick = { item.onCheck?.invoke() },
+        enabled = check !is GiftCheckControl.Blocked,
+        onClick = {
+            when (check) {
+                is GiftCheckControl.Ready -> check.onCheck()
+                is GiftCheckControl.Running -> check.onStop()
+                is GiftCheckControl.Blocked, GiftCheckControl.Hidden -> Unit
+            }
+        },
         modifier = Modifier.fillMaxWidth(),
     )
-    item.checkBlockedReason?.let {
-        ZappSectionLabel(text = stringResource(it.reasonRes()), color = ZappTheme.colors.textSubtle)
+    if (check is GiftCheckControl.Blocked) {
+        ZappSectionLabel(text = stringResource(check.reason.reasonRes()), color = ZappTheme.colors.textSubtle)
     }
 }
 

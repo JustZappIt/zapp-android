@@ -25,8 +25,12 @@ internal fun GiftClaimScreen(args: GiftClaimArgs) {
  * The link's fragment is the bearer secret, and a typed route argument is serialised into the back
  * stack entry and into saved instance state, so the link itself stays in memory and only this token
  * travels (§3.7). It is meaningless once taken.
+ *
+ * A null [token] opens the screen with nothing behind it, which is what a link the store refused
+ * arrives as. The tap has to land somewhere: silently doing nothing is indistinguishable from a
+ * broken app, on money the recipient is expecting.
  */
 @Serializable
 data class GiftClaimArgs(
-    val token: String,
+    val token: String? = null,
 )

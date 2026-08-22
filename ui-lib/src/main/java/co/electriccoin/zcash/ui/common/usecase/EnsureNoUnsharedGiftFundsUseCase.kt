@@ -13,10 +13,10 @@ class UnsharedGiftFundsException : IllegalStateException("Unshared gift cards wo
 /**
  * Refuses a destructive action while a gift card's link has never left the device.
  *
- * Every path that clears the encrypted preferences has to call this. `gift_cards_v1` lives there,
- * an unshared card's ephemeral seed is random rather than derived from the wallet seed, and there
- * is no reclaim — so those preferences are the only copy. It is shared rather than repeated because
- * a guard that exists on one destructive path and not another is the same bug with extra steps.
+ * Every path that clears the encrypted preferences has to call this: `gift_cards_v1` lives there,
+ * an unshared card's seed is random rather than derived from the wallet seed, and there is no
+ * reclaim, so those preferences are the only copy. Shared rather than repeated, because a guard on
+ * one destructive path and not another is the same bug with extra steps.
  */
 class EnsureNoUnsharedGiftFundsUseCase(
     private val giftCardStorageProvider: GiftCardStorageProvider,

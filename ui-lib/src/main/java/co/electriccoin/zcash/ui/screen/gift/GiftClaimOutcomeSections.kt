@@ -114,11 +114,14 @@ internal fun Caption(
     )
 }
 
+/** Shared by both gift screens; each maps its own error enum to a string first. */
 @Composable
-internal fun ErrorBanner(error: GiftClaimError) {
+internal fun ErrorBanner(
+    @StringRes message: Int,
+) {
     val spacing = ZappTheme.spacing
     BasicText(
-        text = stringResource(error.messageRes()),
+        text = stringResource(message),
         style = ZappTheme.typography.body.copy(color = ZappTheme.colors.danger),
         modifier = Modifier.padding(horizontal = spacing.xl, vertical = spacing.md),
     )
@@ -148,7 +151,7 @@ internal fun GiftClaimError.messageRes(): Int =
         GiftClaimError.TAMPERED -> R.string.gift_claim_error_tampered
         GiftClaimError.BIRTHDAY_ABOVE_TIP -> R.string.gift_claim_error_future
         GiftClaimError.WALLET_NOT_READY -> R.string.gift_claim_error_not_ready
-        GiftClaimError.LINK_EXPIRED -> R.string.gift_claim_error_expired
+        GiftClaimError.LINK_UNAVAILABLE -> R.string.gift_claim_error_unavailable
         GiftClaimError.NOT_BROADCAST -> R.string.gift_claim_error_not_broadcast
         GiftClaimError.FAILED -> R.string.gift_claim_error_failed
     }

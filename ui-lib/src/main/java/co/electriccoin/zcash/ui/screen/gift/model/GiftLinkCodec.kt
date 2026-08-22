@@ -143,9 +143,7 @@ object GiftLinkCodec {
      */
     @OptIn(ExperimentalEncodingApi::class)
     fun decode(uri: String, walletNetwork: ZcashNetwork): GiftLinkPayload {
-        // Both bounds, in this order: length is UTF-16 units and cannot bound the byte size, while
-        // measuring bytes first would mean copying whatever we were handed.
-        ensure(uri.length <= MAX_URI_BYTES && uri.toByteArray().size <= MAX_URI_BYTES, GiftLinkError.TOO_LARGE)
+        ensure(isWithinGiftLinkSizeLimit(uri), GiftLinkError.TOO_LARGE)
 
         val fragment = parseFragment(uri)
         val decoded =
@@ -274,3 +272,10 @@ object GiftLinkCodec {
         if (!condition) throw GiftLinkException(error)
     }
 }
+
+/**
+ * Both bounds, in this order: length is UTF-16 units and cannot bound the byte size, while
+ * measuring bytes first would mean copying whatever we were handed.
+ */
+fun isWithinGiftLinkSizeLimit(uri: String): Boolean =
+    uri.length <= GiftLinkCodec.MAX_URI_BYTES && uri.toByteArray().size <= GiftLinkCodec.MAX_URI_BYTES

@@ -5,6 +5,20 @@ package co.electriccoin.zcash.ui.screen.gift.model
 
 import java.util.UUID
 
+/** What the store made of an incoming link. */
+sealed interface GiftLinkIntake {
+    /** Held. [token] retrieves the link exactly once. */
+    data class Accepted(
+        val token: String,
+    ) : GiftLinkIntake
+
+    /** This exact link is already waiting, so the claim it would open is already on its way. */
+    data object AlreadyPending : GiftLinkIntake
+
+    /** Oversized, or too many already waiting. There is nothing to open. */
+    data object Refused : GiftLinkIntake
+}
+
 /**
  * Holds an incoming gift URI in memory between the intent that delivered it and the claim screen
  * that consumes it.
@@ -21,23 +35,14 @@ import java.util.UUID
 class PendingGiftLinkStore {
     private val pending = LinkedHashMap<String, String>()
 
-    /**
-     * Registers [raw] and returns the token that retrieves it, or null when nothing should be
-     * opened for it — oversized, already waiting, or arriving once the store is full.
-     *
-     * Never logs [raw].
-     */
-    fun put(raw: String): String? {
-        // Both size bounds, in this order: length counts UTF-16 units and cannot bound the byte
-        // size, while measuring bytes first would mean copying whatever we were handed.
-        val acceptable =
-            raw.length <= GiftLinkCodec.MAX_URI_BYTES &&
-                raw.toByteArray().size <= GiftLinkCodec.MAX_URI_BYTES &&
-                raw !in pending.values &&
-                pending.size < MAX_PENDING_URIS
-        if (!acceptable) return null
-        return UUID.randomUUID().toString().also { pending[it] = raw }
-    }
+    /** Registers [raw]. Never logs it, at any level. */
+    fun put(raw: String): GiftLinkIntake =
+        when {
+            !isWithinGiftLinkSizeLimit(raw) -> GiftLinkIntake.Refused
+            raw in pending.values -> GiftLinkIntake.AlreadyPending
+            pending.size >= MAX_PENDING_URIS -> GiftLinkIntake.Refused
+            else -> GiftLinkIntake.Accepted(UUID.randomUUID().toString().also { pending[it] = raw })
+        }
 
     /** Returns what [token] stands for and forgets it, or null once it has already been taken. */
     fun take(token: String): String? = pending.remove(token)

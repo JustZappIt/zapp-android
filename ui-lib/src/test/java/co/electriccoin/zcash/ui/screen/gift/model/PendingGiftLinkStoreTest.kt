@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.screen.gift.model
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -13,7 +14,7 @@ class PendingGiftLinkStoreTest {
     @Test
     fun `hands the link back for its token`() {
         val store = PendingGiftLinkStore()
-        val token = assertNotNull(store.put(link("a")))
+        val token = store.accept(link("a"))
 
         assertEquals(link("a"), store.take(token))
     }
@@ -23,7 +24,7 @@ class PendingGiftLinkStoreTest {
         val store = PendingGiftLinkStore()
         val secret = "mnemonic-words-that-are-the-money"
 
-        val token = assertNotNull(store.put(link(secret)))
+        val token = store.accept(link(secret))
 
         assertEquals(false, token.contains(secret), "the token must not carry any of the link")
     }
@@ -35,22 +36,29 @@ class PendingGiftLinkStoreTest {
 
         // Android re-delivers the same intent on recreation and from Recents. Opening a second
         // claim for one card would put two claim screens on the back stack for the same funds.
-        assertNull(store.put(link("a")), "the same link must not open twice while it is waiting")
+        assertEquals(
+            GiftLinkIntake.AlreadyPending,
+            store.put(link("a")),
+            "the same link must not open twice while it is waiting"
+        )
     }
 
     @Test
     fun `a taken link can be opened again`() {
         val store = PendingGiftLinkStore()
-        val token = assertNotNull(store.put(link("a")))
+        val token = store.accept(link("a"))
         store.take(token)
 
-        assertNotNull(store.put(link("a")), "backing out of a claim must not make the card unopenable")
+        assertIs<GiftLinkIntake.Accepted>(
+            store.put(link("a")),
+            "backing out of a claim must not make the card unopenable"
+        )
     }
 
     @Test
     fun `taking twice yields nothing the second time`() {
         val store = PendingGiftLinkStore()
-        val token = assertNotNull(store.put(link("a")))
+        val token = store.accept(link("a"))
         store.take(token)
 
         assertNull(store.take(token))
@@ -66,36 +74,40 @@ class PendingGiftLinkStoreTest {
     fun `distinct links get distinct tokens`() {
         val store = PendingGiftLinkStore()
 
-        assertNotEquals(store.put(link("a")), store.put(link("b")))
+        assertNotEquals(store.accept(link("a")), store.accept(link("b")))
     }
 
     @Test
     fun `bounds the store`() {
         val store = PendingGiftLinkStore()
-        repeat(MAX_PENDING) { assertNotNull(store.put(link("card$it")), "link $it should fit") }
+        repeat(MAX_PENDING) { store.accept(link("card$it")) }
 
-        assertNull(store.put(link("one-too-many")), "the store must not grow without limit")
+        assertEquals(
+            GiftLinkIntake.Refused,
+            store.put(link("one-too-many")),
+            "the store must not grow without limit"
+        )
     }
 
     @Test
     fun `a full store drains as claims are opened`() {
         val store = PendingGiftLinkStore()
-        val tokens = List(MAX_PENDING) { assertNotNull(store.put(link("card$it"))) }
+        val tokens = List(MAX_PENDING) { store.accept(link("card$it")) }
 
         store.take(tokens.first())
 
-        assertNotNull(store.put(link("one-more")), "taking a link must free its slot")
+        assertIs<GiftLinkIntake.Accepted>(store.put(link("one-more")), "taking a link must free its slot")
     }
 
     @Test
-    fun `rejects a link over the size bound by character count`() {
+    fun `refuses a link over the size bound by character count`() {
         val oversized = link("a".repeat(GiftLinkCodec.MAX_URI_BYTES))
 
-        assertNull(PendingGiftLinkStore().put(oversized))
+        assertEquals(GiftLinkIntake.Refused, PendingGiftLinkStore().put(oversized))
     }
 
     @Test
-    fun `rejects a link whose bytes exceed the bound even though its length does not`() {
+    fun `refuses a link whose bytes exceed the bound even though its length does not`() {
         // Four bytes per character, so a string comfortably under the character bound is well over
         // the byte bound. Checking only String.length would let this through.
         val fourByteChar = "😀"
@@ -103,8 +115,15 @@ class PendingGiftLinkStoreTest {
 
         assertEquals(true, raw.length <= GiftLinkCodec.MAX_URI_BYTES, "precondition: under the character bound")
         assertEquals(true, raw.toByteArray().size > GiftLinkCodec.MAX_URI_BYTES, "precondition: over the byte bound")
-        assertNull(PendingGiftLinkStore().put(raw))
+        assertEquals(GiftLinkIntake.Refused, PendingGiftLinkStore().put(raw))
     }
+
+    /**
+     * A refusal here is a test that has already failed, so it says so rather than letting a later
+     * assertion report something unrelated.
+     */
+    private fun PendingGiftLinkStore.accept(raw: String): String =
+        assertNotNull(put(raw) as? GiftLinkIntake.Accepted, "expected the store to accept the link").token
 
     private fun link(body: String) = "https://$GIFT_LINK_HOST/c/v1#k=$body"
 

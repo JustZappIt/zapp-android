@@ -121,16 +121,6 @@ class GiftCardListVM(
         // card's link is spent — both hand the recipient something worthless. Unresolved counts as
         // handable: the money may already have gone, and if it has, the link is the only route.
         val canHandOff = status != GiftCardListStatus.UNFUNDED && status != GiftCardListStatus.CLAIMED
-        // Shown for everything still in play, so rows do not silently differ; enabled only where
-        // there is a funding to look for, and one at a time because each check is a full scan.
-        val isCheckable = status != GiftCardListStatus.CLAIMED
-        val blockedReason =
-            when {
-                card.fundingTxid == null -> GiftCheckBlocked.NO_TRANSACTION
-                checkingId != null && card.id != checkingId -> GiftCheckBlocked.ANOTHER_RUNNING
-                else -> null
-            }
-        val canCheck = isCheckable && blockedReason == null
         return GiftCardListItem(
             id = card.id,
             amount = stringRes(Zatoshi(card.amountZatoshi)),
@@ -139,15 +129,31 @@ class GiftCardListVM(
             status = status,
             expiry = card.expiresAt.toGiftExpiryDisplay(),
             lastCheckedAt = card.lastCheckedAt?.toGiftDisplayDate().takeIf { status != GiftCardListStatus.CLAIMED },
-            isCheckable = isCheckable,
-            onCheck = { onCheck(card.id) }.takeIf { canCheck || card.id == checkingId },
-            checkBlockedReason = blockedReason.takeIf { isCheckable && card.id != checkingId },
-            isChecking = card.id == checkingId,
-            checkProgress = checkProgress.takeIf { card.id == checkingId },
-            onShare = { picker: String -> onShare(card.id, picker) }.takeIf { canHandOff },
-            onCopy = { onCopy(card.id) }.takeIf { canHandOff },
+            check = card.checkControl(status, checkingId, checkProgress),
+            handOff =
+                GiftHandOff(
+                    onShare = { picker -> onShare(card.id, picker) },
+                    onCopy = { onCopy(card.id) },
+                ).takeIf { canHandOff },
         )
     }
+
+    /**
+     * Shown for everything still in play, so rows do not silently differ; actionable only where
+     * there is a funding to look for, and one card at a time because each check is a full scan.
+     */
+    private fun StoredGiftCard.checkControl(
+        status: GiftCardListStatus,
+        checkingId: String?,
+        checkProgress: GiftCheckProgress?,
+    ): GiftCheckControl =
+        when {
+            status == GiftCardListStatus.CLAIMED -> GiftCheckControl.Hidden
+            id == checkingId -> GiftCheckControl.Running(checkProgress) { onCheck(id) }
+            fundingTxid == null -> GiftCheckControl.Blocked(GiftCheckBlocked.NO_TRANSACTION)
+            checkingId != null -> GiftCheckControl.Blocked(GiftCheckBlocked.ANOTHER_RUNNING)
+            else -> GiftCheckControl.Ready { onCheck(id) }
+        }
 
     private fun onShare(cardId: String, sharePickerText: String) {
         if (shareJob?.isActive == true) return
