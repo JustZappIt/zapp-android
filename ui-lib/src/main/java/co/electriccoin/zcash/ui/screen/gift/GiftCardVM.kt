@@ -135,10 +135,16 @@ class GiftCardVM(
                     GiftCardStage.REVIEW -> error == GiftCardError.SUBMIT_UNCERTAIN
                     else -> false
                 }
+        // What is typed wins on DETAILS, even when a quote is already in hand: backing out of
+        // REVIEW keeps the quote, and preferring it there froze the preview on the old figure
+        // while the sender typed a new one.
+        val typed = runCatching { amount.amount?.convertZecToZatoshi() }.getOrNull()
+        val shown = if (stage == GiftCardStage.DETAILS) typed else quote?.cardAmount ?: typed
         return GiftCardState(
             stage = stage,
+            previewAmount = shown,
             // Null wherever the wallet has no rate — opted out, or not loaded yet. Then no fiat.
-            fiat = quote?.let { q -> rate?.toFiatString(q.cardAmount) },
+            fiat = shown?.let { zec -> rate?.toFiatString(zec) },
             amount =
                 NumberTextFieldState(
                     innerState = amount,

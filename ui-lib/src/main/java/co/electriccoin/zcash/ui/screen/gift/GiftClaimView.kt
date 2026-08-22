@@ -3,7 +3,6 @@
 
 package co.electriccoin.zcash.ui.screen.gift
 
-import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
@@ -34,7 +32,6 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappGroupHeader
 import co.electriccoin.zcash.ui.design.component.zapp.ZappProgressBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenProgressIndicator
-import co.electriccoin.zcash.ui.design.component.zapp.ZappSuccessHeader
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSummaryRow
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ProvideZappTheme
@@ -174,12 +171,15 @@ private fun PreviewSection(state: GiftClaimState) {
         isSettled = false,
         caption = stringResource(R.string.gift_claim_podium_caption),
         fiat = state.fiat,
+        message = state.message,
     )
     if (state.message != null || state.expiry != null) {
         ZappBorderedCard(
             modifier = Modifier.padding(horizontal = spacing.xl),
             verticalArrangement = Arrangement.spacedBy(spacing.lg),
         ) {
+            // Printed on the card too, but clipped to two lines there. A note can run to 128
+            // graphemes, and the recipient has to be able to read all of whatever was written.
             state.message?.let {
                 ZappSummaryRow(label = stringResource(R.string.gift_claim_message_label), value = it)
             }
@@ -229,6 +229,7 @@ private fun ClaimingSection(state: GiftClaimState) {
         isSettled = false,
         caption = stringResource(R.string.gift_claim_podium_caption),
         fiat = state.fiat,
+        message = state.message,
     )
     Column(
         modifier = Modifier.padding(horizontal = spacing.xl, vertical = spacing.xl2),

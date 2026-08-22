@@ -326,20 +326,32 @@ private fun ReviewSection(state: GiftCardState) {
 }
 
 /**
- * The card, on the two stages where it exists as an object rather than a form.
+ * The card the sender is making, on every stage where it exists as an object rather than a form.
  *
- * Hoisted out of the stage `when` on purpose: funding and ready are the same card at two moments,
- * and a podium composed separately per stage would dispose the turning card and start a fresh one
- * from zero at exactly the hand-off the turn is meant to carry through.
+ * On DETAILS it is a live preview: the figure lands on the card as it is typed, and crossing onto
+ * better stock turns the card once so the upgrade is something that happens rather than something
+ * you notice later. Held still there — nothing is in flight while someone fills in a form.
+ *
+ * Hoisted out of the stage `when` so funding and ready share one podium: composed per stage, the
+ * turning card would be disposed and a fresh one started from zero at exactly the hand-off the
+ * turn exists to carry through. DETAILS is a separate composition either way — PREPARING and
+ * REVIEW show no card, so the preview is torn down between them.
  */
 @Composable
 private fun MintedCardPodium(state: GiftCardState) {
-    if (state.stage != GiftCardStage.FUNDING && state.stage != GiftCardStage.READY) return
+    if (state.stage == GiftCardStage.PREPARING || state.stage == GiftCardStage.REVIEW) return
+    val isDetails = state.stage == GiftCardStage.DETAILS
+    val tier = giftCardTier(state.previewAmount?.value ?: 0L, isSettled = false)
     GiftCardPodium(
-        amount = state.quote?.let { stringRes(it.cardAmount) },
-        tier = giftCardTier(state.quote?.cardAmount?.value ?: 0L, isSettled = false),
-        isSettled = state.stage == GiftCardStage.READY,
+        // Zero rather than blank while the sender is still typing: an empty card reads as a card
+        // that failed to load, and the figure is what they are watching change.
+        amount = stringRes(state.previewAmount ?: Zatoshi(0L)),
+        tier = tier,
+        isSettled = state.stage != GiftCardStage.FUNDING,
         fiat = state.fiat,
+        flourishOn = tier,
+        caption = stringResource(R.string.gift_card_title).takeIf { isDetails },
+        message = state.message,
     )
 }
 
@@ -486,7 +498,8 @@ private fun GiftCardPreview() =
                     messageGraphemes = 0,
                     expiry = GiftExpiry.NEVER,
                     quote = null,
-                    fiat = null,
+                    previewAmount = Zatoshi(250_000_000L),
+                    fiat = stringRes("$150.00"),
                     link = null,
                     isCopied = false,
                     isAuthenticating = false,

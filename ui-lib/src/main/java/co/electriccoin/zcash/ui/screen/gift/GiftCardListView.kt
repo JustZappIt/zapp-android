@@ -29,7 +29,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.compose.SecureScreen
@@ -214,15 +213,16 @@ private fun GiftCardDeckPreview() =
                         listOf(
                             previewItem(
                                 id = "a",
-                                zatoshi = 1_000_000_000,
-                                tier = GiftCardTier.AMBER,
+                                zatoshi = 1_500_000_000,
+                                tier = GiftCardTier.SIGNATURE,
                                 status = GiftCardListStatus.FUNDED,
-                                fiat = "$600.00",
+                                fiat = "$900.00",
                                 message = "Happy birthday — your first private money.",
                             ),
-                            previewItem("b", 25_000_000, GiftCardTier.OBSIDIAN, GiftCardListStatus.SHARED, "$15.00"),
-                            previewItem("c", 4_000_000, GiftCardTier.BONE, GiftCardListStatus.SHARED, "$2.40"),
-                            previewItem("d", 6_000_000, GiftCardTier.SPENT, GiftCardListStatus.CLAIMED, "$3.60"),
+                            previewItem("b", 75_000_000, GiftCardTier.OBSIDIAN, GiftCardListStatus.SHARED, "$45.00"),
+                            previewItem("c", 4_000_000, GiftCardTier.PAPER, GiftCardListStatus.SHARED, "$2.40"),
+                            previewItem("d", 25_000_000, GiftCardTier.GRAPHITE, GiftCardListStatus.SHARED, "$15.00"),
+                            previewItem("e", 6_000_000, GiftCardTier.SPENT, GiftCardListStatus.CLAIMED, "$3.60"),
                         ),
                     isCorrupted = false,
                     error = null,

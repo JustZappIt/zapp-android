@@ -3,6 +3,7 @@
 
 package co.electriccoin.zcash.ui.screen.gift
 
+import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.usecase.GiftFundingQuote
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
@@ -72,6 +73,8 @@ internal data class GiftCardState(
     val messageGraphemes: Int,
     val expiry: GiftExpiry,
     val quote: GiftFundingQuote?,
+    /** The figure as typed, so the card can be drawn before there is a quote behind it. */
+    val previewAmount: Zatoshi?,
     /** What the card is worth in the wallet's chosen currency. Null when there is no rate. */
     val fiat: StringResource?,
     val link: String?,
