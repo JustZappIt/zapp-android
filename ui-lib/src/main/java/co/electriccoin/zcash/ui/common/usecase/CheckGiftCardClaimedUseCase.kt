@@ -51,10 +51,12 @@ enum class GiftCardCheckResult {
  *
  * An empty wallet is not on its own an answer, and treating it as one is how a card gets settled
  * while its money is still on the way. The scan therefore reads the card wallet's own history
- * alongside its balance, and only the pair — funding arrived, balance now zero — reports collected.
- * That evidence comes from the card's wallet rather than the sender's records on purpose: it stays
- * correct on a device that has never seen the funding transaction, and it is the same evidence
- * whether the card was minted here or restored from somewhere else.
+ * alongside its balance, and only the pair — this card's funding mined, balance now zero — reports
+ * collected. That evidence comes from the card's wallet rather than the sender's records on
+ * purpose: it stays correct on a device that has never seen the funding transaction, and it is the
+ * same evidence whether the card was minted here or restored from somewhere else. The stored txid
+ * is passed in to say *which* transaction in that history counts, not to replace it — see
+ * [GiftCardHoldings.hasFundingArrived] for what any-mined-transaction cannot tell apart.
  */
 class CheckGiftCardClaimedUseCase(
     private val synchronizerProvider: SynchronizerProvider,
@@ -67,10 +69,11 @@ class CheckGiftCardClaimedUseCase(
         onProgress: (GiftClaimProgress) -> Unit,
     ): GiftCardCheckResult {
         // An empty wallet on a card that was never funded means nobody took anything — it was never
-        // there. Only a funded card can be reported collected.
-        if (card.fundingTxid == null) return GiftCardCheckResult.NOT_FUNDED
+        // there. Only a funded card can be reported collected, and the txid that makes it funded is
+        // the same one the scan needs, so it is taken here rather than re-read further down.
+        val fundingTxid = card.fundingTxid ?: return GiftCardCheckResult.NOT_FUNDED
 
-        return when (val outcome = inspect(card, onProgress)) {
+        return when (val outcome = inspect(card, fundingTxid, onProgress)) {
             is CheckOutcome.Failed -> {
                 outcome.result
             }
@@ -108,7 +111,11 @@ class CheckGiftCardClaimedUseCase(
         ) : CheckOutcome
     }
 
-    private suspend fun inspect(card: StoredGiftCard, onProgress: (GiftClaimProgress) -> Unit): CheckOutcome {
+    private suspend fun inspect(
+        card: StoredGiftCard,
+        fundingTxid: String,
+        onProgress: (GiftClaimProgress) -> Unit,
+    ): CheckOutcome {
         val synchronizer = synchronizerProvider.getSynchronizer()
         val endpoint = persistableWalletProvider.requirePersistableWallet().endpoint
         return runCatching {
@@ -117,6 +124,7 @@ class CheckGiftCardClaimedUseCase(
                     payload = card.toLinkPayload(),
                     network = synchronizer.network,
                     endpoint = endpoint,
+                    fundingTxid = fundingTxid,
                     onProgress = onProgress,
                 )
             )

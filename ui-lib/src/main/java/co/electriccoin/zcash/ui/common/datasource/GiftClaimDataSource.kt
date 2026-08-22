@@ -86,6 +86,15 @@ private suspend fun CloseableSynchronizer.closeAndAwait() {
     if (this is SdkSynchronizer) closeFlow().first() else close()
 }
 
+/**
+ * Whether [txid] is in this wallet's history with a block behind it.
+ *
+ * Mined, not merely present: a transaction the wallet knows about but has not seen in a block is
+ * the mempool case, and that is the one thing an empty card must never be settled on.
+ */
+private suspend fun Synchronizer.hasMined(txid: String): Boolean =
+    allTransactions.first().any { it.minedHeight != null && it.txId.txIdString() == txid }
+
 // Sums every shielded pool: a card is funded to a unified address and the sender's wallet picks
 // the pool, so reading one would report a perfectly good card as empty the moment that changed.
 private fun AccountBalance.shieldedAvailable() = sapling.available + orchard.available + ironwood.available
@@ -100,12 +109,18 @@ data class GiftCardHoldings(
     val available: Zatoshi,
     val total: Zatoshi,
     /**
-     * Whether the card's own wallet has a mined transaction in it.
+     * Whether the card's funding transaction — that one, by txid — has mined.
      *
-     * The card's wallet is created for one card and has no history before its funding, so a single
-     * mined transaction anywhere in it is proof the money arrived — the funding itself, or the
-     * claim that spent it. False means the funding has not mined: still in the mempool, or dropped
-     * and possibly yet to mine before it expires.
+     * "Any mined transaction" is the cheaper test and it is wrong. The card's address is plaintext
+     * in the link, so anybody can send to it, and a *transparent* send mines into this wallet's
+     * history while leaving [total] at zero, because only the shielded pools are counted. That pair
+     * is indistinguishable from a collected card, and settling is terminal — a card marked claimed
+     * can no longer be handed out, re-checked or counted by the reset guard
+     * (`GiftCardLedger.markClaimed`). Matching the txid the sender already recorded costs a string
+     * comparison and removes the whole class.
+     *
+     * False means the funding has not mined: still in the mempool, or dropped and possibly yet to
+     * mine before it expires.
      */
     val hasFundingArrived: Boolean,
 ) {
@@ -182,11 +197,17 @@ interface GiftClaimDataSource {
      *
      * This is the only way to learn whether a card was collected: the note is shielded, so nothing
      * short of scanning with the card's own viewing key can see it spent.
+     *
+     * [fundingTxid] is the transaction the sender recorded when funding this card, and it is
+     * required rather than optional — see [GiftCardHoldings.hasFundingArrived] for what a scan
+     * without it cannot tell apart. A caller with no txid has a card that was never funded, and
+     * there is nothing for this to find.
      */
     suspend fun inspect(
         payload: GiftLinkPayload,
         network: ZcashNetwork,
         endpoint: LightWalletEndpoint,
+        fundingTxid: String,
         onProgress: (GiftClaimProgress) -> Unit,
     ): GiftCardHoldings
 }
@@ -216,6 +237,13 @@ internal class GiftClaimDataSourceImpl(
 
         // Terminal outcomes only (§5). NotYetSpendable and NotBroadcast both resume against this
         // database, and rescanning from the card's birthday is the cost of throwing it away.
+        //
+        // The delete is [NonCancellable] itself, which is the half that is easy to miss. The
+        // broadcast above runs to a verdict regardless — but it hands that verdict back into a
+        // context that may have been cancelled while it ran, and every suspension point after it
+        // then throws. A claim that moved real money would return `CancellationException` instead
+        // of its outcome, leaving a spent card's bearer seed on disk. `ClaimGiftCardUseCase`
+        // carries the same reasoning through to the receipt.
         if (outcome is GiftClaimOutcome.Claimed || outcome is GiftClaimOutcome.Empty) {
             deleteWallet(alias, network)
         }
@@ -226,6 +254,7 @@ internal class GiftClaimDataSourceImpl(
         payload: GiftLinkPayload,
         network: ZcashNetwork,
         endpoint: LightWalletEndpoint,
+        fundingTxid: String,
         onProgress: (GiftClaimProgress) -> Unit,
     ): GiftCardHoldings {
         val alias = giftAlias(payload)
@@ -245,9 +274,10 @@ internal class GiftClaimDataSourceImpl(
                     total = balance.shieldedTotal(),
                     // A zero balance is ambiguous and the balance alone cannot resolve it, so the
                     // wallet's own history is read in the same breath: this is what separates
-                    // "collected" from "the funding never landed". Same reasoning as
-                    // `withConfirmations` — this wallet exists for one card and starts empty.
-                    hasFundingArrived = synchronizer.allTransactions.first().any { it.minedHeight != null },
+                    // "collected" from "the funding never landed". Still the card's own wallet
+                    // rather than the sender's records — the txid only says which transaction in
+                    // that history counts.
+                    hasFundingArrived = synchronizer.hasMined(fundingTxid),
                 )
             } finally {
                 withContext(NonCancellable) { synchronizer.closeAndAwait() }
@@ -270,9 +300,13 @@ internal class GiftClaimDataSourceImpl(
      * encrypted file — namespaced inside the blob, not by file — so erasing a card would drop
      * resubmission metadata for unrelated transactions. Verified in the 3.0.1-SNAPSHOT AAR. The
      * alias is ours alone, so deleting its files reclaims the disk without touching anything shared.
+     *
+     * [NonCancellable] because by the time this is called the decision to delete is already made:
+     * a cancelled caller would otherwise throw on the way in and strand a bearer seed on disk, on
+     * exactly the path that has just spent the card.
      */
     private suspend fun deleteWallet(alias: String, network: ZcashNetwork) =
-        withContext(Dispatchers.IO) {
+        withContext(NonCancellable + Dispatchers.IO) {
             val root = File(context.noBackupFilesDir, SDK_NO_BACKUP_SUBDIRECTORY)
             giftWalletFileNames(alias, network.networkName).forEach { name ->
                 val file = File(root, name)

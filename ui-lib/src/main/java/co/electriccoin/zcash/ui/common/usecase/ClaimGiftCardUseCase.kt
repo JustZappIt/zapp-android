@@ -3,6 +3,7 @@
 
 package co.electriccoin.zcash.ui.common.usecase
 
+import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimDataSource
@@ -19,8 +20,10 @@ import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkException
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkPayload
 import co.electriccoin.zcash.ui.screen.gift.model.ReceivedGift
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
@@ -127,9 +130,44 @@ class ClaimGiftCardUseCase(
                 onProgress = onProgress,
             )
 
-        if (outcome is GiftClaimOutcome.Claimed) recordReceipt(payload, outcome)
+        // An empty card this wallet has already collected is "you have it", never "somebody else
+        // took it" — and the two are the same scan, so only the receipt can tell them apart. This
+        // is what the [NonCancellable] write below is for: a claim can succeed and still lose its
+        // outcome on the way back to the screen if the app was backgrounded while the broadcast
+        // ran, and the recipient's next attempt would otherwise be told their gift is gone.
+        if (outcome is GiftClaimOutcome.Empty) collectedEarlier(payload)?.let { return it }
+
+        // NonCancellable for the same reason `GiftClaimDataSource` deletes under it: the money has
+        // already moved by the time this runs, and a cancelled scope would drop the only durable
+        // record that it did.
+        if (outcome is GiftClaimOutcome.Claimed) withContext(NonCancellable) { recordReceipt(payload, outcome) }
         return outcome
     }
+
+    /**
+     * The receipt for this card, rebuilt as the outcome it came from, or null if there is none.
+     *
+     * Keyed on the card's address, which is its identity: one card is one ephemeral wallet, and
+     * `ReceivedGift` already keeps one receipt per address however many times a link is opened.
+     *
+     * The narrow case this reads wrong is a card whose address is funded a second time and emptied
+     * again — it would report the first collection rather than the second. Nothing in the app can
+     * re-fund a spent card, it would take a hand-built transaction to that address, and the answer
+     * it gives then is still closer to true than "nothing left on this card".
+     */
+    private suspend fun collectedEarlier(payload: GiftLinkPayload): GiftClaimOutcome.Claimed? =
+        runCatching {
+            receivedGiftStorageProvider
+                .getAll()
+                .firstOrNull { it.address == payload.address && it.network == payload.network }
+                ?.let { GiftClaimOutcome.Claimed(amount = Zatoshi(it.amountZatoshi), txIds = it.claimTxids) }
+        }.getOrElse { throwable ->
+            if (throwable is CancellationException) throw throwable
+            // Falls through to Empty, which is what this path already said before the receipt
+            // existed. A store that will not read must not turn a claim into a crash.
+            Twig.warn { "Received gift receipts could not be read" }
+            null
+        }
 
     /**
      * Best effort, and deliberately so. The money is already in the wallet by this point; a store
