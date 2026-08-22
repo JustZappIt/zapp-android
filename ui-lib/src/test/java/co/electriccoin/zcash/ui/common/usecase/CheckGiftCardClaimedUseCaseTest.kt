@@ -90,7 +90,7 @@ class CheckGiftCardClaimedUseCaseTest {
 
             assertEquals(GiftCardCheckResult.NOT_FUNDED, useCase(card(txid = null)) {})
 
-            coVerify(exactly = 0) { dataSource.inspect(any(), any(), any(), any(), any()) }
+            coVerify(exactly = 0) { dataSource.inspect(any(), any(), any(), any(), any(), any()) }
         }
 
     @Test
@@ -98,7 +98,7 @@ class CheckGiftCardClaimedUseCaseTest {
         runTest {
             val dataSource =
                 mockk<GiftClaimDataSource>(relaxed = true).also {
-                    coEvery { it.inspect(any(), any(), any(), any(), any()) } returns
+                    coEvery { it.inspect(any(), any(), any(), any(), any(), any()) } returns
                         holdings(total = 0, hasFundingArrived = true)
                 }
             val useCase = useCase(storage(), dataSource = dataSource)
@@ -109,7 +109,7 @@ class CheckGiftCardClaimedUseCaseTest {
             // transparent send mines into the card wallet's history while leaving the shielded
             // balance at zero. That pair is "collected" to a scan that accepts any mined
             // transaction — and settling is terminal.
-            coVerify(exactly = 1) { dataSource.inspect(any(), any(), any(), fundingTxid = TXID, any()) }
+            coVerify(exactly = 1) { dataSource.inspect(any(), any(), any(), any(), fundingTxid = TXID, any()) }
         }
 
     @Test
@@ -145,9 +145,9 @@ class CheckGiftCardClaimedUseCaseTest {
         dataSource: GiftClaimDataSource =
             mockk<GiftClaimDataSource>(relaxed = true).also { source ->
                 if (throws != null) {
-                    coEvery { source.inspect(any(), any(), any(), any(), any()) } throws throws
+                    coEvery { source.inspect(any(), any(), any(), any(), any(), any()) } throws throws
                 } else if (holdings != null) {
-                    coEvery { source.inspect(any(), any(), any(), any(), any()) } returns holdings
+                    coEvery { source.inspect(any(), any(), any(), any(), any(), any()) } returns holdings
                 }
             },
     ) = CheckGiftCardClaimedUseCase(

@@ -40,7 +40,6 @@ base64url'd UTF-8 JSON:
 |---|---|---|
 | `v` | int | `1` |
 | `network` | string | `main`/`test`. Reject on mismatch |
-| `address` | string | Ephemeral UA. A claim MUST verify it matches the address derived from `mnemonic` |
 | `amountZatoshi` | string | Decimal **string**, not a number — JSON numbers decode to doubles in too many parsers, which would silently round a large card |
 | `mnemonic` | string | **The bearer secret.** 24 words |
 | `birthdayHeight` | int | Chain tip at creation |
@@ -72,9 +71,19 @@ request, so the seed never reaches a server, a proxy, a `Referer` header, or a l
 This costs nothing on Android: intent filters have no `fragment` attribute and never match on it, so
 it arrives intact via `intent.data?.fragment`.
 
+**The card's address is deliberately not carried.** It is derived from `mnemonic`, which sits beside
+it in the same link, so sending it spent ~40% of a 754-character link restating what the link already
+said. Both platforms derive it identically — Android's `deriveUnifiedAddressFromSeed` and iOS's
+`zcashlc_derive_address_from_ufvk` both reach `find_address(DiversifierIndex::new(),
+UnifiedAddressRequest::AllAvailableKeys)` on the same UFVK — so there was never a second opinion to
+check against. **That parity is the load-bearing assumption**: if either platform narrows the
+receiver set or moves off account index 0, the two disagree and nothing in the link would notice.
+Lock it with shared test vectors. Note that a claim would still *work* through such a divergence,
+because the note is found by the viewing key rather than by the address.
+
 Every rejection is a distinct `GiftLinkError` and happens before any network call: URI over 16 KiB
 (checked as both `String.length` and UTF-8 byte size); unknown or missing `v`; unknown fields; wrong
-or unrecognised `network`; empty `address`; `amountZatoshi` ≤ 0, over `Zatoshi.MAX_INCLUSIVE`, or
+or unrecognised `network`; `amountZatoshi` ≤ 0, over `Zatoshi.MAX_INCLUSIVE`, or
 unparseable; a `mnemonic` that is not 24 valid BIP-39 words; `birthdayHeight` ≤ 0 or below the named
 network's Sapling activation; unparseable `createdAt`; an over-long `message`.
 
@@ -100,8 +109,8 @@ The alias is **deterministic and derived from the card's address**, so an interr
 against the same database instead of rescanning from the card's birthday. Address, not mnemonic: the
 address already identifies the card, and the alias becomes a filesystem path component.
 
-The sequence: derive the address from the link's mnemonic and verify it matches the payload; verify
-the network; resolve the claim birthday (§3.6); open the synchronizer, letting
+The sequence: derive the address from the link's mnemonic (§2); verify the network; resolve the
+claim birthday (§3.6); open the synchronizer, letting
 `InitializeException.SeedNotRelevant` propagate (§7.1); sync to `SYNCED`; check spendability (§4);
 `proposeTransfer` to the recipient's active account; classify the broadcast and only then decide
 whether to delete the card's wallet (§5).

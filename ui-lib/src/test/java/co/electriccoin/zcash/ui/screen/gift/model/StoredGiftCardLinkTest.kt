@@ -21,7 +21,6 @@ class StoredGiftCardLinkTest {
     fun `a stored card round trips through a link`() {
         val decoded = GiftLinkCodec.decode(GiftLinkCodec.encode(card().toLinkPayload()), ZcashNetwork.Mainnet)
 
-        assertEquals(ADDRESS, decoded.address)
         assertEquals(MNEMONIC, decoded.mnemonic)
         assertEquals(AMOUNT.toString(), decoded.amountZatoshi)
         assertEquals(BIRTHDAY, decoded.birthdayHeight)

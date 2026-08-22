@@ -179,6 +179,7 @@ interface GiftClaimDataSource {
      */
     suspend fun claim(
         payload: GiftLinkPayload,
+        cardAddress: String,
         network: ZcashNetwork,
         endpoint: LightWalletEndpoint,
         recipientAddress: String,
@@ -191,10 +192,12 @@ interface GiftClaimDataSource {
      * card's own viewing key can see it spent.
      *
      * [fundingTxid] is required, not optional — see [GiftCardHoldings.hasFundingArrived]. A caller
-     * without one has a card that was never funded.
+     * without one has a card that was never funded. [cardAddress] is the card's own address, which
+     * the link no longer carries.
      */
     suspend fun inspect(
         payload: GiftLinkPayload,
+        cardAddress: String,
         network: ZcashNetwork,
         endpoint: LightWalletEndpoint,
         fundingTxid: String,
@@ -208,12 +211,13 @@ internal class GiftClaimDataSourceImpl(
 ) : GiftClaimDataSource {
     override suspend fun claim(
         payload: GiftLinkPayload,
+        cardAddress: String,
         network: ZcashNetwork,
         endpoint: LightWalletEndpoint,
         recipientAddress: String,
         onProgress: (GiftClaimProgress) -> Unit,
     ): GiftClaimOutcome {
-        val alias = giftAlias(payload)
+        val alias = giftAlias(payload.network, cardAddress)
         val synchronizer = open(payload, network, endpoint, alias)
         val settlement =
             try {
@@ -247,12 +251,13 @@ internal class GiftClaimDataSourceImpl(
 
     override suspend fun inspect(
         payload: GiftLinkPayload,
+        cardAddress: String,
         network: ZcashNetwork,
         endpoint: LightWalletEndpoint,
         fundingTxid: String,
         onProgress: (GiftClaimProgress) -> Unit,
     ): GiftCardHoldings {
-        val alias = giftAlias(payload)
+        val alias = giftAlias(payload.network, cardAddress)
         val synchronizer = open(payload, network, endpoint, alias)
         val holdings =
             try {
@@ -542,9 +547,9 @@ internal class GiftClaimDataSourceImpl(
          * becomes a filesystem path component. `ZcashSdk` wants 1..99 characters of letters, digits,
          * hyphens and underscores; this is 53 and hex.
          */
-        fun giftAlias(payload: GiftLinkPayload): String {
+        fun giftAlias(network: String, address: String): String {
             val digest = MessageDigest.getInstance("SHA-256")
-            val hash = digest.digest("${payload.network}:${payload.address}".toByteArray())
+            val hash = digest.digest("$network:$address".toByteArray())
             return "gift_" + hash.joinToString("") { "%02x".format(it) }.take(ALIAS_HASH_CHARS)
         }
     }

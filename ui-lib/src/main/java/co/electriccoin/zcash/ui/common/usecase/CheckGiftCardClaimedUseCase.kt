@@ -123,6 +123,7 @@ class CheckGiftCardClaimedUseCase(
             CheckOutcome.Read(
                 giftClaimDataSource.inspect(
                     payload = card.toLinkPayload(),
+                    cardAddress = card.address,
                     network = synchronizer.network,
                     endpoint = endpoint,
                     fundingTxid = fundingTxid,

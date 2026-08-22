@@ -37,7 +37,6 @@ internal enum class GiftClaimStage {
 internal enum class GiftClaimError {
     MALFORMED_LINK,
     WRONG_NETWORK,
-    TAMPERED,
     BIRTHDAY_ABOVE_TIP,
 
     /**

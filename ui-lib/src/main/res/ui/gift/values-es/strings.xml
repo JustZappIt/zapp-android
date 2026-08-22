@@ -106,7 +106,6 @@
 
     <string name="gift_claim_error_link">Esto no es un enlace de regalo que Zapp entienda.</string>
     <string name="gift_claim_error_network">Esta tarjeta es de otra red Zcash.</string>
-    <string name="gift_claim_error_tampered">Este enlace ha sido alterado y no se puede reclamar de forma segura.</string>
     <string name="gift_claim_error_future">Esta tarjeta dice ser más nueva que la cadena de bloques. Puede que Zapp aún se esté sincronizando.</string>
     <string name="gift_claim_error_newer_format">Este regalo se creó con una versión más reciente de Zapp. Actualiza Zapp para reclamarlo: el regalo sigue a salvo en la tarjeta hasta entonces.</string>
     <string name="gift_claim_error_not_broadcast">Zapp no pudo confirmar que la transferencia llegara a la red. Tu regalo sigue a salvo en la tarjeta: inténtalo en un momento.</string>

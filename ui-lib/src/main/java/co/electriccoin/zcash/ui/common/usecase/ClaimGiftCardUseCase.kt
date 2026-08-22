@@ -36,6 +36,8 @@ import kotlin.time.Duration.Companion.seconds
  */
 data class GiftClaimPreview(
     val payload: GiftLinkPayload,
+    /** Derived from the link's mnemonic; the link itself does not carry it. */
+    val cardAddress: String,
     val verdict: GiftBirthdayVerdict,
 )
 
@@ -74,10 +76,9 @@ class ClaimGiftCardUseCase(
         // Wrong network, bad version, unparseable amount, over-long message — all offline.
         val payload = GiftLinkCodec.decode(uri, synchronizer.network)
 
-        // The one check needing key derivation. A mismatch means the link was rewritten, and
-        // scanning for a note at an address we cannot spend from is pure wasted work.
-        val derived = giftKeyProvider.deriveAddress(payload.mnemonic, synchronizer.network)
-        GiftLinkCodec.verifyAddressMatches(payload, derived)
+        // The card's address, which identifies it everywhere below: the isolated wallet's alias
+        // and the receipt. Derived rather than carried, so there is nothing to disagree with.
+        val cardAddress = giftKeyProvider.deriveAddress(payload.mnemonic, synchronizer.network)
 
         // Wait rather than fail. On the cold start an App Link produces, networkHeight is null for
         // a second or two, and reading `.value` once would reject every link opened from a chat.
@@ -91,6 +92,7 @@ class ClaimGiftCardUseCase(
 
         return GiftClaimPreview(
             payload = payload,
+            cardAddress = cardAddress,
             verdict = GiftLinkCodec.evaluateBirthday(payload.birthdayHeight, tip),
         )
     }
@@ -106,6 +108,7 @@ class ClaimGiftCardUseCase(
      */
     suspend operator fun invoke(
         payload: GiftLinkPayload,
+        cardAddress: String,
         onProgress: (GiftClaimProgress) -> Unit,
     ): GiftClaimOutcome {
         val synchronizer = synchronizerProvider.getSynchronizer()
@@ -120,6 +123,7 @@ class ClaimGiftCardUseCase(
         val outcome =
             giftClaimDataSource.claim(
                 payload = payload,
+                cardAddress = cardAddress,
                 network = synchronizer.network,
                 endpoint = endpoint,
                 recipientAddress = recipient,
@@ -131,12 +135,14 @@ class ClaimGiftCardUseCase(
         // is what the [NonCancellable] write below is for: a claim can succeed and still lose its
         // outcome on the way back to the screen if the app was backgrounded while the broadcast
         // ran, and the recipient's next attempt would otherwise be told their gift is gone.
-        if (outcome is GiftClaimOutcome.Empty) collectedEarlier(payload)?.let { return it }
+        if (outcome is GiftClaimOutcome.Empty) collectedEarlier(payload, cardAddress)?.let { return it }
 
         // NonCancellable for the same reason `GiftClaimDataSource` deletes under it: the money has
         // already moved by the time this runs, and a cancelled scope would drop the only durable
         // record that it did.
-        if (outcome is GiftClaimOutcome.Claimed) withContext(NonCancellable) { recordReceipt(payload, outcome) }
+        if (outcome is GiftClaimOutcome.Claimed) {
+            withContext(NonCancellable) { recordReceipt(payload, cardAddress, outcome) }
+        }
         return outcome
     }
 
@@ -148,11 +154,11 @@ class ClaimGiftCardUseCase(
      * collection rather than the second. Nothing in the app can re-fund a spent card, and that
      * answer is still closer to true than "nothing left on this card".
      */
-    private suspend fun collectedEarlier(payload: GiftLinkPayload): GiftClaimOutcome.Claimed? =
+    private suspend fun collectedEarlier(payload: GiftLinkPayload, cardAddress: String): GiftClaimOutcome.Claimed? =
         runCatching {
             receivedGiftStorageProvider
                 .getAll()
-                .firstOrNull { it.address == payload.address && it.network == payload.network }
+                .firstOrNull { it.address == cardAddress && it.network == payload.network }
                 ?.let { GiftClaimOutcome.Claimed(amount = Zatoshi(it.amountZatoshi), txIds = it.claimTxids) }
         }.getOrElse { throwable ->
             if (throwable is CancellationException) throw throwable
@@ -166,11 +172,15 @@ class ClaimGiftCardUseCase(
      * Best effort, and deliberately so. The money is already in the wallet by this point; a store
      * that will not take the receipt costs the recipient a row in a list, not their gift.
      */
-    private suspend fun recordReceipt(payload: GiftLinkPayload, outcome: GiftClaimOutcome.Claimed) {
+    private suspend fun recordReceipt(
+        payload: GiftLinkPayload,
+        cardAddress: String,
+        outcome: GiftClaimOutcome.Claimed,
+    ) {
         bestEffort("Claimed gift could not be recorded") {
             receivedGiftStorageProvider.record(
                 ReceivedGift(
-                    address = payload.address,
+                    address = cardAddress,
                     network = payload.network,
                     amountZatoshi = outcome.amount.value,
                     claimedAt = Clock.System.now().toString(),

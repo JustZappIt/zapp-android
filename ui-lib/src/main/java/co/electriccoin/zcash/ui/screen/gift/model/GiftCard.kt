@@ -11,13 +11,13 @@ import kotlinx.serialization.Serializable
  * The shape is normative and shared with iOS, so the field names, the integer height and the
  * decimal-string amount are wire contract rather than local choices — `docs/gift-cards.md` §2.
  * [amountZatoshi] is a string because JSON numbers decode to doubles in too many parsers, which
- * would silently round a large card.
+ * would silently round a large card. The card's address is not carried: it is derived from
+ * [mnemonic], so sending it would be 40% of the link spent restating what the link already says.
  */
 @Serializable
 data class GiftLinkPayload(
     val v: Int,
     val network: String,
-    val address: String,
     val amountZatoshi: String,
     val mnemonic: String,
     val birthdayHeight: Long,
@@ -155,7 +155,6 @@ fun StoredGiftCard.toLinkPayload(): GiftLinkPayload =
     GiftLinkPayload(
         v = GiftLinkCodec.VERSION,
         network = network,
-        address = address,
         amountZatoshi = amountZatoshi.toString(),
         mnemonic = mnemonic,
         birthdayHeight = birthdayHeight,

@@ -106,7 +106,6 @@
 
     <string name="gift_claim_error_link">This is not a gift link Zapp understands.</string>
     <string name="gift_claim_error_network">This card is for a different Zcash network.</string>
-    <string name="gift_claim_error_tampered">This link has been altered and cannot be claimed safely.</string>
     <string name="gift_claim_error_future">This card claims to be newer than the blockchain. Zapp may still be syncing.</string>
     <string name="gift_claim_error_newer_format">This gift was made with a newer version of Zapp. Update Zapp to claim it — the gift is safe on the card until you do.</string>
     <string name="gift_claim_error_not_broadcast">Zapp could not confirm the transfer reached the network. Your gift is safe on the card — try again in a moment.</string>

@@ -72,6 +72,9 @@ class GiftClaimVM(
 
     private var payload: GiftLinkPayload? = null
 
+    /** Derived once in [load]; the link does not carry it. */
+    private var cardAddress: String? = null
+
     /**
      * Whether a scan may start at all (§3.5).
      *
@@ -116,6 +119,7 @@ class GiftClaimVM(
         runCatching { claimGiftCard.preview(link) }
             .onSuccess { preview ->
                 payload = preview.payload
+                cardAddress = preview.cardAddress
                 snapshot.update {
                     it.copy(
                         stage =
@@ -141,20 +145,23 @@ class GiftClaimVM(
         // broadcast runs on, and a second claim started there would try to spend the same note.
         // And §3.5 as a guard, rather than as a property of where the lock overlay happens to sit.
         if (claimJob?.isCompleted == false || !isForeground) return
-        val current = payload ?: return
+        // Both are set together in load(), so one without the other is unreachable.
+        val current = payload
+        val address = cardAddress
+        if (current == null || address == null) return
         snapshot.update { it.copy(stage = GiftClaimStage.CLAIMING, progressFraction = null, error = null) }
-        claimJob = viewModelScope.launch { claim(current) }
+        claimJob = viewModelScope.launch { claim(current, address) }
     }
 
-    private suspend fun claim(payload: GiftLinkPayload) {
-        runCatching { claimGiftCard(payload, ::onProgress) }
+    private suspend fun claim(payload: GiftLinkPayload, address: String) {
+        runCatching { claimGiftCard(payload, address, ::onProgress) }
             .onSuccess { outcome ->
                 snapshot.update { it.applying(outcome) }
                 // Waiting on confirmations is a wait, not a failure. Re-checking on a timer is
                 // what turns it into something the recipient can watch instead of something they
                 // have to keep poking. The scan resumes against the retained database, so each
                 // pass is cheap.
-                if (outcome is GiftClaimOutcome.NotYetSpendable) scheduleConfirmationRecheck(payload)
+                if (outcome is GiftClaimOutcome.NotYetSpendable) scheduleConfirmationRecheck(payload, address)
             }.onFailure { throwable ->
                 if (throwable is CancellationException) throw throwable
                 Twig.error(throwable) { "Gift claim failed" }
@@ -164,13 +171,13 @@ class GiftClaimVM(
             }
     }
 
-    private fun scheduleConfirmationRecheck(payload: GiftLinkPayload) {
+    private fun scheduleConfirmationRecheck(payload: GiftLinkPayload, address: String) {
         claimJob =
             viewModelScope.launch {
                 delay(CONFIRMATION_RECHECK)
                 if (snapshot.value.stage != GiftClaimStage.PENDING_CONFIRMATIONS) return@launch
                 snapshot.update { it.copy(stage = GiftClaimStage.CLAIMING, progressFraction = null) }
-                claim(payload)
+                claim(payload, address)
             }
     }
 
@@ -308,8 +315,6 @@ private fun Throwable.toClaimError(): GiftClaimError =
 private fun GiftLinkError?.toClaimError(): GiftClaimError =
     when (this) {
         GiftLinkError.NETWORK_MISMATCH -> GiftClaimError.WRONG_NETWORK
-
-        GiftLinkError.ADDRESS_MISMATCH -> GiftClaimError.TAMPERED
 
         GiftLinkError.BIRTHDAY_ABOVE_TIP -> GiftClaimError.BIRTHDAY_ABOVE_TIP
 

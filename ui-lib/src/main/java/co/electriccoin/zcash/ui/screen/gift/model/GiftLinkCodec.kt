@@ -48,11 +48,6 @@ enum class GiftLinkError {
     /** A mainnet card on a testnet wallet, or the reverse. */
     NETWORK_MISMATCH,
 
-    INVALID_ADDRESS,
-
-    /** The address in the link is not the one its mnemonic derives — the link has been tampered with. */
-    ADDRESS_MISMATCH,
-
     INVALID_AMOUNT,
 
     INVALID_MNEMONIC,
@@ -88,8 +83,7 @@ sealed interface GiftBirthdayVerdict {
  * Encodes and decodes gift links.
  *
  * Pure — no network, no key derivation, no Android framework — so every rule here is unit-testable
- * on the JVM. The one check that needs derivation, address-matches-mnemonic, is
- * [verifyAddressMatches], which takes the derived address as an argument.
+ * on the JVM.
  *
  * The bearer secret rides in the fragment rather than the query because everything after `#` is
  * never put on the wire by an HTTP client: it reaches no server, proxy, `Referer` header or
@@ -124,7 +118,6 @@ object GiftLinkCodec {
         setOf(
             FIELD_VERSION,
             "network",
-            "address",
             "amountZatoshi",
             "mnemonic",
             "birthdayHeight",
@@ -164,12 +157,7 @@ object GiftLinkCodec {
         return "$SCHEME://$GIFT_LINK_HOST$LINK_PATH#$FRAGMENT_PREFIX$body"
     }
 
-    /**
-     * Parses and validates a link without touching the network.
-     *
-     * Does not verify that [GiftLinkPayload.address] is the address its own mnemonic derives — that
-     * needs key derivation, so callers must follow up with [verifyAddressMatches].
-     */
+    /** Parses and validates a link without touching the network. */
     fun decode(uri: String, walletNetwork: ZcashNetwork): GiftLinkPayload {
         ensure(isWithinGiftLinkSizeLimit(uri), GiftLinkError.TOO_LARGE)
 
@@ -201,14 +189,6 @@ object GiftLinkCodec {
         validateShape(payload)
         ensure(payload.network == networkName(walletNetwork), GiftLinkError.NETWORK_MISMATCH)
         return payload
-    }
-
-    /**
-     * Confirms the link's address is the one its own mnemonic produces. Callers derive the address
-     * from [GiftLinkPayload.mnemonic] and pass it in.
-     */
-    fun verifyAddressMatches(payload: GiftLinkPayload, derivedAddress: String) {
-        ensure(payload.address == derivedAddress.trim(), GiftLinkError.ADDRESS_MISMATCH)
     }
 
     /**
@@ -262,8 +242,6 @@ object GiftLinkCodec {
                 else -> throw GiftLinkException(GiftLinkError.NETWORK_MISMATCH)
             }
 
-        ensure(payload.address.isNotEmpty(), GiftLinkError.INVALID_ADDRESS)
-
         val amount = payload.amountZatoshi.toLongOrNull()
         ensure(amount != null && amount > 0 && amount <= Zatoshi.MAX_INCLUSIVE, GiftLinkError.INVALID_AMOUNT)
 
@@ -301,7 +279,6 @@ object GiftLinkCodec {
     private fun GiftLinkPayload.normalized() =
         copy(
             network = network.trim(),
-            address = address.trim(),
             amountZatoshi = amountZatoshi.trim(),
             // Collapse whitespace runs as well as trimming: a phrase that survived a copy-paste
             // through a chat client is still the same 24 words, and BIP-39 wants them single-spaced.

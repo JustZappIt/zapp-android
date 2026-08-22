@@ -45,7 +45,7 @@ class ClaimGiftCardUseCaseTest {
             // it ran. Everything after it then throws, and this is the write that must not.
             val useCase = useCase(receipts, onClaim = { running?.cancel() })
 
-            running = launch { runCatching { useCase(PAYLOAD) {} } }
+            running = launch { runCatching { useCase(PAYLOAD, ADDRESS) {} } }
             running.join()
 
             assertEquals(listOf(RECEIPT.claimTxids), receipts.recorded.map { it.claimTxids })
@@ -60,7 +60,7 @@ class ClaimGiftCardUseCaseTest {
             val receipts = FakeReceipts(stored = listOf(RECEIPT))
             val useCase = useCase(receipts, outcome = GiftClaimOutcome.Empty)
 
-            val outcome = useCase(PAYLOAD) {}
+            val outcome = useCase(PAYLOAD, ADDRESS) {}
 
             assertEquals(GiftClaimOutcome.Claimed(amount = Zatoshi(AMOUNT), txIds = listOf(CLAIM_TXID)), outcome)
             // Read back, not re-recorded: the receipt is a note about when it happened.
@@ -74,7 +74,7 @@ class ClaimGiftCardUseCaseTest {
             // collected last month must not make an unfunded card look collected.
             val receipts = FakeReceipts(stored = listOf(RECEIPT.copy(address = "u1someothercardentirely")))
 
-            assertEquals(GiftClaimOutcome.Empty, useCase(receipts, GiftClaimOutcome.Empty)(PAYLOAD) {})
+            assertEquals(GiftClaimOutcome.Empty, useCase(receipts, GiftClaimOutcome.Empty)(PAYLOAD, ADDRESS) {})
         }
 
     @Test
@@ -84,7 +84,7 @@ class ClaimGiftCardUseCaseTest {
             // crash — this falls back to what the scan itself found.
             val receipts = FakeReceipts(readThrows = true)
 
-            assertEquals(GiftClaimOutcome.Empty, useCase(receipts, GiftClaimOutcome.Empty)(PAYLOAD) {})
+            assertEquals(GiftClaimOutcome.Empty, useCase(receipts, GiftClaimOutcome.Empty)(PAYLOAD, ADDRESS) {})
         }
 
     /**
@@ -126,7 +126,7 @@ class ClaimGiftCardUseCaseTest {
         giftKeyProvider = mockk<GiftKeyProvider>(relaxed = true),
         giftClaimDataSource =
             mockk<GiftClaimDataSource>(relaxed = true).also { source ->
-                coEvery { source.claim(any(), any(), any(), any(), any()) } coAnswers {
+                coEvery { source.claim(any(), any(), any(), any(), any(), any()) } coAnswers {
                     // Stands in for the app going to the background mid-broadcast: the claim itself
                     // finishes, and the context it returns into is already gone.
                     onClaim()
@@ -145,7 +145,6 @@ class ClaimGiftCardUseCaseTest {
             GiftLinkPayload(
                 v = 1,
                 network = "main",
-                address = ADDRESS,
                 amountZatoshi = AMOUNT.toString(),
                 // BIP-39 test vector for all-zero entropy. Never a real wallet.
                 mnemonic =

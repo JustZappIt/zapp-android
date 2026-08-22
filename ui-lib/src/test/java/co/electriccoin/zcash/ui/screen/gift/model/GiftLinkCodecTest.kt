@@ -145,7 +145,7 @@ class GiftLinkCodecTest {
 
     @Test
     fun `rejects a missing required field`() {
-        val json = jsonOf(payload()).replace(""""address":"$ADDRESS",""", "")
+        val json = jsonOf(payload()).replace(""""mnemonic":"$MNEMONIC",""", "")
 
         assertEquals(GiftLinkError.MALFORMED_PAYLOAD, errorFrom(linkOf(json)))
     }
@@ -167,11 +167,6 @@ class GiftLinkCodecTest {
     fun `rejects an unrecognised network name`() {
         assertEquals(GiftLinkError.NETWORK_MISMATCH, errorFrom(linkOf(jsonOf(payload(network = "regtest")))))
         assertEquals(GiftLinkError.NETWORK_MISMATCH, errorFrom(linkOf(jsonOf(payload(network = "")))))
-    }
-
-    @Test
-    fun `rejects an empty address`() {
-        assertEquals(GiftLinkError.INVALID_ADDRESS, errorFrom(linkOf(jsonOf(payload(address = "   ")))))
     }
 
     @Test
@@ -280,15 +275,12 @@ class GiftLinkCodecTest {
     }
 
     @Test
-    fun `verifies the address against the one its mnemonic derives`() {
-        GiftLinkCodec.verifyAddressMatches(payload(), ADDRESS)
-        GiftLinkCodec.verifyAddressMatches(payload(), "  $ADDRESS  ")
+    fun `does not carry the card address`() {
+        // Derivable from the mnemonic beside it, so carrying it spent 40% of the link restating
+        // what the link already said. One that turns up now reads as a newer format.
+        val json = jsonOf(payload()).dropLast(1) + ""","address":"$ADDRESS"}"""
 
-        val error =
-            assertFailsWith<GiftLinkException> {
-                GiftLinkCodec.verifyAddressMatches(payload(), "u1someotheraddress")
-            }
-        assertEquals(GiftLinkError.ADDRESS_MISMATCH, error.error)
+        assertEquals(GiftLinkError.NEWER_FORMAT, errorFrom(linkOf(json)))
     }
 
     @Test
@@ -330,7 +322,6 @@ class GiftLinkCodecTest {
         val rendered = payload().toString()
 
         assertFalse(rendered.contains("abandon"))
-        assertFalse(rendered.contains(ADDRESS))
     }
 
     private fun errorFrom(link: String, network: ZcashNetwork = ZcashNetwork.Mainnet): GiftLinkError =
@@ -351,7 +342,6 @@ class GiftLinkCodecTest {
         buildString {
             append("""{"v":${payload.v},""")
             append(""""network":"${payload.network}",""")
-            append(""""address":"${payload.address}",""")
             append(""""amountZatoshi":"${payload.amountZatoshi}",""")
             append(""""mnemonic":"${payload.mnemonic.replace("\n", "\\n")}",""")
             append(""""birthdayHeight":${payload.birthdayHeight},""")
@@ -364,7 +354,6 @@ class GiftLinkCodecTest {
     private fun payload(
         v: Int = GiftLinkCodec.VERSION,
         network: String = "main",
-        address: String = ADDRESS,
         amount: String = "100000000",
         mnemonic: String = MNEMONIC,
         birthday: Long = BIRTHDAY,
@@ -374,7 +363,6 @@ class GiftLinkCodecTest {
     ) = GiftLinkPayload(
         v = v,
         network = network,
-        address = address,
         amountZatoshi = amount,
         mnemonic = mnemonic,
         birthdayHeight = birthday,

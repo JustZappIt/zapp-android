@@ -148,7 +148,6 @@ internal fun GiftClaimError.messageRes(): Int =
     when (this) {
         GiftClaimError.MALFORMED_LINK -> R.string.gift_claim_error_link
         GiftClaimError.WRONG_NETWORK -> R.string.gift_claim_error_network
-        GiftClaimError.TAMPERED -> R.string.gift_claim_error_tampered
         GiftClaimError.BIRTHDAY_ABOVE_TIP -> R.string.gift_claim_error_future
         GiftClaimError.NEWER_FORMAT -> R.string.gift_claim_error_newer_format
         GiftClaimError.WALLET_NOT_READY -> R.string.gift_claim_error_not_ready
