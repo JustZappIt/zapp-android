@@ -54,6 +54,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappFieldBalance
 import co.electriccoin.zcash.ui.design.component.zapp.ZappGroupHeader
 import co.electriccoin.zcash.ui.design.component.zapp.ZappInputField
 import co.electriccoin.zcash.ui.design.component.zapp.ZappOfframpHeroAmountField
+import co.electriccoin.zcash.ui.design.component.zapp.ZappProgressBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
@@ -124,6 +125,7 @@ internal fun GiftCardView(
                     .padding(contentPadding)
                     .verticalScroll(rememberScrollState()),
         ) {
+            MintedCardPodium(state)
             when (state.stage) {
                 GiftCardStage.DETAILS -> DetailsSection(state)
                 GiftCardStage.PREPARING -> ZappScreenProgressIndicator(Modifier.height(240.dp))
@@ -323,13 +325,34 @@ private fun ReviewSection(state: GiftCardState) {
     }
 }
 
+/**
+ * The card, on the two stages where it exists as an object rather than a form.
+ *
+ * Hoisted out of the stage `when` on purpose: funding and ready are the same card at two moments,
+ * and a podium composed separately per stage would dispose the turning card and start a fresh one
+ * from zero at exactly the hand-off the turn is meant to carry through.
+ */
+@Composable
+private fun MintedCardPodium(state: GiftCardState) {
+    if (state.stage != GiftCardStage.FUNDING && state.stage != GiftCardStage.READY) return
+    GiftCardPodium(
+        amount = state.quote?.let { stringRes(it.cardAmount) },
+        tier = giftCardTier(state.quote?.cardAmount?.value ?: 0L, isSettled = false),
+        isSettled = state.stage == GiftCardStage.READY,
+        fiat = state.fiat,
+    )
+}
+
 @Composable
 private fun FundingSection() {
     val spacing = ZappTheme.spacing
     Column(
-        modifier = Modifier.padding(horizontal = spacing.xl, vertical = spacing.xl),
-        verticalArrangement = Arrangement.spacedBy(spacing.lg),
+        modifier = Modifier.padding(horizontal = spacing.xl),
+        verticalArrangement = Arrangement.spacedBy(spacing.xl),
     ) {
+        // Nothing here can be measured — a broadcast lands when it lands — so the bar sweeps
+        // rather than inventing a percentage for it.
+        ZappProgressBar(fraction = null, label = stringResource(R.string.gift_card_funding_note))
         ZappStepList(
             steps =
                 listOf(
@@ -347,10 +370,6 @@ private fun FundingSection() {
                     ),
                 )
         )
-        BasicText(
-            text = stringResource(R.string.gift_card_funding_note),
-            style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.textMuted),
-        )
     }
 }
 
@@ -360,7 +379,6 @@ private fun ReadySection(state: GiftCardState) {
     val spacing = ZappTheme.spacing
     val link = state.link ?: return
 
-    Spacer(Modifier.height(spacing.xl))
     ZappSuccessHeader(
         title = stringRes(R.string.gift_card_ready_title),
         subtitle = stringRes(R.string.gift_card_ready_subtitle),
@@ -468,6 +486,7 @@ private fun GiftCardPreview() =
                     messageGraphemes = 0,
                     expiry = GiftExpiry.NEVER,
                     quote = null,
+                    fiat = null,
                     link = null,
                     isCopied = false,
                     isAuthenticating = false,

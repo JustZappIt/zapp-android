@@ -57,6 +57,8 @@ internal enum class GiftClaimError {
 internal data class GiftClaimState(
     val stage: GiftClaimStage,
     val amount: Zatoshi?,
+    /** What the card is worth in the wallet's chosen currency. Null when there is no rate to use. */
+    val fiat: StringResource?,
     val message: String?,
     val expiry: GiftExpiryDisplay?,
     val blocksToScan: Long?,

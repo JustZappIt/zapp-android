@@ -6,15 +6,17 @@ package co.electriccoin.zcash.ui.screen.gift
 import cash.z.ecc.android.sdk.model.ZcashNetwork
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
-import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
+import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
+import co.electriccoin.zcash.ui.common.repository.SwapAssetsData
+import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.usecase.CheckGiftCardClaimedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GiftCardCheckResult
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
+import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.screen.gift.model.GiftCardStatus
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkCodec
-import co.electriccoin.zcash.ui.screen.gift.model.ReceivedGift
 import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -197,28 +199,39 @@ class GiftCardListVMTest {
             assertNull(collectState(fixture).items.single().lastCheckedAt)
         }
 
+    /**
+     * The priced case cannot be asserted here: building the figure reads `FiatCurrency.symbol`,
+     * which calls `android.icu.util.Currency` and returns null off-device, and this module has no
+     * Robolectric. What is worth pinning down is the half that does not need one — a card must
+     * never invent a figure when the wallet has no rate behind it.
+     */
     @Test
-    fun `lists gifts collected from other people`() =
+    fun `leaves a card unpriced rather than guessing when there is no rate`() =
+        runTest {
+            val fixture = fixture(card(fundingTxid = TXID))
+
+            assertNull(collectState(fixture).items.single().fiat)
+        }
+
+    @Test
+    fun `prints a card on stock chosen by its denomination`() =
+        runTest {
+            val big = fixture(card(amountZatoshi = 1_000_000_000L, fundingTxid = TXID))
+            val small = fixture(card(amountZatoshi = 4_000_000L, fundingTxid = TXID))
+
+            assertEquals(GiftCardTier.AMBER, collectState(big).items.single().tier)
+            assertEquals(GiftCardTier.BONE, collectState(small).items.single().tier)
+        }
+
+    @Test
+    fun `prints a collected card on spent stock whatever it was worth`() =
         runTest {
             val fixture =
                 fixture(
-                    card = card(),
-                    received =
-                        listOf(
-                            ReceivedGift(
-                                address = "u1someoneelsesgiftcardaddress",
-                                network = "main",
-                                amountZatoshi = 50_000_000L,
-                                claimedAt = "2026-08-21T09:00:00Z",
-                                claimTxids = listOf(TXID),
-                                message = "happy birthday",
-                            )
-                        ),
+                    card(amountZatoshi = 1_000_000_000L, fundingTxid = TXID, status = GiftCardStatus.CLAIMED)
                 )
 
-            val received = collectState(fixture).received.single()
-
-            assertEquals("happy birthday", received.message)
+            assertEquals(GiftCardTier.SPENT, collectState(fixture).items.single().tier)
         }
 
     @Test
@@ -236,10 +249,9 @@ class GiftCardListVMTest {
     private fun TestScope.fixture(
         card: StoredGiftCard,
         storeThrows: Boolean = false,
-        received: List<ReceivedGift> = emptyList(),
     ): Fixture {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        return Fixture(card, storeThrows, received)
+        return Fixture(card, storeThrows)
     }
 
     private fun TestScope.collectState(fixture: Fixture): GiftCardListState {
@@ -251,7 +263,6 @@ class GiftCardListVMTest {
     private class Fixture(
         card: StoredGiftCard,
         storeThrows: Boolean,
-        received: List<ReceivedGift> = emptyList(),
     ) {
         val sharedLink = slot<String>()
 
@@ -263,9 +274,15 @@ class GiftCardListVMTest {
         val copyToClipboard = mockk<CopyToClipboardUseCase>(relaxed = true)
         val checkGiftCardClaimed = mockk<CheckGiftCardClaimedUseCase>(relaxed = true)
 
-        private val receivedStorage =
-            mockk<ReceivedGiftStorageProvider>().also {
-                every { it.observe() } returns MutableStateFlow(received)
+        /** Opted out and no catalog price, so nothing here depends on a formatted fiat figure. */
+        private val exchangeRate =
+            mockk<ExchangeRateRepository>().also {
+                every { it.state } returns MutableStateFlow(ExchangeRateState.OptedOut)
+            }
+
+        private val swaps =
+            mockk<SwapRepository>().also {
+                every { it.assets } returns MutableStateFlow(SwapAssetsData())
             }
 
         private val storage =
@@ -284,7 +301,8 @@ class GiftCardListVMTest {
                 giftCardStorageProvider = storage,
                 confirmGiftCardFunding = mockk<ConfirmGiftCardFundingUseCase>(relaxed = true),
                 checkGiftCardClaimed = checkGiftCardClaimed,
-                receivedGiftStorageProvider = receivedStorage,
+                exchangeRateRepository = exchangeRate,
+                swapRepository = swaps,
                 shareGiftLink = shareGiftLink,
                 copyToClipboard = copyToClipboard,
                 navigationRouter = mockk<NavigationRouter>(relaxed = true),
@@ -303,6 +321,7 @@ class GiftCardListVMTest {
                 "abandon abandon abandon art"
 
         fun card(
+            amountZatoshi: Long = 100_000_000L,
             fundingTxid: String? = null,
             fundingAttemptedAt: String? = null,
             lastCheckedAt: String? = null,
@@ -312,7 +331,7 @@ class GiftCardListVMTest {
             network = "main",
             address = "u1exampleunifiedaddressforgiftcardtests",
             mnemonic = MNEMONIC,
-            amountZatoshi = 100_000_000L,
+            amountZatoshi = amountZatoshi,
             birthdayHeight = 2_800_000L,
             sourceAccountUuid = "account-uuid",
             createdAt = "2026-08-20T12:00:00Z",

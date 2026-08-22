@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -26,7 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.layout.layout
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -94,7 +95,7 @@ fun ZappProgressBar(
 @Composable
 private fun Track(fraction: Float?) {
     val c = ZappTheme.colors
-    Box(
+    BoxWithConstraints(
         modifier =
             Modifier
                 .fillMaxWidth()
@@ -104,7 +105,7 @@ private fun Track(fraction: Float?) {
                 .clipToBounds(),
     ) {
         if (fraction == null) {
-            IndeterminateFill()
+            IndeterminateFill(trackWidthPx = constraints.maxWidth.toFloat())
         } else {
             val animated by
                 animateFloatAsState(
@@ -131,7 +132,7 @@ private fun Track(fraction: Float?) {
  * progress that speeds up and slows down, which would be a claim this makes no attempt to support.
  */
 @Composable
-private fun IndeterminateFill() {
+private fun IndeterminateFill(trackWidthPx: Float) {
     val transition = rememberInfiniteTransition(label = "zappProgressSweep")
     val offset by
         transition.animateFloat(
@@ -149,12 +150,10 @@ private fun IndeterminateFill() {
             Modifier
                 .fillMaxHeight()
                 .fillMaxWidth(SWEEP_WIDTH)
-                .layout { measurable, constraints ->
-                    val placeable = measurable.measure(constraints)
-                    layout(placeable.width, placeable.height) {
-                        placeable.placeRelative((offset * constraints.maxWidth).toInt(), 0)
-                    }
-                }.background(ZappTheme.colors.accent, RectangleShape),
+                // Against the track's own width. Measuring inside the block would read the width
+                // fillMaxWidth already narrowed to, and the sweep would stall short of the end.
+                .graphicsLayer { translationX = offset * trackWidthPx }
+                .background(ZappTheme.colors.accent, RectangleShape),
     )
 }
 

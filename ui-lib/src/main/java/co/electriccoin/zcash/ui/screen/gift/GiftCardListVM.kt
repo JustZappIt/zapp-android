@@ -10,16 +10,19 @@ import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
-import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
+import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
+import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.usecase.CheckGiftCardClaimedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GiftCardCheckResult
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
+import co.electriccoin.zcash.ui.common.wallet.ZecFiatRate
+import co.electriccoin.zcash.ui.common.wallet.toFiatString
+import co.electriccoin.zcash.ui.common.wallet.zecFiatRate
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.gift.model.GiftCardStatus
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkCodec
-import co.electriccoin.zcash.ui.screen.gift.model.ReceivedGift
 import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
 import co.electriccoin.zcash.ui.screen.gift.model.toLinkPayload
 import kotlinx.coroutines.CancellationException
@@ -46,7 +49,8 @@ class GiftCardListVM(
     private val giftCardStorageProvider: GiftCardStorageProvider,
     private val confirmGiftCardFunding: ConfirmGiftCardFundingUseCase,
     private val checkGiftCardClaimed: CheckGiftCardClaimedUseCase,
-    receivedGiftStorageProvider: ReceivedGiftStorageProvider,
+    exchangeRateRepository: ExchangeRateRepository,
+    swapRepository: SwapRepository,
     private val shareGiftLink: ShareGiftLinkUseCase,
     private val copyToClipboard: CopyToClipboardUseCase,
     private val navigationRouter: NavigationRouter,
@@ -71,30 +75,30 @@ class GiftCardListVM(
                 emit(emptyList())
             }
 
-    private val received =
-        receivedGiftStorageProvider
-            .observe()
-            .catch { throwable ->
-                // A receipt list that will not decode loses history, never money — render without.
-                Twig.warn(throwable) { "Received gift list could not be read" }
-                emit(emptyList())
-            }
+    /**
+     * Resolved the way the balance card resolves it — the opt-in rate first, then the swap
+     * catalog's ZEC price — so a card never shows a figure the home screen disagrees with.
+     * Null means show no fiat at all.
+     */
+    private val fiatRate =
+        combine(exchangeRateRepository.state, swapRepository.assets) { rate, assets ->
+            zecFiatRate(rate, assets.zecAsset?.usdPrice)
+        }
 
     internal val state: StateFlow<GiftCardListState?> =
         combine(
             cards,
-            received,
+            fiatRate,
             combine(checkingId, checkProgress) { checking, progress -> checking to progress },
             // Paired only to stay inside combine's typed arity; they are unrelated slots.
             combine(errorFlow, noticeFlow) { err, notice -> err to notice },
             isCorrupted,
-        ) { all, receipts, (checking, progress), (err, notice), corrupted ->
+        ) { all, rate, (checking, progress), (err, notice), corrupted ->
             // A draft nothing was ever sent to is an artefact of minting before funding, not a card
             // the sender made. It cannot be handed out, checked, or recovered from — only clutter.
             val visible = all.filter { it.hasFundingAttempt }
             GiftCardListState(
-                items = visible.sortedWith(DISPLAY_ORDER).map { toItem(it, checking, progress) },
-                received = receipts.map { it.toReceivedItem() },
+                items = visible.sortedWith(DISPLAY_ORDER).map { toItem(it, rate, checking, progress) },
                 isCorrupted = corrupted,
                 error = err,
                 notice = notice,
@@ -113,6 +117,7 @@ class GiftCardListVM(
 
     private fun toItem(
         card: StoredGiftCard,
+        rate: ZecFiatRate?,
         checkingId: String?,
         checkProgress: GiftCheckProgress?,
     ): GiftCardListItem {
@@ -124,6 +129,8 @@ class GiftCardListVM(
         return GiftCardListItem(
             id = card.id,
             amount = stringRes(Zatoshi(card.amountZatoshi)),
+            fiat = rate?.toFiatString(Zatoshi(card.amountZatoshi)),
+            tier = giftCardTier(card.amountZatoshi, status == GiftCardListStatus.CLAIMED),
             createdAt = card.createdAt.toGiftDisplayDate(),
             message = card.message,
             status = status,
@@ -258,14 +265,6 @@ class GiftCardListVM(
                 .thenByDescending { it.createdAt }
     }
 }
-
-private fun ReceivedGift.toReceivedItem() =
-    ReceivedGiftItem(
-        address = address,
-        amount = stringRes(Zatoshi(amountZatoshi)),
-        claimedAt = claimedAt.toGiftDisplayDate(),
-        message = message,
-    )
 
 private fun StoredGiftCard.listStatus(): GiftCardListStatus =
     when {

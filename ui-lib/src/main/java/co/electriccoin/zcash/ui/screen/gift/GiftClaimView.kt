@@ -20,8 +20,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -73,6 +71,9 @@ internal fun GiftClaimView(
                     .fillMaxSize()
                     .padding(contentPadding)
                     .verticalScroll(rememberScrollState()),
+            // Centred rather than stacked at the top: on every stage here the card is the subject,
+            // and a card pinned under the header with a screen of void beneath it is a form.
+            verticalArrangement = Arrangement.Center,
         ) {
             when (state.stage) {
                 GiftClaimStage.LOADING -> ZappScreenProgressIndicator(Modifier.height(240.dp))
@@ -110,7 +111,6 @@ private fun GiftClaimBottomBar(state: GiftClaimState) {
                                         else -> R.string.gift_claim_done
                                     }
                                 ),
-                            leadingIcon = Icons.Default.CardGiftcard.takeIf { state.isLoaded },
                             onClick =
                                 when {
                                     state.isLoaded -> state.onClaim
@@ -168,28 +168,31 @@ private fun GiftClaimBottomBar(state: GiftClaimState) {
 @Composable
 private fun PreviewSection(state: GiftClaimState) {
     val spacing = ZappTheme.spacing
-    ZappGroupHeader(text = stringResource(R.string.gift_claim_amount_label))
-    ZappBorderedCard(
-        modifier = Modifier.padding(horizontal = spacing.xl),
-        verticalArrangement = Arrangement.spacedBy(spacing.lg),
-    ) {
-        BasicText(
-            text = state.amountText?.getValue().orEmpty(),
-            style = ZappTheme.typography.display.copy(color = ZappTheme.colors.text),
-        )
-        state.message?.let {
-            ZappSummaryRow(label = stringResource(R.string.gift_claim_message_label), value = it)
-        }
-        state.expiry?.let { expiry ->
-            ZappSummaryRow(
-                label = stringResource(R.string.gift_card_review_expiry_label),
-                value = expiry.date.getValue(),
-            )
+    GiftCardPodium(
+        amount = state.amountText,
+        tier = giftCardTier(state.amount?.value ?: 0L, isSettled = false),
+        isSettled = false,
+        caption = stringResource(R.string.gift_claim_podium_caption),
+        fiat = state.fiat,
+    )
+    if (state.message != null || state.expiry != null) {
+        ZappBorderedCard(
+            modifier = Modifier.padding(horizontal = spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(spacing.lg),
+        ) {
+            state.message?.let {
+                ZappSummaryRow(label = stringResource(R.string.gift_claim_message_label), value = it)
+            }
+            state.expiry?.let { expiry ->
+                ZappSummaryRow(
+                    label = stringResource(R.string.gift_card_review_expiry_label),
+                    value = expiry.date.getValue(),
+                )
+            }
         }
     }
     // An expiry is advisory: nothing on chain enforces it, so a card past its date still claims.
     if (state.expiry?.isPast == true) Caption(R.string.gift_claim_expired_note)
-    Caption(R.string.gift_claim_note)
 }
 
 @Composable
@@ -218,6 +221,15 @@ private fun ConsentSection(state: GiftClaimState) {
 private fun ClaimingSection(state: GiftClaimState) {
     val c = ZappTheme.colors
     val spacing = ZappTheme.spacing
+    GiftCardPodium(
+        amount = state.amountText,
+        tier = giftCardTier(state.amount?.value ?: 0L, isSettled = false),
+        // Still turning: the scan is in flight, and the bar below is what reports the wait. The
+        // sender's funding screen behaves the same way at the same point.
+        isSettled = false,
+        caption = stringResource(R.string.gift_claim_podium_caption),
+        fiat = state.fiat,
+    )
     Column(
         modifier = Modifier.padding(horizontal = spacing.xl, vertical = spacing.xl2),
         verticalArrangement = Arrangement.spacedBy(spacing.lg),
@@ -246,6 +258,7 @@ private fun GiftClaimPreview() =
                 GiftClaimState(
                     stage = GiftClaimStage.PREVIEW,
                     amount = Zatoshi(10_000L),
+                    fiat = stringRes("$0.01"),
                     message = "happy birthday",
                     expiry = null,
                     blocksToScan = null,

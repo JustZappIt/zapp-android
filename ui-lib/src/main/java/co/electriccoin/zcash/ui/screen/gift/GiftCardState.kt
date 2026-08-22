@@ -72,6 +72,8 @@ internal data class GiftCardState(
     val messageGraphemes: Int,
     val expiry: GiftExpiry,
     val quote: GiftFundingQuote?,
+    /** What the card is worth in the wallet's chosen currency. Null when there is no rate. */
+    val fiat: StringResource?,
     val link: String?,
     val isCopied: Boolean,
     val isAuthenticating: Boolean,

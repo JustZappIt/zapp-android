@@ -121,12 +121,15 @@ internal data class GiftHandOff(
 )
 
 /**
- * One row. Deliberately carries no mnemonic and no link: the link is rebuilt from storage only when
+ * One card. Deliberately carries no mnemonic and no link: the link is rebuilt from storage only when
  * the sender asks for it, so a screenshot or a state dump of this list is not a bearer secret.
  */
 internal data class GiftCardListItem(
     val id: String,
     val amount: StringResource,
+    /** Null wherever the wallet has no rate to show. Never a zero — that reads as a worthless card. */
+    val fiat: StringResource?,
+    val tier: GiftCardTier,
     val createdAt: StringResource?,
     val message: String?,
     val status: GiftCardListStatus,
@@ -141,17 +144,8 @@ internal data class GiftCardListItem(
     val handOff: GiftHandOff?,
 )
 
-/** A gift collected from someone else. A receipt only — it carries no key material. */
-internal data class ReceivedGiftItem(
-    val address: String,
-    val amount: StringResource,
-    val claimedAt: StringResource?,
-    val message: String?,
-)
-
 internal data class GiftCardListState(
     val items: List<GiftCardListItem>,
-    val received: List<ReceivedGiftItem>,
     val isCorrupted: Boolean,
     val error: GiftCardListError?,
     val notice: GiftCardListNotice?,

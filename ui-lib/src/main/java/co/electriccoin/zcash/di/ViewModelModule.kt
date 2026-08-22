@@ -137,6 +137,8 @@ val viewModelModule =
                 pendingGiftLinks = get(),
                 claimGiftCard = get(),
                 applicationStateProvider = get(),
+                exchangeRateRepository = get(),
+                swapRepository = get(),
                 navigationRouter = get(),
             )
         }

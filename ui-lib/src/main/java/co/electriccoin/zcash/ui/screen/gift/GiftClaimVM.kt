@@ -13,8 +13,13 @@ import co.electriccoin.zcash.ui.common.datasource.GiftClaimOutcome
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimProgress
 import co.electriccoin.zcash.ui.common.datasource.REQUIRED_CONFIRMATIONS
 import co.electriccoin.zcash.ui.common.provider.ApplicationStateProvider
+import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
+import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.usecase.ClaimGiftCardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GiftClaimNotReadyException
+import co.electriccoin.zcash.ui.common.wallet.ZecFiatRate
+import co.electriccoin.zcash.ui.common.wallet.toFiatString
+import co.electriccoin.zcash.ui.common.wallet.zecFiatRate
 import co.electriccoin.zcash.ui.screen.gift.model.GiftBirthdayVerdict
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkError
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkException
@@ -27,7 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -47,6 +52,8 @@ class GiftClaimVM(
     pendingGiftLinks: PendingGiftLinkStore,
     private val claimGiftCard: ClaimGiftCardUseCase,
     private val applicationStateProvider: ApplicationStateProvider,
+    exchangeRateRepository: ExchangeRateRepository,
+    swapRepository: SwapRepository,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     /**
@@ -65,13 +72,13 @@ class GiftClaimVM(
     private var payload: GiftLinkPayload? = null
 
     internal val state: StateFlow<GiftClaimState> =
-        snapshot
-            .map { it.toState() }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-                initialValue = GiftClaimSnapshot().toState(),
-            )
+        combine(snapshot, exchangeRateRepository.state, swapRepository.assets) { snap, rate, assets ->
+            snap.toState(zecFiatRate(rate, assets.zecAsset?.usdPrice))
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
+            initialValue = GiftClaimSnapshot().toState(rate = null),
+        )
 
     init {
         viewModelScope.launch { load() }
@@ -178,10 +185,12 @@ class GiftClaimVM(
         }
     }
 
-    private fun GiftClaimSnapshot.toState() =
+    private fun GiftClaimSnapshot.toState(rate: ZecFiatRate?) =
         GiftClaimState(
             stage = stage,
             amount = amount,
+            // Null wherever the wallet has no rate — opted out, or not loaded yet. Then no fiat.
+            fiat = amount?.let { zec -> rate?.toFiatString(zec) },
             message = message,
             expiry = expiry,
             blocksToScan = blocksToScan,

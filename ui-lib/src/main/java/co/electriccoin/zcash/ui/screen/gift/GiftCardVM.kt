@@ -13,6 +13,8 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
+import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
+import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.common.security.SecretAuthPolicy
@@ -25,6 +27,9 @@ import co.electriccoin.zcash.ui.common.usecase.GiftFundingError
 import co.electriccoin.zcash.ui.common.usecase.GiftFundingException
 import co.electriccoin.zcash.ui.common.usecase.GiftFundingQuote
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
+import co.electriccoin.zcash.ui.common.wallet.ZecFiatRate
+import co.electriccoin.zcash.ui.common.wallet.toFiatString
+import co.electriccoin.zcash.ui.common.wallet.zecFiatRate
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -64,6 +69,8 @@ class GiftCardVM(
     private val copyToClipboard: CopyToClipboardUseCase,
     private val secretAuthGate: SecretAuthGate,
     accountDataSource: AccountDataSource,
+    exchangeRateRepository: ExchangeRateRepository,
+    swapRepository: SwapRepository,
     giftCardStorageProvider: GiftCardStorageProvider,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
@@ -76,17 +83,29 @@ class GiftCardVM(
     /** What the current draft was minted for, so backing out to edit does not strand it. */
     private var preparedFor: GiftCardInputs? = null
 
+    /**
+     * Resolved the way the balance card resolves it — the opt-in rate first, then the swap
+     * catalog's ZEC price — so a card never shows a figure the home screen disagrees with.
+     * Null means show no fiat at all.
+     */
+    private val fiatRate =
+        combine(exchangeRateRepository.state, swapRepository.assets) { rate, assets ->
+            zecFiatRate(rate, assets.zecAsset?.usdPrice)
+        }
+
     internal val state: StateFlow<GiftCardState> =
         combine(
             snapshot,
             secretAuthGate.pinPrompt,
             accountDataSource.selectedAccount,
             giftCardStorageProvider.observe().catch { emit(emptyList()) },
-        ) { current, pin, account, storedCards ->
+            fiatRate,
+        ) { current, pin, account, storedCards, rate ->
             current.toState(
                 pinVerify = pin,
                 spendableBalance = account?.spendableShieldedBalance?.let { stringRes(it) },
                 hasStoredCards = storedCards.isNotEmpty(),
+                rate = rate,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -94,13 +113,19 @@ class GiftCardVM(
             // The same mapper, so a field added to the state cannot reach the screen wired here
             // and unwired before the first emission.
             initialValue =
-                GiftCardSnapshot().toState(pinVerify = null, spendableBalance = null, hasStoredCards = false),
+                GiftCardSnapshot().toState(
+                    pinVerify = null,
+                    spendableBalance = null,
+                    hasStoredCards = false,
+                    rate = null,
+                ),
         )
 
     private fun GiftCardSnapshot.toState(
         pinVerify: PinVerifyState?,
         spendableBalance: StringResource?,
         hasStoredCards: Boolean,
+        rate: ZecFiatRate?,
     ): GiftCardState {
         // From DETAILS, and from the one REVIEW the sender cannot fund their way out of.
         val canOpenSavedCards =
@@ -112,6 +137,8 @@ class GiftCardVM(
                 }
         return GiftCardState(
             stage = stage,
+            // Null wherever the wallet has no rate — opted out, or not loaded yet. Then no fiat.
+            fiat = quote?.let { q -> rate?.toFiatString(q.cardAmount) },
             amount =
                 NumberTextFieldState(
                     innerState = amount,

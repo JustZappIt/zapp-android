@@ -82,7 +82,6 @@
     <string name="gift_claim_amount_label">Valor de la tarjeta</string>
     <string name="gift_claim_message_label">Mensaje</string>
     <string name="gift_claim_claim">Reclamar a mi monedero</string>
-    <string name="gift_claim_note">La persona remitente ya pagó la comisión, así que recibes el importe completo.</string>
 
     <string name="gift_claim_consent_title">Esta tarjeta tiene ya unos meses</string>
     <string name="gift_claim_consent_body">Reclamarla implica escanear unos %1$s bloques, aproximadamente %2$s. Mantén Zapp abierta mientras tanto.</string>
@@ -122,8 +121,19 @@
     <string name="gift_card_list_open">Tus tarjetas regalo</string>
     <string name="gift_card_list_empty">Aún no hay tarjetas regalo. Las que crees permanecerán aquí hasta que compartas sus enlaces.</string>
     <string name="gift_card_list_warning">Estos enlaces son la única forma de acceder a los fondos. Zapp no puede recuperarlos con tu frase de recuperación.</string>
-    <string name="gift_card_list_received_title">Regalos que cobraste</string>
-    <string name="gift_card_list_received_on">Cobrado el %1$s</string>
+    <string name="gift_claim_podium_caption">Un regalo para ti</string>
+    <string name="gift_card_deck_wordmark">Zapp</string>
+    <string name="gift_card_deck_details">Detalles</string>
+    <string name="gift_card_deck_created">Creada el %1$s</string>
+    <string name="gift_card_deck_open">Abrir esta tarjeta</string>
+    <string name="gift_card_deck_show_back">Mostrar los detalles de la tarjeta</string>
+    <string name="gift_card_deck_show_front">Mostrar el anverso de la tarjeta</string>
+    <string name="gift_card_chip_unfunded">Sin fondos</string>
+    <string name="gift_card_chip_unresolved">Comprueba la financiación</string>
+    <string name="gift_card_chip_submitted">Enviando fondos</string>
+    <string name="gift_card_chip_funded">Lista para compartir</string>
+    <string name="gift_card_chip_shared">Sin cobrar</string>
+    <string name="gift_card_chip_claimed">Cobrada</string>
     <string name="gift_card_list_status_unfunded">Sin fondos</string>
     <string name="gift_card_list_status_unresolved">Estado de financiación desconocido — comprueba antes de volver a financiar</string>
     <string name="gift_card_list_status_submitted">Enviando fondos, aún sin minar</string>
@@ -137,10 +147,7 @@
     <string name="gift_card_list_copy">Copiar enlace</string>
     <string name="gift_card_list_check">Comprobar si se cobró</string>
     <string name="gift_card_list_check_stop">Detener comprobación</string>
-    <string name="gift_card_list_check_connecting">Conectando con la red…</string>
-    <string name="gift_card_list_check_scanning">Buscando esta tarjeta en la cadena de bloques…</string>
     <string name="gift_card_list_checked_unclaimed">Comprobado el %1$s: sigue en la tarjeta, nadie la ha cobrado.</string>
-    <string name="gift_card_list_check_progress">Buscando esta tarjeta… %1$d%%</string>
     <string name="gift_card_list_check_blocked_no_tx">Zapp no tiene ninguna transacción registrada para esta tarjeta, así que todavía no hay nada que buscar.</string>
     <string name="gift_card_list_check_blocked_busy">Se está comprobando otra tarjeta. Cada comprobación analiza la cadena de bloques, así que se hacen de una en una.</string>
     <string name="gift_card_list_error_link">No se pudo recuperar el enlace de esta tarjeta. No restablezcas tu monedero — contacta con soporte.</string>
