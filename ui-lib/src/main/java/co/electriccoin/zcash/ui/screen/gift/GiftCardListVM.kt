@@ -14,6 +14,7 @@ import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.usecase.CheckGiftCardClaimedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
+import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftClaimUseCase
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GiftCardCheckResult
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
@@ -47,6 +48,7 @@ import kotlinx.coroutines.launch
 class GiftCardListVM(
     private val giftCardStorageProvider: GiftCardStorageProvider,
     private val confirmGiftCardFunding: ConfirmGiftCardFundingUseCase,
+    private val confirmGiftClaim: ConfirmGiftClaimUseCase,
     private val checkGiftCardClaimed: CheckGiftCardClaimedUseCase,
     exchangeRateRepository: ExchangeRateRepository,
     swapRepository: SwapRepository,
@@ -112,6 +114,7 @@ class GiftCardListVM(
     init {
         // Anything whose funding mined while nothing was watching still reads as a draft on disk.
         viewModelScope.launch { runCatching { confirmGiftCardFunding.reconcile() } }
+        viewModelScope.launch { runCatching { confirmGiftClaim.reconcile() } }
     }
 
     private fun toItem(

@@ -12,6 +12,7 @@ import co.electriccoin.zcash.ui.common.usecase.CancelSwapUseCase
 import co.electriccoin.zcash.ui.common.usecase.CheckGiftCardClaimedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ClaimGiftCardUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
+import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftClaimUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmResyncUseCase
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.CreateChatGroupUseCase
@@ -217,6 +218,7 @@ val useCaseModule =
         factoryOf(::CreateGiftCardUseCase)
         factoryOf(::FundGiftCardUseCase)
         factoryOf(::ConfirmGiftCardFundingUseCase)
+        factoryOf(::ConfirmGiftClaimUseCase)
         factoryOf(::ClaimGiftCardUseCase)
         factoryOf(::ShareGiftLinkUseCase)
         factoryOf(::Zip321BuildUriUseCase)

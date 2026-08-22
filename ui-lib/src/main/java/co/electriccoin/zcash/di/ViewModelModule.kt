@@ -136,6 +136,7 @@ val viewModelModule =
                 args = params.get(),
                 pendingGiftLinks = get(),
                 claimGiftCard = get(),
+                confirmGiftClaim = get(),
                 applicationStateProvider = get(),
                 exchangeRateRepository = get(),
                 swapRepository = get(),

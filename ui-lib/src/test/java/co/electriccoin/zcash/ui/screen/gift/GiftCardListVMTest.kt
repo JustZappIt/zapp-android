@@ -11,6 +11,7 @@ import co.electriccoin.zcash.ui.common.repository.SwapAssetsData
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.usecase.CheckGiftCardClaimedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
+import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftClaimUseCase
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GiftCardCheckResult
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
@@ -300,6 +301,7 @@ class GiftCardListVMTest {
             GiftCardListVM(
                 giftCardStorageProvider = storage,
                 confirmGiftCardFunding = mockk<ConfirmGiftCardFundingUseCase>(relaxed = true),
+                confirmGiftClaim = mockk<ConfirmGiftClaimUseCase>(relaxed = true),
                 checkGiftCardClaimed = checkGiftCardClaimed,
                 exchangeRateRepository = exchangeRate,
                 swapRepository = swaps,

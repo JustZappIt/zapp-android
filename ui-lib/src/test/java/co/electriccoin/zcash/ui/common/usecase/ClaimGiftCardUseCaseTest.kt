@@ -26,6 +26,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -49,6 +51,8 @@ class ClaimGiftCardUseCaseTest {
             running.join()
 
             assertEquals(listOf(RECEIPT.claimTxids), receipts.recorded.map { it.claimTxids })
+            // The broadcast only reached the mempool, so the link has to survive the write.
+            assertEquals(listOf(PAYLOAD), receipts.recorded.map { it.claimLink })
         }
 
     @Test
@@ -87,6 +91,30 @@ class ClaimGiftCardUseCaseTest {
             assertEquals(GiftClaimOutcome.Empty, useCase(receipts, GiftClaimOutcome.Empty)(PAYLOAD, ADDRESS) {})
         }
 
+    @Test
+    fun `keeps the link only until the claim is on chain`() =
+        runTest {
+            // A broadcast that reached the mempool can still expire unmined, and by then the card's
+            // own wallet is deleted and the recipient may no longer have the link they opened. The
+            // receipt is the only route left, so it holds the secret until the claim mines.
+            val receipts = FakeReceipts()
+            useCase(receipts)(PAYLOAD, ADDRESS) {}
+            val held = receipts.recorded.single()
+
+            assertEquals(PAYLOAD, held.claimLink)
+            assertFalse(held.isSettled)
+            assertTrue(held.copy(claimLink = null).isSettled)
+        }
+
+    @Test
+    fun `refuses a receipt holding a link for another network`() =
+        runTest {
+            // A link that cannot claim this card would send a retry at somebody else's money.
+            assertFailsWith<IllegalArgumentException> {
+                RECEIPT.copy(network = "test", claimLink = PAYLOAD)
+            }
+        }
+
     /**
      * A store whose write really suspends, which is the point of it being a fake rather than a
      * mock. Cancellation is only observable at a suspension point, so a stub that returns without
@@ -109,6 +137,8 @@ class ClaimGiftCardUseCaseTest {
             yield()
             recorded += gift
         }
+
+        override suspend fun settle(address: String) = Unit
     }
 
     private fun useCase(

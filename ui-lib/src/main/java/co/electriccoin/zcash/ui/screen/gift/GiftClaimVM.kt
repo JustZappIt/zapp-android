@@ -17,6 +17,7 @@ import co.electriccoin.zcash.ui.common.provider.ApplicationStateProvider
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.usecase.ClaimGiftCardUseCase
+import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftClaimUseCase
 import co.electriccoin.zcash.ui.common.usecase.GiftClaimNotReadyException
 import co.electriccoin.zcash.ui.common.wallet.ZecFiatRate
 import co.electriccoin.zcash.ui.common.wallet.toFiatString
@@ -52,6 +53,7 @@ class GiftClaimVM(
     args: GiftClaimArgs,
     pendingGiftLinks: PendingGiftLinkStore,
     private val claimGiftCard: ClaimGiftCardUseCase,
+    private val confirmGiftClaim: ConfirmGiftClaimUseCase,
     private val applicationStateProvider: ApplicationStateProvider,
     exchangeRateRepository: ExchangeRateRepository,
     swapRepository: SwapRepository,
@@ -157,6 +159,10 @@ class GiftClaimVM(
         runCatching { claimGiftCard(payload, address, ::onProgress) }
             .onSuccess { outcome ->
                 snapshot.update { it.applying(outcome) }
+                // Detached: the receipt keeps the link until this sees the claim on chain.
+                if (outcome is GiftClaimOutcome.Claimed) {
+                    viewModelScope.launch { confirmGiftClaim(address, outcome.txIds) }
+                }
                 // Waiting on confirmations is a wait, not a failure. Re-checking on a timer is
                 // what turns it into something the recipient can watch instead of something they
                 // have to keep poking. The scan resumes against the retained database, so each

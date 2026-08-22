@@ -169,8 +169,12 @@ class ClaimGiftCardUseCase(
         }
 
     /**
-     * Best effort, and deliberately so. The money is already in the wallet by this point; a store
-     * that will not take the receipt costs the recipient a row in a list, not their gift.
+     * Keeps the link, which is what makes a claim retryable: the broadcast reached the mempool but
+     * can still expire unmined, and by now the card's own wallet is gone. `ConfirmGiftClaimUseCase`
+     * drops it once the claim is on chain.
+     *
+     * Best effort all the same — the money has moved either way, and failing here costs the retry
+     * rather than the gift.
      */
     private suspend fun recordReceipt(
         payload: GiftLinkPayload,
@@ -186,6 +190,7 @@ class ClaimGiftCardUseCase(
                     claimedAt = Clock.System.now().toString(),
                     claimTxids = outcome.txIds,
                     message = payload.message,
+                    claimLink = payload,
                 )
             )
         }

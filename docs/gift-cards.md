@@ -287,6 +287,22 @@ Two rules fall out of that, and both are load-bearing:
   settling a card whose funding is still in the mempool, or was dropped and can still mine before it
   expires, strands the money.
 
+### 6.4 A claim is retryable until it mines
+
+The recipient's mirror of §6.1, and the same distinction: `SubmitResult.Success` means every
+transaction reached the **mempool**, not that any of them mined. A claim can still expire unmined
+(~40 blocks), be evicted, or be lost to a reorg — and by then the card's wallet has been deleted
+(§5), this wallet holds no key to the card, and the link may have been a message the recipient has
+since deleted. Nothing would be left that could spend the card.
+
+So `ReceivedGift.claimLink` keeps the whole payload until `ConfirmGiftClaimUseCase` sees the claim
+on chain, and drops it there — a retained bearer secret past that point is exposure for nothing.
+`ReceivedGiftStorageProvider` therefore decodes **strictly** while any receipt is unsettled, for the
+reason in §7.2: a tolerant decode drops an unrecognised field and writes the record back without it.
+
+The half still missing is a recipient-facing list to retry *from*. The secret is preserved either
+way, and it cannot be preserved retroactively, which is why the storage lands first.
+
 ### 6.3 The reset guard
 
 `hasUnsharedFunds` is true while any card has a funding attempt and its link has never left the
