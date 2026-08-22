@@ -292,10 +292,7 @@ class ProposalDataSourceImpl(
             val synchronizer = synchronizerProvider.getSynchronizer()
             block(synchronizer)
         } catch (e: TransactionEncoderException.ProposalFromParametersException) {
-            val message = e.rootCause.message ?: ""
-            if (message.contains("Insufficient balance", true) ||
-                message.contains("The transaction requires an additional change output of", true)
-            ) {
+            if (e.isInsufficientFunds()) {
                 throw InsufficientFundsException()
             } else {
                 throw TransactionProposalNotCreatedException(e)
@@ -389,3 +386,18 @@ data class MigrationSweepTransactionProposal(
 ) : TransactionProposal
 
 private const val DEFAULT_SHIELDING_THRESHOLD = 100000L
+
+/**
+ * Whether the proposal failed because the account cannot cover the send plus its fee.
+ *
+ * Matched on the root cause's message because that is the only thing the SDK exposes — the Rust
+ * layer collapses both shapes into one exception type. Shared with the gift claim, which proposes
+ * on its own isolated synchronizer and so cannot go through [ProposalDataSourceImpl] at all: a
+ * second copy of this classification is how "the card is short" eventually reads as an unexplained
+ * crash on one path and a clean error on the other.
+ */
+internal fun TransactionEncoderException.ProposalFromParametersException.isInsufficientFunds(): Boolean {
+    val message = rootCause.message ?: ""
+    return message.contains("Insufficient balance", true) ||
+        message.contains("The transaction requires an additional change output of", true)
+}

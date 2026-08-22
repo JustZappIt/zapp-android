@@ -40,6 +40,13 @@ internal enum class GiftClaimError {
     TAMPERED,
     BIRTHDAY_ABOVE_TIP,
 
+    /**
+     * A real gift written by a newer build — a version this one cannot read, or v1 carrying fields
+     * it does not know. The card is fine and the money is still on it, so the ask is an update, not
+     * a new link from the sender.
+     */
+    NEWER_FORMAT,
+
     /** Zapp has not reached the chain tip yet, so the card cannot be judged. Retry, do not blame the card. */
     WALLET_NOT_READY,
 
@@ -51,6 +58,16 @@ internal enum class GiftClaimError {
 
     /** The transfer may or may not have reached the network. The card is untouched either way. */
     NOT_BROADCAST,
+
+    /**
+     * The card cannot cover the fee to move its own funds. Nothing the recipient does fixes it, so
+     * the copy must not read as a wait — but the money is still on the card, so it must not read as
+     * a loss either.
+     */
+    UNDERFUNDED,
+
+    /** The card's server could not be reached, so the scan never started. Nothing is wrong with the card. */
+    UNREACHABLE,
     FAILED,
 }
 

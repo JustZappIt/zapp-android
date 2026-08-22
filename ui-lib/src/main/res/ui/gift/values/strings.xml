@@ -108,8 +108,11 @@
     <string name="gift_claim_error_network">This card is for a different Zcash network.</string>
     <string name="gift_claim_error_tampered">This link has been altered and cannot be claimed safely.</string>
     <string name="gift_claim_error_future">This card claims to be newer than the blockchain. Zapp may still be syncing.</string>
+    <string name="gift_claim_error_newer_format">This gift was made with a newer version of Zapp. Update Zapp to claim it — the gift is safe on the card until you do.</string>
     <string name="gift_claim_error_not_broadcast">Zapp could not confirm the transfer reached the network. Your gift is safe on the card — try again in a moment.</string>
     <string name="gift_claim_error_failed">The gift could not be claimed. Nothing was lost; try again.</string>
+    <string name="gift_claim_error_underfunded">This card cannot cover the network fee to move its own funds. The gift is still on the card, but Zapp cannot claim it.</string>
+    <string name="gift_claim_error_unreachable">Zapp could not reach a Zcash server to look for this gift. Check your connection and try again.</string>
     <string name="gift_claim_error_not_ready">Zapp is still connecting to the Zcash network. Your gift is fine — try again in a moment.</string>
     <string name="gift_claim_error_unavailable">This gift link is no longer open. Tap it again where you received it.</string>
     <string name="gift_claim_expired_note">This card is past its suggested expiry. That is advisory only — it still claims for the full amount.</string>

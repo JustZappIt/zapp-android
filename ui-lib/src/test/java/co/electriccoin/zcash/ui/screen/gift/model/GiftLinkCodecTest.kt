@@ -117,10 +117,30 @@ class GiftLinkCodecTest {
     }
 
     @Test
-    fun `rejects an unknown field`() {
+    fun `rejects an unknown field as a newer format rather than a broken link`() {
         val json = jsonOf(payload()).dropLast(1) + ""","surprise":"tracking-id"}"""
 
-        assertEquals(GiftLinkError.MALFORMED_PAYLOAD, errorFrom(linkOf(json)))
+        // Still refused — an unrecognised field could change who may claim, or for how much — but
+        // told apart from gibberish. The card is real and there is no reclaim, so the recipient
+        // has to be told to update rather than told their gift is broken (§2.1).
+        assertEquals(GiftLinkError.NEWER_FORMAT, errorFrom(linkOf(json)))
+    }
+
+    @Test
+    fun `reports an unknown version even when it also carries unknown fields`() {
+        val json = jsonOf(payload(v = 2)).dropLast(1) + ""","surprise":"tracking-id"}"""
+
+        // The version is the more specific answer, so it wins the ordering.
+        assertEquals(GiftLinkError.UNSUPPORTED_VERSION, errorFrom(linkOf(json)))
+    }
+
+    @Test
+    fun `every field this build encodes is one it recognises on the way back in`() {
+        // The unknown-field check is a hand-maintained key set, so a field added to the payload and
+        // not to it would make this build refuse its own links — on money with no reclaim.
+        val everyField = payload(expiresAt = "2027-01-01T00:00:00Z", message = "hi")
+
+        assertEquals(everyField, GiftLinkCodec.decode(GiftLinkCodec.encode(everyField), ZcashNetwork.Mainnet))
     }
 
     @Test

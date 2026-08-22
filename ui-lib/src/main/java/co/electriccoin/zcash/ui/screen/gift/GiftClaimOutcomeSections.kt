@@ -150,9 +150,12 @@ internal fun GiftClaimError.messageRes(): Int =
         GiftClaimError.WRONG_NETWORK -> R.string.gift_claim_error_network
         GiftClaimError.TAMPERED -> R.string.gift_claim_error_tampered
         GiftClaimError.BIRTHDAY_ABOVE_TIP -> R.string.gift_claim_error_future
+        GiftClaimError.NEWER_FORMAT -> R.string.gift_claim_error_newer_format
         GiftClaimError.WALLET_NOT_READY -> R.string.gift_claim_error_not_ready
         GiftClaimError.LINK_UNAVAILABLE -> R.string.gift_claim_error_unavailable
         GiftClaimError.NOT_BROADCAST -> R.string.gift_claim_error_not_broadcast
+        GiftClaimError.UNDERFUNDED -> R.string.gift_claim_error_underfunded
+        GiftClaimError.UNREACHABLE -> R.string.gift_claim_error_unreachable
         GiftClaimError.FAILED -> R.string.gift_claim_error_failed
     }
 

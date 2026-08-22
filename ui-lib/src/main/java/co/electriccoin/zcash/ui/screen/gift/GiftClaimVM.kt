@@ -9,6 +9,7 @@ import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.datasource.GiftCardUnreachableException
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimOutcome
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimProgress
 import co.electriccoin.zcash.ui.common.datasource.REQUIRED_CONFIRMATIONS
@@ -71,6 +72,18 @@ class GiftClaimVM(
 
     private var payload: GiftLinkPayload? = null
 
+    /**
+     * Whether a scan may start at all (§3.5).
+     *
+     * The lock overlay sits above the nav host, so a claim could not be tapped from behind it
+     * anyway — but that is a fact about the view tree, and this rule is about a bearer seed
+     * scanning behind a lock screen. Held as an invariant here so it survives a re-layered UI.
+     * Starts false: the value arrives with the first collection below, and refusing a claim for the
+     * moment before that is the safe direction to be wrong in.
+     */
+    @Volatile
+    private var isForeground: Boolean = false
+
     internal val state: StateFlow<GiftClaimState> =
         combine(snapshot, exchangeRateRepository.state, swapRepository.assets) { snap, rate, assets ->
             snap.toState(zecFiatRate(rate, assets.zecAsset?.usdPrice))
@@ -83,12 +96,13 @@ class GiftClaimVM(
     init {
         viewModelScope.launch { load() }
         viewModelScope.launch {
-            applicationStateProvider.isInForeground.collect { isForeground ->
+            applicationStateProvider.isInForeground.collect { foreground ->
+                isForeground = foreground
                 // §3.5: a bearer seed must not keep scanning behind a lock screen. Backgrounding is
-                // the signal — the lock overlay only appears on the way back in, and it sits above
-                // the nav host, so a claim cannot be started from behind it either. Cancelling is
-                // safe here precisely because the broadcast half is NonCancellable.
-                if (!isForeground) stopClaim()
+                // the signal — the lock overlay only appears on the way back in. Cancelling is safe
+                // here precisely because the broadcast half is NonCancellable. Starting is refused
+                // separately, in onClaim.
+                if (!foreground) stopClaim()
             }
         }
     }
@@ -125,7 +139,8 @@ class GiftClaimVM(
     private fun onClaim() {
         // isCompleted, not isActive: a cancelled claim stays incomplete while its NonCancellable
         // broadcast runs on, and a second claim started there would try to spend the same note.
-        if (claimJob?.isCompleted == false) return
+        // And §3.5 as a guard, rather than as a property of where the lock overlay happens to sit.
+        if (claimJob?.isCompleted == false || !isForeground) return
         val current = payload ?: return
         snapshot.update { it.copy(stage = GiftClaimStage.CLAIMING, progressFraction = null, error = null) }
         claimJob = viewModelScope.launch { claim(current) }
@@ -143,7 +158,9 @@ class GiftClaimVM(
             }.onFailure { throwable ->
                 if (throwable is CancellationException) throw throwable
                 Twig.error(throwable) { "Gift claim failed" }
-                snapshot.update { it.copy(stage = GiftClaimStage.PREVIEW, error = GiftClaimError.FAILED) }
+                // Through the same mapper as the preview, so an unreachable server reads as one
+                // here too rather than collapsing into a bare "something went wrong".
+                snapshot.update { it.copy(stage = GiftClaimStage.PREVIEW, error = throwable.toClaimError()) }
             }
     }
 
@@ -266,15 +283,41 @@ private fun GiftClaimSnapshot.applying(outcome: GiftClaimOutcome): GiftClaimSnap
             // never a "your gift is gone".
             copy(stage = GiftClaimStage.PREVIEW, error = GiftClaimError.NOT_BROADCAST)
         }
+
+        // Also untouched and also retained, but not a "try again": nothing about the card changes
+        // by waiting, so this must not schedule a re-check the way NotYetSpendable does.
+        is GiftClaimOutcome.Underfunded -> {
+            copy(stage = GiftClaimStage.PREVIEW, error = GiftClaimError.UNDERFUNDED)
+        }
     }
 
-private fun Throwable.toClaimError(): GiftClaimError {
-    if (this is GiftClaimNotReadyException) return GiftClaimError.WALLET_NOT_READY
-    return when ((this as? GiftLinkException)?.error) {
+private fun Throwable.toClaimError(): GiftClaimError =
+    when (this) {
+        is GiftClaimNotReadyException -> GiftClaimError.WALLET_NOT_READY
+
+        // Separated from FAILED for the same reason the sender's check separates them: "you are
+        // offline" and "something went wrong" need different copy, and neither says anything about
+        // the card. Thrown out of the claim rather than the preview, which never touches the
+        // network.
+        is GiftCardUnreachableException -> GiftClaimError.UNREACHABLE
+
+        else -> (this as? GiftLinkException)?.error.toClaimError()
+    }
+
+/** Null is anything that was not a link rejection at all. */
+private fun GiftLinkError?.toClaimError(): GiftClaimError =
+    when (this) {
         GiftLinkError.NETWORK_MISMATCH -> GiftClaimError.WRONG_NETWORK
+
         GiftLinkError.ADDRESS_MISMATCH -> GiftClaimError.TAMPERED
+
         GiftLinkError.BIRTHDAY_ABOVE_TIP -> GiftClaimError.BIRTHDAY_ABOVE_TIP
+
+        // Both mean the link came from something this build does not understand, and both leave a
+        // funded card the sender cannot be asked to re-mint — there is no reclaim.
+        GiftLinkError.NEWER_FORMAT, GiftLinkError.UNSUPPORTED_VERSION -> GiftClaimError.NEWER_FORMAT
+
         null -> GiftClaimError.FAILED
+
         else -> GiftClaimError.MALFORMED_LINK
     }
-}

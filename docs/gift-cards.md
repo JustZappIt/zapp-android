@@ -52,6 +52,21 @@ base64url'd UTF-8 JSON:
 on the codec**: an unknown field means the link came from something we do not understand, and this
 one carries spendable money. (The stored-record store is strict for a different reason — see §7.2.)
 
+### 2.1 Evolving the wire format
+
+Strictness and "normative, shared with iOS" pull against each other, and the resolution is a rule
+rather than a loosened decode. **Any field added to this table is a `v` bump.** A build that meets a
+field it does not know cannot reason about what the field changes — whether it narrows who may
+claim, or caps the amount — so acting on the rest of the payload is a guess about money.
+
+What the strictness must not do is *lie*. A refusal that reads as "this link is broken" sends the
+recipient back to a sender who cannot re-mint the card: there is no reclaim. So `decode` reads the
+key set before it reads the values (`KNOWN_FIELDS`), and reports an unrecognised one as
+`GiftLinkError.NEWER_FORMAT` — told apart from `MALFORMED_PAYLOAD`, and rendered as "update Zapp",
+which is both true and actionable. An unknown `v` reports `UNSUPPORTED_VERSION` and reaches the same
+copy. The key set is checked rather than the decoder's own error because kotlinx names the offending
+field only inside a message that quotes the input, and the input is the bearer mnemonic.
+
 **The secret rides in the fragment, not the query.** Everything after `#` is never sent in an HTTP
 request, so the seed never reaches a server, a proxy, a `Referer` header, or a link-preview crawler.
 This costs nothing on Android: intent filters have no `fragment` attribute and never match on it, so
@@ -97,8 +112,18 @@ but only its database deletion honours it — it first calls `StandardPreference
 lives in that same encrypted file, namespaced inside the blob rather than by file, so erasing a card
 would drop resubmission metadata for unrelated transactions. Verified in the 3.0.1-SNAPSHOT AAR.
 
+Reaching the server is bounded on **both** the claim and the check, and only that: the scan itself
+runs unbounded (§11.1) and the screen offers a stop, but a server that cannot be reached at all must
+say so rather than leave a bar that will never move. It surfaces as `GiftClaimError.UNREACHABLE`,
+separate from `FAILED`, because "you are offline" and "something went wrong" need different copy and
+neither says anything about the card.
+
 **If the app locks mid-claim, the sync stops** and resumes on unlock. A background scan against a
-bearer seed continuing past the lock screen is a battery and a privacy problem.
+bearer seed continuing past the lock screen is a battery and a privacy problem. Starting one is
+refused by `GiftClaimVM.onClaim` against the same foreground signal, rather than by the lock overlay
+sitting above the nav host: the overlay does make the button untappable, but that is a fact about
+the view tree, and this rule is about a bearer seed, so it is held as an invariant that survives a
+re-layered UI.
 
 `importAccount` is not an alternative: it takes a UFVK, so it can import a card view-only but cannot
 grant spend authority over a foreign seed.
@@ -178,6 +203,24 @@ card's wallet is deleted only when the card is settled — an empty wallet whose
 arrived is one that will be asked about again, and rescanning it means the whole multi-minute sync
 over again.
 
+**A claim answers "was it emptied?" the same way, without a txid to lean on.** A recipient never
+sees the funding transaction id, so `inspect`'s evidence is not available; but an empty wallet on
+the claim path is the same ambiguity, and the sender may well have shared the link inside the ~75
+seconds before the funding mined. `unspendable` therefore settles an empty card only when the
+wallet's own history holds a **mined incoming transaction of at least the card amount**. Incoming
+and at-least-the-amount, both load-bearing: the address is plaintext in the link, so a stranger's
+transparent dust mines into this history while leaving the balance at zero, and reading that as
+evidence would throw away a resumable database over somebody else's spam.
+
+`proposeTransfer` is wrapped for the same class of reason. A card that holds its amount but cannot
+also cover the fee to move it has no proposal — `TransactionEncoderException` — and letting that
+propagate raw reports a short card as an unexplained failure. It is `GiftClaimOutcome.Underfunded`,
+which is deliberately *not* `NotYetSpendable`: waiting does not fix it, so it must not schedule the
+45-second re-check. Reaching it at all means the card came from something that does not prepay
+`CLAIM_FEE_RESERVE`, or that ZIP 317 now asks for more than it covers. The insufficient-funds
+classification is shared with `ProposalDataSource` rather than copied, for the reason in §5's first
+paragraph.
+
 `ProposalDataSource.submitTransaction` cannot be used for a claim: its internals hardcode the main
 synchronizer, so it would submit from the wrong wallet. Funding uses it normally; a claim submits on
 its isolated instance.
@@ -198,7 +241,17 @@ This is the part that decides whether a bug costs money.
   everything the link needs — including `network` and `birthdayHeight`, which is why they are stored
   rather than used once at creation.
 - **No card is ever funded twice.** `hasFundingAttempt` is the durable gate: the note may already be
-  spent, and paying twice for one gift is money gone twice.
+  spent, and paying twice for one gift is money gone twice. `prepare` re-reads the record it is
+  handed rather than trusting the caller's copy, which is a snapshot held across a screen the sender
+  can leave and return to.
+- **An abandoned draft is discarded, and it is the only record that ever is.** `StoredGiftCard
+  .isAbandonedDraft` — `DRAFT` with no funding attempt — describes an address no transaction was
+  ever sent to, because `fundingAttemptedAt` is written *before* the broadcast and a failed write
+  refuses to submit. `GiftCardLedger.add` drops them when a new card is minted, so editing an amount
+  and continuing again supersedes the draft instead of stranding it. Without this the store only
+  grows, holding key material that unlocks nothing, inside the one blob every mutation rewrites.
+  Tied to minting rather than to a sweep on purpose: a sweep would have to decide when a draft is
+  old enough to be dead, and that judgement is unrecoverable if it is wrong.
 
 ### 6.2 The two axes, and why they are not one enum
 

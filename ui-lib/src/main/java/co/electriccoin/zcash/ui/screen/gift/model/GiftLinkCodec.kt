@@ -7,6 +7,8 @@ import cash.z.ecc.android.bip39.Mnemonics
 import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.android.sdk.model.ZcashNetwork
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.net.URI
 import java.net.URISyntaxException
 import kotlin.io.encoding.Base64
@@ -34,6 +36,14 @@ enum class GiftLinkError {
 
     /** A link version this build does not know how to claim. */
     UNSUPPORTED_VERSION,
+
+    /**
+     * Version 1, but carrying fields this build does not recognise, so it was written by something
+     * newer. Still refused — the money is real and we cannot know what the extra field changes —
+     * but told apart from [MALFORMED_PAYLOAD] because the remedy is a different one: update, do
+     * not go back to the sender saying their gift is broken.
+     */
+    NEWER_FORMAT,
 
     /** A mainnet card on a testnet wallet, or the reverse. */
     NETWORK_MISMATCH,
@@ -103,6 +113,25 @@ object GiftLinkCodec {
     private const val MNEMONIC_WORD_COUNT = 24
     private const val NETWORK_MAIN = "main"
     private const val NETWORK_TEST = "test"
+    private const val FIELD_VERSION = "v"
+
+    /**
+     * Every field a v1 link may carry — `docs/gift-cards.md` §2, and normative with iOS. Adding one
+     * to [GiftLinkPayload] without adding it here refuses links this build itself produces, so the
+     * two are kept in step by `GiftLinkCodecTest`.
+     */
+    private val KNOWN_FIELDS =
+        setOf(
+            FIELD_VERSION,
+            "network",
+            "address",
+            "amountZatoshi",
+            "mnemonic",
+            "birthdayHeight",
+            "createdAt",
+            "expiresAt",
+            "message",
+        )
 
     private val WHITESPACE = Regex("\\s+")
 
@@ -141,17 +170,25 @@ object GiftLinkCodec {
      * Does not verify that [GiftLinkPayload.address] is the address its own mnemonic derives — that
      * needs key derivation, so callers must follow up with [verifyAddressMatches].
      */
-    @OptIn(ExperimentalEncodingApi::class)
     fun decode(uri: String, walletNetwork: ZcashNetwork): GiftLinkPayload {
         ensure(isWithinGiftLinkSizeLimit(uri), GiftLinkError.TOO_LARGE)
 
-        val fragment = parseFragment(uri)
-        val decoded =
-            try {
-                base64.decode(fragment).decodeToString()
-            } catch (_: IllegalArgumentException) {
-                throw GiftLinkException(GiftLinkError.MALFORMED_PAYLOAD)
-            }
+        val decoded = payloadTextFrom(uri)
+
+        // Read the shape before the values. A strict decode refuses an unrecognised field — which
+        // is the right call on a link that carries spendable money — but it cannot say *why* it
+        // refused without quoting the input, and the input is the bearer mnemonic. Inspecting the
+        // key set first is what lets the two cases be told apart: gibberish, and a real link from a
+        // build that knows something this one does not.
+        val fields =
+            (runCatching { Json.parseToJsonElement(decoded) }.getOrNull() as? JsonObject)
+                ?: throw GiftLinkException(GiftLinkError.MALFORMED_PAYLOAD)
+
+        // Before the unknown-field check, so a v2 link reports its version rather than its extras.
+        val version = (fields[FIELD_VERSION] as? JsonPrimitive)?.content?.toIntOrNull()
+        ensure(version == VERSION, GiftLinkError.UNSUPPORTED_VERSION)
+        ensure(fields.keys.all { it in KNOWN_FIELDS }, GiftLinkError.NEWER_FORMAT)
+
         val payload =
             try {
                 // Neither chain the cause nor quote the message: kotlinx embeds a snippet of the
@@ -191,7 +228,9 @@ object GiftLinkCodec {
         }
     }
 
-    private fun parseFragment(uri: String): String {
+    /** The link's payload text: every check that this URI is one of ours, then the base64 body. */
+    @OptIn(ExperimentalEncodingApi::class)
+    private fun payloadTextFrom(uri: String): String {
         val parsed =
             try {
                 URI(uri)
@@ -206,7 +245,11 @@ object GiftLinkCodec {
         ensure(parsed.rawQuery == null, GiftLinkError.MALFORMED_URI)
         val fragment = parsed.rawFragment.orEmpty()
         ensure(fragment.startsWith(FRAGMENT_PREFIX), GiftLinkError.MALFORMED_URI)
-        return fragment.removePrefix(FRAGMENT_PREFIX)
+        return try {
+            base64.decode(fragment.removePrefix(FRAGMENT_PREFIX)).decodeToString()
+        } catch (_: IllegalArgumentException) {
+            throw GiftLinkException(GiftLinkError.MALFORMED_PAYLOAD)
+        }
     }
 
     private fun validateShape(payload: GiftLinkPayload) {
