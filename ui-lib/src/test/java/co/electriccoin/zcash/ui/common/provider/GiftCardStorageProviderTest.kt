@@ -117,13 +117,33 @@ class GiftCardStorageProviderTest {
     fun `serialises concurrent mutations instead of losing cards`() =
         runTest {
             val storage = storage()
+            // Flagged as attempted, because an abandoned draft is deliberately superseded by the
+            // next mint. The records this must never lose are the ones money has moved for.
+            (0 until CONCURRENT).forEach { index ->
+                storage.add(card(id = "card-$index"))
+                storage.setFundingAttemptedAt("card-$index", NOW)
+            }
 
             // Every mutation is a read-modify-write over the whole list. Without the mutex these
             // interleave at their suspension points and all but the last write vanishes.
-            (0 until CONCURRENT).map { index -> async { storage.add(card(id = "card-$index")) } }.awaitAll()
+            (0 until CONCURRENT).map { index -> async { storage.markShared("card-$index", NOW) } }.awaitAll()
 
             assertEquals(CONCURRENT, storage.getAll().size)
             assertEquals((0 until CONCURRENT).map { "card-$it" }.toSet(), storage.getAll().map { it.id }.toSet())
+            assertTrue(storage.getAll().all { it.status == GiftCardStatus.SHARED })
+        }
+
+    @Test
+    fun `minting supersedes an abandoned draft rather than stacking one up`() =
+        runTest {
+            val storage = storage()
+            storage.add(card(id = "abandoned"))
+
+            storage.add(card(id = "minted"))
+
+            // Nothing was ever sent to the first, so its seed unlocks nothing; keeping it only
+            // grows the one blob every mutation rewrites.
+            assertEquals(listOf("minted"), storage.getAll().map { it.id })
         }
 
     @Test

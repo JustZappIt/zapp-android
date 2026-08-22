@@ -11,11 +11,13 @@ import co.electriccoin.zcash.ui.common.datasource.ProposalDataSource
 import co.electriccoin.zcash.ui.common.datasource.RegularTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.SubmitResult
+import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.screen.gift.model.GiftCardStatus
 import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -109,13 +111,12 @@ class FundGiftCardUseCaseTest {
     fun `refuses to re-prepare a card whose broadcast was already attempted`() =
         runTest {
             val fixture = Fixture(submitResult = SubmitResult.Success(listOf(TXID)))
+            val attempted = CARD.copy(fundingAttemptedAt = "2026-08-20T12:00:01Z")
+            coEvery { fixture.storage.get(ID) } returns attempted
 
             val thrown =
                 assertFailsWith<GiftFundingException> {
-                    fixture.useCase.prepare(
-                        amount = Zatoshi(AMOUNT),
-                        existing = CARD.copy(fundingAttemptedAt = "2026-08-20T12:00:01Z"),
-                    )
+                    fixture.useCase.prepare(amount = Zatoshi(AMOUNT), existing = attempted)
                 }
 
             // Stepping back to the details and continuing again clears the screen's error and
@@ -128,21 +129,76 @@ class FundGiftCardUseCaseTest {
     fun `refuses to re-prepare a card that already has a funding txid`() =
         runTest {
             val fixture = Fixture(submitResult = SubmitResult.Success(listOf(TXID)))
+            val funded = CARD.copy(fundingTxid = TXID)
+            coEvery { fixture.storage.get(ID) } returns funded
 
             val thrown =
                 assertFailsWith<GiftFundingException> {
-                    fixture.useCase.prepare(amount = Zatoshi(AMOUNT), existing = CARD.copy(fundingTxid = TXID))
+                    fixture.useCase.prepare(amount = Zatoshi(AMOUNT), existing = funded)
                 }
 
             assertEquals(GiftFundingError.SUBMIT_UNCERTAIN, thrown.error)
             coVerify(exactly = 0) { fixture.accountDataSource.getSelectedAccount() }
         }
 
+    @Test
+    fun `refuses a card the caller still thinks is unfunded`() =
+        runTest {
+            val fixture = Fixture(submitResult = SubmitResult.Success(listOf(TXID)))
+            // The screen holds its copy across a trip the sender can leave and come back from, so
+            // the attempt can land while that copy still says draft. Trusting it funds twice.
+            coEvery { fixture.storage.get(ID) } returns CARD.copy(fundingTxid = TXID)
+
+            val thrown =
+                assertFailsWith<GiftFundingException> {
+                    fixture.useCase.prepare(amount = Zatoshi(AMOUNT), existing = CARD)
+                }
+
+            assertEquals(GiftFundingError.SUBMIT_UNCERTAIN, thrown.error)
+        }
+
+    @Test
+    fun `mints again for a draft that was superseded`() =
+        runTest {
+            val fixture = Fixture(submitResult = SubmitResult.Success(listOf(TXID)))
+            // Gone from the store: a later mint superseded it. Pricing it would build a proposal
+            // against an address whose only record no longer exists.
+            coEvery { fixture.storage.get(ID) } returns null
+            coEvery { fixture.createGiftCard(any(), any(), any()) } returns CARD
+
+            fixture.useCase.prepare(amount = Zatoshi(AMOUNT), existing = CARD)
+
+            coVerify(exactly = 1) { fixture.createGiftCard(any(), any(), any()) }
+        }
+
+    @Test
+    fun `re-prices a draft that is still on file without minting another`() =
+        runTest {
+            val fixture = Fixture(submitResult = SubmitResult.Success(listOf(TXID)))
+            coEvery { fixture.storage.get(ID) } returns CARD
+
+            val quote = fixture.useCase.prepare(amount = Zatoshi(AMOUNT), existing = CARD)
+
+            assertEquals(CARD, quote.card)
+            coVerify(exactly = 0) { fixture.createGiftCard(any(), any(), any()) }
+        }
+
     private class Fixture(
         submitResult: SubmitResult,
     ) {
         val storage = mockk<GiftCardStorageProvider>(relaxed = true)
-        val accountDataSource = mockk<AccountDataSource>(relaxed = true)
+        val createGiftCard = mockk<CreateGiftCardUseCase>(relaxed = true)
+
+        /** Solvent, so the cheap pre-mint refusal never fires and `prepare` runs to a quote. */
+        val account =
+            mockk<WalletAccount>(relaxed = true).also {
+                every { it.canSpend(any()) } returns true
+            }
+
+        val accountDataSource =
+            mockk<AccountDataSource>(relaxed = true).also {
+                coEvery { it.getSelectedAccount() } returns account
+            }
 
         val proposalDataSource =
             mockk<ProposalDataSource>(relaxed = true).also {
@@ -159,7 +215,7 @@ class FundGiftCardUseCaseTest {
 
         val useCase =
             FundGiftCardUseCase(
-                createGiftCard = mockk<CreateGiftCardUseCase>(relaxed = true),
+                createGiftCard = createGiftCard,
                 accountDataSource = accountDataSource,
                 proposalDataSource = proposalDataSource,
                 zashiSpendingKeyDataSource = mockk<ZashiSpendingKeyDataSource>(relaxed = true),

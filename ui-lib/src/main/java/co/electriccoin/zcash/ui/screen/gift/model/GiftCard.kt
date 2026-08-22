@@ -111,6 +111,22 @@ data class StoredGiftCard(
         get() = fundingTxid != null || fundingAttemptedAt != null
 
     /**
+     * A mint nothing was ever sent to, and nothing ever will be.
+     *
+     * The one state in which discarding a record discards nothing: no broadcast was started, so no
+     * money can be at this address, so the seed unlocks nothing. `FundGiftCardUseCase` is what
+     * makes that airtight — it writes [fundingAttemptedAt] *before* it submits, and throws rather
+     * than submitting if that write fails, so "no funding attempt" is a durable statement that no
+     * transaction exists, not merely that none was recorded.
+     *
+     * Abandoned drafts are otherwise permanent: the sender who edits an amount and continues again
+     * mints a second card, and the first is invisible to the list, unreachable from the UI, and
+     * still occupying the one encrypted blob every mutation rewrites.
+     */
+    val isAbandonedDraft: Boolean
+        get() = status == GiftCardStatus.DRAFT && !hasFundingAttempt
+
+    /**
      * The funding is known to have mined, so the card really does hold its money.
      *
      * [GiftCardStatus.SHARED] is deliberately not evidence — a sender may share between submit and

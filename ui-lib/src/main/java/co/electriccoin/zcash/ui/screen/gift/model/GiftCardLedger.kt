@@ -29,12 +29,22 @@ object GiftCardLedger {
     /**
      * Persists a freshly minted card. Callers must complete this *before* submitting funding: a
      * crash in between otherwise loses the ephemeral seed, and with it the money, permanently.
+     *
+     * Minting supersedes any [StoredGiftCard.isAbandonedDraft] already on file, which is the only
+     * discard in this object and the only one that can be: a draft with no funding attempt is a
+     * record of an address no transaction was ever sent to. Without it every edited amount leaves
+     * one behind for good — a store that only grows, holding key material that unlocks nothing, in
+     * the single blob each mutation reads and rewrites.
+     *
+     * Tied to minting rather than run on a timer on purpose. A sweep would have to decide when a
+     * draft is old enough to be dead, and getting that wrong is unrecoverable; here the answer is
+     * structural, and the mutex around this makes the read-and-replace atomic.
      */
     fun add(cards: List<StoredGiftCard>, card: StoredGiftCard): List<StoredGiftCard> {
         ensure(cards.none { it.id == card.id }, "Gift card ${card.id} already exists")
         ensure(card.status == GiftCardStatus.DRAFT, "A new gift card starts as DRAFT")
         ensure(card.fundingTxid == null, "A new gift card has not been funded yet")
-        return cards + card
+        return cards.filterNot { it.isAbandonedDraft } + card
     }
 
     /**

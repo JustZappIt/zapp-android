@@ -310,6 +310,36 @@ class GiftCardLedgerTest {
         assertEquals(GiftCardStatus.CLAIMED, reshared.status)
     }
 
+    @Test
+    fun `minting supersedes a draft nothing was ever sent to`() {
+        val abandoned = GiftCardLedger.add(emptyList(), card())
+
+        val cards = GiftCardLedger.add(abandoned, card(id = OTHER_ID))
+
+        // Its address never saw a transaction, so the seed unlocks nothing and keeping the record
+        // only grows the one blob every mutation rewrites.
+        assertEquals(listOf(OTHER_ID), cards.map { it.id })
+    }
+
+    @Test
+    fun `minting never discards a draft whose broadcast was started`() {
+        val flagged = GiftCardLedger.setFundingAttemptedAt(listOf(card()), ID, LATER)
+
+        val cards = GiftCardLedger.add(flagged, card(id = OTHER_ID))
+
+        // The money may already have left, and this record is the only route back to it.
+        assertEquals(listOf(ID, OTHER_ID), cards.map { it.id })
+    }
+
+    @Test
+    fun `minting never discards a card that reached any later status`() {
+        val kept = listOf(card(id = "funded", status = GiftCardStatus.FUNDED, txid = TXID))
+
+        val cards = GiftCardLedger.add(kept, card())
+
+        assertEquals(listOf("funded", ID), cards.map { it.id })
+    }
+
     /** One draft carrying a submitted funding txid — the state a card shares from. */
     private fun submitted() = GiftCardLedger.recordFundingSubmitted(listOf(card()), ID, TXID, LATER)
 
@@ -338,6 +368,7 @@ class GiftCardLedgerTest {
 
     private companion object {
         const val ID = "card-1"
+        const val OTHER_ID = "card-2"
         const val ACCOUNT = "account-1"
         const val TXID = "f00d"
         const val OTHER_TXID = "beef"

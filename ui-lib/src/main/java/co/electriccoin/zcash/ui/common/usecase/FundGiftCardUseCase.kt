@@ -89,9 +89,15 @@ class FundGiftCardUseCase(
         expiresAt: Instant? = null,
         existing: StoredGiftCard? = null,
     ): GiftFundingQuote {
+        // Re-read rather than trust the copy handed in. The caller's is a snapshot held across a
+        // screen the sender can leave and come back to, so it can be stale in both directions: the
+        // record may have been superseded by a later mint and no longer exist, and — the half that
+        // costs money — it may have picked up a funding attempt that this copy does not show.
+        val current = existing?.let { giftCardStorageProvider.get(it.id) }
+
         // The durable gate on double funding. The screen's error state cannot be it: stepping back
         // to the details and continuing again clears that error and lands here with the same card.
-        if (existing?.hasFundingAttempt == true) fail(GiftFundingError.SUBMIT_UNCERTAIN)
+        if (current?.hasFundingAttempt == true) fail(GiftFundingError.SUBMIT_UNCERTAIN)
 
         val account = accountDataSource.getSelectedAccount()
         val fundingAmount = amount + CLAIM_FEE_RESERVE
@@ -101,7 +107,9 @@ class FundGiftCardUseCase(
         // note selection and the fee this particular send needs.
         if (!account.canSpend(fundingAmount)) fail(GiftFundingError.INSUFFICIENT_FUNDS)
 
-        val card = existing ?: createGiftCard(amount = amount, message = message, expiresAt = expiresAt)
+        // A draft that is gone was superseded by a later mint, so this mints again rather than
+        // pricing a record nothing can fund.
+        val card = current ?: createGiftCard(amount = amount, message = message, expiresAt = expiresAt)
 
         val proposal =
             runCatching {
