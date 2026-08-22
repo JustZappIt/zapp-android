@@ -1,6 +1,7 @@
 package co.electriccoin.zcash.ui.screen.deletewallet
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.component.destructive
@@ -8,20 +9,25 @@ import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
+import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
+import co.electriccoin.zcash.ui.design.component.ButtonStyle
 import co.electriccoin.zcash.ui.design.component.CheckboxState
 import co.electriccoin.zcash.ui.design.component.ZashiConfirmationState
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.gift.GiftCardListArgs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 class ResetZashiVM(
     private val navigationRouter: NavigationRouter,
     private val resetZashi: ResetZashiUseCase,
     private val errorStateMapper: ErrorMapperUseCase,
+    private val giftCardStorageProvider: GiftCardStorageProvider,
 ) : ViewModel() {
     private val isKeepFilesChecked = MutableStateFlow(true)
     private val confirmationDialogFlow = MutableStateFlow<ZashiConfirmationState?>(null)
@@ -66,7 +72,37 @@ class ResetZashiVM(
     private fun onCheckboxToggled() = isKeepFilesChecked.update { !it }
 
     private fun onConfirmClicked() {
-        confirmationDialogFlow.value = createConfirmationState()
+        viewModelScope.launch {
+            val hasUnsharedGiftFunds = runCatching { giftCardStorageProvider.hasUnsharedFunds() }.getOrDefault(true)
+            confirmationDialogFlow.value =
+                if (hasUnsharedGiftFunds) createGiftFundsWarningState() else createConfirmationState()
+        }
+    }
+
+    // ResetZashiUseCase refuses this case anyway; this is what turns that refusal into a way out.
+    private fun createGiftFundsWarningState(): ZashiConfirmationState =
+        ZashiConfirmationState(
+            icon = R.drawable.ic_reset_zashi_warning,
+            title = stringRes(R.string.delete_wallet_gift_cards_title),
+            message = stringRes(R.string.delete_wallet_gift_cards_message),
+            primaryAction =
+                ButtonState(
+                    text = stringRes(R.string.delete_wallet_gift_cards_review),
+                    style = ButtonStyle.PRIMARY,
+                    onClick = ::onReviewGiftCards,
+                ),
+            secondaryAction =
+                ButtonState(
+                    text = stringRes(R.string.delete_wallet_gift_cards_cancel),
+                    style = ButtonStyle.TERTIARY,
+                    onClick = ::onDismissConfirmation,
+                ),
+            onBack = ::onDismissConfirmation,
+        )
+
+    private fun onReviewGiftCards() {
+        confirmationDialogFlow.value = null
+        navigationRouter.forward(GiftCardListArgs)
     }
 
     private fun createConfirmationState(): ZashiConfirmationState =

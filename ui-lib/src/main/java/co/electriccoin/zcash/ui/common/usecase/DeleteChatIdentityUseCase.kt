@@ -26,8 +26,14 @@ class DeleteChatIdentityUseCase(
     private val metadataRepository: MetadataRepository,
     private val homeMessageCacheRepository: HomeMessageCacheRepository,
     private val chatBlockedKeysStorageProvider: ChatBlockedKeysStorageProvider,
+    private val ensureNoUnsharedGiftFunds: EnsureNoUnsharedGiftFundsUseCase,
 ) {
+    /** @throws UnsharedGiftFundsException before anything is deleted. */
     suspend operator fun invoke() {
+        // This clears both preference stores below, and gift_cards_v1 lives in the encrypted one.
+        // Refuse before anything is touched, exactly as ResetZashiUseCase does.
+        ensureNoUnsharedGiftFunds()
+
         runChatCall("DeleteChatIdentityUseCase: shutdown failed") {
             sdk.shutdown()
         }

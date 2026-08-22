@@ -22,6 +22,7 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.error.ErrorArgs
 import co.electriccoin.zcash.ui.screen.error.NavigateToErrorUseCase
 import co.electriccoin.zcash.ui.screen.exchangerate.optin.ExchangeRateOptInArgs
+import co.electriccoin.zcash.ui.screen.gift.GiftCardArgs
 import co.electriccoin.zcash.ui.screen.home.backup.SeedBackupInfo
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupDetail
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupMessageState
@@ -295,6 +296,8 @@ class HomeVM(
     }
 
     fun onSwapClick() = onSwapButtonClick()
+
+    fun onGiftClick() = navigationRouter.forward(GiftCardArgs)
 
     fun onBuyUsdcClick() {
         if (onBuyUsdcClickJob?.isActive == true) return

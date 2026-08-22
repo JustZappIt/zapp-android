@@ -40,6 +40,15 @@
             android:exported="false"
             android:theme="@style/Theme.App.Transparent" />
 
+        <!-- Fired by the system share sheet with the target the sender picked, through a
+             PendingIntent this app owns. Manifest-declared so it outlives the screen — and, on a
+             cold chooser, the process — that opened the sheet: this is what records that a gift
+             link was actually handed out, and a missed one leaves the card blocking a wallet
+             reset forever. Never exported; nothing outside this app has a reason to send it. -->
+        <receiver
+            android:name=".common.usecase.GiftShareCompletionReceiver"
+            android:exported="false" />
+
     </application>
 
 </manifest>

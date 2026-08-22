@@ -266,7 +266,6 @@ class ProposalDataSourceImpl(
         }
     }
 
-    @Suppress("CyclomaticComplexMethod", "TooGenericExceptionCaught")
     private suspend fun submitTransactionInternal(
         block: suspend (Synchronizer) -> Flow<TransactionSubmitResult>
     ): SubmitResult =
@@ -275,71 +274,9 @@ class ProposalDataSourceImpl(
             val submitResults = block(synchronizer).toList()
             Twig.debug { "Internal transaction submit results: $submitResults" }
 
-            val successCount =
-                submitResults
-                    .count { it is TransactionSubmitResult.Success }
-            val txIds =
-                submitResults
-                    .map { it.txIdString() }
-            val statuses =
-                submitResults
-                    .map {
-                        when (it) {
-                            is TransactionSubmitResult.Success -> {
-                                "success"
-                            }
-
-                            is TransactionSubmitResult.Failure -> {
-                                if (it.grpcError) {
-                                    GRPC_FAILURE_STATUS
-                                } else {
-                                    "$REJECTED_STATUS_PREFIX${it.code}"
-                                }
-                            }
-
-                            is TransactionSubmitResult.NotAttempted -> {
-                                "notAttempted"
-                            }
-                        }
-                    }
-            val resubmittableFailures =
-                submitResults
-                    .mapNotNull {
-                        when (it) {
-                            is TransactionSubmitResult.Failure -> it.grpcError
-                            is TransactionSubmitResult.NotAttempted -> null
-                            is TransactionSubmitResult.Success -> null
-                        }
-                    }
-
-            val (errCode, errDesc) =
-                submitResults
-                    .filterIsInstance<TransactionSubmitResult.Failure>()
-                    .lastOrNull { !it.grpcError }
-                    ?.let { it.code to it.description } ?: (0 to "")
-
-            val result =
-                when (successCount) {
-                    0 -> {
-                        if (resubmittableFailures.all { it }) {
-                            SubmitResult.GrpcFailure(txIds = txIds)
-                        } else {
-                            SubmitResult.Failure(txIds = txIds, code = errCode, description = errDesc)
-                        }
-                    }
-
-                    txIds.size -> {
-                        SubmitResult.Success(txIds = txIds)
-                    }
-
-                    else -> {
-                        if (resubmittableFailures.all { it }) {
-                            SubmitResult.GrpcFailure(txIds = txIds)
-                        } else {
-                            SubmitResult.Partial(txIds = txIds, statuses = statuses)
-                        }
-                    }
-                }
+            // Shared with the gift claim, which submits on its own isolated synchronizer and so
+            // cannot call this method. See SubmitResultFold.
+            val result = submitResults.toSubmitResult()
 
             if (synchronizer is SdkSynchronizer) {
                 synchronizer.refreshTransactions()
@@ -355,10 +292,7 @@ class ProposalDataSourceImpl(
             val synchronizer = synchronizerProvider.getSynchronizer()
             block(synchronizer)
         } catch (e: TransactionEncoderException.ProposalFromParametersException) {
-            val message = e.rootCause.message ?: ""
-            if (message.contains("Insufficient balance", true) ||
-                message.contains("The transaction requires an additional change output of", true)
-            ) {
+            if (e.isInsufficientFunds()) {
                 throw InsufficientFundsException()
             } else {
                 throw TransactionProposalNotCreatedException(e)
@@ -453,5 +387,17 @@ data class MigrationSweepTransactionProposal(
 
 private const val DEFAULT_SHIELDING_THRESHOLD = 100000L
 
-private const val GRPC_FAILURE_STATUS = "grpcFailure"
-private const val REJECTED_STATUS_PREFIX = "rejected code: "
+/**
+ * Whether the proposal failed because the account cannot cover the send plus its fee.
+ *
+ * Matched on the root cause's message because that is the only thing the SDK exposes — the Rust
+ * layer collapses both shapes into one exception type. Shared with the gift claim, which proposes
+ * on its own isolated synchronizer and so cannot go through [ProposalDataSourceImpl] at all: a
+ * second copy of this classification is how "the card is short" eventually reads as an unexplained
+ * crash on one path and a clean error on the other.
+ */
+internal fun TransactionEncoderException.ProposalFromParametersException.isInsufficientFunds(): Boolean {
+    val message = rootCause.message ?: ""
+    return message.contains("Insufficient balance", true) ||
+        message.contains("The transaction requires an additional change output of", true)
+}

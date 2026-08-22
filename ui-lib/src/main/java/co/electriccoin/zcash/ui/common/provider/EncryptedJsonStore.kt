@@ -14,16 +14,24 @@ import kotlinx.serialization.json.Json
  * [StoreCorruptedException] for a present-but-undecodable blob: silently treating corrupt as
  * absent would let `getOrCreate` overwrite still-encrypted data (e.g. the relay key sealing past
  * orders' merchant UPI). Schema migration: version the key, don't loosen decode.
+ *
+ * [strict] chooses what a field this build does not recognise means. The default tolerates one,
+ * which is right for a cache or a checkpoint: a record written by a newer build still reads here,
+ * and the unknown field is dropped on the next write. For a store that is the only copy of
+ * something — key material with no other recovery path — that silent drop is data loss, so those
+ * pass true and take a [StoreCorruptedException] instead. Refusing to read is recoverable, because
+ * a mutation that cannot read does not write; dropping a field is not.
  */
 internal class EncryptedJsonStore<T>(
     private val encryptedPreferenceProvider: EncryptedPreferenceProvider,
     prefKey: String,
     private val serializer: KSerializer<T>,
+    strict: Boolean = false,
 ) {
     private val key = PreferenceKey(prefKey)
     private val json =
         Json {
-            ignoreUnknownKeys = true
+            ignoreUnknownKeys = !strict
             explicitNulls = false
         }
 

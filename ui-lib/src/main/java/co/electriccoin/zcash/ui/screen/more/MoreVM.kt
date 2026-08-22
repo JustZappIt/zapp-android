@@ -11,6 +11,7 @@ import co.electriccoin.zcash.ui.design.util.imageRes
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.advancedsettings.AdvancedSettingsArgs
 import co.electriccoin.zcash.ui.screen.exchangerate.settings.ExchangeRateSettingsArgs
+import co.electriccoin.zcash.ui.screen.gift.GiftCardListArgs
 import co.electriccoin.zcash.ui.screen.hotfix.enhancement.EnhancementHotfixArgs
 import co.electriccoin.zcash.ui.screen.hotfix.ephemeral.EphemeralHotfixArgs
 import kotlinx.collections.immutable.toImmutableList
@@ -42,6 +43,11 @@ class MoreVM(
                         onClick = ::onCurrencyConversionClick
                     ),
                     ListItemState(
+                        title = stringRes(R.string.settings_gift_cards),
+                        bigIcon = imageRes(R.drawable.ic_settings_gift_cards),
+                        onClick = ::onGiftCardsClick
+                    ),
+                    ListItemState(
                         title = stringRes(R.string.settings_advanced_settings),
                         bigIcon = imageRes(R.drawable.ic_advanced_settings),
                         onClick = ::onAdvancedSettingsClick
@@ -60,6 +66,8 @@ class MoreVM(
     private fun onBack() = navigationRouter.back()
 
     private fun onAdvancedSettingsClick() = navigationRouter.forward(AdvancedSettingsArgs)
+
+    private fun onGiftCardsClick() = navigationRouter.forward(GiftCardListArgs)
 
     private fun onAddressBookClick() = viewModelScope.launch { navigateToAddressBook() }
 }

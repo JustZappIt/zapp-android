@@ -48,6 +48,26 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="zcash" />
             </intent-filter>
+            <!--
+              Gift links, as their own filter rather than merged into the zcash one above: merging
+              would make the app claim zcash://gift.justzappit.xyz and bare https:// as well, both
+              wrong. Intent filters cannot match on a fragment and never strip one, so the bearer
+              secret after '#' arrives intact via intent.data.fragment.
+
+              autoVerify needs assetlinks.json served from the host; until that exists the link
+              opens in a browser instead, which degrades to the landing page rather than breaking.
+              Test without any of it using an explicit-package intent:
+                adb shell am start -a android.intent.action.VIEW -d '<link>' <applicationId>
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="gift.justzappit.xyz"
+                    android:pathPrefix="/c/"
+                    android:scheme="https" />
+            </intent-filter>
         </activity-alias>
 
         <!-- Enable profiling by benchmark -->

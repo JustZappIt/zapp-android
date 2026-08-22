@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gift_card_speed_dial">Tarjeta de regalo</string>
+
+    <string name="gift_card_title">Tarjeta de regalo</string>
+    <string name="gift_card_subtitle_details">Cualquiera con el enlace puede reclamarla</string>
+    <string name="gift_card_subtitle_review">Revisa antes de financiar</string>
+    <string name="gift_card_subtitle_funding">Financiando tu tarjeta</string>
+    <string name="gift_card_subtitle_ready">Lista para compartir</string>
+
+    <string name="gift_card_amount_label">Cantidad</string>
+    <string name="gift_card_amount_symbol">ZEC</string>
+    <string name="gift_card_amount_balance_label">Disponible</string>
+    <string name="gift_card_amount_hint">La persona receptora recibe exactamente esta cantidad. Tú pagas las comisiones.</string>
+    <string name="gift_card_amount_error_empty">Introduce una cantidad</string>
+    <string name="gift_card_amount_error_too_small">Introduce una cantidad mayor que cero</string>
+    <string name="gift_card_amount_error_insufficient">No tienes suficiente ZEC disponible para esta cantidad más las comisiones</string>
+
+    <string name="gift_card_message_label">Mensaje (opcional)</string>
+    <string name="gift_card_message_placeholder">Feliz cumpleaños</string>
+    <string name="gift_card_message_counter">%1$d / %2$d</string>
+    <string name="gift_card_message_error_too_long">Este mensaje es demasiado largo para caber en un enlace de regalo</string>
+
+    <string name="gift_card_expiry_label">Caducidad sugerida</string>
+    <string name="gift_card_expiry_compact">Caducidad · %1$s</string>
+    <string name="gift_card_expiry_none">Ninguna</string>
+    <string name="gift_card_expiry_days">%1$d días</string>
+    <string name="gift_card_expiry_hint">Solo orientativa. Nada en la cadena la impone, así que la tarjeta se sigue pudiendo reclamar después.</string>
+
+    <string name="gift_card_continue">Revisar</string>
+    <string name="gift_card_preparing">Preparando…</string>
+
+    <string name="gift_card_review_label">Resumen</string>
+    <string name="gift_card_review_amount">Cantidad del regalo</string>
+    <string name="gift_card_review_reserve">Comisión de reclamación, prepagada</string>
+    <string name="gift_card_review_network_fee">Comisión de red</string>
+    <string name="gift_card_review_total">Total de tu saldo</string>
+    <string name="gift_card_review_message_label">Mensaje</string>
+    <string name="gift_card_review_expiry_label">Caducidad sugerida</string>
+    <string name="gift_card_review_warning_title">Antes de financiarla</string>
+    <string name="gift_card_review_warning_irreversible">Financiarla no se puede deshacer. No hay reembolso ni forma de recuperar el dinero.</string>
+    <string name="gift_card_review_warning_bearer">Quien tenga el enlace es dueño del dinero. Envíalo de forma privada.</string>
+    <string name="gift_card_review_warning_backup">Zapp no puede recuperar esta tarjeta con tu frase semilla. Si pierdes este dispositivo antes de compartir el enlace, pierdes los fondos.</string>
+    <string name="gift_card_review_warning_delay">La tarjeta se puede reclamar unos 15 minutos después de financiarla.</string>
+    <string name="gift_card_review_confirm">Financiar tarjeta</string>
+    <string name="gift_card_auth_prompt">Autentícate para financiar esta tarjeta de regalo</string>
+    <string name="gift_card_authenticating">Autenticando…</string>
+
+    <string name="gift_card_step_minted">Tarjeta creada</string>
+    <string name="gift_card_step_funding">Enviando fondos</string>
+    <string name="gift_card_step_ready">Lista para compartir</string>
+    <string name="gift_card_funding_note">Mantén Zapp abierta hasta que termine.</string>
+
+    <string name="gift_card_ready_title">Tarjeta financiada</string>
+    <string name="gift_card_ready_subtitle">Comparte el enlace con la persona a la que se la regalas.</string>
+    <string name="gift_card_ready_link_label">Enlace de regalo</string>
+    <string name="gift_card_ready_copy">Copiar enlace de regalo</string>
+    <string name="gift_card_ready_share">Compartir enlace</string>
+    <string name="gift_card_ready_share_picker">Compartir enlace de regalo</string>
+    <string name="gift_card_ready_done">Listo</string>
+    <string name="gift_card_ready_claimable">Se podrá reclamar en unos 15 minutos, cuando la transacción de financiación tenga suficientes confirmaciones.</string>
+    <string name="gift_card_ready_bearer">Cualquiera con este enlace puede reclamarla. Compártelo de forma privada y solo una vez.</string>
+
+    <string name="gift_card_error_keystone">Las tarjetas de regalo necesitan una clave de gasto en este dispositivo. Cambia a una cuenta Zapp para crear una.</string>
+    <string name="gift_card_error_network">Las tarjetas de regalo solo están disponibles en mainnet y testnet.</string>
+    <string name="gift_card_error_chain_tip">Zapp todavía se está conectando. Inténtalo cuando haya empezado la sincronización.</string>
+    <string name="gift_card_error_persist">No se pudo guardar la tarjeta de regalo, así que no se financió nada. Inténtalo de nuevo.</string>
+    <string name="gift_card_error_mint">No se pudo crear la tarjeta de regalo. No se financió nada.</string>
+    <string name="gift_card_error_proposal">No se pudo preparar la transacción de financiación. No se envió nada.</string>
+    <string name="gift_card_error_insufficient">No tienes suficiente ZEC disponible para financiar esta tarjeta y sus comisiones.</string>
+    <string name="gift_card_error_auth">La autenticación falló, así que no se financió nada.</string>
+    <string name="gift_card_error_submit">La financiación falló. No salió nada de tu monedero: inténtalo de nuevo.</string>
+    <string name="gift_card_error_submit_uncertain">Zapp no pudo confirmar si la transacción de financiación se difundió. Revisa tu lista de transacciones antes de volver a financiar.</string>
+    <string name="gift_card_error_share">No se pudo abrir el panel para compartir. Copia el enlace en su lugar.</string>
+    <string name="gift_card_error_handoff">El enlace está copiado, pero Zapp no pudo registrar que lo compartiste. Esta tarjeta sigue contando como no compartida y seguirá bloqueando el restablecimiento de la billetera.</string>
+
+    <string name="gift_claim_title">Tarjeta de regalo</string>
+    <string name="gift_claim_subtitle_preview">Alguien te ha enviado ZEC</string>
+    <string name="gift_claim_subtitle_claiming">Reclamando tu regalo</string>
+    <string name="gift_claim_subtitle_done">Reclamada</string>
+
+    <string name="gift_claim_amount_label">Valor de la tarjeta</string>
+    <string name="gift_claim_message_label">Mensaje</string>
+    <string name="gift_claim_claim">Reclamar a mi monedero</string>
+
+    <string name="gift_claim_consent_title">Esta tarjeta tiene ya unos meses</string>
+    <string name="gift_claim_consent_body">Reclamarla implica escanear unos %1$s bloques, aproximadamente %2$s. Mantén Zapp abierta mientras tanto.</string>
+    <string name="gift_claim_consent_confirm">Escanear de todos modos</string>
+    <string name="gift_claim_consent_duration_hours">%1$d horas</string>
+    <string name="gift_claim_consent_duration_days">%1$d días</string>
+
+    <string name="gift_claim_progress_syncing">Buscando tu regalo…</string>
+    <string name="gift_claim_progress_percent">%1$d%%</string>
+    <string name="gift_claim_progress_note">Mantén Zapp abierta. Con una tarjeta antigua puede tardar un rato.</string>
+
+    <string name="gift_claim_done_title">Regalo reclamado</string>
+    <string name="gift_claim_done_subtitle">%1$s va de camino a tu monedero.</string>
+    <string name="gift_claim_done">Listo</string>
+
+    <string name="gift_claim_pending_title">Casi listo</string>
+    <string name="gift_claim_pending_body">Tu regalo se está confirmando en la red Zcash. Tarda unos 15 minutos; Zapp lo reclamará automáticamente. Puedes dejar esta pantalla abierta.</string>
+    <string name="gift_claim_retry">Reintentar</string>
+
+    <string name="gift_claim_empty_title">No queda nada en esta tarjeta</string>
+    <string name="gift_claim_empty_body">Esta tarjeta está vacía. O nunca se financió, o alguien más con el enlace ya la reclamó.</string>
+
+    <string name="gift_claim_error_link">Esto no es un enlace de regalo que Zapp entienda.</string>
+    <string name="gift_claim_error_network">Esta tarjeta es de otra red Zcash.</string>
+    <string name="gift_claim_error_tampered">Este enlace ha sido alterado y no se puede reclamar de forma segura.</string>
+    <string name="gift_claim_error_future">Esta tarjeta dice ser más nueva que la cadena de bloques. Puede que Zapp aún se esté sincronizando.</string>
+    <string name="gift_claim_error_newer_format">Este regalo se creó con una versión más reciente de Zapp. Actualiza Zapp para reclamarlo: el regalo sigue a salvo en la tarjeta hasta entonces.</string>
+    <string name="gift_claim_error_not_broadcast">Zapp no pudo confirmar que la transferencia llegara a la red. Tu regalo sigue a salvo en la tarjeta: inténtalo en un momento.</string>
+    <string name="gift_claim_error_failed">No se pudo reclamar el regalo. No se ha perdido nada; inténtalo de nuevo.</string>
+    <string name="gift_claim_error_underfunded">Esta tarjeta no puede cubrir la comisión de red para mover sus propios fondos. El regalo sigue en la tarjeta, pero Zapp no puede reclamarlo.</string>
+    <string name="gift_claim_error_unreachable">Zapp no pudo conectar con ningún servidor de Zcash para buscar este regalo. Comprueba tu conexión e inténtalo de nuevo.</string>
+    <string name="gift_claim_error_not_ready">Zapp todavía se está conectando a la red Zcash. Tu regalo está bien: inténtalo en un momento.</string>
+    <string name="gift_claim_error_unavailable">Este enlace de regalo ya no está abierto. Tócalo de nuevo donde lo recibiste.</string>
+    <string name="gift_claim_expired_note">Esta tarjeta pasó su fecha de caducidad sugerida. Eso es solo informativo: aún se reclama por el importe completo.</string>
+    <string name="gift_claim_progress_remaining">Quedan %1$d bloques</string>
+    <string name="gift_claim_pending_count">%1$d / %2$d confirmaciones</string>
+
+    <string name="gift_card_list_title">Tus tarjetas regalo</string>
+    <string name="gift_card_list_subtitle">Recupera y vuelve a compartir cualquier enlace</string>
+    <string name="gift_card_list_open">Tus tarjetas regalo</string>
+    <string name="gift_card_list_empty">Aún no hay tarjetas regalo. Las que crees permanecerán aquí hasta que compartas sus enlaces.</string>
+    <string name="gift_card_list_warning">Estos enlaces son la única forma de acceder a los fondos. Zapp no puede recuperarlos con tu frase de recuperación.</string>
+    <string name="gift_claim_podium_caption">Un regalo para ti</string>
+    <string name="gift_card_deck_wordmark">Zapp</string>
+    <string name="gift_card_deck_details">Detalles</string>
+    <string name="gift_card_deck_created">Creada el %1$s</string>
+    <string name="gift_card_deck_open">Abrir esta tarjeta</string>
+    <string name="gift_card_deck_show_back">Mostrar los detalles de la tarjeta</string>
+    <string name="gift_card_deck_show_front">Mostrar el anverso de la tarjeta</string>
+    <string name="gift_card_chip_unfunded">Sin fondos</string>
+    <string name="gift_card_chip_unresolved">Comprueba la financiación</string>
+    <string name="gift_card_chip_submitted">Enviando fondos</string>
+    <string name="gift_card_chip_funded">Lista para compartir</string>
+    <string name="gift_card_chip_shared">Sin cobrar</string>
+    <string name="gift_card_chip_claimed">Cobrada</string>
+    <string name="gift_card_list_status_unfunded">Sin fondos</string>
+    <string name="gift_card_list_status_unresolved">Estado de financiación desconocido — comprueba antes de volver a financiar</string>
+    <string name="gift_card_list_status_submitted">Enviando fondos, aún sin minar</string>
+    <string name="gift_card_list_status_funded">Lista para compartir</string>
+    <string name="gift_card_list_status_shared">Enlace compartido</string>
+    <string name="gift_card_list_expires">Caduca el %1$s</string>
+    <string name="gift_card_list_expired">Caducó el %1$s — aún se puede reclamar</string>
+    <string name="gift_card_list_status_claimed">Cobrada</string>
+    <string name="gift_card_list_share">Compartir enlace</string>
+    <string name="gift_card_list_share_picker">Compartir enlace de regalo</string>
+    <string name="gift_card_list_copy">Copiar enlace</string>
+    <string name="gift_card_list_check">Comprobar si se cobró</string>
+    <string name="gift_card_list_check_stop">Detener comprobación</string>
+    <string name="gift_card_list_checked_unclaimed">Comprobado el %1$s: sigue en la tarjeta, nadie la ha cobrado.</string>
+    <string name="gift_card_list_check_blocked_no_tx">Zapp no tiene ninguna transacción registrada para esta tarjeta, así que todavía no hay nada que buscar.</string>
+    <string name="gift_card_list_check_blocked_busy">Se está comprobando otra tarjeta. Cada comprobación analiza la cadena de bloques, así que se hacen de una en una.</string>
+    <string name="gift_card_list_error_link">No se pudo recuperar el enlace de esta tarjeta. No restablezcas tu monedero — contacta con soporte.</string>
+    <string name="gift_card_list_error_share">No se pudo abrir el menú de compartir. Inténtalo de nuevo.</string>
+    <string name="gift_card_list_error_handoff">El enlace está copiado, pero Zapp no pudo registrar que lo compartiste. Esta tarjeta sigue contando como no compartida y seguirá bloqueando el restablecimiento de la billetera.</string>
+    <string name="gift_card_list_notice_funding_pending">La financiación de esta tarjeta aún no ha llegado, así que nadie ha podido cobrarla. Vuelve a comprobarlo cuando la transacción se haya minado.</string>
+    <string name="gift_card_list_error_check">Zapp no pudo terminar de comprobar esta tarjeta. Eso no indica si se cobró o no: inténtalo más tarde.</string>
+    <string name="gift_card_list_error_unreachable">Zapp no pudo conectarse a la red Zcash, así que esta tarjeta no se comprobó. Eso no indica si se cobró o no: inténtalo cuando tengas conexión.</string>
+    <string name="gift_card_list_corrupted">No se pudieron leer tus registros de tarjetas regalo. No restablezcas tu monedero — contacta con soporte.</string>
+</resources>

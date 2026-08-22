@@ -23,20 +23,41 @@ internal fun DeleteIdentityDialog(state: ChatProfileDeleteDialogState) {
         shape = RectangleShape,
         title = {
             BasicText(
-                text = stringResource(R.string.chat_profile_delete_dialog_title),
+                text =
+                    stringResource(
+                        if (state.isBlockedByGiftCards) {
+                            R.string.chat_profile_delete_gift_cards_title
+                        } else {
+                            R.string.chat_profile_delete_dialog_title
+                        }
+                    ),
                 style = ZappTheme.typography.sectionTitle.copy(color = c.text),
             )
         },
         text = {
             BasicText(
-                text = stringResource(R.string.chat_profile_delete_dialog_message),
+                text =
+                    stringResource(
+                        if (state.isBlockedByGiftCards) {
+                            R.string.chat_profile_delete_gift_cards_message
+                        } else {
+                            R.string.chat_profile_delete_dialog_message
+                        }
+                    ),
                 style = ZappTheme.typography.body.copy(color = c.textMuted),
             )
         },
         confirmButton = {
             DialogTextButton(
-                label = stringResource(R.string.chat_profile_delete_dialog_confirm),
-                color = c.danger,
+                label =
+                    stringResource(
+                        if (state.isBlockedByGiftCards) {
+                            R.string.chat_profile_delete_gift_cards_review
+                        } else {
+                            R.string.chat_profile_delete_dialog_confirm
+                        }
+                    ),
+                color = if (state.isBlockedByGiftCards) c.accentText else c.danger,
                 onClick = state.onConfirm,
             )
         },
