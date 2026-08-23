@@ -14,7 +14,9 @@ import co.electriccoin.zcash.ui.common.datasource.ProposalDataSource
 import co.electriccoin.zcash.ui.common.datasource.RegularTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.SubmitResult
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
+import co.electriccoin.zcash.ui.common.provider.GiftFundingOperationLock
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
 import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
 import kotlinx.coroutines.CancellationException
@@ -34,6 +36,12 @@ data class GiftFundingQuote(
     val claimFeeReserve: Zatoshi,
     val networkFee: Zatoshi,
 ) {
+    init {
+        require(card.amountZatoshi + claimFeeReserve.value + networkFee.value <= Zatoshi.MAX_INCLUSIVE) {
+            "A gift funding quote must fit in the Zcash monetary range"
+        }
+    }
+
     val cardAmount: Zatoshi get() = Zatoshi(card.amountZatoshi)
 
     /** What leaves the sender's balance: the card, the recipient's future claim fee, and this fee. */
@@ -76,6 +84,7 @@ class FundGiftCardUseCase(
     private val zashiSpendingKeyDataSource: ZashiSpendingKeyDataSource,
     private val giftCardStorageProvider: GiftCardStorageProvider,
     private val persistableWalletProvider: PersistableWalletProvider,
+    private val giftFundingOperationLock: GiftFundingOperationLock,
 ) {
     /**
      * Mints a card — or re-prices [existing] — and builds its funding proposal.
@@ -99,9 +108,30 @@ class FundGiftCardUseCase(
         // The durable gate on double funding. The screen's error state cannot be it: stepping back
         // to the details and continuing again clears that error and lands here with the same card.
         if (current?.hasFundingAttempt == true) fail(GiftFundingError.SUBMIT_UNCERTAIN)
+        if (existing?.isFundingRetryable == true && current?.isFundingRetryable != true) {
+            // Never turn a disappeared or concurrently-resolved retry into a newly minted card. Its
+            // address and link are the point of retrying, and a second card would be a new spend.
+            fail(GiftFundingError.SUBMIT_UNCERTAIN)
+        }
+        if (current != null && current.amountZatoshi != amount.value) {
+            // Repricing an existing address is never permission to silently change what its bearer
+            // link promises. A retry funds the exact same card; changing the value mints a new one.
+            fail(GiftFundingError.PROPOSAL_FAILED)
+        }
 
-        val account = accountDataSource.getSelectedAccount()
-        val fundingAmount = amount + CLAIM_FEE_RESERVE
+        val account =
+            if (current == null) {
+                accountDataSource.getSelectedAccount()
+            } else {
+                // A retry belongs to the recorded source account, irrespective of which account is
+                // selected now. Otherwise reconciliation would query one wallet for a transaction
+                // created in another and could eventually authorize yet another retry.
+                accountDataSource
+                    .getAllAccounts()
+                    .firstOrNull { it.sdkAccount.accountUuid.toStorageKeyId() == current.sourceAccountUuid }
+                    ?: fail(GiftFundingError.PROPOSAL_FAILED)
+            }
+        val fundingAmount = amount.plusWithinRange(CLAIM_FEE_RESERVE) ?: fail(GiftFundingError.INSUFFICIENT_FUNDS)
 
         // Cheap refusal before minting, so an obviously unaffordable card leaves no draft behind.
         // The authoritative check is still the InsufficientFundsException below, which knows about
@@ -110,7 +140,13 @@ class FundGiftCardUseCase(
 
         // A draft that is gone was superseded by a later mint, so this mints again rather than
         // pricing a record nothing can fund.
-        val card = current ?: createGiftCard(amount = amount, message = message, expiresAt = expiresAt)
+        val card =
+            current ?: createGiftCard(
+                amount = amount,
+                message = message,
+                expiresAt = expiresAt,
+                sourceAccount = account,
+            )
 
         val proposal =
             runCatching {
@@ -129,11 +165,16 @@ class FundGiftCardUseCase(
                 )
             }.getOrElse { throwable -> throw proposalFailure(throwable) }
 
+        val networkFee = proposal.proposal.totalFeeRequired()
+        if (fundingAmount.plusWithinRange(networkFee) == null) {
+            fail(GiftFundingError.INSUFFICIENT_FUNDS)
+        }
+
         return GiftFundingQuote(
             card = card,
             proposal = proposal,
             claimFeeReserve = CLAIM_FEE_RESERVE,
-            networkFee = proposal.proposal.totalFeeRequired(),
+            networkFee = networkFee,
         )
     }
 
@@ -151,7 +192,20 @@ class FundGiftCardUseCase(
      *
      * @return the funding txid.
      */
-    suspend fun submit(quote: GiftFundingQuote): String {
+    suspend fun submit(quote: GiftFundingQuote): String =
+        giftFundingOperationLock.withLock(quote.card.id) { submitLocked(quote) }
+
+    private suspend fun submitLocked(quote: GiftFundingQuote): String {
+        // The quote can sit on a review sheet while reconciliation runs. Re-read under the same
+        // lock used by reconciliation and require the exact lifecycle class the sender reviewed.
+        val current = giftCardStorageProvider.get(quote.card.id)
+        if (current == null || !current.hasSameFundingIdentityAs(quote.card)) {
+            fail(GiftFundingError.SUBMIT_UNCERTAIN)
+        }
+        if (current.hasFundingAttempt || current.isFundingRetryable != quote.card.isFundingRetryable) {
+            fail(GiftFundingError.SUBMIT_UNCERTAIN)
+        }
+
         // Key and endpoint lookup happen before the durable boundary and cannot create a
         // transaction, so failures here remain safe to retry.
         val usk =
@@ -289,6 +343,14 @@ class FundGiftCardUseCase(
 
     private fun fail(error: GiftFundingError): Nothing = throw GiftFundingException(error)
 
+    /** Custody and promise fields that the reviewed proposal is allowed to spend toward. */
+    private fun StoredGiftCard.hasSameFundingIdentityAs(other: StoredGiftCard): Boolean =
+        copy(
+            status = other.status,
+            updatedAt = other.updatedAt,
+            lastCheckedAt = other.lastCheckedAt,
+        ) == other
+
     private companion object {
         /**
          * What the sender prepays so the recipient's claim costs them nothing.
@@ -306,3 +368,9 @@ class FundGiftCardUseCase(
         val CLAIM_FEE_RESERVE = Zatoshi(CLAIM_FEE_RESERVE_ZATOSHI)
     }
 }
+
+/** Adds two bounded monetary values without letting [Zatoshi]'s constructor become control flow. */
+private fun Zatoshi.plusWithinRange(other: Zatoshi): Zatoshi? =
+    (value + other.value)
+        .takeIf { it <= Zatoshi.MAX_INCLUSIVE }
+        ?.let(::Zatoshi)

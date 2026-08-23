@@ -253,29 +253,29 @@ class ClaimGiftCardUseCase(
                 }.onFailure { Twig.warn { "Gift claim: spent card wallet cleanup failed" } }
                 receivedGiftStorageProvider.settle(cardAddress)
             }
-            return outcome
-        }
+        } else {
+            // The prepared record already holds recovery; attach txids even if the caller was cancelled.
+            val submittedTxIds =
+                when (outcome) {
+                    is GiftClaimOutcome.Claimed -> outcome.txIds
+                    is GiftClaimOutcome.NotBroadcast -> outcome.result.txIds
+                    else -> emptyList()
+                }
 
-        // The prepared record already holds recovery; attach txids even if the caller was cancelled.
-        val submittedTxIds =
-            when (outcome) {
-                is GiftClaimOutcome.Claimed -> outcome.txIds
-                is GiftClaimOutcome.NotBroadcast -> outcome.result.txIds
-                else -> emptyList()
-            }
-        if (submittedTxIds.isNotEmpty()) {
-            withContext(NonCancellable) {
-                val currentAttempt =
-                    receivedGiftStorageProvider
-                        .getAll()
-                        .firstOrNull { it.address == cardAddress && it.network == payload.network }
-                receivedGiftStorageProvider.record(
-                    prepared.copy(
-                        claimTxids = submittedTxIds,
-                        claimSubmissionAttemptedAt =
-                            currentAttempt?.claimSubmissionAttemptedAt ?: Clock.System.now().toString(),
+            if (submittedTxIds.isNotEmpty()) {
+                withContext(NonCancellable) {
+                    val currentAttempt =
+                        receivedGiftStorageProvider
+                            .getAll()
+                            .firstOrNull { it.address == cardAddress && it.network == payload.network }
+                    receivedGiftStorageProvider.record(
+                        prepared.copy(
+                            claimTxids = submittedTxIds,
+                            claimSubmissionAttemptedAt =
+                                currentAttempt?.claimSubmissionAttemptedAt ?: Clock.System.now().toString(),
+                        )
                     )
-                )
+                }
             }
         }
         return outcome

@@ -44,6 +44,20 @@ interface GiftCardStorageProvider {
     /** Records a submitted funding txid. The card stays a draft until the transaction mines. */
     suspend fun recordFundingSubmitted(id: String, fundingTxid: String, at: String)
 
+    /** Clears a start marker only after a fully-synced wallet proves creation never happened. */
+    suspend fun markFundingNotCreated(id: String, at: String)
+
+    /** Archives terminal transaction ids and makes the same card safe to fund again. */
+    suspend fun markFundingExpired(id: String, fundingTxids: Set<String>, at: String)
+
+    /** Replaces expired candidates with the single still-live transaction in one atomic write. */
+    suspend fun replaceExpiredFunding(
+        id: String,
+        expiredFundingTxids: Set<String>,
+        activeFundingTxid: String,
+        at: String,
+    )
+
     suspend fun markFunded(id: String, fundingTxid: String, at: String)
 
     suspend fun markShared(id: String, at: String)
@@ -109,6 +123,19 @@ internal class GiftCardStorageProviderImpl(
 
     override suspend fun recordFundingSubmitted(id: String, fundingTxid: String, at: String) =
         mutate { GiftCardLedger.recordFundingSubmitted(it, id, fundingTxid, at) }
+
+    override suspend fun markFundingNotCreated(id: String, at: String) =
+        mutate { GiftCardLedger.markFundingNotCreated(it, id, at) }
+
+    override suspend fun markFundingExpired(id: String, fundingTxids: Set<String>, at: String) =
+        mutate { GiftCardLedger.markFundingExpired(it, id, fundingTxids, at) }
+
+    override suspend fun replaceExpiredFunding(
+        id: String,
+        expiredFundingTxids: Set<String>,
+        activeFundingTxid: String,
+        at: String,
+    ) = mutate { GiftCardLedger.replaceExpiredFunding(it, id, expiredFundingTxids, activeFundingTxid, at) }
 
     override suspend fun markFunded(id: String, fundingTxid: String, at: String) =
         mutate { GiftCardLedger.markFunded(it, id, fundingTxid, at) }

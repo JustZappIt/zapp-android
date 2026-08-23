@@ -62,6 +62,8 @@ internal fun GiftCardListView(
     // one the sort already put first, which is whichever still needs handing out.
     val expandedId = state.items.firstOrNull { it.id == selectedId }?.id ?: state.items.firstOrNull()?.id
 
+    state.fundingReview?.let { GiftFundingRetrySheet(it) }
+
     Scaffold(
         modifier =
             modifier
@@ -164,11 +166,16 @@ private fun GiftCardListError.messageRes() =
         GiftCardListError.HANDOFF_FAILED -> R.string.gift_card_list_error_handoff
         GiftCardListError.CHECK_UNREACHABLE -> R.string.gift_card_list_error_unreachable
         GiftCardListError.CHECK_FAILED -> R.string.gift_card_list_error_check
+        GiftCardListError.RETRY_AUTHENTICATION_FAILED -> R.string.gift_card_list_error_retry_auth
+        GiftCardListError.RETRY_INSUFFICIENT_FUNDS -> R.string.gift_card_list_error_retry_funds
+        GiftCardListError.RETRY_FAILED -> R.string.gift_card_list_error_retry
+        GiftCardListError.RETRY_UNCERTAIN -> R.string.gift_card_list_error_retry_uncertain
     }
 
 private fun GiftCardListNotice.messageRes() =
     when (this) {
         GiftCardListNotice.CHECK_FUNDING_PENDING -> R.string.gift_card_list_notice_funding_pending
+        GiftCardListNotice.RETRY_SUBMITTED -> R.string.gift_card_list_notice_retry_submitted
     }
 
 /**
@@ -200,7 +207,10 @@ private fun previewItem(
     lastCheckedAt = null,
     isLastCheckRecent = false,
     check = GiftCheckControl.Ready {},
-    handOff = GiftHandOff(onShare = {}, onCopy = {}).takeIf { status != GiftCardListStatus.CLAIMED },
+    funding = GiftFundingControl.Hidden,
+    handOff =
+        GiftHandOff(onShare = {}, onCopy = {})
+            .takeIf { status != GiftCardListStatus.RETRYABLE && status != GiftCardListStatus.CLAIMED },
 )
 
 @PreviewScreens
@@ -228,6 +238,7 @@ private fun GiftCardDeckPreview() =
                     isCorrupted = false,
                     error = null,
                     notice = null,
+                    fundingReview = null,
                     onBack = {},
                 )
         )
@@ -244,6 +255,7 @@ private fun GiftCardDeckEmptyPreview() =
                     isCorrupted = false,
                     error = null,
                     notice = null,
+                    fundingReview = null,
                     onBack = {},
                 )
         )

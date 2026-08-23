@@ -25,6 +25,7 @@ import co.electriccoin.zcash.ui.common.provider.GetZcashCurrencyProvider
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.GiftClaimOperationLock
+import co.electriccoin.zcash.ui.common.provider.GiftFundingOperationLock
 import co.electriccoin.zcash.ui.common.provider.GiftKeyProvider
 import co.electriccoin.zcash.ui.common.provider.GiftKeyProviderImpl
 import co.electriccoin.zcash.ui.common.provider.HttpClientProvider
@@ -235,6 +236,7 @@ val providerModule =
         singleOf(::GiftCardStorageProviderImpl) bind GiftCardStorageProvider::class
         singleOf(::GiftKeyProviderImpl) bind GiftKeyProvider::class
         singleOf(::GiftClaimOperationLock)
+        singleOf(::GiftFundingOperationLock)
         singleOf(::PendingGiftLinkStore)
         singleOf(::ReceivedGiftStorageProviderImpl) bind ReceivedGiftStorageProvider::class
         single<HttpClient>(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)) {

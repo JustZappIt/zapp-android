@@ -3,6 +3,7 @@
 
 package co.electriccoin.zcash.ui.screen.gift.model
 
+import cash.z.ecc.android.sdk.model.Zatoshi
 import kotlinx.serialization.Serializable
 
 /**
@@ -58,6 +59,83 @@ enum class GiftCardStatus {
     CLAIMED,
 }
 
+/** Why an earlier funding attempt is conclusively safe to replace. */
+@Serializable
+enum class GiftFundingFailureReason {
+    /** A fully-synced wallet database contained no transaction created by the durable marker. */
+    NO_TRANSACTION,
+
+    /** The SDK reported the transaction expired, so consensus will no longer accept it. */
+    EXPIRED,
+}
+
+/**
+ * Durable evidence for a funding attempt that can no longer put money on the card.
+ *
+ * Failed transaction ids are retained rather than overwritten by a retry. Reconciliation can then
+ * distinguish the new active transaction from every expired predecessor, even after several
+ * retries or a process restart.
+ */
+@Serializable
+data class GiftFundingFailure(
+    val reason: GiftFundingFailureReason,
+    val attemptedAt: String?,
+    val transactionId: String? = null,
+    val detectedAt: String,
+) {
+    init {
+        require(attemptedAt == null || attemptedAt.isNotBlank()) {
+            "A funding failure attempt timestamp cannot be blank"
+        }
+        require(detectedAt.isNotBlank()) { "A funding failure detection timestamp is required" }
+        when (reason) {
+            GiftFundingFailureReason.NO_TRANSACTION -> {
+                require(transactionId == null) {
+                    "A missing-transaction failure cannot identify a transaction"
+                }
+            }
+
+            GiftFundingFailureReason.EXPIRED -> {
+                require(!transactionId.isNullOrBlank()) {
+                    "An expired funding failure requires a transaction id"
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The mutually-exclusive funding state derived from the backward-compatible persisted fields.
+ *
+ * [StoredGiftCard.status] describes delivery of the bearer link, not the transaction. Keeping the
+ * transaction lifecycle typed here prevents a shared card whose transaction expired from looking
+ * funded merely because `SHARED` sorts after `FUNDED`.
+ */
+sealed interface GiftFundingLifecycle {
+    data object NeverStarted : GiftFundingLifecycle
+
+    data class Attempting(
+        val attemptedAt: String,
+    ) : GiftFundingLifecycle
+
+    data class Created(
+        val transactionId: String,
+        val attemptedAt: String,
+    ) : GiftFundingLifecycle
+
+    data class Submitted(
+        val transactionId: String,
+    ) : GiftFundingLifecycle
+
+    data class Retryable(
+        val lastFailure: GiftFundingFailure,
+    ) : GiftFundingLifecycle
+
+    data class Mined(
+        val transactionId: String,
+    ) : GiftFundingLifecycle
+}
+
 /**
  * The locally persisted half of a card, held in encrypted preferences.
  *
@@ -109,18 +187,68 @@ data class StoredGiftCard(
      * conclusive look sets it, so it is evidence rather than a record of having tried.
      */
     val lastCheckedAt: String? = null,
+    /** Terminal attempts, oldest first. Additive so existing encrypted records decode unchanged. */
+    val fundingFailures: List<GiftFundingFailure> = emptyList(),
 ) {
+    init {
+        require(amountZatoshi in 1..Zatoshi.MAX_INCLUSIVE) {
+            "A gift card amount must be positive and within the Zcash monetary range"
+        }
+        require(fundingTxid == null || fundingTxid.isNotBlank()) {
+            "An active funding transaction id cannot be blank"
+        }
+        val failedTransactionIds = fundingFailures.mapNotNull { it.transactionId }
+        require(failedTransactionIds.distinct().size == failedTransactionIds.size) {
+            "A failed funding transaction can only be recorded once"
+        }
+        require(fundingTxid == null || fundingTxid !in failedTransactionIds) {
+            "The active funding transaction cannot also be terminal history"
+        }
+        if (isFundingMined) {
+            require(!fundingTxid.isNullOrBlank()) {
+                "A mined gift card requires a funding transaction id"
+            }
+        }
+    }
+
+    val fundingLifecycle: GiftFundingLifecycle
+        get() =
+            when {
+                isFundingMined -> GiftFundingLifecycle.Mined(requireNotNull(fundingTxid))
+                fundingAttemptedAt != null && fundingTxid != null -> {
+                    GiftFundingLifecycle.Created(fundingTxid, fundingAttemptedAt)
+                }
+
+                fundingAttemptedAt != null -> GiftFundingLifecycle.Attempting(fundingAttemptedAt)
+                fundingTxid != null -> GiftFundingLifecycle.Submitted(fundingTxid)
+                fundingFailures.isNotEmpty() -> GiftFundingLifecycle.Retryable(fundingFailures.last())
+                else -> GiftFundingLifecycle.NeverStarted
+            }
+
     /**
-     * The SDK funding pipeline was started. Whether it created or broadcast a transaction is
-     * unanswerable for [fundingAttemptedAt] alone, so this card must never be funded twice.
+     * The SDK funding pipeline is active or completed. A terminal failed attempt is deliberately
+     * excluded: only [GiftFundingLifecycle.Retryable] may start another transaction.
      */
     val hasFundingAttempt: Boolean
         get() =
-            fundingAttemptedAt != null ||
-                fundingSubmittedAt != null ||
-                // Backward compatibility: before fundingCreatedAt existed, a txid was only written
-                // after the combined create-and-submit SDK call returned.
-                (fundingTxid != null && fundingCreatedAt == null)
+            when (fundingLifecycle) {
+                is GiftFundingLifecycle.Attempting,
+                is GiftFundingLifecycle.Created,
+                is GiftFundingLifecycle.Submitted,
+                is GiftFundingLifecycle.Mined,
+                -> true
+
+                GiftFundingLifecycle.NeverStarted,
+                is GiftFundingLifecycle.Retryable,
+                -> false
+            }
+
+    /** Includes failed attempts, which remain visible and recoverable from the saved-card deck. */
+    val hasFundingHistory: Boolean
+        get() = fundingLifecycle !is GiftFundingLifecycle.NeverStarted
+
+    val isFundingRetryable: Boolean
+        get() = fundingLifecycle is GiftFundingLifecycle.Retryable
 
     /** The network accepted the transaction, including legacy records whose txid implied that. */
     val isFundingSubmitted: Boolean
@@ -138,7 +266,7 @@ data class StoredGiftCard(
      * still occupying the one encrypted blob every mutation rewrites.
      */
     val isAbandonedDraft: Boolean
-        get() = status == GiftCardStatus.DRAFT && !hasFundingAttempt
+        get() = status == GiftCardStatus.DRAFT && !hasFundingHistory
 
     /**
      * The funding is known to have mined, so the card really does hold its money.

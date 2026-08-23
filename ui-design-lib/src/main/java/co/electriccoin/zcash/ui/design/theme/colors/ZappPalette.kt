@@ -5,6 +5,11 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
+private const val COMPLETION_ARGB = 0xFFF7CD45
+private const val LIGHT_COMPLETION_SHADE_ARGB = 0xFFE2A91E
+private const val DARK_COMPLETION_SHADE_ARGB = 0xFFDCA31B
+private const val ON_COMPLETION_ARGB = 0xFF211A08
+
 @Immutable
 data class ZappColors(
     val bg: Color,
@@ -47,9 +52,9 @@ val LightZappColors =
         accent = Color(0xFFFF9417),
         accentSoft = Color(0xFFFFE7CC),
         accentText = Color(0xFFA65500),
-        completion = Color(0xFFF7CD45),
-        completionShade = Color(0xFFE2A91E),
-        onCompletion = Color(0xFF211A08),
+        completion = Color(COMPLETION_ARGB),
+        completionShade = Color(LIGHT_COMPLETION_SHADE_ARGB),
+        onCompletion = Color(ON_COMPLETION_ARGB),
         success = Color(0xFF2F9D6A),
         successSoft = Color(0xFFD7F0E3),
         danger = Color(0xFFD94545),
@@ -75,9 +80,9 @@ val DarkZappColors =
         accent = Color(0xFFFF9417),
         accentSoft = Color(0xFF3A2713),
         accentText = Color(0xFFFFB26B),
-        completion = Color(0xFFF7CD45),
-        completionShade = Color(0xFFDCA31B),
-        onCompletion = Color(0xFF211A08),
+        completion = Color(COMPLETION_ARGB),
+        completionShade = Color(DARK_COMPLETION_SHADE_ARGB),
+        onCompletion = Color(ON_COMPLETION_ARGB),
         success = Color(0xFF5FD49C),
         successSoft = Color(0xFF1A2E24),
         danger = Color(0xFFEF6A5F),

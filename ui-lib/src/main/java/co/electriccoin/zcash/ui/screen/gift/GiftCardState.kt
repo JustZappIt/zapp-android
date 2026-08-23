@@ -9,13 +9,15 @@ import co.electriccoin.zcash.ui.common.usecase.GiftFundingQuote
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
+import co.electriccoin.zcash.ui.screen.gift.model.GiftAmount
 import co.electriccoin.zcash.ui.screen.gift.model.GiftMessage
 
 /**
  * Where the sender is in the create flow.
  *
- * The order is the order they travel in, and only [DETAILS] and [REVIEW] are reversible: once
- * [FUNDING] has submitted there is no reclaim, so there is nothing to go back to.
+ * The order is the order they travel in. [UNAVAILABLE] is the fail-closed branch from [READY]
+ * when the persisted card is no longer safe to hand out; its recovery remains in the saved-card
+ * flow so a retry funds the same address and link.
  */
 internal enum class GiftCardStage {
     DETAILS,
@@ -23,7 +25,26 @@ internal enum class GiftCardStage {
     REVIEW,
     FUNDING,
     READY,
+    UNAVAILABLE,
 }
+
+/** A single source of truth for both the visible back control and the VM's back transition. */
+internal enum class GiftCardBackAction {
+    EXIT_FLOW,
+    EDIT_DETAILS,
+    BLOCK,
+}
+
+internal val GiftCardStage.backAction: GiftCardBackAction
+    get() =
+        when (this) {
+            GiftCardStage.DETAILS,
+            GiftCardStage.READY,
+            GiftCardStage.UNAVAILABLE,
+            -> GiftCardBackAction.EXIT_FLOW
+            GiftCardStage.REVIEW -> GiftCardBackAction.EDIT_DETAILS
+            GiftCardStage.PREPARING, GiftCardStage.FUNDING -> GiftCardBackAction.BLOCK
+        }
 
 private const val EXPIRY_WEEK_DAYS = 7
 private const val EXPIRY_MONTH_DAYS = 30
@@ -89,18 +110,19 @@ internal data class GiftCardState(
     val onCopy: () -> Unit,
     val onShare: (String) -> Unit,
     val onBack: () -> Unit,
-    /** Null when nothing is stored, or when the stage has no way out. */
+    /** Null when nothing is stored, or when opening the list would interrupt an in-flight action. */
     val onOpenSavedCards: (() -> Unit)?,
 ) {
     /**
-     * Whether the sender may leave. Funding is irreversible and the ready screen holds the only
-     * copy of the link the sender has seen, so neither offers a way back.
+     * Whether the sender may go back. Transaction preparation and funding are kept on-screen, but
+     * a funded card is already durable and re-shareable from the saved-cards list.
      */
     val isBackEnabled: Boolean
         get() =
-            when (stage) {
-                GiftCardStage.DETAILS, GiftCardStage.REVIEW -> !isAuthenticating
-                GiftCardStage.PREPARING, GiftCardStage.FUNDING, GiftCardStage.READY -> false
+            when (stage.backAction) {
+                GiftCardBackAction.EXIT_FLOW -> true
+                GiftCardBackAction.EDIT_DETAILS -> !isAuthenticating
+                GiftCardBackAction.BLOCK -> false
             }
 
     /**
@@ -117,7 +139,7 @@ internal data class GiftCardState(
      */
     val canContinue: Boolean
         get() =
-            amount.innerState.amount != null &&
+            GiftAmount.fromZec(amount.innerState.amount) != null &&
                 !amount.isError &&
                 (message.isEmpty() || GiftMessage.isWithinLimits(message))
 

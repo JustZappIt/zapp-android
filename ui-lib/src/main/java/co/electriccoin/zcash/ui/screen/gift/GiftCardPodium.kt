@@ -107,6 +107,7 @@ private val CONTACT_SHADOW_DROP = 4.dp
 
 /** Card stock is about 0.76mm. This is the on-screen equivalent, exaggerated to read. */
 private val CARD_THICKNESS = 6.dp
+private const val CARD_FACE_DEPTH = 0.5f
 private const val SHADOW_BOB_RATIO = 0.18f
 private const val SHADOW_MIN_WIDTH_FRACTION = 0.02f
 
@@ -273,7 +274,7 @@ internal fun GiftCardPodium(
                     val fraction = layer.toFloat() / (coreLayerCount - 1)
                     // Far surface first, near surface last. The order reverses with the visible
                     // face so the core never paints over the physical front of the slab.
-                    val depth = if (showBack) 0.5f - fraction else -0.5f + fraction
+                    val depth = if (showBack) CARD_FACE_DEPTH - fraction else -CARD_FACE_DEPTH + fraction
                     Box(
                         modifier =
                             Modifier
@@ -291,7 +292,7 @@ internal fun GiftCardPodium(
                             .cardPlaneTransform(
                                 rotation = rotation,
                                 bob = bob,
-                                depth = if (showBack) -0.5f else 0.5f,
+                                depth = if (showBack) -CARD_FACE_DEPTH else CARD_FACE_DEPTH,
                             ).clip(shape)
                             .materialLighting(rotation = rotation, stock = stock),
                 ) {

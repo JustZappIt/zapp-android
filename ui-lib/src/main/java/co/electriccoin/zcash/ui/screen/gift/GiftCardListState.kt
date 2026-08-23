@@ -15,6 +15,9 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 internal enum class GiftCardListStatus {
     UNFUNDED,
 
+    /** Every previous attempt is terminal. The same card can be deliberately funded again. */
+    RETRYABLE,
+
     /** Broadcast started and its outcome was never seen. Treated as money gone until proven otherwise. */
     UNRESOLVED,
     SUBMITTED,
@@ -65,6 +68,15 @@ internal enum class GiftCardListError {
 
     /** The scan could not finish, which says nothing about whether the card was collected. */
     CHECK_FAILED,
+
+    RETRY_AUTHENTICATION_FAILED,
+    RETRY_INSUFFICIENT_FUNDS,
+
+    /** Proposal creation failed without starting another transaction. */
+    RETRY_FAILED,
+
+    /** A new attempt started, but its transaction outcome is not yet conclusive. */
+    RETRY_UNCERTAIN,
 }
 
 /**
@@ -77,7 +89,32 @@ internal enum class GiftCardListNotice {
      * after funding, and the reason a check cannot report "collected" from an empty wallet alone.
      */
     CHECK_FUNDING_PENDING,
+
+    /** The explicit retry was accepted; mining remains asynchronous. */
+    RETRY_SUBMITTED,
 }
+
+internal sealed interface GiftFundingControl {
+    data object Hidden : GiftFundingControl
+
+    data class Ready(
+        val onReview: () -> Unit,
+    ) : GiftFundingControl
+
+    /** A quote is being built, authentication is open, or the confirmed retry is submitting. */
+    data object Running : GiftFundingControl
+}
+
+/** Freshly-priced spend shown before authentication and transaction creation. */
+internal data class GiftFundingRetryReview(
+    val amount: StringResource,
+    val claimFeeReserve: StringResource,
+    val networkFee: StringResource,
+    val total: StringResource,
+    val message: String?,
+    val onConfirm: () -> Unit,
+    val onDismiss: () -> Unit,
+)
 
 /**
  * The check control on one row.
@@ -139,6 +176,7 @@ internal data class GiftCardListItem(
     /** Whether that conclusive check is recent enough to call the card unclaimed now. */
     val isLastCheckRecent: Boolean,
     val check: GiftCheckControl,
+    val funding: GiftFundingControl,
     /**
      * Null while the card holds nothing to hand over. The row hides the controls rather than
      * disabling them: unlike a blocked check, this is not a "not right now".
@@ -151,5 +189,6 @@ internal data class GiftCardListState(
     val isCorrupted: Boolean,
     val error: GiftCardListError?,
     val notice: GiftCardListNotice?,
+    val fundingReview: GiftFundingRetryReview?,
     val onBack: () -> Unit,
 )

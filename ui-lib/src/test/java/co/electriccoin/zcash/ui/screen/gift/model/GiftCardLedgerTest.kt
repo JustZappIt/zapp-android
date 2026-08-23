@@ -254,6 +254,143 @@ class GiftCardLedgerTest {
     }
 
     @Test
+    fun `a conclusively missing transaction keeps the card but permits retry`() {
+        val attempted = GiftCardLedger.setFundingAttemptedAt(listOf(card()), ID, LATER)
+
+        val retryable = GiftCardLedger.markFundingNotCreated(attempted, ID, LATEST).single()
+
+        assertTrue(retryable.isFundingRetryable)
+        assertTrue(retryable.hasFundingHistory)
+        assertFalse(retryable.hasFundingAttempt)
+        assertFalse(retryable.isUnsharedFunds)
+        assertNull(retryable.fundingTxid)
+        assertEquals(GiftFundingFailureReason.NO_TRANSACTION, retryable.fundingFailures.single().reason)
+    }
+
+    @Test
+    fun `an expired shared card remains the same retryable bearer card`() {
+        val shared = GiftCardLedger.markShared(submitted(), ID, LATER).single()
+
+        val retryable =
+            GiftCardLedger.markFundingExpired(listOf(shared), ID, setOf(TXID), LATEST).single()
+
+        assertEquals(ID, retryable.id)
+        assertEquals(shared.address, retryable.address)
+        assertEquals(shared.mnemonic, retryable.mnemonic)
+        assertEquals(GiftCardStatus.SHARED, retryable.status)
+        assertTrue(retryable.isFundingRetryable)
+        assertEquals(TXID, retryable.fundingFailures.single().transactionId)
+        assertEquals(
+            GiftLinkCodec.encode(shared.toLinkPayload()),
+            GiftLinkCodec.encode(retryable.toLinkPayload()),
+        )
+    }
+
+    @Test
+    fun `retry starts on the same card and preserves terminal transaction history`() {
+        val expired =
+            GiftCardLedger.markFundingExpired(
+                cards = submitted(),
+                id = ID,
+                fundingTxids = setOf(TXID),
+                at = LATER,
+            ).single()
+
+        val retry = GiftCardLedger.setFundingAttemptedAt(listOf(expired), ID, LATEST).single()
+
+        assertEquals(ID, retry.id)
+        assertEquals(expired.address, retry.address)
+        assertEquals(expired.mnemonic, retry.mnemonic)
+        assertEquals(TXID, retry.fundingFailures.single().transactionId)
+        assertTrue(retry.hasFundingAttempt)
+        assertFalse(retry.isFundingRetryable)
+    }
+
+    @Test
+    fun `multiple expired retries retain every historical transaction id`() {
+        val first =
+            GiftCardLedger.markFundingExpired(
+                cards = submitted(),
+                id = ID,
+                fundingTxids = setOf(TXID),
+                at = LATER,
+            )
+        val secondAttempt = GiftCardLedger.setFundingAttemptedAt(first, ID, LATEST)
+        val secondCreated = GiftCardLedger.recordFundingCreated(secondAttempt, ID, OTHER_TXID, LATEST)
+
+        val retryable =
+            GiftCardLedger.markFundingExpired(secondCreated, ID, setOf(OTHER_TXID), LATEST).single()
+
+        assertEquals(listOf(TXID, OTHER_TXID), retryable.fundingFailures.map { it.transactionId })
+    }
+
+    @Test
+    fun `replaces expired evidence with one active recovered transaction atomically`() {
+        val created =
+            GiftCardLedger.recordFundingCreated(
+                GiftCardLedger.setFundingAttemptedAt(listOf(card()), ID, LATER),
+                ID,
+                TXID,
+                LATER,
+            )
+
+        val replaced =
+            GiftCardLedger.replaceExpiredFunding(
+                cards = created,
+                id = ID,
+                expiredFundingTxids = setOf(TXID),
+                activeFundingTxid = OTHER_TXID,
+                at = LATEST,
+            ).single()
+
+        assertEquals(OTHER_TXID, replaced.fundingTxid)
+        assertEquals(TXID, replaced.fundingFailures.single().transactionId)
+        assertTrue(replaced.hasFundingAttempt)
+    }
+
+    @Test
+    fun `expired failure requires a transaction id`() {
+        assertFailsWith<IllegalArgumentException> {
+            GiftFundingFailure(
+                reason = GiftFundingFailureReason.EXPIRED,
+                attemptedAt = LATER,
+                detectedAt = LATEST,
+            )
+        }
+    }
+
+    @Test
+    fun `mined card requires a transaction id`() {
+        assertFailsWith<IllegalArgumentException> {
+            card(status = GiftCardStatus.FUNDED)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            card(minedAt = LATER)
+        }
+    }
+
+    @Test
+    fun `a retry cannot reactivate a transaction from terminal history`() {
+        val failure =
+            GiftFundingFailure(
+                reason = GiftFundingFailureReason.EXPIRED,
+                attemptedAt = LATER,
+                transactionId = TXID,
+                detectedAt = LATEST,
+            )
+        val attempted =
+            GiftCardLedger.setFundingAttemptedAt(
+                cards = listOf(card(fundingFailures = listOf(failure))),
+                id = ID,
+                at = LATEST,
+            )
+
+        assertFailsWith<GiftCardTransitionException> {
+            GiftCardLedger.recordFundingCreated(attempted, ID, TXID, LATEST)
+        }
+    }
+
+    @Test
     fun `keeps the mnemonic out of toString`() {
         assertFalse(card().toString().contains(MNEMONIC))
     }
@@ -355,6 +492,7 @@ class GiftCardLedgerTest {
         txid: String? = null,
         attemptedAt: String? = null,
         minedAt: String? = null,
+        fundingFailures: List<GiftFundingFailure> = emptyList(),
     ) = StoredGiftCard(
         id = id,
         network = "main",
@@ -369,6 +507,7 @@ class GiftCardLedgerTest {
         fundingTxid = txid,
         fundingAttemptedAt = attemptedAt,
         fundingMinedAt = minedAt,
+        fundingFailures = fundingFailures,
     )
 
     private companion object {

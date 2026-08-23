@@ -159,6 +159,28 @@ private fun CardTools(item: GiftCardListItem, stock: ZappGiftCardStock) {
                 onClick = { handOff.onShare(sharePickerText) },
             )
         }
+        when (val funding = item.funding) {
+            is GiftFundingControl.Ready -> {
+                CardTool(
+                    icon = Icons.Default.Refresh,
+                    label = stringResource(R.string.gift_card_list_retry_funding),
+                    stock = stock,
+                    onClick = funding.onReview,
+                )
+            }
+
+            GiftFundingControl.Running -> {
+                CardTool(
+                    icon = Icons.Default.Refresh,
+                    label = stringResource(R.string.gift_card_list_retry_funding_running),
+                    stock = stock,
+                    isEnabled = false,
+                    onClick = {},
+                )
+            }
+
+            GiftFundingControl.Hidden -> Unit
+        }
         when (val check = item.check) {
             is GiftCheckControl.Ready -> {
                 CardTool(

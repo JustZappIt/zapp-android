@@ -6,6 +6,7 @@ package co.electriccoin.zcash.ui.common.usecase
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
+import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.provider.GiftKeyProvider
@@ -60,6 +61,7 @@ class CreateGiftCardUseCase(
         amount: Zatoshi,
         message: String? = null,
         expiresAt: Instant? = null,
+        sourceAccount: WalletAccount? = null,
     ): StoredGiftCard {
         ensure(amount.value > 0, GiftCardCreationError.INVALID_AMOUNT)
 
@@ -68,7 +70,10 @@ class CreateGiftCardUseCase(
 
         // Keystone holds the spending key on the device, so funding one is a different flow. Out
         // of scope for v1, and better refused here than half-way through a funding proposal.
-        val account = accountDataSource.getSelectedAccount()
+        // Funding resolves the selected account once and passes it here. Reading selection again
+        // would let a concurrent account switch persist B as the owner while proposing the send
+        // from A, after which reconciliation would search the wrong wallet.
+        val account = sourceAccount ?: accountDataSource.getSelectedAccount()
         ensure(account !is KeystoneAccount, GiftCardCreationError.KEYSTONE_ACCOUNT_UNSUPPORTED)
 
         val synchronizer = synchronizerProvider.getSynchronizer()

@@ -7,6 +7,7 @@
     <string name="gift_card_subtitle_review">Revisa antes de financiar</string>
     <string name="gift_card_subtitle_funding">Financiando tu tarjeta</string>
     <string name="gift_card_subtitle_ready">Lista para compartir</string>
+    <string name="gift_card_subtitle_unavailable">La tarjeta guardada necesita revisión</string>
 
     <string name="gift_card_amount_label">Cantidad</string>
     <string name="gift_card_amount_symbol">ZEC</string>
@@ -14,6 +15,7 @@
     <string name="gift_card_amount_hint">La persona receptora recibe exactamente esta cantidad. Tú pagas las comisiones.</string>
     <string name="gift_card_amount_error_empty">Introduce una cantidad</string>
     <string name="gift_card_amount_error_too_small">Introduce una cantidad mayor que cero</string>
+    <string name="gift_card_amount_error_invalid">Introduce más de cero y hasta 21.000.000 ZEC, con un máximo de 8 decimales</string>
     <string name="gift_card_amount_error_insufficient">No tienes suficiente ZEC disponible para esta cantidad más las comisiones</string>
 
     <string name="gift_card_message_label">Mensaje (opcional)</string>
@@ -59,6 +61,7 @@
     <string name="gift_card_ready_share_picker">Compartir enlace de regalo</string>
     <string name="gift_card_ready_claimable">Se podrá reclamar en unos 15 minutos, cuando la transacción de financiación tenga suficientes confirmaciones.</string>
     <string name="gift_card_ready_bearer">Cualquiera con este enlace puede reclamarla. Compártelo de forma privada y solo una vez.</string>
+    <string name="gift_card_unavailable_body">Esta tarjeta ya no está lista para compartir. Abre las tarjetas guardadas para revisar su estado actual. Si se puede reintentar la financiación, Zapp conserva esta misma tarjeta y enlace.</string>
 
     <string name="gift_card_error_keystone">Las tarjetas de regalo necesitan una clave de gasto en este dispositivo. Cambia a una cuenta Zapp para crear una.</string>
     <string name="gift_card_error_network">Las tarjetas de regalo solo están disponibles en mainnet y testnet.</string>
@@ -140,6 +143,7 @@
     <string name="gift_card_deck_show_back">Mostrar los detalles de la tarjeta</string>
     <string name="gift_card_deck_show_front">Mostrar el anverso de la tarjeta</string>
     <string name="gift_card_chip_unfunded">Sin fondos</string>
+    <string name="gift_card_chip_retryable">Reintentar financiación</string>
     <string name="gift_card_chip_unresolved">Comprueba la financiación</string>
     <string name="gift_card_chip_submitted">Enviando fondos</string>
     <string name="gift_card_chip_funded">Lista para compartir</string>
@@ -148,6 +152,7 @@
     <string name="gift_card_chip_shared_stale">Compartida · comprueba de nuevo</string>
     <string name="gift_card_chip_claimed">Cobrada</string>
     <string name="gift_card_list_status_unfunded">Sin fondos</string>
+    <string name="gift_card_list_status_retryable">El intento anterior de financiación terminó de forma concluyente. Revisa las comisiones actuales antes de financiar de nuevo esta misma tarjeta.</string>
     <string name="gift_card_list_status_unresolved">Estado de financiación desconocido — comprueba antes de volver a financiar</string>
     <string name="gift_card_list_status_submitted">Enviando fondos, aún sin minar</string>
     <string name="gift_card_list_status_funded">Lista para compartir</string>
@@ -158,6 +163,8 @@
     <string name="gift_card_list_share">Compartir enlace</string>
     <string name="gift_card_list_share_picker">Compartir enlace de regalo</string>
     <string name="gift_card_list_copy">Copiar enlace</string>
+    <string name="gift_card_list_retry_funding">Reintentar financiación</string>
+    <string name="gift_card_list_retry_funding_running">Preparando el reintento</string>
     <string name="gift_card_list_check">Comprobar si se cobró</string>
     <string name="gift_card_list_check_stop">Detener comprobación</string>
     <string name="gift_card_list_checked_unclaimed">Comprobado el %1$s: sigue en la tarjeta, nadie la ha cobrado.</string>
@@ -169,5 +176,14 @@
     <string name="gift_card_list_notice_funding_pending">La financiación de esta tarjeta aún no ha llegado, así que nadie ha podido cobrarla. Vuelve a comprobarlo cuando la transacción se haya minado.</string>
     <string name="gift_card_list_error_check">Zapp no pudo terminar de comprobar esta tarjeta. Eso no indica si se cobró o no: inténtalo más tarde.</string>
     <string name="gift_card_list_error_unreachable">Zapp no pudo conectarse a la red Zcash, así que esta tarjeta no se comprobó. Eso no indica si se cobró o no: inténtalo cuando tengas conexión.</string>
+    <string name="gift_card_list_error_retry_auth">La financiación no se reintentó porque la autenticación no se completó.</string>
+    <string name="gift_card_list_error_retry_funds">La financiación no se reintentó porque la cuenta original no tiene suficiente ZEC disponible para el importe, la reserva de cobro y la comisión de red actual.</string>
+    <string name="gift_card_list_error_retry">Zapp no pudo preparar este reintento de financiación. No se envió nada nuevo: comprueba la cuenta original de la tarjeta e inténtalo de nuevo.</string>
+    <string name="gift_card_list_error_retry_uncertain">El reintento comenzó, pero Zapp todavía no puede determinar el resultado de la transacción. No vuelvas a intentarlo; Zapp lo conciliará después de sincronizar.</string>
+    <string name="gift_card_list_notice_retry_submitted">Reintento enviado. La financiación está pendiente; sigue siendo la misma tarjeta y el mismo enlace.</string>
+    <string name="gift_card_retry_title">Revisar reintento de financiación</string>
+    <string name="gift_card_retry_body">Tu billetera terminó de sincronizarse y confirmó que el intento anterior no puede completarse. Esto crea una nueva transacción para la misma tarjeta y el mismo enlace.</string>
+    <string name="gift_card_retry_confirm">Confirmar y autenticar</string>
+    <string name="gift_card_retry_cancel">Cancelar</string>
     <string name="gift_card_list_corrupted">No se pudieron leer tus registros de tarjetas regalo. No restablezcas tu monedero — contacta con soporte.</string>
 </resources>

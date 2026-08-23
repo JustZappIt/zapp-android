@@ -9,15 +9,22 @@ import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.provider.ApplicationStateProvider
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
+import co.electriccoin.zcash.ui.common.security.SecretAuthGate
+import co.electriccoin.zcash.ui.common.security.SecretAuthPolicy
 import co.electriccoin.zcash.ui.common.usecase.CheckGiftCardClaimedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftClaimUseCase
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
+import co.electriccoin.zcash.ui.common.usecase.FundGiftCardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GiftCardCheckResult
+import co.electriccoin.zcash.ui.common.usecase.GiftFundingError
+import co.electriccoin.zcash.ui.common.usecase.GiftFundingException
+import co.electriccoin.zcash.ui.common.usecase.GiftFundingQuote
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
 import co.electriccoin.zcash.ui.common.wallet.ZecFiatRate
 import co.electriccoin.zcash.ui.common.wallet.toFiatString
@@ -49,16 +56,19 @@ import kotlin.time.Instant
  * screen — must not be the end of the story. Every stored card is re-shareable from here, because
  * [StoredGiftCard] keeps everything the link needs.
  */
+@Suppress("TooManyFunctions")
 class GiftCardListVM(
     private val giftCardStorageProvider: GiftCardStorageProvider,
     private val confirmGiftCardFunding: ConfirmGiftCardFundingUseCase,
     private val confirmGiftClaim: ConfirmGiftClaimUseCase,
     private val checkGiftCardClaimed: CheckGiftCardClaimedUseCase,
+    private val fundGiftCard: FundGiftCardUseCase,
     exchangeRateRepository: ExchangeRateRepository,
     swapRepository: SwapRepository,
     private val shareGiftLink: ShareGiftLinkUseCase,
     private val copyToClipboard: CopyToClipboardUseCase,
     private val applicationStateProvider: ApplicationStateProvider,
+    private val secretAuthGate: SecretAuthGate,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     private val errorFlow = MutableStateFlow<GiftCardListError?>(null)
@@ -66,9 +76,13 @@ class GiftCardListVM(
     private val isCorrupted = MutableStateFlow(false)
     private val checkingId = MutableStateFlow<String?>(null)
     private val checkProgress = MutableStateFlow<GiftCheckProgress?>(null)
+    private val retryingId = MutableStateFlow<String?>(null)
+    private val fundingReview = MutableStateFlow<GiftFundingRetryReview?>(null)
 
     private var shareJob: Job? = null
     private var checkJob: Job? = null
+    private var retryJob: Job? = null
+    private var retryQuote: GiftFundingQuote? = null
 
     @Volatile
     private var isForeground: Boolean = false
@@ -101,16 +115,19 @@ class GiftCardListVM(
             combine(checkingId, checkProgress) { checking, progress -> checking to progress },
             // Paired only to stay inside combine's typed arity; they are unrelated slots.
             combine(errorFlow, noticeFlow) { err, notice -> err to notice },
-            isCorrupted,
-        ) { all, rate, (checking, progress), (err, notice), corrupted ->
+            combine(isCorrupted, retryingId, fundingReview) { corrupted, retrying, review ->
+                Triple(corrupted, retrying, review)
+            },
+        ) { all, rate, (checking, progress), (err, notice), (corrupted, retrying, review) ->
             // A draft nothing was ever sent to is an artefact of minting before funding, not a card
             // the sender made. It cannot be handed out, checked, or recovered from — only clutter.
-            val visible = all.filter { it.hasFundingAttempt }
+            val visible = all.filter { it.hasFundingHistory }
             GiftCardListState(
-                items = visible.sortedWith(DISPLAY_ORDER).map { toItem(it, rate, checking, progress) },
+                items = visible.sortedWith(DISPLAY_ORDER).map { toItem(it, rate, checking, progress, retrying) },
                 isCorrupted = corrupted,
                 error = err,
                 notice = notice,
+                fundingReview = review,
                 onBack = navigationRouter::back,
             )
         }.stateIn(
@@ -121,7 +138,7 @@ class GiftCardListVM(
 
     init {
         // Anything whose funding mined while nothing was watching still reads as a draft on disk.
-        viewModelScope.launch { runCatching { confirmGiftCardFunding.reconcile() } }
+        viewModelScope.launch { runCatching { confirmGiftCardFunding.reconcileAndObserve() } }
         viewModelScope.launch { runCatching { confirmGiftClaim.reconcile() } }
         viewModelScope.launch {
             applicationStateProvider.isInForeground.collect { foreground ->
@@ -136,12 +153,16 @@ class GiftCardListVM(
         rate: ZecFiatRate?,
         checkingId: String?,
         checkProgress: GiftCheckProgress?,
+        retryingId: String?,
     ): GiftCardListItem {
         val status = card.listStatus()
         // An unfunded draft encodes into a link that looks real and pays nothing, and a collected
         // card's link is spent — both hand the recipient something worthless. Unresolved counts as
         // handable: the money may already have gone, and if it has, the link is the only route.
-        val canHandOff = status != GiftCardListStatus.UNFUNDED && status != GiftCardListStatus.CLAIMED
+        val canHandOff =
+            status != GiftCardListStatus.UNFUNDED &&
+                status != GiftCardListStatus.RETRYABLE &&
+                status != GiftCardListStatus.CLAIMED
         return GiftCardListItem(
             id = card.id,
             amount = stringRes(Zatoshi(card.amountZatoshi)),
@@ -154,6 +175,7 @@ class GiftCardListVM(
             lastCheckedAt = card.lastCheckedAt?.toGiftDisplayDate().takeIf { status != GiftCardListStatus.CLAIMED },
             isLastCheckRecent = card.lastCheckedAt.isRecentGiftCheck(),
             check = card.checkControl(status, checkingId, checkProgress),
+            funding = card.fundingControl(status, retryingId),
             handOff =
                 GiftHandOff(
                     onShare = { picker -> onShare(card.id, picker) },
@@ -173,11 +195,106 @@ class GiftCardListVM(
     ): GiftCheckControl =
         when {
             status == GiftCardListStatus.CLAIMED -> GiftCheckControl.Hidden
+            status == GiftCardListStatus.RETRYABLE -> GiftCheckControl.Hidden
             id == checkingId -> GiftCheckControl.Running(checkProgress) { onCheck(id) }
             fundingTxid == null -> GiftCheckControl.Blocked(GiftCheckBlocked.NO_TRANSACTION)
             checkingId != null -> GiftCheckControl.Blocked(GiftCheckBlocked.ANOTHER_RUNNING)
             else -> GiftCheckControl.Ready { onCheck(id) }
         }
+
+    private fun StoredGiftCard.fundingControl(
+        status: GiftCardListStatus,
+        retryingId: String?,
+    ): GiftFundingControl =
+        when {
+            status != GiftCardListStatus.RETRYABLE -> GiftFundingControl.Hidden
+            id == retryingId -> GiftFundingControl.Running
+            else -> GiftFundingControl.Ready { onReviewFunding(id) }
+        }
+
+    /** Prices the retry. This step cannot create or submit a transaction. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun onReviewFunding(cardId: String) {
+        if (retryJob?.isActive == true || retryQuote != null) return
+        retryJob =
+            viewModelScope.launch {
+                retryingId.value = cardId
+                clearMessages()
+                try {
+                    val card = checkNotNull(giftCardStorageProvider.get(cardId)) { "No gift card $cardId" }
+                    check(card.isFundingRetryable) { "Gift card $cardId funding is not retryable" }
+                    val quote =
+                        fundGiftCard.prepare(
+                            amount = Zatoshi(card.amountZatoshi),
+                            message = card.message,
+                            existing = card,
+                        )
+                    retryQuote = quote
+                    fundingReview.value =
+                        GiftFundingRetryReview(
+                            amount = stringRes(quote.cardAmount),
+                            claimFeeReserve = stringRes(quote.claimFeeReserve),
+                            networkFee = stringRes(quote.networkFee),
+                            total = stringRes(quote.total),
+                            message = quote.card.message,
+                            onConfirm = ::onConfirmFunding,
+                            onDismiss = ::onDismissFunding,
+                        )
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (throwable: Throwable) {
+                    Twig.error(throwable) { "Gift card $cardId funding retry could not be priced" }
+                    errorFlow.value = throwable.toFundingRetryError()
+                } finally {
+                    retryingId.value = null
+                }
+            }
+    }
+
+    /** The only retry action that may spend; reached after the freshly-priced review is visible. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun onConfirmFunding() {
+        val quote = retryQuote ?: return
+        if (retryJob?.isActive == true) return
+        fundingReview.value = null
+        retryJob =
+            viewModelScope.launch {
+                retryingId.value = quote.card.id
+                clearMessages()
+                try {
+                    val authenticated =
+                        secretAuthGate.authenticate(
+                            promptMessage = stringRes(R.string.gift_card_auth_prompt),
+                            policy = SecretAuthPolicy.REQUIRE_AUTHENTICATION,
+                        )
+                    if (!authenticated) {
+                        errorFlow.value = GiftCardListError.RETRY_AUTHENTICATION_FAILED
+                        return@launch
+                    }
+                    val txid = fundGiftCard.submit(quote)
+                    noticeFlow.value = GiftCardListNotice.RETRY_SUBMITTED
+                    viewModelScope.launch { confirmGiftCardFunding(quote.card.id, txid) }
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (throwable: Throwable) {
+                    Twig.error(throwable) { "Gift card ${quote.card.id} funding retry failed" }
+                    val error = throwable.toFundingRetryError()
+                    errorFlow.value = error
+                    if (error == GiftCardListError.RETRY_UNCERTAIN) {
+                        viewModelScope.launch { runCatching { confirmGiftCardFunding.reconcileAndObserve() } }
+                    }
+                } finally {
+                    retryQuote = null
+                    retryingId.value = null
+                }
+            }
+    }
+
+    private fun onDismissFunding() {
+        if (retryJob?.isActive == true) return
+        fundingReview.value = null
+        retryQuote = null
+    }
 
     private fun onShare(cardId: String, sharePickerText: String) {
         if (shareJob?.isActive == true) return
@@ -266,6 +383,9 @@ class GiftCardListVM(
     private suspend fun linkFor(cardId: String): String? =
         runCatching {
             val card = checkNotNull(giftCardStorageProvider.get(cardId)) { "No gift card $cardId" }
+            check(card.status != GiftCardStatus.CLAIMED && card.hasFundingAttempt) {
+                "Gift card $cardId is not safe to hand out"
+            }
             GiftLinkCodec.encode(card.toLinkPayload())
         }.getOrElse { throwable ->
             if (throwable is CancellationException) throw throwable
@@ -287,11 +407,19 @@ class GiftCardListVM(
 private fun StoredGiftCard.listStatus(): GiftCardListStatus =
     when {
         status == GiftCardStatus.CLAIMED -> GiftCardListStatus.CLAIMED
+        isFundingRetryable -> GiftCardListStatus.RETRYABLE
+        !isFundingMined && fundingAttemptedAt != null -> GiftCardListStatus.UNRESOLVED
+        !isFundingMined && isFundingSubmitted -> GiftCardListStatus.SUBMITTED
         status == GiftCardStatus.SHARED -> GiftCardListStatus.SHARED
         status == GiftCardStatus.FUNDED -> GiftCardListStatus.FUNDED
-        fundingAttemptedAt != null -> GiftCardListStatus.UNRESOLVED
-        isFundingSubmitted -> GiftCardListStatus.SUBMITTED
         else -> GiftCardListStatus.UNFUNDED
+    }
+
+private fun Throwable.toFundingRetryError() =
+    when ((this as? GiftFundingException)?.error) {
+        GiftFundingError.INSUFFICIENT_FUNDS -> GiftCardListError.RETRY_INSUFFICIENT_FUNDS
+        GiftFundingError.SUBMIT_UNCERTAIN -> GiftCardListError.RETRY_UNCERTAIN
+        GiftFundingError.PROPOSAL_FAILED, null -> GiftCardListError.RETRY_FAILED
     }
 
 private fun String?.isRecentGiftCheck(now: Instant = Clock.System.now()): Boolean {

@@ -54,7 +54,6 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.compose.SecureScreen
 import co.electriccoin.zcash.ui.common.compose.shouldSecureScreen
 import co.electriccoin.zcash.ui.common.security.PinVerifyOverlay
-import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
@@ -73,8 +72,6 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappStepList
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSuccessHeader
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSummaryRow
-import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
-import co.electriccoin.zcash.ui.design.theme.ProvideZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.ellipsizeMiddle
 import co.electriccoin.zcash.ui.design.util.getValue
@@ -87,7 +84,6 @@ internal fun GiftCardView(
     modifier: Modifier = Modifier,
 ) {
     val c = ZappTheme.colors
-    val spacing = ZappTheme.spacing
     var showFundingInfo by rememberSaveable { mutableStateOf(false) }
 
     // The ready screen puts a bearer secret on the display. Mainnet builds already carry
@@ -106,15 +102,7 @@ internal fun GiftCardView(
         topBar = {
             ZappScreenHeader(
                 title = stringResource(R.string.gift_card_title),
-                subtitle =
-                    stringResource(
-                        when (state.stage) {
-                            GiftCardStage.DETAILS -> R.string.gift_card_subtitle_details
-                            GiftCardStage.PREPARING, GiftCardStage.REVIEW -> R.string.gift_card_subtitle_review
-                            GiftCardStage.FUNDING -> R.string.gift_card_subtitle_funding
-                            GiftCardStage.READY -> R.string.gift_card_subtitle_ready
-                        }
-                    ),
+                subtitle = stringResource(state.stage.subtitleRes()),
                 // The way back to a card whose link was never handed out, including one this
                 // process never saw. Only offered where the stage has a way out at all.
                 right = { HeaderActions(state) { showFundingInfo = true } },
@@ -129,23 +117,29 @@ internal fun GiftCardView(
                     .padding(contentPadding)
                     .verticalScroll(rememberScrollState()),
         ) {
-            if (state.stage == GiftCardStage.READY) ReadySuccessHeader()
-            MintedCardPodium(state)
-            when (state.stage) {
-                GiftCardStage.DETAILS -> DetailsSection(state)
-                GiftCardStage.PREPARING -> ZappScreenProgressIndicator(Modifier.height(240.dp))
-                GiftCardStage.REVIEW -> ReviewSection(state)
-                GiftCardStage.FUNDING -> FundingSection()
-                GiftCardStage.READY -> ReadySection(state)
-            }
-            state.error?.let { ErrorBanner(it.messageRes()) }
-            Spacer(Modifier.height(spacing.xl))
+            GiftCardBody(state)
         }
     }
 
     state.pinVerify?.let { PinVerifyOverlay(state = it) }
 
     if (showFundingInfo) GiftCardFundingInfoSheet { showFundingInfo = false }
+}
+
+@Composable
+private fun GiftCardBody(state: GiftCardState) {
+    if (state.stage == GiftCardStage.READY) ReadySuccessHeader()
+    MintedCardPodium(state)
+    when (state.stage) {
+        GiftCardStage.DETAILS -> DetailsSection(state)
+        GiftCardStage.PREPARING -> ZappScreenProgressIndicator(Modifier.height(240.dp))
+        GiftCardStage.REVIEW -> ReviewSection(state)
+        GiftCardStage.FUNDING -> FundingSection()
+        GiftCardStage.READY -> ReadySection(state)
+        GiftCardStage.UNAVAILABLE -> ErrorBanner(R.string.gift_card_unavailable_body)
+    }
+    state.error?.let { ErrorBanner(it.messageRes()) }
+    Spacer(Modifier.height(ZappTheme.spacing.xl))
 }
 
 /** The one button a stage offers, or null where there is nothing to press. */
@@ -191,6 +185,10 @@ private fun GiftCardBottomBar(state: GiftCardState) {
                     onClick = { state.onShare(sharePickerText) },
                 )
             }
+
+            // Recovery continues through the saved-card action in the header, where the same
+            // card and link are repriced rather than minting another card.
+            GiftCardStage.UNAVAILABLE -> null
 
             // Nothing to press while the card is being minted or broadcast, and no way back.
             GiftCardStage.PREPARING, GiftCardStage.FUNDING -> {
@@ -457,64 +455,9 @@ private fun WarningRow(
     }
 }
 
-// A lookup table, not a decision: one arm per case, no nesting, and exhaustive so a new error
-// cannot be added without landing here. Same reasoning as `SubmitResultFold`.
-@Suppress("CyclomaticComplexMethod")
-@StringRes
-private fun GiftCardError.messageRes(): Int =
-    when (this) {
-        GiftCardError.AMOUNT_INVALID -> R.string.gift_card_amount_error_too_small
-        GiftCardError.MESSAGE_TOO_LONG -> R.string.gift_card_message_error_too_long
-        GiftCardError.INSUFFICIENT_FUNDS -> R.string.gift_card_error_insufficient
-        GiftCardError.KEYSTONE_UNSUPPORTED -> R.string.gift_card_error_keystone
-        GiftCardError.UNSUPPORTED_NETWORK -> R.string.gift_card_error_network
-        GiftCardError.CHAIN_TIP_UNAVAILABLE -> R.string.gift_card_error_chain_tip
-        GiftCardError.PERSIST_FAILED -> R.string.gift_card_error_persist
-        GiftCardError.MINT_FAILED -> R.string.gift_card_error_mint
-        GiftCardError.PROPOSAL_FAILED -> R.string.gift_card_error_proposal
-        GiftCardError.AUTHENTICATION_FAILED -> R.string.gift_card_error_auth
-        GiftCardError.SUBMIT_UNCERTAIN -> R.string.gift_card_error_submit_uncertain
-        GiftCardError.SHARE_FAILED -> R.string.gift_card_error_share
-        GiftCardError.HANDOFF_FAILED -> R.string.gift_card_error_handoff
-    }
-
 internal object GiftCardTag {
     const val LINK = "gift_card_link"
 }
 
 private const val LINK_PREFIX = 20
 private const val LINK_SUFFIX = 8
-
-@PreviewScreens
-@Composable
-private fun GiftCardPreview() =
-    ProvideZappTheme {
-        GiftCardView(
-            state =
-                GiftCardState(
-                    stage = GiftCardStage.DETAILS,
-                    amount = NumberTextFieldState(onValueChange = {}),
-                    spendableBalance = stringRes(Zatoshi(0)),
-                    message = "",
-                    messageGraphemes = 0,
-                    expiry = GiftExpiry.NEVER,
-                    quote = null,
-                    previewAmount = Zatoshi(250_000_000L),
-                    fiat = stringRes("$150.00"),
-                    link = null,
-                    isCopied = false,
-                    isAuthenticating = false,
-                    error = null,
-                    pinVerify = null,
-                    onAmountChange = {},
-                    onMessageChange = {},
-                    onExpiryChange = {},
-                    onContinue = {},
-                    onConfirm = {},
-                    onCopy = {},
-                    onShare = {},
-                    onBack = {},
-                    onOpenSavedCards = null,
-                )
-        )
-    }

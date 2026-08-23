@@ -8,6 +8,7 @@ import co.electriccoin.zcash.preference.api.PreferenceProvider
 import co.electriccoin.zcash.preference.model.entry.PreferenceKey
 import co.electriccoin.zcash.ui.screen.gift.model.GiftCardStatus
 import co.electriccoin.zcash.ui.screen.gift.model.GiftCardTransitionException
+import co.electriccoin.zcash.ui.screen.gift.model.GiftFundingLifecycle
 import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -22,6 +23,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -43,6 +46,26 @@ class GiftCardStorageProviderTest {
 
             assertEquals(card(), reread)
             assertEquals(MNEMONIC, reread?.mnemonic)
+        }
+
+    @Test
+    fun `decodes and round trips a record written before funding failure history`() =
+        runTest {
+            val preferences = InMemoryPreferenceProvider()
+            preferences.putString(PreferenceKey("gift_cards_v1"), PRE_FAILURE_HISTORY_BLOB)
+            val storage = storage(preferences)
+
+            val legacy = assertNotNull(storage.get(ID))
+            assertEquals(emptyList(), legacy.fundingFailures)
+            assertIs<GiftFundingLifecycle.Attempting>(legacy.fundingLifecycle)
+
+            storage.recordChecked(ID, LATER)
+
+            val rewritten = assertNotNull(storage.get(ID))
+            assertEquals(MNEMONIC, rewritten.mnemonic)
+            assertEquals(NOW, rewritten.fundingAttemptedAt)
+            assertEquals(emptyList(), rewritten.fundingFailures)
+            assertEquals(LATER, rewritten.lastCheckedAt)
         }
 
     @Test
@@ -245,7 +268,16 @@ class GiftCardStorageProviderTest {
         const val ACCOUNT = "account-1"
         const val TXID = "f00d"
         const val NOW = "2026-08-20T12:00:00Z"
+        const val LATER = "2026-08-20T12:05:00Z"
         const val CONCURRENT = 25
+
+        /** Exact shape written immediately before `fundingFailures` was added. */
+        val PRE_FAILURE_HISTORY_BLOB =
+            """
+            [{"id":"$ID","network":"main","address":"u1example","mnemonic":"$MNEMONIC",
+            "amountZatoshi":100000000,"birthdayHeight":2800000,"sourceAccountUuid":"$ACCOUNT",
+            "createdAt":"$NOW","updatedAt":"$NOW","status":"DRAFT","fundingAttemptedAt":"$NOW"}]
+            """.trimIndent()
 
         /** A valid card as some later build would write it, plus one field this one has never seen. */
         val NEWER_SCHEMA_BLOB =

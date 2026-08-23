@@ -45,6 +45,7 @@ object GiftCardLedger {
         ensure(cards.none { it.id == card.id }, "Gift card ${card.id} already exists")
         ensure(card.status == GiftCardStatus.DRAFT, "A new gift card starts as DRAFT")
         ensure(card.fundingTxid == null, "A new gift card has not been funded yet")
+        ensure(!card.hasFundingHistory, "A new gift card has no funding history")
         return cards.filterNot { it.isAbandonedDraft } + card
     }
 
@@ -58,7 +59,15 @@ object GiftCardLedger {
     fun setFundingAttemptedAt(cards: List<StoredGiftCard>, id: String, at: String): List<StoredGiftCard> =
         cards.replacing(id) { card ->
             ensure(!card.hasFundingAttempt, "Gift card $id funding was already started")
-            card.copy(fundingAttemptedAt = at, updatedAt = at)
+            ensure(!card.isFundingMined, "Gift card $id is already funded")
+            ensure(card.status != GiftCardStatus.CLAIMED, "Gift card $id is already collected")
+            card.copy(
+                fundingTxid = null,
+                fundingCreatedAt = null,
+                fundingAttemptedAt = at,
+                fundingSubmittedAt = null,
+                updatedAt = at,
+            )
         }
 
     /** Attaches the txid created after [setFundingAttemptedAt] established the durable gate. */
@@ -72,6 +81,10 @@ object GiftCardLedger {
             ensure(card.fundingAttemptedAt != null, "Gift card $id funding was not started durably")
             ensure(card.fundingTxid == null, "Gift card $id already has a funding transaction")
             ensure(fundingTxid.isNotBlank(), "Gift card $id needs a funding txid")
+            ensure(
+                card.fundingFailures.none { it.transactionId == fundingTxid },
+                "Gift card $id cannot reactivate an expired funding transaction"
+            )
             card.copy(
                 fundingTxid = fundingTxid,
                 fundingCreatedAt = at,
@@ -97,11 +110,125 @@ object GiftCardLedger {
                 card.fundingTxid == null || card.fundingTxid == fundingTxid,
                 "Gift card $id is already funded by a different transaction"
             )
+            ensure(
+                card.fundingFailures.none { it.transactionId == fundingTxid },
+                "Gift card $id cannot resubmit an expired funding transaction"
+            )
             card.copy(
                 fundingTxid = fundingTxid,
                 fundingCreatedAt = card.fundingCreatedAt,
                 fundingAttemptedAt = null,
                 fundingSubmittedAt = at,
+                updatedAt = at,
+            )
+        }
+
+    /**
+     * Resolves an attempt whose transaction was never created, after a fully-synced wallet read.
+     * The history record keeps a shared card visible while clearing the double-funding gate.
+     */
+    fun markFundingNotCreated(cards: List<StoredGiftCard>, id: String, at: String): List<StoredGiftCard> =
+        cards.replacing(id) { card ->
+            val lifecycle = card.fundingLifecycle
+            if (lifecycle is GiftFundingLifecycle.Retryable &&
+                lifecycle.lastFailure.reason == GiftFundingFailureReason.NO_TRANSACTION
+            ) {
+                return@replacing card
+            }
+            val attempt =
+                lifecycle as? GiftFundingLifecycle.Attempting
+                    ?: throw GiftCardTransitionException("Gift card $id is not awaiting transaction creation")
+            card.withFailedFunding(
+                failures =
+                    listOf(
+                        GiftFundingFailure(
+                            reason = GiftFundingFailureReason.NO_TRANSACTION,
+                            attemptedAt = attempt.attemptedAt,
+                            detectedAt = at,
+                        )
+                    ),
+                at = at,
+            )
+        }
+
+    /**
+     * Resolves every expired transaction belonging to the current attempt.
+     *
+     * Keeping all ids matters after repeated recovery: an old expired row must never be selected as
+     * the active transaction of a later attempt merely because it still targets the same address.
+     */
+    fun markFundingExpired(
+        cards: List<StoredGiftCard>,
+        id: String,
+        fundingTxids: Set<String>,
+        at: String,
+    ): List<StoredGiftCard> =
+        cards.replacing(id) { card ->
+            ensure(fundingTxids.isNotEmpty(), "Gift card $id needs an expired funding txid")
+            ensure(!card.isFundingMined, "Gift card $id funding already mined")
+            ensure(card.status != GiftCardStatus.CLAIMED, "Gift card $id is already collected")
+            card.fundingTxid?.let {
+                ensure(it in fundingTxids, "Gift card $id active funding transaction has not expired")
+            }
+            val attemptedAt = card.currentFundingAttemptedAt()
+            val failures =
+                fundingTxids
+                    .filterNot { txid -> card.fundingFailures.any { it.transactionId == txid } }
+                    .sorted()
+                    .map { txid ->
+                        GiftFundingFailure(
+                            reason = GiftFundingFailureReason.EXPIRED,
+                            attemptedAt = attemptedAt,
+                            transactionId = txid,
+                            detectedAt = at,
+                        )
+                    }
+            if (failures.isEmpty() && card.isFundingRetryable) return@replacing card
+            ensure(failures.isNotEmpty(), "Gift card $id has no new expired funding transaction")
+            card.withFailedFunding(failures, at)
+        }
+
+    /**
+     * Archives expired candidates and attaches the single still-live transaction atomically.
+     * This is recovery for a process death between SDK creation and recording the new txid.
+     */
+    fun replaceExpiredFunding(
+        cards: List<StoredGiftCard>,
+        id: String,
+        expiredFundingTxids: Set<String>,
+        activeFundingTxid: String,
+        at: String,
+    ): List<StoredGiftCard> =
+        cards.replacing(id) { card ->
+            ensure(activeFundingTxid.isNotBlank(), "Gift card $id needs an active funding txid")
+            ensure(activeFundingTxid !in expiredFundingTxids, "Gift card $id active transaction cannot be expired")
+            ensure(
+                card.fundingFailures.none { it.transactionId == activeFundingTxid },
+                "Gift card $id cannot reactivate an expired funding transaction"
+            )
+            ensure(!card.isFundingMined, "Gift card $id funding already mined")
+            card.fundingTxid?.let {
+                ensure(it in expiredFundingTxids, "Gift card $id cannot replace a live funding transaction")
+            }
+            val attemptedAt = card.currentFundingAttemptedAt()
+            val failures =
+                expiredFundingTxids
+                    .filterNot { txid -> card.fundingFailures.any { it.transactionId == txid } }
+                    .sorted()
+                    .map { txid ->
+                        GiftFundingFailure(
+                            reason = GiftFundingFailureReason.EXPIRED,
+                            attemptedAt = attemptedAt,
+                            transactionId = txid,
+                            detectedAt = at,
+                        )
+                    }
+            card.copy(
+                fundingTxid = activeFundingTxid,
+                fundingCreatedAt = at,
+                fundingAttemptedAt = attemptedAt ?: at,
+                fundingSubmittedAt = null,
+                fundingFailures = card.fundingFailures + failures,
                 updatedAt = at,
             )
         }
@@ -127,14 +254,20 @@ object GiftCardLedger {
                 card.fundingTxid == null || card.fundingTxid == fundingTxid,
                 "Gift card $id is already funded by a different transaction"
             )
+            ensure(
+                card.fundingFailures.none { it.transactionId == fundingTxid },
+                "Gift card $id cannot mine an expired funding transaction"
+            )
+            // The transaction is attached before the status advances. `copy` runs the record's
+            // invariants, and a card momentarily FUNDED with no txid behind it is precisely what
+            // they refuse — so advancing first throws on the very card this is here to confirm.
             card
-                .advancedTo(GiftCardStatus.FUNDED, at)
                 .copy(
                     fundingTxid = fundingTxid,
                     fundingAttemptedAt = null,
                     fundingSubmittedAt = card.fundingSubmittedAt ?: at,
                     fundingMinedAt = card.fundingMinedAt ?: at,
-                )
+                ).advancedTo(GiftCardStatus.FUNDED, at)
         }
 
     /**
@@ -180,6 +313,22 @@ object GiftCardLedger {
     // being walked back out of SHARED, and no ordering of callbacks can produce a regression.
     private fun StoredGiftCard.advancedTo(next: GiftCardStatus, at: String): StoredGiftCard =
         copy(status = maxOf(status, next), updatedAt = at)
+
+    private fun StoredGiftCard.currentFundingAttemptedAt(): String? =
+        fundingAttemptedAt ?: fundingCreatedAt ?: fundingSubmittedAt
+
+    private fun StoredGiftCard.withFailedFunding(
+        failures: List<GiftFundingFailure>,
+        at: String,
+    ) =
+        copy(
+            fundingTxid = null,
+            fundingCreatedAt = null,
+            fundingAttemptedAt = null,
+            fundingSubmittedAt = null,
+            fundingFailures = fundingFailures + failures,
+            updatedAt = at,
+        )
 
     private fun ensure(condition: Boolean, message: String) {
         if (!condition) throw GiftCardTransitionException(message)

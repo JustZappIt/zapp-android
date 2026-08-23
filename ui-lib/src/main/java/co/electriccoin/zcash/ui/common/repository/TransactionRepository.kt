@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEmpty
 import kotlinx.coroutines.flow.onStart
@@ -73,7 +74,24 @@ interface TransactionRepository {
     /** Finds a send to [recipient] in a specific account, including pending transactions. */
     suspend fun findAccountSendByRecipient(accountUuid: String, recipient: String): TransactionOverview?
 
+    /**
+     * Reads transactions and their recipients only while the owning synchronizer is fully synced.
+     * An empty result is therefore positive evidence, unlike a transient empty flow during startup.
+     */
+    suspend fun getSyncedAccountTransactionSnapshot(accountUuid: String): SyncedAccountTransactionSnapshot
+
     suspend fun resolveWalletAddress(address: String): WalletAddress?
+}
+
+data class SyncedAccountTransactionSnapshot(
+    val transactions: List<TransactionOverview>,
+    val recipientsByTransactionId: Map<String, Set<String>>,
+) {
+    fun sendsTo(recipient: String): List<TransactionOverview> =
+        transactions.filter { transaction ->
+            transaction.isSentTransaction &&
+                recipientsByTransactionId[transaction.txId.txIdString()].orEmpty().contains(recipient)
+        }
 }
 
 @Suppress("TooManyFunctions")
@@ -475,6 +493,39 @@ class TransactionRepositoryImpl(
             .firstOrNull { transaction ->
                 synchronizer.getRecipients(transaction).toList().any { it.addressValue == recipient }
             }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override suspend fun getSyncedAccountTransactionSnapshot(
+        accountUuid: String,
+    ): SyncedAccountTransactionSnapshot {
+        val uuid =
+            requireNotNull(resolveAccountUuid(accountUuid)) {
+                "Gift card source account $accountUuid is unavailable"
+            }
+        return synchronizerProvider
+            .synchronizer
+            .filterNotNull()
+            .flatMapLatest { synchronizer ->
+                // `mapLatest` is load-bearing: if sync leaves SYNCED while either database read is
+                // in flight, that read is cancelled and its absence cannot authorize a retry.
+                synchronizer.status
+                    .mapLatest { status ->
+                        if (status != Synchronizer.Status.SYNCED) {
+                            null
+                        } else {
+                            val transactions = synchronizer.getTransactions(uuid).first()
+                            val recipients = synchronizer.getRecipients()
+                            SyncedAccountTransactionSnapshot(
+                                transactions = normalizeTransactions(transactions, status),
+                                recipientsByTransactionId =
+                                    recipients.mapKeys { it.key.txIdString() }.mapValues { entry ->
+                                        entry.value.mapNotNullTo(mutableSetOf()) { it.addressValue }
+                                    },
+                            )
+                        }
+                    }.filterNotNull()
+            }.first()
     }
 
     override suspend fun resolveWalletAddress(address: String): WalletAddress? =

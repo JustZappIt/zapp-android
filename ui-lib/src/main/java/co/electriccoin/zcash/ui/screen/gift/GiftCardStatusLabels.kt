@@ -14,6 +14,7 @@ import co.electriccoin.zcash.ui.R
 internal fun GiftCardListStatus.chipRes(hasBeenChecked: Boolean = false, isCheckRecent: Boolean = false) =
     when (this) {
         GiftCardListStatus.UNFUNDED -> R.string.gift_card_chip_unfunded
+        GiftCardListStatus.RETRYABLE -> R.string.gift_card_chip_retryable
         GiftCardListStatus.UNRESOLVED -> R.string.gift_card_chip_unresolved
         GiftCardListStatus.SUBMITTED -> R.string.gift_card_chip_submitted
         GiftCardListStatus.FUNDED -> R.string.gift_card_chip_funded
@@ -32,6 +33,7 @@ private fun sharedChipRes(hasBeenChecked: Boolean, isCheckRecent: Boolean) =
 internal fun GiftCardListStatus.labelRes() =
     when (this) {
         GiftCardListStatus.UNFUNDED -> R.string.gift_card_list_status_unfunded
+        GiftCardListStatus.RETRYABLE -> R.string.gift_card_list_status_retryable
         GiftCardListStatus.UNRESOLVED -> R.string.gift_card_list_status_unresolved
         GiftCardListStatus.SUBMITTED -> R.string.gift_card_list_status_submitted
         GiftCardListStatus.FUNDED -> R.string.gift_card_list_status_funded

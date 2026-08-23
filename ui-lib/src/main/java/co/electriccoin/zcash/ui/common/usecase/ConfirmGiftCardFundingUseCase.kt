@@ -5,116 +5,228 @@ package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.model.TransactionOverview
 import cash.z.ecc.android.sdk.model.TransactionState
-import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.bestEffort
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
+import co.electriccoin.zcash.ui.common.provider.GiftFundingOperationLock
+import co.electriccoin.zcash.ui.common.repository.SyncedAccountTransactionSnapshot
 import co.electriccoin.zcash.ui.common.repository.TransactionRepository
+import co.electriccoin.zcash.ui.screen.gift.model.GiftFundingLifecycle
 import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlin.time.Clock
 
 /**
- * Advances a submitted card from draft to funded, once its funding transaction has mined.
+ * Reconciles each locally-created card with the main wallet's authoritative transaction database.
  *
- * Submission alone is not funding: a transaction in the mempool can still be dropped, and a card
- * recorded as funded with nothing behind it is a card the sender believes exists and the recipient
- * cannot claim. Until this runs, the card stays a draft carrying its txid — which is already enough
- * for the sender to share it, and already counts as unshared funds against account deletion.
+ * A retry is enabled only from terminal evidence: either the fully-synced database contains no
+ * transaction created after the durable start marker, or every candidate belonging to the attempt
+ * is [TransactionState.Expired]. Pending and temporarily unavailable data remain unresolved.
  */
+@Suppress("TooManyFunctions")
 class ConfirmGiftCardFundingUseCase(
     private val giftCardStorageProvider: GiftCardStorageProvider,
     private val transactionRepository: TransactionRepository,
+    private val giftFundingOperationLock: GiftFundingOperationLock,
 ) {
-    /**
-     * Suspends until [fundingTxid] appears with a block behind it, then marks [cardId] funded.
-     *
-     * Cancelling this loses nothing: [reconcile] picks the card up on the next pass.
-     */
+    /** Waits for one known funding transaction to become either confirmed or safely retryable. */
     suspend operator fun invoke(cardId: String, fundingTxid: String) {
         val card = giftCardStorageProvider.get(cardId) ?: return
-        // Success is the repository's name for "mined" — TransactionRepository maps a non-null
-        // minedHeight to Confirmed and Confirmed to Success. Pending and Failed both keep waiting.
-        transactionRepository
-            .observeAccountTransaction(card.sourceAccountUuid, fundingTxid)
-            .filterNotNull()
-            .first { it.isSentTransaction && it.transactionState == TransactionState.Confirmed }
-        markFunded(cardId, fundingTxid)
+        val terminal =
+            transactionRepository
+                .observeAccountTransaction(card.sourceAccountUuid, fundingTxid)
+                .filterNotNull()
+                .first {
+                    it.isSentTransaction &&
+                        it.transactionState != TransactionState.Pending
+                }
+
+        giftFundingOperationLock.withLock(cardId) {
+            val current = giftCardStorageProvider.get(cardId) ?: return@withLock
+            if (!current.needsFundingReconciliation() || current.fundingTxid != fundingTxid) {
+                return@withLock
+            }
+            when (terminal.transactionState) {
+                TransactionState.Confirmed -> markFunded(cardId, fundingTxid)
+                TransactionState.Expired -> {
+                    // Observe may emit during startup. Re-read from the fully-synced snapshot before
+                    // allowing another spend; `Expired` there is the SDK's public terminal state.
+                    val snapshot =
+                        transactionRepository.getSyncedAccountTransactionSnapshot(current.sourceAccountUuid)
+                    reconcileKnownTransaction(current, fundingTxid, snapshot)
+                }
+
+                TransactionState.Pending -> Unit
+            }
+        }
     }
 
     /**
-     * Sweeps every card whose funding is not yet known to have mined against transactions already on
-     * chain.
+     * Recovers every active attempt after process death.
      *
-     * This is what recovers a card whose [invoke] never got to finish, because the process died or
-     * the sender left the screen between broadcast and the next block — and, for a card flagged
-     * [StoredGiftCard.fundingAttemptedAt], including a process death after the durable start marker
-     * but before the locally-created txid was attached to the card.
-     *
-     * Scoped by [StoredGiftCard.isFundingMined] rather than by status, because the two are not the
-     * same question and a status-scoped sweep skipped the cards that needed it most: sharing
-     * outranks funded, so a sender who handed the link over in the submit-to-mine window left a card
-     * that no pass would ever look at again.
+     * The per-card operation lock is shared with [FundGiftCardUseCase]. It prevents a synced empty
+     * snapshot from clearing the durable marker while transaction creation is still running in this
+     * process. After process death there is no creator left, so a synced absence is conclusive.
      */
-    suspend fun reconcile() {
-        val cards = giftCardStorageProvider.getAll()
-        val submitted = cards.filter { it.needsTxidReconciliation() }
-        // Funding started, outcome never seen — the process can die during creation, txid
-        // persistence, or submission. There is no attached txid, so match by destination instead.
-        val unresolved = cards.filter { it.needsRecipientReconciliation() }
-        if (submitted.isEmpty() && unresolved.isEmpty()) return
-
-        val transactionsByAccount =
-            (submitted + unresolved)
-                .map { it.sourceAccountUuid }
-                .distinct()
-                .associateWith { transactionRepository.getAccountTransactions(it) }
-
-        submitted.forEach { reconcileTxid(it, transactionsByAccount[it.sourceAccountUuid].orEmpty()) }
-        unresolved.forEach { reconcileRecipient(it) }
-    }
-
-    private fun StoredGiftCard.needsTxidReconciliation() =
-        fundingTxid != null && (isFundingSubmitted || fundingAttemptedAt != null) && !isFundingMined
-
-    private fun StoredGiftCard.needsRecipientReconciliation() =
-        fundingTxid == null && fundingAttemptedAt != null
-
-    private suspend fun reconcileTxid(
-        card: StoredGiftCard,
-        transactions: List<TransactionOverview>,
-    ) {
-        val txid = card.fundingTxid ?: return
-        val isMined =
-            transactions.any {
-                it.txId.txIdString() == txid &&
-                    it.isSentTransaction &&
-                    it.transactionState == TransactionState.Confirmed
+    internal suspend fun reconcile(): List<GiftFundingWatch> {
+        val watches = linkedSetOf<GiftFundingWatch>()
+        giftCardStorageProvider
+            .getAll()
+            .filter { it.needsFundingReconciliation() }
+            .forEach { snapshot ->
+                val watch =
+                    giftFundingOperationLock.withLock(snapshot.id) {
+                        val card = giftCardStorageProvider.get(snapshot.id) ?: return@withLock null
+                        if (!card.needsFundingReconciliation()) return@withLock null
+                        val transactions =
+                            transactionRepository.getSyncedAccountTransactionSnapshot(card.sourceAccountUuid)
+                        reconcile(card, transactions)
+                        giftCardStorageProvider
+                            .get(card.id)
+                            ?.takeIf { it.needsFundingReconciliation() }
+                            ?.fundingTxid
+                            ?.let { GiftFundingWatch(card.id, it) }
+                    }
+                watch?.let(watches::add)
             }
-        if (isMined) markFunded(card.id, txid)
+        return watches.toList()
     }
 
-    private suspend fun reconcileRecipient(card: StoredGiftCard) {
-        // The card's address is single-use and was minted for this one transaction, so a send to it
-        // is that broadcast and nothing else. A pending one counts: the money has left.
-        val funding =
-            transactionRepository.findAccountSendByRecipient(card.sourceAccountUuid, card.address)
+    /**
+     * Reconciles startup state, then keeps every recovered transaction observed in this caller's
+     * scope. Without this second phase, a transaction first seen Pending would remain stuck until
+     * the screen was recreated even after it later confirmed or expired.
+     */
+    suspend fun reconcileAndObserve() =
+        supervisorScope {
+            reconcile().forEach { watch ->
+                launch {
+                    bestEffort("Gift card ${watch.cardId} funding observation stopped") {
+                        invoke(watch.cardId, watch.fundingTxid)
+                    }
+                }
+            }
+        }
+
+    private suspend fun reconcile(
+        card: StoredGiftCard,
+        snapshot: SyncedAccountTransactionSnapshot,
+    ) {
+        val txid = card.fundingTxid
+        if (txid == null) {
+            reconcileAttemptWithoutTxid(card, snapshot)
+        } else {
+            reconcileKnownTransaction(card, txid, snapshot)
+        }
+    }
+
+    private suspend fun reconcileAttemptWithoutTxid(
+        card: StoredGiftCard,
+        snapshot: SyncedAccountTransactionSnapshot,
+    ) {
+        val historical = card.fundingFailures.mapNotNullTo(mutableSetOf()) { it.transactionId }
+        val candidates = snapshot.sendsTo(card.address).filterNot { it.txId.txIdString() in historical }
+        val live = candidates.filter { it.transactionState != TransactionState.Expired }
+        // One proposal produces one transaction. More than one live candidate is corrupted or
+        // externally-created evidence; choosing either could hide a second spend, so fail closed.
+        if (live.size > 1) return
+        live.singleOrNull()?.let { transaction ->
+            val txid = transaction.txId.txIdString()
+            attach(card.id, txid)
+            if (transaction.transactionState == TransactionState.Confirmed) markFunded(card.id, txid)
+            return
+        }
+
+        val expiredCandidates = candidates.withState(TransactionState.Expired)
+        val expired = expiredCandidates.mapTo(mutableSetOf()) { it.txId.txIdString() }
+        if (expired.isNotEmpty()) {
+            markExpired(card.id, expired)
+        } else {
+            markNotCreated(card.id)
+        }
+    }
+
+    private suspend fun reconcileKnownTransaction(
+        card: StoredGiftCard,
+        txid: String,
+        snapshot: SyncedAccountTransactionSnapshot,
+    ) {
+        val current =
+            snapshot.transactions.firstOrNull { it.txId.txIdString() == txid && it.isSentTransaction }
                 ?: return
-        val txid = funding.txId.txIdString()
-        bestEffort("Gift card ${card.id} funding could not be reattached") {
-            giftCardStorageProvider.recordFundingSubmitted(
+        when (current.transactionState) {
+            TransactionState.Confirmed -> markFunded(card.id, txid)
+            TransactionState.Pending -> Unit
+            TransactionState.Expired -> reconcileExpiredCurrent(card, txid, snapshot)
+        }
+    }
+
+    private suspend fun reconcileExpiredCurrent(
+        card: StoredGiftCard,
+        currentTxid: String,
+        snapshot: SyncedAccountTransactionSnapshot,
+    ) {
+        val historical = card.fundingFailures.mapNotNullTo(mutableSetOf()) { it.transactionId }
+        val otherCandidates =
+            snapshot
+                .sendsTo(card.address)
+                .filterNot { it.txId.txIdString() == currentTxid || it.txId.txIdString() in historical }
+        val live = otherCandidates.filter { it.transactionState != TransactionState.Expired }
+        if (live.size > 1) return
+        val expiredCandidates = otherCandidates.withState(TransactionState.Expired)
+        val expired =
+            expiredCandidates
+                .mapTo(mutableSetOf(currentTxid)) { it.txId.txIdString() }
+        val replacement = live.singleOrNull()
+
+        if (replacement == null) {
+            markExpired(card.id, expired)
+            return
+        }
+
+        val replacementTxid = replacement.txId.txIdString()
+        bestEffort("Gift card ${card.id} funding transaction could not be replaced") {
+            giftCardStorageProvider.replaceExpiredFunding(
                 id = card.id,
-                fundingTxid = txid,
+                expiredFundingTxids = expired,
+                activeFundingTxid = replacementTxid,
                 at = Clock.System.now().toString(),
             )
         }
-        if (funding.transactionState == TransactionState.Confirmed) markFunded(card.id, txid)
+        if (replacement.transactionState == TransactionState.Confirmed) {
+            markFunded(card.id, replacementTxid)
+        }
+    }
+
+    private suspend fun attach(cardId: String, fundingTxid: String) {
+        bestEffort("Gift card $cardId funding could not be reattached") {
+            giftCardStorageProvider.recordFundingCreated(
+                id = cardId,
+                fundingTxid = fundingTxid,
+                at = Clock.System.now().toString(),
+            )
+        }
+    }
+
+    private suspend fun markNotCreated(cardId: String) {
+        bestEffort("Gift card $cardId missing funding transaction could not be resolved") {
+            giftCardStorageProvider.markFundingNotCreated(cardId, Clock.System.now().toString())
+        }
+    }
+
+    private suspend fun markExpired(cardId: String, fundingTxids: Set<String>) {
+        bestEffort("Gift card $cardId expired funding could not be resolved") {
+            giftCardStorageProvider.markFundingExpired(
+                id = cardId,
+                fundingTxids = fundingTxids,
+                at = Clock.System.now().toString(),
+            )
+        }
     }
 
     private suspend fun markFunded(cardId: String, fundingTxid: String) {
-        // A losing race with another writer is a legitimate outcome, not a failure: the ledger
-        // advances by maximum, so whichever call lands second is a no-op on an already-funded card.
         bestEffort("Gift card $cardId could not be marked funded") {
             giftCardStorageProvider.markFunded(
                 id = cardId,
@@ -124,3 +236,24 @@ class ConfirmGiftCardFundingUseCase(
         }
     }
 }
+
+internal data class GiftFundingWatch(
+    val cardId: String,
+    val fundingTxid: String,
+)
+
+private fun StoredGiftCard.needsFundingReconciliation() =
+    !isFundingMined &&
+        when (fundingLifecycle) {
+            is GiftFundingLifecycle.Attempting,
+            is GiftFundingLifecycle.Created,
+            is GiftFundingLifecycle.Submitted,
+            -> true
+
+            GiftFundingLifecycle.NeverStarted,
+            is GiftFundingLifecycle.Retryable,
+            is GiftFundingLifecycle.Mined,
+            -> false
+        }
+
+private fun List<TransactionOverview>.withState(state: TransactionState) = filter { it.transactionState == state }

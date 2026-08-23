@@ -5,8 +5,6 @@ package co.electriccoin.zcash.ui.screen.gift
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import cash.z.ecc.android.sdk.ext.convertZecToZatoshi
-import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
@@ -34,8 +32,11 @@ import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.gift.model.GiftAmount
+import co.electriccoin.zcash.ui.screen.gift.model.GiftCardStatus
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkCodec
 import co.electriccoin.zcash.ui.screen.gift.model.GiftMessage
+import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
 import co.electriccoin.zcash.ui.screen.gift.model.toLinkPayload
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -49,7 +50,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.math.BigDecimal
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 
@@ -71,13 +71,14 @@ class GiftCardVM(
     accountDataSource: AccountDataSource,
     exchangeRateRepository: ExchangeRateRepository,
     swapRepository: SwapRepository,
-    giftCardStorageProvider: GiftCardStorageProvider,
+    private val giftCardStorageProvider: GiftCardStorageProvider,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     private val snapshot = MutableStateFlow(GiftCardSnapshot())
 
     private var prepareJob: Job? = null
     private var fundJob: Job? = null
+    private var handOffJob: Job? = null
     private var copyFeedbackJob: Job? = null
 
     /** What the current draft was minted for, so backing out to edit does not strand it. */
@@ -104,7 +105,7 @@ class GiftCardVM(
             current.toState(
                 pinVerify = pin,
                 spendableBalance = account?.spendableShieldedBalance?.let { stringRes(it) },
-                hasStoredCards = storedCards.isNotEmpty(),
+                storedCards = storedCards,
                 rate = rate,
             )
         }.stateIn(
@@ -116,7 +117,7 @@ class GiftCardVM(
                 GiftCardSnapshot().toState(
                     pinVerify = null,
                     spendableBalance = null,
-                    hasStoredCards = false,
+                    storedCards = emptyList(),
                     rate = null,
                 ),
         )
@@ -124,31 +125,43 @@ class GiftCardVM(
     private fun GiftCardSnapshot.toState(
         pinVerify: PinVerifyState?,
         spendableBalance: StringResource?,
-        hasStoredCards: Boolean,
+        storedCards: List<StoredGiftCard>,
         rate: ZecFiatRate?,
     ): GiftCardState {
+        val storedCard = quote?.card?.id?.let { id -> storedCards.firstOrNull { it.id == id } }
+        val visibleStage =
+            if (stage == GiftCardStage.READY && storedCard?.canBeHandedOff != true) {
+                GiftCardStage.UNAVAILABLE
+            } else {
+                stage
+            }
         // From DETAILS, and from the one REVIEW the sender cannot fund their way out of.
         val canOpenSavedCards =
-            hasStoredCards &&
-                when (stage) {
+            storedCards.isNotEmpty() &&
+                when (visibleStage) {
                     GiftCardStage.DETAILS -> true
                     GiftCardStage.REVIEW -> error == GiftCardError.SUBMIT_UNCERTAIN
+                    GiftCardStage.UNAVAILABLE -> true
                     else -> false
                 }
         // What is typed wins on DETAILS, even when a quote is already in hand: backing out of
         // REVIEW keeps the quote, and preferring it there froze the preview on the old figure
         // while the sender typed a new one.
-        val typed = runCatching { amount.amount?.convertZecToZatoshi() }.getOrNull()
-        val shown = if (stage == GiftCardStage.DETAILS) typed else quote?.cardAmount ?: typed
+        val typed = GiftAmount.fromZec(amount.amount)?.zatoshi
+        val shown = if (visibleStage == GiftCardStage.DETAILS) typed else quote?.cardAmount ?: typed
         return GiftCardState(
-            stage = stage,
+            stage = visibleStage,
             previewAmount = shown,
             // Null wherever the wallet has no rate — opted out, or not loaded yet. Then no fiat.
             fiat = shown?.let { zec -> rate?.toFiatString(zec) },
             amount =
                 NumberTextFieldState(
                     innerState = amount,
-                    isEnabled = stage == GiftCardStage.DETAILS,
+                    isEnabled = visibleStage == GiftCardStage.DETAILS,
+                    explicitError =
+                        stringRes(R.string.gift_card_amount_error_invalid)
+                            .takeIf { amount.amount != null && typed == null },
+                    defaultNumberError = stringRes(R.string.gift_card_amount_error_invalid),
                     onValueChange = ::onAmountChange,
                 ),
             spendableBalance = spendableBalance,
@@ -176,7 +189,7 @@ class GiftCardVM(
     init {
         // Picks up any card whose funding mined while nothing was watching, because a previous run
         // was killed between broadcast and the next block.
-        viewModelScope.launch { confirmGiftCardFunding.reconcile() }
+        viewModelScope.launch { confirmGiftCardFunding.reconcileAndObserve() }
     }
 
     private fun onAmountChange(amount: NumberTextFieldInnerState) =
@@ -190,14 +203,14 @@ class GiftCardVM(
         val current = snapshot.value
         if (prepareJob?.isActive == true || current.stage != GiftCardStage.DETAILS) return
 
-        val zec = current.amount.amount
-        if (zec == null || zec <= BigDecimal.ZERO) {
+        val amount = GiftAmount.fromZec(current.amount.amount)
+        if (amount == null) {
             snapshot.update { it.copy(error = GiftCardError.AMOUNT_INVALID) }
             return
         }
 
         val inputs =
-            GiftCardInputs(amount = zec.convertZecToZatoshi(), message = current.note(), expiry = current.expiry)
+            GiftCardInputs(amount = amount, message = current.note(), expiry = current.expiry)
         snapshot.update { it.copy(stage = GiftCardStage.PREPARING, error = null) }
         prepareJob = viewModelScope.launch { prepare(inputs) }
     }
@@ -212,7 +225,7 @@ class GiftCardVM(
         runCatching {
             val quote =
                 fundGiftCard.prepare(
-                    amount = inputs.amount,
+                    amount = inputs.amount.zatoshi,
                     message = inputs.message,
                     expiresAt =
                         inputs.expiry.days
@@ -262,53 +275,85 @@ class GiftCardVM(
                 viewModelScope.launch { confirmGiftCardFunding(quote.card.id, txid) }
             }.onFailure { throwable ->
                 if (throwable is CancellationException) throw throwable
-                snapshot.update { it.copy(stage = GiftCardStage.REVIEW, error = throwable.toGiftCardError()) }
+                val error = throwable.toGiftCardError()
+                snapshot.update { it.copy(stage = GiftCardStage.REVIEW, error = error) }
+                if (error == GiftCardError.SUBMIT_UNCERTAIN) {
+                    viewModelScope.launch { confirmGiftCardFunding.reconcileAndObserve() }
+                }
             }
     }
 
     private fun onCopy() {
-        val current = snapshot.value
-        val link = current.link.takeIf { current.stage == GiftCardStage.READY } ?: return
-        val cardId = current.quote?.card?.id ?: return
-        copyToClipboard(link, isSensitive = true)
-        snapshot.update { it.copy(isCopied = true, error = null) }
-        // The clipboard is a hand-off too. Recording it is what eventually unblocks deleting the
-        // source account for a card that has in fact already been given away — and if that record
-        // does not save, the sender is the only one who can do anything about it. Launched after
-        // the copy feedback is set, so a failure lands on top of it rather than under it.
-        viewModelScope.launch {
-            if (!shareGiftLink.markHandedOut(cardId)) {
-                snapshot.update { it.copy(error = GiftCardError.HANDOFF_FAILED) }
-            }
-        }
-        copyFeedbackJob?.cancel()
-        copyFeedbackJob =
+        if (handOffJob?.isActive == true) return
+        handOffJob =
             viewModelScope.launch {
-                delay(COPY_FEEDBACK_DURATION_MS)
-                snapshot.update { it.copy(isCopied = false) }
+                val handOff = currentHandOff() ?: return@launch
+                copyToClipboard(handOff.link, isSensitive = true)
+                snapshot.update { it.copy(isCopied = true, error = null) }
+                // The clipboard is a hand-off too. Recording it is what eventually unblocks
+                // deleting the source account for a card that has in fact already been given away.
+                if (!shareGiftLink.markHandedOut(handOff.cardId)) {
+                    snapshot.update { it.copy(error = GiftCardError.HANDOFF_FAILED) }
+                }
+                copyFeedbackJob?.cancel()
+                copyFeedbackJob =
+                    viewModelScope.launch {
+                        delay(COPY_FEEDBACK_DURATION_MS)
+                        snapshot.update { it.copy(isCopied = false) }
+                    }
             }
     }
 
     private fun onShare(sharePickerText: String) {
-        val current = snapshot.value
-        val link = current.link.takeIf { current.stage == GiftCardStage.READY } ?: return
-        val cardId = current.quote?.card?.id ?: return
-        snapshot.update { it.copy(error = null) }
-        viewModelScope.launch {
-            if (!shareGiftLink(cardId = cardId, link = link, sharePickerText = sharePickerText)) {
-                snapshot.update { it.copy(error = GiftCardError.SHARE_FAILED) }
+        if (handOffJob?.isActive == true) return
+        handOffJob =
+            viewModelScope.launch {
+                val handOff = currentHandOff() ?: return@launch
+                snapshot.update { it.copy(error = null) }
+                if (
+                    !shareGiftLink(
+                        cardId = handOff.cardId,
+                        link = handOff.link,
+                        sharePickerText = sharePickerText,
+                    )
+                ) {
+                    snapshot.update { it.copy(error = GiftCardError.SHARE_FAILED) }
+                }
             }
+    }
+
+    /** Re-reads the custody record immediately before its bearer link can leave the device. */
+    private suspend fun currentHandOff(): GiftCardHandOff? {
+        val current = snapshot.value
+        val link = current.link.takeIf { current.stage == GiftCardStage.READY }
+        val cardId = current.quote?.card?.id
+        if (link == null || cardId == null) return null
+        val card =
+            runCatching { giftCardStorageProvider.get(cardId) }
+                .getOrElse { throwable ->
+                    if (throwable is CancellationException) throw throwable
+                    Twig.error(throwable) { "Gift card $cardId status could not be read" }
+                    null
+                }
+        return if (card?.canBeHandedOff == true) {
+            GiftCardHandOff(cardId = cardId, link = link)
+        } else {
+            snapshot.update { latest ->
+                if (latest.stage == GiftCardStage.READY && latest.quote?.card?.id == cardId) {
+                    latest.copy(stage = GiftCardStage.UNAVAILABLE, isCopied = false, error = null)
+                } else {
+                    latest
+                }
+            }
+            null
         }
     }
 
     private fun onBack() {
-        when (snapshot.value.stage) {
-            GiftCardStage.DETAILS -> navigationRouter.back()
-
-            GiftCardStage.REVIEW -> snapshot.update { it.copy(stage = GiftCardStage.DETAILS, error = null) }
-
-            // Funding is irreversible, and the ready screen is the only place the link is shown.
-            GiftCardStage.PREPARING, GiftCardStage.FUNDING, GiftCardStage.READY -> Unit
+        when (snapshot.value.stage.backAction) {
+            GiftCardBackAction.EXIT_FLOW -> navigationRouter.back()
+            GiftCardBackAction.EDIT_DETAILS -> snapshot.update { it.copy(stage = GiftCardStage.DETAILS, error = null) }
+            GiftCardBackAction.BLOCK -> Unit
         }
     }
 
@@ -319,10 +364,19 @@ class GiftCardVM(
 
 /** The inputs a draft was minted for. Re-minting on an unchanged set would strand the old draft. */
 private data class GiftCardInputs(
-    val amount: Zatoshi,
+    val amount: GiftAmount,
     val message: String?,
     val expiry: GiftExpiry,
 )
+
+private data class GiftCardHandOff(
+    val cardId: String,
+    val link: String,
+)
+
+/** A bearer link is useful only while this exact persisted card may still hold incoming funds. */
+private val StoredGiftCard.canBeHandedOff: Boolean
+    get() = status != GiftCardStatus.CLAIMED && hasFundingAttempt
 
 private data class GiftCardSnapshot(
     val stage: GiftCardStage = GiftCardStage.DETAILS,

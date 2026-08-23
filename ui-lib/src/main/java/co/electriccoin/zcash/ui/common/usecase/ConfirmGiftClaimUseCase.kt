@@ -107,23 +107,30 @@ class ConfirmGiftClaimUseCase(
             receivedGiftStorageProvider
                 .getAll()
                 .firstOrNull { it.address == snapshot.address && !it.isSettled }
-                ?: return
-        val payload = receipt.claimLink ?: return
-        if (!receipt.isFinalized && !hasFinalDestinationTransactions(receipt)) return
-        val synchronizer = synchronizerProvider.getSynchronizer()
-        if (!receipt.isFinalized) {
-            val result =
-                giftClaimDataSource.inspectFinalization(
-                    payload = payload,
-                    cardAddress = receipt.address,
-                    network = synchronizer.network,
-                    endpoint = persistableWalletProvider.requirePersistableWallet().endpoint,
-                )
-            if (!result.canSettle) return
-            receivedGiftStorageProvider.markFinalized(receipt.address)
+        val payload = receipt?.claimLink
+
+        if (receipt != null && payload != null) {
+            val hasFinalDestination = receipt.isFinalized || hasFinalDestinationTransactions(receipt)
+            if (hasFinalDestination) {
+                val synchronizer = synchronizerProvider.getSynchronizer()
+                val canSettle =
+                    receipt.isFinalized ||
+                        giftClaimDataSource
+                            .inspectFinalization(
+                                payload = payload,
+                                cardAddress = receipt.address,
+                                network = synchronizer.network,
+                                endpoint = persistableWalletProvider.requirePersistableWallet().endpoint,
+                            ).canSettle
+                if (canSettle && !receipt.isFinalized) {
+                    receivedGiftStorageProvider.markFinalized(receipt.address)
+                }
+                if (canSettle) {
+                    giftClaimDataSource.cleanupFinalizedClaim(payload, receipt.address, synchronizer.network)
+                    receivedGiftStorageProvider.settle(receipt.address)
+                }
+            }
         }
-        giftClaimDataSource.cleanupFinalizedClaim(payload, receipt.address, synchronizer.network)
-        receivedGiftStorageProvider.settle(receipt.address)
     }
 
     private suspend fun hasFinalDestinationTransactions(receipt: ReceivedGift): Boolean {

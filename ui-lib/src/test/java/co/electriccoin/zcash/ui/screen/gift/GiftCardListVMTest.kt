@@ -4,20 +4,26 @@
 package co.electriccoin.zcash.ui.screen.gift
 
 import cash.z.ecc.android.sdk.model.ZcashNetwork
+import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.provider.ApplicationStateProvider
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.SwapAssetsData
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
+import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.common.usecase.CheckGiftCardClaimedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftClaimUseCase
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
+import co.electriccoin.zcash.ui.common.usecase.FundGiftCardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GiftCardCheckResult
+import co.electriccoin.zcash.ui.common.usecase.GiftFundingQuote
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.screen.gift.model.GiftCardStatus
+import co.electriccoin.zcash.ui.screen.gift.model.GiftFundingFailure
+import co.electriccoin.zcash.ui.screen.gift.model.GiftFundingFailureReason
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkCodec
 import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
 import io.mockk.coEvery
@@ -134,6 +140,69 @@ class GiftCardListVMTest {
             // The money may already have gone, and then this link is the only route to it.
             assertEquals(GiftCardListStatus.UNRESOLVED, item.status)
             assertNotNull(item.handOff)
+        }
+
+    @Test
+    fun `shared expired card stays visible as retryable with no hand-off`() =
+        runTest {
+            val fixture =
+                fixture(
+                    card(
+                        status = GiftCardStatus.SHARED,
+                        fundingFailures = listOf(expiredFailure()),
+                    )
+                )
+
+            val item = collectState(fixture).items.single()
+
+            assertEquals(GiftCardListStatus.RETRYABLE, item.status)
+            assertNull(item.handOff)
+            assertEquals(GiftCheckControl.Hidden, item.check)
+            assertIs<GiftFundingControl.Ready>(item.funding)
+        }
+
+    @Test
+    fun `active retry funding overrides a shared delivery status`() =
+        runTest {
+            val fixture =
+                fixture(
+                    card(
+                        status = GiftCardStatus.SHARED,
+                        fundingTxid = TXID,
+                        fundingAttemptedAt = ATTEMPTED_AT,
+                        fundingFailures = listOf(expiredFailure()),
+                    )
+                )
+
+            assertEquals(GiftCardListStatus.UNRESOLVED, collectState(fixture).items.single().status)
+        }
+
+    @Test
+    fun `retry is priced for confirmation before it can submit`() =
+        runTest {
+            val retryable = card(status = GiftCardStatus.SHARED, fundingFailures = listOf(expiredFailure()))
+            val fixture = fixture(retryable)
+            val quote =
+                GiftFundingQuote(
+                    card = retryable,
+                    proposal = mockk(relaxed = true),
+                    claimFeeReserve = Zatoshi(10_000L),
+                    networkFee = Zatoshi(10_000L),
+                )
+            coEvery { fixture.fundGiftCard.prepare(any(), any(), any(), any()) } returns quote
+            coEvery { fixture.fundGiftCard.submit(quote) } returns TXID
+
+            assertIs<GiftFundingControl.Ready>(collectState(fixture).items.single().funding).onReview()
+            advanceUntilIdle()
+
+            val review = assertNotNull(collectState(fixture).fundingReview)
+            coVerify(exactly = 0) { fixture.fundGiftCard.submit(any()) }
+
+            review.onConfirm()
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { fixture.secretAuthGate.authenticate(any(), any()) }
+            coVerify(exactly = 1) { fixture.fundGiftCard.submit(quote) }
         }
 
     @Test
@@ -287,6 +356,11 @@ class GiftCardListVMTest {
             }
         val copyToClipboard = mockk<CopyToClipboardUseCase>(relaxed = true)
         val checkGiftCardClaimed = mockk<CheckGiftCardClaimedUseCase>(relaxed = true)
+        val fundGiftCard = mockk<FundGiftCardUseCase>(relaxed = true)
+        val secretAuthGate =
+            mockk<SecretAuthGate>().also {
+                coEvery { it.authenticate(any(), any()) } returns true
+            }
 
         /** Opted out and no catalog price, so nothing here depends on a formatted fiat figure. */
         private val exchangeRate =
@@ -316,6 +390,7 @@ class GiftCardListVMTest {
                 confirmGiftCardFunding = mockk<ConfirmGiftCardFundingUseCase>(relaxed = true),
                 confirmGiftClaim = mockk<ConfirmGiftClaimUseCase>(relaxed = true),
                 checkGiftCardClaimed = checkGiftCardClaimed,
+                fundGiftCard = fundGiftCard,
                 exchangeRateRepository = exchangeRate,
                 swapRepository = swaps,
                 shareGiftLink = shareGiftLink,
@@ -324,6 +399,7 @@ class GiftCardListVMTest {
                     mockk<ApplicationStateProvider>().also {
                         every { it.isInForeground } returns flowOf(true)
                     },
+                secretAuthGate = secretAuthGate,
                 navigationRouter = mockk<NavigationRouter>(relaxed = true),
             )
     }
@@ -343,6 +419,10 @@ class GiftCardListVMTest {
             amountZatoshi: Long = 100_000_000L,
             fundingTxid: String? = null,
             fundingAttemptedAt: String? = null,
+            fundingCreatedAt: String? = null,
+            fundingSubmittedAt: String? = null,
+            fundingMinedAt: String? = null,
+            fundingFailures: List<GiftFundingFailure> = emptyList(),
             lastCheckedAt: String? = null,
             status: GiftCardStatus = GiftCardStatus.DRAFT,
         ) = StoredGiftCard(
@@ -357,8 +437,22 @@ class GiftCardListVMTest {
             updatedAt = "2026-08-20T12:00:00Z",
             status = status,
             fundingTxid = fundingTxid,
+            fundingCreatedAt = fundingCreatedAt,
             fundingAttemptedAt = fundingAttemptedAt,
+            fundingSubmittedAt = fundingSubmittedAt,
+            fundingMinedAt = fundingMinedAt,
+            fundingFailures = fundingFailures,
             lastCheckedAt = lastCheckedAt,
         )
+
+        fun expiredFailure() =
+            GiftFundingFailure(
+                reason = GiftFundingFailureReason.EXPIRED,
+                attemptedAt = ATTEMPTED_AT,
+                transactionId = EXPIRED_TXID,
+                detectedAt = "2026-08-20T12:10:00Z",
+            )
+
+        const val EXPIRED_TXID = "cafe"
     }
 }
