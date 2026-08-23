@@ -54,10 +54,7 @@ enum class GiftCardStatus {
     /** The link has been handed to the share sheet at least once. */
     SHARED,
 
-    /**
-     * The card's own wallet is empty again, so whoever held the link took the money. Terminal, and
-     * the only status that settles a card.
-     */
+    /** A claim spend reached SDK finality. Terminal. */
     CLAIMED,
 }
 

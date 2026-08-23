@@ -102,7 +102,11 @@ class DeleteChatIdentityUseCaseTest {
                     metadataRepository = metadataRepository,
                     homeMessageCacheRepository = mockk<HomeMessageCacheRepository>(relaxed = true),
                     chatBlockedKeysStorageProvider = mockk<ChatBlockedKeysStorageProvider>(relaxed = true),
-                    ensureNoUnsharedGiftFunds = EnsureNoUnsharedGiftFundsUseCase(giftCardStorageProvider),
+                    ensureNoUnsharedGiftFunds =
+                        EnsureNoUnsharedGiftFundsUseCase(
+                            giftCardStorageProvider,
+                            mockk(relaxed = true),
+                        ),
                 )
         }
 

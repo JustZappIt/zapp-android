@@ -67,6 +67,16 @@ class ResetZashiUseCaseTest {
             coVerify(exactly = 1) { fixture.biometricRepository.requestBiometrics(any()) }
         }
 
+    @Test
+    fun `explicit start fresh confirmation may discard gift recovery`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = true)
+
+            fixture.useCase(keepFiles = true, allowGiftDataLoss = true)
+
+            coVerify(exactly = 1) { fixture.encryptedPreferences.clearPreferences() }
+        }
+
     private class Fixture(
         hasUnsharedFunds: Boolean?,
     ) {
@@ -110,7 +120,11 @@ class ResetZashiUseCaseTest {
                     peerCashOutRepository = mockk<PeerCashOutRepository>(relaxed = true),
                     baseBalanceRepository = mockk<BaseBalanceRepository>(relaxed = true),
                     migrationAppHooks = mockk<MigrationAppHooks>(relaxed = true),
-                    ensureNoUnsharedGiftFunds = EnsureNoUnsharedGiftFundsUseCase(giftCardStorageProvider),
+                    ensureNoUnsharedGiftFunds =
+                        EnsureNoUnsharedGiftFundsUseCase(
+                            giftCardStorageProvider,
+                            mockk(relaxed = true),
+                        ),
                 )
         }
 

@@ -134,6 +134,7 @@ import co.electriccoin.zcash.ui.common.usecase.OptInExchangeRateUseCase
 import co.electriccoin.zcash.ui.common.usecase.ParseKeystonePCZTUseCase
 import co.electriccoin.zcash.ui.common.usecase.ParseKeystoneSignInRequestUseCase
 import co.electriccoin.zcash.ui.common.usecase.ParseKeystoneUrToZashiAccountsUseCase
+import co.electriccoin.zcash.ui.common.usecase.PendingGiftClaimCoordinator
 import co.electriccoin.zcash.ui.common.usecase.PersistEndpointUseCase
 import co.electriccoin.zcash.ui.common.usecase.PrefillSendUseCase
 import co.electriccoin.zcash.ui.common.usecase.PreselectSwapAssetUseCase
@@ -219,6 +220,7 @@ val useCaseModule =
         factoryOf(::FundGiftCardUseCase)
         factoryOf(::ConfirmGiftCardFundingUseCase)
         factoryOf(::ConfirmGiftClaimUseCase)
+        singleOf(::PendingGiftClaimCoordinator)
         factoryOf(::ClaimGiftCardUseCase)
         factoryOf(::ShareGiftLinkUseCase)
         factoryOf(::Zip321BuildUriUseCase)

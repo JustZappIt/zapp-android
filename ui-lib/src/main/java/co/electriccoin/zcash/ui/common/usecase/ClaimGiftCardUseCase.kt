@@ -5,15 +5,16 @@ package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.spackle.Twig
-import co.electriccoin.zcash.ui.common.bestEffort
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimOutcome
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimProgress
+import co.electriccoin.zcash.ui.common.provider.GiftClaimOperationLock
 import co.electriccoin.zcash.ui.common.provider.GiftKeyProvider
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
 import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
+import co.electriccoin.zcash.ui.common.provider.ZcashNetworkProvider
 import co.electriccoin.zcash.ui.screen.gift.model.GiftBirthdayVerdict
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkCodec
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkError
@@ -30,15 +31,22 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * A link checked as far as it can be without touching the network. [verdict] is what the recipient
- * still has to agree to — a long foreground scan is their decision, not something to spring on
- * them (§3.6).
+ * A link checked as far as it can be without touching the network — which is everything the card
+ * says about itself. What it costs to claim needs the chain tip, so that is [birthdayVerdict],
+ * asked for separately: a recipient must see what they were sent while the wallet is still finding
+ * the chain, not a spinner.
  */
 data class GiftClaimPreview(
     val payload: GiftLinkPayload,
     /** Derived from the link's mnemonic; the link itself does not carry it. */
     val cardAddress: String,
-    val verdict: GiftBirthdayVerdict,
+    /** False when this device has no wallet yet, so there is nowhere to claim into. */
+    val hasWallet: Boolean,
+    /**
+     * Set when this wallet's own receipt says it already holds this card's funds, which is the
+     * answer to a link opened twice — and one no amount of scanning can improve on.
+     */
+    val collected: GiftClaimOutcome.Claimed? = null,
 )
 
 /**
@@ -63,22 +71,49 @@ class ClaimGiftCardUseCase(
     private val persistableWalletProvider: PersistableWalletProvider,
     private val giftKeyProvider: GiftKeyProvider,
     private val giftClaimDataSource: GiftClaimDataSource,
+    private val zcashNetworkProvider: ZcashNetworkProvider,
     private val receivedGiftStorageProvider: ReceivedGiftStorageProvider,
+    private val giftClaimOperationLock: GiftClaimOperationLock,
 ) {
     /**
-     * Parses and validates [uri] and decides what claiming it would cost.
+     * Parses and validates [uri]. Touches neither the network nor the chain, so it returns as fast
+     * as the link can be decoded and the card can go on screen straight away.
      *
      * @throws GiftLinkException with the specific check that failed.
      */
     suspend fun preview(uri: String): GiftClaimPreview {
-        val synchronizer = synchronizerProvider.getSynchronizer()
+        // Not getSynchronizer(): that one waits for a wallet that a recipient arriving on their
+        // first-ever launch does not have, and waits for it forever.
+        val synchronizer = synchronizerProvider.getSynchronizerOrNull()
+        val network = synchronizer?.network ?: zcashNetworkProvider()
 
         // Wrong network, bad version, unparseable amount, over-long message — all offline.
-        val payload = GiftLinkCodec.decode(uri, synchronizer.network)
+        val payload = GiftLinkCodec.decode(uri, network)
 
         // The card's address, which identifies it everywhere below: the isolated wallet's alias
         // and the receipt. Derived rather than carried, so there is nothing to disagree with.
-        val cardAddress = giftKeyProvider.deriveAddress(payload.mnemonic, synchronizer.network)
+        val cardAddress = giftKeyProvider.deriveAddress(payload.mnemonic, network)
+
+        // Answered from the receipt, before a block is fetched. The same question asked after a
+        // scan gets the same answer thirty seconds later, having searched a card it already knew
+        // was empty — and a card is emptied exactly once, so the record is authoritative.
+        return GiftClaimPreview(
+            payload = payload,
+            cardAddress = cardAddress,
+            hasWallet = synchronizer != null,
+            collected = collectedEarlier(payload, cardAddress, settledOnly = true),
+        )
+    }
+
+    /**
+     * What the recipient still has to agree to — a long foreground scan is their decision, not
+     * something to spring on them (§3.6).
+     *
+     * @throws GiftClaimNotReadyException while the chain tip is still unknown. The card is already
+     * on screen and correct by then, so this is a wait to be retried, never a verdict on the gift.
+     */
+    suspend fun birthdayVerdict(payload: GiftLinkPayload): GiftBirthdayVerdict {
+        val synchronizer = synchronizerProvider.getSynchronizer()
 
         // Wait rather than fail. On the cold start an App Link produces, networkHeight is null for
         // a second or two, and reading `.value` once would reject every link opened from a chat.
@@ -90,23 +125,30 @@ class ClaimGiftCardUseCase(
                     .value
             } ?: throw GiftClaimNotReadyException()
 
-        return GiftClaimPreview(
-            payload = payload,
-            cardAddress = cardAddress,
-            verdict = GiftLinkCodec.evaluateBirthday(payload.birthdayHeight, tip),
-        )
+        return GiftLinkCodec.evaluateBirthday(payload.birthdayHeight, tip)
+    }
+
+    /** Suspends until this device has a wallet of its own. */
+    suspend fun awaitWallet() {
+        synchronizerProvider.getSynchronizer()
     }
 
     /**
      * Syncs the card's own wallet and moves its funds here.
      *
-     * Claims **exactly** the card amount and never sweeps. The ephemeral address is plaintext in
-     * the link, so anyone holding it can send dust there; targeting the amount means the note
-     * selector takes the one funding note and ignores the dust. A genuine top-up above the card
-     * amount is left behind — predictable, and the accepted trade. Do not "optimise" this into a
-     * sweep.
+     * Claims at least the advertised amount and sweeps spendable top-ups to the same destination.
+     * Fee-reserve dust is the only value that may be intentionally abandoned at final cleanup.
      */
     suspend operator fun invoke(
+        payload: GiftLinkPayload,
+        cardAddress: String,
+        onProgress: (GiftClaimProgress) -> Unit,
+    ): GiftClaimOutcome =
+        giftClaimOperationLock.withLock(cardAddress) {
+            claimLocked(payload, cardAddress, onProgress)
+        }
+
+    private suspend fun claimLocked(
         payload: GiftLinkPayload,
         cardAddress: String,
         onProgress: (GiftClaimProgress) -> Unit,
@@ -119,6 +161,18 @@ class ClaimGiftCardUseCase(
         // The wallet's own endpoint rather than the bundled default, so a claim talks to whatever
         // server the user chose for everything else.
         val endpoint = persistableWalletProvider.requirePersistableWallet().endpoint
+
+        val prepared =
+            ReceivedGift(
+                address = cardAddress,
+                network = payload.network,
+                amountZatoshi = payload.amountZatoshi.toLong(),
+                claimedAt = Clock.System.now().toString(),
+                destinationAddress = recipient,
+                message = payload.message,
+                claimLink = payload,
+            )
+        receivedGiftStorageProvider.record(prepared)
 
         val outcome =
             giftClaimDataSource.claim(
@@ -137,11 +191,11 @@ class ClaimGiftCardUseCase(
         // ran, and the recipient's next attempt would otherwise be told their gift is gone.
         if (outcome is GiftClaimOutcome.Empty) collectedEarlier(payload, cardAddress)?.let { return it }
 
-        // NonCancellable for the same reason `GiftClaimDataSource` deletes under it: the money has
-        // already moved by the time this runs, and a cancelled scope would drop the only durable
-        // record that it did.
+        // The prepared record already holds recovery; attach txids even if the caller was cancelled.
         if (outcome is GiftClaimOutcome.Claimed) {
-            withContext(NonCancellable) { recordReceipt(payload, cardAddress, outcome) }
+            withContext(NonCancellable) {
+                receivedGiftStorageProvider.record(prepared.copy(claimTxids = outcome.txIds))
+            }
         }
         return outcome
     }
@@ -153,13 +207,29 @@ class ClaimGiftCardUseCase(
      * Reads wrong only for an address funded a second time and emptied again, reporting the first
      * collection rather than the second. Nothing in the app can re-fund a spent card, and that
      * answer is still closer to true than "nothing left on this card".
+     *
+     * [settledOnly] is for answering *before* a scan. An unsettled receipt means the broadcast
+     * reached the mempool and nothing has confirmed it — and such a claim can still expire unmined,
+     * leaving the card funded and its retained link the only way back to the money. Reporting that
+     * as collected would retire a retryable claim over funds still sitting on the card. Once a scan
+     * has reported the card empty the money has demonstrably moved, so any receipt answers.
      */
-    private suspend fun collectedEarlier(payload: GiftLinkPayload, cardAddress: String): GiftClaimOutcome.Claimed? =
+    private suspend fun collectedEarlier(
+        payload: GiftLinkPayload,
+        cardAddress: String,
+        settledOnly: Boolean = false,
+    ): GiftClaimOutcome.Claimed? =
         runCatching {
-            receivedGiftStorageProvider
-                .getAll()
-                .firstOrNull { it.address == cardAddress && it.network == payload.network }
-                ?.let { GiftClaimOutcome.Claimed(amount = Zatoshi(it.amountZatoshi), txIds = it.claimTxids) }
+            val receipt =
+                receivedGiftStorageProvider
+                    .getAll()
+                    .firstOrNull {
+                        it.address == cardAddress &&
+                            it.network == payload.network &&
+                            it.claimTxids.isNotEmpty() &&
+                            (!settledOnly || it.isSettled)
+                    }
+            receipt?.let { GiftClaimOutcome.Claimed(amount = Zatoshi(it.amountZatoshi), txIds = it.claimTxids) }
         }.getOrElse { throwable ->
             if (throwable is CancellationException) throw throwable
             // Falls through to Empty, which is what this path already said before the receipt
@@ -167,34 +237,6 @@ class ClaimGiftCardUseCase(
             Twig.warn { "Received gift receipts could not be read" }
             null
         }
-
-    /**
-     * Keeps the link, which is what makes a claim retryable: the broadcast reached the mempool but
-     * can still expire unmined, and by now the card's own wallet is gone. `ConfirmGiftClaimUseCase`
-     * drops it once the claim is on chain.
-     *
-     * Best effort all the same — the money has moved either way, and failing here costs the retry
-     * rather than the gift.
-     */
-    private suspend fun recordReceipt(
-        payload: GiftLinkPayload,
-        cardAddress: String,
-        outcome: GiftClaimOutcome.Claimed,
-    ) {
-        bestEffort("Claimed gift could not be recorded") {
-            receivedGiftStorageProvider.record(
-                ReceivedGift(
-                    address = cardAddress,
-                    network = payload.network,
-                    amountZatoshi = outcome.amount.value,
-                    claimedAt = Clock.System.now().toString(),
-                    claimTxids = outcome.txIds,
-                    message = payload.message,
-                    claimLink = payload,
-                )
-            )
-        }
-    }
 
     private companion object {
         /** Long enough for a cold-start connection, short enough not to look frozen. */

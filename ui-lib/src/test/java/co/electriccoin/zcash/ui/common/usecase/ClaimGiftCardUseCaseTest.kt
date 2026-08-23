@@ -9,13 +9,19 @@ import cash.z.ecc.android.sdk.model.ZcashNetwork
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimOutcome
+import co.electriccoin.zcash.ui.common.provider.GiftClaimOperationLock
 import co.electriccoin.zcash.ui.common.provider.GiftKeyProvider
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
 import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
+import co.electriccoin.zcash.ui.common.provider.ZcashNetworkProvider
+import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkCodec
+import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkError
+import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkException
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkPayload
 import co.electriccoin.zcash.ui.screen.gift.model.ReceivedGift
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Job
@@ -28,6 +34,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -37,6 +44,78 @@ import kotlin.test.assertTrue
  * as what the recipient's next attempt is told.
  */
 class ClaimGiftCardUseCaseTest {
+    @Test
+    fun `reads a card on a device that has no wallet yet`() =
+        runTest {
+            // The recipient's first-ever launch: they tapped the link before onboarding. Waiting on
+            // a synchronizer here waits forever, and the spinner it leaves is the whole gift.
+            val preview = previewUseCase(synchronizer = null).preview(GiftLinkCodec.encode(PAYLOAD))
+
+            assertEquals(AMOUNT.toString(), preview.payload.amountZatoshi)
+            assertEquals(ADDRESS, preview.cardAddress)
+            // The one part of a preview a wallet is genuinely required for, so the card reads
+            // without one and the scan cost waits.
+            assertFalse(preview.hasWallet)
+        }
+
+    @Test
+    fun `rejects a wrong-network card before there is a wallet to blame it on`() =
+        runTest {
+            val testnetCard = GiftLinkCodec.encode(PAYLOAD.copy(network = "test"))
+
+            val error =
+                assertFailsWith<GiftLinkException> {
+                    previewUseCase(synchronizer = null).preview(testnetCard)
+                }
+
+            assertEquals(GiftLinkError.NETWORK_MISMATCH, error.error)
+        }
+
+    @Test
+    fun `answers a link opened twice from the receipt, without scanning`() =
+        runTest {
+            // The second tap on a link this wallet already collected. A scan would spend thirty
+            // seconds rediscovering an empty card; the receipt is the record that emptied it.
+            val preview =
+                previewUseCase(
+                    synchronizer = null,
+                    receipts = FakeReceipts(stored = listOf(RECEIPT)),
+                ).preview(GiftLinkCodec.encode(PAYLOAD))
+
+            assertEquals(
+                GiftClaimOutcome.Claimed(amount = Zatoshi(AMOUNT), txIds = listOf(CLAIM_TXID)),
+                preview.collected,
+            )
+        }
+
+    @Test
+    fun `still offers a claim whose broadcast has not been confirmed on chain`() =
+        runTest {
+            // The receipt exists but keeps its link, which is what an unconfirmed claim looks like.
+            // Such a claim can still expire unmined, leaving the card funded — so this must stay
+            // claimable rather than being retired as already collected.
+            val unsettled = RECEIPT.copy(claimLink = PAYLOAD)
+
+            val preview =
+                previewUseCase(
+                    synchronizer = null,
+                    receipts = FakeReceipts(stored = listOf(unsettled)),
+                ).preview(GiftLinkCodec.encode(PAYLOAD))
+
+            assertNull(
+                preview.collected,
+                "an unconfirmed claim must not be reported as collected — the card may still hold its funds"
+            )
+        }
+
+    @Test
+    fun `leaves a card this wallet has not collected open to claim`() =
+        runTest {
+            val preview = previewUseCase(synchronizer = null).preview(GiftLinkCodec.encode(PAYLOAD))
+
+            assertNull(preview.collected, "an uncollected card must not be reported as already claimed")
+        }
+
     @Test
     fun `records the receipt even when the scope is cancelled while the claim runs`() =
         runTest {
@@ -50,9 +129,23 @@ class ClaimGiftCardUseCaseTest {
             running = launch { runCatching { useCase(PAYLOAD, ADDRESS) {} } }
             running.join()
 
-            assertEquals(listOf(RECEIPT.claimTxids), receipts.recorded.map { it.claimTxids })
+            assertEquals(listOf(emptyList(), RECEIPT.claimTxids), receipts.recorded.map { it.claimTxids })
             // The broadcast only reached the mempool, so the link has to survive the write.
-            assertEquals(listOf(PAYLOAD), receipts.recorded.map { it.claimLink })
+            assertEquals(listOf(PAYLOAD, PAYLOAD), receipts.recorded.map { it.claimLink })
+        }
+
+    @Test
+    fun `does not broadcast when the prepared receipt cannot be persisted`() =
+        runTest {
+            val receipts = mockk<ReceivedGiftStorageProvider>(relaxed = true)
+            val dataSource = mockk<GiftClaimDataSource>(relaxed = true)
+            coEvery { receipts.record(any()) } throws IllegalStateException("disk full")
+
+            assertFailsWith<IllegalStateException> {
+                useCase(receipts, dataSource = dataSource)(PAYLOAD, ADDRESS) {}
+            }
+
+            coVerify(exactly = 0) { dataSource.claim(any(), any(), any(), any(), any(), any()) }
         }
 
     @Test
@@ -67,8 +160,12 @@ class ClaimGiftCardUseCaseTest {
             val outcome = useCase(PAYLOAD, ADDRESS) {}
 
             assertEquals(GiftClaimOutcome.Claimed(amount = Zatoshi(AMOUNT), txIds = listOf(CLAIM_TXID)), outcome)
-            // Read back, not re-recorded: the receipt is a note about when it happened.
-            assertTrue(receipts.recorded.isEmpty())
+            assertTrue(
+                receipts.recorded
+                    .single()
+                    .claimTxids
+                    .isEmpty()
+            )
         }
 
     @Test
@@ -99,7 +196,7 @@ class ClaimGiftCardUseCaseTest {
             // receipt is the only route left, so it holds the secret until the claim mines.
             val receipts = FakeReceipts()
             useCase(receipts)(PAYLOAD, ADDRESS) {}
-            val held = receipts.recorded.single()
+            val held = receipts.recorded.last()
 
             assertEquals(PAYLOAD, held.claimLink)
             assertFalse(held.isSettled)
@@ -139,12 +236,37 @@ class ClaimGiftCardUseCaseTest {
         }
 
         override suspend fun settle(address: String) = Unit
+
+        override suspend fun markFinalized(address: String) = Unit
     }
+
+    /** No wallet means no synchronizer, so the build's own network is all a preview has to go on. */
+    private fun previewUseCase(
+        synchronizer: Synchronizer?,
+        receipts: ReceivedGiftStorageProvider = mockk<ReceivedGiftStorageProvider>(relaxed = true),
+    ) =
+        ClaimGiftCardUseCase(
+            accountDataSource = mockk<AccountDataSource>(relaxed = true),
+            synchronizerProvider =
+                mockk<SynchronizerProvider>(relaxed = true).also {
+                    coEvery { it.getSynchronizerOrNull() } returns synchronizer
+                },
+            persistableWalletProvider = mockk<PersistableWalletProvider>(relaxed = true),
+            giftKeyProvider =
+                mockk<GiftKeyProvider>(relaxed = true).also {
+                    coEvery { it.deriveAddress(any(), any()) } returns ADDRESS
+                },
+            giftClaimDataSource = mockk<GiftClaimDataSource>(relaxed = true),
+            zcashNetworkProvider = mockk<ZcashNetworkProvider>().also { every { it() } returns ZcashNetwork.Mainnet },
+            receivedGiftStorageProvider = receipts,
+            giftClaimOperationLock = GiftClaimOperationLock(),
+        )
 
     private fun useCase(
         receipts: ReceivedGiftStorageProvider,
         outcome: GiftClaimOutcome = GiftClaimOutcome.Claimed(amount = Zatoshi(AMOUNT), txIds = listOf(CLAIM_TXID)),
         onClaim: () -> Unit = {},
+        dataSource: GiftClaimDataSource? = null,
     ) = ClaimGiftCardUseCase(
         accountDataSource = mockk<AccountDataSource>(relaxed = true),
         synchronizerProvider =
@@ -154,8 +276,9 @@ class ClaimGiftCardUseCaseTest {
             },
         persistableWalletProvider = mockk<PersistableWalletProvider>(relaxed = true),
         giftKeyProvider = mockk<GiftKeyProvider>(relaxed = true),
+        zcashNetworkProvider = mockk<ZcashNetworkProvider>(relaxed = true),
         giftClaimDataSource =
-            mockk<GiftClaimDataSource>(relaxed = true).also { source ->
+            dataSource ?: mockk<GiftClaimDataSource>(relaxed = true).also { source ->
                 coEvery { source.claim(any(), any(), any(), any(), any(), any()) } coAnswers {
                     // Stands in for the app going to the background mid-broadcast: the claim itself
                     // finishes, and the context it returns into is already gone.
@@ -164,6 +287,7 @@ class ClaimGiftCardUseCaseTest {
                 }
             },
         receivedGiftStorageProvider = receipts,
+        giftClaimOperationLock = GiftClaimOperationLock(),
     )
 
     private companion object {

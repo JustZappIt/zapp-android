@@ -128,18 +128,8 @@ object GiftCardLedger {
         cards.replacing(id) { card -> card.copy(lastCheckedAt = at, updatedAt = at) }
 
     /**
-     * Marks a card collected, once its own wallet has been observed empty *having first held the
-     * funding*.
-     *
-     * Both halves are load-bearing and this is where getting it wrong costs money: settling is
-     * terminal, so a settled card can no longer be handed out, re-checked or counted by the reset
-     * guard. An empty wallet alone does not separate "somebody took it" from "the funding never
-     * arrived" — a transaction still in the mempool, or dropped and yet to mine before it expires —
-     * so the caller must establish the money reached the card first, which
-     * `CheckGiftCardClaimedUseCase` does from the card's own transaction history.
-     *
-     * The observation is itself proof the funding mined, so it backfills
-     * [StoredGiftCard.fundingMinedAt] for a card settled before anything confirmed it.
+     * Marks a card collected after its funding and finalized claim spend are observed. The
+     * observation also backfills [StoredGiftCard.fundingMinedAt].
      */
     fun markClaimed(cards: List<StoredGiftCard>, id: String, at: String): List<StoredGiftCard> =
         cards.replacing(id) { card ->

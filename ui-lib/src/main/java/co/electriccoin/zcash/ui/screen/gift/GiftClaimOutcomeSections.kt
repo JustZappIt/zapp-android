@@ -134,6 +134,10 @@ internal fun GiftClaimStage.subtitleRes(): Int =
             R.string.gift_claim_subtitle_preview
         }
 
+        GiftClaimStage.NEEDS_WALLET -> {
+            R.string.gift_claim_subtitle_needs_wallet
+        }
+
         GiftClaimStage.CLAIMING -> {
             R.string.gift_claim_subtitle_claiming
         }
@@ -155,6 +159,7 @@ internal fun GiftClaimError.messageRes(): Int =
         GiftClaimError.NOT_BROADCAST -> R.string.gift_claim_error_not_broadcast
         GiftClaimError.UNDERFUNDED -> R.string.gift_claim_error_underfunded
         GiftClaimError.UNREACHABLE -> R.string.gift_claim_error_unreachable
+        GiftClaimError.PARAMS_UNAVAILABLE -> R.string.gift_claim_error_params
         GiftClaimError.FAILED -> R.string.gift_claim_error_failed
     }
 

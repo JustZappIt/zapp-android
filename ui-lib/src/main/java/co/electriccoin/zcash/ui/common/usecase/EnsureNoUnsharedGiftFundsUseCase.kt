@@ -5,10 +5,11 @@ package co.electriccoin.zcash.ui.common.usecase
 
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
+import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
 import kotlinx.coroutines.CancellationException
 
 /** Thrown before anything is deleted, so an unhandled one leaves the wallet intact. */
-class UnsharedGiftFundsException : IllegalStateException("Unshared gift cards would lose their funds")
+class UnsharedGiftFundsException : IllegalStateException("Unsettled gift custody would be destroyed")
 
 /**
  * Refuses a destructive action while a gift card's link has never left the device.
@@ -20,17 +21,27 @@ class UnsharedGiftFundsException : IllegalStateException("Unshared gift cards wo
  */
 class EnsureNoUnsharedGiftFundsUseCase(
     private val giftCardStorageProvider: GiftCardStorageProvider,
+    private val receivedGiftStorageProvider: ReceivedGiftStorageProvider,
 ) {
     /** @throws UnsharedGiftFundsException before the caller has touched anything. */
     suspend operator fun invoke() {
         // An unreadable store blocks rather than passes: guessing "empty" wrong destroys money.
-        val blocked =
+        val senderBlocked =
             runCatching { giftCardStorageProvider.hasUnsharedFunds() }
                 .getOrElse { throwable ->
-                    if (throwable is CancellationException) throw throwable
-                    Twig.error(throwable) { "Gift card store could not be read; refusing to destroy it" }
-                    true
+                    throwable.blockDestruction("Gift card store could not be read; refusing to destroy it")
                 }
-        if (blocked) throw UnsharedGiftFundsException()
+        val recipientBlocked =
+            runCatching { receivedGiftStorageProvider.hasUnsettledClaims() }
+                .getOrElse { throwable ->
+                    throwable.blockDestruction("Received gift store could not be read; refusing to destroy it")
+                }
+        if (senderBlocked || recipientBlocked) throw UnsharedGiftFundsException()
     }
+}
+
+private fun Throwable.blockDestruction(message: String): Boolean {
+    if (this is CancellationException) throw this
+    Twig.error(this) { message }
+    return true
 }

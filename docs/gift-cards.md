@@ -191,7 +191,7 @@ Every balance read sums **all** shielded pools. A card is funded to a unified ad
 *sender's* wallet picks the pool; reading one pool would report a good card as empty the moment that
 changed.
 
-## 5. Broadcast classification — delete the isolated wallet only on a full success
+## 5. Broadcast classification and cleanup
 
 `createProposedTransactions` returns a `Flow<TransactionSubmitResult>` — one element per transaction,
 because a proposal can contain several. That is why "did it send?" is not a boolean. The app already
@@ -199,27 +199,21 @@ folds this into `SubmitResult` in `ProposalDataSource`; the fold is extracted in
 (`SubmitResultFold`) so the claim path and the ordinary send path cannot diverge. Two copies of this
 classification is how a partial broadcast eventually reads as a success.
 
-| `SubmitResult` | Meaning | Card's wallet |
+| `SubmitResult` | Meaning | Recovery state |
 |---|---|---|
-| `Success` | every transaction reached the mempool | **delete** |
+| `Success` | every transaction reached the mempool | **retain until finality** |
 | `Partial` | some reached the mempool, some did not | **retain** |
 | `GrpcFailure` | never reached lightwalletd; may or may not be on the network | **retain** |
 | `Failure` | reached the server and was rejected | **retain** |
 | `Error` | threw before or during submit | **retain** |
 
-Deleting on anything but `Success` strands funds. The same rule governs a collection check: the
-card's wallet is deleted only when the card is settled — an empty wallet whose funding has not
-arrived is one that will be asked about again, and rescanning it means the whole multi-minute sync
-over again.
+The bearer payload and destination are persisted before submission. A clean success attaches txids
+but does not delete the isolated database: the SDK needs it to recover unmined transactions. Cleanup
+runs only after the destination transactions reach the SDK's confirmation threshold.
 
-**A claim answers "was it emptied?" the same way, without a txid to lean on.** A recipient never
-sees the funding transaction id, so `inspect`'s evidence is not available; but an empty wallet on
-the claim path is the same ambiguity, and the sender may well have shared the link inside the ~75
-seconds before the funding mined. `unspendable` therefore settles an empty card only when the
-wallet's own history holds a **mined incoming transaction of at least the card amount**. Incoming
-and at-least-the-amount, both load-bearing: the address is plaintext in the link, so a stranger's
-transparent dust mines into this history while leaving the balance at zero, and reading that as
-evidence would throw away a resumable database over somebody else's spam.
+Sender-side collection uses a final outgoing spend of at least the advertised amount, never the
+wallet's aggregate balance. This remains correct when change, dust, or a top-up is left behind and
+avoids a terminal decision from separately sampled balance/history reads.
 
 `proposeTransfer` is wrapped for the same class of reason. A card that holds its amount but cannot
 also cover the fee to move it has no proposal — `TransactionEncoderException` — and letting that
@@ -280,35 +274,29 @@ Two rules fall out of that, and both are load-bearing:
 - **Reconciliation is scoped by `isFundingMined`, never by status.** A status-scoped sweep skipped
   precisely the cards that needed it — the ones shared during the submit-to-mine window, which no
   later pass would ever look at again.
-- **An empty wallet is not evidence a card was collected.** It has to be paired with evidence the
-  funding arrived, and that evidence comes from the *card's own* transaction history rather than from
-  the sender's records, so it stays correct on a device that has never seen the funding transaction.
+- **Balance is not evidence a card was collected.** Collection requires the card's funding txid and
+  a finalized outgoing spend of at least the advertised amount in the card's own transaction history.
   Settling is terminal — no re-share, no re-check, and no longer counted by the reset guard — so
   settling a card whose funding is still in the mempool, or was dropped and can still mine before it
   expires, strands the money.
 
-### 6.4 A claim is retryable until it mines
+### 6.3 A claim is retryable until finality
 
 The recipient's mirror of §6.1, and the same distinction: `SubmitResult.Success` means every
-transaction reached the **mempool**, not that any of them mined. A claim can still expire unmined
-(~40 blocks), be evicted, or be lost to a reorg — and by then the card's wallet has been deleted
-(§5), this wallet holds no key to the card, and the link may have been a message the recipient has
-since deleted. Nothing would be left that could spend the card.
+transaction reached the **mempool**, not that it is final. A claim can expire unmined, be evicted,
+or reorg after its first block.
 
-So `ReceivedGift.claimLink` keeps the whole payload until `ConfirmGiftClaimUseCase` sees the claim
-on chain, and drops it there — a retained bearer secret past that point is exposure for nothing.
-`ReceivedGiftStorageProvider` therefore decodes **strictly** while any receipt is unsettled, for the
-reason in §7.2: a tolerant decode drops an unrecognised field and writes the record back without it.
+The recipient and link are stored before broadcast. Txids are attached after submission, and the
+isolated database remains in place for the SDK's unmined recovery. `ConfirmGiftClaimUseCase` waits
+for the SDK's confirmation threshold, writes a finalization checkpoint, deletes the isolated
+database, then removes the link. A startup/foreground coordinator reopens unsettled receipts in the
+claim screen. Spendable top-ups are swept to the recipient; only fee-reserve dust may be abandoned.
 
-The half still missing is a recipient-facing list to retry *from*. The secret is preserved either
-way, and it cannot be preserved retroactively, which is why the storage lands first.
+### 6.4 The reset guard
 
-### 6.3 The reset guard
-
-`hasUnsharedFunds` is true while any card has a funding attempt and its link has never left the
-device. It blocks deleting the source account and blocks the wallet wipe, which clears the whole
-store. It fails **closed**: a store that cannot be read blocks rather than passes, because guessing
-"empty" wrong destroys money.
+The guard blocks for sender cards with unshared funds and for received gifts that are not settled.
+It also blocks when either store cannot be read. The reset screen offers a separate, explicit
+"delete anyway" action for a user who intentionally wants to start fresh.
 
 Every path that clears encrypted preferences must call `EnsureNoUnsharedGiftFundsUseCase`. A guard
 that exists on one destructive path and not another is the same bug with extra steps.

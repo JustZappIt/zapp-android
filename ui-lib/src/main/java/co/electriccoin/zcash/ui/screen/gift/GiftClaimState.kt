@@ -12,6 +12,13 @@ internal enum class GiftClaimStage {
     /** Reading and checking the link. Entirely offline. */
     LOADING,
 
+    /**
+     * The card reads, but this device has no wallet to claim it into. Shows what it is worth all
+     * the same: "create a wallet" has to arrive as an offer attached to a real amount, not as a
+     * demand made before the recipient has been told what they were sent.
+     */
+    NEEDS_WALLET,
+
     /** The card is understood: show what it is worth and let them decide. */
     PREVIEW,
 
@@ -67,6 +74,13 @@ internal enum class GiftClaimError {
 
     /** The card's server could not be reached, so the scan never started. Nothing is wrong with the card. */
     UNREACHABLE,
+
+    /**
+     * The Sapling proving parameters are missing and could not be downloaded, so no shielded
+     * transaction can be built at all. Kept out of [FAILED] because "try again" is wrong advice:
+     * the scan already found the money and nothing changes until the download succeeds.
+     */
+    PARAMS_UNAVAILABLE,
     FAILED,
 }
 
@@ -86,6 +100,7 @@ internal data class GiftClaimState(
     val onClaim: () -> Unit,
     val onConsent: () -> Unit,
     val onRetry: () -> Unit,
+    val onCreateWallet: () -> Unit,
     val onBack: () -> Unit,
 ) {
     /**

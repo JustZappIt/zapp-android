@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
@@ -26,18 +27,27 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.R
@@ -77,6 +87,7 @@ internal fun GiftCardView(
 ) {
     val c = ZappTheme.colors
     val spacing = ZappTheme.spacing
+    var showFundingInfo by rememberSaveable { mutableStateOf(false) }
 
     // The ready screen puts a bearer secret on the display. Mainnet builds already carry
     // FLAG_SECURE globally; this keeps the link out of screenshots on the builds that do not.
@@ -105,15 +116,7 @@ internal fun GiftCardView(
                     ),
                 // The way back to a card whose link was never handed out, including one this
                 // process never saw. Only offered where the stage has a way out at all.
-                right = {
-                    state.onOpenSavedCards?.let { onOpen ->
-                        ZappSectionLabel(
-                            text = stringResource(R.string.gift_card_list_open),
-                            color = ZappTheme.colors.accentText,
-                            modifier = Modifier.clickable(onClick = onOpen),
-                        )
-                    }
-                },
+                right = { HeaderActions(state) { showFundingInfo = true } },
             )
         },
         bottomBar = { GiftCardBottomBar(state) },
@@ -139,6 +142,8 @@ internal fun GiftCardView(
     }
 
     state.pinVerify?.let { PinVerifyOverlay(state = it) }
+
+    if (showFundingInfo) GiftCardFundingInfoSheet { showFundingInfo = false }
 }
 
 /** The one button a stage offers, or null where there is nothing to press. */
@@ -312,17 +317,6 @@ private fun ReviewSection(state: GiftCardState) {
             ZappSummaryRow(label = stringResource(R.string.gift_card_review_message_label), value = it)
         }
     }
-
-    ZappGroupHeader(text = stringResource(R.string.gift_card_review_warning_title))
-    Column(
-        modifier = Modifier.padding(horizontal = spacing.xl),
-        verticalArrangement = Arrangement.spacedBy(spacing.md),
-    ) {
-        WarningRow(R.string.gift_card_review_warning_irreversible)
-        WarningRow(R.string.gift_card_review_warning_bearer)
-        WarningRow(R.string.gift_card_review_warning_backup)
-        WarningRow(R.string.gift_card_review_warning_delay)
-    }
 }
 
 /**
@@ -406,9 +400,14 @@ private fun ReadySection(state: GiftCardState) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
+            // One line, ellipsised. The whole link is far too long to read and the tail of it is
+            // the bearer secret — the host is enough to recognise what this is, and Copy and
+            // Share are what actually move it.
             BasicText(
                 text = link,
                 style = ZappTheme.typography.mono.copy(color = c.text),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier =
                     Modifier
                         .weight(1f)
@@ -428,12 +427,6 @@ private fun ReadySection(state: GiftCardState) {
     ) {
         WarningRow(R.string.gift_card_ready_bearer)
         WarningRow(R.string.gift_card_ready_claimable)
-        ZappButton(
-            text = stringResource(R.string.gift_card_ready_done),
-            variant = ZappButtonVariant.Ghost,
-            onClick = state.onDone,
-            modifier = Modifier.fillMaxWidth(),
-        )
     }
 }
 
@@ -512,7 +505,6 @@ private fun GiftCardPreview() =
                     onConfirm = {},
                     onCopy = {},
                     onShare = {},
-                    onDone = {},
                     onBack = {},
                     onOpenSavedCards = null,
                 )

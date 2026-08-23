@@ -50,10 +50,8 @@ enum class GiftCardCheckResult {
  * (§11.1). That cost is why this is one card at a time on request, and never a background sweep
  * across the list.
  *
- * An empty wallet is not on its own an answer, and treating it as one is how a card gets settled
- * while its money is still on the way. The scan therefore reads the card wallet's own history
- * alongside its balance, and only the pair — this card's funding mined, balance now zero — reports
- * collected. That evidence comes from the card's wallet rather than the sender's records on
+ * Balance is not an answer. The scan requires this card's funding transaction and a finalized
+ * outgoing spend of at least the advertised amount. That evidence comes from the card's wallet on
  * purpose: it stays correct on a device that has never seen the funding transaction, and it is the
  * same evidence whether the card was minted here or restored from somewhere else. The stored txid
  * is passed in to say *which* transaction in that history counts, not to replace it — see
@@ -69,9 +67,7 @@ class CheckGiftCardClaimedUseCase(
         card: StoredGiftCard,
         onProgress: (GiftClaimProgress) -> Unit,
     ): GiftCardCheckResult {
-        // An empty wallet on a card that was never funded means nobody took anything — it was never
-        // there. Only a funded card can be reported collected, and the txid that makes it funded is
-        // the same one the scan needs, so it is taken here rather than re-read further down.
+        // The funding txid anchors the card's incoming side before outgoing claim evidence is used.
         val fundingTxid = card.fundingTxid ?: return GiftCardCheckResult.NOT_FUNDED
 
         return when (val outcome = inspect(card, fundingTxid, onProgress)) {

@@ -65,40 +65,42 @@ internal fun CardFront(item: GiftCardListItem, stock: ZappGiftCardStock) {
         modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        // Everything in this row has to survive being the only part of the card in sight.
+        // The peek line. On a stacked deck this strip is the whole card, so it carries the only
+        // two things the stack is read for: what a card is worth, and whether it has been
+        // collected. Nothing else belongs here — anything added pushes one of them out of sight.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.Top,
         ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                BasicText(
-                    text = item.amount.getValue(),
-                    style = ZappTheme.typography.displaySecondary.copy(color = stock.ink),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.testTag(GiftCardListTag.AMOUNT),
-                )
-                // Absent whenever the wallet has no rate to show — never a zero, which would read
-                // as a card worth nothing.
-                item.fiat?.let {
-                    BasicText(
-                        text = it.getValue(),
-                        style = ZappTheme.typography.body.copy(color = stock.inkMuted),
-                        maxLines = 1,
-                    )
-                }
-            }
+            BasicText(
+                text = item.amount.getValue(),
+                style = ZappTheme.typography.displaySecondary.copy(color = stock.ink),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).testTag(GiftCardListTag.AMOUNT),
+            )
             StatusPill(item.status, stock)
         }
 
-        item.message?.let {
-            BasicText(
-                text = it,
-                style = ZappTheme.typography.body.copy(color = stock.inkMuted),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+        // Below the peek, so opening a card is what reveals it. The fiat is absent whenever the
+        // wallet has no rate to show — never a zero, which would read as a card worth nothing.
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            item.fiat?.let {
+                BasicText(
+                    text = it.getValue(),
+                    style = ZappTheme.typography.body.copy(color = stock.inkMuted),
+                    maxLines = 1,
+                )
+            }
+            item.message?.let {
+                BasicText(
+                    text = it,
+                    style = ZappTheme.typography.body.copy(color = stock.inkMuted),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
 
         Row(

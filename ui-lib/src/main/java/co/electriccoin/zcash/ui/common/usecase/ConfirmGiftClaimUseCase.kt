@@ -3,27 +3,30 @@
 
 package co.electriccoin.zcash.ui.common.usecase
 
-import co.electriccoin.zcash.ui.common.bestEffort
+import co.electriccoin.zcash.ui.common.datasource.GiftClaimDataSource
+import co.electriccoin.zcash.ui.common.provider.GiftClaimOperationLock
+import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
 import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
+import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.common.repository.ReceiveTransaction
 import co.electriccoin.zcash.ui.common.repository.TransactionRepository
+import co.electriccoin.zcash.ui.screen.gift.model.ReceivedGift
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 
 /**
- * Drops a received gift's retained link once its claim has mined.
- *
- * The mirror of [ConfirmGiftCardFundingUseCase] on the recipient's side, and the same distinction:
- * a broadcast that reached the mempool is not one that landed. Until it has, the card still holds
- * its funds and the link is the only thing left that can move them, so it is kept — and dropped
- * here, on evidence, because a retained bearer secret that is no longer needed is pure exposure.
+ * Drops a received gift's retained link after SDK finality and isolated-wallet cleanup.
  */
 class ConfirmGiftClaimUseCase(
     private val receivedGiftStorageProvider: ReceivedGiftStorageProvider,
     private val transactionRepository: TransactionRepository,
+    private val synchronizerProvider: SynchronizerProvider,
+    private val persistableWalletProvider: PersistableWalletProvider,
+    private val giftClaimDataSource: GiftClaimDataSource,
+    private val giftClaimOperationLock: GiftClaimOperationLock,
 ) {
     /**
-     * Suspends until every transaction in [claimTxids] is mined, then settles [address].
+     * Suspends until every transaction in [claimTxids] is final, then settles [address].
      *
      * Cancelling loses nothing: [reconcile] picks the receipt up on the next pass.
      */
@@ -36,30 +39,44 @@ class ConfirmGiftClaimUseCase(
                 .filterIsInstance<ReceiveTransaction.Success>()
                 .first()
         }
-        settle(address)
+        receivedGiftStorageProvider.getAll().firstOrNull { it.address == address }?.let { finalize(it) }
     }
 
-    /** Settles every receipt still holding a link whose claim is already on chain. */
+    /** Settles every receipt whose claim is already final. */
     suspend fun reconcile() {
-        val unsettled =
-            runCatching { receivedGiftStorageProvider.getAll().filterNot { it.isSettled } }
-                .getOrDefault(emptyList())
+        val unsettled = receivedGiftStorageProvider.getAll().filterNot { it.isSettled }
         if (unsettled.isEmpty()) return
 
-        val mined =
+        val finalized =
             transactionRepository
                 .getTransactions()
                 .filterIsInstance<ReceiveTransaction.Success>()
                 .mapTo(mutableSetOf()) { it.id.txIdString() }
 
         unsettled
-            .filter { it.claimTxids.isNotEmpty() && mined.containsAll(it.claimTxids) }
-            .forEach { settle(it.address) }
+            .filter { it.claimTxids.isNotEmpty() && finalized.containsAll(it.claimTxids) }
+            .forEach { finalize(it) }
     }
 
-    private suspend fun settle(address: String) {
-        bestEffort("Received gift claim could not be settled") {
-            receivedGiftStorageProvider.settle(address)
+    private suspend fun finalize(receipt: ReceivedGift) {
+        giftClaimOperationLock.withLock(receipt.address) { finalizeLocked(receipt) }
+    }
+
+    private suspend fun finalizeLocked(receipt: ReceivedGift) {
+        val payload = receipt.claimLink ?: return
+        val synchronizer = synchronizerProvider.getSynchronizer()
+        if (!receipt.isFinalized) {
+            val result =
+                giftClaimDataSource.inspectFinalization(
+                    payload = payload,
+                    cardAddress = receipt.address,
+                    network = synchronizer.network,
+                    endpoint = persistableWalletProvider.requirePersistableWallet().endpoint,
+                )
+            if (!result.canSettle) return
+            receivedGiftStorageProvider.markFinalized(receipt.address)
         }
+        giftClaimDataSource.cleanupFinalizedClaim(payload, receipt.address, synchronizer.network)
+        receivedGiftStorageProvider.settle(receipt.address)
     }
 }

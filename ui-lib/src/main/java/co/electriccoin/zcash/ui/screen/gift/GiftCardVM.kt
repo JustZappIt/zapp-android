@@ -168,7 +168,6 @@ class GiftCardVM(
             onConfirm = ::onConfirm,
             onCopy = ::onCopy,
             onShare = ::onShare,
-            onDone = navigationRouter::back,
             onBack = ::onBack,
             onOpenSavedCards = { navigationRouter.forward(GiftCardListArgs) }.takeIf { canOpenSavedCards },
         )

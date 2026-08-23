@@ -32,7 +32,7 @@ class CheckGiftCardClaimedUseCaseTest {
     fun `reports collected only once the funding is known to have reached the card`() =
         runTest {
             val storage = storage()
-            val useCase = useCase(storage, holdings(total = 0, hasFundingArrived = true))
+            val useCase = useCase(storage, holdings(total = 0, hasFundingArrived = true, hasFinalClaimSpend = true))
 
             assertEquals(GiftCardCheckResult.COLLECTED, useCase(card()) {})
 
@@ -59,7 +59,7 @@ class CheckGiftCardClaimedUseCaseTest {
     fun `settles a card shared before its funding mined`() =
         runTest {
             val storage = storage()
-            val useCase = useCase(storage, holdings(total = 0, hasFundingArrived = true))
+            val useCase = useCase(storage, holdings(total = 0, hasFundingArrived = true, hasFinalClaimSpend = true))
 
             // The status cannot say this card's funding mined — sharing outranks funded — so the
             // evidence has to come from the card's own wallet, or a legitimately collected card
@@ -99,7 +99,7 @@ class CheckGiftCardClaimedUseCaseTest {
             val dataSource =
                 mockk<GiftClaimDataSource>(relaxed = true).also {
                     coEvery { it.inspect(any(), any(), any(), any(), any(), any()) } returns
-                        holdings(total = 0, hasFundingArrived = true)
+                        holdings(total = 0, hasFundingArrived = true, hasFinalClaimSpend = true)
                 }
             val useCase = useCase(storage(), dataSource = dataSource)
 
@@ -129,11 +129,16 @@ class CheckGiftCardClaimedUseCaseTest {
             coVerify(exactly = 0) { storage.markClaimed(any(), any()) }
         }
 
-    private fun holdings(total: Long, hasFundingArrived: Boolean) =
+    private fun holdings(
+        total: Long,
+        hasFundingArrived: Boolean,
+        hasFinalClaimSpend: Boolean = false,
+    ) =
         GiftCardHoldings(
             available = Zatoshi(total),
             total = Zatoshi(total),
             hasFundingArrived = hasFundingArrived,
+            hasFinalClaimSpend = hasFinalClaimSpend,
         )
 
     private fun storage() = mockk<GiftCardStorageProvider>(relaxed = true)

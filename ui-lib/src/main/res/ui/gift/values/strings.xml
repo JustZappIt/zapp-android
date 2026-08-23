@@ -57,7 +57,6 @@
     <string name="gift_card_ready_copy">Copy gift link</string>
     <string name="gift_card_ready_share">Share link</string>
     <string name="gift_card_ready_share_picker">Share gift link</string>
-    <string name="gift_card_ready_done">Done</string>
     <string name="gift_card_ready_claimable">Claimable in about 15 minutes, once the funding transaction has enough confirmations.</string>
     <string name="gift_card_ready_bearer">Anyone with this link can claim it. Share it privately, and only once.</string>
 
@@ -78,10 +77,15 @@
     <string name="gift_claim_subtitle_preview">Someone sent you ZEC</string>
     <string name="gift_claim_subtitle_claiming">Claiming your gift</string>
     <string name="gift_claim_subtitle_done">Claimed</string>
+    <string name="gift_claim_subtitle_needs_wallet">You need a wallet first</string>
 
     <string name="gift_claim_amount_label">Card value</string>
     <string name="gift_claim_message_label">Message</string>
     <string name="gift_claim_claim">Claim to my wallet</string>
+    <string name="gift_claim_needs_wallet_action">Create a wallet</string>
+    <string name="gift_claim_connecting">Connecting to the Zcash network…</string>
+    <string name="gift_claim_needs_wallet_title">Create a wallet to claim this</string>
+    <string name="gift_claim_needs_wallet_body">The gift is yours — Zapp just needs a wallet to put it in. Set one up and your card will be waiting when you get back.</string>
 
     <string name="gift_claim_consent_title">This card is a few months old</string>
     <string name="gift_claim_consent_body">Claiming it means scanning about %1$s blocks, roughly %2$s. Keep Zapp open while it runs.</string>
@@ -111,6 +115,7 @@
     <string name="gift_claim_error_not_broadcast">Zapp could not confirm the transfer reached the network. Your gift is safe on the card — try again in a moment.</string>
     <string name="gift_claim_error_failed">The gift could not be claimed. Nothing was lost; try again.</string>
     <string name="gift_claim_error_underfunded">This card cannot cover the network fee to move its own funds. The gift is still on the card, but Zapp cannot claim it.</string>
+    <string name="gift_claim_error_params">Zapp couldn\'t download what it needs to build the transaction. Your gift is safe — check your connection and try again.</string>
     <string name="gift_claim_error_unreachable">Zapp could not reach a Zcash server to look for this gift. Check your connection and try again.</string>
     <string name="gift_claim_error_not_ready">Zapp is still connecting to the Zcash network. Your gift is fine — try again in a moment.</string>
     <string name="gift_claim_error_unavailable">This gift link is no longer open. Tap it again where you received it.</string>

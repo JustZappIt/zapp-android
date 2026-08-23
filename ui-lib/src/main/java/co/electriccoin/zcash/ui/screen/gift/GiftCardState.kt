@@ -89,7 +89,6 @@ internal data class GiftCardState(
     val onConfirm: () -> Unit,
     val onCopy: () -> Unit,
     val onShare: (String) -> Unit,
-    val onDone: () -> Unit,
     val onBack: () -> Unit,
     /** Null when nothing is stored, or when the stage has no way out. */
     val onOpenSavedCards: (() -> Unit)?,

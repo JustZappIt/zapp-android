@@ -14,6 +14,8 @@ import cash.z.ecc.android.sdk.model.AccountBalance
 import cash.z.ecc.android.sdk.model.AccountCreateSetup
 import cash.z.ecc.android.sdk.model.BlockHeight
 import cash.z.ecc.android.sdk.model.FirstClassByteArray
+import cash.z.ecc.android.sdk.model.TransactionOverview
+import cash.z.ecc.android.sdk.model.TransactionState
 import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.android.sdk.model.ZcashNetwork
 import cash.z.ecc.sdk.extension.ZERO
@@ -28,10 +30,13 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -77,13 +82,6 @@ private suspend fun CloseableSynchronizer.closeAndAwait() {
     if (this is SdkSynchronizer) closeFlow().first() else close()
 }
 
-/**
- * Mined, not merely present: a transaction the wallet knows of but has not seen in a block is the
- * mempool case, and that is the one thing an empty card must never be settled on.
- */
-private suspend fun Synchronizer.hasMined(txid: String): Boolean =
-    allTransactions.first().any { it.minedHeight != null && it.txId.txIdString() == txid }
-
 // Every shielded pool: the card is funded to a unified address and the *sender's* wallet picks
 // which, so reading one pool would report a good card as empty the moment that changed.
 private fun AccountBalance.shieldedAvailable() = sapling.available + orchard.available + ironwood.available
@@ -106,17 +104,23 @@ data class GiftCardHoldings(
      * still in the mempool, or dropped and possibly yet to mine before it expires.
      */
     val hasFundingArrived: Boolean,
+    /** A claim spend at the SDK's full confirmation threshold. */
+    val hasFinalClaimSpend: Boolean = false,
+    /** A submitted/mined claim that can still expire or reorg. */
+    val hasPendingClaimSpend: Boolean = false,
 ) {
-    /** Nothing left. On its own this does not say why — see [isCollected]. */
+    /** Nothing left in the card wallet. */
     val isEmpty: Boolean get() = total == Zatoshi.ZERO
 
-    /**
-     * Somebody took the money — the only reading of an empty wallet that settles a card. Both halves
-     * are needed: one that never held the funding was never funded, and settling it would strand
-     * the card if the funding mined afterwards.
-     */
-    val isCollected: Boolean get() = hasFundingArrived && isEmpty
+    /** The funding arrived and a claim spend reached SDK finality. */
+    val isCollected: Boolean get() = hasFundingArrived && hasFinalClaimSpend
 }
+
+/** Whether recipient-side finality may discard the retry secret and isolated database. */
+data class GiftClaimFinalization(
+    val canSettle: Boolean,
+    val residual: Zatoshi,
+)
 
 /** What the card's own wallet turned out to hold. */
 sealed interface GiftClaimOutcome {
@@ -171,11 +175,8 @@ sealed interface GiftClaimOutcome {
  */
 interface GiftClaimDataSource {
     /**
-     * Syncs the card's wallet and, if its funds are spendable, moves exactly the card amount to
-     * [recipientAddress].
-     *
-     * Never claims more than [GiftLinkPayload.amountZatoshi] even when more has arrived — see
-     * `ClaimGiftCardUseCase` for why sweeping is the wrong shape.
+     * Syncs the card's wallet and moves at least the advertised amount to [recipientAddress].
+     * Spendable top-ups are swept so no recoverable funds are discarded with the isolated wallet.
      */
     suspend fun claim(
         payload: GiftLinkPayload,
@@ -203,12 +204,28 @@ interface GiftClaimDataSource {
         fundingTxid: String,
         onProgress: (GiftClaimProgress) -> Unit,
     ): GiftCardHoldings
+
+    suspend fun inspectFinalization(
+        payload: GiftLinkPayload,
+        cardAddress: String,
+        network: ZcashNetwork,
+        endpoint: LightWalletEndpoint,
+    ): GiftClaimFinalization
+
+    suspend fun cleanupFinalizedClaim(
+        payload: GiftLinkPayload,
+        cardAddress: String,
+        network: ZcashNetwork,
+    )
 }
 
+@Suppress("TooManyFunctions")
 internal class GiftClaimDataSourceImpl(
     private val context: Context,
     private val giftKeyProvider: GiftKeyProvider,
 ) : GiftClaimDataSource {
+    private val claimLocks = ConcurrentHashMap<String, Mutex>()
+
     override suspend fun claim(
         payload: GiftLinkPayload,
         cardAddress: String,
@@ -218,36 +235,15 @@ internal class GiftClaimDataSourceImpl(
         onProgress: (GiftClaimProgress) -> Unit,
     ): GiftClaimOutcome {
         val alias = giftAlias(payload.network, cardAddress)
-        val synchronizer = open(payload, network, endpoint, alias)
-        val settlement =
+        return lockFor(alias).withLock {
+            val synchronizer = open(payload, network, endpoint, alias)
             try {
                 claimFrom(synchronizer, payload, recipientAddress, onProgress)
             } finally {
-                // Every path: an engine left running holds its database files open and leaks a
-                // bearer seed into a background scan. NonCancellable because a cancelled claim
-                // still has to shut its engine down, and this suspends.
                 withContext(NonCancellable) { synchronizer.closeAndAwait() }
             }
-
-        // Settled outcomes only (§5). Everything else resumes against this database, and
-        // rescanning from the card's birthday is the cost of throwing it away.
-        //
-        // The delete is NonCancellable itself, which is the easy half to miss: the broadcast runs
-        // to a verdict regardless, but hands it back into a context that may have been cancelled
-        // meanwhile, so every later suspension point throws. A claim that moved real money would
-        // return CancellationException instead of its outcome, leaving a bearer seed on disk.
-        if (settlement.isSettled) deleteWallet(alias, network)
-        return settlement.outcome
+        }
     }
-
-    /**
-     * An outcome and whether it settles the card, which is not the same question — the pairing
-     * exists because only [claimFrom] can answer the second while the engine is still open.
-     */
-    private data class ClaimSettlement(
-        val outcome: GiftClaimOutcome,
-        val isSettled: Boolean,
-    )
 
     override suspend fun inspect(
         payload: GiftLinkPayload,
@@ -258,34 +254,91 @@ internal class GiftClaimDataSourceImpl(
         onProgress: (GiftClaimProgress) -> Unit,
     ): GiftCardHoldings {
         val alias = giftAlias(payload.network, cardAddress)
-        val synchronizer = open(payload, network, endpoint, alias)
-        val holdings =
-            try {
-                awaitReachable(synchronizer)
-                awaitSynced(synchronizer, onProgress)
-                val account = synchronizer.getAccounts().first()
-                val balance =
-                    synchronizer.walletBalances
-                        .filterNotNull()
-                        .first()
-                        .getValue(account.accountUuid)
-                GiftCardHoldings(
-                    available = balance.shieldedAvailable(),
-                    total = balance.shieldedTotal(),
-                    // A zero balance cannot resolve itself, so the wallet's own history is read in
-                    // the same breath: that is what separates "collected" from "never landed". The
-                    // txid only says which transaction in that history counts.
-                    hasFundingArrived = synchronizer.hasMined(fundingTxid),
-                )
-            } finally {
-                withContext(NonCancellable) { synchronizer.closeAndAwait() }
-            }
+        return lockFor(alias).withLock {
+            val synchronizer = open(payload, network, endpoint, alias)
+            val holdings =
+                try {
+                    awaitReachable(synchronizer)
+                    awaitSynced(synchronizer, onProgress)
+                    readHoldings(synchronizer, payload, fundingTxid)
+                } finally {
+                    withContext(NonCancellable) { synchronizer.closeAndAwait() }
+                }
 
-        // Retained unless settled, so the next check resumes instead of rescanning from the card's
-        // birthday. An empty wallet whose funding has not arrived will be asked about again.
-        if (holdings.isCollected) deleteWallet(alias, network)
-        return holdings
+            if (holdings.isCollected && holdings.isEmpty) deleteWallet(alias, network)
+            holdings
+        }
     }
+
+    override suspend fun inspectFinalization(
+        payload: GiftLinkPayload,
+        cardAddress: String,
+        network: ZcashNetwork,
+        endpoint: LightWalletEndpoint,
+    ): GiftClaimFinalization {
+        val alias = giftAlias(payload.network, cardAddress)
+        return lockFor(alias).withLock {
+            val synchronizer = open(payload, network, endpoint, alias)
+            val finalization =
+                try {
+                    awaitReachable(synchronizer)
+                    awaitSynced(synchronizer) {}
+                    val account = synchronizer.getAccounts().first()
+                    val balance =
+                        synchronizer.walletBalances
+                            .filterNotNull()
+                            .first()
+                            .getValue(account.accountUuid)
+                    val residual = balance.shieldedTotal()
+                    val hasFinalSpend =
+                        synchronizer.allTransactions.first().any {
+                            it.isFinalClaimSpend(Zatoshi(payload.amountZatoshi.toLong()))
+                        }
+                    GiftClaimFinalization(
+                        canSettle = hasFinalSpend && residual <= MAX_ABANDONED_RESIDUAL,
+                        residual = residual,
+                    )
+                } finally {
+                    withContext(NonCancellable) { synchronizer.closeAndAwait() }
+                }
+            finalization
+        }
+    }
+
+    override suspend fun cleanupFinalizedClaim(
+        payload: GiftLinkPayload,
+        cardAddress: String,
+        network: ZcashNetwork,
+    ) {
+        val alias = giftAlias(payload.network, cardAddress)
+        lockFor(alias).withLock {
+            check(deleteWallet(alias, network)) { "Gift claim wallet cleanup failed" }
+        }
+    }
+
+    private suspend fun readHoldings(
+        synchronizer: Synchronizer,
+        payload: GiftLinkPayload,
+        fundingTxid: String,
+    ): GiftCardHoldings {
+        val account = synchronizer.getAccounts().first()
+        val balance =
+            synchronizer.walletBalances
+                .filterNotNull()
+                .first()
+                .getValue(account.accountUuid)
+        val transactions = synchronizer.allTransactions.first()
+        val amount = Zatoshi(payload.amountZatoshi.toLong())
+        return GiftCardHoldings(
+            available = balance.shieldedAvailable(),
+            total = balance.shieldedTotal(),
+            hasFundingArrived = transactions.any { it.minedHeight != null && it.txId.txIdString() == fundingTxid },
+            hasFinalClaimSpend = transactions.any { it.isFinalClaimSpend(amount) },
+            hasPendingClaimSpend = transactions.any { it.isPendingClaimSpend(amount) },
+        )
+    }
+
+    private fun lockFor(alias: String): Mutex = claimLocks.getOrPut(alias) { Mutex() }
 
     /**
      * Deletes the card's wallet by file rather than through `Synchronizer.erase`.
@@ -302,13 +355,13 @@ internal class GiftClaimDataSourceImpl(
     private suspend fun deleteWallet(alias: String, network: ZcashNetwork) =
         withContext(NonCancellable + Dispatchers.IO) {
             val root = File(context.noBackupFilesDir, SDK_NO_BACKUP_SUBDIRECTORY)
-            giftWalletFileNames(alias, network.networkName).forEach { name ->
-                val file = File(root, name)
-                // deleteRecursively reports failure by returning false, not by throwing, so a
-                // runCatching around it would never see the ordinary case.
-                val deleted = runCatching { !file.exists() || file.deleteRecursively() }.getOrDefault(false)
-                if (!deleted) Twig.warn { "Gift claim: $name could not be deleted" }
-            }
+            giftWalletFileNames(alias, network.networkName)
+                .map { name ->
+                    val file = File(root, name)
+                    val deleted = runCatching { !file.exists() || file.deleteRecursively() }.getOrDefault(false)
+                    if (!deleted) Twig.warn { "Gift claim: $name could not be deleted" }
+                    deleted
+                }.all { it }
         }
 
     /**
@@ -352,13 +405,13 @@ internal class GiftClaimDataSourceImpl(
         }
     }
 
-    @Suppress("ReturnCount")
+    @Suppress("CyclomaticComplexMethod", "ReturnCount")
     private suspend fun claimFrom(
         synchronizer: CloseableSynchronizer,
         payload: GiftLinkPayload,
         recipientAddress: String,
         onProgress: (GiftClaimProgress) -> Unit,
-    ): ClaimSettlement {
+    ): GiftClaimOutcome {
         // Same bound as `inspect`, and for the same reason: the scan that follows is deliberately
         // unbounded (§11.1), but a server that cannot be reached at all must say so rather than
         // leave the recipient on a bar that will never move.
@@ -373,11 +426,33 @@ internal class GiftClaimDataSourceImpl(
                 .getValue(account.accountUuid)
         val amount = Zatoshi(payload.amountZatoshi.toLong())
 
-        unspendable(synchronizer, balance, amount)?.let { return it }
+        // Resume a transaction retained by the isolated database instead of double-spending.
+        val transactions = synchronizer.allTransactions.first()
+        val finalClaims = transactions.filter { it.isFinalClaimSpend(amount) }
+        val pendingClaims =
+            transactions.filter {
+                it.isPendingClaimSpend(amount) ||
+                    (
+                        finalClaims.isNotEmpty() &&
+                            it.isSentTransaction &&
+                            it.transactionState == TransactionState.Pending
+                    )
+            }
+        if (pendingClaims.isNotEmpty()) {
+            return GiftClaimOutcome.Claimed(amount, pendingClaims.map { it.txId.txIdString() })
+        }
+        val available = balance.shieldedAvailable()
+        if (finalClaims.isNotEmpty() && available <= MAX_ABANDONED_RESIDUAL) {
+            return GiftClaimOutcome.Claimed(amount, finalClaims.map { it.txId.txIdString() })
+        }
 
-        val proposal =
+        if (finalClaims.isEmpty()) unspendable(synchronizer, balance, amount)?.let { return it }
+
+        val requested =
+            if (finalClaims.isEmpty()) amount else available - MAX_ABANDONED_RESIDUAL
+        val initialProposal =
             try {
-                synchronizer.proposeTransfer(account, recipientAddress, amount, "")
+                synchronizer.proposeTransfer(account, recipientAddress, requested, "")
             } catch (e: TransactionEncoderException.ProposalFromParametersException) {
                 // The card holds its amount but cannot also cover the fee to move it. Waiting does
                 // not fix that — the funding is one note, so it is either confirmed in full or not
@@ -386,7 +461,15 @@ internal class GiftClaimDataSourceImpl(
                 // and the database stays resumable.
                 if (!e.isInsufficientFunds()) throw e
                 Twig.warn { "Gift claim: card cannot cover its own claim fee" }
-                return ClaimSettlement(GiftClaimOutcome.Underfunded(balance.shieldedAvailable()), isSettled = false)
+                return GiftClaimOutcome.Underfunded(available)
+            }
+        val sweepAmount = available - initialProposal.totalFeeRequired()
+        val proposal =
+            if (sweepAmount > requested) {
+                runCatching { synchronizer.proposeTransfer(account, recipientAddress, sweepAmount, "") }
+                    .getOrDefault(initialProposal)
+            } else {
+                initialProposal
             }
         val usk = giftKeyProvider.deriveSpendingKey(payload.mnemonic, synchronizer.network)
 
@@ -403,7 +486,7 @@ internal class GiftClaimDataSourceImpl(
 
             if (result !is SubmitResult.Success) {
                 Twig.warn { "Gift claim: broadcast was not a clean success" }
-                ClaimSettlement(GiftClaimOutcome.NotBroadcast(result), isSettled = false)
+                GiftClaimOutcome.NotBroadcast(result)
             } else {
                 if (synchronizer is SdkSynchronizer) {
                     runCatching {
@@ -411,9 +494,9 @@ internal class GiftClaimDataSourceImpl(
                         synchronizer.refreshAllBalances()
                     }.onFailure { Twig.warn { "Gift claim: post-claim refresh failed" } }
                 }
-                ClaimSettlement(
-                    GiftClaimOutcome.Claimed(amount = amount, txIds = result.txIds),
-                    isSettled = true,
+                GiftClaimOutcome.Claimed(
+                    amount = amount,
+                    txIds = finalClaims.map { it.txId.txIdString() } + result.txIds,
                 )
             }
         }
@@ -458,7 +541,7 @@ internal class GiftClaimDataSourceImpl(
         synchronizer: Synchronizer,
         balance: AccountBalance,
         amount: Zatoshi,
-    ): ClaimSettlement? {
+    ): GiftClaimOutcome? {
         val available = balance.shieldedAvailable()
         val total = balance.shieldedTotal()
         return when {
@@ -467,21 +550,15 @@ internal class GiftClaimDataSourceImpl(
             }
 
             total > Zatoshi.ZERO -> {
-                ClaimSettlement(
-                    GiftClaimOutcome
-                        .NotYetSpendable(available, total, confirmations = null)
-                        .withConfirmations(synchronizer, amount),
-                    isSettled = false,
-                )
+                GiftClaimOutcome
+                    .NotYetSpendable(available, total, confirmations = null)
+                    .withConfirmations(synchronizer, amount)
             }
 
             else -> {
                 // Empty either way, but only a wallet that once held the card's amount is a wallet
                 // somebody emptied. Nothing at all means the funding has not landed yet.
-                ClaimSettlement(
-                    GiftClaimOutcome.Empty,
-                    isSettled = synchronizer.fundingCandidates(amount).any(),
-                )
+                GiftClaimOutcome.Empty
             }
         }
     }
@@ -496,6 +573,12 @@ internal class GiftClaimDataSourceImpl(
         allTransactions.first().filter {
             it.minedHeight != null && !it.isSentTransaction && it.netValue >= amount
         }
+
+    private fun TransactionOverview.isFinalClaimSpend(amount: Zatoshi): Boolean =
+        isSentTransaction && totalSpent >= amount && transactionState == TransactionState.Confirmed
+
+    private fun TransactionOverview.isPendingClaimSpend(amount: Zatoshi): Boolean =
+        isSentTransaction && totalSpent >= amount && transactionState == TransactionState.Pending
 
     /**
      * Bounds only the part that can hang forever: reaching the server at all. The scan that follows
@@ -535,6 +618,7 @@ internal class GiftClaimDataSourceImpl(
          * and connecting from scratch, so a short bound fails checks that would have worked.
          */
         val SERVER_TIMEOUT = 90.seconds
+        val MAX_ABANDONED_RESIDUAL = Zatoshi(10_000L)
 
         const val GIFT_ACCOUNT_NAME = "gift"
         const val ALIAS_HASH_CHARS = 48

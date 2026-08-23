@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.screen.gift
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cash.z.ecc.android.sdk.exception.TransactionEncoderException
 import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
@@ -14,6 +15,7 @@ import co.electriccoin.zcash.ui.common.datasource.GiftClaimOutcome
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimProgress
 import co.electriccoin.zcash.ui.common.datasource.REQUIRED_CONFIRMATIONS
 import co.electriccoin.zcash.ui.common.provider.ApplicationStateProvider
+import co.electriccoin.zcash.ui.common.provider.ProvingParamsProvider
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.usecase.ClaimGiftCardUseCase
@@ -51,10 +53,11 @@ import kotlin.time.Duration.Companion.seconds
  */
 class GiftClaimVM(
     args: GiftClaimArgs,
-    pendingGiftLinks: PendingGiftLinkStore,
+    private val pendingGiftLinks: PendingGiftLinkStore,
     private val claimGiftCard: ClaimGiftCardUseCase,
     private val confirmGiftClaim: ConfirmGiftClaimUseCase,
     private val applicationStateProvider: ApplicationStateProvider,
+    private val provingParams: ProvingParamsProvider,
     exchangeRateRepository: ExchangeRateRepository,
     swapRepository: SwapRepository,
     private val navigationRouter: NavigationRouter,
@@ -99,7 +102,17 @@ class GiftClaimVM(
         )
 
     init {
-        viewModelScope.launch { load() }
+        viewModelScope.launch {
+            load()
+            // A recipient can arrive here on their first-ever launch, with the link tapped before
+            // there is any wallet to claim into. Pick the card back up once onboarding has made
+            // one, rather than leaving them on a screen whose offer has already been taken.
+            if (snapshot.value.stage == GiftClaimStage.NEEDS_WALLET) {
+                claimGiftCard.awaitWallet()
+                snapshot.update { it.copy(stage = GiftClaimStage.LOADING) }
+                load()
+            }
+        }
         viewModelScope.launch {
             applicationStateProvider.isInForeground.collect { foreground ->
                 isForeground = foreground
@@ -118,28 +131,65 @@ class GiftClaimVM(
                 it.copy(stage = GiftClaimStage.PREVIEW, error = GiftClaimError.LINK_UNAVAILABLE)
             }
 
+        // Settle any receipt whose claim has since mined, so the lookup inside preview can tell a
+        // finished claim from one still in flight. Nothing else on a recipient's device does this:
+        // the in-flight confirm dies with this screen, and reconcile otherwise runs only on the
+        // sender's card list — which a recipient never opens. Without it every receipt here stays
+        // unsettled forever, holding a bearer secret it no longer needs.
+        runCatching { confirmGiftClaim.reconcile() }
+
         runCatching { claimGiftCard.preview(link) }
             .onSuccess { preview ->
                 payload = preview.payload
                 cardAddress = preview.cardAddress
+                // The card goes up now, on what the link alone says. Holding it back until the
+                // wallet finds the chain is how a real gift spends its first half-minute looking
+                // like a broken screen.
                 snapshot.update {
                     it.copy(
-                        stage =
-                            when (preview.verdict) {
-                                GiftBirthdayVerdict.Proceed -> GiftClaimStage.PREVIEW
-                                is GiftBirthdayVerdict.NeedsConsent -> GiftClaimStage.CONSENT
-                            },
+                        stage = if (preview.hasWallet) GiftClaimStage.LOADING else GiftClaimStage.NEEDS_WALLET,
                         amount = Zatoshi(preview.payload.amountZatoshi.toLong()),
                         message = preview.payload.message,
                         expiry = preview.payload.expiresAt.toGiftExpiryDisplay(),
-                        blocksToScan = (preview.verdict as? GiftBirthdayVerdict.NeedsConsent)?.blocksToScan,
                         error = null,
                     )
+                }
+                if (preview.collected != null) {
+                    // Already collected, on this wallet's own record. Nothing to scan for, nothing
+                    // to spend, and no proving parameters needed to say so.
+                    snapshot.update { it.applying(preview.collected) }
+                } else {
+                    // Start the 51MB proving-parameter download the moment a real card is on
+                    // screen, rather than at the end of a claim that has already found the money.
+                    // A recipient with no wallet spends the next minute in onboarding, which is
+                    // the room this needs.
+                    provingParams.prefetch()
+                    if (preview.hasWallet) awaitVerdict(preview.payload)
                 }
             }.onFailure { throwable ->
                 if (throwable is CancellationException) throw throwable
                 snapshot.update { it.copy(stage = GiftClaimStage.PREVIEW, error = throwable.toClaimError()) }
             }
+    }
+
+    /**
+     * Resolves the scan cost, retrying for as long as the chain tip is unknown.
+     *
+     * A cold start has simply not found the chain yet, and the card on screen is already correct,
+     * so this must not surface as a failure the recipient has to keep tapping at. Cancelled with
+     * the scope the moment they leave.
+     */
+    private suspend fun awaitVerdict(payload: GiftLinkPayload) {
+        while (true) {
+            val attempt = runCatching { claimGiftCard.birthdayVerdict(payload) }
+            val throwable = attempt.exceptionOrNull()
+            if (throwable is CancellationException) throw throwable
+            // An unknown chain tip is the only thing worth another pass. The card is already on
+            // screen, so a cold start reads as a wait rather than as a verdict on the gift.
+            if (throwable is GiftClaimNotReadyException) continue
+            snapshot.update { it.applying(attempt) }
+            return
+        }
     }
 
     private fun onClaim() {
@@ -156,7 +206,7 @@ class GiftClaimVM(
     }
 
     private suspend fun claim(payload: GiftLinkPayload, address: String) {
-        runCatching { claimGiftCard(payload, address, ::onProgress) }
+        runCatching { claimGiftCard(payload, address) { progress -> snapshot.update { it.applying(progress) } } }
             .onSuccess { outcome ->
                 snapshot.update { it.applying(outcome) }
                 // Detached: the receipt keeps the link until this sees the claim on chain.
@@ -187,8 +237,6 @@ class GiftClaimVM(
             }
     }
 
-    private fun onProgress(progress: GiftClaimProgress) = snapshot.update { it.applying(progress) }
-
     private fun stopClaim() {
         val job = claimJob ?: return
         if (job.isCompleted) return
@@ -201,8 +249,14 @@ class GiftClaimVM(
         snapshot.update { it.copy(stage = GiftClaimStage.PREVIEW, progressFraction = null) }
     }
 
-    private fun onConsent() {
-        snapshot.update { it.copy(stage = GiftClaimStage.PREVIEW) }
+    /**
+     * Hands the link back to the store before leaving, because this screen's own token was spent
+     * when it opened and onboarding is hosted by the root destination — the only way to reach it is
+     * to pop this claim. `RootNavGraph` reopens the deferred link once the wallet lands.
+     */
+    private fun onCreateWallet() {
+        uri?.let { pendingGiftLinks.defer(it) }
+        navigationRouter.backToRoot()
     }
 
     private fun onRetry() {
@@ -230,13 +284,15 @@ class GiftClaimVM(
             requiredConfirmations = requiredConfirmations,
             error = error,
             onClaim = ::onClaim,
-            onConsent = ::onConsent,
+            onConsent = { snapshot.update { snap -> snap.copy(stage = GiftClaimStage.PREVIEW) } },
             onRetry = ::onRetry,
+            onCreateWallet = ::onCreateWallet,
             onBack = navigationRouter::back,
         )
 
     override fun onCleared() {
         stopClaim()
+        uri?.let { pendingGiftLinks.release(it) }
         super.onCleared()
     }
 
@@ -272,6 +328,23 @@ private data class GiftClaimSnapshot(
     val error: GiftClaimError? = null,
 )
 
+/** The scan cost once the chain tip is known, or the reason the link could not be judged. */
+private fun GiftClaimSnapshot.applying(verdict: Result<GiftBirthdayVerdict>): GiftClaimSnapshot =
+    verdict.fold(
+        onSuccess = {
+            copy(
+                stage =
+                    when (it) {
+                        GiftBirthdayVerdict.Proceed -> GiftClaimStage.PREVIEW
+                        is GiftBirthdayVerdict.NeedsConsent -> GiftClaimStage.CONSENT
+                    },
+                blocksToScan = (it as? GiftBirthdayVerdict.NeedsConsent)?.blocksToScan,
+                error = null,
+            )
+        },
+        onFailure = { copy(stage = GiftClaimStage.PREVIEW, error = it.toClaimError()) },
+    )
+
 private fun GiftClaimSnapshot.applying(outcome: GiftClaimOutcome): GiftClaimSnapshot =
     when (outcome) {
         is GiftClaimOutcome.Claimed -> {
@@ -305,17 +378,45 @@ private fun GiftClaimSnapshot.applying(outcome: GiftClaimOutcome): GiftClaimSnap
     }
 
 private fun Throwable.toClaimError(): GiftClaimError =
-    when (this) {
-        is GiftClaimNotReadyException -> GiftClaimError.WALLET_NOT_READY
+    when {
+        this is GiftClaimNotReadyException -> GiftClaimError.WALLET_NOT_READY
 
         // Separated from FAILED for the same reason the sender's check separates them: "you are
         // offline" and "something went wrong" need different copy, and neither says anything about
         // the card. Thrown out of the claim rather than the preview, which never touches the
         // network.
-        is GiftCardUnreachableException -> GiftClaimError.UNREACHABLE
+        this is GiftCardUnreachableException -> GiftClaimError.UNREACHABLE
+
+        isMissingProvingParams() -> GiftClaimError.PARAMS_UNAVAILABLE
 
         else -> (this as? GiftLinkException)?.error.toClaimError()
     }
+
+/**
+ * Whether a claim died for want of the Sapling proving parameters.
+ *
+ * They are downloaded on first spend rather than shipped, and scanning never touches them, so this
+ * lands at the last step of a claim that has already found the money.
+ *
+ * The typed exception only surfaces when the download itself throws; an absent or partial file
+ * instead reaches Rust, which reports it as a string with no typed sub-code — the same limitation
+ * `TransactionProgressVM.isAnchorError` works around. Replace the string check if the SDK ever
+ * adds one.
+ */
+private fun Throwable.isMissingProvingParams(): Boolean {
+    var throwable: Throwable? = this
+    while (throwable != null) {
+        val fetchFailed = throwable is TransactionEncoderException.FetchParamsException
+        val rustRejectedTheFile =
+            (throwable as? TransactionEncoderException.TransactionNotCreatedException)
+                ?.rootCause
+                ?.message
+                ?.contains("parameter file", ignoreCase = true) == true
+        if (fetchFailed || rustRejectedTheFile) return true
+        throwable = throwable.cause
+    }
+    return false
+}
 
 /** Null is anything that was not a link rejection at all. */
 private fun GiftLinkError?.toClaimError(): GiftClaimError =

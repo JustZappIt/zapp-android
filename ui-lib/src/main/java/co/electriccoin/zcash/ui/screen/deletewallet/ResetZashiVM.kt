@@ -9,7 +9,7 @@ import co.electriccoin.zcash.ui.common.model.LceState
 import co.electriccoin.zcash.ui.common.model.mutableLce
 import co.electriccoin.zcash.ui.common.model.stateIn
 import co.electriccoin.zcash.ui.common.model.withLce
-import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
+import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnsharedGiftFundsUseCase
 import co.electriccoin.zcash.ui.common.usecase.ErrorMapperUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ButtonStyle
@@ -27,7 +27,7 @@ class ResetZashiVM(
     private val navigationRouter: NavigationRouter,
     private val resetZashi: ResetZashiUseCase,
     private val errorStateMapper: ErrorMapperUseCase,
-    private val giftCardStorageProvider: GiftCardStorageProvider,
+    private val ensureNoUnsharedGiftFunds: EnsureNoUnsharedGiftFundsUseCase,
 ) : ViewModel() {
     private val isKeepFilesChecked = MutableStateFlow(true)
     private val confirmationDialogFlow = MutableStateFlow<ZashiConfirmationState?>(null)
@@ -73,7 +73,7 @@ class ResetZashiVM(
 
     private fun onConfirmClicked() {
         viewModelScope.launch {
-            val hasUnsharedGiftFunds = runCatching { giftCardStorageProvider.hasUnsharedFunds() }.getOrDefault(true)
+            val hasUnsharedGiftFunds = runCatching { ensureNoUnsharedGiftFunds() }.isFailure
             confirmationDialogFlow.value =
                 if (hasUnsharedGiftFunds) createGiftFundsWarningState() else createConfirmationState()
         }
@@ -93,9 +93,9 @@ class ResetZashiVM(
                 ),
             secondaryAction =
                 ButtonState(
-                    text = stringRes(R.string.delete_wallet_gift_cards_cancel),
+                    text = stringRes(R.string.delete_wallet_gift_cards_delete_anyway),
                     style = ButtonStyle.TERTIARY,
-                    onClick = ::onDismissConfirmation,
+                    onClick = ::onConfirmDiscardGifts,
                 ),
             onBack = ::onDismissConfirmation,
         )
@@ -123,6 +123,16 @@ class ResetZashiVM(
         confirmationDialogFlow.value = null
         resetLce.execute {
             resetZashi(keepFiles = isKeepFilesChecked.value)
+        }
+    }
+
+    private fun onConfirmDiscardGifts() {
+        confirmationDialogFlow.value = null
+        resetLce.execute {
+            resetZashi(
+                keepFiles = isKeepFilesChecked.value,
+                allowGiftDataLoss = true,
+            )
         }
     }
 }

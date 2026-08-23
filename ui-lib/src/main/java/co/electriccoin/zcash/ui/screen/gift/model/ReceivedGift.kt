@@ -6,12 +6,11 @@ package co.electriccoin.zcash.ui.screen.gift.model
 import kotlinx.serialization.Serializable
 
 /**
- * A gift this wallet collected, and — until its claim has mined — the only way back to it.
+ * A gift this wallet is collecting, and — until its claim is final — the only way back to it.
  *
- * A broadcast that reached the mempool is not a claim that landed: it can expire unmined, and then
- * the card still holds its funds while the card's own wallet has already been deleted. So the link
- * is kept until the claim is on chain and dropped the moment it is. [address] is the identity, so
- * one link cannot produce two receipts.
+ * A broadcast that reached the mempool can expire or reorg. The link is written before broadcast,
+ * kept with the isolated wallet database, and dropped only after SDK finality.
+ * [address] is the identity, so one link cannot produce two receipts.
  */
 @Serializable
 data class ReceivedGift(
@@ -19,10 +18,13 @@ data class ReceivedGift(
     val network: String,
     val amountZatoshi: Long,
     val claimedAt: String,
-    val claimTxids: List<String>,
+    val destinationAddress: String? = null,
+    val claimTxids: List<String> = emptyList(),
     val message: String? = null,
-    /** The bearer link, held only until [claimTxids] are seen on chain. */
+    /** The bearer link, held until every [claimTxids] transaction reaches SDK finality. */
     val claimLink: GiftLinkPayload? = null,
+    /** Durable cleanup checkpoint written before the isolated database is deleted. */
+    val isFinalized: Boolean = false,
 ) {
     init {
         // A link for another network cannot retry this one. IAE so the store reads it as corrupt.
@@ -31,7 +33,7 @@ data class ReceivedGift(
         }
     }
 
-    /** The claim is on chain, so nothing can need the link again. */
+    /** The claim is final, so nothing can need the link again. */
     val isSettled: Boolean
         get() = claimLink == null
 
@@ -39,10 +41,42 @@ data class ReceivedGift(
     override fun toString(): String = "ReceivedGift(network=$network, redacted)"
 }
 
-/** Newest first, and one receipt per card however many times its link is opened. */
-internal fun List<ReceivedGift>.recording(gift: ReceivedGift): List<ReceivedGift> =
-    listOf(gift) + filterNot { it.address == gift.address }
+/** Newest first, one receipt per card, and never regresses durable recovery state. */
+internal fun List<ReceivedGift>.recording(gift: ReceivedGift): List<ReceivedGift> {
+    val current = firstOrNull { it.address == gift.address }
+    val merged =
+        when {
+            current == null -> {
+                gift
+            }
 
-/** Drops the link for [address], its claim now being on chain. One-way, and a no-op if absent. */
+            current.isSettled -> {
+                current
+            }
+
+            else -> {
+                gift.copy(
+                    destinationAddress = gift.destinationAddress ?: current.destinationAddress,
+                    claimTxids = mergeClaimTxids(current.claimTxids, gift.claimTxids),
+                    claimLink = current.claimLink ?: gift.claimLink,
+                    isFinalized = current.isFinalized || gift.isFinalized,
+                )
+            }
+        }
+    return listOf(merged) + filterNot { it.address == gift.address }
+}
+
+private fun mergeClaimTxids(current: List<String>, incoming: List<String>): List<String> =
+    when {
+        incoming.isEmpty() -> current
+        current.isEmpty() -> incoming
+        incoming.any(current::contains) -> (current + incoming).distinct()
+        else -> incoming
+    }
+
+/** Drops the link for [address]. One-way, and a no-op if absent. */
 internal fun List<ReceivedGift>.settling(address: String): List<ReceivedGift> =
     map { if (it.address == address) it.copy(claimLink = null) else it }
+
+internal fun List<ReceivedGift>.finalizing(address: String): List<ReceivedGift> =
+    map { if (it.address == address) it.copy(isFinalized = true) else it }

@@ -379,16 +379,18 @@ class TransactionRepositoryImpl(
             }
         }
 
-    // MOB-1577: minedHeight == null alone used to fall straight to `isSyncing -> Pending`, so an
-    // Expired transaction flickered back to Pending on every sync cycle. transactionState carries
-    // the terminal Expired classification through explicitly instead of re-deriving it here.
+    // Preserve the SDK's confirmation policy. A non-null mined height means one or more blocks,
+    // while TransactionState.Confirmed means the SDK's full confirmation threshold. Collapsing
+    // those two states destroys reorg recovery for custody-sensitive transactions.
+    //
+    // MOB-1577: transactionState also carries Expired through sync cycles explicitly.
     internal fun createTransactionState(
         minedHeight: BlockHeight?,
         transactionState: TransactionState,
         isSyncing: Boolean
     ): TransactionState? =
         when {
-            minedHeight != null -> Confirmed
+            minedHeight != null -> transactionState
             transactionState == Expired -> null
             isSyncing -> Pending
             else -> null

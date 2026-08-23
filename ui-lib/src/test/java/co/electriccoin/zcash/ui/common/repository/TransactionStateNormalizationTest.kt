@@ -69,9 +69,9 @@ class TransactionStateNormalizationTest {
     }
 
     @Test
-    fun minedTransactionBecomesConfirmedRegardlessOfStateOrSyncFlag() {
+    fun minedTransactionPreservesSdkConfirmationState() {
         assertEquals(
-            Confirmed,
+            Pending,
             repository.createTransactionState(
                 minedHeight = minedHeight,
                 transactionState = Pending,
@@ -79,7 +79,7 @@ class TransactionStateNormalizationTest {
             )
         )
         assertEquals(
-            Confirmed,
+            Expired,
             repository.createTransactionState(
                 minedHeight = minedHeight,
                 transactionState = Expired,

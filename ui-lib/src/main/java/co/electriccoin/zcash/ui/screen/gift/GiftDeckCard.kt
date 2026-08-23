@@ -46,8 +46,11 @@ import kotlinx.coroutines.launch
  *
  * The card underneath is drawn at full size and clipped, exactly as a wallet shows it — so this
  * slice is the real top of the real card, not a summary row standing in for one.
+ *
+ * Sized so the peek line clears the next card lapping over it: [DECK_OVERLAP] of this is hidden,
+ * and what is left has to hold the amount and the status pill with room to read.
  */
-private val PEEK_HEIGHT = 78.dp
+private val PEEK_HEIGHT = 92.dp
 
 /** Cards have round corners. This is most of what separates a card from a rectangle. */
 internal val GIFT_CARD_CORNER = 16.dp

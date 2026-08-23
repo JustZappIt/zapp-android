@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.common.provider
 
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
 import co.electriccoin.zcash.ui.screen.gift.model.ReceivedGift
+import co.electriccoin.zcash.ui.screen.gift.model.finalizing
 import co.electriccoin.zcash.ui.screen.gift.model.recording
 import co.electriccoin.zcash.ui.screen.gift.model.settling
 import kotlinx.coroutines.flow.Flow
@@ -17,24 +18,27 @@ import kotlinx.serialization.builtins.ListSerializer
  * Receipts for the gifts this wallet has collected.
  *
  * Custody-critical **while a receipt is unsettled**. A claim that reached the mempool can still
- * expire unmined, and until it is seen on chain the card holds its funds and this record holds the
+ * expire unmined, and until finality the card can regain its funds and this record holds the
  * only link left that can move them — see [ReceivedGift]. Once settled it is ordinary history, and
  * losing it costs a row in a list rather than money.
  *
- * That split is why nothing guards its deletion but the decode is strict all the same: a tolerant
- * decode drops an unrecognised field and writes the record back without it, which for an unsettled
- * receipt means an older build silently discarding a bearer secret.
+ * The store is strict so an older build cannot silently discard an unknown recovery field.
  */
 interface ReceivedGiftStorageProvider {
     fun observe(): Flow<List<ReceivedGift>>
 
     suspend fun getAll(): List<ReceivedGift>
 
-    /** Idempotent per card: re-opening the same link replaces its receipt rather than adding one. */
+    /** Idempotent and monotonic per card. */
     suspend fun record(gift: ReceivedGift)
 
+    /** True when any receipt still holds custody-critical retry material. */
+    suspend fun hasUnsettledClaims(): Boolean = getAll().any { !it.isSettled }
+
+    suspend fun markFinalized(address: String)
+
     /**
-     * Drops the retained bearer secret for [address], its claim now being on chain.
+     * Drops the retained bearer secret for [address], its claim now being final.
      *
      * Only [ConfirmGiftClaimUseCase] should call this, and only on evidence: a receipt settled
      * early is a gift that cannot be retried if its claim never mines.
@@ -64,6 +68,9 @@ internal class ReceivedGiftStorageProviderImpl(
 
     override suspend fun settle(address: String) =
         mutex.withLock { store.set(store.get().orEmpty().settling(address)) }
+
+    override suspend fun markFinalized(address: String) =
+        mutex.withLock { store.set(store.get().orEmpty().finalizing(address)) }
 
     private companion object {
         /** Never bump this without a migration: an unsettled receipt behind a dead key is money. */

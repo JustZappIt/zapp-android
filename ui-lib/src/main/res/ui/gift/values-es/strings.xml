@@ -57,7 +57,6 @@
     <string name="gift_card_ready_copy">Copiar enlace de regalo</string>
     <string name="gift_card_ready_share">Compartir enlace</string>
     <string name="gift_card_ready_share_picker">Compartir enlace de regalo</string>
-    <string name="gift_card_ready_done">Listo</string>
     <string name="gift_card_ready_claimable">Se podrá reclamar en unos 15 minutos, cuando la transacción de financiación tenga suficientes confirmaciones.</string>
     <string name="gift_card_ready_bearer">Cualquiera con este enlace puede reclamarla. Compártelo de forma privada y solo una vez.</string>
 
@@ -78,10 +77,15 @@
     <string name="gift_claim_subtitle_preview">Alguien te ha enviado ZEC</string>
     <string name="gift_claim_subtitle_claiming">Reclamando tu regalo</string>
     <string name="gift_claim_subtitle_done">Reclamada</string>
+    <string name="gift_claim_subtitle_needs_wallet">Primero necesitas un monedero</string>
 
     <string name="gift_claim_amount_label">Valor de la tarjeta</string>
     <string name="gift_claim_message_label">Mensaje</string>
     <string name="gift_claim_claim">Reclamar a mi monedero</string>
+    <string name="gift_claim_needs_wallet_action">Crear un monedero</string>
+    <string name="gift_claim_connecting">Conectando con la red Zcash…</string>
+    <string name="gift_claim_needs_wallet_title">Crea un monedero para reclamarla</string>
+    <string name="gift_claim_needs_wallet_body">El regalo es tuyo: Zapp solo necesita un monedero donde guardarlo. Crea uno y tu tarjeta te estará esperando al volver.</string>
 
     <string name="gift_claim_consent_title">Esta tarjeta tiene ya unos meses</string>
     <string name="gift_claim_consent_body">Reclamarla implica escanear unos %1$s bloques, aproximadamente %2$s. Mantén Zapp abierta mientras tanto.</string>
@@ -111,6 +115,7 @@
     <string name="gift_claim_error_not_broadcast">Zapp no pudo confirmar que la transferencia llegara a la red. Tu regalo sigue a salvo en la tarjeta: inténtalo en un momento.</string>
     <string name="gift_claim_error_failed">No se pudo reclamar el regalo. No se ha perdido nada; inténtalo de nuevo.</string>
     <string name="gift_claim_error_underfunded">Esta tarjeta no puede cubrir la comisión de red para mover sus propios fondos. El regalo sigue en la tarjeta, pero Zapp no puede reclamarlo.</string>
+    <string name="gift_claim_error_params">Zapp no pudo descargar lo que necesita para crear la transacción. Tu regalo está a salvo: revisa tu conexión e inténtalo de nuevo.</string>
     <string name="gift_claim_error_unreachable">Zapp no pudo conectar con ningún servidor de Zcash para buscar este regalo. Comprueba tu conexión e inténtalo de nuevo.</string>
     <string name="gift_claim_error_not_ready">Zapp todavía se está conectando a la red Zcash. Tu regalo está bien: inténtalo en un momento.</string>
     <string name="gift_claim_error_unavailable">Este enlace de regalo ya no está abierto. Tócalo de nuevo donde lo recibiste.</string>

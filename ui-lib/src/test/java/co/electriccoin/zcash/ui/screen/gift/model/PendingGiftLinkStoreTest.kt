@@ -44,15 +44,17 @@ class PendingGiftLinkStoreTest {
     }
 
     @Test
-    fun `a taken link can be opened again`() {
+    fun `an active link cannot be opened again until released`() {
         val store = PendingGiftLinkStore()
         val token = store.accept(link("a"))
-        store.take(token)
+        val raw = assertNotNull(store.take(token))
 
-        assertIs<GiftLinkIntake.Accepted>(
+        assertEquals(
+            GiftLinkIntake.AlreadyPending,
             store.put(link("a")),
-            "backing out of a claim must not make the card unopenable"
         )
+        store.release(raw)
+        assertIs<GiftLinkIntake.Accepted>(store.put(link("a")))
     }
 
     @Test
@@ -95,6 +97,7 @@ class PendingGiftLinkStoreTest {
         val tokens = List(MAX_PENDING) { store.accept(link("card$it")) }
 
         store.take(tokens.first())
+        store.release(link("card0"))
 
         assertIs<GiftLinkIntake.Accepted>(store.put(link("one-more")), "taking a link must free its slot")
     }
@@ -116,6 +119,34 @@ class PendingGiftLinkStoreTest {
         assertEquals(true, raw.length <= GiftLinkCodec.MAX_URI_BYTES, "precondition: under the character bound")
         assertEquals(true, raw.toByteArray().size > GiftLinkCodec.MAX_URI_BYTES, "precondition: over the byte bound")
         assertEquals(GiftLinkIntake.Refused, PendingGiftLinkStore().put(raw))
+    }
+
+    @Test
+    fun `hands a deferred link back once a wallet exists`() {
+        val store = PendingGiftLinkStore()
+        // The claim screen opened with no wallet behind it, spending the token on the way in.
+        store.take(store.accept(link("a")))
+
+        store.defer(link("a"))
+        val resumed = assertNotNull(store.resumeDeferred(), "a card left to go and make a wallet must come back")
+
+        assertEquals(link("a"), store.take(resumed))
+    }
+
+    @Test
+    fun `resumes a deferred link only once`() {
+        val store = PendingGiftLinkStore()
+        store.defer(link("a"))
+        store.resumeDeferred()
+
+        // Onboarding reports READY once, but the effect that reads this can run again on
+        // recomposition; a second claim screen would be two attempts to spend the same note.
+        assertNull(store.resumeDeferred())
+    }
+
+    @Test
+    fun `has nothing to resume when no card was deferred`() {
+        assertNull(PendingGiftLinkStore().resumeDeferred())
     }
 
     /**

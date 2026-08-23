@@ -24,6 +24,7 @@ import co.electriccoin.zcash.ui.common.provider.GetVersionInfoProvider
 import co.electriccoin.zcash.ui.common.provider.GetZcashCurrencyProvider
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProviderImpl
+import co.electriccoin.zcash.ui.common.provider.GiftClaimOperationLock
 import co.electriccoin.zcash.ui.common.provider.GiftKeyProvider
 import co.electriccoin.zcash.ui.common.provider.GiftKeyProviderImpl
 import co.electriccoin.zcash.ui.common.provider.HttpClientProvider
@@ -68,6 +69,8 @@ import co.electriccoin.zcash.ui.common.provider.PreferredFiatProvider
 import co.electriccoin.zcash.ui.common.provider.PreferredFiatProviderImpl
 import co.electriccoin.zcash.ui.common.provider.PreferredP2pPaymentMethodProvider
 import co.electriccoin.zcash.ui.common.provider.PreferredP2pPaymentMethodProviderImpl
+import co.electriccoin.zcash.ui.common.provider.ProvingParamsProvider
+import co.electriccoin.zcash.ui.common.provider.ProvingParamsProviderImpl
 import co.electriccoin.zcash.ui.common.provider.RealOfframpBridgeWallet
 import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
 import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProviderImpl
@@ -98,6 +101,8 @@ import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeTimestampSto
 import co.electriccoin.zcash.ui.common.provider.WalletRestoringStateProvider
 import co.electriccoin.zcash.ui.common.provider.WalletRestoringStateProviderImpl
 import co.electriccoin.zcash.ui.common.provider.WalletSeedPhraseSource
+import co.electriccoin.zcash.ui.common.provider.ZcashNetworkProvider
+import co.electriccoin.zcash.ui.common.provider.ZcashNetworkProviderImpl
 import co.electriccoin.zcash.ui.common.push.ChatNotificationState
 import co.electriccoin.zcash.ui.common.push.ChatNotificationTiming
 import co.electriccoin.zcash.ui.common.push.ChatPushBackend
@@ -164,6 +169,8 @@ val providerModule =
         factoryOf(::SecretAuthGate)
         singleOf(::GetVersionInfoProvider)
         singleOf(::GetZcashCurrencyProvider)
+        singleOf(::ZcashNetworkProviderImpl) bind ZcashNetworkProvider::class
+        singleOf(::ProvingParamsProviderImpl) bind ProvingParamsProvider::class
         singleOf(::SelectedAccountUUIDProviderImpl) bind SelectedAccountUUIDProvider::class
         singleOf(::PersistableWalletProviderImpl) bind PersistableWalletProvider::class
         singleOf(::PreferredFiatProviderImpl) bind PreferredFiatProvider::class
@@ -227,6 +234,7 @@ val providerModule =
         // shared, its encrypted record is the only route back to the funds.
         singleOf(::GiftCardStorageProviderImpl) bind GiftCardStorageProvider::class
         singleOf(::GiftKeyProviderImpl) bind GiftKeyProvider::class
+        singleOf(::GiftClaimOperationLock)
         singleOf(::PendingGiftLinkStore)
         singleOf(::ReceivedGiftStorageProviderImpl) bind ReceivedGiftStorageProvider::class
         single<HttpClient>(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)) {

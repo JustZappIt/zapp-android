@@ -73,13 +73,35 @@ internal fun GiftClaimView(
             verticalArrangement = Arrangement.Center,
         ) {
             when (state.stage) {
-                GiftClaimStage.LOADING -> ZappScreenProgressIndicator(Modifier.height(240.dp))
-                GiftClaimStage.PREVIEW -> PreviewSection(state)
-                GiftClaimStage.CONSENT -> ConsentSection(state)
-                GiftClaimStage.CLAIMING -> ClaimingSection(state)
-                GiftClaimStage.DONE -> OutcomeSection(state)
-                GiftClaimStage.PENDING_CONFIRMATIONS -> OutcomeSection(state)
-                GiftClaimStage.EMPTY -> OutcomeSection(state)
+                // The card as soon as the link decodes; the bare indicator only for the instant
+                // before that, when there is genuinely nothing to show.
+                GiftClaimStage.LOADING -> {
+                    if (state.isLoaded) {
+                        ConnectingSection(state)
+                    } else {
+                        ZappScreenProgressIndicator(Modifier.height(240.dp))
+                    }
+                }
+
+                GiftClaimStage.NEEDS_WALLET -> {
+                    NeedsWalletSection(state)
+                }
+
+                GiftClaimStage.PREVIEW -> {
+                    PreviewSection(state)
+                }
+
+                GiftClaimStage.CONSENT -> {
+                    ConsentSection(state)
+                }
+
+                GiftClaimStage.CLAIMING -> {
+                    ClaimingSection(state)
+                }
+
+                GiftClaimStage.DONE, GiftClaimStage.PENDING_CONFIRMATIONS, GiftClaimStage.EMPTY -> {
+                    OutcomeSection(state)
+                }
             }
             state.error?.let { ErrorBanner(it.messageRes()) }
             Spacer(Modifier.height(spacing.xl))
@@ -114,6 +136,19 @@ private fun GiftClaimBottomBar(state: GiftClaimState) {
                                     state.isRetryable -> state.onRetry
                                     else -> state.onBack
                                 },
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .padding(start = spacing.lg),
+                        )
+                    }
+                }
+
+                GiftClaimStage.NEEDS_WALLET -> {
+                    {
+                        ZappButton(
+                            text = stringResource(R.string.gift_claim_needs_wallet_action),
+                            onClick = state.onCreateWallet,
                             modifier =
                                 Modifier
                                     .weight(1f)
@@ -162,17 +197,49 @@ private fun GiftClaimBottomBar(state: GiftClaimState) {
     )
 }
 
+/** The card itself, which is the subject of every stage that has one. */
 @Composable
-private fun PreviewSection(state: GiftClaimState) {
-    val spacing = ZappTheme.spacing
+private fun CardFace(state: GiftClaimState) {
     GiftCardPodium(
         amount = state.amountText,
         tier = giftCardTier(state.amount?.value ?: 0L, isSettled = false),
+        // Still turning everywhere it appears: nothing here is settled until the claim mines.
         isSettled = false,
         caption = stringResource(R.string.gift_claim_podium_caption),
         fiat = state.fiat,
         message = state.message,
     )
+}
+
+/**
+ * The card, then the ask. Reversing the two would put a wallet-creation demand in front of a
+ * recipient who has not yet been told what they were sent, or by whom.
+ */
+@Composable
+private fun NeedsWalletSection(state: GiftClaimState) {
+    val spacing = ZappTheme.spacing
+    CardFace(state)
+    Spacer(Modifier.height(spacing.xl))
+    Headline(R.string.gift_claim_needs_wallet_title, R.string.gift_claim_needs_wallet_body)
+}
+
+/**
+ * The wallet is still finding the chain, so what the card is worth is known but what claiming it
+ * would cost is not. A sweep rather than a figure: there is no progress to report, only a wait.
+ */
+@Composable
+private fun ConnectingSection(state: GiftClaimState) {
+    val spacing = ZappTheme.spacing
+    CardFace(state)
+    Column(modifier = Modifier.padding(horizontal = spacing.xl, vertical = spacing.xl2)) {
+        ZappProgressBar(fraction = null, label = stringResource(R.string.gift_claim_connecting))
+    }
+}
+
+@Composable
+private fun PreviewSection(state: GiftClaimState) {
+    val spacing = ZappTheme.spacing
+    CardFace(state)
     if (state.message != null || state.expiry != null) {
         ZappBorderedCard(
             modifier = Modifier.padding(horizontal = spacing.xl),
@@ -221,16 +288,7 @@ private fun ConsentSection(state: GiftClaimState) {
 private fun ClaimingSection(state: GiftClaimState) {
     val c = ZappTheme.colors
     val spacing = ZappTheme.spacing
-    GiftCardPodium(
-        amount = state.amountText,
-        tier = giftCardTier(state.amount?.value ?: 0L, isSettled = false),
-        // Still turning: the scan is in flight, and the bar below is what reports the wait. The
-        // sender's funding screen behaves the same way at the same point.
-        isSettled = false,
-        caption = stringResource(R.string.gift_claim_podium_caption),
-        fiat = state.fiat,
-        message = state.message,
-    )
+    CardFace(state)
     Column(
         modifier = Modifier.padding(horizontal = spacing.xl, vertical = spacing.xl2),
         verticalArrangement = Arrangement.spacedBy(spacing.lg),
@@ -271,6 +329,7 @@ private fun GiftClaimPreview() =
                     onClaim = {},
                     onConsent = {},
                     onRetry = {},
+                    onCreateWallet = {},
                     onBack = {},
                 )
         )

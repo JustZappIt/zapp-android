@@ -27,25 +27,54 @@ sealed interface GiftLinkIntake {
  * routes are serialised into the back stack entry's arguments and survive into saved instance
  * state. Only the token travels, and it means nothing on its own.
  *
- * [take] removes the entry, which is also what lets a recipient who backed out of a claim open the
- * same link again. Ported from Vizor's payment link intake, which drains its queue for the same
- * reason. Not thread-safe; call it from the main thread, where intents arrive and view models are
- * constructed.
+ * [take] leases the link until the claim screen calls [release], preventing overlapping attempts.
  */
 class PendingGiftLinkStore {
     private val pending = LinkedHashMap<String, String>()
+    private val active = mutableSetOf<String>()
+
+    private var deferred: String? = null
 
     /** Registers [raw]. Never logs it, at any level. */
+    @Synchronized
     fun put(raw: String): GiftLinkIntake =
         when {
             !isWithinGiftLinkSizeLimit(raw) -> GiftLinkIntake.Refused
-            raw in pending.values -> GiftLinkIntake.AlreadyPending
-            pending.size >= MAX_PENDING_URIS -> GiftLinkIntake.Refused
+            raw in pending.values || raw in active || raw == deferred -> GiftLinkIntake.AlreadyPending
+            pending.size + active.size >= MAX_PENDING_URIS -> GiftLinkIntake.Refused
             else -> GiftLinkIntake.Accepted(UUID.randomUUID().toString().also { pending[it] = raw })
         }
 
-    /** Returns what [token] stands for and forgets it, or null once it has already been taken. */
-    fun take(token: String): String? = pending.remove(token)
+    /** Returns what [token] stands for and leases it until [release]. */
+    @Synchronized
+    fun take(token: String): String? = pending.remove(token)?.also { active += it }
+
+    @Synchronized
+    fun release(raw: String) {
+        active -= raw
+    }
+
+    /**
+     * Holds [raw] across wallet creation, for a recipient who tapped a link before they had a
+     * wallet to claim it into. Their claim screen is about to be left behind, and its token is
+     * already spent, so this is the only thing standing between them and re-finding the message.
+     */
+    @Synchronized
+    fun defer(raw: String) {
+        active -= raw
+        deferred = raw
+    }
+
+    /**
+     * Registers the deferred link for a fresh claim and returns its token, or null if none is
+     * waiting. Null also covers a link whose claim is already on its way in.
+     */
+    @Synchronized
+    fun resumeDeferred(): String? =
+        deferred?.let { raw ->
+            deferred = null
+            (put(raw) as? GiftLinkIntake.Accepted)?.token
+        }
 
     private companion object {
         /** Bounds the store, so a flood of links cannot grow it without limit. */

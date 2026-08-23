@@ -13,9 +13,9 @@
     <string name="delete_wallet_confirmation_subtitle">Restablecer la app no se puede deshacer. Necesitarás restaurar tu billetera usando tu frase secreta de recuperación.</string>
     <string name="delete_wallet_confirmation_button">Restablecer Zapp</string>
     <string name="delete_wallet_confirmation_cancel">Cancelar</string>
-    <string name="delete_wallet_gift_cards_title">Tarjetas regalo sin compartir</string>
-    <string name="delete_wallet_gift_cards_message">Tienes tarjetas regalo con fondos cuyos enlaces aún no has compartido. Restablecer Zapp las borra, y tu frase de recuperación no puede recuperarlas. Comparte o copia cada enlace primero.</string>
+    <string name="delete_wallet_gift_cards_title">Regalos pendientes</string>
+    <string name="delete_wallet_gift_cards_message">Restablecer ahora elimina permanentemente enlaces de regalo que aún pueden controlar fondos. Revísalos y resuélvelos primero, o elimínalos de todos modos para empezar de cero.</string>
     <string name="delete_wallet_gift_cards_review">Revisar tarjetas regalo</string>
-    <string name="delete_wallet_gift_cards_cancel">Cancelar</string>
+    <string name="delete_wallet_gift_cards_delete_anyway">Eliminar de todos modos</string>
     <string name="delete_wallet_failed">Error al eliminar la billetera. Inténtalo nuevamente, por favor.</string>
 </resources>

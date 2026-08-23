@@ -138,6 +138,7 @@ val viewModelModule =
                 claimGiftCard = get(),
                 confirmGiftClaim = get(),
                 applicationStateProvider = get(),
+                provingParams = get(),
                 exchangeRateRepository = get(),
                 swapRepository = get(),
                 navigationRouter = get(),

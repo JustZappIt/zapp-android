@@ -12,9 +12,9 @@
     <string name="delete_wallet_confirmation_subtitle">Resetting the app cannot be undone. You will need to restore your wallet using your secret recovery phrase.</string>
     <string name="delete_wallet_confirmation_button">Reset Zapp</string>
     <string name="delete_wallet_confirmation_cancel">Cancel</string>
-    <string name="delete_wallet_gift_cards_title">Unshared gift cards</string>
-    <string name="delete_wallet_gift_cards_message">You have funded gift cards whose links you have not shared yet. Resetting Zapp erases them, and your recovery phrase cannot bring them back. Share or copy each link first.</string>
+    <string name="delete_wallet_gift_cards_title">Unsettled gifts</string>
+    <string name="delete_wallet_gift_cards_message">Resetting now permanently deletes gift links that can still control funds. Review and resolve them first, or delete them anyway to start fresh.</string>
     <string name="delete_wallet_gift_cards_review">Review gift cards</string>
-    <string name="delete_wallet_gift_cards_cancel">Cancel</string>
+    <string name="delete_wallet_gift_cards_delete_anyway">Delete anyway</string>
     <string name="delete_wallet_failed">Wallet deletion failed. Try it again, please.</string>
 </resources>
