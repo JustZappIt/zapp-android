@@ -43,25 +43,43 @@ private data class GiftClaimAction(
 
 private fun GiftClaimState.primaryAction(): GiftClaimAction? =
     when (stage) {
-        GiftClaimStage.PREVIEW -> previewAction()
-        GiftClaimStage.NEEDS_WALLET -> GiftClaimAction(R.string.gift_claim_needs_wallet_action, onCreateWallet)
-        GiftClaimStage.CONSENT -> GiftClaimAction(R.string.gift_claim_consent_confirm, onConsent)
+        GiftClaimStage.PREVIEW -> {
+            previewAction()
+        }
+
+        GiftClaimStage.NEEDS_WALLET -> {
+            GiftClaimAction(R.string.gift_claim_needs_wallet_action, onCreateWallet)
+        }
+
+        GiftClaimStage.CONSENT -> {
+            GiftClaimAction(R.string.gift_claim_consent_confirm, onConsent)
+        }
+
         GiftClaimStage.DONE,
         GiftClaimStage.ALREADY_CLAIMED,
-        -> GiftClaimAction(R.string.gift_claim_done, onBack)
-        GiftClaimStage.AWAITING_FUNDING -> GiftClaimAction(R.string.gift_claim_retry, onClaim)
-        GiftClaimStage.CLAIMING ->
+        -> {
+            GiftClaimAction(R.string.gift_claim_done, onBack)
+        }
+
+        GiftClaimStage.AWAITING_FUNDING -> {
+            GiftClaimAction(R.string.gift_claim_retry, onClaim)
+        }
+
+        GiftClaimStage.CLAIMING -> {
             if (canStopClaim) {
                 GiftClaimAction(R.string.gift_claim_stop_scan, onStopClaim)
             } else {
                 null
             }
+        }
 
         // Nothing to press while reading the link, and nothing to do while confirmations accrue
         // but wait — that screen re-checks itself instead of asking the recipient to keep tapping.
         GiftClaimStage.LOADING,
         GiftClaimStage.PENDING_CONFIRMATIONS,
-        -> null
+        -> {
+            null
+        }
     }
 
 /** Without a loaded card, this action remains a way forward rather than becoming a no-op. */

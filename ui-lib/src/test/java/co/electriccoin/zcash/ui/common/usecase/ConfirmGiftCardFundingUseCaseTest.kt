@@ -277,8 +277,14 @@ class ConfirmGiftCardFundingUseCaseTest {
         every { transaction.txId } returns TransactionId.new(txid)
         every { transaction.isSentTransaction } returns true
         every { transaction.transactionState } returns state
-        every { transaction.expiryHeight } returns cash.z.ecc.android.sdk.model.BlockHeight.new(expiry)
-        every { transaction.minedHeight } returns mined?.let { cash.z.ecc.android.sdk.model.BlockHeight.new(it) }
+        every { transaction.expiryHeight } returns
+            cash.z.ecc.android.sdk.model.BlockHeight
+                .new(expiry)
+        every { transaction.minedHeight } returns
+            mined?.let {
+                cash.z.ecc.android.sdk.model.BlockHeight
+                    .new(it)
+            }
         every { transaction.index } returns null
     }
 

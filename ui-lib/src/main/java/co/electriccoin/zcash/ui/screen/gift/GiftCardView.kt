@@ -187,7 +187,9 @@ private fun GiftCardBottomBar(state: GiftCardState) {
 
             // Recovery continues through the saved-card action in the header, where the same
             // card and link are repriced rather than minting another card.
-            GiftCardStage.UNAVAILABLE -> null
+            GiftCardStage.UNAVAILABLE -> {
+                null
+            }
 
             // Nothing to press while the card is being minted or broadcast, and no way back.
             GiftCardStage.PREPARING, GiftCardStage.FUNDING -> {

@@ -49,7 +49,10 @@ class ConfirmGiftCardFundingUseCase(
                 return@withLock
             }
             when (terminal.transactionState) {
-                TransactionState.Confirmed -> markFunded(cardId, fundingTxid)
+                TransactionState.Confirmed -> {
+                    markFunded(cardId, fundingTxid)
+                }
+
                 TransactionState.Expired -> {
                     // Observe may emit during startup. Re-read from the fully-synced snapshot before
                     // allowing another spend; `Expired` there is the SDK's public terminal state.
@@ -58,7 +61,9 @@ class ConfirmGiftCardFundingUseCase(
                     reconcileKnownTransaction(current, fundingTxid, snapshot)
                 }
 
-                TransactionState.Pending -> Unit
+                TransactionState.Pending -> {
+                    Unit
+                }
             }
         }
     }

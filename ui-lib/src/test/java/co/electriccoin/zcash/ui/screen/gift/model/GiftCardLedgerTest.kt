@@ -289,12 +289,13 @@ class GiftCardLedgerTest {
     @Test
     fun `retry starts on the same card and preserves terminal transaction history`() {
         val expired =
-            GiftCardLedger.markFundingExpired(
-                cards = submitted(),
-                id = ID,
-                fundingTxids = setOf(TXID),
-                at = LATER,
-            ).single()
+            GiftCardLedger
+                .markFundingExpired(
+                    cards = submitted(),
+                    id = ID,
+                    fundingTxids = setOf(TXID),
+                    at = LATER,
+                ).single()
 
         val retry = GiftCardLedger.setFundingAttemptedAt(listOf(expired), ID, LATEST).single()
 
@@ -335,13 +336,14 @@ class GiftCardLedgerTest {
             )
 
         val replaced =
-            GiftCardLedger.replaceExpiredFunding(
-                cards = created,
-                id = ID,
-                expiredFundingTxids = setOf(TXID),
-                activeFundingTxid = OTHER_TXID,
-                at = LATEST,
-            ).single()
+            GiftCardLedger
+                .replaceExpiredFunding(
+                    cards = created,
+                    id = ID,
+                    expiredFundingTxids = setOf(TXID),
+                    activeFundingTxid = OTHER_TXID,
+                    at = LATEST,
+                ).single()
 
         assertEquals(OTHER_TXID, replaced.fundingTxid)
         assertEquals(TXID, replaced.fundingFailures.single().transactionId)

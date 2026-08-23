@@ -173,7 +173,9 @@ private fun CardTools(item: GiftCardListItem, stock: ZappGiftCardStock) {
                 )
             }
 
-            GiftFundingControl.Hidden -> Unit
+            GiftFundingControl.Hidden -> {
+                Unit
+            }
         }
         when (val check = item.check) {
             is GiftCheckControl.Ready -> {

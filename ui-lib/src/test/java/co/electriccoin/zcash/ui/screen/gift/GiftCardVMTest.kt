@@ -73,7 +73,8 @@ class GiftCardVMTest {
                 reachReady(fixture)
 
                 fixture.setStoredCard(card, publish = false)
-                fixture.vm.state.value.onShare("share")
+                fixture.vm.state.value
+                    .onShare("share")
                 advanceUntilIdle()
 
                 verify(exactly = 0) { fixture.shareGiftLink(any(), any(), any()) }
@@ -89,11 +90,14 @@ class GiftCardVMTest {
     private suspend fun TestScope.reachReady(fixture: Fixture) {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { fixture.vm.state.collect {} }
         advanceUntilIdle()
-        fixture.vm.state.value.onAmountChange(NumberTextFieldInnerState.fromAmount(BigDecimal.ONE))
-        fixture.vm.state.value.onContinue()
+        fixture.vm.state.value
+            .onAmountChange(NumberTextFieldInnerState.fromAmount(BigDecimal.ONE))
+        fixture.vm.state.value
+            .onContinue()
         advanceUntilIdle()
         assertEquals(GiftCardStage.REVIEW, fixture.vm.state.value.stage)
-        fixture.vm.state.value.onConfirm()
+        fixture.vm.state.value
+            .onConfirm()
         advanceUntilIdle()
         assertEquals(GiftCardStage.READY, fixture.vm.state.value.stage)
     }

@@ -214,15 +214,29 @@ data class StoredGiftCard(
     val fundingLifecycle: GiftFundingLifecycle
         get() =
             when {
-                isFundingMined -> GiftFundingLifecycle.Mined(requireNotNull(fundingTxid))
+                isFundingMined -> {
+                    GiftFundingLifecycle.Mined(requireNotNull(fundingTxid))
+                }
+
                 fundingAttemptedAt != null && fundingTxid != null -> {
                     GiftFundingLifecycle.Created(fundingTxid, fundingAttemptedAt)
                 }
 
-                fundingAttemptedAt != null -> GiftFundingLifecycle.Attempting(fundingAttemptedAt)
-                fundingTxid != null -> GiftFundingLifecycle.Submitted(fundingTxid)
-                fundingFailures.isNotEmpty() -> GiftFundingLifecycle.Retryable(fundingFailures.last())
-                else -> GiftFundingLifecycle.NeverStarted
+                fundingAttemptedAt != null -> {
+                    GiftFundingLifecycle.Attempting(fundingAttemptedAt)
+                }
+
+                fundingTxid != null -> {
+                    GiftFundingLifecycle.Submitted(fundingTxid)
+                }
+
+                fundingFailures.isNotEmpty() -> {
+                    GiftFundingLifecycle.Retryable(fundingFailures.last())
+                }
+
+                else -> {
+                    GiftFundingLifecycle.NeverStarted
+                }
             }
 
     /**

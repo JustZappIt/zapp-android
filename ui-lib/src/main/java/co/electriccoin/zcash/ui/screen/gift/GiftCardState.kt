@@ -42,7 +42,9 @@ internal val GiftCardStage.backAction: GiftCardBackAction
             GiftCardStage.READY,
             GiftCardStage.UNAVAILABLE,
             -> GiftCardBackAction.EXIT_FLOW
+
             GiftCardStage.REVIEW -> GiftCardBackAction.EDIT_DETAILS
+
             GiftCardStage.PREPARING, GiftCardStage.FUNDING -> GiftCardBackAction.BLOCK
         }
 
