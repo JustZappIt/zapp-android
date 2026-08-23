@@ -163,7 +163,6 @@ private fun GiftCardListError.messageRes() =
     when (this) {
         GiftCardListError.LINK_FAILED -> R.string.gift_card_list_error_link
         GiftCardListError.SHARE_FAILED -> R.string.gift_card_list_error_share
-        GiftCardListError.HANDOFF_FAILED -> R.string.gift_card_list_error_handoff
         GiftCardListError.CHECK_UNREACHABLE -> R.string.gift_card_list_error_unreachable
         GiftCardListError.CHECK_FAILED -> R.string.gift_card_list_error_check
         GiftCardListError.RETRY_AUTHENTICATION_FAILED -> R.string.gift_card_list_error_retry_auth
@@ -209,7 +208,7 @@ private fun previewItem(
     check = GiftCheckControl.Ready {},
     funding = GiftFundingControl.Hidden,
     handOff =
-        GiftHandOff(onShare = {}, onCopy = {})
+        GiftHandOff(onShare = {})
             .takeIf { status != GiftCardListStatus.RETRYABLE && status != GiftCardListStatus.CLAIMED },
 )
 

@@ -132,7 +132,6 @@ internal fun GiftCardPodium(
     isSettled: Boolean,
     modifier: Modifier = Modifier,
     caption: String? = null,
-    fiat: StringResource? = null,
     /** Shown on the face, so the note lands on the card rather than in a row beneath it. */
     message: String? = null,
     /** Changing this turns the card once. Used to mark a denomination crossing onto better stock. */
@@ -300,8 +299,10 @@ internal fun GiftCardPodium(
                 }
             }
             // Stated under the card as well as printed on it: the face is turned away half the
-            // time, and what a gift is worth should not come and go with the rotation.
-            fiat?.let {
+            // time, and what a gift is worth should not come and go with the rotation. In ZEC
+            // rather than fiat, because ZEC is what the card actually carries — the fiat figure
+            // is a conversion that drifts with the rate while the gift itself does not.
+            amount?.let {
                 BasicText(
                     text = it.getValue(),
                     style = ZappTheme.typography.displaySecondary.copy(color = ZappTheme.colors.text),

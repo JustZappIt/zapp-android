@@ -58,7 +58,6 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
-import co.electriccoin.zcash.ui.design.component.zapp.ZappCopyIconButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappFieldBalance
 import co.electriccoin.zcash.ui.design.component.zapp.ZappGroupHeader
 import co.electriccoin.zcash.ui.design.component.zapp.ZappInputField
@@ -342,7 +341,6 @@ private fun MintedCardPodium(state: GiftCardState) {
         amount = stringRes(state.previewAmount ?: Zatoshi(0L)),
         tier = tier,
         isSettled = state.stage != GiftCardStage.FUNDING,
-        fiat = state.fiat,
         flourishOn = tier,
         caption = stringResource(R.string.gift_card_title).takeIf { isDetails },
         message = state.message,
@@ -416,11 +414,6 @@ private fun ReadySection(state: GiftCardState) {
                     Modifier
                         .weight(1f)
                         .testTag(GiftCardTag.LINK),
-            )
-            ZappCopyIconButton(
-                isCopied = state.isCopied,
-                contentDescription = stringResource(R.string.gift_card_ready_copy),
-                onClick = state.onCopy,
             )
         }
     }

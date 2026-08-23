@@ -45,10 +45,11 @@ data class GiftClaimPreview(
     /** False when this device has no wallet yet, so there is nowhere to claim into. */
     val hasWallet: Boolean,
     /**
-     * Set when this wallet's own receipt says it already holds this card's funds, which is the
-     * answer to a link opened twice — and one no amount of scanning can improve on.
+     * Set when this wallet's own receipt already answers the link — either it holds this card's
+     * funds, or a previous scan proved another holder emptied it. Either way this is the answer to
+     * a link opened twice, and one no amount of scanning can improve on.
      */
-    val collected: GiftClaimOutcome.Claimed? = null,
+    val collected: GiftClaimOutcome? = null,
 )
 
 /**
@@ -65,7 +66,7 @@ class GiftReceiptStoreUnreadableException : RuntimeException("Received gift rece
 
 private sealed interface ReceivedGiftLookup {
     data class Found(
-        val outcome: GiftClaimOutcome.Claimed,
+        val outcome: GiftClaimOutcome,
     ) : ReceivedGiftLookup
 
     data object Absent : ReceivedGiftLookup
@@ -251,6 +252,7 @@ class ClaimGiftCardUseCase(
                 runCatching {
                     giftClaimDataSource.cleanupFinalizedClaim(payload, cardAddress, synchronizer.network)
                 }.onFailure { Twig.warn { "Gift claim: spent card wallet cleanup failed" } }
+                receivedGiftStorageProvider.markClaimedElsewhere(cardAddress)
                 receivedGiftStorageProvider.settle(cardAddress)
             }
         } else {
@@ -322,14 +324,20 @@ class ClaimGiftCardUseCase(
                     .firstOrNull {
                         it.address == cardAddress &&
                             it.network == payload.network &&
-                            it.claimTxids.isNotEmpty() &&
+                            (it.isClaimedElsewhere || it.claimTxids.isNotEmpty()) &&
                             (!settledOnly || it.isSettled)
                     }
             receipt
                 ?.let {
-                    ReceivedGiftLookup.Found(
-                        GiftClaimOutcome.Claimed(amount = Zatoshi(it.amountZatoshi), txIds = it.claimTxids)
-                    )
+                    // A card another holder emptied has no txids of ours to report and never will,
+                    // so it answers as the foreign spend it is rather than as money we hold.
+                    if (it.isClaimedElsewhere) {
+                        ReceivedGiftLookup.Found(GiftClaimOutcome.AlreadyClaimed)
+                    } else {
+                        ReceivedGiftLookup.Found(
+                            GiftClaimOutcome.Claimed(amount = Zatoshi(it.amountZatoshi), txIds = it.claimTxids)
+                        )
+                    }
                 } ?: ReceivedGiftLookup.Absent
         }.getOrElse { throwable ->
             if (throwable is CancellationException) throw throwable

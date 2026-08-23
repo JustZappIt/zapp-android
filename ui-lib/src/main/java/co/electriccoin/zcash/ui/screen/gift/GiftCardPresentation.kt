@@ -34,5 +34,4 @@ internal fun GiftCardError.messageRes(): Int =
         GiftCardError.AUTHENTICATION_FAILED -> R.string.gift_card_error_auth
         GiftCardError.SUBMIT_UNCERTAIN -> R.string.gift_card_error_submit_uncertain
         GiftCardError.SHARE_FAILED -> R.string.gift_card_error_share
-        GiftCardError.HANDOFF_FAILED -> R.string.gift_card_error_handoff
     }

@@ -6,6 +6,7 @@ package co.electriccoin.zcash.ui.common.provider
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
 import co.electriccoin.zcash.ui.screen.gift.model.ReceivedGift
 import co.electriccoin.zcash.ui.screen.gift.model.finalizing
+import co.electriccoin.zcash.ui.screen.gift.model.markingClaimedElsewhere
 import co.electriccoin.zcash.ui.screen.gift.model.recording
 import co.electriccoin.zcash.ui.screen.gift.model.settling
 import kotlinx.coroutines.flow.Flow
@@ -44,6 +45,9 @@ interface ReceivedGiftStorageProvider {
      * early is a gift that cannot be retried if its claim never mines.
      */
     suspend fun settle(address: String)
+
+    /** Records that another holder emptied this card, so re-opening the link need not rescan. */
+    suspend fun markClaimedElsewhere(address: String)
 }
 
 internal class ReceivedGiftStorageProviderImpl(
@@ -71,6 +75,9 @@ internal class ReceivedGiftStorageProviderImpl(
 
     override suspend fun markFinalized(address: String) =
         mutex.withLock { store.set(store.get().orEmpty().finalizing(address)) }
+
+    override suspend fun markClaimedElsewhere(address: String) =
+        mutex.withLock { store.set(store.get().orEmpty().markingClaimedElsewhere(address)) }
 
     private companion object {
         /** Never bump this without a migration: an unsettled receipt behind a dead key is money. */

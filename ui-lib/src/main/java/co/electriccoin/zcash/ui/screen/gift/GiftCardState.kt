@@ -76,13 +76,6 @@ internal enum class GiftCardError {
     /** Broadcast outcome unknown. The copy must not invite a retry — see `GiftFundingError`. */
     SUBMIT_UNCERTAIN,
     SHARE_FAILED,
-
-    /**
-     * The link is on the clipboard but the record of the hand-off did not save. The sender needs to
-     * know: the card still counts as unshared, and that is what stands between it and a wallet
-     * reset that would erase its only seed.
-     */
-    HANDOFF_FAILED,
 }
 
 internal data class GiftCardState(
@@ -98,7 +91,6 @@ internal data class GiftCardState(
     /** What the card is worth in the wallet's chosen currency. Null when there is no rate. */
     val fiat: StringResource?,
     val link: String?,
-    val isCopied: Boolean,
     val isAuthenticating: Boolean,
     val error: GiftCardError?,
     val pinVerify: PinVerifyState?,
@@ -107,7 +99,6 @@ internal data class GiftCardState(
     val onExpiryChange: (GiftExpiry) -> Unit,
     val onContinue: () -> Unit,
     val onConfirm: () -> Unit,
-    val onCopy: () -> Unit,
     val onShare: (String) -> Unit,
     val onBack: () -> Unit,
     /** Null when nothing is stored, or when opening the list would interrupt an in-flight action. */

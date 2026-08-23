@@ -56,13 +56,6 @@ internal enum class GiftCardListError {
     LINK_FAILED,
     SHARE_FAILED,
 
-    /**
-     * The link is on the clipboard but the record of that did not save, so the card still counts as
-     * unshared and still blocks a wallet reset. Worth saying out loud: the sender has done their
-     * part and would otherwise never learn that Zapp did not.
-     */
-    HANDOFF_FAILED,
-
     /** The card's server was unreachable, so the scan never started. */
     CHECK_UNREACHABLE,
 
@@ -145,16 +138,14 @@ internal sealed interface GiftCheckControl {
 }
 
 /**
- * Handing the link over. Both routes or neither — a card either has something worth giving away or
- * it does not.
+ * Handing the link over. Present or absent — a card either has something worth giving away or it
+ * does not.
  *
- * [onCopy] is kept beside [onShare] rather than folded into it because it is the route that cannot
- * fail to report: the chooser only marks a card handed off if the system tells us a target was
- * picked, and this is what the sender has if it never does.
+ * A single route out. The chooser only marks a card handed off if the system tells us a target was
+ * picked, so a share the platform never confirms leaves the card counted as unshared.
  */
 internal data class GiftHandOff(
     val onShare: (String) -> Unit,
-    val onCopy: () -> Unit,
 )
 
 /**

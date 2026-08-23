@@ -27,6 +27,7 @@ import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkException
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkPayload
 import co.electriccoin.zcash.ui.screen.gift.model.ReceivedGift
 import co.electriccoin.zcash.ui.screen.gift.model.finalizing
+import co.electriccoin.zcash.ui.screen.gift.model.markingClaimedElsewhere
 import co.electriccoin.zcash.ui.screen.gift.model.recording
 import co.electriccoin.zcash.ui.screen.gift.model.settling
 import io.mockk.coEvery
@@ -95,6 +96,23 @@ class ClaimGiftCardUseCaseTest {
                 GiftClaimOutcome.Claimed(amount = Zatoshi(AMOUNT), txIds = listOf(CLAIM_TXID)),
                 preview.collected,
             )
+        }
+
+    @Test
+    fun `answers a card another holder emptied from the receipt, without rescanning`() =
+        runTest {
+            // A foreign spend leaves this wallet no claim txids of its own, so the receipt has to
+            // say so directly. Without that the answer is rediscovered by a full scan every time
+            // the link is opened, and the screen offers a claim over a card that is already empty.
+            val elsewhere = RECEIPT.copy(claimTxids = emptyList(), isClaimedElsewhere = true)
+
+            val preview =
+                previewUseCase(
+                    synchronizer = null,
+                    receipts = FakeReceipts(stored = listOf(elsewhere)),
+                ).preview(GiftLinkCodec.encode(PAYLOAD))
+
+            assertEquals(GiftClaimOutcome.AlreadyClaimed, preview.collected)
         }
 
     @Test
@@ -336,6 +354,11 @@ class ClaimGiftCardUseCaseTest {
         override suspend fun markFinalized(address: String) {
             yield()
             current = current.finalizing(address)
+        }
+
+        override suspend fun markClaimedElsewhere(address: String) {
+            yield()
+            current = current.markingClaimedElsewhere(address)
         }
     }
 

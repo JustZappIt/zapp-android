@@ -28,7 +28,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
@@ -57,6 +56,7 @@ import co.electriccoin.zcash.ui.design.util.getValue
 /** The bar a running scan fills along the card's bottom edge. */
 private val TRACK_HEIGHT = 3.dp
 private const val SWEEP_WIDTH = 0.3f
+private const val PERCENT = 100
 private const val SWEEP_MS = 1_100
 
 @Composable
@@ -137,21 +137,15 @@ internal fun CardFront(item: GiftCardListItem, stock: ZappGiftCardStock) {
  *
  * Icons rather than a stack of full-width buttons: three sentences of chrome under a card is more
  * furniture than the card itself, and every one of these is a verb the sender already understands.
- * Copy sits beside Share because it is the only hand-off that reports its own outcome — the chooser
- * marks a card handed out only if the system says a target was picked, and a card wrongly counted
- * as unshared goes on blocking a wallet reset.
+ * One hand-off, not two. The link is a URL, and the share sheet already offers copying it wherever
+ * the platform supports that, so a second button beside it only asked the sender to choose between
+ * two spellings of the same action.
  */
 @Composable
 private fun CardTools(item: GiftCardListItem, stock: ZappGiftCardStock) {
     val sharePickerText = stringResource(R.string.gift_card_list_share_picker)
     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         item.handOff?.let { handOff ->
-            CardTool(
-                icon = Icons.Default.ContentCopy,
-                label = stringResource(R.string.gift_card_list_copy),
-                stock = stock,
-                onClick = handOff.onCopy,
-            )
             CardTool(
                 icon = Icons.Default.Share,
                 label = stringResource(R.string.gift_card_list_share),
@@ -192,9 +186,16 @@ private fun CardTools(item: GiftCardListItem, stock: ZappGiftCardStock) {
             }
 
             is GiftCheckControl.Running -> {
+                // The ScanTrack draws the same figure but cannot say it, and the percentage is the
+                // one thing that distinguishes a long scan from a stalled one. Absent until the SDK
+                // measures something, which is a while into a scan — hence the plain label then.
+                val percent = check.progress?.fraction?.let { (it * PERCENT).toInt() }
                 CardTool(
                     icon = Icons.Default.Close,
-                    label = stringResource(R.string.gift_card_list_check_stop),
+                    label =
+                        percent
+                            ?.let { stringResource(R.string.gift_card_list_check_stop_progress, it) }
+                            ?: stringResource(R.string.gift_card_list_check_stop),
                     stock = stock,
                     tint = ZappGiftCardStocks.LiveMark,
                     onClick = check.onStop,

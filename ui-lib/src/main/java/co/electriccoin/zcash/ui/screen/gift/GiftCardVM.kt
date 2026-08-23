@@ -17,7 +17,6 @@ import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.common.security.SecretAuthPolicy
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
-import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.FundGiftCardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GiftCardCreationError
 import co.electriccoin.zcash.ui.common.usecase.GiftCardCreationException
@@ -66,7 +65,6 @@ class GiftCardVM(
     private val fundGiftCard: FundGiftCardUseCase,
     private val confirmGiftCardFunding: ConfirmGiftCardFundingUseCase,
     private val shareGiftLink: ShareGiftLinkUseCase,
-    private val copyToClipboard: CopyToClipboardUseCase,
     private val secretAuthGate: SecretAuthGate,
     accountDataSource: AccountDataSource,
     exchangeRateRepository: ExchangeRateRepository,
@@ -79,7 +77,6 @@ class GiftCardVM(
     private var prepareJob: Job? = null
     private var fundJob: Job? = null
     private var handOffJob: Job? = null
-    private var copyFeedbackJob: Job? = null
 
     /** What the current draft was minted for, so backing out to edit does not strand it. */
     private var preparedFor: GiftCardInputs? = null
@@ -170,7 +167,6 @@ class GiftCardVM(
             expiry = expiry,
             quote = quote,
             link = link,
-            isCopied = isCopied,
             isAuthenticating = isAuthenticating,
             error = error,
             pinVerify = pinVerify,
@@ -179,7 +175,6 @@ class GiftCardVM(
             onExpiryChange = ::onExpiryChange,
             onContinue = ::onContinue,
             onConfirm = ::onConfirm,
-            onCopy = ::onCopy,
             onShare = ::onShare,
             onBack = ::onBack,
             onOpenSavedCards = { navigationRouter.forward(GiftCardListArgs) }.takeIf { canOpenSavedCards },
@@ -283,27 +278,6 @@ class GiftCardVM(
             }
     }
 
-    private fun onCopy() {
-        if (handOffJob?.isActive == true) return
-        handOffJob =
-            viewModelScope.launch {
-                val handOff = currentHandOff() ?: return@launch
-                copyToClipboard(handOff.link, isSensitive = true)
-                snapshot.update { it.copy(isCopied = true, error = null) }
-                // The clipboard is a hand-off too. Recording it is what eventually unblocks
-                // deleting the source account for a card that has in fact already been given away.
-                if (!shareGiftLink.markHandedOut(handOff.cardId)) {
-                    snapshot.update { it.copy(error = GiftCardError.HANDOFF_FAILED) }
-                }
-                copyFeedbackJob?.cancel()
-                copyFeedbackJob =
-                    viewModelScope.launch {
-                        delay(COPY_FEEDBACK_DURATION_MS)
-                        snapshot.update { it.copy(isCopied = false) }
-                    }
-            }
-    }
-
     private fun onShare(sharePickerText: String) {
         if (handOffJob?.isActive == true) return
         handOffJob =
@@ -340,7 +314,7 @@ class GiftCardVM(
         } else {
             snapshot.update { latest ->
                 if (latest.stage == GiftCardStage.READY && latest.quote?.card?.id == cardId) {
-                    latest.copy(stage = GiftCardStage.UNAVAILABLE, isCopied = false, error = null)
+                    latest.copy(stage = GiftCardStage.UNAVAILABLE, error = null)
                 } else {
                     latest
                 }
@@ -358,7 +332,6 @@ class GiftCardVM(
     }
 
     private companion object {
-        const val COPY_FEEDBACK_DURATION_MS = 2_000L
     }
 }
 
@@ -385,7 +358,6 @@ private data class GiftCardSnapshot(
     val expiry: GiftExpiry = GiftExpiry.NEVER,
     val quote: GiftFundingQuote? = null,
     val link: String? = null,
-    val isCopied: Boolean = false,
     val isAuthenticating: Boolean = false,
     val error: GiftCardError? = null,
 ) {

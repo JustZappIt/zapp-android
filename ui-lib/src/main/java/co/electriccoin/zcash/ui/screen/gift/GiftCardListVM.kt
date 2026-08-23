@@ -19,7 +19,6 @@ import co.electriccoin.zcash.ui.common.security.SecretAuthPolicy
 import co.electriccoin.zcash.ui.common.usecase.CheckGiftCardClaimedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftClaimUseCase
-import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.FundGiftCardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GiftCardCheckResult
 import co.electriccoin.zcash.ui.common.usecase.GiftFundingError
@@ -66,7 +65,6 @@ class GiftCardListVM(
     exchangeRateRepository: ExchangeRateRepository,
     swapRepository: SwapRepository,
     private val shareGiftLink: ShareGiftLinkUseCase,
-    private val copyToClipboard: CopyToClipboardUseCase,
     private val applicationStateProvider: ApplicationStateProvider,
     private val secretAuthGate: SecretAuthGate,
     private val navigationRouter: NavigationRouter,
@@ -179,7 +177,6 @@ class GiftCardListVM(
             handOff =
                 GiftHandOff(
                     onShare = { picker -> onShare(card.id, picker) },
-                    onCopy = { onCopy(card.id) },
                 ).takeIf { canHandOff },
         )
     }
@@ -306,26 +303,6 @@ class GiftCardListVM(
                 // later, by the chooser reporting the target the sender picked.
                 if (!shareGiftLink(cardId = cardId, link = link, sharePickerText = sharePickerText)) {
                     errorFlow.value = GiftCardListError.SHARE_FAILED
-                }
-            }
-    }
-
-    /**
-     * The hand-off that reports its own outcome.
-     *
-     * Sharing depends on the system telling us which target was picked, and a chooser that never
-     * does leaves the card counted as unshared — still blocking the wallet reset. This is the route
-     * the sender always has: the copy is an affirmative act, so the record follows it directly.
-     */
-    private fun onCopy(cardId: String) {
-        if (shareJob?.isActive == true) return
-        shareJob =
-            viewModelScope.launch {
-                val link = linkFor(cardId) ?: return@launch
-                clearMessages()
-                copyToClipboard(link, isSensitive = true)
-                if (!shareGiftLink.markHandedOut(cardId)) {
-                    errorFlow.value = GiftCardListError.HANDOFF_FAILED
                 }
             }
     }

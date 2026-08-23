@@ -15,7 +15,6 @@ import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.common.usecase.CheckGiftCardClaimedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftClaimUseCase
-import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.FundGiftCardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GiftCardCheckResult
 import co.electriccoin.zcash.ui.common.usecase.GiftFundingQuote
@@ -89,35 +88,6 @@ class GiftCardListVMTest {
             // Opening the sheet is not the hand-off. The chooser reports the target the sender
             // picked, and only that marks the card — a cancelled sheet must leave it protected.
             coVerify(exactly = 0) { fixture.shareGiftLink.markHandedOut(any()) }
-        }
-
-    @Test
-    fun `copying the link records the hand-off itself`() =
-        runTest {
-            val fixture = fixture(card(fundingTxid = TXID))
-            val state = collectState(fixture)
-
-            assertNotNull(state.items.single().handOff).onCopy()
-            advanceUntilIdle()
-
-            // The route that cannot fail to report. A chooser that never tells us which target was
-            // picked would otherwise leave the card blocking a wallet reset with no way out.
-            coVerify(exactly = 1) { fixture.shareGiftLink.markHandedOut(ID) }
-        }
-
-    @Test
-    fun `says so when a copied link could not be recorded as handed out`() =
-        runTest {
-            val fixture = fixture(card(fundingTxid = TXID))
-            coEvery { fixture.shareGiftLink.markHandedOut(any()) } returns false
-            val state = collectState(fixture)
-
-            assertNotNull(state.items.single().handOff).onCopy()
-            advanceUntilIdle()
-
-            // The link is out and the card still counts as unshared. Only the sender can act on
-            // that, and only if they are told.
-            assertEquals(GiftCardListError.HANDOFF_FAILED, collectState(fixture).error)
         }
 
     @Test
@@ -354,7 +324,6 @@ class GiftCardListVMTest {
                 every { it(cardId = any(), link = capture(sharedLink), sharePickerText = any()) } returns true
                 coEvery { it.markHandedOut(any()) } returns true
             }
-        val copyToClipboard = mockk<CopyToClipboardUseCase>(relaxed = true)
         val checkGiftCardClaimed = mockk<CheckGiftCardClaimedUseCase>(relaxed = true)
         val fundGiftCard = mockk<FundGiftCardUseCase>(relaxed = true)
         val secretAuthGate =
@@ -394,7 +363,6 @@ class GiftCardListVMTest {
                 exchangeRateRepository = exchangeRate,
                 swapRepository = swaps,
                 shareGiftLink = shareGiftLink,
-                copyToClipboard = copyToClipboard,
                 applicationStateProvider =
                     mockk<ApplicationStateProvider>().also {
                         every { it.isInForeground } returns flowOf(true)

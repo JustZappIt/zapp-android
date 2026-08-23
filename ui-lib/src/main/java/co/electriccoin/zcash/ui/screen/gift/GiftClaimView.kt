@@ -120,7 +120,6 @@ private fun CardFace(state: GiftClaimState) {
         // Still turning everywhere it appears: nothing here is settled until the claim mines.
         isSettled = false,
         caption = stringResource(R.string.gift_claim_podium_caption),
-        fiat = state.fiat,
         message = state.message,
     )
 }

@@ -14,7 +14,6 @@ import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
-import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.FundGiftCardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GiftFundingQuote
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
@@ -82,23 +81,6 @@ class GiftCardVMTest {
             }
         }
 
-    @Test
-    fun `copy re-reads storage and refuses every non-handable ready card`() =
-        runTest {
-            nonHandableCards().forEach { card ->
-                val fixture = fixture()
-                reachReady(fixture)
-
-                fixture.setStoredCard(card, publish = false)
-                fixture.vm.state.value.onCopy()
-                advanceUntilIdle()
-
-                verify(exactly = 0) { fixture.copyToClipboard(any(), any()) }
-                coVerify(exactly = 0) { fixture.shareGiftLink.markHandedOut(any()) }
-                assertEquals(GiftCardStage.UNAVAILABLE, fixture.vm.state.value.stage)
-            }
-        }
-
     private fun TestScope.fixture(): Fixture {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         return Fixture()
@@ -126,7 +108,6 @@ class GiftCardVMTest {
                 every { it(any(), any(), any()) } returns true
                 coEvery { it.markHandedOut(any()) } returns true
             }
-        val copyToClipboard = mockk<CopyToClipboardUseCase>(relaxed = true)
 
         private val storage =
             mockk<GiftCardStorageProvider>().also {
@@ -159,7 +140,6 @@ class GiftCardVMTest {
                 fundGiftCard = fundGiftCard,
                 confirmGiftCardFunding = mockk<ConfirmGiftCardFundingUseCase>(relaxed = true),
                 shareGiftLink = shareGiftLink,
-                copyToClipboard = copyToClipboard,
                 secretAuthGate = secretAuthGate,
                 accountDataSource =
                     mockk<AccountDataSource>().also {

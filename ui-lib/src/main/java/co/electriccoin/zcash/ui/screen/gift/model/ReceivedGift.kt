@@ -29,6 +29,14 @@ data class ReceivedGift(
     val claimLink: GiftLinkPayload? = null,
     /** Durable cleanup checkpoint written before the isolated database is deleted. */
     val isFinalized: Boolean = false,
+    /**
+     * A scan found somebody else's final spend of this card, so there is nothing here to collect.
+     *
+     * Separate from [claimTxids], which records only what *this* wallet submitted: a card emptied
+     * by another holder leaves that list empty forever, and without this flag the answer would have
+     * to be rediscovered by a full rescan every time the link is opened again.
+     */
+    val isClaimedElsewhere: Boolean = false,
 ) {
     init {
         // A link for another network cannot retry this one. IAE so the store reads it as corrupt.
@@ -89,6 +97,8 @@ internal fun List<ReceivedGift>.recording(gift: ReceivedGift): List<ReceivedGift
                         } else {
                             current.isFinalized || gift.isFinalized
                         },
+                    // Never cleared by a new submission: the card is empty whatever this wallet does.
+                    isClaimedElsewhere = current.isClaimedElsewhere || gift.isClaimedElsewhere,
                 )
             }
         }
@@ -109,3 +119,12 @@ internal fun List<ReceivedGift>.settling(address: String): List<ReceivedGift> =
 
 internal fun List<ReceivedGift>.finalizing(address: String): List<ReceivedGift> =
     map { if (it.address == address) it.copy(isFinalized = true) else it }
+
+/**
+ * Records that another holder emptied [address]. One-way, and a no-op if absent.
+ *
+ * Its own transition rather than part of [recording] because it is written after [settling], and a
+ * settled receipt deliberately refuses further merges.
+ */
+internal fun List<ReceivedGift>.markingClaimedElsewhere(address: String): List<ReceivedGift> =
+    map { if (it.address == address) it.copy(isClaimedElsewhere = true) else it }
