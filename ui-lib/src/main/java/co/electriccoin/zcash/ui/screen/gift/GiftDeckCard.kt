@@ -162,24 +162,31 @@ internal fun GiftDeckCard(
                         onFlip = onFlip,
                     ),
         ) {
-            // Laid out at full size whatever the box is showing, so a peeking card is genuinely the
-            // top of that card rather than a second, shorter design of it. Required, not plain
-            // height: the parent's constraints would otherwise squash the face into the strip.
-            Box(
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .fillMaxWidth()
-                        .requiredHeight(fullHeight),
-            ) {
-                // Only under the front. The back counter-rotates its content, and a flare drawn
-                // for both faces came out mirrored on the reverse.
-                if (showBack) {
-                    CardBack(item, stock)
-                } else {
-                    CardFlare(stock, GIFT_CARD_CORNER)
-                    CardFront(item, stock)
+            if (isExpanded || showBack) {
+                // Laid out at full size whatever the box is showing. Required, not plain height:
+                // the parent's constraints would otherwise squash the face into the strip.
+                Box(
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .fillMaxWidth()
+                            .requiredHeight(fullHeight),
+                ) {
+                    // Only under the front. The back counter-rotates its content, and a flare drawn
+                    // for both faces came out mirrored on the reverse.
+                    if (showBack) {
+                        CardBack(item, stock)
+                    } else {
+                        CardFlare(stock, GIFT_CARD_CORNER)
+                        CardFront(item, stock)
+                    }
                 }
+            } else {
+                // A stacked card draws its own strip rather than a clipped copy of the open face.
+                // Clipping was meant to reveal the face's top row and revealed the one below it,
+                // so the deck read out in fiat instead of ZEC.
+                CardFlare(stock, GIFT_CARD_CORNER)
+                CardPeek(item, stock)
             }
             // The card seen edge-on along its own bottom. Only on the open card: on a peeking one
             // that line is where the next card laps over, not where this one ends.

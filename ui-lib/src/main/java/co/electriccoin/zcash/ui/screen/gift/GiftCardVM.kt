@@ -330,9 +330,6 @@ class GiftCardVM(
             GiftCardBackAction.BLOCK -> Unit
         }
     }
-
-    private companion object {
-    }
 }
 
 /** The inputs a draft was minted for. Re-minting on an unchanged set would strand the old draft. */

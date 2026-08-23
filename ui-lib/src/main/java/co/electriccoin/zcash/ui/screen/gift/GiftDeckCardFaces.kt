@@ -59,6 +59,37 @@ private const val SWEEP_WIDTH = 0.3f
 private const val PERCENT = 100
 private const val SWEEP_MS = 1_100
 
+/**
+ * What a stacked card shows: its denomination, and whether it has been collected.
+ *
+ * Drawn in the collapsed card's own strip rather than clipped out of [CardFront]. Clipping a
+ * full-height face was supposed to reveal its top row and in practice revealed the row below it,
+ * so a stacked deck answered "what is this card worth" with the fiat conversion — a figure that
+ * drifts with the rate — instead of the ZEC the card actually carries.
+ */
+@Composable
+internal fun CardPeek(item: GiftCardListItem, stock: ZappGiftCardStock) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        BasicText(
+            text = item.amount.getValue(),
+            style = ZappTheme.typography.displaySecondary.copy(color = stock.ink),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).testTag(GiftCardListTag.AMOUNT),
+        )
+        StatusPill(
+            status = item.status,
+            hasBeenChecked = item.lastCheckedAt != null,
+            isCheckRecent = item.isLastCheckRecent,
+            stock = stock,
+        )
+    }
+}
+
 @Composable
 internal fun CardFront(item: GiftCardListItem, stock: ZappGiftCardStock) {
     Column(
@@ -68,6 +99,7 @@ internal fun CardFront(item: GiftCardListItem, stock: ZappGiftCardStock) {
         // The peek line. On a stacked deck this strip is the whole card, so it carries the only
         // two things the stack is read for: what a card is worth, and whether it has been
         // collected. Nothing else belongs here — anything added pushes one of them out of sight.
+        // A collapsed card draws [CardPeek] instead of a clipped copy of this face.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
