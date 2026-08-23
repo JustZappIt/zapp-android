@@ -40,6 +40,16 @@ class CheckGiftCardClaimedUseCaseTest {
         }
 
     @Test
+    fun `does not report collected when the terminal state cannot be persisted`() =
+        runTest {
+            val storage = storage()
+            coEvery { storage.markClaimed(any(), any()) } throws IllegalStateException("store is full")
+            val useCase = useCase(storage, holdings(total = 0, hasFundingArrived = true, hasFinalClaimSpend = true))
+
+            assertEquals(GiftCardCheckResult.UNKNOWN, useCase(card()) {})
+        }
+
+    @Test
     fun `refuses to settle a card whose funding never arrived`() =
         runTest {
             val storage = storage()

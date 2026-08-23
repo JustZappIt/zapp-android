@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.screen.gift
 
 import cash.z.ecc.android.sdk.model.ZcashNetwork
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.provider.ApplicationStateProvider
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.SwapAssetsData
@@ -29,6 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -44,6 +46,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Clock
 
 /**
  * The screen that exists so pressing Done — or the process dying on the ready screen — is not the
@@ -187,7 +190,17 @@ class GiftCardListVMTest {
             val fixture = fixture(card(fundingTxid = TXID, lastCheckedAt = ATTEMPTED_AT))
 
             // Without this the scan finishes and the row looks exactly as it did before it ran.
-            assertNotNull(collectState(fixture).items.single().lastCheckedAt)
+            val item = collectState(fixture).items.single()
+            assertNotNull(item.lastCheckedAt)
+            assertEquals(false, item.isLastCheckRecent)
+        }
+
+    @Test
+    fun `recognizes a conclusive check made now as recent`() =
+        runTest {
+            val fixture = fixture(card(fundingTxid = TXID, lastCheckedAt = Clock.System.now().toString()))
+
+            assertTrue(collectState(fixture).items.single().isLastCheckRecent)
         }
 
     @Test
@@ -307,6 +320,10 @@ class GiftCardListVMTest {
                 swapRepository = swaps,
                 shareGiftLink = shareGiftLink,
                 copyToClipboard = copyToClipboard,
+                applicationStateProvider =
+                    mockk<ApplicationStateProvider>().also {
+                        every { it.isInForeground } returns flowOf(true)
+                    },
                 navigationRouter = mockk<NavigationRouter>(relaxed = true),
             )
     }

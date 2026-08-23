@@ -4,22 +4,22 @@
 package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.model.TransactionId
+import cash.z.ecc.android.sdk.model.TransactionOverview
+import cash.z.ecc.android.sdk.model.TransactionState
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
-import co.electriccoin.zcash.ui.common.repository.SendTransaction
-import co.electriccoin.zcash.ui.common.repository.Transaction
 import co.electriccoin.zcash.ui.common.repository.TransactionRepository
 import co.electriccoin.zcash.ui.screen.gift.model.GiftCardStatus
 import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
 /**
- * Funding is broadcast before its txid can exist, so a process killed in between leaves a record
- * that knows only that an attempt was made. Reattaching that attempt to the transaction it actually
- * produced is what stops the card reading as unfunded while its money sits on chain.
+ * New funding records a local txid before broadcast. Legacy unresolved records can still carry only
+ * an attempt timestamp, so reattaching those by destination remains a migration-safe recovery path.
  */
 class ConfirmGiftCardFundingUseCaseTest {
     @Test
@@ -111,24 +111,32 @@ class ConfirmGiftCardFundingUseCaseTest {
     private fun storage(vararg cards: StoredGiftCard) =
         mockk<GiftCardStorageProvider>(relaxed = true).also { coEvery { it.getAll() } returns cards.toList() }
 
-    private fun useCase(storage: GiftCardStorageProvider, transactions: List<Transaction>) =
+    private fun useCase(storage: GiftCardStorageProvider, transactions: List<TestTransaction>) =
         ConfirmGiftCardFundingUseCase(
             giftCardStorageProvider = storage,
             transactionRepository =
                 mockk<TransactionRepository>(relaxed = true).also {
-                    coEvery { it.getTransactions() } returns transactions
+                    coEvery { it.getAccountTransactions("account-1") } returns transactions.map { it.overview }
+                    coEvery { it.findAccountSendByRecipient("account-1", any()) } coAnswers {
+                        val recipient = secondArg<String>()
+                        transactions.firstOrNull { it.recipient == recipient }?.overview
+                    }
                 },
         )
 
-    private fun send(txid: String, recipient: String, mined: Boolean): Transaction =
-        if (mined) {
-            mockk<SendTransaction.Success>(relaxed = true)
-        } else {
-            mockk<SendTransaction.Pending>(relaxed = true)
-        }.also {
-            coEvery { it.id } returns TransactionId.new(txid)
-            coEvery { it.recipient } returns recipient
-        }
+    private fun send(txid: String, recipient: String, mined: Boolean): TestTransaction {
+        val transaction = mockk<TransactionOverview>()
+        every { transaction.txId } returns TransactionId.new(txid)
+        every { transaction.isSentTransaction } returns true
+        every { transaction.transactionState } returns
+            if (mined) TransactionState.Confirmed else TransactionState.Pending
+        return TestTransaction(transaction, recipient)
+    }
+
+    private data class TestTransaction(
+        val overview: TransactionOverview,
+        val recipient: String,
+    )
 
     private fun card(
         fundingTxid: String? = null,

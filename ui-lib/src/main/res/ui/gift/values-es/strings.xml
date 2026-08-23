@@ -121,6 +121,7 @@
     <string name="gift_claim_error_unavailable">Este enlace de regalo ya no está abierto. Tócalo de nuevo donde lo recibiste.</string>
     <string name="gift_claim_expired_note">Esta tarjeta pasó su fecha de caducidad sugerida. Eso es solo informativo: aún se reclama por el importe completo.</string>
     <string name="gift_claim_progress_remaining">Quedan %1$d bloques</string>
+    <string name="gift_claim_stop_scan">Detener análisis</string>
     <string name="gift_claim_pending_count">%1$d / %2$d confirmaciones</string>
 
     <string name="gift_card_list_title">Tus tarjetas regalo</string>
@@ -140,6 +141,8 @@
     <string name="gift_card_chip_submitted">Enviando fondos</string>
     <string name="gift_card_chip_funded">Lista para compartir</string>
     <string name="gift_card_chip_shared">Sin cobrar</string>
+    <string name="gift_card_chip_shared_unchecked">Compartida · sin comprobar</string>
+    <string name="gift_card_chip_shared_stale">Compartida · comprueba de nuevo</string>
     <string name="gift_card_chip_claimed">Cobrada</string>
     <string name="gift_card_list_status_unfunded">Sin fondos</string>
     <string name="gift_card_list_status_unresolved">Estado de financiación desconocido — comprueba antes de volver a financiar</string>

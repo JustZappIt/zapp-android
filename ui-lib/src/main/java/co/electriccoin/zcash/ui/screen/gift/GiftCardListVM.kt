@@ -9,6 +9,7 @@ import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.provider.ApplicationStateProvider
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
@@ -36,6 +37,9 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Instant
 
 /**
  * The recovery path for cards the sender never finished handing out.
@@ -54,6 +58,7 @@ class GiftCardListVM(
     swapRepository: SwapRepository,
     private val shareGiftLink: ShareGiftLinkUseCase,
     private val copyToClipboard: CopyToClipboardUseCase,
+    private val applicationStateProvider: ApplicationStateProvider,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     private val errorFlow = MutableStateFlow<GiftCardListError?>(null)
@@ -64,6 +69,9 @@ class GiftCardListVM(
 
     private var shareJob: Job? = null
     private var checkJob: Job? = null
+
+    @Volatile
+    private var isForeground: Boolean = false
 
     private val cards =
         giftCardStorageProvider
@@ -115,6 +123,12 @@ class GiftCardListVM(
         // Anything whose funding mined while nothing was watching still reads as a draft on disk.
         viewModelScope.launch { runCatching { confirmGiftCardFunding.reconcile() } }
         viewModelScope.launch { runCatching { confirmGiftClaim.reconcile() } }
+        viewModelScope.launch {
+            applicationStateProvider.isInForeground.collect { foreground ->
+                isForeground = foreground
+                if (!foreground) checkJob?.cancel()
+            }
+        }
     }
 
     private fun toItem(
@@ -138,6 +152,7 @@ class GiftCardListVM(
             status = status,
             expiry = card.expiresAt.toGiftExpiryDisplay(),
             lastCheckedAt = card.lastCheckedAt?.toGiftDisplayDate().takeIf { status != GiftCardListStatus.CLAIMED },
+            isLastCheckRecent = card.lastCheckedAt.isRecentGiftCheck(),
             check = card.checkControl(status, checkingId, checkProgress),
             handOff =
                 GiftHandOff(
@@ -200,6 +215,7 @@ class GiftCardListVM(
 
     /** Starts a check, or stops the one already running on this card. */
     private fun onCheck(cardId: String) {
+        if (!isForeground) return
         if (checkJob?.isActive == true) {
             // The scan can legitimately run for minutes (§11.1), so a stop is the only honest
             // control: there is no duration at which giving up is automatically right.
@@ -273,7 +289,15 @@ private fun StoredGiftCard.listStatus(): GiftCardListStatus =
         status == GiftCardStatus.CLAIMED -> GiftCardListStatus.CLAIMED
         status == GiftCardStatus.SHARED -> GiftCardListStatus.SHARED
         status == GiftCardStatus.FUNDED -> GiftCardListStatus.FUNDED
-        fundingTxid != null -> GiftCardListStatus.SUBMITTED
         fundingAttemptedAt != null -> GiftCardListStatus.UNRESOLVED
+        isFundingSubmitted -> GiftCardListStatus.SUBMITTED
         else -> GiftCardListStatus.UNFUNDED
     }
+
+private fun String?.isRecentGiftCheck(now: Instant = Clock.System.now()): Boolean {
+    val checkedAt = this?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return false
+    val age = now - checkedAt
+    return !age.isNegative() && age <= RECENT_GIFT_CHECK
+}
+
+private val RECENT_GIFT_CHECK = 24.hours

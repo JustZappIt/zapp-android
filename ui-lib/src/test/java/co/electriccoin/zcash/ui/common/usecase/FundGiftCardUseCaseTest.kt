@@ -3,8 +3,7 @@
 
 package co.electriccoin.zcash.ui.common.usecase
 
-import cash.z.ecc.android.sdk.model.Proposal
-import cash.z.ecc.android.sdk.model.UnifiedSpendingKey
+import cash.z.ecc.android.sdk.model.CreatedTransaction
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.ProposalDataSource
@@ -13,6 +12,7 @@ import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.SubmitResult
 import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
+import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
 import co.electriccoin.zcash.ui.screen.gift.model.GiftCardStatus
 import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
 import io.mockk.coEvery
@@ -65,8 +65,25 @@ class FundGiftCardUseCaseTest {
             val thrown = assertFailsWith<GiftFundingException> { fixture.useCase.submit(fixture.quote) }
 
             assertEquals(GiftFundingError.PROPOSAL_FAILED, thrown.error)
+            coVerify(exactly = 1) { fixture.storage.clearFundingPreparation(ID) }
             coVerify(exactly = 0) {
-                fixture.proposalDataSource.submitTransaction(any<Proposal>(), any<UnifiedSpendingKey>())
+                fixture.proposalDataSource.submitTransaction(transaction = any(), endpoint = any())
+            }
+        }
+
+    @Test
+    fun `keeps local transaction creation failures retryable`() =
+        runTest {
+            val fixture = Fixture(submitResult = SubmitResult.Success(listOf(TXID)))
+            coEvery { fixture.proposalDataSource.createTransactions(any(), any()) } throws
+                IllegalStateException("proving parameters missing")
+
+            val thrown = assertFailsWith<GiftFundingException> { fixture.useCase.submit(fixture.quote) }
+
+            assertEquals(GiftFundingError.PROPOSAL_FAILED, thrown.error)
+            coVerify(exactly = 0) { fixture.storage.setFundingAttemptedAt(any(), any()) }
+            coVerify(exactly = 0) {
+                fixture.proposalDataSource.submitTransaction(transaction = any(), endpoint = any())
             }
         }
 
@@ -75,7 +92,7 @@ class FundGiftCardUseCaseTest {
         runTest {
             val fixture =
                 Fixture(submitResult = SubmitResult.Failure(txIds = emptyList(), code = 1, description = null))
-            coEvery { fixture.storage.setFundingAttemptedAt(ID, null) } throws IllegalStateException("store is full")
+            coEvery { fixture.storage.clearFundingPreparation(ID) } throws IllegalStateException("store is full")
 
             val thrown = assertFailsWith<GiftFundingException> { fixture.useCase.submit(fixture.quote) }
 
@@ -99,7 +116,7 @@ class FundGiftCardUseCaseTest {
         runTest {
             val fixture = Fixture(submitResult = SubmitResult.Success(listOf(TXID)))
             coEvery {
-                fixture.proposalDataSource.submitTransaction(any<Proposal>(), any<UnifiedSpendingKey>())
+                fixture.proposalDataSource.submitTransaction(transaction = any(), endpoint = any())
             } throws IllegalStateException("the socket died mid-submit")
 
             val thrown = assertFailsWith<GiftFundingException> { fixture.useCase.submit(fixture.quote) }
@@ -202,7 +219,10 @@ class FundGiftCardUseCaseTest {
 
         val proposalDataSource =
             mockk<ProposalDataSource>(relaxed = true).also {
-                coEvery { it.submitTransaction(any<Proposal>(), any<UnifiedSpendingKey>()) } returns submitResult
+                val transaction = mockk<CreatedTransaction>()
+                every { transaction.txIdString() } returns TXID
+                coEvery { it.createTransactions(any(), any()) } returns listOf(transaction)
+                coEvery { it.submitTransaction(transaction = transaction, endpoint = any()) } returns submitResult
             }
 
         val quote =
@@ -220,6 +240,7 @@ class FundGiftCardUseCaseTest {
                 proposalDataSource = proposalDataSource,
                 zashiSpendingKeyDataSource = mockk<ZashiSpendingKeyDataSource>(relaxed = true),
                 giftCardStorageProvider = storage,
+                persistableWalletProvider = mockk<PersistableWalletProvider>(relaxed = true),
             )
     }
 

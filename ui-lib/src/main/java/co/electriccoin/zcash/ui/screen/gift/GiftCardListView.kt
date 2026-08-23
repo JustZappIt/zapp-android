@@ -198,6 +198,7 @@ private fun previewItem(
     status = status,
     expiry = GiftExpiryDisplay(date = stringRes("1 Sep 2026"), isPast = false),
     lastCheckedAt = null,
+    isLastCheckRecent = false,
     check = GiftCheckControl.Ready {},
     handOff = GiftHandOff(onShare = {}, onCopy = {}).takeIf { status != GiftCardListStatus.CLAIMED },
 )

@@ -17,6 +17,7 @@ import cash.z.ecc.android.sdk.model.Zip318Kind
 import cash.z.ecc.android.sdk.type.AddressType
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -31,9 +32,11 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
@@ -57,15 +60,25 @@ interface TransactionRepository {
 
     fun observeTransaction(txId: String): Flow<Transaction?>
 
+    /** Observes one SDK transaction without depending on whichever account the UI has selected. */
+    fun observeAccountTransaction(accountUuid: String, txId: String): Flow<TransactionOverview?>
+
     fun observeTransactionsByMemo(memo: String): Flow<List<TransactionId>?>
 
     suspend fun getTransactions(): List<Transaction>
 
+    /** Reads lightweight SDK rows for a specific persisted account id. */
+    suspend fun getAccountTransactions(accountUuid: String): List<TransactionOverview>
+
+    /** Finds a send to [recipient] in a specific account, including pending transactions. */
+    suspend fun findAccountSendByRecipient(accountUuid: String, recipient: String): TransactionOverview?
+
     suspend fun resolveWalletAddress(address: String): WalletAddress?
 }
 
+@Suppress("TooManyFunctions")
 class TransactionRepositoryImpl(
-    accountDataSource: AccountDataSource,
+    private val accountDataSource: AccountDataSource,
     private val synchronizerProvider: SynchronizerProvider,
 ) : TransactionRepository {
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -415,6 +428,27 @@ class TransactionRepositoryImpl(
             }
 
     @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeAccountTransaction(accountUuid: String, txId: String): Flow<TransactionOverview?> =
+        flow {
+            val uuid = resolveAccountUuid(accountUuid)
+            if (uuid == null) {
+                emit(null)
+                return@flow
+            }
+            emitAll(
+                synchronizerProvider.synchronizer.flatMapLatest { synchronizer ->
+                    if (synchronizer == null) {
+                        flowOf(null)
+                    } else {
+                        combine(synchronizer.getTransactions(uuid), synchronizer.status) { transactions, status ->
+                            normalizeTransactions(transactions, status).firstOrNull { it.txId.txIdString() == txId }
+                        }
+                    }
+                }
+            )
+        }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeTransactionsByMemo(memo: String): Flow<List<TransactionId>?> =
         synchronizerProvider
             .synchronizer
@@ -424,6 +458,25 @@ class TransactionRepositoryImpl(
 
     override suspend fun getTransactions(): List<Transaction> = transactions.filterNotNull().first()
 
+    override suspend fun getAccountTransactions(accountUuid: String): List<TransactionOverview> {
+        val uuid = resolveAccountUuid(accountUuid) ?: return emptyList()
+        val synchronizer = synchronizerProvider.getSynchronizer()
+        return combine(synchronizer.getTransactions(uuid), synchronizer.status, ::normalizeTransactions).first()
+    }
+
+    override suspend fun findAccountSendByRecipient(
+        accountUuid: String,
+        recipient: String,
+    ): TransactionOverview? {
+        val synchronizer = synchronizerProvider.getSynchronizer()
+        return getAccountTransactions(accountUuid)
+            .asSequence()
+            .filter { it.isSentTransaction }
+            .firstOrNull { transaction ->
+                synchronizer.getRecipients(transaction).toList().any { it.addressValue == recipient }
+            }
+    }
+
     override suspend fun resolveWalletAddress(address: String): WalletAddress? =
         when (synchronizerProvider.getSynchronizer().validateAddress(address)) {
             AddressType.Shielded -> WalletAddress.Sapling.new(address)
@@ -432,6 +485,13 @@ class TransactionRepositoryImpl(
             AddressType.Unified -> WalletAddress.Unified.new(address)
             else -> null
         }
+
+    private suspend fun resolveAccountUuid(storageId: String): AccountUuid? =
+        accountDataSource
+            .getAllAccounts()
+            .firstOrNull { it.sdkAccount.accountUuid.toStorageKeyId() == storageId }
+            ?.sdkAccount
+            ?.accountUuid
 
     /**
      * Resolves the wallet's own unified address for [uuid] — the display recipient of a

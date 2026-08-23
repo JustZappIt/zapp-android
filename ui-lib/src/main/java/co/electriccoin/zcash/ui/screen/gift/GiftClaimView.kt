@@ -183,11 +183,27 @@ private fun GiftClaimBottomBar(state: GiftClaimState) {
                     }
                 }
 
+                GiftClaimStage.CLAIMING -> {
+                    if (state.canStopClaim) {
+                        {
+                            ZappButton(
+                                text = stringResource(R.string.gift_claim_stop_scan),
+                                onClick = state.onStopClaim,
+                                modifier =
+                                    Modifier
+                                        .weight(1f)
+                                        .padding(start = spacing.lg),
+                            )
+                        }
+                    } else {
+                        null
+                    }
+                }
+
                 // Nothing to press while reading the link or mid-claim, nothing to retry on an
                 // empty card, and nothing to do while confirmations accrue but wait — that screen
                 // re-checks itself rather than asking the recipient to keep tapping.
                 GiftClaimStage.LOADING,
-                GiftClaimStage.CLAIMING,
                 GiftClaimStage.PENDING_CONFIRMATIONS,
                 GiftClaimStage.EMPTY,
                 -> {
@@ -325,11 +341,13 @@ private fun GiftClaimPreview() =
                     blocksRemaining = 12_340L,
                     confirmations = null,
                     requiredConfirmations = 10,
+                    canStopClaim = false,
                     error = null,
                     onClaim = {},
                     onConsent = {},
                     onRetry = {},
                     onCreateWallet = {},
+                    onStopClaim = {},
                     onBack = {},
                 )
         )

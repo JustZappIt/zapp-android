@@ -11,14 +11,21 @@ import co.electriccoin.zcash.ui.R
  * Every one of these answers the only question the deck is scanned for — has it been collected —
  * and says what the sender can do about it if not. The sentences live in [labelRes].
  */
-internal fun GiftCardListStatus.chipRes() =
+internal fun GiftCardListStatus.chipRes(hasBeenChecked: Boolean = false, isCheckRecent: Boolean = false) =
     when (this) {
         GiftCardListStatus.UNFUNDED -> R.string.gift_card_chip_unfunded
         GiftCardListStatus.UNRESOLVED -> R.string.gift_card_chip_unresolved
         GiftCardListStatus.SUBMITTED -> R.string.gift_card_chip_submitted
         GiftCardListStatus.FUNDED -> R.string.gift_card_chip_funded
-        GiftCardListStatus.SHARED -> R.string.gift_card_chip_shared
+        GiftCardListStatus.SHARED -> sharedChipRes(hasBeenChecked, isCheckRecent)
         GiftCardListStatus.CLAIMED -> R.string.gift_card_chip_claimed
+    }
+
+private fun sharedChipRes(hasBeenChecked: Boolean, isCheckRecent: Boolean) =
+    when {
+        isCheckRecent -> R.string.gift_card_chip_shared
+        hasBeenChecked -> R.string.gift_card_chip_shared_stale
+        else -> R.string.gift_card_chip_shared_unchecked
     }
 
 /** The long form, for the back of the card, where a warning has room to be a sentence. */

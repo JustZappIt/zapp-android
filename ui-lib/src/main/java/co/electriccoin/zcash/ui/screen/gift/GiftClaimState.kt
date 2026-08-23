@@ -96,11 +96,14 @@ internal data class GiftClaimState(
     val blocksRemaining: Long?,
     val confirmations: Int?,
     val requiredConfirmations: Int,
+    /** True only while the isolated wallet is scanning and no transaction is being built/submitted. */
+    val canStopClaim: Boolean,
     val error: GiftClaimError?,
     val onClaim: () -> Unit,
     val onConsent: () -> Unit,
     val onRetry: () -> Unit,
     val onCreateWallet: () -> Unit,
+    val onStopClaim: () -> Unit,
     val onBack: () -> Unit,
 ) {
     /**

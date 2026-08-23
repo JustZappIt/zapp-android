@@ -5,6 +5,7 @@ import cash.z.ecc.android.sdk.Synchronizer
 import cash.z.ecc.android.sdk.exception.PcztException
 import cash.z.ecc.android.sdk.exception.TransactionEncoderException
 import cash.z.ecc.android.sdk.ext.convertZecToZatoshi
+import cash.z.ecc.android.sdk.model.CreatedTransaction
 import cash.z.ecc.android.sdk.model.Memo
 import cash.z.ecc.android.sdk.model.Pczt
 import cash.z.ecc.android.sdk.model.Proposal
@@ -15,6 +16,7 @@ import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.android.sdk.model.ZecSend
 import cash.z.ecc.android.sdk.model.proposeSend
 import cash.z.ecc.android.sdk.type.AddressType
+import co.electriccoin.lightwallet.client.model.LightWalletEndpoint
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.NetworkDimension
@@ -31,6 +33,7 @@ import org.zecdev.zip321.ZIP321
 import org.zecdev.zip321.parser.ParserContext
 import java.math.BigDecimal
 
+@Suppress("TooManyFunctions")
 interface ProposalDataSource {
     @Throws(
         TransactionProposalNotCreatedException::class,
@@ -80,6 +83,12 @@ interface ProposalDataSource {
     suspend fun submitTransaction(pcztWithProofs: Pczt, pcztWithSignatures: Pczt): SubmitResult
 
     suspend fun submitTransaction(proposal: Proposal, usk: UnifiedSpendingKey): SubmitResult
+
+    /** Creates and stores transaction bytes locally without contacting lightwalletd. */
+    suspend fun createTransactions(proposal: Proposal, usk: UnifiedSpendingKey): List<CreatedTransaction>
+
+    /** Submits one already-created transaction to lightwalletd. */
+    suspend fun submitTransaction(transaction: CreatedTransaction, endpoint: LightWalletEndpoint): SubmitResult
 
     @Throws(PcztException.RedactPcztForSignerException::class)
     suspend fun redactPcztForSigner(pczt: Pczt): Pczt
@@ -243,6 +252,28 @@ class ProposalDataSourceImpl(
                 proposal = proposal,
                 usk = usk,
             )
+        }
+
+    override suspend fun createTransactions(proposal: Proposal, usk: UnifiedSpendingKey): List<CreatedTransaction> =
+        withContext(Dispatchers.IO) {
+            synchronizerProvider
+                .getSynchronizer()
+                .broadcaster
+                .createProposedTransactions(proposal, usk)
+        }
+
+    override suspend fun submitTransaction(
+        transaction: CreatedTransaction,
+        endpoint: LightWalletEndpoint,
+    ): SubmitResult =
+        withContext(Dispatchers.IO) {
+            val synchronizer = synchronizerProvider.getSynchronizer()
+            val result = listOf(synchronizer.broadcaster.submit(transaction, endpoint)).toSubmitResult()
+            if (synchronizer is SdkSynchronizer) {
+                synchronizer.refreshTransactions()
+                synchronizer.refreshAllBalances()
+            }
+            result
         }
 
     override suspend fun redactPcztForSigner(pczt: Pczt): Pczt =

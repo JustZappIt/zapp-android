@@ -4,16 +4,21 @@
 package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.Synchronizer
+import cash.z.ecc.android.sdk.model.Account
+import cash.z.ecc.android.sdk.model.AccountUuid
 import cash.z.ecc.android.sdk.model.TransactionId
+import cash.z.ecc.android.sdk.model.TransactionOverview
+import cash.z.ecc.android.sdk.model.TransactionState
 import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.android.sdk.model.ZcashNetwork
+import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimFinalization
+import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.provider.GiftClaimOperationLock
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
 import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
-import co.electriccoin.zcash.ui.common.repository.ReceiveTransaction
 import co.electriccoin.zcash.ui.common.repository.TransactionRepository
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkPayload
 import co.electriccoin.zcash.ui.screen.gift.model.ReceivedGift
@@ -52,30 +57,43 @@ class ConfirmGiftClaimUseCaseTest {
             coVerify(exactly = 0) { fixture.dataSource.cleanupFinalizedClaim(any(), any(), any()) }
         }
 
+    @Test
+    fun `legacy receipt without an account searches every wallet account`() =
+        runTest {
+            val fixture = Fixture(finalTransaction = true, receipt = RECEIPT.copy(destinationAccountUuid = null))
+
+            fixture.useCase.reconcile()
+
+            coVerify(exactly = 1) { fixture.transactions.getAccountTransactions(ACCOUNT_ID) }
+            coVerify(exactly = 1) { fixture.receipts.settle(ADDRESS) }
+        }
+
     private class Fixture(
         finalTransaction: Boolean,
+        receipt: ReceivedGift = RECEIPT,
     ) {
         val receipts = mockk<ReceivedGiftStorageProvider>(relaxed = true)
         val dataSource = mockk<GiftClaimDataSource>(relaxed = true)
-        private val transactions = mockk<TransactionRepository>(relaxed = true)
+        val transactions = mockk<TransactionRepository>(relaxed = true)
+        private val accountDataSource = mockk<AccountDataSource>()
         private val synchronizerProvider = mockk<SynchronizerProvider>()
         private val persistableWalletProvider = mockk<PersistableWalletProvider>(relaxed = true)
 
         val useCase: ConfirmGiftClaimUseCase
 
         init {
-            coEvery { receipts.getAll() } returns listOf(RECEIPT)
-            val transaction =
-                if (finalTransaction) {
-                    mockk<ReceiveTransaction.Success>().also {
-                        every { it.id } returns TransactionId.new(ByteArray(32))
-                    }
-                } else {
-                    mockk<ReceiveTransaction.Pending>().also {
-                        every { it.id } returns TransactionId.new(ByteArray(32))
-                    }
-                }
-            coEvery { transactions.getTransactions() } returns listOf(transaction)
+            coEvery { receipts.getAll() } returns listOf(receipt)
+            val transaction = mockk<TransactionOverview>()
+            every { transaction.txId } returns TransactionId.new(ByteArray(32))
+            every { transaction.isSentTransaction } returns false
+            every { transaction.transactionState } returns
+                if (finalTransaction) TransactionState.Confirmed else TransactionState.Pending
+            coEvery { transactions.getAccountTransactions(ACCOUNT_ID) } returns listOf(transaction)
+            val sdkAccount = mockk<Account>()
+            every { sdkAccount.accountUuid } returns AccountUuid.new(ByteArray(16))
+            val walletAccount = mockk<WalletAccount>()
+            every { walletAccount.sdkAccount } returns sdkAccount
+            coEvery { accountDataSource.getAllAccounts() } returns listOf(walletAccount)
             coEvery { synchronizerProvider.getSynchronizer() } returns
                 mockk<Synchronizer>().also { every { it.network } returns ZcashNetwork.Mainnet }
             coEvery { dataSource.inspectFinalization(any(), any(), any(), any()) } returns
@@ -85,6 +103,7 @@ class ConfirmGiftClaimUseCaseTest {
                 ConfirmGiftClaimUseCase(
                     receivedGiftStorageProvider = receipts,
                     transactionRepository = transactions,
+                    accountDataSource = accountDataSource,
                     synchronizerProvider = synchronizerProvider,
                     persistableWalletProvider = persistableWalletProvider,
                     giftClaimDataSource = dataSource,
@@ -110,8 +129,11 @@ class ConfirmGiftClaimUseCaseTest {
                 network = "main",
                 amountZatoshi = 100_000_000L,
                 claimedAt = "2026-08-23T00:00:00Z",
+                destinationAccountUuid = ACCOUNT_ID,
                 claimTxids = listOf(TransactionId.new(ByteArray(32)).txIdString()),
                 claimLink = PAYLOAD,
             )
+
+        const val ACCOUNT_ID = "00000000000000000000000000000000"
     }
 }

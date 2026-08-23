@@ -193,11 +193,11 @@ changed.
 
 ## 5. Broadcast classification and cleanup
 
-`createProposedTransactions` returns a `Flow<TransactionSubmitResult>` — one element per transaction,
-because a proposal can contain several. That is why "did it send?" is not a boolean. The app already
-folds this into `SubmitResult` in `ProposalDataSource`; the fold is extracted into a pure function
-(`SubmitResultFold`) so the claim path and the ordinary send path cannot diverge. Two copies of this
-classification is how a partial broadcast eventually reads as a success.
+Ordinary and claim sends still fold the legacy `Flow<TransactionSubmitResult>` into `SubmitResult`.
+Gift funding uses the SDK broadcaster's split API instead: it creates and stores the transaction
+locally, persists that txid, then marks submission as started immediately before contacting
+lightwalletd. Local proving, key, proposal, and cancellation failures therefore stay retryable and
+cannot create a valid-looking empty card.
 
 | `SubmitResult` | Meaning | Recovery state |
 |---|---|---|
@@ -237,9 +237,10 @@ This is the part that decides whether a bug costs money.
 - **A card is persisted before its funding is broadcast.** A crash in between would otherwise lose
   the ephemeral seed and the money with it, permanently. `FundGiftCardUseCase` splits `prepare` from
   `submit` for exactly this reason, and the order between them is load-bearing.
-- **A broadcast is flagged before it starts.** The txid only exists once submit returns, so a process
-  killed mid-broadcast would otherwise leave a record indistinguishable from a card that was never
-  funded. `fundingAttemptedAt` is what makes the gap crash-safe.
+- **Local creation and network submission are separate durable phases.** `fundingCreatedAt` records a
+  locally stored txid without making the card shareable. `fundingAttemptedAt` is written only after
+  local creation succeeds and immediately before submission, so deterministic pre-network failures
+  remain retryable while a process killed mid-submit remains conservatively unresolved.
 - **Every stored card is re-shareable from the list screen**, because `StoredGiftCard` keeps
   everything the link needs — including `network` and `birthdayHeight`, which is why they are stored
   rather than used once at creation.

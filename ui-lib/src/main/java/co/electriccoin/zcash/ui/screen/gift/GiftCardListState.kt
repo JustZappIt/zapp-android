@@ -136,6 +136,8 @@ internal data class GiftCardListItem(
     val expiry: GiftExpiryDisplay?,
     /** When this card was last confirmed to still hold its funds. Null until one check completes. */
     val lastCheckedAt: StringResource?,
+    /** Whether that conclusive check is recent enough to call the card unclaimed now. */
+    val isLastCheckRecent: Boolean,
     val check: GiftCheckControl,
     /**
      * Null while the card holds nothing to hand over. The row hides the controls rather than

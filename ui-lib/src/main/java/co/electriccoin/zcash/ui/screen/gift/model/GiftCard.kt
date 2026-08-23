@@ -82,10 +82,20 @@ data class StoredGiftCard(
     val message: String? = null,
     val fundingTxid: String? = null,
     /**
+     * When [fundingTxid] was created and stored locally, before any network submission.
+     *
+     * Null on records written before this phase existed. A legacy record with a txid is therefore
+     * interpreted as submitted, while a new record with both fields can distinguish local creation
+     * from money that may have left the sender's wallet.
+     */
+    val fundingCreatedAt: String? = null,
+    /**
      * Set immediately before the funding transaction is broadcast and cleared once the outcome is
      * known. A record still carrying it is a card whose money may or may not have moved.
      */
     val fundingAttemptedAt: String? = null,
+    /** A clean lightwalletd acceptance. Null while submission is unresolved or not yet attempted. */
+    val fundingSubmittedAt: String? = null,
     /**
      * When the funding transaction was first observed with a block behind it.
      *
@@ -105,16 +115,25 @@ data class StoredGiftCard(
      * gift is money gone twice.
      */
     val hasFundingAttempt: Boolean
-        get() = fundingTxid != null || fundingAttemptedAt != null
+        get() =
+            fundingAttemptedAt != null ||
+                fundingSubmittedAt != null ||
+                // Backward compatibility: before fundingCreatedAt existed, a txid was only written
+                // after the combined create-and-submit SDK call returned.
+                (fundingTxid != null && fundingCreatedAt == null)
+
+    /** The network accepted the transaction, including legacy records whose txid implied that. */
+    val isFundingSubmitted: Boolean
+        get() = fundingSubmittedAt != null || (fundingTxid != null && fundingCreatedAt == null)
 
     /**
      * A mint nothing was ever sent to, and nothing ever will be.
      *
      * The one state in which discarding a record discards nothing: no broadcast was started, so no
-     * money can be at this address, so the seed unlocks nothing. `FundGiftCardUseCase` is what
-     * makes that airtight — it writes [fundingAttemptedAt] *before* it submits, and throws rather
-     * than submitting if that write fails, so "no funding attempt" is a durable statement that no
-     * transaction exists, not merely that none was recorded.
+     * money can be at this address, so the seed unlocks nothing. A locally-created transaction may
+     * exist in the SDK database, but `FundGiftCardUseCase` writes [fundingAttemptedAt] immediately
+     * before submission and refuses the network call if that write fails. "No funding attempt" is
+     * therefore a durable statement that no transaction was broadcast.
      *
      * Abandoned drafts are otherwise permanent: the sender who edits an amount and continues again
      * mints a second card, and the first is invisible to the list, unreachable from the UI, and

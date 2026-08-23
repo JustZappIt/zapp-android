@@ -4,11 +4,16 @@
 package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.Synchronizer
+import cash.z.ecc.android.sdk.model.Account
+import cash.z.ecc.android.sdk.model.AccountUuid
+import cash.z.ecc.android.sdk.model.WalletAddress
 import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.android.sdk.model.ZcashNetwork
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimOutcome
+import co.electriccoin.zcash.ui.common.model.UnifiedInfo
+import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.provider.GiftClaimOperationLock
 import co.electriccoin.zcash.ui.common.provider.GiftKeyProvider
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
@@ -179,13 +184,13 @@ class ClaimGiftCardUseCaseTest {
         }
 
     @Test
-    fun `still reports empty when the receipts cannot be read`() =
+    fun `fails closed when the receipts cannot be read`() =
         runTest {
-            // Losing the receipt store loses history, never money. It must not turn a claim into a
-            // crash — this falls back to what the scan itself found.
             val receipts = FakeReceipts(readThrows = true)
 
-            assertEquals(GiftClaimOutcome.Empty, useCase(receipts, GiftClaimOutcome.Empty)(PAYLOAD, ADDRESS) {})
+            assertFailsWith<GiftReceiptStoreUnreadableException> {
+                useCase(receipts, GiftClaimOutcome.Empty)(PAYLOAD, ADDRESS) {}
+            }
         }
 
     @Test
@@ -201,6 +206,18 @@ class ClaimGiftCardUseCaseTest {
             assertEquals(PAYLOAD, held.claimLink)
             assertFalse(held.isSettled)
             assertTrue(held.copy(claimLink = null).isSettled)
+        }
+
+    @Test
+    fun `persists the destination account and address before claiming`() =
+        runTest {
+            val receipts = FakeReceipts()
+
+            useCase(receipts)(PAYLOAD, ADDRESS) {}
+
+            val prepared = receipts.recorded.first()
+            assertEquals(DESTINATION_ADDRESS, prepared.destinationAddress)
+            assertEquals(DESTINATION_ACCOUNT_ID, prepared.destinationAccountUuid)
         }
 
     @Test
@@ -268,7 +285,7 @@ class ClaimGiftCardUseCaseTest {
         onClaim: () -> Unit = {},
         dataSource: GiftClaimDataSource? = null,
     ) = ClaimGiftCardUseCase(
-        accountDataSource = mockk<AccountDataSource>(relaxed = true),
+        accountDataSource = destinationAccountDataSource(),
         synchronizerProvider =
             mockk<SynchronizerProvider>(relaxed = true).also { provider ->
                 coEvery { provider.getSynchronizer() } returns
@@ -290,10 +307,25 @@ class ClaimGiftCardUseCaseTest {
         giftClaimOperationLock = GiftClaimOperationLock(),
     )
 
+    private fun destinationAccountDataSource(): AccountDataSource {
+        val address = mockk<WalletAddress.Unified>()
+        every { address.address } returns DESTINATION_ADDRESS
+        val unified = mockk<UnifiedInfo>()
+        every { unified.address } returns address
+        val sdkAccount = mockk<Account>()
+        every { sdkAccount.accountUuid } returns AccountUuid.new(ByteArray(16))
+        val account = mockk<WalletAccount>()
+        every { account.unified } returns unified
+        every { account.sdkAccount } returns sdkAccount
+        return mockk<AccountDataSource>().also { coEvery { it.getSelectedAccount() } returns account }
+    }
+
     private companion object {
         const val AMOUNT = 100_000_000L
         const val ADDRESS = "u1exampleunifiedaddressforgiftcardtests"
         const val CLAIM_TXID = "beef"
+        const val DESTINATION_ADDRESS = "u1recipientwalletaddress"
+        const val DESTINATION_ACCOUNT_ID = "00000000000000000000000000000000"
 
         val PAYLOAD =
             GiftLinkPayload(

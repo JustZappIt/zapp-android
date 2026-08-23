@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.screen.gift
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cash.z.ecc.android.sdk.Synchronizer
 import cash.z.ecc.android.sdk.exception.TransactionEncoderException
 import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
@@ -75,6 +76,8 @@ class GiftClaimVM(
 
     private var claimJob: Job? = null
 
+    private var confirmationRetryJob: Job? = null
+
     private var payload: GiftLinkPayload? = null
 
     /** Derived once in [load]; the link does not carry it. */
@@ -120,7 +123,13 @@ class GiftClaimVM(
                 // the signal — the lock overlay only appears on the way back in. Cancelling is safe
                 // here precisely because the broadcast half is NonCancellable. Starting is refused
                 // separately, in onClaim.
-                if (!foreground) stopClaim()
+                if (foreground) {
+                    if (snapshot.value.stage == GiftClaimStage.PENDING_CONFIRMATIONS) {
+                        scheduleConfirmationRecheck(payload, cardAddress)
+                    }
+                } else {
+                    stopClaim(forBackground = true)
+                }
             }
         }
     }
@@ -168,7 +177,9 @@ class GiftClaimVM(
                 }
             }.onFailure { throwable ->
                 if (throwable is CancellationException) throw throwable
-                snapshot.update { it.copy(stage = GiftClaimStage.PREVIEW, error = throwable.toClaimError()) }
+                snapshot.update {
+                    it.copy(stage = GiftClaimStage.PREVIEW, canStopClaim = false, error = throwable.toClaimError())
+                }
             }
     }
 
@@ -201,7 +212,14 @@ class GiftClaimVM(
         val current = payload
         val address = cardAddress
         if (current == null || address == null) return
-        snapshot.update { it.copy(stage = GiftClaimStage.CLAIMING, progressFraction = null, error = null) }
+        snapshot.update {
+            it.copy(
+                stage = GiftClaimStage.CLAIMING,
+                progressFraction = null,
+                canStopClaim = true,
+                error = null,
+            )
+        }
         claimJob = viewModelScope.launch { claim(current, address) }
     }
 
@@ -227,26 +245,37 @@ class GiftClaimVM(
             }
     }
 
-    private fun scheduleConfirmationRecheck(payload: GiftLinkPayload, address: String) {
-        claimJob =
-            viewModelScope.launch {
-                delay(CONFIRMATION_RECHECK)
-                if (snapshot.value.stage != GiftClaimStage.PENDING_CONFIRMATIONS) return@launch
-                snapshot.update { it.copy(stage = GiftClaimStage.CLAIMING, progressFraction = null) }
-                claim(payload, address)
+    private fun scheduleConfirmationRecheck(payload: GiftLinkPayload?, address: String?) {
+        if (payload != null && address != null) {
+            if (confirmationRetryJob?.isActive != true && isForeground) {
+                confirmationRetryJob =
+                    viewModelScope.launch {
+                        delay(CONFIRMATION_RECHECK)
+                        if (snapshot.value.stage != GiftClaimStage.PENDING_CONFIRMATIONS) return@launch
+                        snapshot.update {
+                            it.copy(stage = GiftClaimStage.CLAIMING, progressFraction = null, canStopClaim = true)
+                        }
+                        claimJob = viewModelScope.launch { claim(payload, address) }
+                    }
             }
+        }
     }
 
-    private fun stopClaim() {
-        val job = claimJob ?: return
-        if (job.isCompleted) return
-        job.cancel()
-        // The handle is kept rather than cleared. Cancelling only abandons the scan — a broadcast
-        // already inside NonCancellable runs on, and onClaim() needs the handle to refuse a second
-        // claim until it finishes.
-        // Back to the preview so the recipient can restart deliberately. Nothing was lost: the
-        // scan is resumable against the same per-card database on the next attempt.
-        snapshot.update { it.copy(stage = GiftClaimStage.PREVIEW, progressFraction = null) }
+    private fun stopClaim(forBackground: Boolean = false) {
+        if (forBackground) {
+            confirmationRetryJob?.cancel()
+            confirmationRetryJob = null
+        }
+
+        val job = claimJob
+        if (job != null && !job.isCompleted && snapshot.value.canStopClaim) {
+            job.cancel()
+            // The handle is kept rather than cleared. Cancelling only abandons a resumable scan,
+            // and prevents a second attempt until cancellation has finished. PENDING_CONFIRMATIONS
+            // and the local creation/submission phase both have canStopClaim=false, so backgrounding
+            // retains the former for a foreground retry and lets the latter publish its outcome.
+            snapshot.update { it.copy(stage = GiftClaimStage.PREVIEW, progressFraction = null, canStopClaim = false) }
+        }
     }
 
     /**
@@ -282,16 +311,19 @@ class GiftClaimVM(
             blocksRemaining = blocksRemaining,
             confirmations = confirmations,
             requiredConfirmations = requiredConfirmations,
+            canStopClaim = canStopClaim,
             error = error,
             onClaim = ::onClaim,
             onConsent = { snapshot.update { snap -> snap.copy(stage = GiftClaimStage.PREVIEW) } },
             onRetry = ::onRetry,
             onCreateWallet = ::onCreateWallet,
+            onStopClaim = { stopClaim() },
             onBack = navigationRouter::back,
         )
 
     override fun onCleared() {
-        stopClaim()
+        confirmationRetryJob?.cancel()
+        claimJob?.cancel()
         uri?.let { pendingGiftLinks.release(it) }
         super.onCleared()
     }
@@ -313,6 +345,7 @@ private fun GiftClaimSnapshot.applying(progress: GiftClaimProgress) =
         blocksRemaining =
             progress.tipHeight
                 ?.let { tip -> progress.scannedHeight?.let { (tip - it).coerceAtLeast(0L) } },
+        canStopClaim = progress.status != Synchronizer.Status.SYNCED,
     )
 
 private data class GiftClaimSnapshot(
@@ -325,6 +358,7 @@ private data class GiftClaimSnapshot(
     val blocksRemaining: Long? = null,
     val confirmations: Int? = null,
     val requiredConfirmations: Int = REQUIRED_CONFIRMATIONS,
+    val canStopClaim: Boolean = false,
     val error: GiftClaimError? = null,
 )
 
@@ -348,7 +382,7 @@ private fun GiftClaimSnapshot.applying(verdict: Result<GiftBirthdayVerdict>): Gi
 private fun GiftClaimSnapshot.applying(outcome: GiftClaimOutcome): GiftClaimSnapshot =
     when (outcome) {
         is GiftClaimOutcome.Claimed -> {
-            copy(stage = GiftClaimStage.DONE, amount = outcome.amount, error = null)
+            copy(stage = GiftClaimStage.DONE, amount = outcome.amount, canStopClaim = false, error = null)
         }
 
         is GiftClaimOutcome.NotYetSpendable -> {
@@ -356,24 +390,25 @@ private fun GiftClaimSnapshot.applying(outcome: GiftClaimOutcome): GiftClaimSnap
                 stage = GiftClaimStage.PENDING_CONFIRMATIONS,
                 confirmations = outcome.confirmations,
                 requiredConfirmations = outcome.requiredConfirmations,
+                canStopClaim = false,
                 error = null,
             )
         }
 
         GiftClaimOutcome.Empty -> {
-            copy(stage = GiftClaimStage.EMPTY, error = null)
+            copy(stage = GiftClaimStage.EMPTY, canStopClaim = false, error = null)
         }
 
         is GiftClaimOutcome.NotBroadcast -> {
             // The card is untouched and its database was retained, so this is a "try again",
             // never a "your gift is gone".
-            copy(stage = GiftClaimStage.PREVIEW, error = GiftClaimError.NOT_BROADCAST)
+            copy(stage = GiftClaimStage.PREVIEW, canStopClaim = false, error = GiftClaimError.NOT_BROADCAST)
         }
 
         // Also untouched and also retained, but not a "try again": nothing about the card changes
         // by waiting, so this must not schedule a re-check the way NotYetSpendable does.
         is GiftClaimOutcome.Underfunded -> {
-            copy(stage = GiftClaimStage.PREVIEW, error = GiftClaimError.UNDERFUNDED)
+            copy(stage = GiftClaimStage.PREVIEW, canStopClaim = false, error = GiftClaimError.UNDERFUNDED)
         }
     }
 

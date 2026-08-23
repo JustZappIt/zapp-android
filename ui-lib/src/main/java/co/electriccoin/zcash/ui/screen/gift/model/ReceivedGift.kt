@@ -19,6 +19,8 @@ data class ReceivedGift(
     val amountZatoshi: Long,
     val claimedAt: String,
     val destinationAddress: String? = null,
+    /** Account that received the claim, persisted so confirmation never follows UI selection. */
+    val destinationAccountUuid: String? = null,
     val claimTxids: List<String> = emptyList(),
     val message: String? = null,
     /** The bearer link, held until every [claimTxids] transaction reaches SDK finality. */
@@ -57,6 +59,7 @@ internal fun List<ReceivedGift>.recording(gift: ReceivedGift): List<ReceivedGift
             else -> {
                 gift.copy(
                     destinationAddress = gift.destinationAddress ?: current.destinationAddress,
+                    destinationAccountUuid = gift.destinationAccountUuid ?: current.destinationAccountUuid,
                     claimTxids = mergeClaimTxids(current.claimTxids, gift.claimTxids),
                     claimLink = current.claimLink ?: gift.claimLink,
                     isFinalized = current.isFinalized || gift.isFinalized,

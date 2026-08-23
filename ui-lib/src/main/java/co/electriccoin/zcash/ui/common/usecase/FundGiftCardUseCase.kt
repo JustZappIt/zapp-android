@@ -16,8 +16,11 @@ import co.electriccoin.zcash.ui.common.datasource.RegularTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.model.SubmitResult
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
+import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
 import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -69,12 +72,14 @@ class GiftFundingException(
  * load-bearing and must not be collapsed — the encrypted record holds the only copy of the
  * ephemeral seed, so funding an address whose record was not yet written burns the funds.
  */
+@Suppress("TooManyFunctions")
 class FundGiftCardUseCase(
     private val createGiftCard: CreateGiftCardUseCase,
     private val accountDataSource: AccountDataSource,
     private val proposalDataSource: ProposalDataSource,
     private val zashiSpendingKeyDataSource: ZashiSpendingKeyDataSource,
     private val giftCardStorageProvider: GiftCardStorageProvider,
+    private val persistableWalletProvider: PersistableWalletProvider,
 ) {
     /**
      * Mints a card — or re-prices [existing] — and builds its funding proposal.
@@ -150,15 +155,37 @@ class FundGiftCardUseCase(
      * @return the funding txid.
      */
     suspend fun submit(quote: GiftFundingQuote): String {
-        markAttempted(quote.card.id)
+        // Everything through local creation is retryable: no RPC has occurred and the SDK's
+        // broadcaster deliberately separates these steps. In particular, missing proving
+        // parameters, a stale proposal, a missing key, and cancellation here must not turn a card
+        // into a permanent "maybe funded" record.
+        val usk =
+            runCatching { zashiSpendingKeyDataSource.getZashiSpendingKey() }
+                .getOrElse(::failProposal)
+        val endpoint =
+            runCatching { persistableWalletProvider.requirePersistableWallet().endpoint }
+                .getOrElse(::failProposal)
+        val transaction =
+            runCatching {
+                proposalDataSource
+                    .createTransactions(quote.proposal.proposal, usk)
+                    .single()
+            }.getOrElse(::failProposal)
+
+        recordCreated(quote.card.id, transaction.txIdString())
+        runCatching { markAttempted(quote.card.id) }.exceptionOrNull()?.let { throwable ->
+            // Cancellation here is still pre-network. Run the cleanup outside the cancelled job
+            // so a half-completed persistence call cannot manufacture an unresolved broadcast.
+            failPrepared(cardId = quote.card.id, throwable = throwable)
+        }
 
         val result =
             runCatching {
                 proposalDataSource.submitTransaction(
-                    proposal = quote.proposal.proposal,
-                    usk = zashiSpendingKeyDataSource.getZashiSpendingKey(),
+                    transaction = transaction,
+                    endpoint = endpoint,
                 )
-            }.getOrElse { throwable -> throw submitFailure(throwable) }
+            }.getOrElse(::failSubmit)
 
         val txid =
             when (result) {
@@ -169,7 +196,7 @@ class FundGiftCardUseCase(
                 // Rejected is the only answer that means the network never took it, so it is the
                 // only one that may clear the attempt. Everything else stays flagged as unresolved.
                 is SubmitResult.Failure -> {
-                    clearAttempt(quote.card.id)
+                    clearPreparation(quote.card.id)
                     fail(GiftFundingError.SUBMIT_REJECTED)
                 }
 
@@ -185,21 +212,27 @@ class FundGiftCardUseCase(
         return txid
     }
 
-    /**
-     * Flags the card as mid-broadcast, before the broadcast rather than after. The txid only exists
-     * once submit returns, so a process killed in between would otherwise leave a record
-     * indistinguishable from a card that was never funded.
-     */
+    private suspend fun recordCreated(cardId: String, txid: String) {
+        runCatching {
+            giftCardStorageProvider.recordFundingCreated(
+                id = cardId,
+                fundingTxid = txid,
+                at = Clock.System.now().toString(),
+            )
+        }.getOrElse(::failProposal)
+    }
+
+    /** Flags the persisted local transaction as mid-broadcast, before the network call. */
     private suspend fun markAttempted(cardId: String) {
         runCatching {
             giftCardStorageProvider.setFundingAttemptedAt(id = cardId, at = Clock.System.now().toString())
-        }.getOrElse { throwable -> throw proposalFailure(throwable) }
+        }.getOrElse(::failProposal)
     }
 
-    /** Unflags a card the network refused. A failed clear overstates the risk rather than hiding it. */
-    private suspend fun clearAttempt(cardId: String) {
-        bestEffort("Gift card $cardId funding attempt could not be cleared") {
-            giftCardStorageProvider.setFundingAttemptedAt(id = cardId, at = null)
+    /** Clears local preparation after a failure known to have reached no network. */
+    private suspend fun clearPreparation(cardId: String) {
+        bestEffort("Gift card $cardId funding preparation could not be cleared") {
+            giftCardStorageProvider.clearFundingPreparation(id = cardId)
         }
     }
 
@@ -215,8 +248,19 @@ class FundGiftCardUseCase(
                 fundingTxid = txid,
                 at = Clock.System.now().toString(),
             )
-        }.getOrElse { throwable -> throw recordFailure(throwable) }
+        }.getOrElse(::failRecord)
     }
+
+    private suspend fun failPrepared(cardId: String, throwable: Throwable): Nothing {
+        withContext(NonCancellable) { clearPreparation(cardId) }
+        throw throwable
+    }
+
+    private fun failProposal(throwable: Throwable): Nothing = throw proposalFailure(throwable)
+
+    private fun failSubmit(throwable: Throwable): Nothing = throw submitFailure(throwable)
+
+    private fun failRecord(throwable: Throwable): Nothing = throw recordFailure(throwable)
 
     private fun proposalFailure(throwable: Throwable): Throwable =
         when (throwable) {

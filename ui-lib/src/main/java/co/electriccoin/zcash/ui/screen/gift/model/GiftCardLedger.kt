@@ -25,6 +25,7 @@ class GiftCardTransitionException(
  * confirmation itself lives off the enum, in [StoredGiftCard.fundingMinedAt], and every caller that
  * needs to know whether the money is really on the card asks [StoredGiftCard.isFundingMined].
  */
+@Suppress("TooManyFunctions")
 object GiftCardLedger {
     /**
      * Persists a freshly minted card. Callers must complete this *before* submitting funding: a
@@ -51,12 +52,45 @@ object GiftCardLedger {
      * Marks that a funding broadcast is about to be attempted, or — with a null [at] — that its
      * outcome is now known.
      *
-     * This is what makes the broadcast crash-safe. The txid only exists once submit returns, so a
-     * process killed mid-broadcast would otherwise leave a draft indistinguishable from one that
-     * was never funded, and [hasUnsharedFunds] would not count money that had in fact left.
+     * This is what makes the network boundary crash-safe. Local creation records a txid first; this
+     * separate marker says submission may have started, so [hasUnsharedFunds] counts money that may
+     * in fact have left.
      */
     fun setFundingAttemptedAt(cards: List<StoredGiftCard>, id: String, at: String?): List<StoredGiftCard> =
-        cards.replacing(id) { card -> card.copy(fundingAttemptedAt = at, updatedAt = at ?: card.updatedAt) }
+        cards.replacing(id) { card ->
+            if (at != null) ensure(card.fundingTxid != null, "Gift card $id needs a locally created transaction")
+            card.copy(fundingAttemptedAt = at, updatedAt = at ?: card.updatedAt)
+        }
+
+    /** Records a locally-created transaction without claiming it was submitted. */
+    fun recordFundingCreated(
+        cards: List<StoredGiftCard>,
+        id: String,
+        fundingTxid: String,
+        at: String,
+    ): List<StoredGiftCard> =
+        cards.replacing(id) { card ->
+            ensure(!card.hasFundingAttempt, "Gift card $id already has a funding submission")
+            ensure(fundingTxid.isNotBlank(), "Gift card $id needs a funding txid")
+            card.copy(
+                fundingTxid = fundingTxid,
+                fundingCreatedAt = at,
+                fundingAttemptedAt = null,
+                fundingSubmittedAt = null,
+                updatedAt = at,
+            )
+        }
+
+    /** Clears a transaction whose network rejection or pre-network failure is conclusive. */
+    fun clearFundingPreparation(cards: List<StoredGiftCard>, id: String): List<StoredGiftCard> =
+        cards.replacing(id) { card ->
+            ensure(card.fundingSubmittedAt == null, "Gift card $id was already submitted")
+            card.copy(
+                fundingTxid = null,
+                fundingCreatedAt = null,
+                fundingAttemptedAt = null,
+            )
+        }
 
     /**
      * Records the txid of a submitted funding transaction, leaving the card [GiftCardStatus.DRAFT]
@@ -74,7 +108,13 @@ object GiftCardLedger {
                 card.fundingTxid == null || card.fundingTxid == fundingTxid,
                 "Gift card $id is already funded by a different transaction"
             )
-            card.copy(fundingTxid = fundingTxid, fundingAttemptedAt = null, updatedAt = at)
+            card.copy(
+                fundingTxid = fundingTxid,
+                fundingCreatedAt = card.fundingCreatedAt,
+                fundingAttemptedAt = null,
+                fundingSubmittedAt = at,
+                updatedAt = at,
+            )
         }
 
     /**
@@ -103,13 +143,14 @@ object GiftCardLedger {
                 .copy(
                     fundingTxid = fundingTxid,
                     fundingAttemptedAt = null,
+                    fundingSubmittedAt = card.fundingSubmittedAt ?: at,
                     fundingMinedAt = card.fundingMinedAt ?: at,
                 )
         }
 
     /**
-     * Marks the link as handed out. Requires only that a broadcast was *started* — not a mined
-     * funding, and not even a txid.
+     * Marks the link as handed out. Requires only that a broadcast was *started*, not that funding
+     * has mined or that the submission outcome was observed.
      *
      * The weakest of the three guards, deliberately. A card whose broadcast outcome was never seen
      * has to be shareable too: its money may already have gone, and then the link is the only route

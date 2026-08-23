@@ -9,6 +9,7 @@ import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimOutcome
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimProgress
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.GiftClaimOperationLock
 import co.electriccoin.zcash.ui.common.provider.GiftKeyProvider
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
@@ -58,6 +59,19 @@ data class GiftClaimPreview(
  */
 class GiftClaimNotReadyException : RuntimeException("Chain tip unknown")
 
+/** Receipt state could not be read, so absence cannot be asserted safely. */
+class GiftReceiptStoreUnreadableException : RuntimeException("Received gift receipts could not be read")
+
+private sealed interface ReceivedGiftLookup {
+    data class Found(
+        val outcome: GiftClaimOutcome.Claimed,
+    ) : ReceivedGiftLookup
+
+    data object Absent : ReceivedGiftLookup
+
+    data object Unreadable : ReceivedGiftLookup
+}
+
 /**
  * Turns a gift link into money in this wallet.
  *
@@ -97,11 +111,17 @@ class ClaimGiftCardUseCase(
         // Answered from the receipt, before a block is fetched. The same question asked after a
         // scan gets the same answer thirty seconds later, having searched a card it already knew
         // was empty — and a card is emptied exactly once, so the record is authoritative.
+        val collected =
+            when (val lookup = collectedEarlier(payload, cardAddress, settledOnly = true)) {
+                is ReceivedGiftLookup.Found -> lookup.outcome
+                ReceivedGiftLookup.Absent -> null
+                ReceivedGiftLookup.Unreadable -> throw GiftReceiptStoreUnreadableException()
+            }
         return GiftClaimPreview(
             payload = payload,
             cardAddress = cardAddress,
             hasWallet = synchronizer != null,
-            collected = collectedEarlier(payload, cardAddress, settledOnly = true),
+            collected = collected,
         )
     }
 
@@ -154,10 +174,8 @@ class ClaimGiftCardUseCase(
         onProgress: (GiftClaimProgress) -> Unit,
     ): GiftClaimOutcome {
         val synchronizer = synchronizerProvider.getSynchronizer()
-        val recipient =
-            accountDataSource
-                .getSelectedAccount()
-                .unified.address.address
+        val destinationAccount = accountDataSource.getSelectedAccount()
+        val recipient = destinationAccount.unified.address.address
         // The wallet's own endpoint rather than the bundled default, so a claim talks to whatever
         // server the user chose for everything else.
         val endpoint = persistableWalletProvider.requirePersistableWallet().endpoint
@@ -169,6 +187,7 @@ class ClaimGiftCardUseCase(
                 amountZatoshi = payload.amountZatoshi.toLong(),
                 claimedAt = Clock.System.now().toString(),
                 destinationAddress = recipient,
+                destinationAccountUuid = destinationAccount.sdkAccount.accountUuid.toStorageKeyId(),
                 message = payload.message,
                 claimLink = payload,
             )
@@ -189,7 +208,13 @@ class ClaimGiftCardUseCase(
         // is what the [NonCancellable] write below is for: a claim can succeed and still lose its
         // outcome on the way back to the screen if the app was backgrounded while the broadcast
         // ran, and the recipient's next attempt would otherwise be told their gift is gone.
-        if (outcome is GiftClaimOutcome.Empty) collectedEarlier(payload, cardAddress)?.let { return it }
+        if (outcome is GiftClaimOutcome.Empty) {
+            when (val lookup = collectedEarlier(payload, cardAddress)) {
+                is ReceivedGiftLookup.Found -> return lookup.outcome
+                ReceivedGiftLookup.Absent -> Unit
+                ReceivedGiftLookup.Unreadable -> throw GiftReceiptStoreUnreadableException()
+            }
+        }
 
         // The prepared record already holds recovery; attach txids even if the caller was cancelled.
         if (outcome is GiftClaimOutcome.Claimed) {
@@ -201,8 +226,8 @@ class ClaimGiftCardUseCase(
     }
 
     /**
-     * The receipt for this card, rebuilt as the outcome it came from, or null if there is none.
-     * Keyed on the address, which is the card's identity.
+     * The receipt for this card, absence, or an unreadable-store result. Keyed on the address,
+     * which is the card's identity.
      *
      * Reads wrong only for an address funded a second time and emptied again, reporting the first
      * collection rather than the second. Nothing in the app can re-fund a spent card, and that
@@ -218,7 +243,7 @@ class ClaimGiftCardUseCase(
         payload: GiftLinkPayload,
         cardAddress: String,
         settledOnly: Boolean = false,
-    ): GiftClaimOutcome.Claimed? =
+    ): ReceivedGiftLookup =
         runCatching {
             val receipt =
                 receivedGiftStorageProvider
@@ -229,13 +254,16 @@ class ClaimGiftCardUseCase(
                             it.claimTxids.isNotEmpty() &&
                             (!settledOnly || it.isSettled)
                     }
-            receipt?.let { GiftClaimOutcome.Claimed(amount = Zatoshi(it.amountZatoshi), txIds = it.claimTxids) }
+            receipt
+                ?.let {
+                    ReceivedGiftLookup.Found(
+                        GiftClaimOutcome.Claimed(amount = Zatoshi(it.amountZatoshi), txIds = it.claimTxids)
+                    )
+                } ?: ReceivedGiftLookup.Absent
         }.getOrElse { throwable ->
             if (throwable is CancellationException) throw throwable
-            // Falls through to Empty, which is what this path already said before the receipt
-            // existed. A store that will not read must not turn a claim into a crash.
             Twig.warn { "Received gift receipts could not be read" }
-            null
+            ReceivedGiftLookup.Unreadable
         }
 
     private companion object {

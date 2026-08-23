@@ -78,8 +78,11 @@ class CheckGiftCardClaimedUseCase(
             is CheckOutcome.Read -> {
                 when {
                     outcome.holdings.isCollected -> {
-                        markClaimed(card)
-                        GiftCardCheckResult.COLLECTED
+                        if (markClaimed(card)) {
+                            GiftCardCheckResult.COLLECTED
+                        } else {
+                            GiftCardCheckResult.UNKNOWN
+                        }
                     }
 
                     // Scanned to the tip and the funding is not there. Deliberately not recorded as
@@ -146,13 +149,14 @@ class CheckGiftCardClaimedUseCase(
         }
     }
 
-    /**
-     * Best effort: the card is collected whether or not the store takes the note, and a failure
-     * here must not be reported back as "still waiting".
-     */
-    private suspend fun markClaimed(card: StoredGiftCard) {
-        bestEffort("Gift card ${card.id} could not be marked claimed") {
+    /** A terminal answer is returned only if the terminal state was durably recorded. */
+    private suspend fun markClaimed(card: StoredGiftCard): Boolean =
+        runCatching {
             giftCardStorageProvider.markClaimed(id = card.id, at = Clock.System.now().toString())
+            true
+        }.getOrElse { throwable ->
+            if (throwable is CancellationException) throw throwable
+            Twig.error(throwable) { "Gift card ${card.id} could not be marked claimed" }
+            false
         }
-    }
 }

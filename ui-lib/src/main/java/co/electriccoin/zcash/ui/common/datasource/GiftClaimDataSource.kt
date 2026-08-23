@@ -91,6 +91,9 @@ private fun AccountBalance.shieldedTotal() = sapling.total + orchard.total + iro
 /** The card's server could not be reached at all, so nothing was learned about the card. */
 class GiftCardUnreachableException : RuntimeException("Card wallet could not reach its server")
 
+/** The isolated synchronizer was stopped and can never reach SYNCED. */
+class GiftCardSynchronizerStoppedException : RuntimeException("Card wallet synchronizer stopped")
+
 /** What a minted card's own wallet holds right now, and whether it ever held anything. */
 data class GiftCardHoldings(
     val available: Zatoshi,
@@ -588,7 +591,11 @@ internal class GiftClaimDataSourceImpl(
     private suspend fun awaitReachable(synchronizer: Synchronizer) {
         withTimeoutOrNull(SERVER_TIMEOUT) {
             synchronizer.status.first {
-                it != Synchronizer.Status.INITIALIZING && it != Synchronizer.Status.DISCONNECTED
+                when (it) {
+                    Synchronizer.Status.STOPPED -> throw GiftCardSynchronizerStoppedException()
+                    Synchronizer.Status.SYNCING, Synchronizer.Status.SYNCED -> true
+                    Synchronizer.Status.INITIALIZING, Synchronizer.Status.DISCONNECTED -> false
+                }
             }
         } ?: throw GiftCardUnreachableException()
     }
@@ -600,6 +607,7 @@ internal class GiftClaimDataSourceImpl(
         // Plain Flows, not StateFlows: no `.value` to poll, so the wait is the collection itself.
         combine(synchronizer.status, synchronizer.progress) { status, progress -> status to progress }
             .first { (status, progress) ->
+                if (status == Synchronizer.Status.STOPPED) throw GiftCardSynchronizerStoppedException()
                 onProgress(
                     GiftClaimProgress(
                         status = status,

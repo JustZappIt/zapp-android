@@ -121,6 +121,7 @@ class GiftCardStorageProviderTest {
             // next mint. The records this must never lose are the ones money has moved for.
             (0 until CONCURRENT).forEach { index ->
                 storage.add(card(id = "card-$index"))
+                storage.recordFundingCreated("card-$index", "tx-$index", NOW)
                 storage.setFundingAttemptedAt("card-$index", NOW)
             }
 

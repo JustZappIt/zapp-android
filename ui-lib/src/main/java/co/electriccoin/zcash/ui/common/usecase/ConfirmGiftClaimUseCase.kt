@@ -3,16 +3,19 @@
 
 package co.electriccoin.zcash.ui.common.usecase
 
+import cash.z.ecc.android.sdk.model.TransactionState
+import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimDataSource
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.GiftClaimOperationLock
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
 import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
-import co.electriccoin.zcash.ui.common.repository.ReceiveTransaction
 import co.electriccoin.zcash.ui.common.repository.TransactionRepository
 import co.electriccoin.zcash.ui.screen.gift.model.ReceivedGift
-import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.merge
 
 /**
  * Drops a received gift's retained link after SDK finality and isolated-wallet cleanup.
@@ -20,6 +23,7 @@ import kotlinx.coroutines.flow.first
 class ConfirmGiftClaimUseCase(
     private val receivedGiftStorageProvider: ReceivedGiftStorageProvider,
     private val transactionRepository: TransactionRepository,
+    private val accountDataSource: AccountDataSource,
     private val synchronizerProvider: SynchronizerProvider,
     private val persistableWalletProvider: PersistableWalletProvider,
     private val giftClaimDataSource: GiftClaimDataSource,
@@ -31,15 +35,25 @@ class ConfirmGiftClaimUseCase(
      * Cancelling loses nothing: [reconcile] picks the receipt up on the next pass.
      */
     suspend operator fun invoke(address: String, claimTxids: List<String>) {
-        if (claimTxids.isEmpty()) return
-        // A claim arrives here as an ordinary incoming transaction, so Receive rather than Send.
+        val receipt =
+            receivedGiftStorageProvider
+                .getAll()
+                .firstOrNull { claimTxids.isNotEmpty() && it.address == address }
+        if (receipt != null) awaitFinality(receipt, claimTxids)
+    }
+
+    private suspend fun awaitFinality(receipt: ReceivedGift, claimTxids: List<String>) {
+        val accountIds = candidateAccountIds(receipt)
+        if (accountIds.isEmpty()) return
+        // A claim arrives here as an ordinary incoming transaction, not a send.
         claimTxids.forEach { txid ->
-            transactionRepository
-                .observeTransaction(txid)
-                .filterIsInstance<ReceiveTransaction.Success>()
-                .first()
+            accountIds
+                .map { transactionRepository.observeAccountTransaction(it, txid) }
+                .merge()
+                .filterNotNull()
+                .first { !it.isSentTransaction && it.transactionState == TransactionState.Confirmed }
         }
-        receivedGiftStorageProvider.getAll().firstOrNull { it.address == address }?.let { finalize(it) }
+        finalize(receipt)
     }
 
     /** Settles every receipt whose claim is already final. */
@@ -47,16 +61,34 @@ class ConfirmGiftClaimUseCase(
         val unsettled = receivedGiftStorageProvider.getAll().filterNot { it.isSettled }
         if (unsettled.isEmpty()) return
 
-        val finalized =
-            transactionRepository
-                .getTransactions()
-                .filterIsInstance<ReceiveTransaction.Success>()
-                .mapTo(mutableSetOf()) { it.id.txIdString() }
+        val allAccountIds = allAccountIds()
+        val transactionsByAccount =
+            allAccountIds.associateWith { accountId ->
+                transactionRepository
+                    .getAccountTransactions(accountId)
+                    .filter { !it.isSentTransaction && it.transactionState == TransactionState.Confirmed }
+                    .mapTo(mutableSetOf()) { it.txId.txIdString() }
+            }
 
         unsettled
-            .filter { it.claimTxids.isNotEmpty() && finalized.containsAll(it.claimTxids) }
-            .forEach { finalize(it) }
+            .filter { receipt ->
+                receipt.claimTxids.isNotEmpty() &&
+                    candidateAccountIds(receipt, allAccountIds).any { accountId ->
+                        transactionsByAccount[accountId].orEmpty().containsAll(receipt.claimTxids)
+                    }
+            }.forEach { finalize(it) }
     }
+
+    private suspend fun candidateAccountIds(receipt: ReceivedGift): List<String> =
+        candidateAccountIds(receipt, allAccountIds())
+
+    private fun candidateAccountIds(receipt: ReceivedGift, allAccountIds: List<String>): List<String> =
+        receipt.destinationAccountUuid?.let(::listOf) ?: allAccountIds
+
+    private suspend fun allAccountIds(): List<String> =
+        accountDataSource
+            .getAllAccounts()
+            .map { it.sdkAccount.accountUuid.toStorageKeyId() }
 
     private suspend fun finalize(receipt: ReceivedGift) {
         giftClaimOperationLock.withLock(receipt.address) { finalizeLocked(receipt) }

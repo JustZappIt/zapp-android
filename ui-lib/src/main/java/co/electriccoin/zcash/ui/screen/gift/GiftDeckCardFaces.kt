@@ -80,7 +80,12 @@ internal fun CardFront(item: GiftCardListItem, stock: ZappGiftCardStock) {
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).testTag(GiftCardListTag.AMOUNT),
             )
-            StatusPill(item.status, stock)
+            StatusPill(
+                status = item.status,
+                hasBeenChecked = item.lastCheckedAt != null,
+                isCheckRecent = item.isLastCheckRecent,
+                stock = stock,
+            )
         }
 
         // Below the peek, so opening a card is what reveals it. The fiat is absent whenever the
@@ -278,7 +283,12 @@ internal fun ScanTrack(fraction: Float?, stock: ZappGiftCardStock, modifier: Mod
 }
 
 @Composable
-private fun StatusPill(status: GiftCardListStatus, stock: ZappGiftCardStock) {
+private fun StatusPill(
+    status: GiftCardListStatus,
+    hasBeenChecked: Boolean,
+    isCheckRecent: Boolean,
+    stock: ZappGiftCardStock,
+) {
     val isSettled = status == GiftCardListStatus.CLAIMED
     val mark = if (isSettled) stock.inkFaint else ZappGiftCardStocks.LiveMark
     Row(
@@ -292,7 +302,7 @@ private fun StatusPill(status: GiftCardListStatus, stock: ZappGiftCardStock) {
     ) {
         Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(mark))
         BasicText(
-            text = stringResource(status.chipRes()),
+            text = stringResource(status.chipRes(hasBeenChecked, isCheckRecent)),
             style = ZappTheme.typography.chip.copy(color = if (isSettled) stock.inkMuted else stock.ink),
             maxLines = 1,
         )
