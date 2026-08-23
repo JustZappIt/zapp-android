@@ -35,14 +35,11 @@ interface GiftCardStorageProvider {
     /** Persists a freshly minted card. Must complete before its funding transaction is submitted. */
     suspend fun add(card: StoredGiftCard)
 
-    /** Flags a broadcast as in flight, or clears the flag with a null [at] once it is resolved. */
-    suspend fun setFundingAttemptedAt(id: String, at: String?)
+    /** Flags funding before SDK transaction creation. Submitted/funded transitions clear it. */
+    suspend fun setFundingAttemptedAt(id: String, at: String)
 
-    /** Stores a locally-created transaction before network submission begins. */
+    /** Stores the txid created after the durable funding-start marker. */
     suspend fun recordFundingCreated(id: String, fundingTxid: String, at: String)
-
-    /** Clears a locally-created transaction after a conclusive pre-network failure or rejection. */
-    suspend fun clearFundingPreparation(id: String)
 
     /** Records a submitted funding txid. The card stays a draft until the transaction mines. */
     suspend fun recordFundingSubmitted(id: String, fundingTxid: String, at: String)
@@ -104,14 +101,11 @@ internal class GiftCardStorageProviderImpl(
 
     override suspend fun add(card: StoredGiftCard) = mutate { GiftCardLedger.add(it, card) }
 
-    override suspend fun setFundingAttemptedAt(id: String, at: String?) =
+    override suspend fun setFundingAttemptedAt(id: String, at: String) =
         mutate { GiftCardLedger.setFundingAttemptedAt(it, id, at) }
 
     override suspend fun recordFundingCreated(id: String, fundingTxid: String, at: String) =
         mutate { GiftCardLedger.recordFundingCreated(it, id, fundingTxid, at) }
-
-    override suspend fun clearFundingPreparation(id: String) =
-        mutate { GiftCardLedger.clearFundingPreparation(it, id) }
 
     override suspend fun recordFundingSubmitted(id: String, fundingTxid: String, at: String) =
         mutate { GiftCardLedger.recordFundingSubmitted(it, id, fundingTxid, at) }

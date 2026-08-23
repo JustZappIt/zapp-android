@@ -83,7 +83,12 @@ class ConfirmGiftClaimUseCase(
         candidateAccountIds(receipt, allAccountIds())
 
     private fun candidateAccountIds(receipt: ReceivedGift, allAccountIds: List<String>): List<String> =
-        receipt.destinationAccountUuid?.let(::listOf) ?: allAccountIds
+        receipt.destinationAccountUuid
+            ?.takeIf(allAccountIds::contains)
+            ?.let(::listOf)
+            // A re-imported account can have a new SDK UUID. Falling back to every current account
+            // keeps the persisted destination hint useful without making it an orphaning key.
+            ?: allAccountIds
 
     private suspend fun allAccountIds(): List<String> =
         accountDataSource
@@ -94,8 +99,17 @@ class ConfirmGiftClaimUseCase(
         giftClaimOperationLock.withLock(receipt.address) { finalizeLocked(receipt) }
     }
 
-    private suspend fun finalizeLocked(receipt: ReceivedGift) {
+    private suspend fun finalizeLocked(snapshot: ReceivedGift) {
+        // Reconcile and a foreground retry read independently. The retry can attach a replacement
+        // txid while reconcile waits for the lock, so finalizing its stale snapshot can discard the
+        // only retry secret before the replacement is final.
+        val receipt =
+            receivedGiftStorageProvider
+                .getAll()
+                .firstOrNull { it.address == snapshot.address && !it.isSettled }
+                ?: return
         val payload = receipt.claimLink ?: return
+        if (!receipt.isFinalized && !hasFinalDestinationTransactions(receipt)) return
         val synchronizer = synchronizerProvider.getSynchronizer()
         if (!receipt.isFinalized) {
             val result =
@@ -110,5 +124,19 @@ class ConfirmGiftClaimUseCase(
         }
         giftClaimDataSource.cleanupFinalizedClaim(payload, receipt.address, synchronizer.network)
         receivedGiftStorageProvider.settle(receipt.address)
+    }
+
+    private suspend fun hasFinalDestinationTransactions(receipt: ReceivedGift): Boolean {
+        if (receipt.claimTxids.isEmpty()) return false
+        val accountIds = candidateAccountIds(receipt)
+        return accountIds.any { accountId ->
+            transactionRepository
+                .getAccountTransactions(accountId)
+                .asSequence()
+                .filter { !it.isSentTransaction && it.transactionState == TransactionState.Confirmed }
+                .map { it.txId.txIdString() }
+                .toSet()
+                .containsAll(receipt.claimTxids)
+        }
     }
 }

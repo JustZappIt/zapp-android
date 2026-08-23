@@ -51,7 +51,6 @@ internal enum class GiftCardError {
     MINT_FAILED,
     PROPOSAL_FAILED,
     AUTHENTICATION_FAILED,
-    SUBMIT_REJECTED,
 
     /** Broadcast outcome unknown. The copy must not invite a retry — see `GiftFundingError`. */
     SUBMIT_UNCERTAIN,

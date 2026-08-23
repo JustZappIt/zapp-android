@@ -49,8 +49,8 @@ class ConfirmGiftCardFundingUseCase(
      *
      * This is what recovers a card whose [invoke] never got to finish, because the process died or
      * the sender left the screen between broadcast and the next block — and, for a card flagged
-     * [StoredGiftCard.fundingAttemptedAt], including legacy records written before local creation
-     * persisted a txid ahead of submission.
+     * [StoredGiftCard.fundingAttemptedAt], including a process death after the durable start marker
+     * but before the locally-created txid was attached to the card.
      *
      * Scoped by [StoredGiftCard.isFundingMined] rather than by status, because the two are not the
      * same question and a status-scoped sweep skipped the cards that needed it most: sharing
@@ -60,8 +60,8 @@ class ConfirmGiftCardFundingUseCase(
     suspend fun reconcile() {
         val cards = giftCardStorageProvider.getAll()
         val submitted = cards.filter { it.needsTxidReconciliation() }
-        // Broadcast started, outcome never seen — the process died mid-submit, or submit came back
-        // uncertain. There is no txid to look up, so these are matched by destination instead.
+        // Funding started, outcome never seen — the process can die during creation, txid
+        // persistence, or submission. There is no attached txid, so match by destination instead.
         val unresolved = cards.filter { it.needsRecipientReconciliation() }
         if (submitted.isEmpty() && unresolved.isEmpty()) return
 

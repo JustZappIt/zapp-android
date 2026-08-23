@@ -348,7 +348,6 @@ private fun Throwable.toGiftCardError(): GiftCardError =
             when (error) {
                 GiftFundingError.INSUFFICIENT_FUNDS -> GiftCardError.INSUFFICIENT_FUNDS
                 GiftFundingError.PROPOSAL_FAILED -> GiftCardError.PROPOSAL_FAILED
-                GiftFundingError.SUBMIT_REJECTED -> GiftCardError.SUBMIT_REJECTED
                 GiftFundingError.SUBMIT_UNCERTAIN -> GiftCardError.SUBMIT_UNCERTAIN
             }
         }

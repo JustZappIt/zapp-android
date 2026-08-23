@@ -37,8 +37,11 @@ internal enum class GiftClaimStage {
      */
     PENDING_CONFIRMATIONS,
 
-    /** Nothing there — never funded, or already claimed by someone else holding the link. */
-    EMPTY,
+    /** The card's funding has not reached its shielded balance yet. Safe to check again later. */
+    AWAITING_FUNDING,
+
+    /** A different holder spent this bearer card before this wallet did. */
+    ALREADY_CLAIMED,
 }
 
 internal enum class GiftClaimError {

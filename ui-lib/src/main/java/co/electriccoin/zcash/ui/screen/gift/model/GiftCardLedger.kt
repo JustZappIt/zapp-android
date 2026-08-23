@@ -49,20 +49,19 @@ object GiftCardLedger {
     }
 
     /**
-     * Marks that a funding broadcast is about to be attempted, or — with a null [at] — that its
-     * outcome is now known.
+     * Marks that the SDK funding pipeline is about to be started.
      *
-     * This is what makes the network boundary crash-safe. Local creation records a txid first; this
-     * separate marker says submission may have started, so [hasUnsharedFunds] counts money that may
-     * in fact have left.
+     * This is what makes the SDK boundary crash-safe. It is written before local creation because
+     * Slipstream may automatically submit any outgoing transaction stored in its database, even
+     * when the app has not called `Broadcaster.submit` yet.
      */
-    fun setFundingAttemptedAt(cards: List<StoredGiftCard>, id: String, at: String?): List<StoredGiftCard> =
+    fun setFundingAttemptedAt(cards: List<StoredGiftCard>, id: String, at: String): List<StoredGiftCard> =
         cards.replacing(id) { card ->
-            if (at != null) ensure(card.fundingTxid != null, "Gift card $id needs a locally created transaction")
-            card.copy(fundingAttemptedAt = at, updatedAt = at ?: card.updatedAt)
+            ensure(!card.hasFundingAttempt, "Gift card $id funding was already started")
+            card.copy(fundingAttemptedAt = at, updatedAt = at)
         }
 
-    /** Records a locally-created transaction without claiming it was submitted. */
+    /** Attaches the txid created after [setFundingAttemptedAt] established the durable gate. */
     fun recordFundingCreated(
         cards: List<StoredGiftCard>,
         id: String,
@@ -70,25 +69,15 @@ object GiftCardLedger {
         at: String,
     ): List<StoredGiftCard> =
         cards.replacing(id) { card ->
-            ensure(!card.hasFundingAttempt, "Gift card $id already has a funding submission")
+            ensure(card.fundingAttemptedAt != null, "Gift card $id funding was not started durably")
+            ensure(card.fundingTxid == null, "Gift card $id already has a funding transaction")
             ensure(fundingTxid.isNotBlank(), "Gift card $id needs a funding txid")
             card.copy(
                 fundingTxid = fundingTxid,
                 fundingCreatedAt = at,
-                fundingAttemptedAt = null,
+                fundingAttemptedAt = card.fundingAttemptedAt,
                 fundingSubmittedAt = null,
                 updatedAt = at,
-            )
-        }
-
-    /** Clears a transaction whose network rejection or pre-network failure is conclusive. */
-    fun clearFundingPreparation(cards: List<StoredGiftCard>, id: String): List<StoredGiftCard> =
-        cards.replacing(id) { card ->
-            ensure(card.fundingSubmittedAt == null, "Gift card $id was already submitted")
-            card.copy(
-                fundingTxid = null,
-                fundingCreatedAt = null,
-                fundingAttemptedAt = null,
             )
         }
 

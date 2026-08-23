@@ -66,6 +66,13 @@ class GiftCardLedgerTest {
     }
 
     @Test
+    fun `refuses to attach a locally created transaction before the durable start marker`() {
+        assertFailsWith<GiftCardTransitionException> {
+            GiftCardLedger.recordFundingCreated(listOf(card()), ID, TXID, LATER)
+        }
+    }
+
+    @Test
     fun `marks a card funded`() {
         val cards = GiftCardLedger.markFunded(listOf(card()), ID, TXID, LATER)
 
@@ -226,28 +233,24 @@ class GiftCardLedgerTest {
     }
 
     @Test
-    fun `counts a broadcast whose outcome was never seen as unshared funds`() {
-        val created = GiftCardLedger.recordFundingCreated(listOf(card()), ID, TXID, LATER)
-        val attempted = GiftCardLedger.setFundingAttemptedAt(created, ID, LATER)
+    fun `counts funding as unresolved before local transaction creation`() {
+        val attempted = GiftCardLedger.setFundingAttemptedAt(listOf(card()), ID, LATER)
 
-        // No txid was ever written, but the money may already have left. Guessing "unfunded" here
-        // is what would let the wallet be wiped out from under it.
-        assertEquals(TXID, attempted.single().fundingTxid)
+        // No txid was written yet, but Slipstream may create and submit one after this checkpoint.
+        // Guessing "unfunded" here is what would let the wallet be wiped out from under it.
+        assertNull(attempted.single().fundingTxid)
         assertTrue(hasUnsharedFunds(attempted))
         assertTrue(hasUnsharedFunds(attempted, ACCOUNT))
     }
 
     @Test
     fun `clears the attempt once its outcome is known`() {
-        val created = GiftCardLedger.recordFundingCreated(listOf(card()), ID, TXID, LATER)
-        val attempted = GiftCardLedger.setFundingAttemptedAt(created, ID, LATER)
+        val attempted = GiftCardLedger.setFundingAttemptedAt(listOf(card()), ID, LATER)
+        val created = GiftCardLedger.recordFundingCreated(attempted, ID, TXID, LATER)
 
         // A txid is a stronger record of the same fact, so recording one supersedes the flag.
-        assertNull(GiftCardLedger.recordFundingSubmitted(attempted, ID, TXID, LATER).single().fundingAttemptedAt)
-        assertNull(GiftCardLedger.markFunded(attempted, ID, TXID, LATER).single().fundingAttemptedAt)
-        // And a rejection clears it outright: nothing was sent.
-        assertNull(GiftCardLedger.setFundingAttemptedAt(attempted, ID, null).single().fundingAttemptedAt)
-        assertFalse(hasUnsharedFunds(GiftCardLedger.setFundingAttemptedAt(attempted, ID, null)))
+        assertNull(GiftCardLedger.recordFundingSubmitted(created, ID, TXID, LATER).single().fundingAttemptedAt)
+        assertNull(GiftCardLedger.markFunded(created, ID, TXID, LATER).single().fundingAttemptedAt)
     }
 
     @Test
@@ -325,8 +328,7 @@ class GiftCardLedgerTest {
 
     @Test
     fun `minting never discards a draft whose broadcast was started`() {
-        val created = GiftCardLedger.recordFundingCreated(listOf(card()), ID, TXID, LATER)
-        val flagged = GiftCardLedger.setFundingAttemptedAt(created, ID, LATER)
+        val flagged = GiftCardLedger.setFundingAttemptedAt(listOf(card()), ID, LATER)
 
         val cards = GiftCardLedger.add(flagged, card(id = OTHER_ID))
 

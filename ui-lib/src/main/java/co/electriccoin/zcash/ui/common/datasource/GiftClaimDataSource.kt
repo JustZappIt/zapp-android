@@ -125,6 +125,40 @@ data class GiftClaimFinalization(
     val residual: Zatoshi,
 )
 
+/** Durable evidence that an outgoing card-wallet spend was submitted by this recipient. */
+data class GiftClaimResumeEvidence(
+    val claimTxIds: Set<String>,
+    val submissionWasAttempted: Boolean,
+)
+
+internal enum class GiftOutgoingClaimDisposition {
+    NONE,
+    RESUME,
+    AWAITING_FINALITY,
+    ALREADY_CLAIMED,
+}
+
+internal fun classifyOutgoingGiftClaim(
+    finalTxIds: Set<String>,
+    pendingTxIds: Set<String>,
+    locallySubmittedTxIds: Set<String>,
+): GiftOutgoingClaimDisposition {
+    val outgoingTxIds = finalTxIds + pendingTxIds
+    if (outgoingTxIds.isEmpty()) return GiftOutgoingClaimDisposition.NONE
+    val resumedTxIds = outgoingTxIds intersect locallySubmittedTxIds
+    return when {
+        (finalTxIds - resumedTxIds).isNotEmpty() -> GiftOutgoingClaimDisposition.ALREADY_CLAIMED
+        resumedTxIds.isEmpty() -> GiftOutgoingClaimDisposition.AWAITING_FINALITY
+        else -> GiftOutgoingClaimDisposition.RESUME
+    }
+}
+
+internal fun TransactionOverview.isFinalClaimSpend(amount: Zatoshi): Boolean =
+    isSentTransaction && netValue >= amount && transactionState == TransactionState.Confirmed
+
+internal fun TransactionOverview.isPendingClaimSpend(amount: Zatoshi): Boolean =
+    isSentTransaction && netValue >= amount && transactionState == TransactionState.Pending
+
 /** What the card's own wallet turned out to hold. */
 sealed interface GiftClaimOutcome {
     /** The funds are now in the recipient's wallet. */
@@ -145,8 +179,11 @@ sealed interface GiftClaimOutcome {
         val requiredConfirmations: Int = REQUIRED_CONFIRMATIONS,
     ) : GiftClaimOutcome
 
-    /** Nothing ever arrived, or it has already been claimed by whoever else held the link. */
-    data object Empty : GiftClaimOutcome
+    /** Funding has not arrived, or another holder's pending spend is not final enough for a verdict. */
+    data object AwaitingFunding : GiftClaimOutcome
+
+    /** A claim spend exists, but this wallet has no durable evidence that it submitted it. */
+    data object AlreadyClaimed : GiftClaimOutcome
 
     /**
      * The card holds its amount but cannot also cover the fee to move it, so no transfer can be
@@ -187,6 +224,8 @@ interface GiftClaimDataSource {
         network: ZcashNetwork,
         endpoint: LightWalletEndpoint,
         recipientAddress: String,
+        resumeEvidence: GiftClaimResumeEvidence,
+        onBeforeSubmit: suspend () -> Unit,
         onProgress: (GiftClaimProgress) -> Unit,
     ): GiftClaimOutcome
 
@@ -235,13 +274,22 @@ internal class GiftClaimDataSourceImpl(
         network: ZcashNetwork,
         endpoint: LightWalletEndpoint,
         recipientAddress: String,
+        resumeEvidence: GiftClaimResumeEvidence,
+        onBeforeSubmit: suspend () -> Unit,
         onProgress: (GiftClaimProgress) -> Unit,
     ): GiftClaimOutcome {
         val alias = giftAlias(payload.network, cardAddress)
         return lockFor(alias).withLock {
             val synchronizer = open(payload, network, endpoint, alias)
             try {
-                claimFrom(synchronizer, payload, recipientAddress, onProgress)
+                claimFrom(
+                    synchronizer = synchronizer,
+                    payload = payload,
+                    recipientAddress = recipientAddress,
+                    resumeEvidence = resumeEvidence,
+                    onBeforeSubmit = onBeforeSubmit,
+                    onProgress = onProgress,
+                )
             } finally {
                 withContext(NonCancellable) { synchronizer.closeAndAwait() }
             }
@@ -413,6 +461,8 @@ internal class GiftClaimDataSourceImpl(
         synchronizer: CloseableSynchronizer,
         payload: GiftLinkPayload,
         recipientAddress: String,
+        resumeEvidence: GiftClaimResumeEvidence,
+        onBeforeSubmit: suspend () -> Unit,
         onProgress: (GiftClaimProgress) -> Unit,
     ): GiftClaimOutcome {
         // Same bound as `inspect`, and for the same reason: the scan that follows is deliberately
@@ -431,9 +481,66 @@ internal class GiftClaimDataSourceImpl(
 
         // Resume a transaction retained by the isolated database instead of double-spending.
         val transactions = synchronizer.allTransactions.first()
-        val finalClaims = transactions.filter { it.isFinalClaimSpend(amount) }
+        val outgoingClaims =
+            transactions.filter { it.isFinalClaimSpend(amount) || it.isPendingClaimSpend(amount) }
+        val finalOutgoingIds =
+            outgoingClaims
+                .filter { it.transactionState == TransactionState.Confirmed }
+                .map { it.txId.txIdString() }
+                .toSet()
+        val pendingOutgoingIds = outgoingClaims.map { it.txId.txIdString() }.toSet() - finalOutgoingIds
+        val locallySubmittedTxIds =
+            when {
+                resumeEvidence.claimTxIds.isNotEmpty() -> {
+                    resumeEvidence.claimTxIds
+                }
+
+                resumeEvidence.submissionWasAttempted -> {
+                    // A marker proves only that this process crossed the durable boundary. It does
+                    // not prove that every later spend of this bearer card was ours: the process
+                    // can die before transaction creation and another link holder can claim next.
+                    // In marker-only recovery, the pinned destination is the ownership evidence.
+                    outgoingClaims
+                        .filter { transaction ->
+                            synchronizer
+                                .getRecipients(transaction)
+                                .toList()
+                                .any { it.addressValue == recipientAddress }
+                        }.map {
+                            it.txId.txIdString()
+                        }.toSet()
+                }
+
+                else -> {
+                    emptySet()
+                }
+            }
+        when (
+            classifyOutgoingGiftClaim(
+                finalTxIds = finalOutgoingIds,
+                pendingTxIds = pendingOutgoingIds,
+                locallySubmittedTxIds = locallySubmittedTxIds,
+            )
+        ) {
+            GiftOutgoingClaimDisposition.ALREADY_CLAIMED -> {
+                return GiftClaimOutcome.AlreadyClaimed
+            }
+
+            GiftOutgoingClaimDisposition.AWAITING_FINALITY -> {
+                return GiftClaimOutcome.AwaitingFunding
+            }
+
+            GiftOutgoingClaimDisposition.NONE,
+            GiftOutgoingClaimDisposition.RESUME,
+            -> {
+                Unit
+            }
+        }
+        val resumedClaims = outgoingClaims.filter { it.txId.txIdString() in locallySubmittedTxIds }
+
+        val finalClaims = resumedClaims.filter { it.transactionState == TransactionState.Confirmed }
         val pendingClaims =
-            transactions.filter {
+            resumedClaims.filter {
                 it.isPendingClaimSpend(amount) ||
                     (
                         finalClaims.isNotEmpty() &&
@@ -480,6 +587,7 @@ internal class GiftClaimDataSourceImpl(
         // a broadcast is not — cancelling between submitting and returning leaves nobody knowing
         // whether the money moved, on a card with no reclaim. The refreshes inside are best-effort
         // for the same reason.
+        onBeforeSubmit()
         return withContext(NonCancellable) {
             val result =
                 synchronizer
@@ -561,7 +669,7 @@ internal class GiftClaimDataSourceImpl(
             else -> {
                 // Empty either way, but only a wallet that once held the card's amount is a wallet
                 // somebody emptied. Nothing at all means the funding has not landed yet.
-                GiftClaimOutcome.Empty
+                GiftClaimOutcome.AwaitingFunding
             }
         }
     }
@@ -576,12 +684,6 @@ internal class GiftClaimDataSourceImpl(
         allTransactions.first().filter {
             it.minedHeight != null && !it.isSentTransaction && it.netValue >= amount
         }
-
-    private fun TransactionOverview.isFinalClaimSpend(amount: Zatoshi): Boolean =
-        isSentTransaction && totalSpent >= amount && transactionState == TransactionState.Confirmed
-
-    private fun TransactionOverview.isPendingClaimSpend(amount: Zatoshi): Boolean =
-        isSentTransaction && totalSpent >= amount && transactionState == TransactionState.Pending
 
     /**
      * Bounds only the part that can hang forever: reaching the server at all. The scan that follows

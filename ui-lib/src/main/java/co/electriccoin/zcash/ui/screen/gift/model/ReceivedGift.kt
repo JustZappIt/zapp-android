@@ -22,6 +22,8 @@ data class ReceivedGift(
     /** Account that received the claim, persisted so confirmation never follows UI selection. */
     val destinationAccountUuid: String? = null,
     val claimTxids: List<String> = emptyList(),
+    /** Written at the irreversible boundary, before entering create-and-submit. */
+    val claimSubmissionAttemptedAt: String? = null,
     val message: String? = null,
     /** The bearer link, held until every [claimTxids] transaction reaches SDK finality. */
     val claimLink: GiftLinkPayload? = null,
@@ -57,12 +59,36 @@ internal fun List<ReceivedGift>.recording(gift: ReceivedGift): List<ReceivedGift
             }
 
             else -> {
+                val startsNewSubmission =
+                    gift.claimSubmissionAttemptedAt != null &&
+                        gift.claimSubmissionAttemptedAt != current.claimSubmissionAttemptedAt &&
+                        gift.claimTxids.isEmpty()
                 gift.copy(
-                    destinationAddress = gift.destinationAddress ?: current.destinationAddress,
-                    destinationAccountUuid = gift.destinationAccountUuid ?: current.destinationAccountUuid,
-                    claimTxids = mergeClaimTxids(current.claimTxids, gift.claimTxids),
+                    // An unsettled claim stays pinned to the account/address that received its first
+                    // attempt. Following UI selection on a retry makes confirmation look in the
+                    // wrong account and can split one card's transactions across accounts.
+                    destinationAddress = current.destinationAddress ?: gift.destinationAddress,
+                    destinationAccountUuid =
+                        if (current.destinationAddress != null) {
+                            current.destinationAccountUuid
+                        } else {
+                            gift.destinationAccountUuid
+                        },
+                    claimTxids =
+                        if (startsNewSubmission) {
+                            emptyList()
+                        } else {
+                            mergeClaimTxids(current.claimTxids, gift.claimTxids)
+                        },
+                    claimSubmissionAttemptedAt =
+                        gift.claimSubmissionAttemptedAt ?: current.claimSubmissionAttemptedAt,
                     claimLink = current.claimLink ?: gift.claimLink,
-                    isFinalized = current.isFinalized || gift.isFinalized,
+                    isFinalized =
+                        if (startsNewSubmission) {
+                            false
+                        } else {
+                            current.isFinalized || gift.isFinalized
+                        },
                 )
             }
         }

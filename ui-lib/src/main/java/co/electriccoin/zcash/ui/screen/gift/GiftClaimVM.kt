@@ -382,12 +382,12 @@ private fun GiftClaimSnapshot.applying(verdict: Result<GiftBirthdayVerdict>): Gi
 private fun GiftClaimSnapshot.applying(outcome: GiftClaimOutcome): GiftClaimSnapshot =
     when (outcome) {
         is GiftClaimOutcome.Claimed -> {
-            copy(stage = GiftClaimStage.DONE, amount = outcome.amount, canStopClaim = false, error = null)
+            copy(stage = outcome.resultStage(), amount = outcome.amount, canStopClaim = false, error = null)
         }
 
         is GiftClaimOutcome.NotYetSpendable -> {
             copy(
-                stage = GiftClaimStage.PENDING_CONFIRMATIONS,
+                stage = outcome.resultStage(),
                 confirmations = outcome.confirmations,
                 requiredConfirmations = outcome.requiredConfirmations,
                 canStopClaim = false,
@@ -395,21 +395,35 @@ private fun GiftClaimSnapshot.applying(outcome: GiftClaimOutcome): GiftClaimSnap
             )
         }
 
-        GiftClaimOutcome.Empty -> {
-            copy(stage = GiftClaimStage.EMPTY, canStopClaim = false, error = null)
+        GiftClaimOutcome.AwaitingFunding -> {
+            copy(stage = outcome.resultStage(), canStopClaim = false, error = null)
+        }
+
+        GiftClaimOutcome.AlreadyClaimed -> {
+            copy(stage = outcome.resultStage(), canStopClaim = false, error = null)
         }
 
         is GiftClaimOutcome.NotBroadcast -> {
             // The card is untouched and its database was retained, so this is a "try again",
             // never a "your gift is gone".
-            copy(stage = GiftClaimStage.PREVIEW, canStopClaim = false, error = GiftClaimError.NOT_BROADCAST)
+            copy(stage = outcome.resultStage(), canStopClaim = false, error = GiftClaimError.NOT_BROADCAST)
         }
 
         // Also untouched and also retained, but not a "try again": nothing about the card changes
         // by waiting, so this must not schedule a re-check the way NotYetSpendable does.
         is GiftClaimOutcome.Underfunded -> {
-            copy(stage = GiftClaimStage.PREVIEW, canStopClaim = false, error = GiftClaimError.UNDERFUNDED)
+            copy(stage = outcome.resultStage(), canStopClaim = false, error = GiftClaimError.UNDERFUNDED)
         }
+    }
+
+/** The screen each domain outcome owns; kept pure so every financially distinct result is testable. */
+internal fun GiftClaimOutcome.resultStage(): GiftClaimStage =
+    when (this) {
+        is GiftClaimOutcome.Claimed -> GiftClaimStage.DONE
+        is GiftClaimOutcome.NotYetSpendable -> GiftClaimStage.PENDING_CONFIRMATIONS
+        GiftClaimOutcome.AwaitingFunding -> GiftClaimStage.AWAITING_FUNDING
+        GiftClaimOutcome.AlreadyClaimed -> GiftClaimStage.ALREADY_CLAIMED
+        is GiftClaimOutcome.NotBroadcast, is GiftClaimOutcome.Underfunded -> GiftClaimStage.PREVIEW
     }
 
 private fun Throwable.toClaimError(): GiftClaimError =

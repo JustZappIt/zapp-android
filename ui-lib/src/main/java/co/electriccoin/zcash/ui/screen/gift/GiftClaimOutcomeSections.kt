@@ -25,8 +25,8 @@ import co.electriccoin.zcash.ui.design.util.stringRes
  *
  * Split from `GiftClaimView` only to stay under detekt's per-file function count, but the grouping
  * is the meaningful one: every screen here is the last thing the recipient sees, and the difference
- * between "not confirmed yet" and "empty" is the difference between waiting fifteen minutes and
- * believing a real gift was fake.
+ * between "funding has not arrived" and "somebody else claimed it" is the difference between
+ * waiting a little longer and knowing this bearer link has already been spent.
  */
 @Composable
 internal fun OutcomeSection(state: GiftClaimState) {
@@ -45,8 +45,16 @@ internal fun OutcomeSection(state: GiftClaimState) {
             PendingConfirmations(state)
         }
 
+        GiftClaimStage.AWAITING_FUNDING -> {
+            Headline(R.string.gift_claim_awaiting_funding_title, R.string.gift_claim_awaiting_funding_body)
+        }
+
+        GiftClaimStage.ALREADY_CLAIMED -> {
+            Headline(R.string.gift_claim_already_claimed_title, R.string.gift_claim_already_claimed_body)
+        }
+
         else -> {
-            Headline(R.string.gift_claim_empty_title, R.string.gift_claim_empty_body)
+            Unit
         }
     }
 }
@@ -142,8 +150,16 @@ internal fun GiftClaimStage.subtitleRes(): Int =
             R.string.gift_claim_subtitle_claiming
         }
 
-        GiftClaimStage.DONE, GiftClaimStage.PENDING_CONFIRMATIONS, GiftClaimStage.EMPTY -> {
+        GiftClaimStage.DONE -> {
             R.string.gift_claim_subtitle_done
+        }
+
+        GiftClaimStage.PENDING_CONFIRMATIONS, GiftClaimStage.AWAITING_FUNDING -> {
+            R.string.gift_claim_subtitle_waiting
+        }
+
+        GiftClaimStage.ALREADY_CLAIMED -> {
+            R.string.gift_claim_subtitle_already_claimed
         }
     }
 

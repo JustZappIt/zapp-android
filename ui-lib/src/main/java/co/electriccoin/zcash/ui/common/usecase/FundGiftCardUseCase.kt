@@ -8,7 +8,6 @@ import cash.z.ecc.android.sdk.model.WalletAddress
 import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.android.sdk.model.ZecSend
 import co.electriccoin.zcash.spackle.Twig
-import co.electriccoin.zcash.ui.common.bestEffort
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.InsufficientFundsException
 import co.electriccoin.zcash.ui.common.datasource.ProposalDataSource
@@ -49,12 +48,9 @@ enum class GiftFundingError {
     /** The proposal could not be built. Nothing was sent. */
     PROPOSAL_FAILED,
 
-    /** The transaction reached lightwalletd and was rejected. Nothing was spent. */
-    SUBMIT_REJECTED,
-
     /**
-     * The broadcast neither clearly succeeded nor clearly failed — a partial submit, a gRPC failure
-     * that may still have reached the network, or a throw mid-submit. Never invite a blind retry
+     * The broadcast neither clearly succeeded nor finally failed — a partial submit, a gRPC failure,
+     * a server rejection retained for SDK retry, or a throw mid-submit. Never invite a blind retry
      * from here: the first attempt may yet mine, and a card funded twice is money gone twice.
      */
     SUBMIT_UNCERTAIN,
@@ -148,92 +144,82 @@ class FundGiftCardUseCase(
      * exists, not that it mined. Advancing it to funded is [ConfirmGiftCardFundingUseCase]'s job,
      * once there is a block behind it.
      *
-     * The broadcast divides this method: before it, failures are [GiftFundingError.PROPOSAL_FAILED];
-     * from it onwards — storage writes included — [GiftFundingError.SUBMIT_UNCERTAIN]. Only a
-     * rejection may say nothing was sent, because it is the only outcome that proves it.
+     * The durable start marker divides this method: before it, failures are
+     * [GiftFundingError.PROPOSAL_FAILED]; from it onwards — creation and storage writes included —
+     * [GiftFundingError.SUBMIT_UNCERTAIN]. Slipstream can resubmit a created transaction before the
+     * app explicitly submits it, and can retry one after a server rejection.
      *
      * @return the funding txid.
      */
     suspend fun submit(quote: GiftFundingQuote): String {
-        // Everything through local creation is retryable: no RPC has occurred and the SDK's
-        // broadcaster deliberately separates these steps. In particular, missing proving
-        // parameters, a stale proposal, a missing key, and cancellation here must not turn a card
-        // into a permanent "maybe funded" record.
+        // Key and endpoint lookup happen before the durable boundary and cannot create a
+        // transaction, so failures here remain safe to retry.
         val usk =
             runCatching { zashiSpendingKeyDataSource.getZashiSpendingKey() }
                 .getOrElse(::failProposal)
         val endpoint =
             runCatching { persistableWalletProvider.requirePersistableWallet().endpoint }
                 .getOrElse(::failProposal)
-        val transaction =
-            runCatching {
-                proposalDataSource
-                    .createTransactions(quote.proposal.proposal, usk)
-                    .single()
-            }.getOrElse(::failProposal)
 
-        recordCreated(quote.card.id, transaction.txIdString())
-        runCatching { markAttempted(quote.card.id) }.exceptionOrNull()?.let { throwable ->
-            // Cancellation here is still pre-network. Run the cleanup outside the cancelled job
-            // so a half-completed persistence call cannot manufacture an unresolved broadcast.
-            failPrepared(cardId = quote.card.id, throwable = throwable)
+        // Slipstream may resubmit a transaction merely because it exists in the wallet database,
+        // even before Broadcaster.submit is called. Persist the unresolved gate before creation so
+        // no crash or storage failure can leave an auto-broadcast transaction behind an
+        // "unfunded" card that is later discarded or funded again.
+        runCatching { markAttempted(quote.card.id) }.getOrElse(::failProposal)
+
+        return withContext(NonCancellable) {
+            val transaction =
+                runCatching {
+                    proposalDataSource
+                        .createTransactions(quote.proposal.proposal, usk)
+                        .single()
+                }.getOrElse(::failStarted)
+
+            runCatching { recordCreated(quote.card.id, transaction.txIdString()) }
+                .getOrElse(::failRecord)
+
+            val result =
+                runCatching {
+                    proposalDataSource.submitTransaction(
+                        transaction = transaction,
+                        endpoint = endpoint,
+                    )
+                }.getOrElse(::failSubmit)
+
+            val txid =
+                when (result) {
+                    is SubmitResult.Success -> {
+                        result.txIds.firstOrNull()
+                    }
+
+                    is SubmitResult.Failure,
+                    is SubmitResult.Partial,
+                    is SubmitResult.GrpcFailure,
+                    is SubmitResult.Error,
+                    -> {
+                        // None of these results makes the locally-created transaction ineligible for
+                        // automatic SDK resubmission, including an RPC rejection. Clearing its txid
+                        // here could make a later retry fund a card the app now considers abandoned.
+                        fail(GiftFundingError.SUBMIT_UNCERTAIN)
+                    }
+                } ?: fail(GiftFundingError.SUBMIT_UNCERTAIN)
+
+            recordSubmitted(cardId = quote.card.id, txid = txid)
+            txid
         }
-
-        val result =
-            runCatching {
-                proposalDataSource.submitTransaction(
-                    transaction = transaction,
-                    endpoint = endpoint,
-                )
-            }.getOrElse(::failSubmit)
-
-        val txid =
-            when (result) {
-                is SubmitResult.Success -> {
-                    result.txIds.firstOrNull()
-                }
-
-                // Rejected is the only answer that means the network never took it, so it is the
-                // only one that may clear the attempt. Everything else stays flagged as unresolved.
-                is SubmitResult.Failure -> {
-                    clearPreparation(quote.card.id)
-                    fail(GiftFundingError.SUBMIT_REJECTED)
-                }
-
-                is SubmitResult.Partial,
-                is SubmitResult.GrpcFailure,
-                is SubmitResult.Error,
-                -> {
-                    fail(GiftFundingError.SUBMIT_UNCERTAIN)
-                }
-            } ?: fail(GiftFundingError.SUBMIT_UNCERTAIN)
-
-        recordSubmitted(cardId = quote.card.id, txid = txid)
-        return txid
     }
 
     private suspend fun recordCreated(cardId: String, txid: String) {
-        runCatching {
-            giftCardStorageProvider.recordFundingCreated(
-                id = cardId,
-                fundingTxid = txid,
-                at = Clock.System.now().toString(),
-            )
-        }.getOrElse(::failProposal)
+        giftCardStorageProvider.recordFundingCreated(
+            id = cardId,
+            fundingTxid = txid,
+            at = Clock.System.now().toString(),
+        )
     }
 
-    /** Flags the persisted local transaction as mid-broadcast, before the network call. */
+    /** Flags funding as unresolved before the SDK is allowed to create an outgoing transaction. */
     private suspend fun markAttempted(cardId: String) {
-        runCatching {
-            giftCardStorageProvider.setFundingAttemptedAt(id = cardId, at = Clock.System.now().toString())
-        }.getOrElse(::failProposal)
-    }
-
-    /** Clears local preparation after a failure known to have reached no network. */
-    private suspend fun clearPreparation(cardId: String) {
-        bestEffort("Gift card $cardId funding preparation could not be cleared") {
-            giftCardStorageProvider.clearFundingPreparation(id = cardId)
-        }
+        giftCardStorageProvider.setFundingAttemptedAt(id = cardId, at = Clock.System.now().toString())
     }
 
     /**
@@ -251,12 +237,9 @@ class FundGiftCardUseCase(
         }.getOrElse(::failRecord)
     }
 
-    private suspend fun failPrepared(cardId: String, throwable: Throwable): Nothing {
-        withContext(NonCancellable) { clearPreparation(cardId) }
-        throw throwable
-    }
-
     private fun failProposal(throwable: Throwable): Nothing = throw proposalFailure(throwable)
+
+    private fun failStarted(throwable: Throwable): Nothing = throw startedFailure(throwable)
 
     private fun failSubmit(throwable: Throwable): Nothing = throw submitFailure(throwable)
 
@@ -276,6 +259,14 @@ class FundGiftCardUseCase(
                 Twig.error(throwable) { "Gift card funding could not start" }
                 GiftFundingException(GiftFundingError.PROPOSAL_FAILED)
             }
+        }
+
+    private fun startedFailure(throwable: Throwable): Throwable =
+        if (throwable is CancellationException) {
+            throwable
+        } else {
+            Twig.error(throwable) { "Gift card funding transaction creation became uncertain" }
+            GiftFundingException(GiftFundingError.SUBMIT_UNCERTAIN)
         }
 
     // A throw out of submit says nothing about whether the transaction reached the network, so it

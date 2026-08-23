@@ -68,7 +68,6 @@
     <string name="gift_card_error_proposal">No se pudo preparar la transacción de financiación. No se envió nada.</string>
     <string name="gift_card_error_insufficient">No tienes suficiente ZEC disponible para financiar esta tarjeta y sus comisiones.</string>
     <string name="gift_card_error_auth">La autenticación falló, así que no se financió nada.</string>
-    <string name="gift_card_error_submit">La financiación falló. No salió nada de tu monedero: inténtalo de nuevo.</string>
     <string name="gift_card_error_submit_uncertain">Zapp no pudo confirmar si la transacción de financiación se difundió. Revisa tu lista de transacciones antes de volver a financiar.</string>
     <string name="gift_card_error_share">No se pudo abrir el panel para compartir. Copia el enlace en su lugar.</string>
     <string name="gift_card_error_handoff">El enlace está copiado, pero Zapp no pudo registrar que lo compartiste. Esta tarjeta sigue contando como no compartida y seguirá bloqueando el restablecimiento de la billetera.</string>
@@ -78,6 +77,8 @@
     <string name="gift_claim_subtitle_claiming">Reclamando tu regalo</string>
     <string name="gift_claim_subtitle_done">Reclamada</string>
     <string name="gift_claim_subtitle_needs_wallet">Primero necesitas un monedero</string>
+    <string name="gift_claim_subtitle_waiting">Esperando a la red</string>
+    <string name="gift_claim_subtitle_already_claimed">Ya reclamada</string>
 
     <string name="gift_claim_amount_label">Valor de la tarjeta</string>
     <string name="gift_claim_message_label">Mensaje</string>
@@ -105,8 +106,10 @@
     <string name="gift_claim_pending_body">Tu regalo se está confirmando en la red Zcash. Tarda unos 15 minutos; Zapp lo reclamará automáticamente. Puedes dejar esta pantalla abierta.</string>
     <string name="gift_claim_retry">Reintentar</string>
 
-    <string name="gift_claim_empty_title">No queda nada en esta tarjeta</string>
-    <string name="gift_claim_empty_body">Esta tarjeta está vacía. O nunca se financió, o alguien más con el enlace ya la reclamó.</string>
+    <string name="gift_claim_awaiting_funding_title">El regalo aún no está disponible</string>
+    <string name="gift_claim_awaiting_funding_body">Este regalo aún no está disponible en la tarjeta. Puede que la financiación todavía esté llegando o que otra reclamación aún se esté resolviendo. Espera un poco y vuelve a intentarlo.</string>
+    <string name="gift_claim_already_claimed_title">Este regalo ya fue reclamado</string>
+    <string name="gift_claim_already_claimed_body">Otra persona con este enlace reclamó el regalo antes que este monedero. No se enviaron fondos a este monedero.</string>
 
     <string name="gift_claim_error_link">Esto no es un enlace de regalo que Zapp entienda.</string>
     <string name="gift_claim_error_network">Esta tarjeta es de otra red Zcash.</string>

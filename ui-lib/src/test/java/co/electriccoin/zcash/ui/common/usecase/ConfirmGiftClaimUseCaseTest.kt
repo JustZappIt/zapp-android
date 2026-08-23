@@ -64,8 +64,42 @@ class ConfirmGiftClaimUseCaseTest {
 
             fixture.useCase.reconcile()
 
-            coVerify(exactly = 1) { fixture.transactions.getAccountTransactions(ACCOUNT_ID) }
+            coVerify(exactly = 2) { fixture.transactions.getAccountTransactions(ACCOUNT_ID) }
             coVerify(exactly = 1) { fixture.receipts.settle(ADDRESS) }
+        }
+
+    @Test
+    fun `receipt whose account was reimported under a new uuid searches current accounts`() =
+        runTest {
+            val fixture =
+                Fixture(
+                    finalTransaction = true,
+                    receipt = RECEIPT.copy(destinationAccountUuid = "removed-account-uuid"),
+                )
+
+            fixture.useCase.reconcile()
+
+            coVerify(exactly = 2) { fixture.transactions.getAccountTransactions(ACCOUNT_ID) }
+            coVerify(exactly = 1) { fixture.receipts.settle(ADDRESS) }
+        }
+
+    @Test
+    fun `does not finalize a replacement transaction from a stale reconciliation snapshot`() =
+        runTest {
+            val fixture = Fixture(finalTransaction = true)
+            val replacement =
+                RECEIPT.copy(
+                    claimTxids = listOf("replacement-txid"),
+                    claimSubmissionAttemptedAt = "replacement-attempt",
+                )
+            coEvery { fixture.receipts.getAll() } returnsMany
+                listOf(listOf(RECEIPT), listOf(replacement))
+
+            fixture.useCase.reconcile()
+
+            coVerify(exactly = 0) { fixture.receipts.markFinalized(any()) }
+            coVerify(exactly = 0) { fixture.receipts.settle(any()) }
+            coVerify(exactly = 0) { fixture.dataSource.cleanupFinalizedClaim(any(), any(), any()) }
         }
 
     private class Fixture(

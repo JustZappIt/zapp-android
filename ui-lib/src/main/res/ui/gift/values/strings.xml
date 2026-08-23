@@ -68,7 +68,6 @@
     <string name="gift_card_error_proposal">The funding transaction could not be prepared. Nothing was sent.</string>
     <string name="gift_card_error_insufficient">Not enough spendable ZEC to fund this card and its fees.</string>
     <string name="gift_card_error_auth">Authentication failed, so nothing was funded.</string>
-    <string name="gift_card_error_submit">Funding failed. Nothing left your wallet — try again.</string>
     <string name="gift_card_error_submit_uncertain">Zapp could not confirm whether the funding transaction was broadcast. Check your transaction list before funding again.</string>
     <string name="gift_card_error_share">The share sheet could not be opened. Copy the link instead.</string>
     <string name="gift_card_error_handoff">The link is copied, but Zapp could not record that you shared it. This card still counts as unshared and will keep blocking a wallet reset.</string>
@@ -78,6 +77,8 @@
     <string name="gift_claim_subtitle_claiming">Claiming your gift</string>
     <string name="gift_claim_subtitle_done">Claimed</string>
     <string name="gift_claim_subtitle_needs_wallet">You need a wallet first</string>
+    <string name="gift_claim_subtitle_waiting">Waiting for the network</string>
+    <string name="gift_claim_subtitle_already_claimed">Already claimed</string>
 
     <string name="gift_claim_amount_label">Card value</string>
     <string name="gift_claim_message_label">Message</string>
@@ -105,8 +106,10 @@
     <string name="gift_claim_pending_body">Your gift is confirming on the Zcash network. This takes about 15 minutes; Zapp will claim it automatically. You can leave this screen open.</string>
     <string name="gift_claim_retry">Try again</string>
 
-    <string name="gift_claim_empty_title">Nothing left on this card</string>
-    <string name="gift_claim_empty_body">This card is empty. Either it was never funded, or somebody else with the link already claimed it.</string>
+    <string name="gift_claim_awaiting_funding_title">Gift is not available yet</string>
+    <string name="gift_claim_awaiting_funding_body">This gift is not available on the card yet. Its funding may still be arriving, or another claim may still be resolving. Wait a little, then try again.</string>
+    <string name="gift_claim_already_claimed_title">This gift was already claimed</string>
+    <string name="gift_claim_already_claimed_body">Another holder of this link claimed the gift before this wallet did. No funds were sent to this wallet.</string>
 
     <string name="gift_claim_error_link">This is not a gift link Zapp understands.</string>
     <string name="gift_claim_error_network">This card is for a different Zcash network.</string>

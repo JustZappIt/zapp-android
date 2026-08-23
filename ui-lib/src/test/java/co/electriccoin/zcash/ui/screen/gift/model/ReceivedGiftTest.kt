@@ -43,17 +43,65 @@ class ReceivedGiftTest {
         assertEquals(listOf("retry"), result.single().claimTxids)
     }
 
+    @Test
+    fun `new submission marker clears expired ids and stale finalization checkpoint`() {
+        val previous =
+            receipt(
+                claimTxids = listOf("expired"),
+                claimSubmissionAttemptedAt = "attempt-1",
+                isFinalized = true,
+            )
+
+        val result =
+            listOf(previous)
+                .recording(
+                    receipt(
+                        claimTxids = emptyList(),
+                        claimSubmissionAttemptedAt = "attempt-2",
+                    )
+                ).single()
+
+        assertTrue(result.claimTxids.isEmpty())
+        assertEquals(false, result.isFinalized)
+    }
+
+    @Test
+    fun `unsettled retry remains pinned to its original destination`() {
+        val previous =
+            receipt(
+                destinationAddress = "original-address",
+                destinationAccountUuid = "original-account",
+            )
+
+        val result =
+            listOf(previous)
+                .recording(
+                    receipt(
+                        destinationAddress = "newly-selected-address",
+                        destinationAccountUuid = "newly-selected-account",
+                    )
+                ).single()
+
+        assertEquals("original-address", result.destinationAddress)
+        assertEquals("original-account", result.destinationAccountUuid)
+    }
+
     private fun receipt(
         claimTxids: List<String> = emptyList(),
+        claimSubmissionAttemptedAt: String? = null,
         claimLink: GiftLinkPayload? = PAYLOAD,
         isFinalized: Boolean = false,
+        destinationAddress: String = "wallet-address",
+        destinationAccountUuid: String? = null,
     ) = ReceivedGift(
         address = "card-address",
         network = "main",
         amountZatoshi = 100_000_000L,
         claimedAt = "2026-08-23T00:00:00Z",
-        destinationAddress = "wallet-address",
+        destinationAddress = destinationAddress,
+        destinationAccountUuid = destinationAccountUuid,
         claimTxids = claimTxids,
+        claimSubmissionAttemptedAt = claimSubmissionAttemptedAt,
         claimLink = claimLink,
         isFinalized = isFinalized,
     )

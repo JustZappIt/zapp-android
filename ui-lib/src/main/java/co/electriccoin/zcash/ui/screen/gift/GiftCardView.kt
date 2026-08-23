@@ -76,6 +76,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappSummaryRow
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ProvideZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
+import co.electriccoin.zcash.ui.design.util.ellipsizeMiddle
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.gift.model.GiftMessage
@@ -128,6 +129,7 @@ internal fun GiftCardView(
                     .padding(contentPadding)
                     .verticalScroll(rememberScrollState()),
         ) {
+            if (state.stage == GiftCardStage.READY) ReadySuccessHeader()
             MintedCardPodium(state)
             when (state.stage) {
                 GiftCardStage.DETAILS -> DetailsSection(state)
@@ -380,16 +382,20 @@ private fun FundingSection() {
 }
 
 @Composable
+private fun ReadySuccessHeader() {
+    ZappSuccessHeader(
+        title = stringRes(R.string.gift_card_ready_title),
+        subtitle = stringRes(R.string.gift_card_ready_subtitle),
+        modifier = Modifier.padding(horizontal = ZappTheme.spacing.xl),
+    )
+}
+
+@Composable
 private fun ReadySection(state: GiftCardState) {
     val c = ZappTheme.colors
     val spacing = ZappTheme.spacing
     val link = state.link ?: return
-
-    ZappSuccessHeader(
-        title = stringRes(R.string.gift_card_ready_title),
-        subtitle = stringRes(R.string.gift_card_ready_subtitle),
-        modifier = Modifier.padding(horizontal = spacing.xl),
-    )
+    val displayLink = remember(link) { link.substringAfter("://").ellipsizeMiddle(LINK_PREFIX, LINK_SUFFIX) }
 
     ZappGroupHeader(text = stringResource(R.string.gift_card_ready_link_label))
     ZappBorderedCard(
@@ -398,13 +404,13 @@ private fun ReadySection(state: GiftCardState) {
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            // One line, ellipsised. The whole link is far too long to read and the tail of it is
-            // the bearer secret — the host is enough to recognise what this is, and Copy and
-            // Share are what actually move it.
+            // Keep the recognisable host and a short tail on one line. Copy still receives the full
+            // bearer link; the abbreviation is presentation only and avoids exposing most of it.
             BasicText(
-                text = link,
+                text = displayLink,
                 style = ZappTheme.typography.mono.copy(color = c.text),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -467,7 +473,6 @@ private fun GiftCardError.messageRes(): Int =
         GiftCardError.MINT_FAILED -> R.string.gift_card_error_mint
         GiftCardError.PROPOSAL_FAILED -> R.string.gift_card_error_proposal
         GiftCardError.AUTHENTICATION_FAILED -> R.string.gift_card_error_auth
-        GiftCardError.SUBMIT_REJECTED -> R.string.gift_card_error_submit
         GiftCardError.SUBMIT_UNCERTAIN -> R.string.gift_card_error_submit_uncertain
         GiftCardError.SHARE_FAILED -> R.string.gift_card_error_share
         GiftCardError.HANDOFF_FAILED -> R.string.gift_card_error_handoff
@@ -476,6 +481,9 @@ private fun GiftCardError.messageRes(): Int =
 internal object GiftCardTag {
     const val LINK = "gift_card_link"
 }
+
+private const val LINK_PREFIX = 20
+private const val LINK_SUFFIX = 8
 
 @PreviewScreens
 @Composable

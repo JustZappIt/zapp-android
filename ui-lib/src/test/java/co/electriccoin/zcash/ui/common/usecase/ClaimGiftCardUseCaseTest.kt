@@ -12,6 +12,7 @@ import cash.z.ecc.android.sdk.model.ZcashNetwork
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimOutcome
+import co.electriccoin.zcash.ui.common.datasource.GiftClaimResumeEvidence
 import co.electriccoin.zcash.ui.common.model.UnifiedInfo
 import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.provider.GiftClaimOperationLock
@@ -25,6 +26,9 @@ import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkError
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkException
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkPayload
 import co.electriccoin.zcash.ui.screen.gift.model.ReceivedGift
+import co.electriccoin.zcash.ui.screen.gift.model.finalizing
+import co.electriccoin.zcash.ui.screen.gift.model.recording
+import co.electriccoin.zcash.ui.screen.gift.model.settling
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -134,9 +138,16 @@ class ClaimGiftCardUseCaseTest {
             running = launch { runCatching { useCase(PAYLOAD, ADDRESS) {} } }
             running.join()
 
-            assertEquals(listOf(emptyList(), RECEIPT.claimTxids), receipts.recorded.map { it.claimTxids })
+            assertTrue(
+                receipts.recorded
+                    .first()
+                    .claimTxids
+                    .isEmpty()
+            )
+            assertEquals(RECEIPT.claimTxids, receipts.recorded.last().claimTxids)
+            assertTrue(receipts.recorded.last().claimSubmissionAttemptedAt != null)
             // The broadcast only reached the mempool, so the link has to survive the write.
-            assertEquals(listOf(PAYLOAD, PAYLOAD), receipts.recorded.map { it.claimLink })
+            assertTrue(receipts.recorded.all { it.claimLink == PAYLOAD })
         }
 
     @Test
@@ -150,37 +161,34 @@ class ClaimGiftCardUseCaseTest {
                 useCase(receipts, dataSource = dataSource)(PAYLOAD, ADDRESS) {}
             }
 
-            coVerify(exactly = 0) { dataSource.claim(any(), any(), any(), any(), any(), any()) }
+            coVerify(exactly = 0) { dataSource.claim(any(), any(), any(), any(), any(), any(), any(), any()) }
         }
 
     @Test
-    fun `reports a card this wallet already collected as claimed, not empty`() =
+    fun `reports a settled card this wallet collected without scanning`() =
         runTest {
-            // What the cancelled claim above leaves behind: the money is here, the card is spent,
-            // and the scan on the next attempt can only see an empty wallet. Telling the recipient
-            // somebody else took it would be the one lie this screen must never tell.
             val receipts = FakeReceipts(stored = listOf(RECEIPT))
-            val useCase = useCase(receipts, outcome = GiftClaimOutcome.Empty)
+            val dataSource = mockk<GiftClaimDataSource>(relaxed = true)
+            val useCase = useCase(receipts, dataSource = dataSource)
 
             val outcome = useCase(PAYLOAD, ADDRESS) {}
 
             assertEquals(GiftClaimOutcome.Claimed(amount = Zatoshi(AMOUNT), txIds = listOf(CLAIM_TXID)), outcome)
-            assertTrue(
-                receipts.recorded
-                    .single()
-                    .claimTxids
-                    .isEmpty()
-            )
+            assertTrue(receipts.recorded.isEmpty())
+            coVerify(exactly = 0) { dataSource.claim(any(), any(), any(), any(), any(), any(), any(), any()) }
         }
 
     @Test
-    fun `still reports empty when the receipt belongs to another card`() =
+    fun `awaits funding when the receipt belongs to another card`() =
         runTest {
             // Receipts are keyed on the card's address, and every card is its own wallet. A gift
             // collected last month must not make an unfunded card look collected.
             val receipts = FakeReceipts(stored = listOf(RECEIPT.copy(address = "u1someothercardentirely")))
 
-            assertEquals(GiftClaimOutcome.Empty, useCase(receipts, GiftClaimOutcome.Empty)(PAYLOAD, ADDRESS) {})
+            assertEquals(
+                GiftClaimOutcome.AwaitingFunding,
+                useCase(receipts, GiftClaimOutcome.AwaitingFunding)(PAYLOAD, ADDRESS) {},
+            )
         }
 
     @Test
@@ -189,8 +197,73 @@ class ClaimGiftCardUseCaseTest {
             val receipts = FakeReceipts(readThrows = true)
 
             assertFailsWith<GiftReceiptStoreUnreadableException> {
-                useCase(receipts, GiftClaimOutcome.Empty)(PAYLOAD, ADDRESS) {}
+                useCase(receipts, GiftClaimOutcome.AwaitingFunding)(PAYLOAD, ADDRESS) {}
             }
+        }
+
+    @Test
+    fun `settles recovery after a final spend by another holder`() =
+        runTest {
+            val receipts = FakeReceipts()
+            val dataSource = mockk<GiftClaimDataSource>(relaxed = true)
+            coEvery { dataSource.claim(any(), any(), any(), any(), any(), any(), any(), any()) } returns
+                GiftClaimOutcome.AlreadyClaimed
+
+            val outcome = useCase(receipts, dataSource = dataSource)(PAYLOAD, ADDRESS) {}
+
+            assertEquals(GiftClaimOutcome.AlreadyClaimed, outcome)
+            assertTrue(receipts.current.single().isSettled)
+            assertNull(receipts.current.single().claimLink)
+            coVerify(exactly = 1) {
+                dataSource.cleanupFinalizedClaim(PAYLOAD, ADDRESS, ZcashNetwork.Mainnet)
+            }
+        }
+
+    @Test
+    fun `retains recovery while a foreign pending spend is unresolved`() =
+        runTest {
+            val receipts = FakeReceipts()
+
+            val outcome = useCase(receipts, GiftClaimOutcome.AwaitingFunding)(PAYLOAD, ADDRESS) {}
+
+            assertEquals(GiftClaimOutcome.AwaitingFunding, outcome)
+            assertFalse(receipts.current.single().isSettled)
+            assertEquals(PAYLOAD, receipts.current.single().claimLink)
+        }
+
+    @Test
+    fun `retry stays pinned to the original destination after account switch`() =
+        runTest {
+            val original =
+                RECEIPT.copy(
+                    destinationAddress = ORIGINAL_DESTINATION_ADDRESS,
+                    destinationAccountUuid = ORIGINAL_DESTINATION_ACCOUNT_ID,
+                    claimTxids = emptyList(),
+                    claimSubmissionAttemptedAt = "2026-08-22T00:00:00Z",
+                    claimLink = PAYLOAD,
+                )
+            val receipts = FakeReceipts(stored = listOf(original))
+            val accountDataSource = destinationAccountDataSource()
+            val dataSource = mockk<GiftClaimDataSource>(relaxed = true)
+            var recipient: String? = null
+            var evidence: GiftClaimResumeEvidence? = null
+            coEvery { dataSource.claim(any(), any(), any(), any(), any(), any(), any(), any()) } coAnswers {
+                recipient = arg<String>(4)
+                evidence = arg<GiftClaimResumeEvidence>(5)
+                GiftClaimOutcome.AwaitingFunding
+            }
+
+            useCase(
+                receipts = receipts,
+                dataSource = dataSource,
+                accountDataSource = accountDataSource,
+            )(PAYLOAD, ADDRESS) {}
+
+            assertEquals(ORIGINAL_DESTINATION_ADDRESS, recipient)
+            assertEquals(GiftClaimResumeEvidence(emptySet(), submissionWasAttempted = true), evidence)
+            assertEquals(ORIGINAL_DESTINATION_ADDRESS, receipts.current.single().destinationAddress)
+            assertEquals(ORIGINAL_DESTINATION_ACCOUNT_ID, receipts.current.single().destinationAccountUuid)
+            coVerify(exactly = 0) { accountDataSource.getSelectedAccount() }
         }
 
     @Test
@@ -235,26 +308,35 @@ class ClaimGiftCardUseCaseTest {
      * one cannot tell a protected write from an unprotected one — it records the call either way.
      */
     private class FakeReceipts(
-        private val stored: List<ReceivedGift> = emptyList(),
+        stored: List<ReceivedGift> = emptyList(),
         private val readThrows: Boolean = false,
     ) : ReceivedGiftStorageProvider {
         val recorded = mutableListOf<ReceivedGift>()
+        var current = stored
+            private set
 
-        override fun observe(): Flow<List<ReceivedGift>> = flowOf(stored)
+        override fun observe(): Flow<List<ReceivedGift>> = flowOf(current)
 
         override suspend fun getAll(): List<ReceivedGift> {
             check(!readThrows) { "store is unreadable" }
-            return stored
+            return current
         }
 
         override suspend fun record(gift: ReceivedGift) {
             yield()
             recorded += gift
+            current = current.recording(gift)
         }
 
-        override suspend fun settle(address: String) = Unit
+        override suspend fun settle(address: String) {
+            yield()
+            current = current.settling(address)
+        }
 
-        override suspend fun markFinalized(address: String) = Unit
+        override suspend fun markFinalized(address: String) {
+            yield()
+            current = current.finalizing(address)
+        }
     }
 
     /** No wallet means no synchronizer, so the build's own network is all a preview has to go on. */
@@ -284,8 +366,9 @@ class ClaimGiftCardUseCaseTest {
         outcome: GiftClaimOutcome = GiftClaimOutcome.Claimed(amount = Zatoshi(AMOUNT), txIds = listOf(CLAIM_TXID)),
         onClaim: () -> Unit = {},
         dataSource: GiftClaimDataSource? = null,
+        accountDataSource: AccountDataSource = destinationAccountDataSource(),
     ) = ClaimGiftCardUseCase(
-        accountDataSource = destinationAccountDataSource(),
+        accountDataSource = accountDataSource,
         synchronizerProvider =
             mockk<SynchronizerProvider>(relaxed = true).also { provider ->
                 coEvery { provider.getSynchronizer() } returns
@@ -296,7 +379,8 @@ class ClaimGiftCardUseCaseTest {
         zcashNetworkProvider = mockk<ZcashNetworkProvider>(relaxed = true),
         giftClaimDataSource =
             dataSource ?: mockk<GiftClaimDataSource>(relaxed = true).also { source ->
-                coEvery { source.claim(any(), any(), any(), any(), any(), any()) } coAnswers {
+                coEvery { source.claim(any(), any(), any(), any(), any(), any(), any(), any()) } coAnswers {
+                    arg<suspend () -> Unit>(6).invoke()
                     // Stands in for the app going to the background mid-broadcast: the claim itself
                     // finishes, and the context it returns into is already gone.
                     onClaim()
@@ -326,6 +410,8 @@ class ClaimGiftCardUseCaseTest {
         const val CLAIM_TXID = "beef"
         const val DESTINATION_ADDRESS = "u1recipientwalletaddress"
         const val DESTINATION_ACCOUNT_ID = "00000000000000000000000000000000"
+        const val ORIGINAL_DESTINATION_ADDRESS = "u1originalrecipientwalletaddress"
+        const val ORIGINAL_DESTINATION_ACCOUNT_ID = "11111111111111111111111111111111"
 
         val PAYLOAD =
             GiftLinkPayload(

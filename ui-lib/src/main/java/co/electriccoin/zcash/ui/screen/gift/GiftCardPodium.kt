@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -40,19 +40,27 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.colors.ZappGiftCardStock
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.getValue
+import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
  * The card, presented.
@@ -83,7 +91,7 @@ private const val BOB_MS = 2_600
 private const val HALF_TURNS_PER_CIRCLE = 2
 
 private val SETTLE_SPEC = spring<Float>(dampingRatio = 0.78f, stiffness = Spring.StiffnessLow)
-private const val CAMERA_DISTANCE = 18f
+private const val CAMERA_DISTANCE_WIDTH_FACTOR = 1.7f
 
 private val CORNER = 16.dp
 private val BOB_TRAVEL = 6.dp
@@ -92,10 +100,26 @@ private val BOB_TRAVEL = 6.dp
 private val CARD_MAX_WIDTH = 420.dp
 private val GUTTER = 16.dp
 private val VERTICAL_ROOM = 20.dp
-private val LIFT = 22.dp
+private val AMBIENT_LIFT = 24.dp
+private val CONTACT_LIFT = 7.dp
+private val AMBIENT_SHADOW_DROP = 9.dp
+private val CONTACT_SHADOW_DROP = 4.dp
 
 /** Card stock is about 0.76mm. This is the on-screen equivalent, exaggerated to read. */
-private val CARD_THICKNESS = 3.dp
+private val CARD_THICKNESS = 6.dp
+private const val SHADOW_BOB_RATIO = 0.18f
+private const val SHADOW_MIN_WIDTH_FRACTION = 0.02f
+
+/** Light across the face stays quiet when flat and becomes more apparent as the card turns. */
+private const val LIGHT_BASE = 0.025f
+private const val LIGHT_SHEEN_WEIGHT = 0.16f
+private const val LIGHT_GLANCING_GAIN = 0.09f
+private const val SHADE_BASE = 0.035f
+private const val SHADE_GLANCING_GAIN = 0.11f
+private const val LIGHT_MIDPOINT = 0.42f
+private const val SHADE_MIDPOINT = 0.7f
+private const val EDGE_SHEEN_ALPHA = 0.68f
+private const val EDGE_SHEEN_Y = 0.5f
 
 /** Enough of a note to be worth reading at a glance without crowding the denomination. */
 private const val MESSAGE_LINES = 2
@@ -159,7 +183,7 @@ internal fun GiftCardPodium(
     }
 
     val float = rememberInfiniteTransition(label = "giftPodiumFloat")
-    val bob by
+    val bob =
         float.animateFloat(
             initialValue = 0f,
             targetValue = 1f,
@@ -172,6 +196,9 @@ internal fun GiftCardPodium(
         )
 
     val shape = RoundedCornerShape(CORNER)
+    // One plane per physical pixel keeps the edge solid at 90 degrees. Every plane uses the exact
+    // same RenderNode transform, so it cannot drift away from the face or stair-step its corners.
+    val coreLayerCount = with(LocalDensity.current) { CARD_THICKNESS.roundToPx().coerceAtLeast(1) + 1 }
     BoxWithConstraints(
         modifier = modifier.fillMaxWidth().padding(horizontal = GUTTER, vertical = VERTICAL_ROOM),
         contentAlignment = Alignment.Center,
@@ -186,17 +213,7 @@ internal fun GiftCardPodium(
                     Modifier
                         .width(cardWidth)
                         .height(cardWidth / GIFT_CARD_ASPECT)
-                        .graphicsLayer {
-                            rotationY = rotation.value
-                            cameraDistance = CAMERA_DISTANCE * density
-                            translationY = -BOB_TRAVEL.toPx() * bob
-                        }.shadow(
-                            elevation = LIFT,
-                            shape = shape,
-                            clip = false,
-                            ambientColor = Color.Black,
-                            spotColor = Color.Black,
-                        ).clickable(
+                        .clickable(
                             enabled = isSettled,
                             onClickLabel =
                                 stringResource(
@@ -212,17 +229,74 @@ internal fun GiftCardPodium(
                             halfTurns += 1
                         },
             ) {
-                // The slab the face is printed on, peeking past it. At the podium's tilt this is
-                // the edge of the card, and it is what stops the whole thing reading as a decal.
+                // The broad shadow stays nearer the surface than the bobbing card. That separation
+                // is the visual cue that this is an object suspended over the page, rather than a
+                // dark glow painted onto the card itself.
                 Box(
                     modifier =
                         Modifier
                             .fillMaxSize()
-                            .offset(y = CARD_THICKNESS)
-                            .clip(RoundedCornerShape(CORNER))
-                            .background(stock.core),
+                            .shadowProjection(
+                                rotation = rotation,
+                                bob = bob,
+                                yOffset = AMBIENT_SHADOW_DROP,
+                                bobRatio = SHADOW_BOB_RATIO,
+                            ).shadow(
+                                elevation = AMBIENT_LIFT,
+                                shape = shape,
+                                clip = false,
+                                ambientColor = Color.Black,
+                                spotColor = Color.Black,
+                            ).background(Color.Black.copy(alpha = LIGHT_BASE), shape),
                 )
-                if (showBack) PodiumBack(stock) else PodiumFace(amount, caption, message, stock)
+                // A tighter shadow anchors the lower edge while the larger one supplies the soft
+                // falloff. One shadow cannot convincingly do both jobs at phone scale.
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .shadowProjection(
+                                rotation = rotation,
+                                bob = bob,
+                                yOffset = CONTACT_SHADOW_DROP,
+                                bobRatio = SHADOW_BOB_RATIO,
+                            ).shadow(
+                                elevation = CONTACT_LIFT,
+                                shape = shape,
+                                clip = false,
+                                ambientColor = Color.Black,
+                                spotColor = Color.Black,
+                            ).background(Color.Black.copy(alpha = SHADE_BASE), shape),
+                )
+
+                repeat(coreLayerCount) { layer ->
+                    val fraction = layer.toFloat() / (coreLayerCount - 1)
+                    // Far surface first, near surface last. The order reverses with the visible
+                    // face so the core never paints over the physical front of the slab.
+                    val depth = if (showBack) 0.5f - fraction else -0.5f + fraction
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .cardPlaneTransform(rotation = rotation, bob = bob, depth = depth)
+                                .clip(shape)
+                                .background(stock.core),
+                    )
+                }
+
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .cardPlaneTransform(
+                                rotation = rotation,
+                                bob = bob,
+                                depth = if (showBack) -0.5f else 0.5f,
+                            ).clip(shape)
+                            .materialLighting(rotation = rotation, stock = stock),
+                ) {
+                    if (showBack) PodiumBack(stock) else PodiumFace(amount, caption, message, stock)
+                }
             }
             // Stated under the card as well as printed on it: the face is turned away half the
             // time, and what a gift is worth should not come and go with the rotation.
@@ -237,6 +311,80 @@ internal fun GiftCardPodium(
     }
 }
 
+/**
+ * Keeps the shadow on the screen plane. Its caster narrows with the broad face but never collapses
+ * past the projected card stock, so the object stays grounded while it is exactly edge-on.
+ */
+private fun Modifier.shadowProjection(
+    rotation: Animatable<Float, *>,
+    bob: State<Float>,
+    yOffset: Dp = 0.dp,
+    bobRatio: Float = 1f,
+) = graphicsLayer {
+    val radians = Math.toRadians(rotation.value.toDouble())
+    val turn = sin(radians).toFloat()
+    val faceWidth = abs(cos(radians)).toFloat()
+    val edgeWidth = CARD_THICKNESS.toPx() / size.width * abs(turn)
+    scaleX = (faceWidth + edgeWidth).coerceIn(SHADOW_MIN_WIDTH_FRACTION, 1f)
+    translationY = yOffset.toPx() - BOB_TRAVEL.toPx() * bob.value * bobRatio
+}
+
+/**
+ * Projects one plane in a centred slab. Depth becomes horizontal displacement as the card turns;
+ * there is deliberately no depth-derived vertical offset, which was what broke the corner match.
+ */
+private fun Modifier.cardPlaneTransform(
+    rotation: Animatable<Float, *>,
+    bob: State<Float>,
+    depth: Float,
+) = graphicsLayer {
+    val radians = Math.toRadians(rotation.value.toDouble())
+    val turn = sin(radians).toFloat()
+    rotationY = rotation.value
+    cameraDistance = size.width * CAMERA_DISTANCE_WIDTH_FACTOR
+    translationX = turn * CARD_THICKNESS.toPx() * depth
+    translationY = -BOB_TRAVEL.toPx() * bob.value
+}
+
+/** A restrained moving highlight and falloff, both derived from the card-stock palette. */
+private fun Modifier.materialLighting(rotation: Animatable<Float, *>, stock: ZappGiftCardStock) =
+    drawWithContent {
+        drawContent()
+        val radians = Math.toRadians(rotation.value.toDouble())
+        val glancing = abs(sin(radians)).toFloat()
+        val light =
+            stock.sheen.copy(
+                alpha =
+                    (LIGHT_BASE + stock.sheen.alpha * LIGHT_SHEEN_WEIGHT + glancing * LIGHT_GLANCING_GAIN)
+                        .coerceAtMost(1f)
+            )
+        val shade = stock.core.copy(alpha = SHADE_BASE + glancing * SHADE_GLANCING_GAIN)
+        // Reverse the local gradient on the mirrored back so light remains fixed at screen-left.
+        val lighting =
+            if (cos(radians) >= 0f) {
+                Brush.horizontalGradient(
+                    0f to light,
+                    LIGHT_MIDPOINT to Color.Transparent,
+                    SHADE_MIDPOINT to Color.Transparent,
+                    1f to shade,
+                )
+            } else {
+                Brush.horizontalGradient(
+                    0f to shade,
+                    LIGHT_MIDPOINT to Color.Transparent,
+                    SHADE_MIDPOINT to Color.Transparent,
+                    1f to light,
+                )
+            }
+        drawRect(brush = lighting)
+        drawLine(
+            color = stock.sheen.copy(alpha = stock.sheen.alpha * EDGE_SHEEN_ALPHA),
+            start = Offset(CORNER.toPx(), EDGE_SHEEN_Y.dp.toPx()),
+            end = Offset(size.width - CORNER.toPx(), EDGE_SHEEN_Y.dp.toPx()),
+            strokeWidth = density,
+        )
+    }
+
 @Composable
 private fun PodiumFace(
     amount: StringResource?,
@@ -248,7 +396,6 @@ private fun PodiumFace(
         modifier =
             Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(CORNER))
                 .background(stock.face)
                 .border(stock.edgeWidth, stock.edge, RoundedCornerShape(CORNER)),
     ) {
@@ -305,7 +452,6 @@ private fun PodiumBack(stock: ZappGiftCardStock) {
             Modifier
                 .fillMaxSize()
                 .graphicsLayer { rotationY = HALF_CIRCLE }
-                .clip(RoundedCornerShape(CORNER))
                 .background(stock.face)
                 .border(stock.edgeWidth, stock.edge, RoundedCornerShape(CORNER))
                 .padding(18.dp),

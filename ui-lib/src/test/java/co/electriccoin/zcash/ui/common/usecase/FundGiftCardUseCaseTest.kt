@@ -17,6 +17,7 @@ import co.electriccoin.zcash.ui.screen.gift.model.GiftCardStatus
 import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -38,7 +39,13 @@ class FundGiftCardUseCaseTest {
 
             assertEquals(TXID, fixture.useCase.submit(fixture.quote))
 
-            coVerify { fixture.storage.recordFundingSubmitted(id = ID, fundingTxid = TXID, at = any()) }
+            coVerifyOrder {
+                fixture.storage.setFundingAttemptedAt(ID, any())
+                fixture.proposalDataSource.createTransactions(any(), any())
+                fixture.storage.recordFundingCreated(ID, TXID, any())
+                fixture.proposalDataSource.submitTransaction(transaction = any(), endpoint = any())
+                fixture.storage.recordFundingSubmitted(id = ID, fundingTxid = TXID, at = any())
+            }
         }
 
     @Test
@@ -55,7 +62,7 @@ class FundGiftCardUseCaseTest {
         }
 
     @Test
-    fun `reports a storage failure before the broadcast as nothing sent`() =
+    fun `refuses creation when the durable start marker cannot be saved`() =
         runTest {
             val fixture = Fixture(submitResult = SubmitResult.Success(listOf(TXID)))
             coEvery {
@@ -65,14 +72,14 @@ class FundGiftCardUseCaseTest {
             val thrown = assertFailsWith<GiftFundingException> { fixture.useCase.submit(fixture.quote) }
 
             assertEquals(GiftFundingError.PROPOSAL_FAILED, thrown.error)
-            coVerify(exactly = 1) { fixture.storage.clearFundingPreparation(ID) }
+            coVerify(exactly = 0) { fixture.proposalDataSource.createTransactions(any(), any()) }
             coVerify(exactly = 0) {
                 fixture.proposalDataSource.submitTransaction(transaction = any(), endpoint = any())
             }
         }
 
     @Test
-    fun `keeps local transaction creation failures retryable`() =
+    fun `keeps a transaction creation failure unresolved after the durable marker`() =
         runTest {
             val fixture = Fixture(submitResult = SubmitResult.Success(listOf(TXID)))
             coEvery { fixture.proposalDataSource.createTransactions(any(), any()) } throws
@@ -80,24 +87,45 @@ class FundGiftCardUseCaseTest {
 
             val thrown = assertFailsWith<GiftFundingException> { fixture.useCase.submit(fixture.quote) }
 
-            assertEquals(GiftFundingError.PROPOSAL_FAILED, thrown.error)
-            coVerify(exactly = 0) { fixture.storage.setFundingAttemptedAt(any(), any()) }
+            assertEquals(GiftFundingError.SUBMIT_UNCERTAIN, thrown.error)
+            coVerify(exactly = 1) { fixture.storage.setFundingAttemptedAt(ID, any()) }
+            coVerify(exactly = 0) { fixture.storage.recordFundingCreated(any(), any(), any()) }
             coVerify(exactly = 0) {
                 fixture.proposalDataSource.submitTransaction(transaction = any(), endpoint = any())
             }
         }
 
     @Test
-    fun `still reports a rejection when the attempt flag cannot be cleared`() =
+    fun `keeps the durable marker when the created txid cannot be recorded`() =
         runTest {
-            val fixture =
-                Fixture(submitResult = SubmitResult.Failure(txIds = emptyList(), code = 1, description = null))
-            coEvery { fixture.storage.clearFundingPreparation(ID) } throws IllegalStateException("store is full")
+            val fixture = Fixture(submitResult = SubmitResult.Success(listOf(TXID)))
+            coEvery { fixture.storage.recordFundingCreated(any(), any(), any()) } throws
+                IllegalStateException("store is full")
 
             val thrown = assertFailsWith<GiftFundingException> { fixture.useCase.submit(fixture.quote) }
 
-            // The network never took it, and that is knowable regardless of what the store did.
-            assertEquals(GiftFundingError.SUBMIT_REJECTED, thrown.error)
+            assertEquals(GiftFundingError.SUBMIT_UNCERTAIN, thrown.error)
+            coVerifyOrder {
+                fixture.storage.setFundingAttemptedAt(ID, any())
+                fixture.proposalDataSource.createTransactions(any(), any())
+                fixture.storage.recordFundingCreated(ID, TXID, any())
+            }
+            coVerify(exactly = 0) {
+                fixture.proposalDataSource.submitTransaction(transaction = any(), endpoint = any())
+            }
+        }
+
+    @Test
+    fun `keeps a rejected transaction unresolved because the SDK may resubmit it`() =
+        runTest {
+            val fixture =
+                Fixture(submitResult = SubmitResult.Failure(txIds = emptyList(), code = 1, description = null))
+
+            val thrown = assertFailsWith<GiftFundingException> { fixture.useCase.submit(fixture.quote) }
+
+            assertEquals(GiftFundingError.SUBMIT_UNCERTAIN, thrown.error)
+            coVerify(exactly = 1) { fixture.storage.recordFundingCreated(ID, TXID, any()) }
+            coVerify(exactly = 1) { fixture.storage.setFundingAttemptedAt(ID, any()) }
         }
 
     @Test

@@ -99,7 +99,11 @@ internal fun GiftClaimView(
                     ClaimingSection(state)
                 }
 
-                GiftClaimStage.DONE, GiftClaimStage.PENDING_CONFIRMATIONS, GiftClaimStage.EMPTY -> {
+                GiftClaimStage.DONE,
+                GiftClaimStage.PENDING_CONFIRMATIONS,
+                GiftClaimStage.AWAITING_FUNDING,
+                GiftClaimStage.ALREADY_CLAIMED,
+                -> {
                     OutcomeSection(state)
                 }
             }
@@ -183,6 +187,32 @@ private fun GiftClaimBottomBar(state: GiftClaimState) {
                     }
                 }
 
+                GiftClaimStage.AWAITING_FUNDING -> {
+                    {
+                        ZappButton(
+                            text = stringResource(R.string.gift_claim_retry),
+                            onClick = state.onClaim,
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .padding(start = spacing.lg),
+                        )
+                    }
+                }
+
+                GiftClaimStage.ALREADY_CLAIMED -> {
+                    {
+                        ZappButton(
+                            text = stringResource(R.string.gift_claim_done),
+                            onClick = state.onBack,
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .padding(start = spacing.lg),
+                        )
+                    }
+                }
+
                 GiftClaimStage.CLAIMING -> {
                     if (state.canStopClaim) {
                         {
@@ -200,12 +230,11 @@ private fun GiftClaimBottomBar(state: GiftClaimState) {
                     }
                 }
 
-                // Nothing to press while reading the link or mid-claim, nothing to retry on an
-                // empty card, and nothing to do while confirmations accrue but wait — that screen
-                // re-checks itself rather than asking the recipient to keep tapping.
+                // Nothing to press while reading the link, and nothing to do while confirmations
+                // accrue but wait — that screen re-checks itself rather than asking the recipient
+                // to keep tapping.
                 GiftClaimStage.LOADING,
                 GiftClaimStage.PENDING_CONFIRMATIONS,
-                GiftClaimStage.EMPTY,
                 -> {
                     null
                 }

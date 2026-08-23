@@ -9,6 +9,7 @@ import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimOutcome
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimProgress
+import co.electriccoin.zcash.ui.common.datasource.GiftClaimResumeEvidence
 import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.GiftClaimOperationLock
 import co.electriccoin.zcash.ui.common.provider.GiftKeyProvider
@@ -174,8 +175,29 @@ class ClaimGiftCardUseCase(
         onProgress: (GiftClaimProgress) -> Unit,
     ): GiftClaimOutcome {
         val synchronizer = synchronizerProvider.getSynchronizer()
-        val destinationAccount = accountDataSource.getSelectedAccount()
-        val recipient = destinationAccount.unified.address.address
+        // Read before writing. The distinction between our interrupted submission and a second
+        // holder's spend exists only in this preexisting record; manufacturing a prepared receipt
+        // first would make every outgoing transaction look local.
+        val existing = existingReceipt(payload, cardAddress)
+        if (existing?.isSettled == true && existing.claimTxids.isNotEmpty()) {
+            return GiftClaimOutcome.Claimed(Zatoshi(existing.amountZatoshi), existing.claimTxids)
+        }
+
+        val selectedAccount =
+            if (existing?.destinationAddress == null) {
+                accountDataSource.getSelectedAccount()
+            } else {
+                null
+            }
+        // Once an unsettled receipt names its recipient, retries stay there. Following account
+        // selection would make confirmation search the wrong account or split txids across two.
+        val recipient = existing?.destinationAddress ?: selectedAccount!!.unified.address.address
+        val destinationAccountUuid =
+            if (existing?.destinationAddress != null) {
+                existing.destinationAccountUuid
+            } else {
+                selectedAccount!!.sdkAccount.accountUuid.toStorageKeyId()
+            }
         // The wallet's own endpoint rather than the bundled default, so a claim talks to whatever
         // server the user chose for everything else.
         val endpoint = persistableWalletProvider.requirePersistableWallet().endpoint
@@ -187,11 +209,19 @@ class ClaimGiftCardUseCase(
                 amountZatoshi = payload.amountZatoshi.toLong(),
                 claimedAt = Clock.System.now().toString(),
                 destinationAddress = recipient,
-                destinationAccountUuid = destinationAccount.sdkAccount.accountUuid.toStorageKeyId(),
+                destinationAccountUuid = destinationAccountUuid,
                 message = payload.message,
                 claimLink = payload,
             )
         receivedGiftStorageProvider.record(prepared)
+
+        val resumeEvidence =
+            GiftClaimResumeEvidence(
+                claimTxIds = existing?.claimTxids.orEmpty().toSet(),
+                // Old receipts predate the marker, but a recorded txid itself proves submission.
+                submissionWasAttempted =
+                    existing?.claimSubmissionAttemptedAt != null || existing?.claimTxids?.isNotEmpty() == true,
+            )
 
         val outcome =
             giftClaimDataSource.claim(
@@ -200,30 +230,71 @@ class ClaimGiftCardUseCase(
                 network = synchronizer.network,
                 endpoint = endpoint,
                 recipientAddress = recipient,
+                resumeEvidence = resumeEvidence,
+                onBeforeSubmit = {
+                    // This is the irreversible boundary: if this write fails the data source must
+                    // never enter its NonCancellable create-and-submit section.
+                    receivedGiftStorageProvider.record(
+                        prepared.copy(
+                            claimTxids = emptyList(),
+                            claimSubmissionAttemptedAt = Clock.System.now().toString(),
+                        )
+                    )
+                },
                 onProgress = onProgress,
             )
 
-        // An empty card this wallet has already collected is "you have it", never "somebody else
-        // took it" — and the two are the same scan, so only the receipt can tell them apart. This
-        // is what the [NonCancellable] write below is for: a claim can succeed and still lose its
-        // outcome on the way back to the screen if the app was backgrounded while the broadcast
-        // ran, and the recipient's next attempt would otherwise be told their gift is gone.
-        if (outcome is GiftClaimOutcome.Empty) {
-            when (val lookup = collectedEarlier(payload, cardAddress)) {
-                is ReceivedGiftLookup.Found -> return lookup.outcome
-                ReceivedGiftLookup.Absent -> Unit
-                ReceivedGiftLookup.Unreadable -> throw GiftReceiptStoreUnreadableException()
+        if (outcome is GiftClaimOutcome.AlreadyClaimed) {
+            // The final foreign spend proves this link has no recovery work left. Keeping the
+            // freshly prepared scan receipt would reopen it on every foreground forever.
+            withContext(NonCancellable) {
+                runCatching {
+                    giftClaimDataSource.cleanupFinalizedClaim(payload, cardAddress, synchronizer.network)
+                }.onFailure { Twig.warn { "Gift claim: spent card wallet cleanup failed" } }
+                receivedGiftStorageProvider.settle(cardAddress)
             }
+            return outcome
         }
 
         // The prepared record already holds recovery; attach txids even if the caller was cancelled.
-        if (outcome is GiftClaimOutcome.Claimed) {
+        val submittedTxIds =
+            when (outcome) {
+                is GiftClaimOutcome.Claimed -> outcome.txIds
+                is GiftClaimOutcome.NotBroadcast -> outcome.result.txIds
+                else -> emptyList()
+            }
+        if (submittedTxIds.isNotEmpty()) {
             withContext(NonCancellable) {
-                receivedGiftStorageProvider.record(prepared.copy(claimTxids = outcome.txIds))
+                val currentAttempt =
+                    receivedGiftStorageProvider
+                        .getAll()
+                        .firstOrNull { it.address == cardAddress && it.network == payload.network }
+                receivedGiftStorageProvider.record(
+                    prepared.copy(
+                        claimTxids = submittedTxIds,
+                        claimSubmissionAttemptedAt =
+                            currentAttempt?.claimSubmissionAttemptedAt ?: Clock.System.now().toString(),
+                    )
+                )
             }
         }
         return outcome
     }
+
+    private suspend fun existingReceipt(
+        payload: GiftLinkPayload,
+        cardAddress: String,
+    ): ReceivedGift? =
+        try {
+            receivedGiftStorageProvider
+                .getAll()
+                .firstOrNull { it.address == cardAddress && it.network == payload.network }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            Twig.warn { "Gift claim: receipt store could not be read" }
+            throw GiftReceiptStoreUnreadableException()
+        }
 
     /**
      * The receipt for this card, absence, or an unreadable-store result. Keyed on the address,
