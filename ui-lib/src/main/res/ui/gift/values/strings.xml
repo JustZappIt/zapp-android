@@ -80,6 +80,7 @@
     <string name="gift_claim_subtitle_needs_wallet">You need a wallet first</string>
     <string name="gift_claim_subtitle_waiting">Waiting for the network</string>
     <string name="gift_claim_subtitle_already_claimed">Already claimed</string>
+    <string name="gift_claim_subtitle_confirming">Claim confirming</string>
 
     <string name="gift_claim_amount_label">Card value</string>
     <string name="gift_claim_message_label">Message</string>
@@ -126,6 +127,9 @@
     <string name="gift_claim_expired_note">This card is past its suggested expiry. That is advisory only — it still claims for the full amount.</string>
     <string name="gift_claim_progress_remaining">%1$d blocks left</string>
     <string name="gift_claim_stop_scan">Stop scan</string>
+    <string name="gift_claim_confirming_title">Your gift is on its way</string>
+    <string name="gift_claim_confirming_body">Zapp has already claimed this gift for you. It is confirming on the Zcash network, which takes about 15 minutes. There is nothing else to do — check again only if it seems stuck.</string>
+    <string name="gift_claim_confirming_recheck">Check again</string>
     <string name="gift_claim_pending_count">%1$d / %2$d confirmations</string>
 
     <string name="gift_card_list_title">Your gift cards</string>

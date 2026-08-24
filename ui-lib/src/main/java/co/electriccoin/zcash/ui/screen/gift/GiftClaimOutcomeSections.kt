@@ -45,6 +45,10 @@ internal fun OutcomeSection(state: GiftClaimState) {
             PendingConfirmations(state)
         }
 
+        GiftClaimStage.CLAIM_CONFIRMING -> {
+            ClaimConfirming(state)
+        }
+
         GiftClaimStage.AWAITING_FUNDING -> {
             Headline(R.string.gift_claim_awaiting_funding_title, R.string.gift_claim_awaiting_funding_body)
         }
@@ -81,7 +85,39 @@ private fun PendingConfirmations(state: GiftClaimState) {
             fraction = state.confirmationFraction,
             label = stringResource(R.string.gift_claim_pending_body),
             detail =
-                state.confirmations?.let {
+                state.confirmationsShown?.let {
+                    stringResource(R.string.gift_claim_pending_count, it, state.requiredConfirmations)
+                },
+        )
+    }
+}
+
+/**
+ * A claim of ours that has been broadcast and is waiting on confirmations.
+ *
+ * Deliberately not a variant of [PendingConfirmations]: that one is the *card's* funding settling
+ * before anything can be spent, and the recipient is waiting on the sender. This one is the money
+ * already moving to them. Same bar, opposite subject, so the copy cannot be shared.
+ *
+ * The count is absent until the claim mines, because the card's own wallet broadcast it and this
+ * one has nothing to count until it lands. The bar sweeps rather than sitting at a dishonest zero.
+ */
+@Composable
+private fun ClaimConfirming(state: GiftClaimState) {
+    val spacing = ZappTheme.spacing
+    Column(
+        modifier = Modifier.padding(horizontal = spacing.xl),
+        verticalArrangement = Arrangement.spacedBy(spacing.lg),
+    ) {
+        BasicText(
+            text = stringResource(R.string.gift_claim_confirming_title),
+            style = ZappTheme.typography.sectionTitle.copy(color = ZappTheme.colors.text),
+        )
+        ZappProgressBar(
+            fraction = state.confirmationFraction,
+            label = stringResource(R.string.gift_claim_confirming_body),
+            detail =
+                state.confirmationsShown?.let {
                     stringResource(R.string.gift_claim_pending_count, it, state.requiredConfirmations)
                 },
         )
@@ -156,6 +192,10 @@ internal fun GiftClaimStage.subtitleRes(): Int =
 
         GiftClaimStage.PENDING_CONFIRMATIONS, GiftClaimStage.AWAITING_FUNDING -> {
             R.string.gift_claim_subtitle_waiting
+        }
+
+        GiftClaimStage.CLAIM_CONFIRMING -> {
+            R.string.gift_claim_subtitle_confirming
         }
 
         GiftClaimStage.ALREADY_CLAIMED -> {

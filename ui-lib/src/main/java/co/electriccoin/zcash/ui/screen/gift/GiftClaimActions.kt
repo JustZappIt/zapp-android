@@ -65,6 +65,14 @@ private fun GiftClaimState.primaryAction(): GiftClaimAction? =
             GiftClaimAction(R.string.gift_claim_retry, onClaim)
         }
 
+        // Nothing is required of the recipient here — back leaves, and the claim confirms without
+        // them. This exists because the one thing this screen cannot see is a claim that will never
+        // mine: it was broadcast by the card's wallet, so an unmined one and a dead one look
+        // identical from here. Without a way to re-check, that would be a screen with no way out.
+        GiftClaimStage.CLAIM_CONFIRMING -> {
+            GiftClaimAction(R.string.gift_claim_confirming_recheck, onClaim)
+        }
+
         GiftClaimStage.CLAIMING -> {
             if (canStopClaim) {
                 GiftClaimAction(R.string.gift_claim_stop_scan, onStopClaim)

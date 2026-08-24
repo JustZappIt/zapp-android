@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.common.provider
 
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
 import co.electriccoin.zcash.ui.screen.gift.model.ReceivedGift
+import co.electriccoin.zcash.ui.screen.gift.model.discardingUnstarted
 import co.electriccoin.zcash.ui.screen.gift.model.finalizing
 import co.electriccoin.zcash.ui.screen.gift.model.markingClaimedElsewhere
 import co.electriccoin.zcash.ui.screen.gift.model.recording
@@ -33,8 +34,14 @@ interface ReceivedGiftStorageProvider {
     /** Idempotent and monotonic per card. */
     suspend fun record(gift: ReceivedGift)
 
-    /** True when any receipt still holds custody-critical retry material. */
-    suspend fun hasUnsettledClaims(): Boolean = getAll().any { !it.isSettled }
+    /**
+     * True when any receipt still holds custody-critical retry material.
+     *
+     * Scoped to receipts that actually started a claim. A receipt is written before the scan, so
+     * "unsettled" alone also covers every card this wallet only read — and blocking a wallet reset
+     * on one of those is a guard nothing can clear.
+     */
+    suspend fun hasUnsettledClaims(): Boolean = getAll().any { it.isUnsettledClaim }
 
     suspend fun markFinalized(address: String)
 
@@ -48,6 +55,12 @@ interface ReceivedGiftStorageProvider {
 
     /** Records that another holder emptied this card, so re-opening the link need not rescan. */
     suspend fun markClaimedElsewhere(address: String)
+
+    /**
+     * Removes a receipt for a card this wallet read but never claimed. A no-op on anything that
+     * created a transaction, was claimed elsewhere, or has already settled.
+     */
+    suspend fun discardUnstarted(address: String)
 }
 
 internal class ReceivedGiftStorageProviderImpl(
@@ -78,6 +91,15 @@ internal class ReceivedGiftStorageProviderImpl(
 
     override suspend fun markClaimedElsewhere(address: String) =
         mutex.withLock { store.set(store.get().orEmpty().markingClaimedElsewhere(address)) }
+
+    override suspend fun discardUnstarted(address: String) =
+        mutex.withLock {
+            val current = store.get().orEmpty()
+            val remaining = current.discardingUnstarted(address)
+            // Skip the write when nothing changed: this runs on every inconclusive claim, and the
+            // store is one encrypted blob that every mutation rewrites.
+            if (remaining.size != current.size) store.set(remaining)
+        }
 
     private companion object {
         /** Never bump this without a migration: an unsettled receipt behind a dead key is money. */

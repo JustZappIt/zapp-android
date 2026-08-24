@@ -99,6 +99,7 @@ internal fun GiftClaimView(
 
                 GiftClaimStage.DONE,
                 GiftClaimStage.PENDING_CONFIRMATIONS,
+                GiftClaimStage.CLAIM_CONFIRMING,
                 GiftClaimStage.AWAITING_FUNDING,
                 GiftClaimStage.ALREADY_CLAIMED,
                 -> {

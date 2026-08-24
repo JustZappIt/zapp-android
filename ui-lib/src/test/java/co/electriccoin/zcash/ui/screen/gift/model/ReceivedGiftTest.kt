@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.screen.gift.model
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -105,6 +106,60 @@ class ReceivedGiftTest {
         claimLink = claimLink,
         isFinalized = isFinalized,
     )
+
+    @Test
+    fun `a receipt for a card this wallet only read holds no recovery material`() {
+        val read = receipt(claimTxids = emptyList(), claimSubmissionAttemptedAt = null)
+
+        assertFalse(read.hasClaimAttempt)
+        assertFalse(read.isUnsettledClaim, "nothing was created, so there is nothing to recover")
+    }
+
+    @Test
+    fun `the submission marker alone makes a receipt custody`() {
+        // Past the marker the transaction may exist whatever came back, so the link is the only
+        // route to a card this wallet may already have spent from.
+        val started = receipt(claimTxids = emptyList(), claimSubmissionAttemptedAt = "2026-08-23T00:01:00Z")
+
+        assertTrue(started.hasClaimAttempt)
+        assertTrue(started.isUnsettledClaim)
+    }
+
+    @Test
+    fun `a settled receipt is no longer unsettled work`() {
+        assertFalse(receipt(claimTxids = listOf("tx-1"), claimLink = null).isUnsettledClaim)
+    }
+
+    @Test
+    fun `discards only a receipt that never started a claim`() {
+        val read = receipt(claimTxids = emptyList())
+
+        assertTrue(listOf(read).discardingUnstarted("card-address").isEmpty())
+    }
+
+    @Test
+    fun `discard leaves every receipt that could still need its link`() {
+        val submitted = receipt(claimTxids = listOf("tx-1"))
+        val started = receipt(claimTxids = emptyList(), claimSubmissionAttemptedAt = "2026-08-23T00:01:00Z")
+        val settled = receipt(claimTxids = listOf("tx-1"), claimLink = null)
+        val elsewhere = receipt(claimTxids = emptyList()).copy(isClaimedElsewhere = true)
+
+        listOf(submitted, started, settled, elsewhere).forEach { kept ->
+            assertEquals(
+                listOf(kept),
+                listOf(kept).discardingUnstarted("card-address"),
+                "a receipt with claimTxids=${kept.claimTxids}, marker=${kept.claimSubmissionAttemptedAt}, " +
+                    "settled=${kept.isSettled}, elsewhere=${kept.isClaimedElsewhere} must survive a discard",
+            )
+        }
+    }
+
+    @Test
+    fun `discard leaves other cards alone`() {
+        val other = receipt(claimTxids = emptyList()).copy(address = "another-card")
+
+        assertEquals(listOf(other), listOf(other).discardingUnstarted("card-address"))
+    }
 
     private companion object {
         val PAYLOAD =

@@ -61,14 +61,19 @@ interface TransactionRepository {
 
     fun observeTransaction(txId: String): Flow<Transaction?>
 
-    /** Observes one SDK transaction without depending on whichever account the UI has selected. */
+    /**
+     * Observes one SDK transaction without depending on whichever account the UI has selected.
+     *
+     * Carries the SDK's own [TransactionState] through, unlike the display flows above: `Confirmed`
+     * here means the SDK's full confirmation threshold rather than "has a block behind it".
+     */
     fun observeAccountTransaction(accountUuid: String, txId: String): Flow<TransactionOverview?>
 
     fun observeTransactionsByMemo(memo: String): Flow<List<TransactionId>?>
 
     suspend fun getTransactions(): List<Transaction>
 
-    /** Reads lightweight SDK rows for a specific persisted account id. */
+    /** Reads lightweight SDK rows for a specific persisted account id, at the SDK's own state. */
     suspend fun getAccountTransactions(accountUuid: String): List<TransactionOverview>
 
     /** Finds a send to [recipient] in a specific account, including pending transactions. */
@@ -77,6 +82,8 @@ interface TransactionRepository {
     /**
      * Reads transactions and their recipients only while the owning synchronizer is fully synced.
      * An empty result is therefore positive evidence, unlike a transient empty flow during startup.
+     *
+     * At the SDK's own [TransactionState], for the reason on [observeAccountTransaction].
      */
     suspend fun getSyncedAccountTransactionSnapshot(accountUuid: String): SyncedAccountTransactionSnapshot
 
@@ -410,18 +417,26 @@ class TransactionRepositoryImpl(
             }
         }
 
-    // Preserve the SDK's confirmation policy. A non-null mined height means one or more blocks,
-    // while TransactionState.Confirmed means the SDK's full confirmation threshold. Collapsing
-    // those two states destroys reorg recovery for custody-sensitive transactions.
+    // Display normalisation, and only that. A send with a block behind it reads as done here, which
+    // is a product choice about the history UI rather than a claim about finality — the SDK's own
+    // `Confirmed` is its full threshold, ten blocks and roughly twelve minutes, and showing every
+    // ordinary send as pending for that long is not what this screen is for.
     //
-    // MOB-1577: transactionState also carries Expired through sync cycles explicitly.
+    // The custody-sensitive readers deliberately do not come through here. `observeAccountTransaction`,
+    // `getAccountTransactions` and `getSyncedAccountTransactionSnapshot` carry the SDK's own state
+    // through untouched, because a gift card marked funded off one confirmation is a card a reorg
+    // can empty after the sender has been told it holds money.
+    //
+    // MOB-1577: minedHeight == null alone used to fall straight to `isSyncing -> Pending`, so an
+    // Expired transaction flickered back to Pending on every sync cycle. transactionState carries
+    // the terminal Expired classification through explicitly instead of re-deriving it here.
     internal fun createTransactionState(
         minedHeight: BlockHeight?,
         transactionState: TransactionState,
         isSyncing: Boolean
     ): TransactionState? =
         when {
-            minedHeight != null -> transactionState
+            minedHeight != null -> Confirmed
             transactionState == Expired -> null
             isSyncing -> Pending
             else -> null
@@ -458,8 +473,11 @@ class TransactionRepositoryImpl(
                     if (synchronizer == null) {
                         flowOf(null)
                     } else {
-                        combine(synchronizer.getTransactions(uuid), synchronizer.status) { transactions, status ->
-                            normalizeTransactions(transactions, status).firstOrNull { it.txId.txIdString() == txId }
+                        // Unnormalized on purpose — see the interface. The caller is watching a
+                        // funding transaction to decide whether a card durably holds money, and
+                        // that decision must not be made off a single confirmation.
+                        synchronizer.getTransactions(uuid).map { transactions ->
+                            transactions.firstOrNull { it.txId.txIdString() == txId }
                         }
                     }
                 }
@@ -478,8 +496,7 @@ class TransactionRepositoryImpl(
 
     override suspend fun getAccountTransactions(accountUuid: String): List<TransactionOverview> {
         val uuid = resolveAccountUuid(accountUuid) ?: return emptyList()
-        val synchronizer = synchronizerProvider.getSynchronizer()
-        return combine(synchronizer.getTransactions(uuid), synchronizer.status, ::normalizeTransactions).first()
+        return synchronizerProvider.getSynchronizer().getTransactions(uuid).first()
     }
 
     override suspend fun findAccountSendByRecipient(
@@ -517,7 +534,7 @@ class TransactionRepositoryImpl(
                             val transactions = synchronizer.getTransactions(uuid).first()
                             val recipients = synchronizer.getRecipients()
                             SyncedAccountTransactionSnapshot(
-                                transactions = normalizeTransactions(transactions, status),
+                                transactions = transactions,
                                 recipientsByTransactionId =
                                     recipients.mapKeys { it.key.txIdString() }.mapValues { entry ->
                                         entry.value.mapNotNullTo(mutableSetOf()) { it.addressValue }

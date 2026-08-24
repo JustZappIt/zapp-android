@@ -9,6 +9,7 @@ import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
 import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.common.repository.BiometricRequest
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.gift.model.ReceivedGift
 import co.electriccoin.zcash.ui.util.loggableNot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -51,12 +52,20 @@ class DisconnectUseCase(
             accountDataSource.selectAccount(zashiAccount)
         }
 
+    /**
+     * Refuses while a claim this wallet actually broadcast is still pointed at [keystoneAccount].
+     *
+     * Scoped to [ReceivedGift.isUnsettledClaim] like every other consumer (`docs/gift-cards.md`
+     * §6.3). A receipt is written before the claim scan, so an unscoped reading also refuses over a
+     * card this wallet merely looked at — and this path, unlike the wallet reset, offers no way to
+     * proceed anyway, so such a receipt would make the account undisconnectable for good.
+     */
     private suspend fun ensureNoGiftClaimUses(keystoneAccount: KeystoneAccount) {
         val accountId = keystoneAccount.sdkAccount.accountUuid.toStorageKeyId()
         if (
             receivedGiftStorageProvider
                 .getAll()
-                .any { !it.isSettled && it.destinationAccountUuid == accountId }
+                .any { it.isUnsettledClaim && it.destinationAccountUuid == accountId }
         ) {
             throw GiftClaimDestinationAccountInUseException()
         }

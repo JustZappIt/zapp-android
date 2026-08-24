@@ -52,6 +52,7 @@ import kotlin.time.Duration.Companion.seconds
  * restart, but once a transaction is being submitted `GiftClaimDataSource` runs it to a verdict
  * regardless, because a card with no reclaim must never be left in "did that send?".
  */
+@Suppress("TooManyFunctions")
 class GiftClaimVM(
     args: GiftClaimArgs,
     private val pendingGiftLinks: PendingGiftLinkStore,
@@ -77,6 +78,18 @@ class GiftClaimVM(
     private var claimJob: Job? = null
 
     private var confirmationRetryJob: Job? = null
+
+    /** Waits out finality for a claim already broadcast, then settles it. */
+    private var claimConfirmJob: Job? = null
+
+    /** Renders how far that wait has got. Separate because it never completes on its own. */
+    private var claimConfirmProgressJob: Job? = null
+
+    /** The claim this screen re-entered on, kept so a foreground can re-arm the wait above. */
+    private var inFlightClaimTxids: List<String> = emptyList()
+
+    /** What [claimConfirmJob] is currently waiting on, so a replacement claim can displace it. */
+    private var awaitedClaimTxids: List<String> = emptyList()
 
     private var payload: GiftLinkPayload? = null
 
@@ -124,8 +137,10 @@ class GiftClaimVM(
                 // here precisely because the broadcast half is NonCancellable. Starting is refused
                 // separately, in onClaim.
                 if (foreground) {
-                    if (snapshot.value.stage == GiftClaimStage.PENDING_CONFIRMATIONS) {
-                        scheduleConfirmationRecheck(payload, cardAddress)
+                    when (snapshot.value.stage) {
+                        GiftClaimStage.PENDING_CONFIRMATIONS -> scheduleConfirmationRecheck(payload, cardAddress)
+                        GiftClaimStage.CLAIM_CONFIRMING -> cardAddress?.let { awaitClaimFinality(it) }
+                        else -> Unit
                     }
                 } else {
                     stopClaim(forBackground = true)
@@ -167,6 +182,16 @@ class GiftClaimVM(
                     // Already collected, on this wallet's own record. Nothing to scan for, nothing
                     // to spend, and no proving parameters needed to say so.
                     snapshot.update { it.applying(preview.collected) }
+                } else if (preview.inFlightClaimTxids.isNotEmpty()) {
+                    // This wallet already broadcast a claim for this card and it has not confirmed
+                    // yet. The transaction is on this device's record, so re-running the claim
+                    // could only resync the card's wallet to rediscover it — minutes of scanning
+                    // for an answer already in hand, and a network error instead of it if the
+                    // recipient happens to be offline. Show the wait, and finish it in the
+                    // background. Proving parameters are irrelevant: nothing here builds a spend.
+                    inFlightClaimTxids = preview.inFlightClaimTxids
+                    snapshot.update { it.confirming() }
+                    awaitClaimFinality(preview.cardAddress)
                 } else {
                     // Start the 51MB proving-parameter download the moment a real card is on
                     // screen, rather than at the end of a claim that has already found the money.
@@ -226,10 +251,12 @@ class GiftClaimVM(
     private suspend fun claim(payload: GiftLinkPayload, address: String) {
         runCatching { claimGiftCard(payload, address) { progress -> snapshot.update { it.applying(progress) } } }
             .onSuccess { outcome ->
-                snapshot.update { it.applying(outcome) }
-                // Detached: the receipt keeps the link until this sees the claim on chain.
+                snapshot.update { it.applying(outcome).keepingConfirming() }
+                // Detached: the receipt keeps the link until this sees the claim on chain. Shares
+                // the handle with the re-entry path so the two cannot both wait on one claim.
                 if (outcome is GiftClaimOutcome.Claimed) {
-                    viewModelScope.launch { confirmGiftClaim(address, outcome.txIds) }
+                    inFlightClaimTxids = outcome.txIds
+                    startClaimConfirmJob(address, outcome.txIds)
                 }
                 // Waiting on confirmations is a wait, not a failure. Re-checking on a timer is
                 // what turns it into something the recipient can watch instead of something they
@@ -241,7 +268,99 @@ class GiftClaimVM(
                 Twig.error(throwable) { "Gift claim failed" }
                 // Through the same mapper as the preview, so an unreachable server reads as one
                 // here too rather than collapsing into a bare "something went wrong".
-                snapshot.update { it.copy(stage = GiftClaimStage.PREVIEW, error = throwable.toClaimError()) }
+                snapshot.update {
+                    it.copy(stage = GiftClaimStage.PREVIEW, error = throwable.toClaimError()).keepingConfirming()
+                }
+            }
+    }
+
+    /**
+     * Holds [GiftClaimStage.CLAIM_CONFIRMING] against anything that would fall back to a preview.
+     *
+     * The re-check offered on that stage runs the ordinary claim path, and every way it can end
+     * short — offline, an unclear broadcast, a stop — lands on [GiftClaimStage.PREVIEW], whose
+     * action is "Claim". That is exactly the state the stage exists to prevent, two taps away from
+     * it. The error still shows; only the framing is kept honest.
+     */
+    private fun GiftClaimSnapshot.keepingConfirming(): GiftClaimSnapshot =
+        if (stage == GiftClaimStage.PREVIEW && inFlightClaimTxids.isNotEmpty()) {
+            copy(stage = GiftClaimStage.CLAIM_CONFIRMING, progressFraction = null, canStopClaim = false)
+        } else {
+            this
+        }
+
+    /**
+     * Arms the wait on a claim already broadcast: finality in one job, the confirmation count in
+     * another.
+     *
+     * Two jobs because they end differently. The finality wait completes — that is the signal the
+     * gift has landed — while the count is a flow that never does, so joining them would leave the
+     * screen unable to tell the two apart.
+     *
+     * Neither touches the card's bearer seed until finality is reached, and both are cancelled on
+     * background alongside every other network work this screen does (§3.5). Losing them costs
+     * nothing: `ConfirmGiftClaimUseCase.reconcile` picks the receipt up on the next pass.
+     */
+    private fun awaitClaimFinality(address: String) {
+        val txIds = inFlightClaimTxids
+        // §3.5, and the same guard `onClaim` holds: the wait ends in `inspectFinalization`, which
+        // opens the card's own wallet on its bearer seed. Refusing here is safe because the
+        // foreground collector re-arms on the stage, so a load that resolves while backgrounded is
+        // picked up on the way back in rather than lost.
+        if (txIds.isEmpty() || !isForeground) return
+        startClaimConfirmJob(address, txIds)
+        if (claimConfirmProgressJob?.isActive == true) return
+        claimConfirmProgressJob =
+            viewModelScope.launch {
+                runCatching {
+                    confirmGiftClaim.observeClaimConfirmations(address).collect { confirmations ->
+                        snapshot.update { snap ->
+                            // Guarded: a re-check the recipient started can move the stage on while
+                            // this is still collecting, and a count under a claiming bar is a lie.
+                            if (snap.stage == GiftClaimStage.CLAIM_CONFIRMING) {
+                                snap.copy(confirmations = confirmations)
+                            } else {
+                                snap
+                            }
+                        }
+                    }
+                }.onFailure { throwable ->
+                    if (throwable is CancellationException) throw throwable
+                    // The bar sweeps without a figure, which is what it does before the claim mines
+                    // anyway. Nothing about the claim itself depends on this.
+                    Twig.warn(throwable) { "Gift claim confirmations could not be counted" }
+                }
+            }
+    }
+
+    private fun startClaimConfirmJob(address: String, txIds: List<String>) {
+        // Compared, not merely checked for liveness. A re-check that finds the first claim expired
+        // submits a replacement, and a running wait on the dead transaction would otherwise keep
+        // the new one from ever being watched — the screen would sit on a claim nothing settles.
+        if (claimConfirmJob?.isActive == true && awaitedClaimTxids == txIds) return
+        claimConfirmJob?.cancel()
+        awaitedClaimTxids = txIds
+        claimConfirmJob =
+            viewModelScope.launch {
+                runCatching { confirmGiftClaim(address, txIds) }
+                    .onSuccess {
+                        // Returning means finality was *observed* — the claim is on chain and the
+                        // money is here. It does not prove the receipt settled: a residual top-up
+                        // above the abandon threshold leaves it open, and then the card still has
+                        // something on it and reopening this screen later is correct.
+                        snapshot.update { snap ->
+                            if (snap.stage == GiftClaimStage.CLAIM_CONFIRMING) {
+                                snap.copy(stage = GiftClaimStage.DONE, confirmations = null, error = null)
+                            } else {
+                                snap
+                            }
+                        }
+                    }.onFailure { throwable ->
+                        if (throwable is CancellationException) throw throwable
+                        // Not surfaced: the claim is broadcast and recorded either way, and
+                        // reconcile retries this on the next foreground.
+                        Twig.warn(throwable) { "Gift claim finality wait ended early" }
+                    }
             }
     }
 
@@ -265,6 +384,13 @@ class GiftClaimVM(
         if (forBackground) {
             confirmationRetryJob?.cancel()
             confirmationRetryJob = null
+            // The finality wait ends in `inspectFinalization`, which opens the card's own wallet on
+            // its bearer seed. §3.5 says that must not run behind a lock screen, and the stage is
+            // retained so the foreground collector re-arms both.
+            claimConfirmJob?.cancel()
+            claimConfirmJob = null
+            claimConfirmProgressJob?.cancel()
+            claimConfirmProgressJob = null
         }
 
         val job = claimJob
@@ -274,7 +400,11 @@ class GiftClaimVM(
             // and prevents a second attempt until cancellation has finished. PENDING_CONFIRMATIONS
             // and the local creation/submission phase both have canStopClaim=false, so backgrounding
             // retains the former for a foreground retry and lets the latter publish its outcome.
-            snapshot.update { it.copy(stage = GiftClaimStage.PREVIEW, progressFraction = null, canStopClaim = false) }
+            snapshot.update { snap ->
+                snap
+                    .copy(stage = GiftClaimStage.PREVIEW, progressFraction = null, canStopClaim = false)
+                    .keepingConfirming()
+            }
         }
     }
 
@@ -323,6 +453,8 @@ class GiftClaimVM(
 
     override fun onCleared() {
         confirmationRetryJob?.cancel()
+        claimConfirmJob?.cancel()
+        claimConfirmProgressJob?.cancel()
         claimJob?.cancel()
         uri?.let { pendingGiftLinks.release(it) }
         super.onCleared()
@@ -346,6 +478,17 @@ private fun GiftClaimSnapshot.applying(progress: GiftClaimProgress) =
             progress.tipHeight
                 ?.let { tip -> progress.scannedHeight?.let { (tip - it).coerceAtLeast(0L) } },
         canStopClaim = progress.status != Synchronizer.Status.SYNCED,
+    )
+
+/** Enters the wait on a claim already broadcast, clearing anything the previous stage was showing. */
+private fun GiftClaimSnapshot.confirming() =
+    copy(
+        stage = GiftClaimStage.CLAIM_CONFIRMING,
+        progressFraction = null,
+        blocksRemaining = null,
+        confirmations = null,
+        canStopClaim = false,
+        error = null,
     )
 
 private data class GiftClaimSnapshot(

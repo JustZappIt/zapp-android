@@ -80,6 +80,7 @@
     <string name="gift_claim_subtitle_needs_wallet">Primero necesitas un monedero</string>
     <string name="gift_claim_subtitle_waiting">Esperando a la red</string>
     <string name="gift_claim_subtitle_already_claimed">Ya reclamada</string>
+    <string name="gift_claim_subtitle_confirming">Confirmando el reclamo</string>
 
     <string name="gift_claim_amount_label">Valor de la tarjeta</string>
     <string name="gift_claim_message_label">Mensaje</string>
@@ -126,6 +127,9 @@
     <string name="gift_claim_expired_note">Esta tarjeta pasó su fecha de caducidad sugerida. Eso es solo informativo: aún se reclama por el importe completo.</string>
     <string name="gift_claim_progress_remaining">Quedan %1$d bloques</string>
     <string name="gift_claim_stop_scan">Detener análisis</string>
+    <string name="gift_claim_confirming_title">Tu regalo está en camino</string>
+    <string name="gift_claim_confirming_body">Zapp ya reclamó este regalo por ti. Se está confirmando en la red Zcash, lo que tarda unos 15 minutos. No hay nada más que hacer: vuelve a comprobar solo si parece atascado.</string>
+    <string name="gift_claim_confirming_recheck">Comprobar de nuevo</string>
     <string name="gift_claim_pending_count">%1$d / %2$d confirmaciones</string>
 
     <string name="gift_card_list_title">Tus tarjetas regalo</string>

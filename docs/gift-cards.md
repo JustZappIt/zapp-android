@@ -228,6 +228,25 @@ paragraph.
 synchronizer, so it would submit from the wrong wallet. Funding uses it normally; a claim submits on
 its isolated instance.
 
+### 5.1 Two readings of "confirmed", kept apart
+
+`TransactionRepository.normalizeTransactions` reports an outgoing transaction with a block behind it
+as `Confirmed`. That is a **display** choice about the history screen, and it is not finality: the
+SDK's own `Confirmed` is its full threshold (§4), so routing the whole history through the strict
+reading shows every ordinary send in the wallet as pending for twelve minutes after it has visibly
+mined.
+
+The custody readers therefore bypass it. `observeAccountTransaction`, `getAccountTransactions`,
+`getSyncedAccountTransactionSnapshot` and `findAccountSendByRecipient` carry the SDK's own state
+through untouched, because `ConfirmGiftCardFundingUseCase` marks a card funded off them and that
+mark never comes back off — a card confirmed at one block is a card a reorg can empty after the
+sender has been told it holds money. None of the four has a caller outside the gift feature
+(`findAccountSendByRecipient` has none at all); keep it that way or the two readings collapse back
+into one.
+
+The recipient's side needs no such care and must not be given it: everything that waits for a claim
+to land filters to *incoming* transactions, which the display normalisation never touched.
+
 ## 6. Recovery guarantees
 
 This is the part that decides whether a bug costs money.
@@ -248,7 +267,8 @@ This is the part that decides whether a bug costs money.
   spent, and paying twice for one gift is money gone twice. `prepare` re-reads the record it is
   handed rather than trusting the caller's copy, which is a snapshot held across a screen the sender
   can leave and return to.
-- **An abandoned draft is discarded, and it is the only record that ever is.** `StoredGiftCard
+- **An abandoned draft is the only *sender* record ever discarded.** (The recipient's store has its
+  own discard, over receipts that never started a claim — §6.3.) `StoredGiftCard
   .isAbandonedDraft` — `DRAFT` with no funding attempt — describes an address no transaction was
   ever sent to, because `fundingAttemptedAt` is written *before* the broadcast and a failed write
   refuses to submit. `GiftCardLedger.add` drops them when a new card is minted, so editing an amount
@@ -293,6 +313,26 @@ for the SDK's confirmation threshold, writes a finalization checkpoint, deletes 
 database, then removes the link. A startup/foreground coordinator reopens unsettled receipts in the
 claim screen. Spendable top-ups are swept to the recipient; only fee-reserve dust may be abandoned.
 
+The receipt is written **before the scan**, not before the broadcast, so one exists for every card
+this wallet merely looked at. `ReceivedGift.hasClaimAttempt` is the line between the two, and it is
+the line every consumer scopes to: `claimSubmissionAttemptedAt` or a txid means a transaction may
+exist and the link is the only route to it, while neither means nothing was created and the link is
+a copy of one the sender still holds.
+
+Scoping is not cosmetic. Nothing settles a receipt with no txids — `reconcile` only examines those
+that have them — so an unscoped reading makes every inconclusive tap permanent: the foreground
+coordinator reopens the claim screen for good, and §6.4's guard refuses every destructive action
+over a gift that was never taken. `ClaimGiftCardUseCase` therefore discards its own receipt when the
+claim returns without creating anything **and when its scan is abandoned**, and every consumer —
+`PendingGiftClaimCoordinator`, `hasUnsettledClaims`, and `DisconnectUseCase`'s per-account check —
+ignores what is left. `DisconnectUseCase` matters most: unlike the wallet reset it offers no way to
+proceed, so a receipt it refuses over and nothing can clear is an account that never disconnects.
+
+The discard costs the recipient their stored copy of a link for a card they never claimed. That is
+the right trade only because such a copy is unreachable: there is no received-gifts screen, and the
+coordinator no longer surfaces it either, so retaining it is a bearer mnemonic at rest with nothing
+able to spend it. The sender's own record is untouched and remains fully recoverable (§7.2).
+
 ### 6.4 The reset guard
 
 The guard blocks for sender cards with unshared funds and for received gifts that are not settled.
@@ -312,6 +352,24 @@ makes the same trade, and it is the right one, because the alternative is a guar
 a wallet nobody can reset. The list therefore also offers a copy action, which is the one hand-off
 route that always reports its own outcome, and the reset dialog routes to the gift list rather than
 simply refusing.
+
+### 6.5 A claim in flight is neither claimed nor unclaimed
+
+Between broadcast and finality — the SDK's ten confirmations, so about 12.5 minutes and longer if
+the claim is slow to mine — a receipt holds this wallet's own claim txids and is not yet settled.
+Answering that window as "not collected" puts a Claim button over money already on its way, and the
+rescan behind it can only rediscover the transaction already recorded on the device. Offline it
+fails with a network error, over a gift that has already moved.
+
+So `GiftClaimPreview` reports it as its own thing, `inFlightClaimTxids`, and the screen has its own
+stage for it. `ConfirmGiftClaimUseCase.observeClaimConfirmations` counts it, read-only and from this
+wallet's own transactions — nothing there opens the card's wallet or touches its bearer seed.
+
+The count is absent until the claim mines, and that is not a gap that can be closed: the claim is
+built and broadcast by the *card's* isolated wallet, so this wallet learns of it only when it mines
+and is scanned. A claim still in the mempool and one that will never mine are indistinguishable from
+here. That is why the stage keeps an explicit re-check rather than waiting on the count alone — a
+screen whose only exit is an event that may never arrive is a trap.
 
 ## 7. Risks
 

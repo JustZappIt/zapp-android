@@ -13,6 +13,7 @@ import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimOutcome
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimResumeEvidence
+import co.electriccoin.zcash.ui.common.model.SubmitResult
 import co.electriccoin.zcash.ui.common.model.UnifiedInfo
 import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.provider.GiftClaimOperationLock
@@ -26,6 +27,7 @@ import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkError
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkException
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkPayload
 import co.electriccoin.zcash.ui.screen.gift.model.ReceivedGift
+import co.electriccoin.zcash.ui.screen.gift.model.discardingUnstarted
 import co.electriccoin.zcash.ui.screen.gift.model.finalizing
 import co.electriccoin.zcash.ui.screen.gift.model.markingClaimedElsewhere
 import co.electriccoin.zcash.ui.screen.gift.model.recording
@@ -116,11 +118,11 @@ class ClaimGiftCardUseCaseTest {
         }
 
     @Test
-    fun `still offers a claim whose broadcast has not been confirmed on chain`() =
+    fun `does not report an unconfirmed claim as collected`() =
         runTest {
             // The receipt exists but keeps its link, which is what an unconfirmed claim looks like.
-            // Such a claim can still expire unmined, leaving the card funded — so this must stay
-            // claimable rather than being retired as already collected.
+            // Such a claim can still expire unmined, leaving the card funded — so it must not be
+            // retired as collected. What the screen shows for it instead is the in-flight test below.
             val unsettled = RECEIPT.copy(claimLink = PAYLOAD)
 
             val preview =
@@ -133,6 +135,54 @@ class ClaimGiftCardUseCaseTest {
                 preview.collected,
                 "an unconfirmed claim must not be reported as collected — the card may still hold its funds"
             )
+        }
+
+    @Test
+    fun `reports a claim already in flight rather than offering to claim again`() =
+        runTest {
+            // Between broadcast and finality this wallet holds the claim's transaction id. Answering
+            // "not collected" there puts a Claim button over money already on its way, and a rescan
+            // can only rediscover the transaction sitting in this record.
+            val inFlight = RECEIPT.copy(claimLink = PAYLOAD)
+
+            val preview =
+                previewUseCase(
+                    synchronizer = null,
+                    receipts = FakeReceipts(stored = listOf(inFlight)),
+                ).preview(GiftLinkCodec.encode(PAYLOAD))
+
+            assertNull(preview.collected, "an unconfirmed claim is not yet collected")
+            assertEquals(listOf(CLAIM_TXID), preview.inFlightClaimTxids)
+        }
+
+    @Test
+    fun `reports no claim in flight once one has settled`() =
+        runTest {
+            // Settled is the better answer, and reporting both would leave the screen choosing.
+            val preview =
+                previewUseCase(
+                    synchronizer = null,
+                    receipts = FakeReceipts(stored = listOf(RECEIPT)),
+                ).preview(GiftLinkCodec.encode(PAYLOAD))
+
+            assertTrue(preview.inFlightClaimTxids.isEmpty())
+        }
+
+    @Test
+    fun `answers a foreign spend even when the settle write never landed`() =
+        runTest {
+            // markClaimedElsewhere and settle are two writes, and the isolated database is deleted
+            // before either. A crash between them would otherwise rescan the card from its birthday
+            // for an answer already on disk.
+            val interrupted = RECEIPT.copy(claimTxids = emptyList(), isClaimedElsewhere = true, claimLink = PAYLOAD)
+
+            val preview =
+                previewUseCase(
+                    synchronizer = null,
+                    receipts = FakeReceipts(stored = listOf(interrupted)),
+                ).preview(GiftLinkCodec.encode(PAYLOAD))
+
+            assertEquals(GiftClaimOutcome.AlreadyClaimed, preview.collected)
         }
 
     @Test
@@ -238,14 +288,54 @@ class ClaimGiftCardUseCaseTest {
         }
 
     @Test
-    fun `retains recovery while a foreign pending spend is unresolved`() =
+    fun `retains recovery once submission was attempted, even with no txid to show for it`() =
         runTest {
+            // Past the durable marker the transaction may exist whatever came back, so the link has
+            // to stay: it is the only way to reach a card this wallet may already have spent from.
             val receipts = FakeReceipts()
 
-            val outcome = useCase(receipts, GiftClaimOutcome.AwaitingFunding)(PAYLOAD, ADDRESS) {}
+            val outcome =
+                useCase(
+                    receipts,
+                    GiftClaimOutcome.NotBroadcast(SubmitResult.GrpcFailure(txIds = emptyList())),
+                )(PAYLOAD, ADDRESS) {}
+
+            assertEquals(GiftClaimOutcome.NotBroadcast(SubmitResult.GrpcFailure(txIds = emptyList())), outcome)
+            assertFalse(receipts.current.single().isSettled)
+            assertEquals(PAYLOAD, receipts.current.single().claimLink)
+        }
+
+    @Test
+    fun `discards the receipt for a card it only read`() =
+        runTest {
+            // A verdict reached before anything was created. The receipt written before the scan
+            // holds no recovery material — the link inside is a copy of one the sender still has —
+            // and nothing ever settles it, so left behind it reopens the claim screen on every
+            // foreground and refuses every wallet reset, over a gift that was never taken.
+            val receipts = FakeReceipts()
+
+            val outcome =
+                useCase(
+                    receipts,
+                    GiftClaimOutcome.AwaitingFunding,
+                    reachesSubmission = false,
+                )(PAYLOAD, ADDRESS) {}
 
             assertEquals(GiftClaimOutcome.AwaitingFunding, outcome)
-            assertFalse(receipts.current.single().isSettled)
+            assertTrue(receipts.current.isEmpty(), "a card this wallet only read must leave nothing behind")
+        }
+
+    @Test
+    fun `keeps a receipt this wallet already broadcast a claim for`() =
+        runTest {
+            // The same early-verdict path, but re-entered on a card this wallet has a claim out on.
+            // Discarding here would throw away the only link that can retry a claim that expires.
+            val started = RECEIPT.copy(claimLink = PAYLOAD, claimSubmissionAttemptedAt = "2026-08-20T12:05:00Z")
+            val receipts = FakeReceipts(stored = listOf(started))
+
+            useCase(receipts, GiftClaimOutcome.AwaitingFunding, reachesSubmission = false)(PAYLOAD, ADDRESS) {}
+
+            assertEquals(listOf(CLAIM_TXID), receipts.current.single().claimTxids)
             assertEquals(PAYLOAD, receipts.current.single().claimLink)
         }
 
@@ -360,6 +450,11 @@ class ClaimGiftCardUseCaseTest {
             yield()
             current = current.markingClaimedElsewhere(address)
         }
+
+        override suspend fun discardUnstarted(address: String) {
+            yield()
+            current = current.discardingUnstarted(address)
+        }
     }
 
     /** No wallet means no synchronizer, so the build's own network is all a preview has to go on. */
@@ -390,6 +485,11 @@ class ClaimGiftCardUseCaseTest {
         onClaim: () -> Unit = {},
         dataSource: GiftClaimDataSource? = null,
         accountDataSource: AccountDataSource = destinationAccountDataSource(),
+        // The real data source calls onBeforeSubmit only immediately before it creates and submits
+        // a transaction. Every outcome that returns earlier — an unfunded card, funds not spendable
+        // yet, another holder's unresolved spend — never reaches it, and a fake that marks
+        // submission regardless hides exactly the receipts that were never started.
+        reachesSubmission: Boolean = true,
     ) = ClaimGiftCardUseCase(
         accountDataSource = accountDataSource,
         synchronizerProvider =
@@ -403,7 +503,7 @@ class ClaimGiftCardUseCaseTest {
         giftClaimDataSource =
             dataSource ?: mockk<GiftClaimDataSource>(relaxed = true).also { source ->
                 coEvery { source.claim(any(), any(), any(), any(), any(), any(), any(), any()) } coAnswers {
-                    arg<suspend () -> Unit>(6).invoke()
+                    if (reachesSubmission) arg<suspend () -> Unit>(6).invoke()
                     // Stands in for the app going to the background mid-broadcast: the claim itself
                     // finishes, and the context it returns into is already gone.
                     onClaim()

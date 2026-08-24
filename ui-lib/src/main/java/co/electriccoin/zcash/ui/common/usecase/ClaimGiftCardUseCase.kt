@@ -4,7 +4,9 @@
 package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.model.Zatoshi
+import cash.z.ecc.android.sdk.model.ZcashNetwork
 import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.common.bestEffort
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimOutcome
@@ -50,6 +52,16 @@ data class GiftClaimPreview(
      * a link opened twice, and one no amount of scanning can improve on.
      */
     val collected: GiftClaimOutcome? = null,
+    /**
+     * The transactions of a claim this wallet has already broadcast and that has not reached
+     * finality yet.
+     *
+     * Neither "claimed" nor "unclaimed": the money is on its way and the only thing left is
+     * confirmations, which a rescan cannot hurry. Without this the link opened during that window
+     * — about twelve minutes, and longer if the claim is slow to mine — answers as an untouched
+     * card and offers to claim it all over again.
+     */
+    val inFlightClaimTxids: List<String> = emptyList(),
 )
 
 /**
@@ -66,7 +78,7 @@ class GiftReceiptStoreUnreadableException : RuntimeException("Received gift rece
 
 private sealed interface ReceivedGiftLookup {
     data class Found(
-        val outcome: GiftClaimOutcome,
+        val receipt: ReceivedGift,
     ) : ReceivedGiftLookup
 
     data object Absent : ReceivedGiftLookup
@@ -113,17 +125,21 @@ class ClaimGiftCardUseCase(
         // Answered from the receipt, before a block is fetched. The same question asked after a
         // scan gets the same answer thirty seconds later, having searched a card it already knew
         // was empty — and a card is emptied exactly once, so the record is authoritative.
-        val collected =
-            when (val lookup = collectedEarlier(payload, cardAddress, settledOnly = true)) {
-                is ReceivedGiftLookup.Found -> lookup.outcome
+        val receipt =
+            when (val lookup = receiptFor(payload, cardAddress)) {
+                is ReceivedGiftLookup.Found -> lookup.receipt
                 ReceivedGiftLookup.Absent -> null
                 ReceivedGiftLookup.Unreadable -> throw GiftReceiptStoreUnreadableException()
             }
+        val collected = receipt?.settledOutcome()
         return GiftClaimPreview(
             payload = payload,
             cardAddress = cardAddress,
             hasWallet = synchronizer != null,
             collected = collected,
+            // Only when nothing terminal answers already: a settled receipt is the better answer,
+            // and reporting both would leave the screen deciding which one it meant.
+            inFlightClaimTxids = if (collected == null) receipt?.inFlightClaimTxids().orEmpty() else emptyList(),
         )
     }
 
@@ -225,32 +241,71 @@ class ClaimGiftCardUseCase(
             )
 
         val outcome =
-            giftClaimDataSource.claim(
-                payload = payload,
-                cardAddress = cardAddress,
-                network = synchronizer.network,
-                endpoint = endpoint,
-                recipientAddress = recipient,
-                resumeEvidence = resumeEvidence,
-                onBeforeSubmit = {
-                    // This is the irreversible boundary: if this write fails the data source must
-                    // never enter its NonCancellable create-and-submit section.
-                    receivedGiftStorageProvider.record(
-                        prepared.copy(
-                            claimTxids = emptyList(),
-                            claimSubmissionAttemptedAt = Clock.System.now().toString(),
+            try {
+                giftClaimDataSource.claim(
+                    payload = payload,
+                    cardAddress = cardAddress,
+                    network = synchronizer.network,
+                    endpoint = endpoint,
+                    recipientAddress = recipient,
+                    resumeEvidence = resumeEvidence,
+                    onBeforeSubmit = {
+                        // This is the irreversible boundary: if this write fails the data source
+                        // must never enter its NonCancellable create-and-submit section.
+                        receivedGiftStorageProvider.record(
+                            prepared.copy(
+                                claimTxids = emptyList(),
+                                claimSubmissionAttemptedAt = Clock.System.now().toString(),
+                            )
                         )
-                    )
-                },
-                onProgress = onProgress,
-            )
+                    },
+                    onProgress = onProgress,
+                )
+            } catch (cancellation: CancellationException) {
+                // A cancelled scan never reaches a verdict, so the discard below never runs — and
+                // nothing else would clear the receipt written before it: the coordinator no longer
+                // reopens one that never started a claim, and reconcile only settles receipts that
+                // have txids. Left behind, an abandoned scan is indistinguishable from an
+                // interrupted claim for good. A no-op past the submission marker, which is written
+                // before anything irreversible, so this can never discard recovery material.
+                withContext(NonCancellable) {
+                    bestEffort("Gift claim: abandoned scan receipt could not be discarded") {
+                        receivedGiftStorageProvider.discardUnstarted(cardAddress)
+                    }
+                }
+                throw cancellation
+            }
 
+        recordOutcome(
+            outcome = outcome,
+            payload = payload,
+            cardAddress = cardAddress,
+            network = synchronizer.network,
+            prepared = prepared,
+        )
+        return outcome
+    }
+
+    /**
+     * Writes down what the claim turned out to be, on a path the caller's cancellation cannot skip.
+     *
+     * Three outcomes and three different obligations: a foreign final spend is terminal and retires
+     * the link, a broadcast of ours attaches its txids, and a verdict that created nothing releases
+     * the receipt written before the scan.
+     */
+    private suspend fun recordOutcome(
+        outcome: GiftClaimOutcome,
+        payload: GiftLinkPayload,
+        cardAddress: String,
+        network: ZcashNetwork,
+        prepared: ReceivedGift,
+    ) {
         if (outcome is GiftClaimOutcome.AlreadyClaimed) {
             // The final foreign spend proves this link has no recovery work left. Keeping the
             // freshly prepared scan receipt would reopen it on every foreground forever.
             withContext(NonCancellable) {
                 runCatching {
-                    giftClaimDataSource.cleanupFinalizedClaim(payload, cardAddress, synchronizer.network)
+                    giftClaimDataSource.cleanupFinalizedClaim(payload, cardAddress, network)
                 }.onFailure { Twig.warn { "Gift claim: spent card wallet cleanup failed" } }
                 receivedGiftStorageProvider.markClaimedElsewhere(cardAddress)
                 receivedGiftStorageProvider.settle(cardAddress)
@@ -278,9 +333,21 @@ class ClaimGiftCardUseCase(
                         )
                     )
                 }
+            } else {
+                // The scan reached a verdict and nothing was created: an unfunded card, funds that
+                // are not spendable yet, a card that cannot cover its own fee, or another holder's
+                // claim that is not final enough to call. The receipt written before the scan holds
+                // no recovery material for any of those — only a copy of a link the sender still
+                // has — and left behind it is indistinguishable from an interrupted claim, so it
+                // would reopen this screen on every foreground and refuse every wallet reset, for a
+                // gift that was never taken. The discard is a no-op past the submission marker.
+                withContext(NonCancellable) {
+                    bestEffort("Gift claim: unstarted receipt for a read-only card could not be discarded") {
+                        receivedGiftStorageProvider.discardUnstarted(cardAddress)
+                    }
+                }
             }
         }
-        return outcome
     }
 
     private suspend fun existingReceipt(
@@ -305,40 +372,17 @@ class ClaimGiftCardUseCase(
      * Reads wrong only for an address funded a second time and emptied again, reporting the first
      * collection rather than the second. Nothing in the app can re-fund a spent card, and that
      * answer is still closer to true than "nothing left on this card".
-     *
-     * [settledOnly] is for answering *before* a scan. An unsettled receipt means the broadcast
-     * reached the mempool and nothing has confirmed it — and such a claim can still expire unmined,
-     * leaving the card funded and its retained link the only way back to the money. Reporting that
-     * as collected would retire a retryable claim over funds still sitting on the card. Once a scan
-     * has reported the card empty the money has demonstrably moved, so any receipt answers.
      */
-    private suspend fun collectedEarlier(
+    private suspend fun receiptFor(
         payload: GiftLinkPayload,
         cardAddress: String,
-        settledOnly: Boolean = false,
     ): ReceivedGiftLookup =
         runCatching {
-            val receipt =
-                receivedGiftStorageProvider
-                    .getAll()
-                    .firstOrNull {
-                        it.address == cardAddress &&
-                            it.network == payload.network &&
-                            (it.isClaimedElsewhere || it.claimTxids.isNotEmpty()) &&
-                            (!settledOnly || it.isSettled)
-                    }
-            receipt
-                ?.let {
-                    // A card another holder emptied has no txids of ours to report and never will,
-                    // so it answers as the foreign spend it is rather than as money we hold.
-                    if (it.isClaimedElsewhere) {
-                        ReceivedGiftLookup.Found(GiftClaimOutcome.AlreadyClaimed)
-                    } else {
-                        ReceivedGiftLookup.Found(
-                            GiftClaimOutcome.Claimed(amount = Zatoshi(it.amountZatoshi), txIds = it.claimTxids)
-                        )
-                    }
-                } ?: ReceivedGiftLookup.Absent
+            receivedGiftStorageProvider
+                .getAll()
+                .firstOrNull { it.address == cardAddress && it.network == payload.network }
+                ?.let(ReceivedGiftLookup::Found)
+                ?: ReceivedGiftLookup.Absent
         }.getOrElse { throwable ->
             if (throwable is CancellationException) throw throwable
             Twig.warn { "Received gift receipts could not be read" }
@@ -350,3 +394,27 @@ class ClaimGiftCardUseCase(
         val TIP_TIMEOUT = 30.seconds
     }
 }
+
+/**
+ * The terminal answer this receipt already holds, or null when it holds none yet.
+ *
+ * A foreign final spend answers whether or not the settle write that follows it landed: the money
+ * demonstrably moved and no rescan can change that, and the isolated database is deleted on that
+ * path, so treating an unsettled one as unanswered would rescan the card from its birthday for an
+ * answer already on disk.
+ *
+ * Our own claim answers only once settled. Unsettled means the broadcast reached the mempool and
+ * nothing has confirmed it — such a claim can still expire unmined, leaving the card funded and its
+ * retained link the only way back to the money, so calling it collected retires a retryable claim
+ * over funds still sitting on the card. That window is [inFlightClaimTxids] instead.
+ */
+private fun ReceivedGift.settledOutcome(): GiftClaimOutcome? =
+    when {
+        isClaimedElsewhere -> GiftClaimOutcome.AlreadyClaimed
+        isSettled && claimTxids.isNotEmpty() -> GiftClaimOutcome.Claimed(Zatoshi(amountZatoshi), claimTxids)
+        else -> null
+    }
+
+/** A claim of ours that reached the mempool and is still short of finality. */
+private fun ReceivedGift.inFlightClaimTxids(): List<String> =
+    if (!isSettled && claimTxids.isNotEmpty()) claimTxids else emptyList()

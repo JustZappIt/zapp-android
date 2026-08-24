@@ -49,6 +49,23 @@ data class ReceivedGift(
     val isSettled: Boolean
         get() = claimLink == null
 
+    /**
+     * Whether this wallet ever crossed the boundary into creating a claim transaction for this card.
+     *
+     * A receipt is written before the scan starts, so one exists for every card this wallet merely
+     * *looked* at — an unfunded card, a card whose funding has not confirmed, a card another holder
+     * is mid-claim on. None of those hold recovery material: nothing was created, so there is
+     * nothing to recover, and the link inside is a copy of one the sender still holds and can send
+     * again. Only past this boundary is a receipt custody, and only then may it keep a screen
+     * reopening or a wallet undeletable.
+     */
+    val hasClaimAttempt: Boolean
+        get() = claimSubmissionAttemptedAt != null || claimTxids.isNotEmpty()
+
+    /** Unfinished *and* holding recovery material — the only receipts anything should act on. */
+    val isUnsettledClaim: Boolean
+        get() = !isSettled && hasClaimAttempt
+
     // The sender's words, an amount, and — while unsettled — the mnemonic.
     override fun toString(): String = "ReceivedGift(network=$network, redacted)"
 }
@@ -128,3 +145,18 @@ internal fun List<ReceivedGift>.finalizing(address: String): List<ReceivedGift> 
  */
 internal fun List<ReceivedGift>.markingClaimedElsewhere(address: String): List<ReceivedGift> =
     map { if (it.address == address) it.copy(isClaimedElsewhere = true) else it }
+
+/**
+ * Drops the receipt for [address] when this wallet never started a claim against it.
+ *
+ * The only discard over this store, and the one that cannot lose anything: [ReceivedGift
+ * .hasClaimAttempt] is false exactly when no transaction was created and none was broadcast, so
+ * the record describes a card this wallet read and nothing more. Left behind, such a record is
+ * indistinguishable from an interrupted claim — it reopens the claim screen on every foreground
+ * and refuses every destructive action, for a gift that was never taken.
+ *
+ * Deliberately narrow. A settled receipt is history, a foreign-claim receipt is a terminal answer
+ * worth keeping so the link need not be rescanned, and anything past the boundary is custody.
+ */
+internal fun List<ReceivedGift>.discardingUnstarted(address: String): List<ReceivedGift> =
+    filterNot { it.address == address && !it.hasClaimAttempt && !it.isClaimedElsewhere && !it.isSettled }

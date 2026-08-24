@@ -32,6 +32,16 @@ internal enum class GiftClaimStage {
     DONE,
 
     /**
+     * This wallet already broadcast a claim for this card and it has not reached finality yet.
+     *
+     * Its own stage because the alternative is [PREVIEW], and offering "Claim" over a claim already
+     * in flight is the app forgetting what it did a minute ago: a rescan there can only rediscover
+     * the transaction already recorded on this device, and offline it fails with a network error
+     * over money that has already moved.
+     */
+    CLAIM_CONFIRMING,
+
+    /**
      * The money is on the card but has not got its ten confirmations yet. Deliberately not [EMPTY]:
      * telling someone a perfectly good card is fake is the single worst failure this screen has.
      */
@@ -127,6 +137,13 @@ internal data class GiftClaimState(
     /** A link we never held cannot be reloaded from here — it has to be opened again where it arrived. */
     val isRetryable: Boolean
         get() = error != GiftClaimError.LINK_UNAVAILABLE
+
+    /**
+     * Never above the target. The count keeps climbing after the threshold is met — finalization
+     * takes a moment longer than the tenth block — and "13 / 10 confirmations" reads as a bug.
+     */
+    val confirmationsShown: Int?
+        get() = confirmations?.coerceAtMost(requiredConfirmations)
 
     /** 0..1 across the confirmations a freshly funded card still owes, when they are known. */
     val confirmationFraction: Float?
