@@ -16,10 +16,18 @@ import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.time.Instant
 
 /**
- * Host serving gift links.
+ * Host serving gift links. Live, with App Links verified.
  *
- * TODO [#0]: confirm the production host and stand up DNS before shipping. `gift.justzappit.xyz` is
- * a working assumption; the manifest App Links filter and `assetlinks.json` must use the same name.
+ * Three things must name it identically or a tapped link silently stops opening the app: this
+ * constant, the manifest's App Links filter, and the `assetlinks.json` the host serves. The host is
+ * `gift-host/` in the `justZappIt` repo, deployed to Cloudflare Pages; its `assetlinks.json` lists
+ * every package variant with its signing fingerprint, so a new flavour needs adding there too.
+ *
+ * The path is part of the contract as well. The manifest matches on the `/c/` prefix, but the host
+ * serves each version as a flat file and a splat rewrite does not work on Pages — static assets
+ * resolve before `_redirects` — so **bumping [GiftLinkCodec.VERSION] means shipping the matching
+ * `public/c/vN.html` in the same change**, or a recipient without the app meets a 404 holding a
+ * link that is real money.
  */
 const val GIFT_LINK_HOST = "gift.justzappit.xyz"
 
