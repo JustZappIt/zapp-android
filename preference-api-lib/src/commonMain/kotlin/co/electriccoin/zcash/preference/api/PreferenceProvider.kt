@@ -3,9 +3,15 @@ package co.electriccoin.zcash.preference.api
 import co.electriccoin.zcash.preference.model.entry.PreferenceKey
 import kotlinx.coroutines.flow.Flow
 
+/** A write that did not reach disk. Distinct from a write that reached disk with the wrong value. */
+class PreferenceWriteFailedException(
+    key: PreferenceKey,
+) : RuntimeException("Preference ${key.key} could not be committed")
+
 interface PreferenceProvider {
     suspend fun hasKey(key: PreferenceKey): Boolean
 
+    /** @throws PreferenceWriteFailedException if the value did not reach disk. */
     suspend fun putString(
         key: PreferenceKey,
         value: String?

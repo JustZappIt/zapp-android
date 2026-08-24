@@ -116,8 +116,11 @@ CLAUDE.md
 # Solves a captcha to drip testnet funds. Not something to hand out.
 scripts/testnet-faucet.mjs
 
-# Design prototypes: raw capture dumps, not a build input
-design/
+# Design prototypes: raw capture dumps, not a build input.
+# Anchored to the repo root on purpose: unanchored, `design/` also matches the real source package
+# ui-design-lib/src/main/java/co/electriccoin/zcash/ui/design/, so every *new* design-system file
+# was being silently ignored. The existing ones survived only because they predate the rule.
+/design/
 
 # Store artwork inherited from upstream, removed rather than republished as
 # this project's own. See stores/solana/media/README.md.

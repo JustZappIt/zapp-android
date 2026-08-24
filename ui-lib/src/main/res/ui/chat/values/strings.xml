@@ -134,7 +134,10 @@
 
     <!-- Chat profile — delete identity dialog -->
     <string name="chat_profile_delete_dialog_title">Delete identity?</string>
-    <string name="chat_profile_delete_dialog_message">This will remove your messaging identity and all chat history from this device. Your wallet funds are unaffected and can be recovered at any time with your seed phrase.</string>
+    <string name="chat_profile_delete_dialog_message">This removes your messaging identity and all chat history, and resets this device back to onboarding. Your wallet funds can be restored with your seed phrase.</string>
+    <string name="chat_profile_delete_gift_cards_title">Unshared gift cards</string>
+    <string name="chat_profile_delete_gift_cards_message">You have funded gift cards whose links you have not shared yet. Deleting erases them, and your recovery phrase cannot bring them back. Share or copy each link first.</string>
+    <string name="chat_profile_delete_gift_cards_review">Review gift cards</string>
     <string name="chat_profile_delete_dialog_confirm">Delete</string>
     <string name="chat_profile_delete_dialog_cancel">Cancel</string>
 

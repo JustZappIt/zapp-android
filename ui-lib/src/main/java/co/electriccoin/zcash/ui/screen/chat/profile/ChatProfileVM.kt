@@ -17,6 +17,7 @@ import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.DeleteChatIdentityUseCase
 import co.electriccoin.zcash.ui.common.usecase.ExportChatSeedPhraseUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveChatIdentityUseCase
+import co.electriccoin.zcash.ui.common.usecase.UnsharedGiftFundsException
 import co.electriccoin.zcash.ui.common.usecase.UpdateChatDisplayNameUseCase
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -25,6 +26,7 @@ import co.electriccoin.zcash.ui.screen.chat.common.CopyFeedback
 import co.electriccoin.zcash.ui.screen.chat.common.UsernameRules
 import co.electriccoin.zcash.ui.screen.chat.p2pkey.ChatP2pKeyArgs
 import co.electriccoin.zcash.ui.screen.chat.walletaddress.ChatWalletAddressArgs
+import co.electriccoin.zcash.ui.screen.gift.GiftCardListArgs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -46,7 +48,7 @@ class ChatProfileVM(
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     private val copyFeedback = CopyFeedback(viewModelScope)
-    private val showDeleteDialog = MutableStateFlow(false)
+    private val deletePrompt = MutableStateFlow(DeletePrompt.NONE)
     private val showEditNameDialog = MutableStateFlow(false)
     private val editNameInput = MutableStateFlow("")
     private val isUpdatingDisplayName = MutableStateFlow(false)
@@ -67,13 +69,13 @@ class ChatProfileVM(
             identity,
             copyFeedback.copiedValue,
             combine(
-                showDeleteDialog,
+                deletePrompt,
                 showEditNameDialog,
                 editNameInput,
                 isUpdatingDisplayName,
                 editNameError,
-            ) { delete, edit, input, isSaving, error ->
-                DialogSnapshot(delete, edit, input, isSaving, error)
+            ) { prompt, edit, input, isSaving, error ->
+                DialogSnapshot(prompt, edit, input, isSaving, error)
             },
             combine(secretAuthGate.pinPrompt, pendingSeedPhrase) { pin, seed -> pin to seed },
         ) { id, copiedValue, dialogs, (pinPrompt, seed) ->
@@ -87,7 +89,7 @@ class ChatProfileVM(
                     copiedValue = null,
                     dialogs =
                         DialogSnapshot(
-                            showDelete = false,
+                            deletePrompt = DeletePrompt.NONE,
                             showEdit = false,
                             input = "",
                             isSaving = false,
@@ -132,13 +134,25 @@ class ChatProfileVM(
                     null
                 },
             deleteDialog =
-                if (dialogs.showDelete) {
-                    ChatProfileDeleteDialogState(
-                        onConfirm = ::onDeleteConfirm,
-                        onDismiss = ::dismissDeleteDialog,
-                    )
-                } else {
-                    null
+                when (dialogs.deletePrompt) {
+                    DeletePrompt.NONE -> {
+                        null
+                    }
+
+                    DeletePrompt.CONFIRM -> {
+                        ChatProfileDeleteDialogState(
+                            onConfirm = ::onDeleteConfirm,
+                            onDismiss = ::dismissDeleteDialog,
+                        )
+                    }
+
+                    DeletePrompt.GIFT_CARDS_BLOCKED -> {
+                        ChatProfileDeleteDialogState(
+                            onConfirm = ::onReviewGiftCards,
+                            onDismiss = ::dismissDeleteDialog,
+                            isBlockedByGiftCards = true,
+                        )
+                    }
                 },
             seedPhraseDialog =
                 seed?.let { phrase ->
@@ -190,20 +204,30 @@ class ChatProfileVM(
     }
 
     private fun onDeleteClick() {
-        showDeleteDialog.value = true
+        deletePrompt.value = DeletePrompt.CONFIRM
     }
 
     private fun dismissDeleteDialog() {
-        showDeleteDialog.value = false
+        deletePrompt.value = DeletePrompt.NONE
     }
 
     private fun onDeleteConfirm() {
-        showDeleteDialog.value = false
+        deletePrompt.value = DeletePrompt.NONE
         viewModelScope.launch { performDeleteIdentity() }
     }
 
+    private fun onReviewGiftCards() {
+        deletePrompt.value = DeletePrompt.NONE
+        navigationRouter.forward(GiftCardListArgs)
+    }
+
     private suspend fun performDeleteIdentity() {
-        deleteChatIdentity()
+        try {
+            deleteChatIdentity()
+        } catch (_: UnsharedGiftFundsException) {
+            deletePrompt.value = DeletePrompt.GIFT_CARDS_BLOCKED
+            return
+        }
         application.packageManager.getLaunchIntentForPackage(application.packageName)?.let { intent ->
             intent.addFlags(
                 Intent.FLAG_ACTIVITY_CLEAR_TOP or
@@ -243,8 +267,11 @@ class ChatProfileVM(
         val publicKey: String
     )
 
+    /** [GIFT_CARDS_BLOCKED] is a refusal, not a confirmation: its primary action reviews the cards. */
+    private enum class DeletePrompt { NONE, CONFIRM, GIFT_CARDS_BLOCKED }
+
     private data class DialogSnapshot(
-        val showDelete: Boolean,
+        val deletePrompt: DeletePrompt,
         val showEdit: Boolean,
         val input: String,
         val isSaving: Boolean,

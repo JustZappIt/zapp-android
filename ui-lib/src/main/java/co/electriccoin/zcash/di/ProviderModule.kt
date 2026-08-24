@@ -22,6 +22,12 @@ import co.electriccoin.zcash.ui.common.provider.EphemeralAddressStorageProvider
 import co.electriccoin.zcash.ui.common.provider.EphemeralAddressStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.GetVersionInfoProvider
 import co.electriccoin.zcash.ui.common.provider.GetZcashCurrencyProvider
+import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
+import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProviderImpl
+import co.electriccoin.zcash.ui.common.provider.GiftClaimOperationLock
+import co.electriccoin.zcash.ui.common.provider.GiftFundingOperationLock
+import co.electriccoin.zcash.ui.common.provider.GiftKeyProvider
+import co.electriccoin.zcash.ui.common.provider.GiftKeyProviderImpl
 import co.electriccoin.zcash.ui.common.provider.HttpClientProvider
 import co.electriccoin.zcash.ui.common.provider.HttpClientProviderImpl
 import co.electriccoin.zcash.ui.common.provider.IsBackgroundExecutionAvailableProvider
@@ -64,7 +70,11 @@ import co.electriccoin.zcash.ui.common.provider.PreferredFiatProvider
 import co.electriccoin.zcash.ui.common.provider.PreferredFiatProviderImpl
 import co.electriccoin.zcash.ui.common.provider.PreferredP2pPaymentMethodProvider
 import co.electriccoin.zcash.ui.common.provider.PreferredP2pPaymentMethodProviderImpl
+import co.electriccoin.zcash.ui.common.provider.ProvingParamsProvider
+import co.electriccoin.zcash.ui.common.provider.ProvingParamsProviderImpl
 import co.electriccoin.zcash.ui.common.provider.RealOfframpBridgeWallet
+import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
+import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.RestoreTimestampStorageProvider
 import co.electriccoin.zcash.ui.common.provider.RestoreTimestampStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.SelectedAccountUUIDProvider
@@ -92,12 +102,15 @@ import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeTimestampSto
 import co.electriccoin.zcash.ui.common.provider.WalletRestoringStateProvider
 import co.electriccoin.zcash.ui.common.provider.WalletRestoringStateProviderImpl
 import co.electriccoin.zcash.ui.common.provider.WalletSeedPhraseSource
+import co.electriccoin.zcash.ui.common.provider.ZcashNetworkProvider
+import co.electriccoin.zcash.ui.common.provider.ZcashNetworkProviderImpl
 import co.electriccoin.zcash.ui.common.push.ChatNotificationState
 import co.electriccoin.zcash.ui.common.push.ChatNotificationTiming
 import co.electriccoin.zcash.ui.common.push.ChatPushBackend
 import co.electriccoin.zcash.ui.common.push.ChatPushBackendImpl
 import co.electriccoin.zcash.ui.common.push.PushRegistrar
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
+import co.electriccoin.zcash.ui.screen.gift.model.PendingGiftLinkStore
 import io.ktor.client.HttpClient
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
@@ -157,6 +170,8 @@ val providerModule =
         factoryOf(::SecretAuthGate)
         singleOf(::GetVersionInfoProvider)
         singleOf(::GetZcashCurrencyProvider)
+        singleOf(::ZcashNetworkProviderImpl) bind ZcashNetworkProvider::class
+        singleOf(::ProvingParamsProviderImpl) bind ProvingParamsProvider::class
         singleOf(::SelectedAccountUUIDProviderImpl) bind SelectedAccountUUIDProvider::class
         singleOf(::PersistableWalletProviderImpl) bind PersistableWalletProvider::class
         singleOf(::PreferredFiatProviderImpl) bind PreferredFiatProvider::class
@@ -215,6 +230,15 @@ val providerModule =
         singleOf(::OfframpTopUpCheckpointStorageProviderImpl) bind OfframpTopUpCheckpointStorageProvider::class
         singleOf(::PeerCashOutCheckpointStorageProviderImpl) bind PeerCashOutCheckpointStorageProvider::class
         singleOf(::PeerPayeeHandleProviderImpl) bind PeerPayeeHandleProvider::class
+
+        // Gift cards. The storage provider is custody-critical: for a card whose link was never
+        // shared, its encrypted record is the only route back to the funds.
+        singleOf(::GiftCardStorageProviderImpl) bind GiftCardStorageProvider::class
+        singleOf(::GiftKeyProviderImpl) bind GiftKeyProvider::class
+        singleOf(::GiftClaimOperationLock)
+        singleOf(::GiftFundingOperationLock)
+        singleOf(::PendingGiftLinkStore)
+        singleOf(::ReceivedGiftStorageProviderImpl) bind ReceivedGiftStorageProvider::class
         single<HttpClient>(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)) {
             // Pipe ktor's Logging plugin output through Twig so subgraph + RPC errors land in
             // logcat under our "Twig" tag with the OfframpHttp prefix. Without this, transport

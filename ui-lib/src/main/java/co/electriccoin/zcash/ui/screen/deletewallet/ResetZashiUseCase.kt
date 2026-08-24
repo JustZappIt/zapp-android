@@ -18,6 +18,7 @@ import co.electriccoin.zcash.ui.common.repository.FlexaRepository
 import co.electriccoin.zcash.ui.common.repository.HomeMessageCacheRepository
 import co.electriccoin.zcash.ui.common.repository.MetadataRepository
 import co.electriccoin.zcash.ui.common.repository.PeerCashOutRepository
+import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnsharedGiftFundsUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
 import kotlinx.coroutines.flow.first
 import okhttp3.internal.closeQuietly
@@ -36,10 +37,17 @@ class ResetZashiUseCase(
     private val peerCashOutRepository: PeerCashOutRepository,
     private val baseBalanceRepository: BaseBalanceRepository,
     private val migrationAppHooks: MigrationAppHooks,
+    private val ensureNoUnsharedGiftFunds: EnsureNoUnsharedGiftFundsUseCase,
 ) {
     @Suppress("TooGenericExceptionCaught", "ThrowsCount")
-    suspend operator fun invoke(keepFiles: Boolean) {
+    suspend operator fun invoke(
+        keepFiles: Boolean,
+        allowGiftDataLoss: Boolean = false,
+    ) {
         try {
+            // clearSharedPrefs() wipes gift_cards_v1, and an unshared card's ephemeral seed lives
+            // nowhere else. Refuse before anything is touched.
+            if (!allowGiftDataLoss) ensureNoUnsharedGiftFunds()
             requestBiometrics()
             // Migration workers are self-rechaining OneTimeWork — a wallet wipe that leaves them
             // scheduled produces zombie retries against a wallet that no longer exists (Milan,

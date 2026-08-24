@@ -75,6 +75,12 @@ import co.electriccoin.zcash.ui.screen.exchangerate.settings.ExchangeRateSetting
 import co.electriccoin.zcash.ui.screen.exportdata.WrapExportPrivateData
 import co.electriccoin.zcash.ui.screen.feedback.FeedbackArgs
 import co.electriccoin.zcash.ui.screen.feedback.FeedbackScreen
+import co.electriccoin.zcash.ui.screen.gift.GiftCardArgs
+import co.electriccoin.zcash.ui.screen.gift.GiftCardListArgs
+import co.electriccoin.zcash.ui.screen.gift.GiftCardListScreen
+import co.electriccoin.zcash.ui.screen.gift.GiftCardScreen
+import co.electriccoin.zcash.ui.screen.gift.GiftClaimArgs
+import co.electriccoin.zcash.ui.screen.gift.GiftClaimScreen
 import co.electriccoin.zcash.ui.screen.heightinfo.HeightInfoArgs
 import co.electriccoin.zcash.ui.screen.heightinfo.HeightInfoScreen
 import co.electriccoin.zcash.ui.screen.home.AndroidHome
@@ -281,6 +287,9 @@ fun NavGraphBuilder.walletNavGraph(
         composable<MoreArgs> { MoreScreen() }
         composable<AdvancedSettingsArgs> { AdvancedSettingsScreen() }
         composable<ViewingKeyExportArgs> { ViewingKeyExportScreen() }
+        composable<GiftCardArgs> { GiftCardScreen() }
+        composable<GiftCardListArgs> { GiftCardListScreen() }
+        composable<GiftClaimArgs> { GiftClaimScreen(it.toRoute()) }
         composable<ChooseServerArgs> { ChooseServerScreen() }
         composable<P2pTransactionsArgs> { P2pTransactionsScreen() }
         composable<P2pPaymentMethodArgs> { P2pPaymentMethodScreen() }

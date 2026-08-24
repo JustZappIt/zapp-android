@@ -33,6 +33,9 @@ import co.electriccoin.zcash.ui.screen.exchangerate.picker.CurrencyConversionPic
 import co.electriccoin.zcash.ui.screen.exchangerate.settings.ExchangeRateSettingsVM
 import co.electriccoin.zcash.ui.screen.feedback.FeedbackVM
 import co.electriccoin.zcash.ui.screen.flexa.FlexaViewModel
+import co.electriccoin.zcash.ui.screen.gift.GiftCardListVM
+import co.electriccoin.zcash.ui.screen.gift.GiftCardVM
+import co.electriccoin.zcash.ui.screen.gift.GiftClaimVM
 import co.electriccoin.zcash.ui.screen.home.HomeVM
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupDetailViewModel
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupInfoViewModel
@@ -125,6 +128,22 @@ val viewModelModule =
         viewModelOf(::MoreVM)
         viewModelOf(::AdvancedSettingsVM)
         viewModelOf(::ViewingKeyExportVM)
+        viewModelOf(::GiftCardVM)
+        viewModelOf(::GiftCardListVM)
+        // Constructed manually: the claim token arrives as a navigation argument, not a binding.
+        viewModel { params ->
+            GiftClaimVM(
+                args = params.get(),
+                pendingGiftLinks = get(),
+                claimGiftCard = get(),
+                confirmGiftClaim = get(),
+                applicationStateProvider = get(),
+                provingParams = get(),
+                exchangeRateRepository = get(),
+                swapRepository = get(),
+                navigationRouter = get(),
+            )
+        }
         viewModelOf(::SupportViewModel)
         viewModelOf(::WhatsNewViewModel)
         viewModelOf(::ChooseServerVM)

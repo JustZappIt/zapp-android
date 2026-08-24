@@ -23,8 +23,8 @@ import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import kotlinx.coroutines.launch
 
 /**
- * A checkmark stroked on via path-trim (progress 0..1) inside a `side`-square at [topLeft]. Square
- * caps and a miter joint keep it Swiss-crisp.
+ * A gently curved check stroked on via path-trim. Cubic segments and rounded caps keep both the
+ * large success mark and the small Done-button mark smooth at every point in their reveal.
  */
 fun DrawScope.drawTrimmedCheck(
     topLeft: Offset,
@@ -37,8 +37,22 @@ fun DrawScope.drawTrimmedCheck(
     val path =
         Path().apply {
             moveTo(topLeft.x + side * CHECK_P0_X, topLeft.y + side * CHECK_P0_Y)
-            lineTo(topLeft.x + side * CHECK_P1_X, topLeft.y + side * CHECK_P1_Y)
-            lineTo(topLeft.x + side * CHECK_P2_X, topLeft.y + side * CHECK_P2_Y)
+            cubicTo(
+                topLeft.x + side * CHECK_P0_CONTROL_1_X,
+                topLeft.y + side * CHECK_P0_CONTROL_1_Y,
+                topLeft.x + side * CHECK_P0_CONTROL_2_X,
+                topLeft.y + side * CHECK_P0_CONTROL_2_Y,
+                topLeft.x + side * CHECK_P1_X,
+                topLeft.y + side * CHECK_P1_Y,
+            )
+            cubicTo(
+                topLeft.x + side * CHECK_P1_CONTROL_1_X,
+                topLeft.y + side * CHECK_P1_CONTROL_1_Y,
+                topLeft.x + side * CHECK_P1_CONTROL_2_X,
+                topLeft.y + side * CHECK_P1_CONTROL_2_Y,
+                topLeft.x + side * CHECK_P2_X,
+                topLeft.y + side * CHECK_P2_Y,
+            )
         }
     val measure = PathMeasure().apply { setPath(path, false) }
     val segment = Path()
@@ -46,73 +60,97 @@ fun DrawScope.drawTrimmedCheck(
     drawPath(
         path = segment,
         color = color,
-        style = Stroke(width = strokeWidth, cap = StrokeCap.Square, join = StrokeJoin.Miter),
+        style = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round),
     )
 }
 
 /**
- * The terminal-success moment for every money flow: a sharp accent square stamps in, the checkmark
- * strokes on, and a single square outline rings outward once and fades. Crisp tweens only — no
- * springs, no overshoot.
+ * The terminal-success moment for every money flow. A clean yellow medallion settles once while a
+ * complete outer ring resolves around it and the curved check draws on. Closing the ring makes the
+ * final frame read as fully finished without adding translucent echoes, irregular blobs or gloss.
  */
 @Composable
 fun ZappSuccessBadge(modifier: Modifier = Modifier) {
     val c = ZappTheme.colors
-    val accent = c.accent
-    val onAccent = c.onAccent
-    val badgeIn = remember { Animatable(0f) }
+    val markIn = remember { Animatable(0f) }
     val checkTrim = remember { Animatable(0f) }
-    val pulse = remember { Animatable(0f) }
+    val orbit = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        badgeIn.animateTo(1f, tween(ZappMotion.CONTENT_MS, easing = ZappMotion.easing))
-        launch { pulse.animateTo(1f, tween(COMPLETE_PULSE_MS, easing = ZappMotion.easing)) }
+        launch { orbit.animateTo(1f, tween(COMPLETE_ORBIT_MS, easing = ZappMotion.easing)) }
+        markIn.animateTo(1f, tween(ZappMotion.CONTENT_MS, easing = ZappMotion.easing))
         checkTrim.animateTo(1f, tween(ZappMotion.REVEAL_MS, easing = ZappMotion.easing))
     }
     Canvas(modifier = modifier.size(COMPLETE_CANVAS_SIZE.dp)) {
-        val badge = COMPLETE_MARK_SIZE.dp.toPx()
         val cx = size.width / 2f
         val cy = size.height / 2f
+        val mark = COMPLETE_MARK_SIZE.dp.toPx()
+        val markScale = COMPLETE_MARK_INITIAL_SCALE + (1f - COMPLETE_MARK_INITIAL_SCALE) * markIn.value
+        val radius = mark / 2f * markScale
+        val orbitSide = COMPLETE_ORBIT_SIZE.dp.toPx()
+        val orbitTopLeft = Offset(cx - orbitSide / 2f, cy - orbitSide / 2f)
 
-        if (pulse.value > 0f) {
-            val side = badge * (1f + COMPLETE_PULSE_GROW * pulse.value)
-            drawRect(
-                color = accent,
-                topLeft = Offset(cx - side / 2f, cy - side / 2f),
-                size = Size(side, side),
-                alpha = (1f - pulse.value) * COMPLETE_PULSE_MAX_ALPHA,
-                style = Stroke(width = COMPLETE_PULSE_STROKE.dp.toPx()),
-            )
-        }
-
-        val scaled = badge * (COMPLETE_MARK_INITIAL_SCALE + (1f - COMPLETE_MARK_INITIAL_SCALE) * badgeIn.value)
-        drawRect(
-            color = accent,
-            topLeft = Offset(cx - scaled / 2f, cy - scaled / 2f),
-            size = Size(scaled, scaled),
-            alpha = badgeIn.value,
+        drawArc(
+            color = c.completionShade,
+            startAngle = COMPLETE_ORBIT_START_DEGREES,
+            sweepAngle = COMPLETE_ORBIT_SWEEP_DEGREES * orbit.value,
+            useCenter = false,
+            topLeft = orbitTopLeft,
+            size = Size(orbitSide, orbitSide),
+            style = Stroke(width = COMPLETE_ORBIT_STROKE.dp.toPx(), cap = StrokeCap.Round),
+        )
+        drawCircle(
+            color = c.shadow,
+            radius = radius,
+            center = Offset(cx, cy + COMPLETE_SHADOW_OFFSET.dp.toPx()),
+            alpha = COMPLETE_SHADOW_ALPHA * markIn.value,
+        )
+        drawCircle(
+            color = c.completionShade,
+            radius = radius,
+            center = Offset(cx, cy + COMPLETE_DEPTH_OFFSET.dp.toPx()),
+            alpha = markIn.value,
+        )
+        drawCircle(
+            color = c.completion,
+            radius = radius,
+            center = Offset(cx, cy),
+            alpha = markIn.value,
         )
 
         drawTrimmedCheck(
-            topLeft = Offset(cx - badge / 2f, cy - badge / 2f),
-            side = badge,
+            topLeft = Offset(cx - COMPLETE_CHECK_SIZE.dp.toPx() / 2f, cy - COMPLETE_CHECK_SIZE.dp.toPx() / 2f),
+            side = COMPLETE_CHECK_SIZE.dp.toPx(),
             progress = checkTrim.value,
-            color = onAccent,
-            strokeWidth = badge * COMPLETE_CHECK_STROKE_FRAC,
+            color = c.onCompletion,
+            strokeWidth = COMPLETE_CHECK_SIZE.dp.toPx() * COMPLETE_CHECK_STROKE_FRAC,
         )
     }
 }
 
-private const val COMPLETE_CANVAS_SIZE = 120
-private const val COMPLETE_MARK_SIZE = 64
-private const val COMPLETE_MARK_INITIAL_SCALE = 0.86f
-private const val COMPLETE_CHECK_STROKE_FRAC = 0.08f
-private const val COMPLETE_PULSE_GROW = 0.75f
-private const val COMPLETE_PULSE_STROKE = 1.5f
-private const val COMPLETE_PULSE_MAX_ALPHA = 0.45f
-private const val COMPLETE_PULSE_MS = 520
+private const val COMPLETE_CANVAS_SIZE = 116
+private const val COMPLETE_MARK_SIZE = 66
+private const val COMPLETE_MARK_INITIAL_SCALE = 0.88f
+private const val COMPLETE_ORBIT_SIZE = 88
+private const val COMPLETE_ORBIT_STROKE = 2.5f
+private const val COMPLETE_ORBIT_START_DEGREES = -72f
+private const val COMPLETE_ORBIT_SWEEP_DEGREES = 360f
+private const val COMPLETE_ORBIT_MS = 480
+private const val COMPLETE_DEPTH_OFFSET = 3
+private const val COMPLETE_SHADOW_OFFSET = 5
+private const val COMPLETE_SHADOW_ALPHA = 0.12f
+private const val COMPLETE_CHECK_SIZE = 56
+private const val COMPLETE_CHECK_STROKE_FRAC = 0.085f
 private const val CHECK_P0_X = 0.26f
-private const val CHECK_P0_Y = 0.50f
+private const val CHECK_P0_Y = 0.51f
+private const val CHECK_P0_CONTROL_1_X = 0.30f
+private const val CHECK_P0_CONTROL_1_Y = 0.55f
+private const val CHECK_P0_CONTROL_2_X = 0.38f
+private const val CHECK_P0_CONTROL_2_Y = 0.64f
 private const val CHECK_P1_X = 0.43f
-private const val CHECK_P1_Y = 0.67f
-private const val CHECK_P2_X = 0.75f
-private const val CHECK_P2_Y = 0.34f
+private const val CHECK_P1_Y = 0.64f
+private const val CHECK_P1_CONTROL_1_X = 0.49f
+private const val CHECK_P1_CONTROL_1_Y = 0.64f
+private const val CHECK_P1_CONTROL_2_X = 0.68f
+private const val CHECK_P1_CONTROL_2_Y = 0.36f
+private const val CHECK_P2_X = 0.77f
+private const val CHECK_P2_Y = 0.31f

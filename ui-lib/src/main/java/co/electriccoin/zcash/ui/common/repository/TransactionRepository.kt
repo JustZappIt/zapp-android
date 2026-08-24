@@ -17,6 +17,7 @@ import cash.z.ecc.android.sdk.model.Zip318Kind
 import cash.z.ecc.android.sdk.type.AddressType
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
+import co.electriccoin.zcash.ui.common.model.toStorageKeyId
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -31,11 +32,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEmpty
 import kotlinx.coroutines.flow.onStart
@@ -57,15 +61,49 @@ interface TransactionRepository {
 
     fun observeTransaction(txId: String): Flow<Transaction?>
 
+    /**
+     * Observes one SDK transaction without depending on whichever account the UI has selected.
+     *
+     * Carries the SDK's own [TransactionState] through, unlike the display flows above: `Confirmed`
+     * here means the SDK's full confirmation threshold rather than "has a block behind it".
+     */
+    fun observeAccountTransaction(accountUuid: String, txId: String): Flow<TransactionOverview?>
+
     fun observeTransactionsByMemo(memo: String): Flow<List<TransactionId>?>
 
     suspend fun getTransactions(): List<Transaction>
 
+    /** Reads lightweight SDK rows for a specific persisted account id, at the SDK's own state. */
+    suspend fun getAccountTransactions(accountUuid: String): List<TransactionOverview>
+
+    /** Finds a send to [recipient] in a specific account, including pending transactions. */
+    suspend fun findAccountSendByRecipient(accountUuid: String, recipient: String): TransactionOverview?
+
+    /**
+     * Reads transactions and their recipients only while the owning synchronizer is fully synced.
+     * An empty result is therefore positive evidence, unlike a transient empty flow during startup.
+     *
+     * At the SDK's own [TransactionState], for the reason on [observeAccountTransaction].
+     */
+    suspend fun getSyncedAccountTransactionSnapshot(accountUuid: String): SyncedAccountTransactionSnapshot
+
     suspend fun resolveWalletAddress(address: String): WalletAddress?
 }
 
+data class SyncedAccountTransactionSnapshot(
+    val transactions: List<TransactionOverview>,
+    val recipientsByTransactionId: Map<String, Set<String>>,
+) {
+    fun sendsTo(recipient: String): List<TransactionOverview> =
+        transactions.filter { transaction ->
+            transaction.isSentTransaction &&
+                recipientsByTransactionId[transaction.txId.txIdString()].orEmpty().contains(recipient)
+        }
+}
+
+@Suppress("TooManyFunctions")
 class TransactionRepositoryImpl(
-    accountDataSource: AccountDataSource,
+    private val accountDataSource: AccountDataSource,
     private val synchronizerProvider: SynchronizerProvider,
 ) : TransactionRepository {
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -379,6 +417,16 @@ class TransactionRepositoryImpl(
             }
         }
 
+    // Display normalisation, and only that. A send with a block behind it reads as done here, which
+    // is a product choice about the history UI rather than a claim about finality — the SDK's own
+    // `Confirmed` is its full threshold, ten blocks and roughly twelve minutes, and showing every
+    // ordinary send as pending for that long is not what this screen is for.
+    //
+    // The custody-sensitive readers deliberately do not come through here. `observeAccountTransaction`,
+    // `getAccountTransactions` and `getSyncedAccountTransactionSnapshot` carry the SDK's own state
+    // through untouched, because a gift card marked funded off one confirmation is a card a reorg
+    // can empty after the sender has been told it holds money.
+    //
     // MOB-1577: minedHeight == null alone used to fall straight to `isSyncing -> Pending`, so an
     // Expired transaction flickered back to Pending on every sync cycle. transactionState carries
     // the terminal Expired classification through explicitly instead of re-deriving it here.
@@ -413,6 +461,30 @@ class TransactionRepositoryImpl(
             }
 
     @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeAccountTransaction(accountUuid: String, txId: String): Flow<TransactionOverview?> =
+        flow {
+            val uuid = resolveAccountUuid(accountUuid)
+            if (uuid == null) {
+                emit(null)
+                return@flow
+            }
+            emitAll(
+                synchronizerProvider.synchronizer.flatMapLatest { synchronizer ->
+                    if (synchronizer == null) {
+                        flowOf(null)
+                    } else {
+                        // Unnormalized on purpose — see the interface. The caller is watching a
+                        // funding transaction to decide whether a card durably holds money, and
+                        // that decision must not be made off a single confirmation.
+                        synchronizer.getTransactions(uuid).map { transactions ->
+                            transactions.firstOrNull { it.txId.txIdString() == txId }
+                        }
+                    }
+                }
+            )
+        }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeTransactionsByMemo(memo: String): Flow<List<TransactionId>?> =
         synchronizerProvider
             .synchronizer
@@ -422,6 +494,57 @@ class TransactionRepositoryImpl(
 
     override suspend fun getTransactions(): List<Transaction> = transactions.filterNotNull().first()
 
+    override suspend fun getAccountTransactions(accountUuid: String): List<TransactionOverview> {
+        val uuid = resolveAccountUuid(accountUuid) ?: return emptyList()
+        return synchronizerProvider.getSynchronizer().getTransactions(uuid).first()
+    }
+
+    override suspend fun findAccountSendByRecipient(
+        accountUuid: String,
+        recipient: String,
+    ): TransactionOverview? {
+        val synchronizer = synchronizerProvider.getSynchronizer()
+        return getAccountTransactions(accountUuid)
+            .asSequence()
+            .filter { it.isSentTransaction }
+            .firstOrNull { transaction ->
+                synchronizer.getRecipients(transaction).toList().any { it.addressValue == recipient }
+            }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override suspend fun getSyncedAccountTransactionSnapshot(
+        accountUuid: String,
+    ): SyncedAccountTransactionSnapshot {
+        val uuid =
+            requireNotNull(resolveAccountUuid(accountUuid)) {
+                "Gift card source account $accountUuid is unavailable"
+            }
+        return synchronizerProvider
+            .synchronizer
+            .filterNotNull()
+            .flatMapLatest { synchronizer ->
+                // `mapLatest` is load-bearing: if sync leaves SYNCED while either database read is
+                // in flight, that read is cancelled and its absence cannot authorize a retry.
+                synchronizer.status
+                    .mapLatest { status ->
+                        if (status != Synchronizer.Status.SYNCED) {
+                            null
+                        } else {
+                            val transactions = synchronizer.getTransactions(uuid).first()
+                            val recipients = synchronizer.getRecipients()
+                            SyncedAccountTransactionSnapshot(
+                                transactions = transactions,
+                                recipientsByTransactionId =
+                                    recipients.mapKeys { it.key.txIdString() }.mapValues { entry ->
+                                        entry.value.mapNotNullTo(mutableSetOf()) { it.addressValue }
+                                    },
+                            )
+                        }
+                    }.filterNotNull()
+            }.first()
+    }
+
     override suspend fun resolveWalletAddress(address: String): WalletAddress? =
         when (synchronizerProvider.getSynchronizer().validateAddress(address)) {
             AddressType.Shielded -> WalletAddress.Sapling.new(address)
@@ -430,6 +553,13 @@ class TransactionRepositoryImpl(
             AddressType.Unified -> WalletAddress.Unified.new(address)
             else -> null
         }
+
+    private suspend fun resolveAccountUuid(storageId: String): AccountUuid? =
+        accountDataSource
+            .getAllAccounts()
+            .firstOrNull { it.sdkAccount.accountUuid.toStorageKeyId() == storageId }
+            ?.sdkAccount
+            ?.accountUuid
 
     /**
      * Resolves the wallet's own unified address for [uuid] — the display recipient of a
