@@ -15,12 +15,10 @@ bare-kit=15a3569f3d704de7151761051c8d9cc2e299414f
 
 # zcash-android-wallet-sdk is resolved from Maven snapshots, not includeBuild: upstream
 # zodl ships SDK_INCLUDED_BUILD_PATH blank, but it does not leave the SDK floating: on
-# maint/v3.10.x it sets SDK_COMMIT_PIN, and its CI builds the SDK from that exact commit
-# rather than resolving the published artifact. We now match that, both the version and the
-# pin, so our CI compiles the same SDK tree upstream's does. The SHA below is that pin, and
-# unlike before it IS a build input in CI (.github/actions/setup-sdk-companion reads
-# SDK_COMMIT_PIN from gradle.properties); locally, an unset SDK_INCLUDED_BUILD_PATH still
-# resolves the Maven snapshot.
+# maint/v3.10.x it sets SDK_COMMIT_PIN and builds the SDK from that exact commit. We record the
+# same pin (see SDK_COMMIT_PIN in gradle.properties) but do not wire it into CI: CI resolves the
+# published snapshot, as it always has. The SHA below is that pin — provenance and the intended
+# input for a release build, not something CI verifies.
 #
 # ON v3.1.0, for coinholder polling: the first SDK line with the public VotingSdk facade and a
 # native library built with cfg(zcash_voting) (63 voting JNI symbols; 3.0.1 exports none).
