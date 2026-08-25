@@ -8,6 +8,8 @@
     <string name="unified_send_address_placeholder">la dirección de alguien…</string>
     <string name="unified_send_memo_hint">Agrega una nota (opcional)</string>
     <string name="unified_send_they_receive_approx">Recibirá ≈</string>
+    <string name="unified_send_they_receive_exact">Recibirá exactamente</string>
+    <string name="unified_send_crosspay_info">Acerca de CrossPay</string>
     <string name="unified_send_top_up">Recargar</string>
     <string name="unified_send_title">Enviar</string>
     <string name="unified_send_available_balance">Saldo disponible</string>

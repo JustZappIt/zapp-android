@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Alignment.Companion.CenterHorizontally
 import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -75,9 +76,9 @@ import co.electriccoin.zcash.ui.design.component.ZashiTextField
 import co.electriccoin.zcash.ui.design.component.ZashiTextFieldDefaults
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBackButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
-import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.screen.balances.BalanceWidgetState
 import co.electriccoin.zcash.ui.screen.swap.SlippageButton
@@ -100,6 +101,10 @@ internal fun UnifiedSendView(
         ZappScreenHeader(
             title = stringResource(R.string.unified_send_title),
             titleStyle = ZappTheme.typography.displaySecondary,
+            right =
+                state.infoButton?.let { info ->
+                    { ZashiImageButton(modifier = Modifier.size(36.dp), state = info) }
+                },
         )
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -162,7 +167,8 @@ internal fun UnifiedSendView(
                     }
                 }
                 Box(modifier = Modifier.shake(amountErrorText)) {
-                    AmountFields(state)
+                    val payEstimate = state.payEstimate
+                    if (payEstimate == null) AmountFields(state) else PayEstimateRow(payEstimate)
                 }
                 AnimatedVisibility(visible = amountErrorText != null) {
                     Column {
@@ -176,22 +182,15 @@ internal fun UnifiedSendView(
                 }
                 Spacer(12.dp)
 
-                // ── Swap mode: "They receive ≈ X TOKEN" ─────────────────────
-                if (state.theyReceiveLabel != null) {
-                    TheyReceiveRow(state.theyReceiveLabel)
+                // ── Swap mode: the destination amount ────────────────────────
+                if (state.theyReceive != null) {
+                    SendDestinationRow(state.theyReceive)
                     Spacer(8.dp)
                 }
 
                 // ── Swap mode: Slippage ──────────────────────────────────────
-                if (state.slippage != null && state.onSlippageClick != null) {
-                    SlippageButton(
-                        state =
-                            co.electriccoin.zcash.ui.design.component.ButtonState(
-                                text = state.slippage,
-                                icon = R.drawable.ic_swap_slippage,
-                                onClick = state.onSlippageClick,
-                            )
-                    )
+                if (state.slippage != null) {
+                    SlippageButton(state = state.slippage)
                     Spacer(8.dp)
                 }
 
@@ -264,7 +263,29 @@ private fun CtaButton(btn: PrimaryButtonState, modifier: Modifier = Modifier) {
                 modifier = modifier,
                 text = stringResource(R.string.send_create),
                 enabled = !btn.isLoading,
+                loading = btn.isLoading,
                 onClick = btn.onClick,
+            )
+        }
+
+        is PrimaryButtonState.Retry -> {
+            ZappButton(
+                modifier = modifier,
+                text = stringResource(co.electriccoin.zcash.ui.design.R.string.general_try_again),
+                variant = ZappButtonVariant.Danger,
+                enabled = !btn.isLoading,
+                loading = btn.isLoading,
+                onClick = btn.onClick,
+            )
+        }
+
+        PrimaryButtonState.Loading -> {
+            ZappButton(
+                modifier = modifier,
+                text = stringResource(co.electriccoin.zcash.ui.design.R.string.general_loading),
+                enabled = false,
+                loading = true,
+                onClick = {},
             )
         }
 
@@ -287,23 +308,21 @@ private fun CtaButton(btn: PrimaryButtonState, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * Stands in for the editable pay fields while the destination amount is the binding one. Tapping it
+ * hands authority back to the pay side.
+ */
 @Composable
-private fun TheyReceiveRow(label: StringResource) {
-    Row(verticalAlignment = CenterVertically) {
-        Image(
-            modifier = Modifier.size(20.dp),
-            painter = painterResource(R.drawable.ic_zec_round_full),
-            contentDescription = null
-        )
-        Spacer(8.dp)
-        Text(
-            text = label.getValue(),
-            style = ZappTheme.typography.caption,
-            fontWeight = FontWeight.Medium,
-            color = ZappTheme.colors.text,
-            modifier = Modifier.weight(1f),
-        )
-    }
+private fun PayEstimateRow(state: PayEstimateState) {
+    Text(
+        text = state.text.getValue(),
+        style = ZappTheme.typography.rowTitle.copy(fontWeight = FontWeight.Black),
+        color = ZappTheme.colors.textMuted,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(enabled = state.onClick != null) { state.onClick?.invoke() },
+    )
 }
 
 @Composable

@@ -182,6 +182,8 @@ import co.electriccoin.zcash.ui.screen.swap.detail.SwapDetailArgs
 import co.electriccoin.zcash.ui.screen.swap.detail.SwapDetailScreen
 import co.electriccoin.zcash.ui.screen.swap.detail.support.SwapSupportArgs
 import co.electriccoin.zcash.ui.screen.swap.detail.support.SwapSupportScreen
+import co.electriccoin.zcash.ui.screen.swap.info.CrossPayInfoArgs
+import co.electriccoin.zcash.ui.screen.swap.info.CrossPayInfoScreen
 import co.electriccoin.zcash.ui.screen.swap.info.DepositSwapInfoArgs
 import co.electriccoin.zcash.ui.screen.swap.info.DepositSwapInfoScreen
 import co.electriccoin.zcash.ui.screen.swap.info.SwapInfoArgs
@@ -393,6 +395,7 @@ fun NavGraphBuilder.walletNavGraph(
         dialogComposable<SwapSlippageArgs> { SwapSlippageScreen(it.toRoute()) }
         dialogComposable<SwapInfoArgs> { SwapInfoScreen() }
         dialogComposable<DepositSwapInfoArgs> { DepositSwapInfoScreen() }
+        dialogComposable<CrossPayInfoArgs> { CrossPayInfoScreen() }
         dialogComposable<SwapQuoteArgs> { SwapQuoteScreen() }
         composable<ScanGenericAddressArgs> { ScanGenericAddressScreen(it.toRoute()) }
         composable<SelectABSwapRecipientArgs> { SelectSwapABRecipientScreen(it.toRoute()) }
