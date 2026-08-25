@@ -17,11 +17,26 @@ bare-kit=15a3569f3d704de7151761051c8d9cc2e299414f
 # zodl ships SDK_INCLUDED_BUILD_PATH blank and requests ZCASH_SDK_VERSION from the
 # central.sonatype.com snapshot repo, so we match it rather than building the Rust backend
 # locally. This SHA is the provenance of that artifact, not a build input; CI does not
-# verify it. v3.0.0 carries the ZODL Slipstream sync engine (enabled per-wallet via
-# WalletCoordinator's isSlipstreamEnabled) and the OrchardMigrationSdk that drives the
-# Orchard->Ironwood migration; v3.0.1 adds the Slipstream fixes upstream zodl 3.9.1 ships:
-# the DB-backed chain-height fallback that stops transaction status flickering to Pending
-# across a synchronizer rebuild, and a timestamp estimate for expired never-mined
-# transactions. It also carries the semantic-types API break (Pczt, TransactionId).
+# verify it.
+#
+# NOW ON v3.1.0-SNAPSHOT, for coinholder polling: it is the first published snapshot with the
+# public VotingSdk facade and a native library built with cfg(zcash_voting) (63 voting JNI
+# symbols; 3.0.1 exports none). It is ALSO the first snapshot without the ZODL Slipstream sync
+# engine and the isSlipstreamEnabled WalletCoordinator parameter, which v3.0.0/v3.0.1 carried
+# alongside the OrchardMigrationSdk. The two features do not coexist in any published artifact.
+# Voting is therefore behind VOTING_ENABLED=false and this trade is unresolved -- do not ship
+# either half without settling it. See docs/voting.md.
+#
+# Upstream did not drop Slipstream by accident: SDK commit 6b4d6339 "MOB-1757: Remove the
+# Slipstream sync engine and its AGPL dependency" removes it because the zodl-slipstream crate
+# is AGPL-3.0-only while the SDK publishes MIT artifacts, and adds a cargo-deny licence gate to
+# keep it out. Zapp is itself AGPL-3.0-only, so that specific conflict does not bind us -- but
+# keeping Slipstream now means maintaining a permanent fork of the SDK's native build against
+# an upstream licence gate, not just pinning an older snapshot.
+#
+# PROVENANCE SHA BELOW IS STALE: it is v3.0.1's. The published 3.1.0-20260820.161424-1 does not
+# match 6b4d6339 either (it still exports syncBurst/syncToTip, which that commit deletes), so
+# the exact source commit is unverified. Establish it during the SDK decision.
+#
 # GitHub: https://github.com/zcash/zcash-android-wallet-sdk
 zcashAndroidWalletSdk=b5a302cbbe6dd3da4a615dade221ca3461236304

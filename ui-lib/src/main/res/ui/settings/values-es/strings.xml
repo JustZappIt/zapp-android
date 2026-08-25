@@ -8,6 +8,7 @@
     <string name="settings_version">Versión <xliff:g example="1" id="version">%s</xliff:g></string>
     <string name="settings_address_book">Libreta de Direcciones</string>
     <string name="settings_gift_cards">Tarjetas de Regalo</string>
+    <string name="settings_coinholderPolling">Votación de Titulares</string>
     <string name="settings_whats_new">Novedades</string>
 
     <string name="settings_troubleshooting_menu_content_description">Configuración adicional</string>

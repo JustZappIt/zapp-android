@@ -11,6 +11,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.toRoute
 import co.electriccoin.zcash.ui.common.migration.MigrationNavContributor
 import co.electriccoin.zcash.ui.common.viewmodel.WalletViewModel
+import co.electriccoin.zcash.ui.common.voting.VotingNavContributor
 import co.electriccoin.zcash.ui.screen.about.AboutArgs
 import co.electriccoin.zcash.ui.screen.about.AboutScreen
 import co.electriccoin.zcash.ui.screen.accountlist.AccountListArgs
@@ -432,6 +433,11 @@ fun NavGraphBuilder.walletNavGraph(
         // Migration destinations are contributed by the feature-migration module — see
         // MigrationNavContributor in MigrationContracts.kt (wired via Koin in the app module).
         org.koin.mp.KoinPlatform.getKoin().getAll<MigrationNavContributor>().forEach {
+            it.contribute(this)
+        }
+        // Voting destinations are contributed by the feature-voting module — see
+        // VotingNavContributor in VotingContracts.kt (wired via Koin in the app module).
+        org.koin.mp.KoinPlatform.getKoin().getAll<VotingNavContributor>().forEach {
             it.contribute(this)
         }
     }

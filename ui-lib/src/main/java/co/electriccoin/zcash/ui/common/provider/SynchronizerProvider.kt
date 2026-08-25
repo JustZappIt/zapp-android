@@ -58,6 +58,8 @@ interface SynchronizerProvider {
      */
     suspend fun getSynchronizerOrNull(): Synchronizer?
 
+    suspend fun getVotingWalletDbPath(): String
+
     fun resetSynchronizer()
 }
 
@@ -142,6 +144,8 @@ class SynchronizerProviderImpl(
                 getSynchronizer()
             }
         }
+
+    override suspend fun getVotingWalletDbPath(): String = getSynchronizer().getWalletDbPathForVoting()
 
     override fun resetSynchronizer() {
         walletCoordinator.resetSynchronizer()

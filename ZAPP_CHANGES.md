@@ -189,10 +189,12 @@ committed defaults are blank or safe; anything developer-specific belongs in `lo
 
 ## 8. Upstream surfaces the fork does not ship
 
-- **Coinholder governance voting.** The complete upstream feature (models, repositories, PCZT and
-  Keystone signing, recovery, workers, screens, resources, tests) is absent by standing decision.
-  It is a large security-sensitive feature, not a missing plumbing patch, and cherry-picking pieces
-  of it is worse than not having it. Tracked as `D1` in the parity document.
+- **Coinholder governance voting is now present but switched off.** The standing decision not to
+  ship it rested on cherry-picking being worse than absence; the feature has since been taken whole
+  (`feature-voting`, upstream's 133 files and 124 tests, plus a fork-designed UI), so that reasoning
+  no longer applies. `VOTING_ENABLED` is `false` because the SDK snapshot carrying the voting API is
+  also the first one without the Slipstream sync engine, and no published artifact has both. The
+  trade has to be settled before it ships. See `docs/voting.md`.
 - **Flexa is retained but inert.** `screen/flexa/`, `FlexaRepository`, `GetFlexaStatusUseCase` and
   the `IntegrationsVM` entry are kept byte-compatible with upstream so that merges in that area
   stay trivial, but `ZCASH_FLEXA_KEY` is blank, so `FlexaRepository.init()` never builds a client

@@ -25,7 +25,12 @@ internal operator fun WalletCoordinator.Companion.invoke(
         isTorEnabled = isTorEnabledStorageProvider.observe(),
         isExchangeRateEnabled = isExchangeRateEnabledStorageProvider.observe(),
         isSyncBlocked = isSyncBlocked(context, persistableWalletProvider),
-        isSlipstreamEnabled = true,
+        // The ZODL Slipstream sync engine is absent from SDK 3.1.0-SNAPSHOT, which is the first
+        // published snapshot carrying the public VotingSdk facade coinholder polling needs; the
+        // two do not coexist in any published artifact. `isSlipstreamEnabled` therefore no longer
+        // exists to pass. Sync falls back to the stock engine, which changes the auto-resubmit
+        // behaviour that GiftCardLedger/GiftCard/FundGiftCardUseCase reason about in comments.
+        // Resolve the SDK end-state before this branch merges — see docs/voting.md.
     )
 
 /**

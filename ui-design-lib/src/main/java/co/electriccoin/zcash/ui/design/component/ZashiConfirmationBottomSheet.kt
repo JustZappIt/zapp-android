@@ -42,7 +42,8 @@ data class ZashiConfirmationState(
     val message: StringResource,
     val primaryAction: ButtonState,
     val secondaryAction: ButtonState? = null,
-    override val onBack: () -> Unit
+    override val onBack: () -> Unit,
+    val style: ZashiConfirmationStyle = ZashiConfirmationStyle.DEFAULT,
 ) : ModalBottomSheetState {
     companion object {
         val preview =
@@ -54,6 +55,16 @@ data class ZashiConfirmationState(
                 onBack = {},
             )
     }
+}
+
+/**
+ * Upstream also rounds the sheet's corners for [UNVERIFIED_POLL_WARNING]; the fork keeps every
+ * sheet on the shared square silhouette, so the style only carries the part that is about meaning
+ * rather than shape — a warning leads with the cautious action instead of the confirming one.
+ */
+enum class ZashiConfirmationStyle {
+    DEFAULT,
+    UNVERIFIED_POLL_WARNING,
 }
 
 @Composable
@@ -93,15 +104,17 @@ private fun ConfirmationContent(
             textAlign = TextAlign.Center
         )
         Spacer(32.dp)
-        ZashiButton(
-            modifier = Modifier.fillMaxWidth(),
-            state = state.primaryAction
-        )
-        state.secondaryAction?.let { secondaryAction ->
-            Spacer(8.dp)
+        val actions =
+            if (state.style == ZashiConfirmationStyle.UNVERIFIED_POLL_WARNING) {
+                listOfNotNull(state.secondaryAction, state.primaryAction)
+            } else {
+                listOfNotNull(state.primaryAction, state.secondaryAction)
+            }
+        actions.forEachIndexed { index, action ->
+            if (index > 0) Spacer(8.dp)
             ZashiButton(
                 modifier = Modifier.fillMaxWidth(),
-                state = secondaryAction,
+                state = action,
             )
         }
     }
