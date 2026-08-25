@@ -43,10 +43,12 @@ import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ProvideZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.getValue
+import co.electriccoin.zcash.ui.screen.voting.VoteConfirmationBottomSheet
 import co.electriccoin.zcash.ui.screen.voting.component.VoteAppBar
 import co.electriccoin.zcash.ui.screen.voting.component.VoteRadioIndicator
 import co.electriccoin.zcash.ui.screen.voting.component.VoteViewMoreChip
 import co.electriccoin.zcash.ui.screen.voting.proposaldetail.bottomsheet.PollEndedBottomSheet
+import co.electriccoin.zcash.ui.screen.voting.voteBarAction
 import co.electriccoin.zcash.ui.R as AppR
 import co.electriccoin.zcash.ui.design.R as DesignR
 
@@ -57,8 +59,8 @@ import co.electriccoin.zcash.ui.design.R as DesignR
  */
 @Composable
 fun VoteProposalDetailView(state: VoteProposalDetailState) {
-    ZashiConfirmationBottomSheet(state = state.unverifiedPollWarningSheet)
-    ZashiConfirmationBottomSheet(state = state.unansweredSheet)
+    VoteConfirmationBottomSheet(state = state.unverifiedPollWarningSheet)
+    VoteConfirmationBottomSheet(state = state.unansweredSheet)
 
     val c = ZappTheme.colors
     val spacing = ZappTheme.spacing
@@ -80,7 +82,12 @@ fun VoteProposalDetailView(state: VoteProposalDetailState) {
                 }
                 ZappBottomActionBar(
                     onBack = state.onBack,
-                    primaryAction = if (state.isLocked) null else ({ NextButton(state) })
+                    primaryAction =
+                        if (state.isLocked) {
+                            null
+                        } else {
+                            { NextButton(state, modifier = voteBarAction()) }
+                        }
                 )
             }
         },
@@ -133,10 +140,13 @@ fun VoteProposalDetailView(state: VoteProposalDetailState) {
 }
 
 @Composable
-private fun NextButton(state: VoteProposalDetailState) {
+private fun NextButton(
+    state: VoteProposalDetailState,
+    modifier: Modifier = Modifier
+) {
     val label =
         if (state.isEditingFromReview) AppR.string.coinVote_common_save else AppR.string.coinVote_common_next
-    ZappButton(text = stringResource(label), onClick = state.onNext)
+    ZappButton(text = stringResource(label), modifier = modifier, onClick = state.onNext)
 }
 
 @Composable

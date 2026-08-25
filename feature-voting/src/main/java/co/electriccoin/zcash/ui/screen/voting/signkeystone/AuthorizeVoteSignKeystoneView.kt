@@ -42,12 +42,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.appbar.ZashiTopAppBarTags
-import co.electriccoin.zcash.ui.design.component.BlankBgScaffold
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.QrCodeDefaults
 import co.electriccoin.zcash.ui.design.component.ZashiBadge
 import co.electriccoin.zcash.ui.design.component.ZashiBadgeDefaults
-import co.electriccoin.zcash.ui.design.component.ZashiButton
 import co.electriccoin.zcash.ui.design.component.ZashiLinearProgressIndicator
 import co.electriccoin.zcash.ui.design.component.ZashiQr
 import co.electriccoin.zcash.ui.design.component.ZashiSmallTopAppBar
@@ -64,6 +62,7 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.signkeystonetransaction.ZashiAccountInfoListItemState
 import co.electriccoin.zcash.ui.screen.voting.VoteButton
 import co.electriccoin.zcash.ui.screen.voting.component.VoteAppBar
+import co.electriccoin.zcash.ui.screen.voting.voteBarAction
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
@@ -83,7 +82,7 @@ fun AuthorizeVoteSignKeystoneView(state: AuthorizeVoteSignKeystoneState) {
         bottomBar = {
             ZappBottomActionBar(
                 onBack = state.onBack,
-                primaryAction = { VoteButton(state.scanButton) }
+                primaryAction = { VoteButton(state.scanButton, modifier = voteBarAction()) }
             )
         }
     ) { padding ->

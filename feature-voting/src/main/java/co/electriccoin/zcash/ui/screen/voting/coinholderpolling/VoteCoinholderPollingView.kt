@@ -40,14 +40,15 @@ import co.electriccoin.zcash.ui.design.theme.ProvideZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.screen.home.common.CommonShimmerLoadingScreen
+import co.electriccoin.zcash.ui.screen.voting.VoteConfirmationBottomSheet
 import co.electriccoin.zcash.ui.screen.voting.component.VoteAppBar
 import co.electriccoin.zcash.ui.screen.voting.component.VoteTrustIndicatorView
 
 @Composable
 fun VoteCoinholderPollingView(state: VoteCoinholderPollingState) {
-    ZashiConfirmationBottomSheet(state = state.configErrorSheet)
-    ZashiConfirmationBottomSheet(state = state.unverifiedPollWarningSheet)
-    ZashiConfirmationBottomSheet(state = state.noRoundsSheet)
+    VoteConfirmationBottomSheet(state = state.configErrorSheet)
+    VoteConfirmationBottomSheet(state = state.unverifiedPollWarningSheet)
+    VoteConfirmationBottomSheet(state = state.noRoundsSheet)
 
     PollingScaffold(state) { padding ->
         val activeRounds = state.activeRounds.orEmpty()

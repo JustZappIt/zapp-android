@@ -39,6 +39,7 @@ import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.screen.common.WalletHeaderIcons
 import co.electriccoin.zcash.ui.screen.voting.VoteButton
 import co.electriccoin.zcash.ui.screen.voting.component.VoteAppBar
+import co.electriccoin.zcash.ui.screen.voting.voteBarAction
 import co.electriccoin.zcash.ui.R as AppR
 import co.electriccoin.zcash.ui.design.R as DesignR
 
@@ -58,7 +59,7 @@ fun VoteHowToVoteView(state: VoteHowToVoteState) {
         bottomBar = {
             ZappBottomActionBar(
                 onBack = state.onBack,
-                primaryAction = { VoteButton(state.continueButton) }
+                primaryAction = { VoteButton(state.continueButton, modifier = voteBarAction()) }
             )
         },
     ) { padding ->

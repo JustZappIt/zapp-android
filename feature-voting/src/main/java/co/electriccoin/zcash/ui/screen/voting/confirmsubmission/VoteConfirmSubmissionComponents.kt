@@ -94,7 +94,10 @@ private fun VoteSubmissionDetailRow(
 }
 
 @Composable
-internal fun VoteSubmissionBottomSection(state: VoteConfirmSubmissionState) {
+internal fun VoteSubmissionBottomSection(
+    state: VoteConfirmSubmissionState,
+    modifier: Modifier = Modifier
+) {
     val progressTitle: StringResource? =
         when (val status = state.status) {
             is VoteSubmissionStatus.Authorizing -> {
@@ -115,12 +118,13 @@ internal fun VoteSubmissionBottomSection(state: VoteConfirmSubmissionState) {
         }
 
     if (progressTitle == null) {
-        VoteButton(state.ctaButton)
+        VoteButton(state.ctaButton, modifier = modifier)
     } else {
         VoteSubmissionProgressCard(
             title = progressTitle,
             progress = state.submissionProgress(),
-            ctaButton = state.ctaButton
+            ctaButton = state.ctaButton,
+            modifier = modifier
         )
     }
 }
@@ -154,6 +158,7 @@ private fun VoteSubmissionProgressCard(
     title: StringResource,
     progress: Float,
     ctaButton: ButtonState,
+    modifier: Modifier = Modifier,
 ) {
     val c = ZappTheme.colors
     val animatedProgress by animateFloatAsState(
@@ -162,7 +167,7 @@ private fun VoteSubmissionProgressCard(
         label = "submission_progress"
     )
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.lg)
     ) {
         BasicText(

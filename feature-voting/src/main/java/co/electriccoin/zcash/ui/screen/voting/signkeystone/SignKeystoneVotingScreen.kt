@@ -1,15 +1,22 @@
 package co.electriccoin.zcash.ui.screen.voting.signkeystone
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -23,17 +30,18 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.appbar.ZashiTopAppBarTags
-import co.electriccoin.zcash.ui.design.component.BlankBgScaffold
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.CircularScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.component.ModalBottomSheetState
-import co.electriccoin.zcash.ui.design.component.ZashiButton
-import co.electriccoin.zcash.ui.design.component.ZashiButtonDefaults
 import co.electriccoin.zcash.ui.design.component.ZashiConfirmationBottomSheet
 import co.electriccoin.zcash.ui.design.component.ZashiInScreenModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.ZashiSmallTopAppBar
 import co.electriccoin.zcash.ui.design.component.ZashiTopAppBarBackNavigation
+import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
+import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
+import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
+import co.electriccoin.zcash.ui.design.theme.ProvideZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -41,6 +49,9 @@ import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.scaffoldPadding
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.signkeystonetransaction.SignKeystoneTransactionBottomSheet
+import co.electriccoin.zcash.ui.screen.voting.VoteButton
+import co.electriccoin.zcash.ui.screen.voting.VoteConfirmationBottomSheet
+import co.electriccoin.zcash.ui.screen.voting.component.VoteAppBar
 import kotlinx.serialization.Serializable
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -68,8 +79,8 @@ fun SignKeystoneVotingScreen(args: SignKeystoneVotingArgs) {
         else -> SignKeystoneVotingLoadingView(onBack = vm::onScreenBack)
     }
 
-    ZashiConfirmationBottomSheet(state = errorSheet)
-    ZashiConfirmationBottomSheet(state = scanNoticeSheet)
+    VoteConfirmationBottomSheet(state = errorSheet)
+    VoteConfirmationBottomSheet(state = scanNoticeSheet)
     SignKeystoneTransactionBottomSheet(state = bottomSheetState)
     SkipKeystoneBundlesBottomSheet(state = skipBottomSheetState)
 }
@@ -113,15 +124,16 @@ private fun SkipKeystoneBundlesBottomSheet(
                 color = ZappTheme.colors.textMuted,
             )
             Spacer(Modifier.height(32.dp))
-            ZashiButton(
-                modifier = Modifier.fillMaxWidth(),
+            VoteButton(
                 state = sheetState.skipButton,
-                defaultPrimaryColors = ZashiButtonDefaults.destructive2Colors()
+                modifier = Modifier.fillMaxWidth(),
+                variant = ZappButtonVariant.Danger,
             )
             Spacer(Modifier.height(8.dp))
-            ZashiButton(
+            VoteButton(
+                state = sheetState.cancelButton,
                 modifier = Modifier.fillMaxWidth(),
-                state = sheetState.cancelButton
+                variant = ZappButtonVariant.Secondary,
             )
             Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.systemBars))
         }
@@ -130,29 +142,25 @@ private fun SkipKeystoneBundlesBottomSheet(
 
 @Composable
 private fun SignKeystoneVotingLoadingView(onBack: () -> Unit) {
-    BlankBgScaffold(
-        topBar = {
-            ZashiSmallTopAppBar(
-                title = stringResource(R.string.coinVote_common_confirmation),
-                navigationAction = {
-                    ZashiTopAppBarBackNavigation(
-                        onBack = onBack,
-                        modifier = Modifier.testTag(ZashiTopAppBarTags.BACK)
-                    )
-                }
-            )
-        }
+    val c = ZappTheme.colors
+    Scaffold(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(c.bg)
+                .windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.displayCutout)),
+        containerColor = c.bg,
+        topBar = { VoteAppBar(title = stringResource(R.string.coinVote_common_confirmation)) },
+        bottomBar = { ZappBottomActionBar(onBack = onBack) },
     ) { padding ->
-        CircularScreenProgressIndicator(
-            modifier = Modifier.scaffoldPadding(padding)
-        )
+        ZappScreenProgressIndicator(modifier = Modifier.padding(padding))
     }
 }
 
 @PreviewScreens
 @Composable
 private fun SignKeystoneVotingLoadingPreview() =
-    ZcashTheme { SignKeystoneVotingLoadingView(onBack = {}) }
+    ProvideZappTheme { SignKeystoneVotingLoadingView(onBack = {}) }
 
 @PreviewScreens
 @Composable

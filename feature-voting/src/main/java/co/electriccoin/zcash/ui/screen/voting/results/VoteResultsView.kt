@@ -43,6 +43,7 @@ import co.electriccoin.zcash.ui.screen.voting.answerColors
 import co.electriccoin.zcash.ui.screen.voting.component.VoteAppBar
 import co.electriccoin.zcash.ui.screen.voting.component.VoteViewMoreChip
 import co.electriccoin.zcash.ui.screen.voting.component.ZipBadge
+import co.electriccoin.zcash.ui.screen.voting.voteBarAction
 
 @Composable
 fun VoteResultsView(state: VoteResultsState) {
@@ -50,7 +51,7 @@ fun VoteResultsView(state: VoteResultsState) {
     val spacing = ZappTheme.spacing
     ResultsScaffold(
         onBack = state.onBack,
-        primaryAction = { VoteButton(state.doneButton) }
+        primaryAction = { VoteButton(state.doneButton, modifier = voteBarAction()) }
     ) { padding ->
         Column(
             modifier =

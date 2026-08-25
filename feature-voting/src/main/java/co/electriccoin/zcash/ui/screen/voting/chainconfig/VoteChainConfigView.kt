@@ -24,8 +24,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -48,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -57,13 +56,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.design.component.BlankBgScaffold
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ButtonStyle
 import co.electriccoin.zcash.ui.design.component.CircularScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.component.RadioButtonState
-import co.electriccoin.zcash.ui.design.component.ZashiButton
-import co.electriccoin.zcash.ui.design.component.ZashiButtonDefaults
 import co.electriccoin.zcash.ui.design.component.ZashiConfirmationBottomSheet
 import co.electriccoin.zcash.ui.design.component.ZashiScreenModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.ZashiTextField
@@ -74,13 +70,12 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
-import co.electriccoin.zcash.ui.design.theme.colors.ZashiColors
-import co.electriccoin.zcash.ui.design.theme.dimensions.ZashiDimensions
-import co.electriccoin.zcash.ui.design.theme.typography.ZashiTypography
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.voting.VoteButton
+import co.electriccoin.zcash.ui.screen.voting.VoteConfirmationBottomSheet
 import co.electriccoin.zcash.ui.screen.voting.component.VoteAppBar
+import co.electriccoin.zcash.ui.screen.voting.voteBarAction
 import kotlinx.coroutines.delay
 
 @Composable
@@ -91,7 +86,7 @@ fun VoteChainConfigView(state: VoteChainConfigState?) {
         return
     }
 
-    ZashiConfirmationBottomSheet(state = state.errorSheet)
+    VoteConfirmationBottomSheet(state = state.errorSheet)
     state.editor?.let { editor ->
         ZashiScreenModalBottomSheet(
             onDismissRequest = editor.cancelButton.onClick,
@@ -148,14 +143,14 @@ private fun Intro() {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             text = stringResource(R.string.coinVote_configSettings_sectionTitle),
-            style = ZashiTypography.header6,
+            style = ZappTheme.typography.sectionTitle,
             fontWeight = FontWeight.SemiBold,
-            color = ZashiColors.Text.textPrimary
+            color = ZappTheme.colors.text
         )
         Text(
             text = stringResource(R.string.coinVote_configSettings_sectionSubtitle),
-            style = ZashiTypography.textSm,
-            color = ZashiColors.Text.textTertiary
+            style = ZappTheme.typography.rowSubtitle,
+            color = ZappTheme.colors.textMuted
         )
     }
 }
@@ -172,8 +167,8 @@ private fun ChainItem(state: VoteChainConfigItemState) {
                     if (isSelected) {
                         Modifier.border(
                             width = 2.dp,
-                            color = ZashiColors.Utility.Gray.utilityGray200,
-                            shape = RoundedCornerShape(ZashiDimensions.Radius.radius2xl),
+                            color = ZappTheme.colors.border,
+                            shape = RectangleShape,
                         )
                     } else {
                         Modifier
@@ -183,11 +178,11 @@ private fun ChainItem(state: VoteChainConfigItemState) {
                     role = Role.RadioButton,
                     onClick = state.radioButtonState.onClick
                 ),
-        shape = RoundedCornerShape(ZashiDimensions.Radius.radius2xl),
-        color = if (isSelected) ZashiColors.Surfaces.bgPrimary else ZashiColors.Surfaces.bgSecondary,
+        shape = RectangleShape,
+        color = if (isSelected) ZappTheme.colors.surface else ZappTheme.colors.surfaceAlt,
         border =
             if (isSelected) {
-                BorderStroke(1.dp, ZashiColors.Surfaces.bgAlt)
+                BorderStroke(1.dp, ZappTheme.colors.border)
             } else {
                 null
             }
@@ -200,19 +195,19 @@ private fun ChainItem(state: VoteChainConfigItemState) {
                         if (isSelected) {
                             Modifier.border(
                                 width = 2.dp,
-                                color = ZashiColors.Utility.Gray.utilityGray200,
-                                shape = RoundedCornerShape(ZashiDimensions.Radius.radius2xl)
+                                color = ZappTheme.colors.border,
+                                shape = RectangleShape
                             )
                         } else {
                             Modifier
                         }
                     ).padding(
-                        start = ZashiDimensions.Spacing.spacing2xl,
-                        top = ZashiDimensions.Spacing.spacingXl,
-                        end = ZashiDimensions.Spacing.spacingXl,
-                        bottom = ZashiDimensions.Spacing.spacingXl
+                        start = ZappTheme.spacing.xl2,
+                        top = ZappTheme.spacing.xl,
+                        end = ZappTheme.spacing.xl,
+                        bottom = ZappTheme.spacing.xl
                     ),
-            horizontalArrangement = Arrangement.spacedBy(ZashiDimensions.Spacing.spacingXl),
+            horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.xl),
             verticalAlignment = Alignment.Top
         ) {
             RadioIndicator(
@@ -224,17 +219,17 @@ private fun ChainItem(state: VoteChainConfigItemState) {
                 modifier =
                     Modifier
                         .weight(1f)
-                        .padding(end = ZashiDimensions.Spacing.spacingXl)
+                        .padding(end = ZappTheme.spacing.xl)
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(ZashiDimensions.Spacing.spacingSm),
+                    horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.sm),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = state.radioButtonState.text.getValue(),
-                        style = ZashiTypography.textMd,
+                        style = ZappTheme.typography.rowTitle,
                         fontWeight = FontWeight.Medium,
-                        color = ZashiColors.Text.textPrimary,
+                        color = ZappTheme.colors.text,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(weight = 1f, fill = false)
@@ -245,8 +240,8 @@ private fun ChainItem(state: VoteChainConfigItemState) {
                 }
                 Text(
                     text = state.radioButtonState.subtitle?.getValue() ?: state.fullUrl.getValue(),
-                    style = ZashiTypography.textSm,
-                    color = ZashiColors.Text.textTertiary,
+                    style = ZappTheme.typography.rowSubtitle,
+                    color = ZappTheme.colors.textMuted,
                     maxLines = 1,
                     overflow = TextOverflow.MiddleEllipsis,
                 )
@@ -261,7 +256,7 @@ private fun ChainItem(state: VoteChainConfigItemState) {
                     Icon(
                         painter = painterResource(co.electriccoin.zcash.ui.design.R.drawable.ic_chevron_right),
                         contentDescription = editButton.text.getValue(),
-                        tint = ZashiColors.Text.textPrimary
+                        tint = ZappTheme.colors.text
                     )
                 }
             }
@@ -279,12 +274,12 @@ private fun RadioIndicator(
             modifier
                 .size(20.dp)
                 .background(
-                    color = if (isSelected) ZashiColors.Checkboxes.boxOnBg else ZashiColors.Surfaces.bgPrimary,
-                    shape = CircleShape
+                    color = if (isSelected) ZappTheme.colors.accent else ZappTheme.colors.surface,
+                    shape = RectangleShape
                 ).border(
                     width = 1.dp,
-                    color = if (isSelected) ZashiColors.Checkboxes.boxOnBg else ZashiColors.Checkboxes.boxOffStroke,
-                    shape = CircleShape
+                    color = if (isSelected) ZappTheme.colors.accent else ZappTheme.colors.borderStrong,
+                    shape = RectangleShape
                 ),
         contentAlignment = Alignment.Center
     ) {
@@ -293,7 +288,7 @@ private fun RadioIndicator(
                 modifier =
                     Modifier
                         .size(8.dp)
-                        .background(ZashiColors.Surfaces.bgPrimary, CircleShape)
+                        .background(ZappTheme.colors.surface, RectangleShape)
             )
         }
     }
@@ -317,7 +312,7 @@ private fun BottomActions(
         )
         ZappBottomActionBar(
             onBack = state.onBack,
-            primaryAction = { VoteButton(state.saveChangesButton) }
+            primaryAction = { VoteButton(state.saveChangesButton, modifier = voteBarAction()) }
         )
     }
 }
@@ -342,15 +337,15 @@ private fun AddCustomSourceButton(
 private fun DefaultBadge(modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(6.dp),
-        color = ZashiColors.Utility.Gray.utilityGray100,
-        border = BorderStroke(1.dp, ZashiColors.Utility.Gray.utilityGray200)
+        shape = RectangleShape,
+        color = ZappTheme.colors.chipBg,
+        border = BorderStroke(1.dp, ZappTheme.colors.border)
     ) {
         Text(
             text = stringResource(R.string.coinVote_configSettings_defaultBadge),
-            style = ZashiTypography.textXs,
+            style = ZappTheme.typography.caption,
             fontWeight = FontWeight.Medium,
-            color = ZashiColors.Utility.Gray.utilityGray700,
+            color = ZappTheme.colors.text,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
         )
     }
@@ -376,23 +371,23 @@ private fun EditorSheet(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = ZashiDimensions.Spacing.spacing3xl)
+                        .padding(horizontal = ZappTheme.spacing.xl3)
             ) {
                 Text(
                     text = state.title.getValue(),
-                    style = ZashiTypography.header6,
+                    style = ZappTheme.typography.sectionTitle,
                     fontWeight = FontWeight.SemiBold,
-                    color = ZashiColors.Text.textPrimary
+                    color = ZappTheme.colors.text
                 )
-                Spacer(modifier = Modifier.height(ZashiDimensions.Spacing.spacingMd))
+                Spacer(modifier = Modifier.height(ZappTheme.spacing.md))
                 Text(
                     text = state.description.getValue(),
-                    style = ZashiTypography.textSm,
-                    color = ZashiColors.Text.textPrimary
+                    style = ZappTheme.typography.rowSubtitle,
+                    color = ZappTheme.colors.text
                 )
-                Spacer(modifier = Modifier.height(ZashiDimensions.Spacing.spacing3xl))
+                Spacer(modifier = Modifier.height(ZappTheme.spacing.xl3))
                 FieldLabel(text = stringResource(R.string.coinVote_configSettings_titleField))
-                Spacer(modifier = Modifier.height(ZashiDimensions.Spacing.spacingMd))
+                Spacer(modifier = Modifier.height(ZappTheme.spacing.md))
                 ZashiTextField(
                     state = state.name,
                     singleLine = true,
@@ -403,16 +398,16 @@ private fun EditorSheet(
                     innerModifier = ZashiTextFieldDefaults.innerModifier.height(46.dp),
                     colors = sheetTextFieldColors(isFocusedByDefault = true)
                 )
-                Spacer(modifier = Modifier.height(ZashiDimensions.Spacing.spacingXl))
+                Spacer(modifier = Modifier.height(ZappTheme.spacing.xl))
                 FieldLabel(text = stringResource(R.string.coinVote_configSettings_urlField))
-                Spacer(modifier = Modifier.height(ZashiDimensions.Spacing.spacingMd))
+                Spacer(modifier = Modifier.height(ZappTheme.spacing.md))
                 ZashiTextField(
                     state = state.url,
                     placeholder = {
                         Text(
                             text = stringResource(R.string.coinVote_configSettings_urlPlaceholder),
-                            style = ZashiTypography.textMd,
-                            color = ZashiColors.Text.textTertiary
+                            style = ZappTheme.typography.rowTitle,
+                            color = ZappTheme.colors.textMuted
                         )
                     },
                     trailingIcon =
@@ -427,7 +422,7 @@ private fun EditorSheet(
                                         painter = painterResource(R.drawable.ic_copy),
                                         contentDescription =
                                             stringResource(co.electriccoin.zcash.ui.design.R.string.general_copy),
-                                        tint = ZashiColors.Text.textTertiary,
+                                        tint = ZappTheme.colors.textMuted,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
@@ -443,26 +438,20 @@ private fun EditorSheet(
                     innerModifier = ZashiTextFieldDefaults.innerModifier.height(46.dp),
                     colors = sheetTextFieldColors(isFocusedByDefault = false)
                 )
-                Spacer(modifier = Modifier.height(ZashiDimensions.Spacing.spacing3xl))
+                Spacer(modifier = Modifier.height(ZappTheme.spacing.xl3))
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(ZashiDimensions.Spacing.spacingLg)
+                    verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.lg)
                 ) {
                     state.deleteButton?.let { deleteButton ->
-                        ZashiButton(
+                        VoteButton(
                             state = deleteButton,
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
-                    ZashiButton(
+                    VoteButton(
                         state = state.saveButton,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
@@ -482,19 +471,19 @@ private fun SheetHeader(state: VoteChainConfigEditorState) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = ZashiDimensions.Spacing.spacingXl)
-                .padding(bottom = ZashiDimensions.Spacing.spacing3xl),
+                .padding(horizontal = ZappTheme.spacing.xl)
+                .padding(bottom = ZappTheme.spacing.xl3),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = state.sheetTitle.getValue().uppercase(),
-            style = ZashiTypography.textMd,
+            style = ZappTheme.typography.rowTitle,
             fontWeight = FontWeight.SemiBold,
-            color = ZashiColors.Text.textPrimary
+            color = ZappTheme.colors.text
         )
         Surface(
-            shape = CircleShape,
-            color = ZashiColors.Surfaces.bgPrimary,
+            shape = RectangleShape,
+            color = ZappTheme.colors.surface,
             modifier =
                 Modifier
                     .align(Alignment.CenterStart)
@@ -504,7 +493,7 @@ private fun SheetHeader(state: VoteChainConfigEditorState) {
             Icon(
                 painter = painterResource(co.electriccoin.zcash.ui.design.R.drawable.ic_navigation_close),
                 contentDescription = null,
-                tint = ZashiColors.Text.textSecondary,
+                tint = ZappTheme.colors.textMuted,
                 modifier = Modifier.padding(10.dp)
             )
         }
@@ -515,21 +504,21 @@ private fun SheetHeader(state: VoteChainConfigEditorState) {
 private fun FieldLabel(text: String) {
     Text(
         text = text,
-        style = ZashiTypography.textSm,
+        style = ZappTheme.typography.rowSubtitle,
         fontWeight = FontWeight.Medium,
-        color = ZashiColors.Text.textPrimary
+        color = ZappTheme.colors.text
     )
 }
 
 @Composable
 private fun sheetTextFieldColors(isFocusedByDefault: Boolean) =
     ZashiTextFieldDefaults.defaultColors(
-        textColor = ZashiColors.Text.textPrimary,
-        borderColor = if (isFocusedByDefault) ZashiColors.Surfaces.bgAlt else Color.Unspecified,
-        focusedBorderColor = ZashiColors.Surfaces.bgAlt,
-        containerColor = ZashiColors.Surfaces.bgPrimary,
-        focusedContainerColor = ZashiColors.Surfaces.bgPrimary,
-        placeholderColor = ZashiColors.Text.textTertiary
+        textColor = ZappTheme.colors.text,
+        borderColor = if (isFocusedByDefault) ZappTheme.colors.border else Color.Unspecified,
+        focusedBorderColor = ZappTheme.colors.border,
+        containerColor = ZappTheme.colors.surface,
+        focusedContainerColor = ZappTheme.colors.surface,
+        placeholderColor = ZappTheme.colors.textMuted
     )
 
 private const val EDITOR_FOCUS_DELAY_MS = 100L

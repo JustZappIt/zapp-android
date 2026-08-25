@@ -43,6 +43,7 @@ import co.electriccoin.zcash.ui.screen.voting.answerColors
 import co.electriccoin.zcash.ui.screen.voting.component.VoteAppBar
 import co.electriccoin.zcash.ui.screen.voting.component.VoteViewMoreChip
 import co.electriccoin.zcash.ui.screen.voting.component.ZipBadge
+import co.electriccoin.zcash.ui.screen.voting.voteBarAction
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -98,7 +99,7 @@ private fun ProposalListScaffold(
         bottomBar = {
             ZappBottomActionBar(
                 onBack = state.onBack,
-                primaryAction = state.ctaButton?.let { { VoteButton(it) } }
+                primaryAction = state.ctaButton?.let { cta -> { VoteButton(cta, modifier = voteBarAction()) } }
             )
         },
         content = content

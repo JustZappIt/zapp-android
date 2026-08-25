@@ -3,8 +3,11 @@
 
 package co.electriccoin.zcash.ui.screen.voting
 
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ButtonStyle
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
@@ -38,3 +41,12 @@ fun ButtonStyle?.toZappVariant(): ZappButtonVariant =
         ButtonStyle.DESTRUCTIVE1, ButtonStyle.DESTRUCTIVE2 -> ZappButtonVariant.Danger
         ButtonStyle.PRIMARY, null -> ZappButtonVariant.Primary
     }
+
+/**
+ * How every Zapp screen sizes the primary action inside `ZappBottomActionBar`: it takes the width
+ * the back arrow leaves, rather than hugging its own text. Kept here so the voting screens cannot
+ * drift from ChooseServer, ChatSettings, PortfolioChartSettings and the rest.
+ */
+fun RowScope.voteBarAction(): Modifier = Modifier.weight(1f).padding(start = BAR_ACTION_GAP)
+
+private val BAR_ACTION_GAP = 12.dp

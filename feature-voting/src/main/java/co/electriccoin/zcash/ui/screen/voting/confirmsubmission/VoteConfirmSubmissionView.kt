@@ -36,7 +36,9 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.common.WalletHeaderBadgeChrome
 import co.electriccoin.zcash.ui.screen.common.WalletHeaderIcons
 import co.electriccoin.zcash.ui.screen.common.WalletHeaderIconsState
+import co.electriccoin.zcash.ui.screen.voting.VoteConfirmationBottomSheet
 import co.electriccoin.zcash.ui.screen.voting.component.VoteAppBar
+import co.electriccoin.zcash.ui.screen.voting.voteBarAction
 import co.electriccoin.zcash.ui.screen.voting.votingerror.VotingErrorMapper
 
 /**
@@ -46,7 +48,7 @@ import co.electriccoin.zcash.ui.screen.voting.votingerror.VotingErrorMapper
  */
 @Composable
 fun VoteConfirmSubmissionView(state: VoteConfirmSubmissionState) {
-    ZashiConfirmationBottomSheet(state = state.errorSheet)
+    VoteConfirmationBottomSheet(state = state.errorSheet)
 
     val c = ZappTheme.colors
     val spacing = ZappTheme.spacing
@@ -62,7 +64,7 @@ fun VoteConfirmSubmissionView(state: VoteConfirmSubmissionState) {
             ZappBottomActionBar(
                 onBack = state.onBack,
                 isBackEnabled = !state.status.isInFlight(),
-                primaryAction = { VoteSubmissionBottomSection(state) }
+                primaryAction = { VoteSubmissionBottomSection(state, modifier = voteBarAction()) }
             )
         },
     ) { padding ->
