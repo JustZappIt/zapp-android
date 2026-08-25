@@ -131,6 +131,8 @@ internal fun GiftCardPodium(
     tier: GiftCardTier,
     isSettled: Boolean,
     modifier: Modifier = Modifier,
+    /** The same worth in the wallet's chosen currency, under the ZEC figure. Null when no rate. */
+    fiat: StringResource? = null,
     caption: String? = null,
     /** Shown on the face, so the note lands on the card rather than in a row beneath it. */
     message: String? = null,
@@ -295,7 +297,7 @@ internal fun GiftCardPodium(
                             ).clip(shape)
                             .materialLighting(rotation = rotation, stock = stock),
                 ) {
-                    if (showBack) PodiumBack(stock) else PodiumFace(amount, caption, message, stock)
+                    if (showBack) PodiumBack(stock) else PodiumFace(amount, fiat, caption, message, stock)
                 }
             }
             // Stated under the card as well as printed on it: the face is turned away half the
@@ -390,6 +392,7 @@ private fun Modifier.materialLighting(rotation: Animatable<Float, *>, stock: Zap
 @Composable
 private fun PodiumFace(
     amount: StringResource?,
+    fiat: StringResource?,
     caption: String?,
     message: String?,
     stock: ZappGiftCardStock,
@@ -402,13 +405,14 @@ private fun PodiumFace(
                 .border(stock.edgeWidth, stock.edge, RoundedCornerShape(CORNER)),
     ) {
         CardFlare(stock, CORNER)
-        PodiumFaceContent(amount, caption, message, stock)
+        PodiumFaceContent(amount, fiat, caption, message, stock)
     }
 }
 
 @Composable
 private fun PodiumFaceContent(
     amount: StringResource?,
+    fiat: StringResource?,
     caption: String?,
     message: String?,
     stock: ZappGiftCardStock,
@@ -421,12 +425,22 @@ private fun PodiumFaceContent(
             text = stringResource(R.string.gift_card_deck_wordmark),
             style = ZappTheme.typography.groupLabel.copy(color = stock.inkMuted),
         )
-        BasicText(
-            text = amount?.getValue().orEmpty(),
-            style = ZappTheme.typography.display.copy(color = stock.ink),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Column {
+            BasicText(
+                text = amount?.getValue().orEmpty(),
+                style = ZappTheme.typography.display.copy(color = stock.ink),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            fiat?.let {
+                BasicText(
+                    text = it.getValue(),
+                    style = ZappTheme.typography.caption.copy(color = stock.inkMuted),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         // The note, where the sender wrote it to be read. Set in caption rather than the eyebrow
         // style, and in the middle ink rather than the faintest: this is prose, and the faint
         // small-caps treatment the caption uses is not legible at that length. The full text still
