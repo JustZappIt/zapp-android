@@ -122,6 +122,7 @@ internal fun VoteSubmissionBottomSection(
     } else {
         VoteSubmissionProgressCard(
             title = progressTitle,
+            note = stringRes(R.string.coinVote_confirmSubmission_submittingExplainerNote),
             progress = state.submissionProgress(),
             ctaButton = state.ctaButton,
             modifier = modifier
@@ -159,6 +160,7 @@ private fun VoteSubmissionProgressCard(
     progress: Float,
     ctaButton: ButtonState,
     modifier: Modifier = Modifier,
+    note: StringResource? = null,
 ) {
     val c = ZappTheme.colors
     val animatedProgress by animateFloatAsState(
@@ -182,6 +184,12 @@ private fun VoteSubmissionProgressCard(
             gapSize = (-1).dp,
             drawStopIndicator = {},
         )
+        if (note != null) {
+            BasicText(
+                text = note.getValue(),
+                style = ZappTheme.typography.caption.copy(color = c.textMuted),
+            )
+        }
         VoteButton(ctaButton, modifier = Modifier.fillMaxWidth())
     }
 }
