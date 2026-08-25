@@ -84,7 +84,7 @@
 
     <string name="gift_claim_amount_label">Valor del Zpacket</string>
     <string name="gift_claim_message_label">Mensaje</string>
-    <string name="gift_claim_claim">Reclamar tu Zpacket</string>
+    <string name="gift_claim_claim">Reclamar</string>
     <string name="gift_claim_needs_wallet_action">Crear un monedero</string>
     <string name="gift_claim_connecting">Conectando con la red Zcash…</string>
     <string name="gift_claim_needs_wallet_title">Crea un monedero para reclamarlo</string>

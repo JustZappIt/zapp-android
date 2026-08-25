@@ -117,6 +117,7 @@ internal fun GiftClaimView(
 private fun CardFace(state: GiftClaimState) {
     GiftCardPodium(
         amount = state.amountText,
+        fiat = state.fiat,
         tier = giftCardTier(state.amount?.value ?: 0L, isSettled = false),
         // Still turning everywhere it appears: nothing here is settled until the claim mines.
         isSettled = false,

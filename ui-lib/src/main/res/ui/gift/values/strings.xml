@@ -84,7 +84,7 @@
 
     <string name="gift_claim_amount_label">Zpacket value</string>
     <string name="gift_claim_message_label">Message</string>
-    <string name="gift_claim_claim">Claim your Zpacket</string>
+    <string name="gift_claim_claim">Claim</string>
     <string name="gift_claim_needs_wallet_action">Create a wallet</string>
     <string name="gift_claim_connecting">Connecting to the Zcash network…</string>
     <string name="gift_claim_needs_wallet_title">Create a wallet to claim this</string>
