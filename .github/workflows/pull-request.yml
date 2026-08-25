@@ -634,7 +634,9 @@ jobs:
         timeout-minutes: 10
       - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
         timeout-minutes: 30
-        uses: ./.github/actions/setup-sdk-companion
+        uses: ./zapp-android/.github/actions/setup-sdk-companion
+        with:
+          working-directory: zapp-android
       - name: Set up Java
         uses: ./zapp-android/.github/actions/setup-java
         timeout-minutes: 1

@@ -7,6 +7,14 @@ description: >-
   publish. Supported on main, maint/* branches, and branches targeting either. No-ops (does
   nothing) whenever the pin is blank, which is the default, normal case for every branch
   that isn't actively co-developing against an SDK PR.
+inputs:
+  working-directory:
+    description: >-
+      Directory holding this repo's gradle.properties. Defaults to the workspace root; set it
+      when the job checks the repo out into a subdirectory (verify_composite_build does), or the
+      pin reads as empty and this action silently no-ops against the published artifact.
+    required: false
+    default: '.'
 outputs:
   active:
     description: "'true' if the companion SDK build was activated this run, else empty."
@@ -17,6 +25,7 @@ runs:
     - name: Read SDK_COMMIT_PIN and enforce the branch gate
       id: pin
       shell: bash
+      working-directory: ${{ inputs.working-directory }}
       run: |
         PIN="$(grep -m1 '^SDK_COMMIT_PIN=' gradle.properties | cut -d= -f2 | tr -d '[:space:]')"
         [ -z "${PIN}" ] || [[ "${PIN}" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::SDK_COMMIT_PIN must be a full 40-char commit sha'; exit 1; }
