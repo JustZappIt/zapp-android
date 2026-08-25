@@ -21,22 +21,23 @@ bare-kit=15a3569f3d704de7151761051c8d9cc2e299414f
 #
 # NOW ON v3.1.0-SNAPSHOT, for coinholder polling: it is the first published snapshot with the
 # public VotingSdk facade and a native library built with cfg(zcash_voting) (63 voting JNI
-# symbols; 3.0.1 exports none). It is ALSO the first snapshot without the ZODL Slipstream sync
-# engine and the isSlipstreamEnabled WalletCoordinator parameter, which v3.0.0/v3.0.1 carried
-# alongside the OrchardMigrationSdk. The two features do not coexist in any published artifact.
-# Voting is therefore behind VOTING_ENABLED=false and this trade is unresolved -- do not ship
-# either half without settling it. See docs/voting.md.
+# symbols; 3.0.1 exports none).
 #
-# Upstream did not drop Slipstream by accident: SDK commit 6b4d6339 "MOB-1757: Remove the
-# Slipstream sync engine and its AGPL dependency" removes it because the zodl-slipstream crate
-# is AGPL-3.0-only while the SDK publishes MIT artifacts, and adds a cargo-deny licence gate to
-# keep it out. Zapp is itself AGPL-3.0-only, so that specific conflict does not bind us -- but
-# keeping Slipstream now means maintaining a permanent fork of the SDK's native build against
-# an upstream licence gate, not just pinning an older snapshot.
+# Slipstream is NOT lost by this bump. At 3.1.0 the AGPL engine was split out of the
+# MIT-published zcash-android-sdk into its own zcash-android-sdk-slipstream artifact, which still
+# arrives transitively via sdk-incubator and is what the wallet runs (verified on-device).
+# WalletCoordinator's isSlipstreamEnabled parameter is gone only because the engine stopped being
+# opt-in per wallet.
 #
-# PROVENANCE SHA BELOW IS STALE: it is v3.0.1's. The published 3.1.0-20260820.161424-1 does not
-# match 6b4d6339 either (it still exports syncBurst/syncToTip, which that commit deletes), so
-# the exact source commit is unverified. Establish it during the SDK decision.
+# WARNING -- -SNAPSHOT IS MUTABLE. SDK commit 6b4d6339 ("MOB-1757: Remove the Slipstream sync
+# engine and its AGPL dependency") deletes it outright and adds a cargo-deny licence gate; it
+# merged 2026-08-21, AFTER the snapshot we currently resolve (3.1.0-20260820.161424-1, built
+# 2026-08-20 16:14 UTC). The next republish of 3.1.0-SNAPSHOT can therefore drop Slipstream with
+# no code change and no build failure. Consider pinning the timestamped version. See
+# docs/voting.md.
+#
+# PROVENANCE SHA BELOW IS STALE: it is v3.0.1's. The exact commit behind
+# 3.1.0-20260820.161424-1 is unverified. Establish it when settling the pin.
 #
 # GitHub: https://github.com/zcash/zcash-android-wallet-sdk
 zcashAndroidWalletSdk=b5a302cbbe6dd3da4a615dade221ca3461236304

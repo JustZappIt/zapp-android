@@ -4,13 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.provider.GetVersionInfoProvider
-import co.electriccoin.zcash.ui.common.provider.HasSeenHowToVoteKeystoneStorageProvider
-import co.electriccoin.zcash.ui.common.provider.HasSeenHowToVoteStorageProvider
-import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToAddressBookUseCase
-import co.electriccoin.zcash.ui.common.voting.VotingSettingsEntry
+import co.electriccoin.zcash.ui.common.usecase.NavigateToVotingUseCase
 import co.electriccoin.zcash.ui.design.component.listitem.ListItemState
 import co.electriccoin.zcash.ui.design.util.imageRes
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -28,10 +24,7 @@ class MoreVM(
     private val getVersionInfo: GetVersionInfoProvider,
     private val navigationRouter: NavigationRouter,
     private val navigateToAddressBook: NavigateToAddressBookUseCase,
-    private val hasSeenHowToVote: HasSeenHowToVoteStorageProvider,
-    private val hasSeenHowToVoteKeystone: HasSeenHowToVoteKeystoneStorageProvider,
-    private val getSelectedWalletAccount: GetSelectedWalletAccountUseCase,
-    private val votingSettingsEntry: VotingSettingsEntry,
+    private val navigateToVoting: NavigateToVotingUseCase,
 ) : ViewModel() {
     val state: StateFlow<MoreState> = MutableStateFlow(createState())
 
@@ -55,7 +48,7 @@ class MoreVM(
                         title = stringRes(R.string.settings_coinholderPolling),
                         bigIcon = imageRes(R.drawable.ic_settings_voting),
                         onClick = ::onVotingClick
-                    ).takeIf { votingSettingsEntry.isEnabled },
+                    ).takeIf { navigateToVoting.isEnabled },
                     ListItemState(
                         title = stringRes(R.string.settings_gift_cards),
                         bigIcon = imageRes(R.drawable.ic_settings_gift_cards),
@@ -79,23 +72,7 @@ class MoreVM(
 
     private fun onBack() = navigationRouter.back()
 
-    private fun onVotingClick() {
-        viewModelScope.launch {
-            val isKeystone = getSelectedWalletAccount() is KeystoneAccount
-            val hasSeenHowToVoteForCurrentWallet =
-                if (isKeystone) {
-                    hasSeenHowToVoteKeystone.get()
-                } else {
-                    hasSeenHowToVote.get()
-                }
-
-            if (hasSeenHowToVoteForCurrentWallet) {
-                votingSettingsEntry.navigateToCoinholderPolling()
-            } else {
-                votingSettingsEntry.navigateToHowToVote()
-            }
-        }
-    }
+    private fun onVotingClick() = viewModelScope.launch { navigateToVoting() }
 
     private fun onAdvancedSettingsClick() = navigationRouter.forward(AdvancedSettingsArgs)
 

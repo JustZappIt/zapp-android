@@ -11,46 +11,51 @@ is worse than not having it, and this port does not cherry-pick — it takes the
 
 ## Shipping status
 
-**Off.** `VOTING_ENABLED` in `FeatureVotingImpls.kt` is `false`, so the settings entry is hidden and
-`HomeVM`'s session recovery bails out. The screens and routes are registered but unreachable.
+**On.** `VOTING_ENABLED` is `true` and the feature is reachable from the "You" tab.
 
-The blocker is not the feature. It is the SDK:
+An earlier revision of this document said the opposite, on the grounds that SDK 3.1.0 drops the
+ZODL Slipstream sync engine and that shipping voting therefore meant losing it. **That was wrong.**
+Slipstream was not deleted at 3.1.0 — it was *split out*: the AGPL-licensed engine left the
+MIT-published `zcash-android-sdk` and became its own `zcash-android-sdk-slipstream` artifact, which
+still reaches the app transitively through `sdk-incubator`. Verified on device: the running build
+stacks through `com.zodl.slipstream.SlipstreamSynchronizer.prepare`. `isSlipstreamEnabled`
+disappeared from `WalletCoordinator` because the engine stopped being opt-in per wallet, not
+because sync fell back to `CompactBlockProcessor`. Both features ship together.
 
-| SDK snapshot | Slipstream sync engine | public `VotingSdk` facade |
-|---|---|---|
-| `3.0.1-SNAPSHOT` (the fork's prior pin) | 257 classes | none |
-| `3.0.2-SNAPSHOT` | 255 classes | none |
-| `3.1.0-SNAPSHOT` (**current pin**) | **none** | **26 classes** |
+What the SDK bump is genuinely for: 3.0.1 carries the voting Kotlin classes but a native library
+built without `cfg(zcash_voting)`, exporting **zero** voting JNI symbols, so every native call would
+fail at runtime. 3.1.0 exports 63 and adds the public `VotingSdk` facade.
 
-No published artifact has both. 3.0.1's native library is not even built with `cfg(zcash_voting)` —
-it carries the voting Kotlin classes but exports zero voting JNI symbols, so every native call would
-fail at runtime. 3.1.0 exports 63 of them.
+### One real risk, and it is about pinning
 
-So this branch is on 3.1.0 and has therefore lost Slipstream. `WalletCoordinatorFactory` no longer
-passes `isSlipstreamEnabled`, because the parameter does not exist any more. Sync falls back to the
-stock engine. That matters beyond sync speed: `GiftCardLedger`, `GiftCard` and `FundGiftCardUseCase`
-all reason in comments about Slipstream automatically resubmitting a locally-created outgoing
-transaction, and that behaviour is what changes.
+`ZCASH_SDK_VERSION=3.1.0-SNAPSHOT` is a *mutable* coordinate. SDK commit `6b4d6339`
+("MOB-1757: Remove the Slipstream sync engine and its AGPL dependency") removes the engine outright
+and adds a cargo-deny licence gate to keep it out; it merged on 2026-08-21, **after** the snapshot
+the fork currently resolves (`3.1.0-20260820.161424-1`, built 16:14 UTC on 2026-08-20). When
+`3.1.0-SNAPSHOT` is next republished from a commit that includes it, Slipstream will vanish from
+under this branch silently, with no code change and no build failure — the first symptom would be a
+behaviour change in sync.
 
-Upstream did not drop Slipstream casually, and this shapes the choice. SDK commit `6b4d6339`,
-*"MOB-1757: Remove the Slipstream sync engine and its AGPL dependency"*, removes it because the
-`zodl-slipstream` crate is AGPL-3.0-only while the SDK publishes MIT artifacts — *"the native
-library and the `zcash-android-sdk` AAR have been shipping copyleft code under an MIT POM since
-3.0.0"* — and the same series adds a cargo-deny licence gate to keep it out. Slipstream is not
-coming back to a published snapshot.
+Zapp is itself AGPL-3.0-only, so upstream's MIT/AGPL conflict does not bind the fork. But keeping
+Slipstream past that point means either pinning the exact timestamped snapshot or maintaining a fork
+of the SDK's native build against an upstream licence gate. **Decide this before merging**, and
+consider pinning `3.1.0-20260820.161424-1` explicitly in the meantime.
 
-Zapp is itself AGPL-3.0-only, so that particular licence conflict does not bind the fork. But it
-means keeping Slipstream is no longer "pin an older snapshot": it is maintaining a permanent fork of
-the SDK's native build against an upstream licence gate.
+### Why the poll list is empty right now
 
-**Resolve before merging.** Three ways out:
+Not a defect, and not the UI. Against the live production config:
 
-1. Accept the trade and re-verify the gift-card and send paths against the stock engine.
-2. Build the SDK locally from `../zcash-android-wallet-sdk` on `android-slipstream-ironwood-chp`,
-   which has both (53 slipstream files, 20 voting files). This is how upstream develops voting, but
-   it means setting `SDK_INCLUDED_BUILD_PATH`, building the Rust backend locally, and rewriting the
-   `.zapp-deps` note that currently says the fork deliberately does not do that.
-3. Wait for a published snapshot carrying both — which, given MOB-1757, is not going to happen.
+- The only round ZODL endorses is **"NU7 Scope"** (`16eef7eb…`, active). It is absent from the
+  dynamic voting config, so `RoundAuthenticator` returns `MISSING_ROUND` and the wallet refuses to
+  show it — it will not act on a round whose attestation it cannot verify.
+- Every round the config *does* attest is a closed `[TEST]` round (status 3), and one of those is
+  `auth_version: 1`, which `RoundAuthenticator` rejects by deliberate policy (MOB-1678): v1 signs
+  only the raw `ea_pk` and does not pin the round id or PIR layout.
+
+So "no polls right now" is the security model working. Upstream's own Android build shows the same
+against this config today. It resolves when the publisher adds the live round to the config, or via
+a custom config source added from the screen's gear. Do not relax the authenticator to make the list
+populate.
 
 ## What the port contains
 

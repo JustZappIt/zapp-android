@@ -139,4 +139,7 @@
     <string name="settings_base_account_title">Base account</string>
     <string name="settings_base_account_subtitle">Your USDC balance and activity</string>
     <string name="settings_base_account_in_progress">Cash-out in progress</string>
+    <string name="settings_group_governance">Governance</string>
+    <string name="settings_voting_title">Coinholder Polling</string>
+    <string name="settings_voting_subtitle">Vote on Zcash governance proposals</string>
 </resources>

@@ -69,6 +69,8 @@ import co.electriccoin.zcash.ui.design.component.ZashiScreenModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.ZashiTextField
 import co.electriccoin.zcash.ui.design.component.ZashiTextFieldDefaults
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
+import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
@@ -303,46 +305,36 @@ private fun BottomActions(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = ZappTheme.spacing.xl),
-            verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.lg)
-        ) {
-            AddCustomSourceButton(state)
-            VoteButton(state.saveChangesButton, modifier = Modifier.fillMaxWidth())
-        }
-        ZappBottomActionBar(onBack = state.onBack)
+        // "Add a source" is a list action, so it stays above the bar. Save is the screen's
+        // primary action and belongs beside back, in the shared bar every other page uses.
+        AddCustomSourceButton(
+            state = state,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = ZappTheme.spacing.xl)
+                    .padding(bottom = ZappTheme.spacing.md)
+        )
+        ZappBottomActionBar(
+            onBack = state.onBack,
+            primaryAction = { VoteButton(state.saveChangesButton) }
+        )
     }
 }
 
 @Composable
-private fun AddCustomSourceButton(state: VoteChainConfigState) {
-    ZashiButton(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(48.dp),
-        state =
-            ButtonState(
-                text = stringRes(R.string.coinVote_configSettings_addCustomSource),
-                style = ButtonStyle.TERTIARY,
-                isEnabled = !state.isValidating,
-                onClick = state.onAddCustom
-            ),
-        defaultTertiaryColors =
-            ZashiButtonDefaults.tertiaryColors(
-                containerColor = ZashiColors.Surfaces.bgSecondary,
-                contentColor = ZashiColors.Text.textPrimary
-            ),
-        content = { scope ->
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(ZashiDimensions.Spacing.spacingSm))
-            scope.Text()
-            scope.Loading()
-        }
+private fun AddCustomSourceButton(
+    state: VoteChainConfigState,
+    modifier: Modifier = Modifier
+) {
+    ZappButton(
+        text = stringResource(R.string.coinVote_configSettings_addCustomSource),
+        modifier = modifier,
+        variant = ZappButtonVariant.Secondary,
+        enabled = !state.isValidating,
+        loading = state.isValidating,
+        leadingIcon = Icons.Default.Add,
+        onClick = state.onAddCustom,
     )
 }
 
