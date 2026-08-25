@@ -202,6 +202,9 @@ jobs:
       - name: Set up bare-kit npm dependencies
         uses: ./.github/actions/setup-bare-kit
         timeout-minutes: 10
+      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
+        timeout-minutes: 30
+        uses: ./.github/actions/setup-sdk-companion
       - name: Set up Java
         uses: ./.github/actions/setup-java
         timeout-minutes: 1
@@ -244,6 +247,9 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0 # to fetch all commits
+      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
+        timeout-minutes: 30
+        uses: ./.github/actions/setup-sdk-companion
       - name: Set up Java
         uses: ./.github/actions/setup-java
         timeout-minutes: 1
@@ -251,7 +257,7 @@ jobs:
         uses: ./.github/actions/setup-gradle
         timeout-minutes: 5
       - name: Test
-        timeout-minutes: 10
+        timeout-minutes: 45
         run: |
           # Note that we explicitly check just the Kotlin modules, to avoid compiling the Android modules here
           ./gradlew :configuration-api-lib:check :crash-lib:check :preference-api-lib:check :spackle-lib:check
@@ -304,6 +310,9 @@ jobs:
       - name: Set up bare-kit npm dependencies
         uses: ./.github/actions/setup-bare-kit
         timeout-minutes: 10
+      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
+        timeout-minutes: 30
+        uses: ./.github/actions/setup-sdk-companion
       - name: Set up Java
         uses: ./.github/actions/setup-java
         timeout-minutes: 1
@@ -311,7 +320,7 @@ jobs:
         uses: ./.github/actions/setup-gradle
         timeout-minutes: 5
       - name: Build
-        timeout-minutes: 20
+        timeout-minutes: 45
         run: |
           ./gradlew assembleZcashmainnetStoreDebug assembleZcashtestnetStoreDebug assembleAndroidTest
       - name: Authenticate to Google Cloud for Firebase Test Lab
@@ -324,7 +333,7 @@ jobs:
           workload_identity_provider: ${{ secrets.FIREBASE_TEST_LAB_WORKLOAD_IDENTITY_PROVIDER }}
           access_token_lifetime: '1200s'
       - name: Test
-        timeout-minutes: 30
+        timeout-minutes: 45
         env:
           # Force blank suffix for screenshot tests
           ORG_GRADLE_PROJECT_ZCASH_DEBUG_APP_NAME_SUFFIX: ""
@@ -384,6 +393,9 @@ jobs:
       - name: Set up bare-kit npm dependencies
         uses: ./.github/actions/setup-bare-kit
         timeout-minutes: 10
+      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
+        timeout-minutes: 30
+        uses: ./.github/actions/setup-sdk-companion
       - name: Set up Java
         uses: ./.github/actions/setup-java
         timeout-minutes: 1
@@ -391,7 +403,7 @@ jobs:
         uses: ./.github/actions/setup-gradle
         timeout-minutes: 5
       - name: Build and test
-        timeout-minutes: 30
+        timeout-minutes: 45
         env:
           # Force blank suffix for screenshot tests
           ORG_GRADLE_PROJECT_ZCASH_DEBUG_APP_NAME_SUFFIX: ""
@@ -448,6 +460,9 @@ jobs:
       - name: Set up bare-kit npm dependencies
         uses: ./.github/actions/setup-bare-kit
         timeout-minutes: 10
+      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
+        timeout-minutes: 30
+        uses: ./.github/actions/setup-sdk-companion
       - name: Set up Java
         uses: ./.github/actions/setup-java
         timeout-minutes: 1
@@ -455,7 +470,7 @@ jobs:
         uses: ./.github/actions/setup-gradle
         timeout-minutes: 5
       - name: Build and test
-        timeout-minutes: 30
+        timeout-minutes: 45
         env:
           # Force blank suffix for screenshot tests
           ORG_GRADLE_PROJECT_ZCASH_DEBUG_APP_NAME_SUFFIX: ""
@@ -515,6 +530,9 @@ jobs:
       - name: Set up bare-kit npm dependencies
         uses: ./.github/actions/setup-bare-kit
         timeout-minutes: 10
+      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
+        timeout-minutes: 30
+        uses: ./.github/actions/setup-sdk-companion
       - name: Set up Java
         uses: ./.github/actions/setup-java
         timeout-minutes: 1
@@ -533,7 +551,7 @@ jobs:
           echo ${FIREBASE_DEBUG_JSON_BASE64} | base64 --decode > app/src/debug/google-services.json
           echo ${FIREBASE_RELEASE_JSON_BASE64} | base64 --decode > app/src/release/google-services.json
       - name: Build
-        timeout-minutes: 20
+        timeout-minutes: 45
         env:
           ORG_GRADLE_PROJECT_IS_CRASH_ON_STRICT_MODE_VIOLATION: true
           ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
@@ -550,7 +568,7 @@ jobs:
           workload_identity_provider: ${{ secrets.FIREBASE_TEST_LAB_WORKLOAD_IDENTITY_PROVIDER }}
           access_token_lifetime: '900s'
       - name: Robo test
-        timeout-minutes: 20
+        timeout-minutes: 45
         env:
           # This first environment variable is used by Flank, since the temporary token is missing the project name
           GOOGLE_CLOUD_PROJECT: ${{ vars.FIREBASE_TEST_LAB_PROJECT }}
@@ -614,6 +632,9 @@ jobs:
       - name: Set up bare-kit npm dependencies
         uses: ./zapp-android/.github/actions/setup-bare-kit
         timeout-minutes: 10
+      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
+        timeout-minutes: 30
+        uses: ./.github/actions/setup-sdk-companion
       - name: Set up Java
         uses: ./zapp-android/.github/actions/setup-java
         timeout-minutes: 1
@@ -669,6 +690,9 @@ jobs:
       - name: Set up bare-kit npm dependencies
         uses: ./.github/actions/setup-bare-kit
         timeout-minutes: 10
+      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
+        timeout-minutes: 30
+        uses: ./.github/actions/setup-sdk-companion
       - name: Set up Java
         uses: ./.github/actions/setup-java
         timeout-minutes: 1
@@ -779,6 +803,9 @@ jobs:
       - name: Set up bare-kit npm dependencies
         uses: ./.github/actions/setup-bare-kit
         timeout-minutes: 10
+      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
+        timeout-minutes: 30
+        uses: ./.github/actions/setup-sdk-companion
       - name: Set up Java
         uses: ./.github/actions/setup-java
         timeout-minutes: 1
@@ -973,6 +1000,9 @@ jobs:
       - name: Set up bare-kit npm dependencies
         uses: ./.github/actions/setup-bare-kit
         timeout-minutes: 10
+      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
+        timeout-minutes: 30
+        uses: ./.github/actions/setup-sdk-companion
       - name: Set up Java
         uses: ./.github/actions/setup-java
         timeout-minutes: 1
@@ -993,7 +1023,7 @@ jobs:
         with:
           name: Binaries
       - name: Robo test
-        timeout-minutes: 25
+        timeout-minutes: 45
         env:
           # Path depends on `release_build` job, plus path of `Download a single artifact` step
           BINARIES_ZIP_PATH: binaries.zip
