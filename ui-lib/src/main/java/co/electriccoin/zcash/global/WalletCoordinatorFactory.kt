@@ -25,7 +25,13 @@ internal operator fun WalletCoordinator.Companion.invoke(
         isTorEnabled = isTorEnabledStorageProvider.observe(),
         isExchangeRateEnabled = isExchangeRateEnabledStorageProvider.observe(),
         isSyncBlocked = isSyncBlocked(context, persistableWalletProvider),
-        isSlipstreamEnabled = true,
+        // `isSlipstreamEnabled` is gone from WalletCoordinator in SDK 3.1.0, but the engine is
+        // not: it moved out of the MIT-licensed `zcash-android-sdk` into its own AGPL-licensed
+        // `zcash-android-sdk-slipstream` artifact, which still arrives transitively via
+        // sdk-incubator and is what the wallet actually runs (verified on-device: the running
+        // build stacks through com.zodl.slipstream.SlipstreamSynchronizer.prepare). The parameter
+        // disappeared because the engine stopped being opt-in per wallet, not because sync fell
+        // back to CompactBlockProcessor. Nothing here needs to replace it. See docs/voting.md.
     )
 
 /**

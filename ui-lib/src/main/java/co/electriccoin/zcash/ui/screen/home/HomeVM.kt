@@ -17,6 +17,7 @@ import co.electriccoin.zcash.ui.common.usecase.NavigateToPayMerchantUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToReceiveUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToSwapUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShieldFundsFromMessageUseCase
+import co.electriccoin.zcash.ui.common.voting.VotingHomeHooks
 import co.electriccoin.zcash.ui.design.component.BigIconButtonState
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.error.ErrorArgs
@@ -73,11 +74,15 @@ class HomeVM(
     private val navigateToOnramp: NavigateToOnrampUseCase,
     private val navigateToPayMerchant: NavigateToPayMerchantUseCase,
     private val navigateToSwap: NavigateToSwapUseCase,
+    private val votingHomeHooks: VotingHomeHooks,
     private val migrationHomeMessageSource: MigrationHomeMessageSource,
     private val homeMessageMapper: HomeMessageMapper,
 ) : ViewModel() {
     private var hasSyncErrorBeenShown = false
     private var hasRestoreSuccessBeenShown = false
+    private var hasAttemptedPendingVotingRouteRecovery = false
+    private var hasRecoveredPendingVotingRoute = false
+    private var hasResumedShareTracking = false
 
     // NOTE: no checkMigrationRecovery() here. HomeVM is lazily created on Home's FIRST
     // composition — with replaceAll(Home, Progress) that moment is exactly when the user backs
@@ -129,6 +134,16 @@ class HomeVM(
             messageData,
             isRestoreDialogVisible
         ) { message, isRestoreVisible ->
+            if (!hasAttemptedPendingVotingRouteRecovery) {
+                hasAttemptedPendingVotingRouteRecovery = true
+                hasRecoveredPendingVotingRoute = votingHomeHooks.recoverPendingRouteIfNeeded()
+            }
+
+            if (!hasResumedShareTracking) {
+                hasResumedShareTracking = true
+                votingHomeHooks.resumePendingShareTracking()
+            }
+
             hasSyncErrorBeenShown =
                 if (message is HomeMessageData.Error) {
                     if (!hasSyncErrorBeenShown) navigateToError.navigateToSyncError(message) else false
@@ -136,7 +151,7 @@ class HomeVM(
                     false
                 }
 
-            if (isRestoreVisible == true && !hasRestoreSuccessBeenShown) {
+            if (!hasRecoveredPendingVotingRoute && isRestoreVisible == true && !hasRestoreSuccessBeenShown) {
                 hasRestoreSuccessBeenShown = true
                 navigationRouter.forward(KeepOpenArgs(KeepOpenFlow.RESTORE))
             }

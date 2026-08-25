@@ -28,6 +28,10 @@ import co.electriccoin.zcash.ui.common.provider.GiftClaimOperationLock
 import co.electriccoin.zcash.ui.common.provider.GiftFundingOperationLock
 import co.electriccoin.zcash.ui.common.provider.GiftKeyProvider
 import co.electriccoin.zcash.ui.common.provider.GiftKeyProviderImpl
+import co.electriccoin.zcash.ui.common.provider.HasSeenHowToVoteKeystoneStorageProvider
+import co.electriccoin.zcash.ui.common.provider.HasSeenHowToVoteKeystoneStorageProviderImpl
+import co.electriccoin.zcash.ui.common.provider.HasSeenHowToVoteStorageProvider
+import co.electriccoin.zcash.ui.common.provider.HasSeenHowToVoteStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.HttpClientProvider
 import co.electriccoin.zcash.ui.common.provider.HttpClientProviderImpl
 import co.electriccoin.zcash.ui.common.provider.IsBackgroundExecutionAvailableProvider
@@ -483,5 +487,8 @@ val providerModule =
             }
         }
         singleOf(::LastNetworkActivityStorageProviderImpl) bind LastNetworkActivityStorageProvider::class
+        singleOf(::HasSeenHowToVoteStorageProviderImpl) bind HasSeenHowToVoteStorageProvider::class
+        singleOf(::HasSeenHowToVoteKeystoneStorageProviderImpl) bind
+            HasSeenHowToVoteKeystoneStorageProvider::class
         factoryOf(::IsBackgroundExecutionAvailableProvider)
     }

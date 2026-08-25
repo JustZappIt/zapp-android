@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.HowToVote
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Person
@@ -100,6 +101,8 @@ internal fun SettingsTabContent(
     onBaseAccountClick: () -> Unit,
     onPortfolioChartClick: () -> Unit,
     onViewingKeyExportClick: () -> Unit,
+    // Null while the coinholder-polling kill switch is off, which hides the group entirely.
+    onVotingClick: (() -> Unit)?,
     walletViewModel: WalletViewModel = koinViewModel(),
 ) {
     val scope = rememberCoroutineScope()
@@ -199,6 +202,19 @@ internal fun SettingsTabContent(
                         iconBackground = c.accentSoft,
                         onClick = onChatSettingsClick,
                     )
+                }
+
+                if (onVotingClick != null) {
+                    ZappSettingsGroup(title = stringResource(R.string.settings_group_governance)) {
+                        ZappRow(
+                            title = stringResource(R.string.settings_voting_title),
+                            subtitle = stringResource(R.string.settings_voting_subtitle),
+                            icon = Icons.Default.HowToVote,
+                            iconTint = c.accentText,
+                            iconBackground = c.accentSoft,
+                            onClick = onVotingClick,
+                        )
+                    }
                 }
 
                 ZappSettingsGroup(title = stringResource(R.string.settings_group_p2p)) {

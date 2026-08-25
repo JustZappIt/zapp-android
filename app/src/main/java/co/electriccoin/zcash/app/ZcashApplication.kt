@@ -35,6 +35,7 @@ import co.electriccoin.zcash.ui.common.repository.WalletSnapshotRepository
 import co.electriccoin.zcash.ui.screen.chat.common.ChatBootstrap
 import co.electriccoin.zcash.ui.screen.error.ErrorArgs
 import co.electriccoin.zcash.ui.screen.error.NavigateToErrorUseCase
+import co.electriccoin.zcash.voting.di.featureVotingModule
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -87,6 +88,7 @@ class ZcashApplication : CoroutineApplication() {
                 viewModelModule,
                 zappMessagingModule,
                 featureMigrationModule,
+                featureVotingModule,
             )
         }
 

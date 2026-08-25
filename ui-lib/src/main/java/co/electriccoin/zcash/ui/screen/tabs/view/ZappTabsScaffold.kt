@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -21,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.usecase.NavigateToVotingUseCase
 import co.electriccoin.zcash.ui.common.viewmodel.SecretState
 import co.electriccoin.zcash.ui.common.viewmodel.WalletViewModel
 import co.electriccoin.zcash.ui.design.animation.ZappMotion
@@ -35,6 +37,7 @@ import co.electriccoin.zcash.ui.screen.onboarding.ZappRestoreFlow
 import co.electriccoin.zcash.ui.screen.tabs.TabsVM
 import co.electriccoin.zcash.ui.screen.welcome.WelcomeGateVM
 import co.electriccoin.zcash.ui.screen.welcome.view.WelcomeGateView
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 
@@ -120,6 +123,8 @@ private fun ZappTabsScaffoldContent() {
     var hideNavPill by rememberSaveable { mutableStateOf(false) }
 
     val chatConversationsRepository: ChatConversationsRepository = koinInject()
+    val navigateToVoting: NavigateToVotingUseCase = koinInject()
+    val scope = rememberCoroutineScope()
     val conversations by chatConversationsRepository.conversations.collectAsState()
     val unreadCount = conversations.orEmpty().sumOf { it.unreadCount }
     val c = ZappTheme.colors
@@ -169,6 +174,12 @@ private fun ZappTabsScaffoldContent() {
                         onBaseAccountClick = tabsVM::onBaseAccountClick,
                         onPortfolioChartClick = tabsVM::onPortfolioChartClick,
                         onViewingKeyExportClick = tabsVM::onViewingKeyExportClick,
+                        onVotingClick =
+                            if (navigateToVoting.isEnabled) {
+                                { scope.launch { navigateToVoting() } }
+                            } else {
+                                null
+                            },
                     )
                 }
             }

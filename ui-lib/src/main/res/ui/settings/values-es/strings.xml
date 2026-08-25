@@ -8,6 +8,7 @@
     <string name="settings_version">Versión <xliff:g example="1" id="version">%s</xliff:g></string>
     <string name="settings_address_book">Libreta de Direcciones</string>
     <string name="settings_gift_cards">Tarjetas de Regalo</string>
+    <string name="settings_coinholderPolling">Votación de Titulares</string>
     <string name="settings_whats_new">Novedades</string>
 
     <string name="settings_troubleshooting_menu_content_description">Configuración adicional</string>
@@ -134,4 +135,7 @@
     <string name="settings_base_account_title">Cuenta de Base</string>
     <string name="settings_base_account_subtitle">Tu saldo de USDC y tu actividad</string>
     <string name="settings_base_account_in_progress">Retiro en curso</string>
+    <string name="settings_group_governance">Gobernanza</string>
+    <string name="settings_voting_title">Votación de Titulares</string>
+    <string name="settings_voting_subtitle">Vota en propuestas de gobernanza de Zcash</string>
 </resources>

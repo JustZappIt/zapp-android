@@ -256,6 +256,7 @@ dependencies {
     implementation(projects.spackleAndroidLib)
     implementation(projects.uiLib)
     implementation(projects.featureMigration)
+    implementation(projects.featureVoting)
 
     androidTestImplementation(projects.testLib)
 

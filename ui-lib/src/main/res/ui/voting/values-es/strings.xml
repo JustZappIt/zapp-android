@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Coinholder polling (governance voting). Ids are upstream zodl-android's
+     verbatim so upstream string patches still apply; only the file location
+     follows the fork's per-feature res/ui/<feature>/ split. -->
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2" xmlns:tools="http://schemas.android.com/tools">
+    <string name="coinVote_error_title">Algo salió mal</string>
+    <string name="coinVote_common_retry">Reintentar</string>
+    <string name="coinVote_delegationSigning_scanInstructions">Escanea tu wallet Keystone para firmar la transacción</string>
+    <string name="authentication_use_case_vote_submission">Envío de voto</string>
+    <string name="keystone_signWith_hardware">Hardware</string>
+    <string name="keystoneTransactionReject_goBack">Volver</string>
+    <string name="keystoneTransactionReject_rejectSig">Rechazar firma</string>
+</resources>
