@@ -135,9 +135,9 @@
     <!-- Chat profile — delete identity dialog -->
     <string name="chat_profile_delete_dialog_title">¿Eliminar identidad?</string>
     <string name="chat_profile_delete_dialog_message">Esto elimina tu identidad de mensajería y todo el historial de chat, y restablece este dispositivo a la configuración inicial. Tus fondos se pueden restaurar con tu frase semilla.</string>
-    <string name="chat_profile_delete_gift_cards_title">Tarjetas de regalo no compartidas</string>
-    <string name="chat_profile_delete_gift_cards_message">Tienes tarjetas de regalo financiadas cuyos enlaces aún no has compartido. Al eliminar se borran, y tu frase de recuperación no puede recuperarlas. Comparte o copia cada enlace primero.</string>
-    <string name="chat_profile_delete_gift_cards_review">Revisar tarjetas de regalo</string>
+    <string name="chat_profile_delete_gift_cards_title">Zpackets no compartidos</string>
+    <string name="chat_profile_delete_gift_cards_message">Tienes Zpackets financiados cuyos enlaces aún no has compartido. Al eliminar se borran, y tu frase de recuperación no puede recuperarlos. Comparte o copia cada enlace primero.</string>
+    <string name="chat_profile_delete_gift_cards_review">Revisar Zpackets</string>
     <string name="chat_profile_delete_dialog_confirm">Eliminar</string>
     <string name="chat_profile_delete_dialog_cancel">Cancelar</string>
 

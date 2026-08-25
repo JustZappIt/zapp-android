@@ -7,7 +7,7 @@
     <string name="settings_feedback">Send Us Feedback</string>
     <string name="settings_version">Version <xliff:g example="1" id="version">%s</xliff:g></string>
     <string name="settings_address_book">Address Book</string>
-    <string name="settings_gift_cards">Gift Cards</string>
+    <string name="settings_gift_cards">Zpackets</string>
     <string name="settings_coinholderPolling">Coinholder Polling</string>
     <string name="settings_whats_new">What\'s New</string>
 

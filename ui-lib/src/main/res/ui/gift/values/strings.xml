@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="gift_card_speed_dial">Gift card</string>
+    <string name="gift_card_speed_dial">Gift Zpacket</string>
 
-    <string name="gift_card_title">Gift card</string>
+    <string name="gift_card_title">Zpacket</string>
     <string name="gift_card_subtitle_details">Anyone with the link can claim it</string>
     <string name="gift_card_subtitle_review">Check before you fund</string>
-    <string name="gift_card_subtitle_funding">Funding your card</string>
+    <string name="gift_card_subtitle_funding">Funding your Zpacket</string>
     <string name="gift_card_subtitle_ready">Ready to share</string>
-    <string name="gift_card_subtitle_unavailable">Saved card needs review</string>
+    <string name="gift_card_subtitle_unavailable">Saved Zpacket needs review</string>
 
     <string name="gift_card_amount_label">Amount</string>
     <string name="gift_card_amount_symbol">ZEC</string>
@@ -21,13 +21,13 @@
     <string name="gift_card_message_label">Message (optional)</string>
     <string name="gift_card_message_placeholder">Happy birthday</string>
     <string name="gift_card_message_counter">%1$d / %2$d</string>
-    <string name="gift_card_message_error_too_long">This message is too long to fit in a gift link</string>
+    <string name="gift_card_message_error_too_long">This message is too long to fit in a Zpacket link</string>
 
     <string name="gift_card_expiry_label">Suggested expiry</string>
     <string name="gift_card_expiry_compact">Expiry · %1$s</string>
     <string name="gift_card_expiry_none">None</string>
     <string name="gift_card_expiry_days">%1$d days</string>
-    <string name="gift_card_expiry_hint">Advisory only. Nothing on chain enforces it, so the card still claims afterwards.</string>
+    <string name="gift_card_expiry_hint">Advisory only. Nothing on chain enforces it, so the Zpacket still claims afterwards.</string>
 
     <string name="gift_card_continue">Review</string>
     <string name="gift_card_preparing">Preparing…</string>
@@ -42,108 +42,108 @@
     <string name="gift_card_review_warning_title">Before you fund this</string>
     <string name="gift_card_review_warning_irreversible">Funding cannot be undone. There is no refund and no way to claw the money back.</string>
     <string name="gift_card_review_warning_bearer">Whoever holds the link owns the money. Send it privately.</string>
-    <string name="gift_card_review_warning_backup">Zapp cannot recover this card from your seed phrase. Losing this device before you share the link loses the funds.</string>
-    <string name="gift_card_review_warning_delay">The card becomes claimable about 15 minutes after funding.</string>
-    <string name="gift_card_review_confirm">Fund gift card</string>
-    <string name="gift_card_auth_prompt">Authenticate to fund this gift card</string>
+    <string name="gift_card_review_warning_backup">Zapp cannot recover this Zpacket from your seed phrase. Losing this device before you share the link loses the funds.</string>
+    <string name="gift_card_review_warning_delay">The Zpacket becomes claimable about 15 minutes after funding.</string>
+    <string name="gift_card_review_confirm">Fund Zpacket</string>
+    <string name="gift_card_auth_prompt">Authenticate to fund this Zpacket</string>
     <string name="gift_card_authenticating">Authenticating…</string>
 
-    <string name="gift_card_step_minted">Card created</string>
+    <string name="gift_card_step_minted">Zpacket created</string>
     <string name="gift_card_step_funding">Sending funds</string>
     <string name="gift_card_step_ready">Ready to share</string>
     <string name="gift_card_funding_note">Keep Zapp open until this finishes.</string>
 
-    <string name="gift_card_ready_title">Gift card funded</string>
+    <string name="gift_card_ready_title">Zpacket funded</string>
     <string name="gift_card_ready_subtitle">Share the link with whoever you are gifting.</string>
-    <string name="gift_card_ready_link_label">Gift link</string>
+    <string name="gift_card_ready_link_label">Zpacket link</string>
     <string name="gift_card_ready_share">Share link</string>
-    <string name="gift_card_ready_share_picker">Share gift link</string>
+    <string name="gift_card_ready_share_picker">Share Zpacket link</string>
     <string name="gift_card_ready_claimable">Claimable in about 15 minutes, once the funding transaction has enough confirmations.</string>
     <string name="gift_card_ready_bearer">Anyone with this link can claim it. Share it privately, and only once.</string>
-    <string name="gift_card_unavailable_body">This card is no longer ready to share. Open saved gift cards to review its current status. If funding can be retried, Zapp keeps this same card and link.</string>
+    <string name="gift_card_unavailable_body">This Zpacket is no longer ready to share. Open your saved Zpackets to review its current status. If funding can be retried, Zapp keeps this same Zpacket and link.</string>
 
-    <string name="gift_card_error_keystone">Gift cards need a spending key on this device. Switch to a Zapp account to create one.</string>
-    <string name="gift_card_error_network">Gift cards are available on mainnet and testnet only.</string>
+    <string name="gift_card_error_keystone">Zpackets need a spending key on this device. Switch to a Zapp account to create one.</string>
+    <string name="gift_card_error_network">Zpackets are available on mainnet and testnet only.</string>
     <string name="gift_card_error_chain_tip">Zapp is still connecting. Try again once syncing has started.</string>
-    <string name="gift_card_error_persist">The gift card could not be saved, so nothing was funded. Try again.</string>
-    <string name="gift_card_error_mint">The gift card could not be created. Nothing was funded.</string>
+    <string name="gift_card_error_persist">The Zpacket could not be saved, so nothing was funded. Try again.</string>
+    <string name="gift_card_error_mint">The Zpacket could not be created. Nothing was funded.</string>
     <string name="gift_card_error_proposal">The funding transaction could not be prepared. Nothing was sent.</string>
-    <string name="gift_card_error_insufficient">Not enough spendable ZEC to fund this card and its fees.</string>
+    <string name="gift_card_error_insufficient">Not enough spendable ZEC to fund this Zpacket and its fees.</string>
     <string name="gift_card_error_auth">Authentication failed, so nothing was funded.</string>
     <string name="gift_card_error_submit_uncertain">Zapp could not confirm whether the funding transaction was broadcast. Check your transaction list before funding again.</string>
     <string name="gift_card_error_share">The share sheet could not be opened. Copy the link instead.</string>
 
-    <string name="gift_claim_title">Gift card</string>
+    <string name="gift_claim_title">Zpacket</string>
     <string name="gift_claim_subtitle_preview">Someone sent you ZEC</string>
-    <string name="gift_claim_subtitle_claiming">Claiming your gift</string>
+    <string name="gift_claim_subtitle_claiming">Claiming your ZEC</string>
     <string name="gift_claim_subtitle_done">Claimed</string>
     <string name="gift_claim_subtitle_needs_wallet">You need a wallet first</string>
     <string name="gift_claim_subtitle_waiting">Waiting for the network</string>
     <string name="gift_claim_subtitle_already_claimed">Already claimed</string>
     <string name="gift_claim_subtitle_confirming">Claim confirming</string>
 
-    <string name="gift_claim_amount_label">Card value</string>
+    <string name="gift_claim_amount_label">Zpacket value</string>
     <string name="gift_claim_message_label">Message</string>
-    <string name="gift_claim_claim">Claim to my wallet</string>
+    <string name="gift_claim_claim">Claim your Zpacket</string>
     <string name="gift_claim_needs_wallet_action">Create a wallet</string>
     <string name="gift_claim_connecting">Connecting to the Zcash network…</string>
     <string name="gift_claim_needs_wallet_title">Create a wallet to claim this</string>
-    <string name="gift_claim_needs_wallet_body">The gift is yours — Zapp just needs a wallet to put it in. Set one up and your card will be waiting when you get back.</string>
+    <string name="gift_claim_needs_wallet_body">The ZEC is yours — Zapp just needs a wallet to put it in. Set one up and your Zpacket will be waiting when you get back.</string>
 
-    <string name="gift_claim_consent_title">This card is a few months old</string>
+    <string name="gift_claim_consent_title">This Zpacket is a few months old</string>
     <string name="gift_claim_consent_body">Claiming it means scanning about %1$s blocks, roughly %2$s. Keep Zapp open while it runs.</string>
     <string name="gift_claim_consent_confirm">Scan anyway</string>
     <string name="gift_claim_consent_duration_hours">%1$d hours</string>
     <string name="gift_claim_consent_duration_days">%1$d days</string>
 
-    <string name="gift_claim_progress_syncing">Looking for your gift…</string>
+    <string name="gift_claim_progress_syncing">Looking for your ZEC…</string>
     <string name="gift_claim_progress_percent">%1$d%%</string>
-    <string name="gift_claim_progress_note">Keep Zapp open. This can take a while for an older card.</string>
+    <string name="gift_claim_progress_note">Keep Zapp open. This can take a while for an older Zpacket.</string>
 
-    <string name="gift_claim_done_title">Gift claimed</string>
+    <string name="gift_claim_done_title">ZEC claimed</string>
     <string name="gift_claim_done_subtitle">%1$s is on its way into your wallet.</string>
     <string name="gift_claim_done">Done</string>
 
     <string name="gift_claim_pending_title">Almost ready</string>
-    <string name="gift_claim_pending_body">Your gift is confirming on the Zcash network. This takes about 15 minutes; Zapp will claim it automatically. You can leave this screen open.</string>
+    <string name="gift_claim_pending_body">Your ZEC is confirming on the Zcash network. This takes about 15 minutes; Zapp will claim it automatically. You can leave this screen open.</string>
     <string name="gift_claim_retry">Try again</string>
 
-    <string name="gift_claim_awaiting_funding_title">Gift is not available yet</string>
-    <string name="gift_claim_awaiting_funding_body">This gift is not available on the card yet. Its funding may still be arriving, or another claim may still be resolving. Wait a little, then try again.</string>
-    <string name="gift_claim_already_claimed_title">This gift was already claimed</string>
-    <string name="gift_claim_already_claimed_body">Another holder of this link claimed the gift before this wallet did. No funds were sent to this wallet.</string>
+    <string name="gift_claim_awaiting_funding_title">This Zpacket is not funded yet</string>
+    <string name="gift_claim_awaiting_funding_body">The ZEC has not reached this Zpacket yet. Its funding may still be arriving, or another claim may still be resolving. Wait a little, then try again.</string>
+    <string name="gift_claim_already_claimed_title">This Zpacket was already claimed</string>
+    <string name="gift_claim_already_claimed_body">Another holder of this link claimed it before this wallet did. No funds were sent to this wallet.</string>
 
-    <string name="gift_claim_error_link">This is not a gift link Zapp understands.</string>
-    <string name="gift_claim_error_network">This card is for a different Zcash network.</string>
-    <string name="gift_claim_error_future">This card claims to be newer than the blockchain. Zapp may still be syncing.</string>
-    <string name="gift_claim_error_newer_format">This gift was made with a newer version of Zapp. Update Zapp to claim it — the gift is safe on the card until you do.</string>
-    <string name="gift_claim_error_not_broadcast">Zapp could not confirm the transfer reached the network. Your gift is safe on the card — try again in a moment.</string>
-    <string name="gift_claim_error_failed">The gift could not be claimed. Nothing was lost; try again.</string>
-    <string name="gift_claim_error_underfunded">This card cannot cover the network fee to move its own funds. The gift is still on the card, but Zapp cannot claim it.</string>
-    <string name="gift_claim_error_params">Zapp couldn\'t download what it needs to build the transaction. Your gift is safe — check your connection and try again.</string>
-    <string name="gift_claim_error_unreachable">Zapp could not reach a Zcash server to look for this gift. Check your connection and try again.</string>
-    <string name="gift_claim_error_not_ready">Zapp is still connecting to the Zcash network. Your gift is fine — try again in a moment.</string>
-    <string name="gift_claim_error_unavailable">This gift link is no longer open. Tap it again where you received it.</string>
-    <string name="gift_claim_expired_note">This card is past its suggested expiry. That is advisory only — it still claims for the full amount.</string>
+    <string name="gift_claim_error_link">This is not a Zpacket link Zapp understands.</string>
+    <string name="gift_claim_error_network">This Zpacket is for a different Zcash network.</string>
+    <string name="gift_claim_error_future">This Zpacket claims to be newer than the blockchain. Zapp may still be syncing.</string>
+    <string name="gift_claim_error_newer_format">This Zpacket was made with a newer version of Zapp. Update Zapp to claim it — the ZEC is safe inside until you do.</string>
+    <string name="gift_claim_error_not_broadcast">Zapp could not confirm the transfer reached the network. Your ZEC is safe in the Zpacket — try again in a moment.</string>
+    <string name="gift_claim_error_failed">The Zpacket could not be claimed. Nothing was lost; try again.</string>
+    <string name="gift_claim_error_underfunded">This Zpacket cannot cover the network fee to move its own funds. The ZEC is still inside, but Zapp cannot claim it.</string>
+    <string name="gift_claim_error_params">Zapp couldn\'t download what it needs to build the transaction. Your ZEC is safe — check your connection and try again.</string>
+    <string name="gift_claim_error_unreachable">Zapp could not reach a Zcash server to look for this Zpacket. Check your connection and try again.</string>
+    <string name="gift_claim_error_not_ready">Zapp is still connecting to the Zcash network. Your ZEC is fine — try again in a moment.</string>
+    <string name="gift_claim_error_unavailable">This Zpacket link is no longer open. Tap it again where you received it.</string>
+    <string name="gift_claim_expired_note">This Zpacket is past its suggested expiry. That is advisory only — it still claims for the full amount.</string>
     <string name="gift_claim_progress_remaining">%1$d blocks left</string>
     <string name="gift_claim_stop_scan">Stop scan</string>
-    <string name="gift_claim_confirming_title">Your gift is on its way</string>
-    <string name="gift_claim_confirming_body">Zapp has already claimed this gift for you. It is confirming on the Zcash network, which takes about 15 minutes. There is nothing else to do — check again only if it seems stuck.</string>
+    <string name="gift_claim_confirming_title">Your ZEC is on its way</string>
+    <string name="gift_claim_confirming_body">Zapp has already claimed this Zpacket for you. It is confirming on the Zcash network, which takes about 15 minutes. There is nothing else to do — check again only if it seems stuck.</string>
     <string name="gift_claim_confirming_recheck">Check again</string>
     <string name="gift_claim_pending_count">%1$d / %2$d confirmations</string>
 
-    <string name="gift_card_list_title">Your gift cards</string>
+    <string name="gift_card_list_title">Your Zpackets</string>
     <string name="gift_card_list_subtitle">Rebuild and re-share any link</string>
-    <string name="gift_card_list_open">Your gift cards</string>
-    <string name="gift_card_list_empty">No gift cards yet. Cards you create stay here until you have shared their links.</string>
+    <string name="gift_card_list_open">Your Zpackets</string>
+    <string name="gift_card_list_empty">No Zpackets yet. The ones you create stay here until you have shared their links.</string>
     <string name="gift_card_list_warning">These links are the only way to reach the funds. Zapp cannot rebuild them from your recovery phrase.</string>
     <string name="gift_claim_podium_caption">A gift for you</string>
     <string name="gift_card_deck_wordmark">Zapp</string>
     <string name="gift_card_deck_details">Details</string>
     <string name="gift_card_deck_created">Created %1$s</string>
-    <string name="gift_card_deck_open">Open this card</string>
-    <string name="gift_card_deck_show_back">Show card details</string>
-    <string name="gift_card_deck_show_front">Show card front</string>
+    <string name="gift_card_deck_open">Open this Zpacket</string>
+    <string name="gift_card_deck_show_back">Show Zpacket details</string>
+    <string name="gift_card_deck_show_front">Show Zpacket front</string>
     <string name="gift_card_chip_unfunded">Not funded</string>
     <string name="gift_card_chip_retryable">Retry funding</string>
     <string name="gift_card_chip_unresolved">Check funding</string>
@@ -154,7 +154,7 @@
     <string name="gift_card_chip_shared_stale">Shared · check again</string>
     <string name="gift_card_chip_claimed">Collected</string>
     <string name="gift_card_list_status_unfunded">Not funded</string>
-    <string name="gift_card_list_status_retryable">The previous funding attempt is conclusively finished. Review current fees before funding this same card again.</string>
+    <string name="gift_card_list_status_retryable">The previous funding attempt is conclusively finished. Review current fees before funding this same Zpacket again.</string>
     <string name="gift_card_list_status_unresolved">Funding status unknown — check before re-funding</string>
     <string name="gift_card_list_status_submitted">Funding, not yet mined</string>
     <string name="gift_card_list_status_funded">Ready to share</string>
@@ -163,28 +163,28 @@
     <string name="gift_card_list_expired">Expired %1$s — still claimable</string>
     <string name="gift_card_list_status_claimed">Collected</string>
     <string name="gift_card_list_share">Share link</string>
-    <string name="gift_card_list_share_picker">Share gift link</string>
+    <string name="gift_card_list_share_picker">Share Zpacket link</string>
     <string name="gift_card_list_retry_funding">Retry funding</string>
     <string name="gift_card_list_retry_funding_running">Preparing funding retry</string>
     <string name="gift_card_list_check">Check if collected</string>
     <string name="gift_card_list_check_stop">Stop checking</string>
     <string name="gift_card_list_check_stop_progress">Stop checking · %1$d%%</string>
-    <string name="gift_card_list_checked_unclaimed">Checked %1$s — still on the card, nobody has collected it.</string>
-    <string name="gift_card_list_check_blocked_no_tx">Zapp has no transaction recorded for this card, so there is nothing to look for yet.</string>
-    <string name="gift_card_list_check_blocked_busy">Another card is being checked. Each check scans the blockchain, so they run one at a time.</string>
-    <string name="gift_card_list_error_link">This card\'s link could not be rebuilt. Do not reset your wallet — contact support.</string>
+    <string name="gift_card_list_checked_unclaimed">Checked %1$s — still inside, nobody has collected it.</string>
+    <string name="gift_card_list_check_blocked_no_tx">Zapp has no transaction recorded for this Zpacket, so there is nothing to look for yet.</string>
+    <string name="gift_card_list_check_blocked_busy">Another Zpacket is being checked. Each check scans the blockchain, so they run one at a time.</string>
+    <string name="gift_card_list_error_link">This Zpacket\'s link could not be rebuilt. Do not reset your wallet — contact support.</string>
     <string name="gift_card_list_error_share">The share sheet could not be opened. Try again.</string>
-    <string name="gift_card_list_notice_funding_pending">This card\'s funding has not reached it yet, so nobody can have collected it. Check again once the transaction has mined.</string>
-    <string name="gift_card_list_error_check">Zapp could not finish checking this card. That says nothing about whether it was collected — try again later.</string>
-    <string name="gift_card_list_error_unreachable">Zapp could not reach the Zcash network, so this card was never checked. That says nothing about whether it was collected — try again when you are connected.</string>
+    <string name="gift_card_list_notice_funding_pending">This Zpacket\'s funding has not reached it yet, so nobody can have collected it. Check again once the transaction has mined.</string>
+    <string name="gift_card_list_error_check">Zapp could not finish checking this Zpacket. That says nothing about whether it was collected — try again later.</string>
+    <string name="gift_card_list_error_unreachable">Zapp could not reach the Zcash network, so this Zpacket was never checked. That says nothing about whether it was collected — try again when you are connected.</string>
     <string name="gift_card_list_error_retry_auth">Funding was not retried because authentication did not complete.</string>
-    <string name="gift_card_list_error_retry_funds">This card was not retried because its original account does not have enough spendable ZEC for the amount, claim reserve, and current network fee.</string>
-    <string name="gift_card_list_error_retry">Zapp could not prepare this funding retry. Nothing new was sent — check the card’s original account and try again.</string>
+    <string name="gift_card_list_error_retry_funds">This Zpacket was not retried because its original account does not have enough spendable ZEC for the amount, claim reserve, and current network fee.</string>
+    <string name="gift_card_list_error_retry">Zapp could not prepare this funding retry. Nothing new was sent — check the Zpacket’s original account and try again.</string>
     <string name="gift_card_list_error_retry_uncertain">The retry started, but Zapp cannot yet determine its transaction outcome. Do not retry again; Zapp will reconcile it after syncing.</string>
-    <string name="gift_card_list_notice_retry_submitted">Retry submitted. Funding is pending; this is still the same card and link.</string>
+    <string name="gift_card_list_notice_retry_submitted">Retry submitted. Funding is pending; this is still the same Zpacket and link.</string>
     <string name="gift_card_retry_title">Review funding retry</string>
-    <string name="gift_card_retry_body">Your wallet finished syncing and confirmed the previous funding attempt cannot complete. This creates a new transaction to the same card and link.</string>
+    <string name="gift_card_retry_body">Your wallet finished syncing and confirmed the previous funding attempt cannot complete. This creates a new transaction to the same Zpacket and link.</string>
     <string name="gift_card_retry_confirm">Confirm and authenticate</string>
     <string name="gift_card_retry_cancel">Cancel</string>
-    <string name="gift_card_list_corrupted">Your gift card records could not be read. Do not reset your wallet — contact support.</string>
+    <string name="gift_card_list_corrupted">Your Zpacket records could not be read. Do not reset your wallet — contact support.</string>
 </resources>
