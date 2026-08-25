@@ -60,7 +60,6 @@ import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ButtonStyle
 import co.electriccoin.zcash.ui.design.component.CircularScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.component.RadioButtonState
-import co.electriccoin.zcash.ui.design.component.ZashiConfirmationBottomSheet
 import co.electriccoin.zcash.ui.design.component.ZashiScreenModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.ZashiTextField
 import co.electriccoin.zcash.ui.design.component.ZashiTextFieldDefaults

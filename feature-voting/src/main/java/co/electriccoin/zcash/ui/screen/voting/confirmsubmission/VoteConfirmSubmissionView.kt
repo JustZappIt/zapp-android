@@ -24,7 +24,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.design.component.ZashiConfirmationBottomSheet
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens

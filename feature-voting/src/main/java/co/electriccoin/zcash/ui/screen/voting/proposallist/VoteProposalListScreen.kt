@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import co.electriccoin.zcash.ui.design.component.ZashiConfirmationBottomSheet
 import co.electriccoin.zcash.ui.screen.common.LceRenderer
 import co.electriccoin.zcash.ui.screen.voting.VoteConfirmationBottomSheet
 import kotlinx.serialization.Serializable

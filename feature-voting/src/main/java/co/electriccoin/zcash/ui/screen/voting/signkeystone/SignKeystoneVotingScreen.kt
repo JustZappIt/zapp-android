@@ -33,7 +33,6 @@ import co.electriccoin.zcash.ui.common.appbar.ZashiTopAppBarTags
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.CircularScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.component.ModalBottomSheetState
-import co.electriccoin.zcash.ui.design.component.ZashiConfirmationBottomSheet
 import co.electriccoin.zcash.ui.design.component.ZashiInScreenModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.ZashiSmallTopAppBar
 import co.electriccoin.zcash.ui.design.component.ZashiTopAppBarBackNavigation

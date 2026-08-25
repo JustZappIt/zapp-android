@@ -497,7 +497,7 @@
     <ID>UseRequire:ExceptionPath.kt$ExceptionPath$throw IllegalArgumentException("Directories couldn't be created")</ID>
     <ID>UseRequire:ExceptionPath.kt$ExceptionPath$throw IllegalArgumentException("Path is a file when a directory was expected")</ID>
     <ID>UseRequire:ExceptionPath.kt$ExceptionPath$throw IllegalArgumentException("Path is not writeable")</ID>
-      <ID>CyclomaticComplexMethod:PrepareVotingRoundUseCase.kt$PrepareVotingRoundUseCase$suspend operator fun invoke(roundId: String): VotingRoundPreparationResult</ID>
+    <ID>CyclomaticComplexMethod:PrepareVotingRoundUseCase.kt$PrepareVotingRoundUseCase$suspend operator fun invoke(roundId: String): VotingRoundPreparationResult</ID>
     <ID>CyclomaticComplexMethod:SubmitVotesUseCase.kt$SubmitVotesUseCase$@Suppress("TooGenericExceptionCaught") suspend operator fun invoke( roundId: String, choices: Map&lt;Int, Int&gt;, onProgress: (VotingSubmissionProgress) -&gt; Unit = {} ): VotingSubmissionResult</ID>
     <ID>CyclomaticComplexMethod:TrackVotingSharesUseCase.kt$TrackVotingSharesUseCase$suspend operator fun invoke(roundId: String): VotingShareTrackingResult</ID>
     <ID>CyclomaticComplexMethod:VoteConfirmSubmissionVM.kt$VoteConfirmSubmissionVM$private fun buildButtonState( isPrepared: Boolean, isKeystone: Boolean, keystoneSignedBundles: Int, preparedBundleCount: Int, hasPendingKeystoneRequest: Boolean, isSubmitting: Boolean, status: VoteSubmissionStatus )</ID>

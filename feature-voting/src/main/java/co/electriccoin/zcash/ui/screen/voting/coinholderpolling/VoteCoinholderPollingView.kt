@@ -28,7 +28,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.model.voting.SessionStatus
-import co.electriccoin.zcash.ui.design.component.ZashiConfirmationBottomSheet
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
