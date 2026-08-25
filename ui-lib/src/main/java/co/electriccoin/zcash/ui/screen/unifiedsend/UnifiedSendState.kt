@@ -2,6 +2,7 @@ package co.electriccoin.zcash.ui.screen.unifiedsend
 
 import cash.z.ecc.android.sdk.model.FiatCurrency
 import co.electriccoin.zcash.ui.design.component.AssetCardState
+import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ChipButtonState
 import co.electriccoin.zcash.ui.design.component.IconButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
@@ -33,9 +34,8 @@ internal data class UnifiedSendState(
     // Exact-output only: the muted "≈ 0.42 ZEC" estimate standing in for the editable pay fields,
     // since what we actually spend is only known once NEAR quotes it.
     val payEstimate: PayEstimateState?,
-    // Swap mode only: slippage tolerance button
-    val slippage: StringResource?, // formatted text like "1%" — null in ZEC-direct mode
-    val onSlippageClick: (() -> Unit)?,
+    // Swap mode only: slippage tolerance button — null in ZEC-direct mode
+    val slippage: ButtonState?,
     // ZEC-direct mode only: optional memo
     val memo: MemoFieldState?, // null in swap mode
     // Footers
@@ -48,15 +48,17 @@ internal data class UnifiedSendState(
 )
 
 /**
- * The destination amount row. The field is always editable — which side the user last typed into
- * is what decides between an exact-input and an exact-output quote.
+ * The destination amount row: one field, denominated either in the destination token or in USD — the
+ * currency the asset is priced in, so it stays comparable with an invoice. [onSwapCurrency] flips
+ * between the two, mirroring the same toggle on the pay side; it is null when the asset carries no USD
+ * price and there is nothing to convert with. Typing here is what makes the payment exact-output; in
+ * exact-input the field simply carries the estimate.
  */
 internal data class TheyReceiveState(
     val label: StringResource,
-    val ticker: String,
+    val unit: String,
     val amount: NumberTextFieldState,
-    // Exact-output only: what the recipient's amount costs in USD, the currency invoices are quoted in
-    val fiatEquivalent: StringResource?,
+    val onSwapCurrency: (() -> Unit)?,
 )
 
 /**
@@ -65,7 +67,7 @@ internal data class TheyReceiveState(
  */
 internal data class PayEstimateState(
     val text: StringResource,
-    val onClick: () -> Unit,
+    val onClick: (() -> Unit)?,
 )
 
 internal enum class AddressMode { ZCASH, GENERIC }
@@ -80,15 +82,29 @@ internal sealed interface MemoFieldState {
     ) : MemoFieldState
 }
 
+/**
+ * Mirrors the four states upstream's Pay screen gives its primary button (review / try again /
+ * loading / disabled), plus the Top Up call to action Zapp offers instead of leaving the user on a
+ * dead button when they cannot cover the payment.
+ */
 internal sealed interface PrimaryButtonState {
     data class Review(
         val isLoading: Boolean,
         val onClick: () -> Unit
     ) : PrimaryButtonState
 
+    /** Swap assets failed to load. Retries the fetch rather than submitting anything. */
+    data class Retry(
+        val isLoading: Boolean,
+        val onClick: () -> Unit
+    ) : PrimaryButtonState
+
+    /** The first swap-asset fetch is still in flight, so there is nothing to review yet. */
+    data object Loading : PrimaryButtonState
+
     data class TopUp(
         val onClick: () -> Unit
     ) : PrimaryButtonState
 
-    object Disabled : PrimaryButtonState
+    data object Disabled : PrimaryButtonState
 }

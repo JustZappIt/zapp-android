@@ -1,6 +1,10 @@
 package co.electriccoin.zcash.ui.screen.unifiedsend
 
+import androidx.compose.ui.text.TextRange
+import co.electriccoin.zcash.ui.design.component.InnerTextFieldState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
+import co.electriccoin.zcash.ui.design.component.TextSelection
+import co.electriccoin.zcash.ui.design.util.stringResByDynamicNumber
 import java.math.BigDecimal
 import java.math.MathContext
 import java.math.RoundingMode
@@ -27,6 +31,10 @@ internal fun estimateTokenFromZec(
 /** USD value of [token] of the destination asset — upstream's `getOriginFiatAmount`. */
 internal fun estimateUsdFromToken(token: BigDecimal?, tokenUsdPrice: BigDecimal?): BigDecimal? =
     usdValue(token, tokenUsdPrice)
+
+/** The destination amount [usd] buys, the inverse of [estimateUsdFromToken]. */
+internal fun estimateTokenFromUsd(usd: BigDecimal?, tokenUsdPrice: BigDecimal?): BigDecimal? =
+    divideByPrice(usd, tokenUsdPrice)
 
 private fun usdValue(amount: BigDecimal?, usdPrice: BigDecimal?): BigDecimal? =
     if (amount == null || usdPrice == null) {
@@ -60,8 +68,29 @@ internal fun NumberTextFieldInnerState.exceedsAssetDecimals(decimals: Int): Bool
 }
 
 /**
- * Whether the field is empty. The destination field is authoritative as soon as it holds anything;
- * emptying it hands authority back to the ZEC side. Mid-typing values like "0." parse to a null
- * amount while still being input, so the text — not the parsed amount — decides.
+ * Builds a field state from a computed amount, for the half of a linked pair the user is not
+ * currently typing into. [selection] decides what happens when they do reach for it: [TextSelection.End]
+ * to carry on from the figure (how the derived half of an active pair behaves), or a range covering
+ * the whole value so the first keystroke replaces an estimate the user never typed.
  */
-internal fun NumberTextFieldInnerState.isBlankInput(): Boolean = innerTextFieldState.value.isEmpty()
+internal fun BigDecimal?.toAmountState(
+    selection: TextSelection = TextSelection.End
+): NumberTextFieldInnerState =
+    this?.let { amount ->
+        NumberTextFieldInnerState(
+            innerTextFieldState =
+                InnerTextFieldState(
+                    value = stringResByDynamicNumber(amount, includeGroupingSeparator = false),
+                    selection = selection,
+                ),
+            amount = amount,
+            lastValidAmount = amount,
+        )
+    } ?: NumberTextFieldInnerState()
+
+/**
+ * Selects the whole value, so a field holding a figure the user did not type is replaced rather
+ * than appended to on the first keystroke. The end is clamped to the rendered text by
+ * `ZashiNumberTextField`, so it does not need to be known here.
+ */
+internal val SELECT_ALL = TextSelection.ByTextRange(TextRange(0, Int.MAX_VALUE))

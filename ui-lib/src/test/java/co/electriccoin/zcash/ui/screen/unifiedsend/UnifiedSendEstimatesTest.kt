@@ -1,11 +1,12 @@
 package co.electriccoin.zcash.ui.screen.unifiedsend
 
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
-import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.design.component.TextSelection
 import java.math.BigDecimal
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -80,6 +81,19 @@ class UnifiedSendEstimatesTest {
         assertNull(estimateUsdFromToken(BigDecimal("0.001"), null))
     }
 
+    @Test
+    fun `a usd amount converts back to the destination amount it buys`() {
+        assertEquals(
+            0,
+            BigDecimal("0.001").compareTo(estimateTokenFromUsd(BigDecimal("50"), BigDecimal("50000")))
+        )
+    }
+
+    @Test
+    fun `a usd amount refuses a zero token price`() {
+        assertNull(estimateTokenFromUsd(BigDecimal("50"), BigDecimal.ZERO))
+    }
+
     // endregion
 
     // region precision — the destination chain decides how fine an amount can be
@@ -110,32 +124,32 @@ class UnifiedSendEstimatesTest {
     }
 
     @Test
-    fun `a half typed amount is not flagged as too precise`() {
-        // "0." parses to nothing yet; there is no precision to judge.
+    fun `an empty field is not flagged as too precise`() {
+        // Nothing has been typed, so there is no precision to judge.
         assertFalse(NumberTextFieldInnerState().exceedsAssetDecimals(2))
     }
 
     // endregion
 
-    // region blank input — what hands authority back to the pay side
+    // region field states built from a computed amount
 
     @Test
-    fun `an empty field is blank input`() {
-        assertTrue(NumberTextFieldInnerState().isBlankInput())
+    fun `a computed amount becomes a field holding that amount`() {
+        val state = BigDecimal("1.5").toAmountState()
+        assertEquals(0, BigDecimal("1.5").compareTo(assertNotNull(state.amount)))
+        assertEquals(TextSelection.End, state.innerTextFieldState.selection)
     }
 
     @Test
-    fun `a mid-typing value is not blank input even though it has no amount yet`() {
-        val midTyping =
-            NumberTextFieldInnerState(
-                innerTextFieldState =
-                    NumberTextFieldInnerState().innerTextFieldState.copy(
-                        value = stringRes("0.")
-                    ),
-                amount = null,
-                lastValidAmount = null
-            )
-        assertFalse(midTyping.isBlankInput())
+    fun `no amount becomes an empty field rather than a zero`() {
+        val state = (null as BigDecimal?).toAmountState()
+        assertNull(state.amount)
+        assertTrue(state.innerTextFieldState.value.isEmpty())
+    }
+
+    @Test
+    fun `an estimate the user never typed comes pre-selected so the first keystroke replaces it`() {
+        assertEquals(SELECT_ALL, BigDecimal("1.5").toAmountState(SELECT_ALL).innerTextFieldState.selection)
     }
 
     // endregion

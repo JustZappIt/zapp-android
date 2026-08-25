@@ -40,11 +40,15 @@ import co.electriccoin.zcash.ui.design.util.imageRes
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.swap.info.CrossPayInfoArgs
 import co.electriccoin.zcash.ui.screen.swap.slippage.SwapSlippageArgs
+import io.ktor.client.network.sockets.SocketTimeoutException
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
@@ -98,9 +102,10 @@ class UnifiedSendVMTest {
             assertNull(state().payEstimate)
             val theyReceive = assertNotNull(state().theyReceive)
             assertEquals(stringRes(R.string.unified_send_they_receive_approx), theyReceive.label)
-            assertEquals("BTC", theyReceive.ticker)
+            assertEquals("BTC", theyReceive.unit)
             assertEqualsBd("0.001", theyReceive.amount.innerState.amount)
-            assertNull(theyReceive.fiatEquivalent)
+            // The USD side is one tap away, not a second field competing for the same row.
+            assertNotNull(theyReceive.onSwapCurrency)
         }
 
     @Test
@@ -114,13 +119,13 @@ class UnifiedSendVMTest {
             val theyReceive = assertNotNull(state().theyReceive)
             assertEquals(stringRes(R.string.unified_send_they_receive_exact), theyReceive.label)
             assertEqualsBd("0.002", theyReceive.amount.innerState.amount)
-            // The USD line only appears once the recipient's amount is the one being fixed.
-            assertNotNull(theyReceive.fiatEquivalent)
+            assertEquals("BTC", theyReceive.unit)
         }
 
     @Test
-    fun `emptying the destination field hands authority back to the pay side`() =
+    fun `emptying the destination field leaves the payment exact output with nothing to submit`() =
         swapForm {
+            vm.onAddressChange(BTC_ADDRESS)
             vm.onZecAmountChange(amount("1"))
             vm.onTokenAmountChange(amount("0.002"))
             runCurrent()
@@ -129,8 +134,168 @@ class UnifiedSendVMTest {
             vm.onTokenAmountChange(NumberTextFieldInnerState())
             runCurrent()
 
+            // The estimate must not flood back into the field the user just cleared — it would put
+            // a number they never typed under the caret and the next keystroke would extend it.
+            assertNotNull(state().payEstimate)
+            val theyReceive = assertNotNull(state().theyReceive)
+            assertEquals(stringRes(R.string.unified_send_they_receive_exact), theyReceive.label)
+            assertNull(theyReceive.amount.innerState.amount)
+            assertEquals(PrimaryButtonState.Disabled, state().primaryButton)
+        }
+
+    @Test
+    fun `while exact input the destination field pre-selects, so typing replaces the estimate`() =
+        swapForm {
+            vm.onZecAmountChange(amount("1"))
+            runCurrent()
+
+            val theyReceive = assertNotNull(state().theyReceive)
+            assertEquals(SELECT_ALL, theyReceive.amount.innerState.innerTextFieldState.selection)
+        }
+
+    @Test
+    fun `merely putting the caret in the estimate does not pin the payment to the recipient`() =
+        swapForm {
+            vm.onZecAmountChange(amount("1"))
+            runCurrent()
+            val estimate = assertNotNull(state().theyReceive).amount
+
+            // The text field reports a bare selection change as a value change, forwarding the
+            // estimate untouched. That is a tap, not an entry.
+            estimate.onValueChange(estimate.innerState)
+            runCurrent()
+
             assertNull(state().payEstimate)
-            assertEquals(stringRes(R.string.unified_send_they_receive_approx), assertNotNull(state().theyReceive).label)
+            assertEquals(
+                stringRes(R.string.unified_send_they_receive_approx),
+                assertNotNull(state().theyReceive).label
+            )
+        }
+
+    @Test
+    fun `clearing the estimate does count as entry, so the field becomes the user's`() =
+        swapForm {
+            vm.onZecAmountChange(amount("1"))
+            runCurrent()
+            val estimate = assertNotNull(state().theyReceive).amount
+
+            estimate.onValueChange(NumberTextFieldInnerState())
+            runCurrent()
+
+            assertNotNull(state().payEstimate)
+            assertNull(assertNotNull(state().theyReceive).amount.innerState.amount)
+        }
+
+    @Test
+    fun `a USD-entered amount is stored as the figure the field shows, not a longer one`() =
+        swapForm(asset = btc(usdPrice = BigDecimal("47123"))) {
+            // $100 at $47,123 is 0.0021221...; the field renders 0.00212, so that is what we quote.
+            vm.onTokenFiatAmountChange(amount("100"))
+            runCurrent()
+
+            assertEqualsBd("0.00212", assertNotNull(state().theyReceive).amount.innerState.amount)
+        }
+
+    @Test
+    fun `the destination shows one figure at a time and the toggle swaps which`() =
+        swapForm {
+            vm.onTokenAmountChange(amount("0.002"))
+            runCurrent()
+            assertEquals("BTC", assertNotNull(state().theyReceive).unit)
+            assertEqualsBd("0.002", assertNotNull(state().theyReceive).amount.innerState.amount)
+
+            assertNotNull(assertNotNull(state().theyReceive).onSwapCurrency).invoke()
+            runCurrent()
+
+            // Same amount, other denomination — never both on screen at once.
+            val theyReceive = assertNotNull(state().theyReceive)
+            assertEquals("USD", theyReceive.unit)
+            assertEqualsBd("100", theyReceive.amount.innerState.amount)
+        }
+
+    @Test
+    fun `an asset with no USD price offers no toggle and stays on the token`() =
+        swapForm(asset = pricelessToken()) {
+            vm.onTokenAmountChange(amount("5"))
+            runCurrent()
+
+            val theyReceive = assertNotNull(state().theyReceive)
+            assertEquals("XYZ", theyReceive.unit)
+            assertNull(theyReceive.onSwapCurrency)
+        }
+
+    @Test
+    fun `typing a USD amount pins the payment to the destination amount it buys`() =
+        swapForm {
+            vm.onAddressChange(BTC_ADDRESS)
+            vm.onTokenFiatAmountChange(amount("100"))
+            runCurrent()
+
+            // $100 of BTC at $50,000 is 0.002 BTC, and that is what gets quoted.
+            assertEqualsBd("0.002", assertNotNull(state().theyReceive).amount.innerState.amount)
+            assertNotNull(state().payEstimate)
+
+            assertIs<PrimaryButtonState.Review>(state().primaryButton).onClick()
+            runCurrent()
+
+            coVerify(exactly = 1) {
+                requestSwapQuote.requestExactOutput(BigDecimal("0.002"), BTC_ADDRESS, any())
+            }
+        }
+
+    @Test
+    fun `a USD amount is converted down to what the destination chain can settle`() =
+        swapForm(asset = btc(decimals = 6)) {
+            // $1 of BTC at $50,000 is 0.00002 BTC; at 6 decimals the rest cannot be delivered.
+            vm.onTokenFiatAmountChange(amount("1.0000001"))
+            runCurrent()
+
+            assertEqualsBd("0.00002", assertNotNull(state().theyReceive).amount.innerState.amount)
+        }
+
+    @Test
+    fun `the destination fields disable while a quote is in flight, slippage included`() =
+        swapForm {
+            coEvery { requestSwapQuote.requestExactOutput(any(), any(), any()) } coAnswers { awaitCancellation() }
+            vm.onAddressChange(BTC_ADDRESS)
+            vm.onTokenAmountChange(amount("0.002"))
+            runCurrent()
+
+            assertIs<PrimaryButtonState.Review>(state().primaryButton).onClick()
+            runCurrent()
+
+            // The repository re-reads the tolerance when it builds the request, so letting it change
+            // now would quote something other than what the form is showing.
+            assertEquals(false, assertNotNull(state().slippage).isEnabled)
+            val theyReceive = assertNotNull(state().theyReceive)
+            assertEquals(false, theyReceive.amount.isEnabled)
+            assertNull(theyReceive.onSwapCurrency)
+            assertNull(assertNotNull(state().payEstimate).onClick)
+        }
+
+    @Test
+    fun `a failed asset load offers a retry, not a review`() =
+        swapForm(assetsError = SocketTimeoutException()) {
+            runCurrent()
+
+            // One refresh already went out when the form opened.
+            verify(exactly = 1) { swapRepository.requestRefreshAssets() }
+
+            assertIs<PrimaryButtonState.Retry>(state().primaryButton).onClick()
+
+            verify(exactly = 2) { swapRepository.requestRefreshAssets() }
+        }
+
+    @Test
+    fun `the slippage sheet drops the USD figure when the ZEC price is unknown`() =
+        swapForm(zecPrice = null) {
+            vm.onZecAmountChange(amount("1"))
+            runCurrent()
+
+            assertNotNull(state().slippage).onClick()
+
+            // Better no figure than a confident "US$0.00".
+            assertNull(assertIs<SwapSlippageArgs>(navigationRouter.forwarded.single()).fiatAmount)
         }
 
     @Test
@@ -139,7 +304,7 @@ class UnifiedSendVMTest {
             vm.onTokenAmountChange(amount("0.002"))
             runCurrent()
 
-            assertNotNull(state().payEstimate).onClick()
+            assertNotNull(assertNotNull(state().payEstimate).onClick).invoke()
             runCurrent()
 
             assertNull(state().payEstimate)
@@ -227,7 +392,7 @@ class UnifiedSendVMTest {
             vm.onTokenAmountChange(amount("0.002"))
             runCurrent()
 
-            assertNotNull(state().onSlippageClick).invoke()
+            assertNotNull(state().slippage).onClick()
 
             val args = assertIs<SwapSlippageArgs>(navigationRouter.forwarded.single())
             assertEquals(SwapMode.EXACT_OUTPUT, args.mode)
@@ -240,7 +405,7 @@ class UnifiedSendVMTest {
             vm.onZecAmountChange(amount("1"))
             runCurrent()
 
-            assertNotNull(state().onSlippageClick).invoke()
+            assertNotNull(state().slippage).onClick()
 
             val args = assertIs<SwapSlippageArgs>(navigationRouter.forwarded.single())
             assertEquals(SwapMode.EXACT_INPUT, args.mode)
@@ -273,9 +438,11 @@ class UnifiedSendVMTest {
     private fun swapForm(
         asset: SwapAsset = btc(),
         spendable: Zatoshi = Zatoshi(1_000_000_000),
+        zecPrice: BigDecimal? = BigDecimal("50"),
+        assetsError: Exception? = null,
         block: suspend Harness.() -> Unit
     ) = runTest {
-        val harness = Harness(this, asset, spendable)
+        val harness = Harness(this, asset, spendable, zecPrice, assetsError)
         val collection = backgroundScope.launch { harness.vm.state.collect() }
         runCurrent()
         harness.block()
@@ -285,14 +452,29 @@ class UnifiedSendVMTest {
     private class Harness(
         private val scope: TestScope,
         asset: SwapAsset,
-        spendable: Zatoshi
+        spendable: Zatoshi,
+        zecPrice: BigDecimal?,
+        assetsError: Exception?,
     ) {
         val selectedAsset = MutableStateFlow<SwapAsset?>(asset)
         val requestSwapQuote = mockk<RequestSwapQuoteUseCase>(relaxed = true)
         val navigationRouter = RecordingNavigationRouter()
 
-        private val assetsData = MutableStateFlow(SwapAssetsData(data = listOf(asset), zecAsset = zecAsset()))
+        private val assetsData =
+            MutableStateFlow(
+                SwapAssetsData(
+                    data = listOf(asset).takeIf { assetsError == null },
+                    zecAsset = zecAsset(zecPrice),
+                    error = assetsError
+                )
+            )
         private val slippageFlow = MutableStateFlow(BigDecimal.ONE)
+
+        val swapRepository =
+            mockk<SwapRepository>(relaxed = true) {
+                every { assets } returns assetsData
+                every { slippage } returns slippageFlow
+            }
 
         // Event buses the form listens to but these tests never publish on. Real instances, since
         // an unfed bus is already the silence these cases want and needs no stubbing.
@@ -303,6 +485,7 @@ class UnifiedSendVMTest {
         val vm =
             UnifiedSendVM(
                 args = UnifiedSendArgs(),
+                mapper = UnifiedSendVMMapper(),
                 getSelectedSwapAsset =
                     mockk<GetSelectedSwapAssetUseCase> { every { observe() } returns selectedAsset },
                 getSwapAssetsUseCase = mockk<GetSwapAssetsUseCase> { every { observe() } returns assetsData },
@@ -318,11 +501,7 @@ class UnifiedSendVMTest {
                     },
                 preselectSwapAsset =
                     mockk<PreselectSwapAssetUseCase> { every { observe() } returns emptyFlow<Unit>() },
-                swapRepository =
-                    mockk<SwapRepository>(relaxed = true) {
-                        every { assets } returns assetsData
-                        every { slippage } returns slippageFlow
-                    },
+                swapRepository = swapRepository,
                 cancelSwap = mockk(relaxed = true),
                 requestSwapQuote = requestSwapQuote,
                 navigateToSwapQuoteIfAvailable = mockk<NavigateToSwapQuoteIfAvailableUseCase>(relaxed = true),
@@ -357,24 +536,28 @@ class UnifiedSendVMTest {
     private companion object {
         const val BTC_ADDRESS = "bc1qexampleaddressforunittests"
 
-        fun btc(decimals: Int = 8) = swapAsset("BTC", "BTC", BigDecimal("50000"), decimals)
+        fun btc(decimals: Int = 8, usdPrice: BigDecimal = BigDecimal("50000")) =
+            swapAsset("BTC", "BTC", usdPrice, decimals)
 
         fun usdc() = swapAsset("USDC", "ETH", BigDecimal.ONE, decimals = 6)
 
+        /** An asset NEAR listed without a price, so nothing can be valued in USD. */
+        fun pricelessToken() = swapAsset("XYZ", "ETH", usdPrice = null, decimals = 8)
+
         fun zec() = zecAsset()
 
-        fun zecAsset() =
+        fun zecAsset(usdPrice: BigDecimal? = BigDecimal("50")) =
             ZecSwapAsset(
                 tokenTicker = "ZEC",
                 tokenName = StringResource.ByString("Zcash"),
                 tokenIcon = imageRes("ZEC"),
                 blockchain = blockchain("ZEC"),
-                usdPrice = BigDecimal("50"),
+                usdPrice = usdPrice,
                 assetId = "ZEC.ZEC",
                 decimals = 8,
             )
 
-        fun swapAsset(token: String, chain: String, usdPrice: BigDecimal, decimals: Int) =
+        fun swapAsset(token: String, chain: String, usdPrice: BigDecimal?, decimals: Int) =
             DynamicSwapAsset(
                 tokenTicker = token,
                 tokenName = StringResource.ByString(token),

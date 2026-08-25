@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Alignment.Companion.CenterHorizontally
 import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -75,9 +76,9 @@ import co.electriccoin.zcash.ui.design.component.ZashiTextField
 import co.electriccoin.zcash.ui.design.component.ZashiTextFieldDefaults
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBackButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
-import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.screen.balances.BalanceWidgetState
 import co.electriccoin.zcash.ui.screen.swap.SlippageButton
@@ -183,20 +184,13 @@ internal fun UnifiedSendView(
 
                 // ── Swap mode: the destination amount ────────────────────────
                 if (state.theyReceive != null) {
-                    TheyReceiveRow(state.theyReceive)
+                    SendDestinationRow(state.theyReceive)
                     Spacer(8.dp)
                 }
 
                 // ── Swap mode: Slippage ──────────────────────────────────────
-                if (state.slippage != null && state.onSlippageClick != null) {
-                    SlippageButton(
-                        state =
-                            co.electriccoin.zcash.ui.design.component.ButtonState(
-                                text = state.slippage,
-                                icon = R.drawable.ic_swap_slippage,
-                                onClick = state.onSlippageClick,
-                            )
-                    )
+                if (state.slippage != null) {
+                    SlippageButton(state = state.slippage)
                     Spacer(8.dp)
                 }
 
@@ -269,7 +263,29 @@ private fun CtaButton(btn: PrimaryButtonState, modifier: Modifier = Modifier) {
                 modifier = modifier,
                 text = stringResource(R.string.send_create),
                 enabled = !btn.isLoading,
+                loading = btn.isLoading,
                 onClick = btn.onClick,
+            )
+        }
+
+        is PrimaryButtonState.Retry -> {
+            ZappButton(
+                modifier = modifier,
+                text = stringResource(co.electriccoin.zcash.ui.design.R.string.general_try_again),
+                variant = ZappButtonVariant.Danger,
+                enabled = !btn.isLoading,
+                loading = btn.isLoading,
+                onClick = btn.onClick,
+            )
+        }
+
+        PrimaryButtonState.Loading -> {
+            ZappButton(
+                modifier = modifier,
+                text = stringResource(co.electriccoin.zcash.ui.design.R.string.general_loading),
+                enabled = false,
+                loading = true,
+                onClick = {},
             )
         }
 
@@ -293,59 +309,6 @@ private fun CtaButton(btn: PrimaryButtonState, modifier: Modifier = Modifier) {
 }
 
 /**
- * The destination amount. Editing it is what turns the payment into an exact-output one, so the
- * field stays editable in both modes — in exact-input it simply carries the estimate.
- */
-@Composable
-private fun TheyReceiveRow(state: TheyReceiveState) {
-    Column {
-        Row(verticalAlignment = CenterVertically) {
-            Text(
-                text = state.label.getValue(),
-                style = ZappTheme.typography.caption,
-                fontWeight = FontWeight.Medium,
-                color = ZappTheme.colors.text,
-            )
-            Spacer(8.dp)
-            ZashiNumberTextField(
-                modifier = Modifier.weight(1f),
-                state = state.amount,
-                textStyle =
-                    ZappTheme.typography.caption.copy(
-                        color = ZappTheme.colors.text,
-                        fontWeight = FontWeight.Medium,
-                    ),
-                placeholder = {
-                    ZashiNumberTextFieldDefaults.Placeholder(
-                        style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.textSubtle),
-                        fontWeight = FontWeight.Normal,
-                        text = "0.00"
-                    )
-                },
-                suffix = {
-                    Text(
-                        text = state.ticker,
-                        style = ZappTheme.typography.caption,
-                        fontWeight = FontWeight.Medium,
-                        color = ZappTheme.colors.textMuted,
-                    )
-                },
-            )
-        }
-        if (state.fiatEquivalent != null) {
-            Spacer(6.dp)
-            Text(
-                text = state.fiatEquivalent.getValue(),
-                style = ZappTheme.typography.caption,
-                color = ZappTheme.colors.textSubtle,
-                textAlign = TextAlign.End,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
-}
-
-/**
  * Stands in for the editable pay fields while the destination amount is the binding one. Tapping it
  * hands authority back to the pay side.
  */
@@ -358,7 +321,7 @@ private fun PayEstimateRow(state: PayEstimateState) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clickable(onClick = state.onClick),
+                .clickable(enabled = state.onClick != null) { state.onClick?.invoke() },
     )
 }
 
