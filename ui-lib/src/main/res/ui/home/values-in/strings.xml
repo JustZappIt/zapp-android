@@ -27,8 +27,6 @@
     <string name="home_sync_progress_error">Kesalahan sinkronisasi</string>
     <string name="home_sync_chip_synced">Tersinkron</string>
     <string name="home_sync_chip_offline">Offline</string>
-    <string name="home_sync_chip_syncing_fmt">Menyinkronkan %1$.2f%%</string>
-    <string name="home_sync_chip_restoring_fmt">Memulihkan %1$.2f%%</string>
 
     <string name="home_button_receive">Terima</string>
     <string name="home_button_send">Kirim</string>

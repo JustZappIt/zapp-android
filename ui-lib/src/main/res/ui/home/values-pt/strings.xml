@@ -46,8 +46,6 @@
     <string name="home_sync_progress_error">Erro de sincronização</string>
     <string name="home_sync_chip_synced">Sincronizado</string>
     <string name="home_sync_chip_offline">Sem conexão</string>
-    <string name="home_sync_chip_syncing_fmt">Sincronizando %1$.2f%%</string>
-    <string name="home_sync_chip_restoring_fmt">Restaurando %1$.2f%%</string>
 
     <string name="home_message_restoring_title">Restaurando Carteira • %1$.1f%% Concluído</string>
     <string name="home_message_restoring_subtitle">Mantenha o Zapp aberto com a tela do telefone ativa</string>

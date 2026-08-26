@@ -46,8 +46,6 @@
     <string name="home_sync_progress_error">Sync error</string>
     <string name="home_sync_chip_synced">Synced</string>
     <string name="home_sync_chip_offline">Offline</string>
-    <string name="home_sync_chip_syncing_fmt">Syncing %1$.2f%%</string>
-    <string name="home_sync_chip_restoring_fmt">Restoring %1$.2f%%</string>
 
     <string name="home_message_restoring_title">Restoring Wallet • %1$.1f%% Complete</string>
     <string name="home_message_restoring_subtitle">Keep Zapp open on active phone screen</string>
