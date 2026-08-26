@@ -1,7 +1,6 @@
 package co.electriccoin.zcash.ui.screen.voting.howtovote
 
 import androidx.compose.runtime.Immutable
-import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -27,7 +26,6 @@ data class VoteHowToVoteState(
                 walletHeaderIcons =
                     WalletHeaderIconsState(
                         isKeystone = false,
-                        badgeIcon = R.drawable.ic_vote_thumbs_up,
                     ),
                 continueButton = ButtonState.preview,
                 onBack = {},

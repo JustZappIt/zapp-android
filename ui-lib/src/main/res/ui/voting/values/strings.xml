@@ -56,7 +56,7 @@
     <string name="coinVote_pollsList_statusActive" tools:ignore="MissingTranslation">Active</string>
     <string name="coinVote_common_voted" tools:ignore="MissingTranslation">Voted</string>
     <string name="coinVote_pollsList_statusClosed" tools:ignore="MissingTranslation">Closed</string>
-    <string name="coinVote_pollsList_approvedByZodl" tools:ignore="MissingTranslation">Approved by Zodl</string>
+    <string name="coinVote_pollsList_approvedByZodl" tools:ignore="MissingTranslation">Approved by Zapp</string>
     <string name="coinVote_pollsList_unverifiedSheetTitle" tools:ignore="MissingTranslation">Unverified Poll</string>
     <string name="coinVote_pollsList_dateCloses" tools:ignore="MissingTranslation">Closes %1$s</string>
     <string name="coinVote_pollsList_dateClosed" tools:ignore="MissingTranslation">Closed %1$s</string>

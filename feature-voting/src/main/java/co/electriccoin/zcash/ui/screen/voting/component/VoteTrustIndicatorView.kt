@@ -11,6 +11,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -36,12 +37,19 @@ fun VoteTrustIndicatorView(
         }
     val iconRes =
         when (indicator) {
-            VoteTrustIndicator.ZODL -> DesignR.drawable.ic_item_zashi
+            VoteTrustIndicator.ZODL -> DesignR.drawable.ic_item_zapp
             VoteTrustIndicator.UNVERIFIED -> DesignR.drawable.ic_info
         }
-    val tint =
+    val textColor =
         when (indicator) {
             VoteTrustIndicator.ZODL -> c.text
+            VoteTrustIndicator.UNVERIFIED -> c.textMuted
+        }
+    // The Zapp mark carries its own brand colours, so it goes untinted; only the generic
+    // info glyph picks up the label colour.
+    val iconTint =
+        when (indicator) {
+            VoteTrustIndicator.ZODL -> Color.Unspecified
             VoteTrustIndicator.UNVERIFIED -> c.textMuted
         }
 
@@ -53,12 +61,12 @@ fun VoteTrustIndicatorView(
         Icon(
             painter = painterResource(iconRes),
             contentDescription = null,
-            tint = tint,
+            tint = iconTint,
             modifier = Modifier.size(16.dp)
         )
         BasicText(
             text = stringResource(labelRes),
-            style = ZappTheme.typography.caption.copy(color = tint)
+            style = ZappTheme.typography.caption.copy(color = textColor)
         )
     }
 }
