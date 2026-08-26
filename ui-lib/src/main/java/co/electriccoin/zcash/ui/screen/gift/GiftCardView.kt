@@ -340,7 +340,7 @@ private fun MintedCardPodium(state: GiftCardState) {
     GiftCardPodium(
         // Zero rather than blank while the sender is still typing: an empty card reads as a card
         // that failed to load, and the figure is what they are watching change.
-        amount = stringRes(state.previewAmount ?: Zatoshi(0L)),
+        amount = giftAmountRes(state.previewAmount ?: Zatoshi(0L)),
         tier = tier,
         isSettled = state.stage != GiftCardStage.FUNDING,
         flourishOn = tier,

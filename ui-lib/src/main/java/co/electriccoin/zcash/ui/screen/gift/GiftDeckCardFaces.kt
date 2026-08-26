@@ -76,7 +76,7 @@ internal fun CardPeek(item: GiftCardListItem, stock: ZappGiftCardStock) {
     ) {
         BasicText(
             text = item.amount.getValue(),
-            style = ZappTheme.typography.displaySecondary.copy(color = stock.ink),
+            style = ZappTheme.typography.displaySecondary.copy(color = stock.figureInk ?: stock.ink),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f).testTag(GiftCardListTag.AMOUNT),
@@ -107,7 +107,7 @@ internal fun CardFront(item: GiftCardListItem, stock: ZappGiftCardStock) {
         ) {
             BasicText(
                 text = item.amount.getValue(),
-                style = ZappTheme.typography.displaySecondary.copy(color = stock.ink),
+                style = ZappTheme.typography.displaySecondary.copy(color = stock.figureInk ?: stock.ink),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).testTag(GiftCardListTag.AMOUNT),

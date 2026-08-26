@@ -428,7 +428,7 @@ private fun PodiumFaceContent(
         Column {
             BasicText(
                 text = amount?.getValue().orEmpty(),
-                style = ZappTheme.typography.display.copy(color = stock.ink),
+                style = ZappTheme.typography.display.copy(color = stock.figureInk ?: stock.ink),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
