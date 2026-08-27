@@ -456,8 +456,13 @@ release resets it.
 
 The gap punishes **fresh** cards hardest, which is the case the design assumed was free.
 
-Two consequences are already in the code. A claim's scan is deliberately unbounded — only reaching
-the server is timed out — and the screen offers a stop rather than a deadline, because there is no
-duration at which giving up is automatically right. And a collection check costs exactly the same
+Two consequences are already in the code. A claim's scan is not bounded by a deadline — there is no
+duration at which giving up is automatically right, so the screen offers a stop instead — but it is
+bounded by *movement*: if neither the scanned height nor the progress fraction passes where it began
+for six minutes, the claim fails as `SCAN_STALLED`. That window must stay above the SDK's 90s gRPC
+streaming deadline, since nothing advances for the whole of a block-batch download; a forked SDK
+raising `streamingRequestTimeout` to 300s would need roughly 12 minutes here. The case it catches is
+a phone that cannot finish a batch before that deadline, after which the batch restarts from its
+first block and nothing ever moves forward. And a collection check costs exactly the same
 multi-minute scan, which is why it runs one card at a time on request and never as a background
 sweep across the list.

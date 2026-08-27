@@ -26,10 +26,14 @@ import co.electriccoin.zcash.ui.common.provider.GiftKeyProvider
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkPayload
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -37,6 +41,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -93,6 +98,46 @@ class GiftCardUnreachableException : RuntimeException("Card wallet could not rea
 
 /** The isolated synchronizer was stopped and can never reach SYNCED. */
 class GiftCardSynchronizerStoppedException : RuntimeException("Card wallet synchronizer stopped")
+
+/** The card's scan stopped advancing, so it will never reach SYNCED on its own. */
+class GiftCardScanStalledException : RuntimeException("Card wallet scan stopped advancing")
+
+private val STALL_POLL_INTERVAL = 10.seconds
+
+// Must exceed the SDK's 90s gRPC streaming deadline: nothing advances for the whole of a block-batch
+// download, so a shorter window would cut off a batch that is still legitimately downloading.
+internal val STALL_TIMEOUT = 6.minutes
+
+internal val STALL_POLL_LIMIT = (STALL_TIMEOUT / STALL_POLL_INTERVAL).toInt()
+
+/**
+ * Suspends forever while the card's scan keeps moving, and throws [GiftCardScanStalledException]
+ * once it has not moved for [STALL_TIMEOUT].
+ */
+internal suspend fun failWhenScanStalls(
+    scannedHeight: () -> Long?,
+    fraction: () -> Float,
+): Nothing {
+    // Below every real height, so the first one to arrive counts as movement.
+    var furthestHeight = scannedHeight() ?: Long.MIN_VALUE
+    var furthestFraction = fraction()
+    var idlePolls = 0
+    while (true) {
+        delay(STALL_POLL_INTERVAL)
+        val height = scannedHeight() ?: Long.MIN_VALUE
+        val current = fraction()
+        // Either signal counts: the height only lands per batch, the fraction moves within one.
+        // Furthest-ever, not last, so a regressing height is the failing batch restarting.
+        if (height > furthestHeight || current > furthestFraction) {
+            furthestHeight = maxOf(furthestHeight, height)
+            furthestFraction = maxOf(furthestFraction, current)
+            idlePolls = 0
+        } else if (++idlePolls >= STALL_POLL_LIMIT) {
+            Twig.warn { "Gift claim: card wallet scan made no progress for $STALL_TIMEOUT" }
+            throw GiftCardScanStalledException()
+        }
+    }
+}
 
 /** What a minted card's own wallet holds right now, and whether it ever held anything. */
 data class GiftCardHoldings(
@@ -705,11 +750,20 @@ internal class GiftClaimDataSourceImpl(
     private suspend fun awaitSynced(
         synchronizer: Synchronizer,
         onProgress: (GiftClaimProgress) -> Unit,
-    ) {
+    ) = coroutineScope {
+        val fraction = MutableStateFlow(0f)
+        val watchdog =
+            launch {
+                failWhenScanStalls(
+                    scannedHeight = { synchronizer.fullyScannedHeight.value?.value },
+                    fraction = { fraction.value },
+                )
+            }
         // Plain Flows, not StateFlows: no `.value` to poll, so the wait is the collection itself.
         combine(synchronizer.status, synchronizer.progress) { status, progress -> status to progress }
             .first { (status, progress) ->
                 if (status == Synchronizer.Status.STOPPED) throw GiftCardSynchronizerStoppedException()
+                fraction.value = progress.decimal
                 onProgress(
                     GiftClaimProgress(
                         status = status,
@@ -720,6 +774,7 @@ internal class GiftClaimDataSourceImpl(
                 )
                 status == Synchronizer.Status.SYNCED
             }
+        watchdog.cancel()
     }
 
     private companion object {

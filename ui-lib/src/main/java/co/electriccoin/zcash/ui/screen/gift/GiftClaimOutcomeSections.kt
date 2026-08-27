@@ -215,6 +215,7 @@ internal fun GiftClaimError.messageRes(): Int =
         GiftClaimError.NOT_BROADCAST -> R.string.gift_claim_error_not_broadcast
         GiftClaimError.UNDERFUNDED -> R.string.gift_claim_error_underfunded
         GiftClaimError.UNREACHABLE -> R.string.gift_claim_error_unreachable
+        GiftClaimError.SCAN_STALLED -> R.string.gift_claim_error_scan_stalled
         GiftClaimError.PARAMS_UNAVAILABLE -> R.string.gift_claim_error_params
         GiftClaimError.FAILED -> R.string.gift_claim_error_failed
     }
