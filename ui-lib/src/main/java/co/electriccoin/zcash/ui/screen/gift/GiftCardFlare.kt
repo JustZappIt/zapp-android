@@ -25,21 +25,33 @@ import kotlin.math.sin
 /**
  * What a card picks up as its denomination climbs.
  *
- * Struck into the face rather than laid on top of it: everything here is drawn at low
- * opacity, so it reads as something done to the material rather than a graphic sitting on it. Read
- * the amount and you learn what the card is worth; glance at it and you already knew.
+ * Struck into the face rather than laid on top of it: everything here is drawn at low opacity, so
+ * it reads as something done to the material rather than a graphic sitting on it. Read the amount
+ * and you learn what the card is worth; glance at it and you already knew.
  *
  * Drawn outside in: the ring is the field's boundary, then whichever motif the stock carries. One
  * only — the Zapp Z is itself a motif here, so a card that has a design of its own cannot also be
  * stamped with the logo. [CardMotif] makes that a fact about the type rather than a rule someone
  * has to remember.
+ *
+ * [isReverse] is the back of the card, which has no figure and no wordmark to work around, so the
+ * scale field spreads over the whole surface there instead of keeping to the half of the front the
+ * text leaves free. The other motifs are drawn the same on both faces: the diagonals already cross
+ * the whole card, and the rosette and the Z are single objects with a place on the card rather
+ * than fields that can be given more of it.
  */
 @Composable
-internal fun CardFlare(stock: ZappGiftCardStock, corner: Dp, modifier: Modifier = Modifier) {
+internal fun CardFlare(
+    stock: ZappGiftCardStock,
+    corner: Dp,
+    modifier: Modifier = Modifier,
+    isReverse: Boolean = false,
+) {
     if (stock.isBare) return
 
     Canvas(modifier = modifier.fillMaxSize()) {
-        stock.ring?.let { ink ->
+        // The reverse draws its own inner border, and a ring inside that is two frames deep.
+        stock.ring.takeIf { !isReverse }?.let { ink ->
             // The field's own boundary, so it is drawn under everything that sits inside it.
             val inset = size.minDimension * RING_INSET
             val radius = (corner.toPx() - inset).coerceAtLeast(0f)
@@ -56,7 +68,7 @@ internal fun CardFlare(stock: ZappGiftCardStock, corner: Dp, modifier: Modifier 
             is CardMotif.Sweep -> drawDiagonals(motif.ink, SWEEP_STROKES, SWEEP_WIDTH)
             is CardMotif.Claw -> drawDiagonals(motif.ink, CLAW_STROKES, CLAW_WIDTH)
             is CardMotif.Rosette -> drawRosette(motif.ink)
-            is CardMotif.Scales -> drawScales(motif.ink)
+            is CardMotif.Scales -> drawScales(motif.ink, if (isReverse) 0f else SCALE_FIELD)
             null -> Unit
         }
     }
@@ -135,16 +147,19 @@ private fun DrawScope.drawRosette(ink: Color) {
 }
 
 /**
- * A field of interlocking scales, filling the same corner the rosette occupies.
+ * A field of interlocking scales.
  *
  * Each scale is the lower half of a circle, and the rows overlap by half a scale so every arc tucks
  * under the two above it — which is the whole trick: drawn as separate arcs they are fish tiles,
  * drawn overlapping they are hide. Rows alternate by half a scale sideways so the seams never line
  * up into columns.
+ *
+ * [fieldLeft] is where the hide starts, as a fraction of the width. On the front it begins about
+ * halfway across, clear of the figure and the note; on the back, at zero, it covers everything.
  */
-private fun DrawScope.drawScales(ink: Color) {
+private fun DrawScope.drawScales(ink: Color, fieldLeft: Float) {
     val scale = size.height * SCALE_SIZE
-    val left = size.width * SCALE_FIELD
+    val left = size.width * fieldLeft
     val stroke = Stroke(width = SCALE_WIDTH.dp.toPx())
     val rows = ((size.height / (scale * SCALE_ROW)) + 2).toInt()
     val columns = (((size.width - left) / scale) + 2).toInt()

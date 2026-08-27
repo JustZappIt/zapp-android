@@ -476,17 +476,23 @@ private fun PodiumBack(stock: ZappGiftCardStock) {
                 .fillMaxSize()
                 .graphicsLayer { rotationY = HALF_CIRCLE }
                 .background(stock.face)
-                .border(stock.edgeWidth, stock.edge, RoundedCornerShape(CORNER))
-                .padding(18.dp),
+                .border(stock.edgeWidth, stock.edge, RoundedCornerShape(CORNER)),
         contentAlignment = Alignment.Center,
     ) {
-        // The reverse is one framed field and nothing else, so the frame is the whole design — and
-        // it is drawn in the stock's own ring rather than its edge, which makes the back of a card
-        // recognisably the same card as the front without repeating a single word of it.
+        // The stock's own design, over the whole back rather than held to a corner: there is no
+        // figure and no note here to work around, so this is the one surface where a card gets to
+        // be nothing but its pattern. The turn mirrors it, which for a field of scales or a set of
+        // parallel diagonals is a field of scales or a set of parallel diagonals — the text is what
+        // needed counter-rotating, and the text is below.
+        CardFlare(stock, CORNER, isReverse = true)
+        // The reverse is one framed field, and the frame is drawn in the stock's own ring rather
+        // than its edge, which makes the back of a card recognisably the same card as the front
+        // without repeating a single word of it.
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
+                    .padding(18.dp)
                     .border(1.dp, stock.ring ?: stock.edge, RoundedCornerShape(CORNER - 8.dp)),
             contentAlignment = Alignment.Center,
         ) {

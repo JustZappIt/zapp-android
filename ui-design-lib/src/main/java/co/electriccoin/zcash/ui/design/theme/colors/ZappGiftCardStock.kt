@@ -268,22 +268,27 @@ object ZappGiftCardStocks {
         )
 
     /**
-     * Dragon. Gold on oxblood, and the top of the ladder. Same metal as [Signature] — there is no
-     * richer one to reach for — so the distinction is the figure: the engraved rosette gives way to
-     * a field of scales, and the black ground goes red underneath it. Unsigned and unmarked, which
-     * is most of why it reads as the best card in the deck.
+     * Dragon. Red scales under gold, and the top of the ladder. Same metal as [Signature] — there
+     * is no richer one to reach for — so the distinction is the figure: the engraved rosette gives
+     * way to a field of scales, and those scales are red rather than another pass of the gold.
+     *
+     * The two colours run at different depths, which is the whole reason it works: the gold is the
+     * rim, the ring and the figure, so it stays the card's furniture, and the red is only ever the
+     * hide underneath it. Ground pushed nearly to black so the scales have something to be seen
+     * against — on the oxblood they were first drawn over, red on red went quiet. Unsigned and
+     * unmarked, which is most of why it reads as the best card in the deck.
      */
     val Dragon =
         ZappGiftCardStock(
-            face = Color(0xFF1A0A0B),
-            core = Color(0xFF0A0405),
+            face = Color(0xFF14090A),
+            core = Color(0xFF080405),
             edge = Color(0xFFE8C06A),
             sheen = Color(0x33F0D392),
             ink = Color(0xFFFBF2E2),
             inkMuted = Color(0xFFE8C06A),
             inkFaint = Color(0xFF9C8248),
             edgeWidth = ZappGiftCardStock.FOIL,
-            motif = CardMotif.Scales(Color(0x22E8C06A)),
+            motif = CardMotif.Scales(Color(0x40F0483A)),
             figureInk = Color(0xFFF2D289),
             ring = Color(0x33E8C06A),
             showsWordmark = false,

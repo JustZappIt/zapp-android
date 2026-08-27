@@ -232,7 +232,12 @@ private fun DetailsSection(state: GiftCardState) {
         ZappOfframpHeroAmountField(
             symbol = stringResource(R.string.gift_card_amount_symbol),
             state = state.amount,
-            secondaryText = null,
+            // The same worth in the wallet's currency, small, directly under the figure being
+            // typed. ZEC is what the card carries and stays the hero; this is the sanity check a
+            // sender actually wants while choosing a number, and it is where the claim screen and
+            // the deck both put it. Absent whenever the wallet has no rate — never a zero, which
+            // would read as a card worth nothing.
+            secondaryText = state.fiat?.getValue(),
             balance =
                 state.spendableBalance?.let {
                     ZappFieldBalance(
@@ -341,6 +346,11 @@ private fun MintedCardPodium(state: GiftCardState) {
         // Zero rather than blank while the sender is still typing: an empty card reads as a card
         // that failed to load, and the figure is what they are watching change.
         amount = giftAmountRes(state.previewAmount ?: Zatoshi(0L)),
+        // Not while the sender is still typing: the amount field sits directly under this card and
+        // carries the same conversion beneath the figure being typed, so the card would be the
+        // second copy of it a few dp away. Once the card is minted the field is gone, and then the
+        // card is the only thing left that can say what it is worth.
+        fiat = state.fiat.takeIf { !isDetails },
         tier = tier,
         isSettled = state.stage != GiftCardStage.FUNDING,
         flourishOn = tier,
