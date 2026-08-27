@@ -34,7 +34,7 @@ class VoteHowToVoteVM(
     init {
         viewModelScope.launch {
             val isKeystone = getSelectedWalletAccount() is KeystoneAccount
-            val walletName = if (isKeystone) "Keystone" else "Zodl"
+            val walletName = if (isKeystone) "Keystone" else "Zapp"
 
             mutableState.value =
                 LceState(
@@ -59,7 +59,6 @@ class VoteHowToVoteVM(
                             walletHeaderIcons =
                                 WalletHeaderIconsState(
                                     isKeystone = isKeystone,
-                                    badgeIcon = R.drawable.ic_vote_thumbs_up,
                                 ),
                             continueButton =
                                 ButtonState(

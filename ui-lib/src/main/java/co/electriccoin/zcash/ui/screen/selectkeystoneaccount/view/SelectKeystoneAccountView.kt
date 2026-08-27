@@ -159,7 +159,7 @@ private fun SinglePreview() =
                             ZashiExpandedCheckboxListItemState(
                                 title = stringRes("title"),
                                 subtitle = stringRes("subtitle"),
-                                icon = R.drawable.ic_item_zashi,
+                                icon = R.drawable.ic_item_zapp,
                                 isSelected = false,
                                 info =
                                     ZashiExpandedCheckboxRowState(

@@ -273,7 +273,7 @@ class GiftCardListVMTest {
             val small = fixture(card(amountZatoshi = 4_000_000L, fundingTxid = TXID))
 
             assertEquals(GiftCardTier.SIGNATURE, collectState(big).items.single().tier)
-            assertEquals(GiftCardTier.PAPER, collectState(small).items.single().tier)
+            assertEquals(GiftCardTier.CLAY, collectState(small).items.single().tier)
         }
 
     @Test

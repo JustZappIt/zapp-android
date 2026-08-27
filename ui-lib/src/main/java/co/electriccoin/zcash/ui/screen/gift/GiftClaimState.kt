@@ -153,5 +153,5 @@ internal data class GiftClaimState(
             }
 
     val amountText: StringResource?
-        get() = amount?.let { stringRes(it) }
+        get() = amount?.let { giftAmountRes(it) }
 }

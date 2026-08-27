@@ -92,7 +92,7 @@ class SelectABRecipientVM(
                                             }
 
                                             is ZashiAccount -> {
-                                                co.electriccoin.zcash.ui.design.R.drawable.ic_item_zashi
+                                                co.electriccoin.zcash.ui.design.R.drawable.ic_item_zapp
                                             }
                                         }
                                     ),

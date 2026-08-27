@@ -76,7 +76,7 @@ internal fun CardPeek(item: GiftCardListItem, stock: ZappGiftCardStock) {
     ) {
         BasicText(
             text = item.amount.getValue(),
-            style = ZappTheme.typography.displaySecondary.copy(color = stock.ink),
+            style = ZappTheme.typography.displaySecondary.copy(color = stock.figureInk ?: stock.ink),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f).testTag(GiftCardListTag.AMOUNT),
@@ -107,7 +107,7 @@ internal fun CardFront(item: GiftCardListItem, stock: ZappGiftCardStock) {
         ) {
             BasicText(
                 text = item.amount.getValue(),
-                style = ZappTheme.typography.displaySecondary.copy(color = stock.ink),
+                style = ZappTheme.typography.displaySecondary.copy(color = stock.figureInk ?: stock.ink),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).testTag(GiftCardListTag.AMOUNT),
@@ -146,10 +146,13 @@ internal fun CardFront(item: GiftCardListItem, stock: ZappGiftCardStock) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                BasicText(
-                    text = stringResource(R.string.gift_card_deck_wordmark),
-                    style = ZappTheme.typography.groupLabel.copy(color = stock.inkMuted),
-                )
+                // Absent on the stocks that carry a design of their own — see showsWordmark.
+                if (stock.showsWordmark) {
+                    BasicText(
+                        text = stringResource(R.string.gift_card_deck_wordmark),
+                        style = ZappTheme.typography.groupLabel.copy(color = stock.inkMuted),
+                    )
+                }
                 item.createdAt?.let {
                     BasicText(
                         text = it.getValue(),

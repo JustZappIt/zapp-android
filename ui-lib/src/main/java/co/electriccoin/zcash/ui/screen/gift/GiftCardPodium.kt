@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -421,14 +422,20 @@ private fun PodiumFaceContent(
         modifier = Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        BasicText(
-            text = stringResource(R.string.gift_card_deck_wordmark),
-            style = ZappTheme.typography.groupLabel.copy(color = stock.inkMuted),
-        )
+        // Absent on the stocks that carry a design of their own — see showsWordmark. The Column
+        // below still needs something above it for SpaceBetween to push against, so the slot stays.
+        if (stock.showsWordmark) {
+            BasicText(
+                text = stringResource(R.string.gift_card_deck_wordmark),
+                style = ZappTheme.typography.groupLabel.copy(color = stock.inkMuted),
+            )
+        } else {
+            Spacer(modifier = Modifier)
+        }
         Column {
             BasicText(
                 text = amount?.getValue().orEmpty(),
-                style = ZappTheme.typography.display.copy(color = stock.ink),
+                style = ZappTheme.typography.display.copy(color = stock.figureInk ?: stock.ink),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -469,25 +476,36 @@ private fun PodiumBack(stock: ZappGiftCardStock) {
                 .fillMaxSize()
                 .graphicsLayer { rotationY = HALF_CIRCLE }
                 .background(stock.face)
-                .border(stock.edgeWidth, stock.edge, RoundedCornerShape(CORNER))
-                .padding(18.dp),
+                .border(stock.edgeWidth, stock.edge, RoundedCornerShape(CORNER)),
         contentAlignment = Alignment.Center,
     ) {
+        // The stock's own design, over the whole back rather than held to a corner: there is no
+        // figure and no note here to work around, so this is the one surface where a card gets to
+        // be nothing but its pattern. The turn mirrors it, which for a field of scales or a set of
+        // parallel diagonals is a field of scales or a set of parallel diagonals — the text is what
+        // needed counter-rotating, and the text is below.
+        CardFlare(stock, CORNER, isReverse = true)
+        // The reverse is one framed field, and the frame is drawn in the stock's own ring rather
+        // than its edge, which makes the back of a card recognisably the same card as the front
+        // without repeating a single word of it.
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .border(1.dp, stock.edge, RoundedCornerShape(CORNER - 8.dp)),
+                    .padding(18.dp)
+                    .border(1.dp, stock.ring ?: stock.edge, RoundedCornerShape(CORNER - 8.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            BasicText(
-                text = stringResource(R.string.gift_card_deck_wordmark).uppercase(),
-                style =
-                    ZappTheme.typography.eyebrow.copy(
-                        color = stock.inkMuted,
-                        textAlign = TextAlign.Center,
-                    ),
-            )
+            if (stock.showsWordmark) {
+                BasicText(
+                    text = stringResource(R.string.gift_card_deck_wordmark).uppercase(),
+                    style =
+                        ZappTheme.typography.eyebrow.copy(
+                            color = stock.inkMuted,
+                            textAlign = TextAlign.Center,
+                        ),
+                )
+            }
         }
     }
 }

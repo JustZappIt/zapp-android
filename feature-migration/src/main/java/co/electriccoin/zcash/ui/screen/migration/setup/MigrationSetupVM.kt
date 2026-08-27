@@ -88,7 +88,7 @@ class MigrationSetupVM(
     }
 
     private fun onFindOutMore() =
-        navigationRouter.forward(ExternalUrl("https://support.zodl.com/article/42-moving-your-funds-to-ironwood"))
+        navigationRouter.forward(ExternalUrl("https://justzappit.xyz/ironwood"))
 
     private fun onConfirm() =
         when (selectedMode.value) {

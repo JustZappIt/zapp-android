@@ -1,0 +1,21 @@
+<!--
+  Zapp account brandmark: accent field with the Z drawn in white on top. Geometry is lifted
+  from the Zapp half of ic_ironwood_zapp_logos.xml and re-centred in a 48x48 frame; swap this
+  file when a real exported asset exists. The Z is painted rather than knocked out so the mark
+  keeps its accent background on any surface — render it with Image, or with Icon at
+  tint = Color.Unspecified, so the brand colours survive.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Accent field -->
+    <path
+        android:fillColor="#FF9417"
+        android:pathData="M0 24C0 10.7644 10.7644 0 24 0C37.2356 0 48 10.7644 48 24C48 37.2356 37.2356 48 24 48C10.7644 48 0 37.2356 0 24Z" />
+    <!-- Z -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12 12L36 12L36 17.5L21 30.5L36 30.5L36 36L12 36L12 30.5L27 17.5L12 17.5Z" />
+</vector>

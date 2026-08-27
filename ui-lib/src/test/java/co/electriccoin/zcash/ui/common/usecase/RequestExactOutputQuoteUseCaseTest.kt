@@ -305,6 +305,8 @@ private class ExactOutputSynchronizerProviderFake : SynchronizerProvider {
 
     override suspend fun getSynchronizerOrNull(): Synchronizer? = null
 
+    override suspend fun getVotingWalletDbPath(): String = error("voting is out of scope for this test")
+
     override fun resetSynchronizer() = Unit
 }
 

@@ -163,7 +163,7 @@ class GiftCardListVM(
                 status != GiftCardListStatus.CLAIMED
         return GiftCardListItem(
             id = card.id,
-            amount = stringRes(Zatoshi(card.amountZatoshi)),
+            amount = giftAmountRes(Zatoshi(card.amountZatoshi)),
             fiat = rate?.toFiatString(Zatoshi(card.amountZatoshi)),
             tier = giftCardTier(card.amountZatoshi, status == GiftCardListStatus.CLAIMED),
             createdAt = card.createdAt.toGiftDisplayDate(),

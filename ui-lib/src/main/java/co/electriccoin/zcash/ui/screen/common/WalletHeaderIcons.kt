@@ -32,7 +32,8 @@ sealed interface WalletHeaderBadgeChrome {
 
 data class WalletHeaderIconsState(
     val isKeystone: Boolean,
-    val badgeIcon: Int,
+    // Null renders the wallet mark on its own, with no badge overlaid.
+    val badgeIcon: Int? = null,
     val badgeChrome: WalletHeaderBadgeChrome = WalletHeaderBadgeChrome.Neutral,
     // Spins the badge icon in discrete 45°/100ms steps — for loading-style badge icons.
     val isBadgeAnimated: Boolean = false,
@@ -61,34 +62,36 @@ fun WalletHeaderIcons(
                 )
             } else {
                 Image(
-                    painter = painterResource(co.electriccoin.zcash.ui.design.R.drawable.ic_item_zashi),
+                    painter = painterResource(co.electriccoin.zcash.ui.design.R.drawable.ic_item_zapp),
                     contentDescription = null,
                     modifier = Modifier.padding(8.dp)
                 )
             }
         }
 
-        val (background, tint, iconPadding) = badgeChromeAppearance(state.badgeChrome)
+        if (state.badgeIcon != null) {
+            val (background, tint, iconPadding) = badgeChromeAppearance(state.badgeChrome)
 
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier =
-                Modifier
-                    .size(48.dp)
-                    .offset(x = 36.dp)
-                    .clip(CircleShape)
-                    .background(background)
-                    .border(2.dp, ZashiColors.Surfaces.bgPrimary, CircleShape)
-        ) {
-            Icon(
-                painter = painterResource(state.badgeIcon),
-                contentDescription = null,
-                tint = tint,
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier =
                     Modifier
-                        .padding(iconPadding)
-                        .let { if (state.isBadgeAnimated) it.steppedRotation() else it }
-            )
+                        .size(48.dp)
+                        .offset(x = 36.dp)
+                        .clip(CircleShape)
+                        .background(background)
+                        .border(2.dp, ZashiColors.Surfaces.bgPrimary, CircleShape)
+            ) {
+                Icon(
+                    painter = painterResource(state.badgeIcon),
+                    contentDescription = null,
+                    tint = tint,
+                    modifier =
+                        Modifier
+                            .padding(iconPadding)
+                            .let { if (state.isBadgeAnimated) it.steppedRotation() else it }
+                )
+            }
         }
     }
 }

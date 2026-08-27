@@ -191,8 +191,8 @@ private fun previewItem(
     id: String,
     zatoshi: Long,
     tier: GiftCardTier,
-    status: GiftCardListStatus,
     fiat: String,
+    status: GiftCardListStatus = GiftCardListStatus.SHARED,
     message: String? = null,
 ) = GiftCardListItem(
     id = id,
@@ -221,18 +221,22 @@ private fun GiftCardDeckPreview() =
                 GiftCardListState(
                     items =
                         listOf(
+                            // One card from each stretch of the ladder, so a change to any rung
+                            // shows up here beside the rungs it has to stay distinguishable from.
                             previewItem(
                                 id = "a",
-                                zatoshi = 1_500_000_000,
-                                tier = GiftCardTier.SIGNATURE,
+                                zatoshi = 6_000_000_000,
+                                tier = GiftCardTier.DRAGON,
                                 status = GiftCardListStatus.FUNDED,
-                                fiat = "$900.00",
+                                fiat = "$3,600.00",
                                 message = "Happy birthday — your first private money.",
                             ),
-                            previewItem("b", 75_000_000, GiftCardTier.OBSIDIAN, GiftCardListStatus.SHARED, "$45.00"),
-                            previewItem("c", 4_000_000, GiftCardTier.PAPER, GiftCardListStatus.SHARED, "$2.40"),
-                            previewItem("d", 25_000_000, GiftCardTier.GRAPHITE, GiftCardListStatus.SHARED, "$15.00"),
-                            previewItem("e", 6_000_000, GiftCardTier.SPENT, GiftCardListStatus.CLAIMED, "$3.60"),
+                            previewItem("b", 1_500_000_000, GiftCardTier.SIGNATURE, "$900.00"),
+                            previewItem("c", 700_000_000, GiftCardTier.TIGER, "$420.00"),
+                            previewItem("d", 75_000_000, GiftCardTier.VERMILION, "$45.00"),
+                            previewItem("e", 30_000_000, GiftCardTier.CINNABAR, "$18.00"),
+                            previewItem("f", 4_000_000, GiftCardTier.CLAY, "$2.40"),
+                            previewItem("g", 6_000_000, GiftCardTier.SPENT, "$3.60", GiftCardListStatus.CLAIMED),
                         ),
                     isCorrupted = false,
                     error = null,

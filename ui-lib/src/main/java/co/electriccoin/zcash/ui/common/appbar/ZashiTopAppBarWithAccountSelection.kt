@@ -85,7 +85,7 @@ private fun AccountSwitch(state: AccountSwitchState) {
             painter =
                 painterResource(
                     when (state.accountType) {
-                        AccountType.ZASHI -> R.drawable.ic_item_zashi
+                        AccountType.ZASHI -> R.drawable.ic_item_zapp
                         AccountType.KEYSTONE -> R.drawable.ic_item_keystone
                     }
                 ),

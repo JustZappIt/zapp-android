@@ -105,7 +105,7 @@ internal fun SyncProgressRow(state: WalletSyncChipState) {
 @Composable
 internal fun SyncStatusChip(state: WalletSyncChipState) {
     val c = ZappTheme.colors
-    // Keyed on status only: percent updates render in place, state changes crossfade.
+    // The chip is status-only; percentages live on SyncProgressRow.
     Crossfade(
         targetState = state.status,
         animationSpec = tween(ZappMotion.CONTENT_MS, easing = ZappMotion.easing),
@@ -122,7 +122,7 @@ internal fun SyncStatusChip(state: WalletSyncChipState) {
 
             WalletSyncStatus.SYNCING -> {
                 ZappStatusChip(
-                    stringResource(R.string.home_sync_chip_syncing_fmt, state.progressPercent),
+                    stringResource(R.string.home_sync_progress_syncing),
                     variant = ZappChipVariant.Accent,
                     dotColor = c.accent,
                 )
@@ -130,7 +130,7 @@ internal fun SyncStatusChip(state: WalletSyncChipState) {
 
             WalletSyncStatus.RESTORING -> {
                 ZappStatusChip(
-                    stringResource(R.string.home_sync_chip_restoring_fmt, state.progressPercent),
+                    stringResource(R.string.home_sync_progress_restoring),
                     variant = ZappChipVariant.Accent,
                     dotColor = c.accent,
                 )

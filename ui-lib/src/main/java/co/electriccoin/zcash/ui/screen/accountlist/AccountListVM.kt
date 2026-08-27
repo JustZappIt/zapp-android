@@ -38,7 +38,7 @@ class AccountListVM(
                                     icon =
                                         when (account) {
                                             is KeystoneAccount -> R.drawable.ic_item_keystone
-                                            is ZashiAccount -> R.drawable.ic_item_zashi
+                                            is ZashiAccount -> R.drawable.ic_item_zapp
                                         },
                                     isSelected = account.isSelected,
                                     onClick = { onAccountClicked(account) }
