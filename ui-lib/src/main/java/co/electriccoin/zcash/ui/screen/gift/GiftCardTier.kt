@@ -26,16 +26,16 @@ private const val ZATOSHI_PER_ZEC = 100_000_000L
  */
 internal enum class GiftCardTier {
     /** Under 0.1 ZEC. */
-    PAPER,
+    CLAY,
 
     /** 0.1 to 0.25 ZEC. */
-    LINEN,
+    SLATE,
 
-    /** 0.25 to 0.5 ZEC. */
-    GRAPHITE,
+    /** 0.25 to 0.5 ZEC. The first red. */
+    CINNABAR,
 
     /** 0.5 to 1 ZEC. */
-    OBSIDIAN,
+    VERMILION,
 
     /** 1 to 2 ZEC. */
     COPPER,
@@ -44,33 +44,33 @@ internal enum class GiftCardTier {
     AMBER,
 
     /** 5 to 10 ZEC. The black card. */
-    ONYX,
+    TIGER,
 
     /** 10 to 50 ZEC. */
     SIGNATURE,
 
     /** 50 ZEC and up. */
-    AURORA,
+    DRAGON,
 
     /** Collected. Overrides denomination: a spent card is a receipt, not a gift. */
     SPENT,
 }
 
-// The rungs added later subdivide the original boundaries rather than moving them, so a card
-// printed before they existed lands on its old stock or the one immediately beside it - never
-// somewhere unrecognisable.
+// The boundaries have not moved since the ladder was first drawn - only the stock printed on each
+// side of them has. A card made before a restyle lands on the same rung it always did, wearing
+// whatever that rung looks like now.
 
 /** 0.1 ZEC. */
-private const val PAPER_CEILING = ZATOSHI_PER_ZEC / 10
+private const val CLAY_CEILING = ZATOSHI_PER_ZEC / 10
 
 /** 0.25 ZEC. */
-private const val LINEN_CEILING = ZATOSHI_PER_ZEC / 4
+private const val SLATE_CEILING = ZATOSHI_PER_ZEC / 4
 
 /** 0.5 ZEC. */
-private const val GRAPHITE_CEILING = ZATOSHI_PER_ZEC / 2
+private const val CINNABAR_CEILING = ZATOSHI_PER_ZEC / 2
 
 /** 1 ZEC. */
-private const val OBSIDIAN_CEILING = ZATOSHI_PER_ZEC
+private const val VERMILION_CEILING = ZATOSHI_PER_ZEC
 
 /** 2 ZEC. */
 private const val COPPER_CEILING = ZATOSHI_PER_ZEC * 2
@@ -79,20 +79,20 @@ private const val COPPER_CEILING = ZATOSHI_PER_ZEC * 2
 private const val AMBER_CEILING = ZATOSHI_PER_ZEC * 5
 
 /** 10 ZEC. */
-private const val ONYX_CEILING = ZATOSHI_PER_ZEC * 10
+private const val TIGER_CEILING = ZATOSHI_PER_ZEC * 10
 
-/** 50 ZEC. Above this a card is an Aurora, and there is no rung after it. */
+/** 50 ZEC. Above this a card is a Dragon, and there is no rung after it. */
 private const val SIGNATURE_CEILING = ZATOSHI_PER_ZEC * 50
 
 private val LADDER =
     listOf(
-        PAPER_CEILING to GiftCardTier.PAPER,
-        LINEN_CEILING to GiftCardTier.LINEN,
-        GRAPHITE_CEILING to GiftCardTier.GRAPHITE,
-        OBSIDIAN_CEILING to GiftCardTier.OBSIDIAN,
+        CLAY_CEILING to GiftCardTier.CLAY,
+        SLATE_CEILING to GiftCardTier.SLATE,
+        CINNABAR_CEILING to GiftCardTier.CINNABAR,
+        VERMILION_CEILING to GiftCardTier.VERMILION,
         COPPER_CEILING to GiftCardTier.COPPER,
         AMBER_CEILING to GiftCardTier.AMBER,
-        ONYX_CEILING to GiftCardTier.ONYX,
+        TIGER_CEILING to GiftCardTier.TIGER,
         SIGNATURE_CEILING to GiftCardTier.SIGNATURE,
     )
 
@@ -103,20 +103,20 @@ private val LADDER =
 internal fun giftCardTier(amountZatoshi: Long, isSettled: Boolean): GiftCardTier =
     when {
         isSettled -> GiftCardTier.SPENT
-        else -> LADDER.firstOrNull { amountZatoshi < it.first }?.second ?: GiftCardTier.AURORA
+        else -> LADDER.firstOrNull { amountZatoshi < it.first }?.second ?: GiftCardTier.DRAGON
     }
 
 internal fun GiftCardTier.stock(): ZappGiftCardStock =
     when (this) {
-        GiftCardTier.PAPER -> ZappGiftCardStocks.Paper
-        GiftCardTier.LINEN -> ZappGiftCardStocks.Linen
-        GiftCardTier.GRAPHITE -> ZappGiftCardStocks.Graphite
-        GiftCardTier.OBSIDIAN -> ZappGiftCardStocks.Obsidian
+        GiftCardTier.CLAY -> ZappGiftCardStocks.Clay
+        GiftCardTier.SLATE -> ZappGiftCardStocks.Slate
+        GiftCardTier.CINNABAR -> ZappGiftCardStocks.Cinnabar
+        GiftCardTier.VERMILION -> ZappGiftCardStocks.Vermilion
         GiftCardTier.COPPER -> ZappGiftCardStocks.Copper
         GiftCardTier.AMBER -> ZappGiftCardStocks.Amber
-        GiftCardTier.ONYX -> ZappGiftCardStocks.Onyx
+        GiftCardTier.TIGER -> ZappGiftCardStocks.Tiger
         GiftCardTier.SIGNATURE -> ZappGiftCardStocks.Signature
-        GiftCardTier.AURORA -> ZappGiftCardStocks.Aurora
+        GiftCardTier.DRAGON -> ZappGiftCardStocks.Dragon
         GiftCardTier.SPENT -> ZappGiftCardStocks.Spent
     }
 

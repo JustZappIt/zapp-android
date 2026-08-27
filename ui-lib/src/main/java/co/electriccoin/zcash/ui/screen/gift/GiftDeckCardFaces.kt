@@ -146,10 +146,13 @@ internal fun CardFront(item: GiftCardListItem, stock: ZappGiftCardStock) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                BasicText(
-                    text = stringResource(R.string.gift_card_deck_wordmark),
-                    style = ZappTheme.typography.groupLabel.copy(color = stock.inkMuted),
-                )
+                // Absent on the stocks that carry a design of their own — see showsWordmark.
+                if (stock.showsWordmark) {
+                    BasicText(
+                        text = stringResource(R.string.gift_card_deck_wordmark),
+                        style = ZappTheme.typography.groupLabel.copy(color = stock.inkMuted),
+                    )
+                }
                 item.createdAt?.let {
                     BasicText(
                         text = it.getValue(),

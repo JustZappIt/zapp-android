@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -421,10 +422,16 @@ private fun PodiumFaceContent(
         modifier = Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        BasicText(
-            text = stringResource(R.string.gift_card_deck_wordmark),
-            style = ZappTheme.typography.groupLabel.copy(color = stock.inkMuted),
-        )
+        // Absent on the stocks that carry a design of their own — see showsWordmark. The Column
+        // below still needs something above it for SpaceBetween to push against, so the slot stays.
+        if (stock.showsWordmark) {
+            BasicText(
+                text = stringResource(R.string.gift_card_deck_wordmark),
+                style = ZappTheme.typography.groupLabel.copy(color = stock.inkMuted),
+            )
+        } else {
+            Spacer(modifier = Modifier)
+        }
         Column {
             BasicText(
                 text = amount?.getValue().orEmpty(),
@@ -473,21 +480,26 @@ private fun PodiumBack(stock: ZappGiftCardStock) {
                 .padding(18.dp),
         contentAlignment = Alignment.Center,
     ) {
+        // The reverse is one framed field and nothing else, so the frame is the whole design — and
+        // it is drawn in the stock's own ring rather than its edge, which makes the back of a card
+        // recognisably the same card as the front without repeating a single word of it.
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .border(1.dp, stock.edge, RoundedCornerShape(CORNER - 8.dp)),
+                    .border(1.dp, stock.ring ?: stock.edge, RoundedCornerShape(CORNER - 8.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            BasicText(
-                text = stringResource(R.string.gift_card_deck_wordmark).uppercase(),
-                style =
-                    ZappTheme.typography.eyebrow.copy(
-                        color = stock.inkMuted,
-                        textAlign = TextAlign.Center,
-                    ),
-            )
+            if (stock.showsWordmark) {
+                BasicText(
+                    text = stringResource(R.string.gift_card_deck_wordmark).uppercase(),
+                    style =
+                        ZappTheme.typography.eyebrow.copy(
+                            color = stock.inkMuted,
+                            textAlign = TextAlign.Center,
+                        ),
+                )
+            }
         }
     }
 }
