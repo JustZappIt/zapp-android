@@ -31,9 +31,7 @@ import kotlin.math.sin
  */
 @Composable
 internal fun CardFlare(stock: ZappGiftCardStock, corner: Dp, modifier: Modifier = Modifier) {
-    if (stock.engraving == null && stock.watermark == null && stock.spark == null && stock.ring == null) {
-        return
-    }
+    if (stock.isBare) return
     // The two ornament registers are meant to be exclusive; a stock carrying both would read as
     // two cards printed on top of each other. Cheaper to catch here than in review.
     check(stock.spark == null || stock.engraving == null) {
@@ -94,6 +92,10 @@ internal fun CardFlare(stock: ZappGiftCardStock, corner: Dp, modifier: Modifier 
         }
     }
 }
+
+/** Nothing to strike into this face: the plain end of the ladder, where the stock is the whole card. */
+private val ZappGiftCardStock.isBare: Boolean
+    get() = listOfNotNull(engraving, watermark, spark, ring).isEmpty()
 
 /**
  * The Zapp Z, drawn rather than set: a text glyph would inherit whatever face the system feels like
