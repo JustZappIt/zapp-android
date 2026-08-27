@@ -11,6 +11,7 @@ import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.datasource.GiftCardScanStalledException
 import co.electriccoin.zcash.ui.common.datasource.GiftCardUnreachableException
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimOutcome
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimProgress
@@ -578,6 +579,8 @@ private fun Throwable.toClaimError(): GiftClaimError =
         // the card. Thrown out of the claim rather than the preview, which never touches the
         // network.
         this is GiftCardUnreachableException -> GiftClaimError.UNREACHABLE
+
+        this is GiftCardScanStalledException -> GiftClaimError.SCAN_STALLED
 
         isMissingProvingParams() -> GiftClaimError.PARAMS_UNAVAILABLE
 

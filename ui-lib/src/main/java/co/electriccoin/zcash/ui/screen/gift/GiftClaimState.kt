@@ -89,6 +89,13 @@ internal enum class GiftClaimError {
     UNREACHABLE,
 
     /**
+     * The card's server answered, but this phone could not finish the search and the scan stopped
+     * advancing. Kept apart from [UNREACHABLE] because the connection is fine: what the recipient
+     * can do is free the phone up or move to another one, not check their signal.
+     */
+    SCAN_STALLED,
+
+    /**
      * The Sapling proving parameters are missing and could not be downloaded, so no shielded
      * transaction can be built at all. Kept out of [FAILED] because "try again" is wrong advice:
      * the scan already found the money and nothing changes until the download succeeds.

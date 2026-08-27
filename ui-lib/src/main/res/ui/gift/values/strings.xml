@@ -122,6 +122,7 @@
     <string name="gift_claim_error_underfunded">This Zpacket cannot cover the network fee to move its own funds. The ZEC is still inside, but Zapp cannot claim it.</string>
     <string name="gift_claim_error_params">Zapp couldn\'t download what it needs to build the transaction. Your ZEC is safe — check your connection and try again.</string>
     <string name="gift_claim_error_unreachable">Zapp could not reach a Zcash server to look for this Zpacket. Check your connection and try again.</string>
+    <string name="gift_claim_error_scan_stalled">Zapp reached a Zcash server, but this phone could not keep up with the search and it stopped making progress. Your ZEC is safe inside the Zpacket. Close other apps and try again, or claim it on another device.</string>
     <string name="gift_claim_error_not_ready">Zapp is still connecting to the Zcash network. Your ZEC is fine — try again in a moment.</string>
     <string name="gift_claim_error_unavailable">This Zpacket link is no longer open. Tap it again where you received it.</string>
     <string name="gift_claim_expired_note">This Zpacket is past its suggested expiry. That is advisory only — it still claims for the full amount.</string>

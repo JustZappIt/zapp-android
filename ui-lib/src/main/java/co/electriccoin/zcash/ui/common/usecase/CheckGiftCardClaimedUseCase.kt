@@ -6,6 +6,7 @@ package co.electriccoin.zcash.ui.common.usecase
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.bestEffort
 import co.electriccoin.zcash.ui.common.datasource.GiftCardHoldings
+import co.electriccoin.zcash.ui.common.datasource.GiftCardScanStalledException
 import co.electriccoin.zcash.ui.common.datasource.GiftCardUnreachableException
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimDataSource
 import co.electriccoin.zcash.ui.common.datasource.GiftClaimProgress
@@ -35,7 +36,7 @@ enum class GiftCardCheckResult {
      */
     FUNDING_PENDING,
 
-    /** The card's server could not be reached, so the scan never started. */
+    /** The card's server could not be reached, or this phone could not keep up with the search. */
     UNREACHABLE,
 
     /** The scan could not finish. Says nothing about the card either way. */
@@ -134,7 +135,8 @@ class CheckGiftCardClaimedUseCase(
             Twig.error(throwable) { "Gift card ${card.id} could not be checked" }
             // Separated because the two need different copy: one is "you are offline", the other
             // is "something went wrong". Neither says anything about the card.
-            if (throwable is GiftCardUnreachableException) {
+            // A stalled scan folds in here: the sender's screen offers "check again" either way.
+            if (throwable is GiftCardUnreachableException || throwable is GiftCardScanStalledException) {
                 CheckOutcome.Failed(GiftCardCheckResult.UNREACHABLE)
             } else {
                 CheckOutcome.Failed(GiftCardCheckResult.UNKNOWN)

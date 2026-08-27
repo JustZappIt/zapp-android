@@ -122,6 +122,7 @@
     <string name="gift_claim_error_underfunded">Este Zpacket no puede cubrir la comisión de red para mover sus propios fondos. Los ZEC siguen dentro, pero Zapp no puede reclamarlos.</string>
     <string name="gift_claim_error_params">Zapp no pudo descargar lo que necesita para crear la transacción. Tus ZEC están a salvo: revisa tu conexión e inténtalo de nuevo.</string>
     <string name="gift_claim_error_unreachable">Zapp no pudo conectar con ningún servidor de Zcash para buscar este Zpacket. Comprueba tu conexión e inténtalo de nuevo.</string>
+    <string name="gift_claim_error_scan_stalled">Zapp conectó con un servidor de Zcash, pero este teléfono no pudo seguir el ritmo de la búsqueda y dejó de avanzar. Tus ZEC están a salvo dentro del Zpacket. Cierra otras aplicaciones e inténtalo de nuevo, o recíbelo en otro dispositivo.</string>
     <string name="gift_claim_error_not_ready">Zapp todavía se está conectando a la red Zcash. Tus ZEC están bien: inténtalo en un momento.</string>
     <string name="gift_claim_error_unavailable">Este enlace de Zpacket ya no está abierto. Tócalo de nuevo donde lo recibiste.</string>
     <string name="gift_claim_expired_note">Este Zpacket pasó su fecha de caducidad sugerida. Eso es solo informativo: aún se reclama por el importe completo.</string>
