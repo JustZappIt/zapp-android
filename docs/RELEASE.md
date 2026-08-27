@@ -74,6 +74,30 @@ After the build, confirm the preflight actually took by reading the generated
 checking that `P2P_NETWORK` and `OFFRAMP_USE_DEV_KEY` say what you intended.
 Configuration mistakes here are invisible in the APK/AAB otherwise.
 
+## 3. Refresh the bundled checkpoints
+
+```
+./gradlew :app:assembleZcashmainnetFossDebug   # once, to merge the SDK's assets
+scripts/refresh-checkpoints.sh mainnet
+```
+
+Checkpoints are the height a scan is allowed to start from, and they ship frozen
+inside the SDK AAR at whatever height that SDK was cut. Every week that passes
+between the SDK's cut and this release is a stretch of chain that a restored
+wallet has to scan from scratch — and a Zpacket minted above the newest bundled
+checkpoint pays that whole gap on a phone before it can be claimed at all. On a
+slow device that is the difference between a claim that finishes and one that
+does not.
+
+The script writes into `app/src/main/assets/`, where the app's own assets merge
+over the library's, so nothing in the SDK is replaced. It refuses to write
+anything unless it can first regenerate the newest checkpoint the SDK already
+ships, byte for byte, and it cross-checks every new file against a second,
+independent server.
+
+Commit whatever it writes. Testnet takes the same command with `testnet`, but
+its endpoint has never been verified — check the output before trusting it.
+
 ## Signing
 
 Release signing reads four git-ignored properties from `local.properties`
