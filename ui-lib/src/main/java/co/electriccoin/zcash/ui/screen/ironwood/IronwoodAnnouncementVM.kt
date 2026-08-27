@@ -11,7 +11,7 @@ import co.electriccoin.zcash.ui.screen.ExternalUrl
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
-private const val GUIDE_URL = "https://www.justzappit.xyz/ironwood"
+private const val GUIDE_URL = "https://justzappit.xyz/ironwood"
 
 /**
  * Marks the announcement as shown at display time, not at dismissal. Home forwards here from a

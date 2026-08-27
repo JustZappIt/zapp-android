@@ -39,7 +39,7 @@
     <string name="coinVote_configSettings_urlField" tools:ignore="MissingTranslation">URL</string>
     <string name="coinVote_configSettings_urlPlaceholder" tools:ignore="MissingTranslation">Enter...</string>
     <string name="coinVote_configSettings_errorTitleTooLong" tools:ignore="MissingTranslation">Title must be 15 characters or less, including spaces.</string>
-    <string name="coinVote_configSettings_errorInvalidUrl" tools:ignore="MissingTranslation">Please enter a valid URL (e.g. https://zodl.com/polls)</string>
+    <string name="coinVote_configSettings_errorInvalidUrl" tools:ignore="MissingTranslation">Please enter a valid URL (e.g. https://example.com/voting-config.json)</string>
     <string name="coinVote_configSettings_errorDuplicateUrl" tools:ignore="MissingTranslation">This source URL is already added.</string>
     <string name="coinVote_howToVote_titleZodl" tools:ignore="MissingTranslation">How to vote with %1$s</string>
     <string name="coinVote_howToVote_subtitle" tools:ignore="MissingTranslation">Your ZEC gives you a voice. Shape the future of the Zcash network by voting on active proposals.</string>

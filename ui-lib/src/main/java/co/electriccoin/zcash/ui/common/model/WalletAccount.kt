@@ -94,7 +94,7 @@ data class ZashiAccount(
         get() = stringRes(co.electriccoin.zcash.ui.R.string.accounts_zashi)
 
     override val icon: Int
-        get() = R.drawable.ic_item_zashi
+        get() = R.drawable.ic_item_zapp
 
     override val totalBalance: Zatoshi
         get() = unified.balance.total + sapling.balance.total + transparent.balance

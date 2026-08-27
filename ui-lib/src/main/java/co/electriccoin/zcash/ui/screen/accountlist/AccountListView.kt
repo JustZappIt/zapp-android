@@ -146,7 +146,7 @@ private fun Preview() =
                                 ZashiAccountListItemState(
                                     title = stringRes("Zapp"),
                                     subtitle = stringResByAddress("u1078r23uvtj8xj6dpdx..."),
-                                    icon = R.drawable.ic_item_zashi,
+                                    icon = R.drawable.ic_item_zapp,
                                     isSelected = true,
                                     onClick = {}
                                 )
