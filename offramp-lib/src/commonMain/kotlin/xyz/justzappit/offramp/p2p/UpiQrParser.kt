@@ -86,13 +86,6 @@ object UpiQrParser {
     }
 
     /**
-     * Decodes one `application/x-www-form-urlencoded` parameter out of a raw query string, or null
-     * when it is absent. Shared with [EcuQrParser] so a DeUna URL's `id=` and a UPI URI's `pa=`
-     * unescape `%XX` and `+` through exactly one implementation.
-     */
-    internal fun queryParam(query: String, key: String): String? = parseQueryParams(query)[key]
-
-    /**
      * Hand-rolled `application/x-www-form-urlencoded` decoder so the parser stays
      * Android-runtime-free (no `java.net.URLDecoder` is fine on JVM, but we avoid `Uri.parse`
      * to keep this in offramp-lib jvmMain). Handles `+` → space and `%XX` byte escapes.

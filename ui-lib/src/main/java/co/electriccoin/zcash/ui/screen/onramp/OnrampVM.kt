@@ -851,8 +851,9 @@ internal class OnrampVM(
             OnrampFailureCode.UNKNOWN -> stringRes(R.string.onramp_error_progress)
         }
 
-    // Rail names are brand nouns and identical across locales, so they are literals. NGN's is the
-    // exception: "Bank transfer" is prose, and prose goes through strings.xml like everything else.
+    // Rail names are brand nouns and identical across locales, so they are literals. NGN and ECU are
+    // the exceptions: "Bank transfer" is prose, and prose goes through strings.xml. Note these are
+    // the rails a BUY is *paid over* — DeUna and QR Ph are Scan & Pay rails and do not belong here.
     private fun CurrencyCode.paymentRail(): StringResource =
         when (this) {
             CurrencyCode.Inr -> stringRes("UPI")
@@ -864,9 +865,9 @@ internal class OnrampVM(
             CurrencyCode.Cop -> stringRes("Nequi")
             CurrencyCode.Bob -> stringRes("QR Simple")
             CurrencyCode.Cup -> stringRes("Transfermóvil")
-            CurrencyCode.Ecu -> stringRes("DeUna")
-            CurrencyCode.Pen -> stringRes("Yape/Plin")
-            CurrencyCode.Php -> stringRes("QR Ph")
+            CurrencyCode.Ecu -> stringRes(R.string.onramp_payment_rail_bank_transfer)
+            CurrencyCode.Pen -> stringRes("Yape/Plin/CCI")
+            CurrencyCode.Php -> stringRes("InstaPay")
         }
 
     /**

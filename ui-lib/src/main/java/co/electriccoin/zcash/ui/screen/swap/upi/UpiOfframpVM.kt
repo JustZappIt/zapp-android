@@ -456,22 +456,24 @@ internal class UpiOfframpVM(
 
     companion object {
         // Pre-fetch placeholder rate per corridor, replaced by the live getPriceConfig read within
-        // ~30s (and immediately on re-quote before any order is placed). Rough, just seeds the estimate.
-        // ECU is exactly 1: Ecuador is dollarised, so the corridor quotes 1:1 against USDC.
+        // ~30s (and immediately on re-quote before any order is placed). Rough, just seeds the
+        // estimate. Read off the mainnet Diamond's sellPrice on 2026-08-28; the inflationary
+        // corridors (ARS, VEN, BOB, CUP) drift fastest, so re-measure when this table is touched.
+        // ECU sits just under 1 because Ecuador is dollarised and the rate carries the spread.
         private fun fallbackRate(currency: CurrencyCode): BigDecimal =
             when (currency) {
-                CurrencyCode.Inr -> BigDecimal("85")
-                CurrencyCode.Brl -> BigDecimal("5.4")
-                CurrencyCode.Idr -> BigDecimal("16000")
-                CurrencyCode.Ars -> BigDecimal("1500")
-                CurrencyCode.Ven -> BigDecimal("800")
-                CurrencyCode.Ngn -> BigDecimal("1350")
-                CurrencyCode.Cop -> BigDecimal("3250")
-                CurrencyCode.Bob -> BigDecimal("6.9")
-                CurrencyCode.Cup -> BigDecimal("400")
-                CurrencyCode.Ecu -> BigDecimal.ONE
-                CurrencyCode.Pen -> BigDecimal("3.7")
-                CurrencyCode.Php -> BigDecimal("58")
+                CurrencyCode.Inr -> BigDecimal("97")
+                CurrencyCode.Brl -> BigDecimal("5.1")
+                CurrencyCode.Idr -> BigDecimal("17400")
+                CurrencyCode.Ars -> BigDecimal("1555")
+                CurrencyCode.Ven -> BigDecimal("925")
+                CurrencyCode.Ngn -> BigDecimal("1343")
+                CurrencyCode.Cop -> BigDecimal("3063")
+                CurrencyCode.Bob -> BigDecimal("11.6")
+                CurrencyCode.Cup -> BigDecimal("928")
+                CurrencyCode.Ecu -> BigDecimal("0.98")
+                CurrencyCode.Pen -> BigDecimal("3.34")
+                CurrencyCode.Php -> BigDecimal("60.5")
             }
 
         // p2p.me caps a single offramp at 100 USDC. Surfaced proactively in the UI via

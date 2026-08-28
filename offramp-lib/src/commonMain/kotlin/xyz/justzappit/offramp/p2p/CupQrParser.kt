@@ -47,7 +47,7 @@ object CupQrParser {
     }
 
     private fun normaliseCard(card: String): String? =
-        card.filterNot { it == ' ' || it == '-' }.takeIf { CARD_REGEX.matches(it) }
+        card.filterNot { it.isWhitespace() || it == '-' }.takeIf { CARD_REGEX.matches(it) }
 
     /** 8 national digits, with an optional `53` country prefix stripped rather than rejected. */
     private fun normalisePhone(phone: String): String? {
