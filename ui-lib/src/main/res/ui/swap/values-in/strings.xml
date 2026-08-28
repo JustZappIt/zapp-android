@@ -104,6 +104,7 @@
     <string name="upi_offramp_estimate_disclaimer">Perkiraan. Jumlah akhir dikunci saat merchant menerima.</string>
     <string name="upi_offramp_limit_hint">Maksimum 100 USDC per offramp.</string>
     <string name="upi_offramp_error_no_merchant">Tidak ada merchant yang tersedia untuk jumlah ini saat ini. Coba jumlah yang lebih kecil.</string>
+    <string name="upi_offramp_error_quote_failed">Tidak dapat memastikan kurs saat ini. Periksa koneksi Anda dan coba lagi.</string>
     <string name="upi_offramp_error_invalid_upi">Itu tidak tampak seperti handle UPI (seharusnya seperti nama@bank).</string>
     <string name="upi_offramp_send_button">Bayar</string>
     <string name="upi_offramp_resume_button">Lanjutkan offramp yang berjalan</string>

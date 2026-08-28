@@ -6,6 +6,7 @@ import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.bestEffort
 import co.electriccoin.zcash.ui.common.provider.OfframpCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
 import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepository
@@ -18,6 +19,7 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.settings.p2p.P2pTransactionsArgs
 import co.electriccoin.zcash.ui.screen.swap.upi.bridge.BridgeToBaseArgs
 import co.electriccoin.zcash.ui.screen.swap.upi.progress.UpiOfframpProgressArgs
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,6 +85,9 @@ internal class UpiOfframpVM(
      */
     private val merchantProbe = MutableStateFlow<MerchantProbe>(MerchantProbe.Unknown)
 
+    // Cleared on the next attempt and whenever the amount moves.
+    private val quoteFailed = MutableStateFlow(false)
+
     private sealed interface MerchantProbe {
         /**
          * Nothing typed yet, a probe still in flight, or a probe that could not reach the chain —
@@ -122,20 +127,24 @@ internal class UpiOfframpVM(
     // so a backgrounded screen doesn't burn RPC quota.
     private val activeSubscribers = MutableStateFlow(0)
 
+    // Folded into one flow because combine's typed arity stops at five.
+    private val commitFeedback = combine(merchantProbe, quoteFailed) { probe, failed -> probe to failed }
+
     val state: StateFlow<UpiOfframpState> =
         combine(
             inrState,
             pricing,
             inFlight,
             baseBalance.balance,
-            merchantProbe,
-        ) { inr, currentPricing, checkpoint, balance, probe ->
+            commitFeedback,
+        ) { inr, currentPricing, checkpoint, balance, (probe, failed) ->
             buildState(
                 inr = inr,
                 pricing = currentPricing,
                 inFlightCheckpoint = checkpoint,
                 balance = balance.loadedOrNull,
                 probe = probe,
+                quoteFailed = failed,
             )
         }.onStart { activeSubscribers.update { it + 1 } }
             .onCompletion { activeSubscribers.update { (it - 1).coerceAtLeast(0) } }
@@ -149,6 +158,7 @@ internal class UpiOfframpVM(
                         inFlightCheckpoint = inFlight.value,
                         balance = baseBalance.balance.value.loadedOrNull,
                         probe = merchantProbe.value,
+                        quoteFailed = quoteFailed.value,
                     ),
             )
 
@@ -189,23 +199,29 @@ internal class UpiOfframpVM(
             }
         }
 
+    // Best-effort: a failed poll leaves the last good value in place, which is right here and wrong
+    // at commit — see [readPricingForCommit].
     private suspend fun refreshRate() {
-        runCatching { rpc.getPriceConfig(network.diamondAddress, currency).sellPriceAsRate() }
-            .onSuccess { newRate ->
-                Twig.info { "UpiOfframpVM: live sellPrice for ${currency.code} = $newRate" }
-                pricing.update { it.copy(rate = newRate) }
-            }.onFailure { Twig.warn(it) { "UpiOfframpVM: getPriceConfig(${currency.code}) failed" } }
+        bestEffort("UpiOfframpVM: getPriceConfig(${currency.code}) failed") {
+            val newRate = readRate()
+            Twig.info { "UpiOfframpVM: live sellPrice for ${currency.code} = $newRate" }
+            pricing.update { it.copy(rate = newRate) }
+        }
     }
 
     // Separate diamond reads; update each independently so one failing doesn't stale the other.
     private suspend fun refreshFees() {
-        runCatching { rpc.getSmallOrderThreshold(network.diamondAddress, currency) }
-            .onSuccess { threshold -> pricing.update { it.copy(smallOrderThreshold = threshold) } }
-            .onFailure { Twig.warn(it) { "UpiOfframpVM: getSmallOrderThreshold(${currency.code}) failed" } }
-        runCatching { rpc.getSmallOrderFixedFeePay(network.diamondAddress, currency) }
-            .onSuccess { fee -> pricing.update { it.copy(smallOrderFixedFeePay = fee) } }
-            .onFailure { Twig.warn(it) { "UpiOfframpVM: getSmallOrderFixedFeePay(${currency.code}) failed" } }
+        bestEffort("UpiOfframpVM: getSmallOrderThreshold(${currency.code}) failed") {
+            val threshold = rpc.getSmallOrderThreshold(network.diamondAddress, currency)
+            pricing.update { it.copy(smallOrderThreshold = threshold) }
+        }
+        bestEffort("UpiOfframpVM: getSmallOrderFixedFeePay(${currency.code}) failed") {
+            val fee = rpc.getSmallOrderFixedFeePay(network.diamondAddress, currency)
+            pricing.update { it.copy(smallOrderFixedFeePay = fee) }
+        }
     }
+
+    private suspend fun readRate(): BigDecimal = rpc.getPriceConfig(network.diamondAddress, currency).sellPriceAsRate()
 
     private fun buildState(
         inr: NumberTextFieldInnerState,
@@ -213,11 +229,12 @@ internal class UpiOfframpVM(
         inFlightCheckpoint: OfframpCheckpoint?,
         balance: Usdc6?,
         probe: MerchantProbe,
+        quoteFailed: Boolean,
     ): UpiOfframpState {
         // INR is the source of truth; USDC re-derives at the placed precision (see [alignUsdc]) and
         // nulls a sub-micro amount that floors to 0 USDC so Send stays disabled.
         val usdcAmount: BigDecimal? = inr.amount?.let { alignUsdc(it, pricing.rate) }
-        val validationError = errorFor(inFlightCheckpoint, usdcAmount, probe)
+        val validationError = errorFor(inFlightCheckpoint, usdcAmount, probe, quoteFailed)
         val orderAmount: Usdc6? =
             if (inFlightCheckpoint == null && validationError == null && usdcAmount != null) {
                 Usdc6.ofWhole(usdcAmount)
@@ -323,11 +340,16 @@ internal class UpiOfframpVM(
         inFlightCheckpoint: OfframpCheckpoint?,
         usdc: BigDecimal?,
         probe: MerchantProbe,
+        quoteFailed: Boolean,
     ): StringResource? =
         if (inFlightCheckpoint != null) {
             stringRes(R.string.upi_offramp_error_in_flight)
         } else {
-            validate(usdc) ?: noMerchantError(usdc, probe)
+            // A failed re-quote outranks the probe beneath it, which was measured against a rate
+            // the order was never allowed to use.
+            validate(usdc)
+                ?: stringRes(R.string.upi_offramp_error_quote_failed).takeIf { quoteFailed }
+                ?: noMerchantError(usdc, probe)
         }
 
     private fun validate(usdc: BigDecimal?): StringResource? {
@@ -397,6 +419,7 @@ internal class UpiOfframpVM(
 
     private fun onInrChange(next: NumberTextFieldInnerState) {
         inrState.update { next }
+        quoteFailed.update { false }
     }
 
     private fun onSendClick() {
@@ -421,8 +444,16 @@ internal class UpiOfframpVM(
     // Re-quote: the sell rate the contract stamps can drift, so refetch it the instant the user
     // commits, recompute the USDC, then either confirm a payment from the Base balance or route to a
     // top-up bridge when the balance is short. The pay flow never kicks off an inline bridge itself.
+    @Suppress("ReturnCount")
     private suspend fun reQuoteAndRoute(rawInr: BigDecimal) {
-        val pricing = refreshPricingNow()
+        quoteFailed.update { false }
+        val pricing =
+            runCatching { readPricingForCommit() }
+                .onFailure { e ->
+                    if (e is CancellationException) throw e
+                    Twig.warn(e) { "UpiOfframpVM: commit-time pricing read failed for ${currency.code}" }
+                    quoteFailed.update { true }
+                }.getOrNull() ?: return
         val amounts = orderAmounts(rawInr, pricing.rate)?.takeIf { it.usdc.whole <= USDC_CAP } ?: return
 
         // The re-quote can move the placed amount off whatever the input probe measured, and
@@ -576,10 +607,24 @@ internal class UpiOfframpVM(
         return usdc.micros.multiply(rateMicros).divide(MICROS_PER_UNIT)
     }
 
-    private suspend fun refreshPricingNow(): Pricing {
-        refreshRate()
-        refreshFees()
-        return pricing.value
+    /**
+     * Read fresh and allowed to fail: unlike the poller this must not fall back to whatever [pricing]
+     * holds, which on a screen whose first read has not landed is the seed constant and a zero fee.
+     *
+     * A stale-*low* rate still clears the Diamond's slippage check — `fiatAmountLimit` is a floor,
+     * not a ceiling — so the order settles above the fiat the confirmation sheet showed. A zero fee
+     * makes a balance of exactly the placed amount look sufficient, and setSellOrderUpi then
+     * atomic-cancels on the fee's own transferFrom (see [topUpShortfall]).
+     */
+    private suspend fun readPricingForCommit(): Pricing {
+        val fresh =
+            Pricing(
+                rate = readRate(),
+                smallOrderThreshold = rpc.getSmallOrderThreshold(network.diamondAddress, currency),
+                smallOrderFixedFeePay = rpc.getSmallOrderFixedFeePay(network.diamondAddress, currency),
+            )
+        pricing.value = fresh
+        return fresh
     }
 
     companion object {
@@ -605,11 +650,11 @@ internal class UpiOfframpVM(
             }
 
         // Ours, not p2p.me's. Measured on mainnet 2026-08-28: the Diamond assigns merchants well
-        // past this — INR to ~200 USDC, BRL and IDR to ~300 — the SDK's corridor metadata carries
-        // no amount bounds at all, and the eligibility read answers identically for a fresh address
-        // and for one with 150 completed orders, so user reputation does not move it either. The
-        // only ceilings actually enforced on chain are per-currency *monthly* volume and per-user
-        // rolling buy limits, neither of which is a per-order cap.
+        // past this — INR to ~200 USDC, BRL and IDR to ~300 — and the SDK's corridor metadata
+        // carries no amount bounds at all. The eligibility read answered identically for a fresh
+        // address, the operator, and an account with 150 completed orders — three addresses, so read
+        // it as no sign reputation moves it rather than proof it cannot. The only ceilings seen
+        // enforced on chain are per-currency *monthly* volume and per-user rolling buy limits.
         //
         // Keep it as the deliberate self-custody safety rail it is, but do not mistake it for the
         // real limit: that is merchant liquidity, which is per corridor and per amount, and lower

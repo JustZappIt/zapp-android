@@ -104,6 +104,7 @@
     <string name="upi_offramp_estimate_disclaimer">Estimado. O valor final e fixado quando o comerciante aceita.</string>
     <string name="upi_offramp_limit_hint">Maximo de 100 USDC por offramp.</string>
     <string name="upi_offramp_error_no_merchant">Nenhum comerciante disponível para este valor no momento. Tente um valor menor.</string>
+    <string name="upi_offramp_error_quote_failed">Não foi possível confirmar a taxa atual. Verifique sua conexão e tente novamente.</string>
     <string name="upi_offramp_error_invalid_upi">Isso nao parece um identificador UPI (esperava algo como nome@banco).</string>
     <string name="upi_offramp_send_button">Pagar</string>
     <string name="upi_offramp_resume_button">Retomar offramp em andamento</string>
