@@ -54,6 +54,11 @@ class OfframpOrchestratorTest {
     private val rawTxLog = mutableListOf<String>()
     private var getAssignableResponse = ENCODED_ADDRESS_ARRAY_OF_ONE
 
+    // Raw params of every getAssignableMerchantsFromCircle call, so a test can check which amounts
+    // the eligibility read actually carried rather than only what it answered.
+    private val eligibilityCalldataLog = mutableListOf<String>()
+    private var failEligibilityCall = false
+
     private val rpcEngine =
         MockEngine { request ->
             val bytes = (request.body as io.ktor.http.content.OutgoingContent.ByteArrayContent).bytes()
@@ -168,6 +173,8 @@ class OfframpOrchestratorTest {
         nextIsOrderExpired = ENCODED_ZERO
         nextSubgraphResponse = SUBGRAPH_OK_ONE_CIRCLE
         getAssignableResponse = ENCODED_ADDRESS_ARRAY_OF_ONE
+        failEligibilityCall = false
+        eligibilityCalldataLog.clear()
         rpcRequestLog.clear()
         rawTxLog.clear()
         tickCounter = 0L
@@ -620,14 +627,98 @@ class OfframpOrchestratorTest {
         }
 
     @Test
-    fun `isMerchantAvailable is true with an assignable merchant and false without`() =
+    fun `merchantAvailability is Available with an assignable merchant and Unavailable without`() =
         runTest {
             getAssignableResponse = ENCODED_ADDRESS_ARRAY_OF_ONE
-            assertTrue(orchestrator.isMerchantAvailable(Usdc6.ofMicros(5_000_000), CurrencyCode.Inr))
+            assertEquals(
+                MerchantAvailability.Available,
+                orchestrator.merchantAvailability(
+                    usdc = Usdc6.ofMicros(5_000_000),
+                    fiat = Usdc6.ofMicros(445_000_000),
+                    currency = CurrencyCode.Inr,
+                ),
+            )
 
             getAssignableResponse = ENCODED_EMPTY_ADDRESS_ARRAY
-            assertTrue(!orchestrator.isMerchantAvailable(Usdc6.ofMicros(5_000_000), CurrencyCode.Inr))
+            assertEquals(
+                MerchantAvailability.Unavailable,
+                orchestrator.merchantAvailability(
+                    usdc = Usdc6.ofMicros(5_000_000),
+                    fiat = Usdc6.ofMicros(445_000_000),
+                    currency = CurrencyCode.Inr,
+                ),
+            )
         }
+
+    // The bug this guards: probing with a placeholder fiat amount asks the Diamond a different
+    // question than the order asks, and gets a near-uniform yes back.
+    @Test
+    fun `merchantAvailability asks the chain about the fiat amount it was given`() =
+        runTest {
+            orchestrator.merchantAvailability(
+                usdc = Usdc6.ofMicros(5_000_000),
+                fiat = Usdc6.ofMicros(445_000_000),
+                currency = CurrencyCode.Inr,
+            )
+
+            assertEquals(bigIntegerValueOf(445_000_000), fiatAmountOf(eligibilityCalldataLog.single()))
+        }
+
+    @Test
+    fun `merchantAvailability reports Undetermined rather than Unavailable when the read fails`() =
+        runTest {
+            failEligibilityCall = true
+
+            val availability =
+                orchestrator.merchantAvailability(
+                    usdc = Usdc6.ofMicros(5_000_000),
+                    fiat = Usdc6.ofMicros(445_000_000),
+                    currency = CurrencyCode.Inr,
+                )
+
+            assertIs<MerchantAvailability.Undetermined>(availability)
+        }
+
+    @Test
+    fun `merchantAvailability reports Undetermined when the subgraph cannot be read`() =
+        runTest {
+            nextSubgraphResponse = "not json at all"
+
+            val availability =
+                orchestrator.merchantAvailability(
+                    usdc = Usdc6.ofMicros(5_000_000),
+                    fiat = Usdc6.ofMicros(445_000_000),
+                    currency = CurrencyCode.Inr,
+                )
+
+            assertIs<MerchantAvailability.Undetermined>(availability)
+        }
+
+    @Test
+    fun `merchantAvailability is Unavailable when the corridor has no circle to try`() =
+        runTest {
+            nextSubgraphResponse = """{"data":{"circles":[]}}"""
+
+            assertEquals(
+                MerchantAvailability.Unavailable,
+                orchestrator.merchantAvailability(
+                    usdc = Usdc6.ofMicros(5_000_000),
+                    fiat = Usdc6.ofMicros(445_000_000),
+                    currency = CurrencyCode.Inr,
+                ),
+            )
+        }
+
+    /**
+     * `fiatAmount` is the sixth argument of `getAssignableMerchantsFromCircle(circleId, assignUpto,
+     * currency, user, usdtAmount, fiatAmount, orderType, preferredPCConfigId)`, so word 5 of the
+     * argument block that follows the 4-byte selector.
+     */
+    private fun fiatAmountOf(callParams: String): BigInteger {
+        val args = callParams.substringAfter("0x36b0ec9a").substring(0, ABI_WORD_HEX * 8)
+        val word = args.substring(ABI_WORD_HEX * 5, ABI_WORD_HEX * 6)
+        return BigInteger(word, 16)
+    }
 
     private fun payRequest(
         usdcAmount: Usdc6 = Usdc6.ofMicros(5_000_000),
@@ -776,7 +867,12 @@ class OfframpOrchestratorTest {
         val params = payload["params"]!!.toString()
         return when {
             params.contains("0x36b0ec9a") -> {
-                """{"jsonrpc":"2.0","id":1,"result":"$getAssignableResponse"}"""
+                eligibilityCalldataLog += params
+                if (failEligibilityCall) {
+                    """{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"execution reverted"}}"""
+                } else {
+                    """{"jsonrpc":"2.0","id":1,"result":"$getAssignableResponse"}"""
+                }
             }
 
             params.contains("0x70a08231") -> {
@@ -872,6 +968,9 @@ class OfframpOrchestratorTest {
         const val ENCODED_EMPTY_ADDRESS_ARRAY =
             "0x0000000000000000000000000000000000000000000000000000000000000020" +
                 "0000000000000000000000000000000000000000000000000000000000000000"
+
+        // One ABI word (32 bytes) as hex characters.
+        const val ABI_WORD_HEX = 64
 
         const val ENCODED_ZERO = "0x" + "0000000000000000000000000000000000000000000000000000000000000000"
         const val ENCODED_ONE = "0x" + "0000000000000000000000000000000000000000000000000000000000000001"

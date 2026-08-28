@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.offramp.config.P2pNetworkConfig
 import xyz.justzappit.offramp.config.P2pNetworks
+import xyz.justzappit.offramp.orchestrator.MerchantAvailability
 import xyz.justzappit.offramp.orchestrator.OfframpCheckpoint
 import xyz.justzappit.offramp.orchestrator.OfframpDriver
 import xyz.justzappit.offramp.p2p.CurrencyCode
@@ -83,7 +84,11 @@ internal class UpiOfframpVM(
     private val merchantProbe = MutableStateFlow<MerchantProbe>(MerchantProbe.Unknown)
 
     private sealed interface MerchantProbe {
-        /** Nothing typed yet, or a probe is still in flight — never blocks the button. */
+        /**
+         * Nothing typed yet, a probe still in flight, or a probe that could not reach the chain —
+         * never blocks the button. An unanswerable question must read the same as an unasked one,
+         * or an RPC outage silently becomes a "corridor is dead" message.
+         */
         object Unknown : MerchantProbe
 
         data class Checked(
@@ -91,6 +96,12 @@ internal class UpiOfframpVM(
             val isAvailable: Boolean
         ) : MerchantProbe
     }
+
+    /** The USDC/fiat pair a placed order carries, and the pair merchant eligibility is decided on. */
+    private data class OrderAmounts(
+        val usdc: Usdc6,
+        val fiat: Usdc6,
+    )
 
     // The two contract reads that drive the order math, held together so buildState sees a consistent
     // pair: the sell rate (INR→USDC) and the fixed fee the Diamond pulls on top of the placed amount.
@@ -344,28 +355,45 @@ internal class UpiOfframpVM(
      * Re-probes once the amount stops moving. Debounced because each probe is a subgraph read plus
      * an eligibility call per candidate circle, and the answer only matters once the user has
      * settled on a number.
+     *
+     * Keyed on the rate as well as the input: the placed USDC is derived from both, so a rate move
+     * changes the amount being asked about even while the typed fiat sits still.
      */
     private suspend fun pollMerchantAvailability() {
-        inrState
-            .map { it.amount }
+        combine(inrState.map { it.amount }, pricing.map { it.rate }) { fiat, rate -> fiat to rate }
             .distinctUntilChanged()
-            .collectLatest { fiat ->
-                val usdc = fiat?.let { alignUsdc(it, pricing.value.rate) }
-                if (usdc == null || usdc.signum() <= 0 || usdc > USDC_CAP) {
+            .collectLatest { (fiat, rate) ->
+                val amounts = fiat?.let { orderAmounts(it, rate) }?.takeIf { it.usdc.whole <= USDC_CAP }
+                if (amounts == null) {
                     merchantProbe.update { MerchantProbe.Unknown }
                     return@collectLatest
                 }
                 delay(MERCHANT_PROBE_DEBOUNCE_MS)
-                val amount = Usdc6.ofWhole(usdc)
                 merchantProbe.update { MerchantProbe.Unknown }
-                val available =
-                    runCatching { orchestrator.isMerchantAvailable(amount, currency) }
-                        .onFailure { Twig.warn(it) { "UpiOfframpVM: merchant probe failed for ${currency.code}" } }
-                        // A probe that cannot run must not block an order the router may still fill.
-                        .getOrDefault(true)
-                merchantProbe.update { MerchantProbe.Checked(usdc = amount, isAvailable = available) }
+                merchantProbe.update { probe(amounts) }
             }
     }
+
+    /**
+     * Asks the chain about one exact pair and translates the answer into what the button should do.
+     * A refusal is reported; an unreachable chain is not, because the router may still fill an order
+     * this probe simply could not evaluate.
+     */
+    private suspend fun probe(amounts: OrderAmounts): MerchantProbe =
+        when (val answer = orchestrator.merchantAvailability(amounts.usdc, amounts.fiat, currency)) {
+            MerchantAvailability.Available -> {
+                MerchantProbe.Checked(usdc = amounts.usdc, isAvailable = true)
+            }
+
+            MerchantAvailability.Unavailable -> {
+                MerchantProbe.Checked(usdc = amounts.usdc, isAvailable = false)
+            }
+
+            is MerchantAvailability.Undetermined -> {
+                Twig.warn(answer.cause) { "UpiOfframpVM: merchant probe failed for ${currency.code}" }
+                MerchantProbe.Unknown
+            }
+        }
 
     private fun onInrChange(next: NumberTextFieldInnerState) {
         inrState.update { next }
@@ -395,11 +423,19 @@ internal class UpiOfframpVM(
     // top-up bridge when the balance is short. The pay flow never kicks off an inline bridge itself.
     private suspend fun reQuoteAndRoute(rawInr: BigDecimal) {
         val pricing = refreshPricingNow()
-        val snappedInr = rawInr.setScale(currency.precision, RoundingMode.FLOOR)
-        val aligned = alignUsdc(rawInr, pricing.rate) ?: return
-        if (aligned > USDC_CAP) return
-        val requiredUsdc = Usdc6.ofWhole(aligned)
-        val fiatMicro = Usdc6.ofWhole(snappedInr).micros
+        val amounts = orderAmounts(rawInr, pricing.rate)?.takeIf { it.usdc.whole <= USDC_CAP } ?: return
+
+        // The re-quote can move the placed amount off whatever the input probe measured, and
+        // assignability is per amount — so ask once more about the exact pair now being committed.
+        // Only a definite refusal stops here; it lands in the same error slot the typed-amount probe
+        // uses, so the screen explains itself instead of the button quietly doing nothing.
+        val recheck = probe(amounts)
+        merchantProbe.update { recheck }
+        if (recheck is MerchantProbe.Checked && !recheck.isAvailable) return
+
+        val snappedInr = snapFiat(rawInr)
+        val requiredUsdc = amounts.usdc
+        val fiatMicro = amounts.fiat.micros
         val fiatLimitMicro = fiatAmountLimit(requiredUsdc, pricing.rate)
         baseBalance.refresh()
         val balance = baseBalance.balance.value.loadedOrNull
@@ -498,6 +534,22 @@ internal class UpiOfframpVM(
         // Round the prefill up to the nearest 0.01 USDC so it comfortably covers the total.
         val step = USDC_TOPUP_ROUNDING_MICROS
         return Usdc6(((shortMicros + step - BigInteger.ONE) / step) * step)
+    }
+
+    // The fiat the order will carry, quantised to what the rail can actually charge.
+    private fun snapFiat(raw: BigDecimal): BigDecimal = raw.setScale(currency.precision, RoundingMode.FLOOR)
+
+    /**
+     * The exact pair an order for [rawFiat] would carry at [rate]. Null when the input isn't a
+     * placeable amount.
+     *
+     * Both the probe and the commit path derive their amounts here, so the question asked of the
+     * chain cannot drift from the order that follows it — the two disagreeing is precisely what let
+     * a corridor answer "yes" for an amount it would then refuse.
+     */
+    private fun orderAmounts(rawFiat: BigDecimal, rate: BigDecimal): OrderAmounts? {
+        val aligned = alignUsdc(rawFiat, rate) ?: return null
+        return OrderAmounts(usdc = Usdc6.ofWhole(aligned), fiat = Usdc6.ofWhole(snapFiat(rawFiat)))
     }
 
     // Snap INR to 2dp then floor-divide by the rate at 6dp — the exact precision the Diamond re-derives

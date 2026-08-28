@@ -47,6 +47,7 @@ import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
 import xyz.justzappit.offramp.config.P2pNetworkConfig
 import xyz.justzappit.offramp.orchestrator.BridgeToBaseStatus
+import xyz.justzappit.offramp.orchestrator.MerchantAvailability
 import xyz.justzappit.offramp.orchestrator.OfframpDriver
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.Usdc6
@@ -190,13 +191,21 @@ internal class BridgeToBaseVM(
 
     // Best-effort warning, shown only when NO merchant currently has liquidity (no positive "available"
     // hint when they do). Non-blocking: the bridged USDC persists on Base and stays usable regardless.
+    // The fiat side is priced at the current sell rate, because eligibility is decided on the pair —
+    // a placeholder fiat amount gets a yes from circles that would refuse the real one. An unreachable
+    // chain clears the warning rather than raising it: this hint is only worth showing when it is known.
     private suspend fun refreshAvailability() {
-        val probe = enteredUsdc() ?: Usdc6.ofWhole(PROBE_USDC)
-        val available = orchestrator.isMerchantAvailable(probe, CURRENCY)
+        val usdc = enteredUsdc() ?: Usdc6.ofWhole(PROBE_USDC)
+        val fiat = usdc.whole.multiply(priming.value.sellRate).setScale(INR_INPUT_SCALE, RoundingMode.FLOOR)
+        val availability = orchestrator.merchantAvailability(usdc, Usdc6.ofWhole(fiat), CURRENCY)
         priming.update {
             it.copy(
                 unavailableWarning =
-                    if (available) null else stringRes(R.string.bridge_to_base_merchants_unavailable),
+                    if (availability is MerchantAvailability.Unavailable) {
+                        stringRes(R.string.bridge_to_base_merchants_unavailable)
+                    } else {
+                        null
+                    },
             )
         }
     }

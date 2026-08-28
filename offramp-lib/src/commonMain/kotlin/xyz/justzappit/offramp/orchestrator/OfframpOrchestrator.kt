@@ -83,10 +83,15 @@ interface OfframpDriver {
     fun bridgeToBase(addUsdc: Usdc6, resumeBridgeHandle: String?): Flow<BridgeToBaseStatus>
 
     /**
-     * Whether any eligible circle currently has an assignable merchant for an [usdc]/[currency] order.
-     * Best-effort gate shown before a top-up bridge; returns false on RPC failure or no eligible circle.
+     * Whether any eligible circle would assign a merchant for this order right now.
+     *
+     * Both amounts matter and both must be the ones the order will actually carry. The Diamond
+     * prices eligibility on the pair, not on the USDC alone: PHP circle 16 assigns three merchants
+     * for 11 USDC against a zero fiat amount and none at all against the ₱665 that amount really
+     * costs. Asking with a placeholder fiat amount therefore returns a near-uniform yes and gates
+     * nothing.
      */
-    suspend fun isMerchantAvailable(usdc: Usdc6, currency: CurrencyCode): Boolean
+    suspend fun merchantAvailability(usdc: Usdc6, fiat: Usdc6, currency: CurrencyCode): MerchantAvailability
 
     /**
      * "Get my USDC back to ZEC". Cleanup-call selection depends on on-chain order state:
@@ -322,15 +327,49 @@ class OfframpOrchestrator(
             }
         }
 
-    override suspend fun isMerchantAvailable(usdc: Usdc6, currency: CurrencyCode): Boolean =
-        runCatching {
-            val currencyHex = "0x" + AbiEncoder.bytes32String(currency.code).value.toHex()
-            val circles = subgraph.circlesForRouting(currencyHex)
-            router.selectCircleForOrder(circles, currencyHex) { id ->
-                validateCircleOnChain(id, usdc, Usdc6.ZERO, currency)
+    // Runs the same selection the order itself runs, with the same amounts, and reports which of the
+    // two failure kinds happened. [CircleRouter] already keeps them apart — it lets a read failure
+    // propagate and treats only a `false` as "this circle refused" — so the job here is to preserve
+    // that distinction rather than flatten it back into a boolean.
+    override suspend fun merchantAvailability(
+        usdc: Usdc6,
+        fiat: Usdc6,
+        currency: CurrencyCode,
+    ): MerchantAvailability {
+        val currencyHex = "0x" + AbiEncoder.bytes32String(currency.code).value.toHex()
+        val circles =
+            try {
+                subgraph.circlesForRouting(currencyHex)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                return MerchantAvailability.Undetermined(e)
             }
-            true
-        }.getOrDefault(false)
+        return try {
+            router.selectCircleForOrder(circles, currencyHex) { id ->
+                try {
+                    validateCircleOnChain(id, usdc, fiat, currency)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    throw EligibilityReadFailed(e)
+                }
+            }
+            MerchantAvailability.Available
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: EligibilityReadFailed) {
+            MerchantAvailability.Undetermined(e.reason)
+        } catch (
+            @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Throwable
+        ) {
+            // Deliberately the catch-all arm: anything left, once the read failures above are
+            // accounted for, is the router reporting that it ran out of candidates — no eligible
+            // circle, or every one of them refused this amount. That is an answer about liquidity,
+            // not a failure to look, so it is the one case that may legitimately block the button.
+            MerchantAvailability.Unavailable
+        }
+    }
 
     override fun bridgeFundsBackToZec(orderId: BigInteger?, resume: RefundResume?): Flow<OfframpStatus> =
         flow {
@@ -778,6 +817,16 @@ class OfframpOrchestrator(
 }
 
 private const val ASSIGN_UP_TO = 3L
+
+/**
+ * Marks a throwable as having come from the eligibility read rather than from the router's own
+ * "nobody left to try". Tagging it at the throw site is what lets [MerchantAvailability] tell a
+ * dead corridor from an unreachable one without matching on exception types or message strings.
+ */
+private class EligibilityReadFailed(
+    val reason: Throwable
+) : Exception(reason)
+
 private const val DEFAULT_POLL_INTERVAL_MS = 3_000L
 private const val DEFAULT_STALLED_AFTER_MS = 5L * 60 * 1000
 
