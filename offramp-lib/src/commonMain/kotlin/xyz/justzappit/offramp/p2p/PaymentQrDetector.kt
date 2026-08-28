@@ -3,6 +3,17 @@
 
 package xyz.justzappit.offramp.p2p
 
+/**
+ * Sniffs which corridor a scanned payload belongs to, so [PaymentQrParser] can reject a QR from the
+ * wrong country before it is encrypted to a merchant who cannot settle it.
+ *
+ * Only corridors carrying an EMVCo currency tag can be sniffed. Four are unreachable here by
+ * construction and must be identified by the order's own currency instead:
+ * - **VEN** Pago Móvil and **BOB**'s encrypted envelope are opaque base64, with no tags at all.
+ * - **CUP** Transfermóvil is a comma-separated record, not EMVCo.
+ * - **ECU** DeUna is a plain `https://` URL, and Ecuador transacts in USD (`840`) — claiming that
+ *   tag would misroute every genuinely dollar-denominated QR to Ecuador.
+ */
 object PaymentQrDetector {
     @Suppress("ReturnCount")
     fun detect(qrData: String): CurrencyCode? {
@@ -18,6 +29,9 @@ object PaymentQrDetector {
             ISO4217_ARS -> CurrencyCode.Ars
             ISO4217_NGN -> CurrencyCode.Ngn
             ISO4217_COP -> CurrencyCode.Cop
+            ISO4217_BOB -> CurrencyCode.Bob
+            ISO4217_PEN -> CurrencyCode.Pen
+            ISO4217_PHP -> CurrencyCode.Php
             else -> null
         }
     }
@@ -31,4 +45,7 @@ object PaymentQrDetector {
     private const val ISO4217_ARS = "032"
     private const val ISO4217_NGN = "566"
     private const val ISO4217_COP = "170"
+    private const val ISO4217_BOB = "068"
+    private const val ISO4217_PEN = "604"
+    private const val ISO4217_PHP = "608"
 }

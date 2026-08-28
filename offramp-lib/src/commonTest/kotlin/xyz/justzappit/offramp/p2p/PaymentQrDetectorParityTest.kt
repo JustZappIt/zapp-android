@@ -16,6 +16,20 @@ class PaymentQrDetectorParityTest {
         assertEquals(CurrencyCode.Ars, PaymentQrDetector.detect("0002015303032"))
         assertEquals(CurrencyCode.Ngn, PaymentQrDetector.detect("0002015303566"))
         assertEquals(CurrencyCode.Cop, PaymentQrDetector.detect("0002015303170"))
+        assertEquals(CurrencyCode.Bob, PaymentQrDetector.detect("0002015303068"))
+        assertEquals(CurrencyCode.Pen, PaymentQrDetector.detect("0002015303604"))
+        assertEquals(CurrencyCode.Php, PaymentQrDetector.detect("0002015303608"))
+    }
+
+    /**
+     * ECU is dollarised and CUP is not EMVCo, so neither can be sniffed — claiming USD would
+     * misroute every dollar-denominated QR to Ecuador. Both are reached by order currency alone.
+     */
+    @Test
+    fun doesNotSniffTheDollarisedOrNonEmvCorridors() {
+        assertNull(PaymentQrDetector.detect("https://pagar.deuna.app/demo/merchant?id=demomerchant123"))
+        assertNull(PaymentQrDetector.detect("TRANSFERMOVIL_ETECSA,TRANSFERENCIA,9204959800000000,58555555,"))
+        assertNull(PaymentQrDetector.detect("0002015303840"))
     }
 
     @Test

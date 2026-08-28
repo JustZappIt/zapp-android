@@ -37,6 +37,11 @@ internal enum class P2pPaymentMethod(
     PAGO_MOVIL(available = true, currency = CurrencyCode.Ven),
     NIP(available = true, currency = CurrencyCode.Ngn),
     TRANSFERENCIA(available = true, currency = CurrencyCode.Cop),
+    QR_SIMPLE(available = true, currency = CurrencyCode.Bob),
+    TRANSFERMOVIL(available = true, currency = CurrencyCode.Cup),
+    DEUNA(available = true, currency = CurrencyCode.Ecu),
+    YAPE_PLIN(available = true, currency = CurrencyCode.Pen),
+    QR_PH(available = true, currency = CurrencyCode.Php),
     ;
 
     companion object {

@@ -457,6 +457,7 @@ internal class UpiOfframpVM(
     companion object {
         // Pre-fetch placeholder rate per corridor, replaced by the live getPriceConfig read within
         // ~30s (and immediately on re-quote before any order is placed). Rough, just seeds the estimate.
+        // ECU is exactly 1: Ecuador is dollarised, so the corridor quotes 1:1 against USDC.
         private fun fallbackRate(currency: CurrencyCode): BigDecimal =
             when (currency) {
                 CurrencyCode.Inr -> BigDecimal("85")
@@ -466,6 +467,11 @@ internal class UpiOfframpVM(
                 CurrencyCode.Ven -> BigDecimal("800")
                 CurrencyCode.Ngn -> BigDecimal("1350")
                 CurrencyCode.Cop -> BigDecimal("3250")
+                CurrencyCode.Bob -> BigDecimal("6.9")
+                CurrencyCode.Cup -> BigDecimal("400")
+                CurrencyCode.Ecu -> BigDecimal.ONE
+                CurrencyCode.Pen -> BigDecimal("3.7")
+                CurrencyCode.Php -> BigDecimal("58")
             }
 
         // p2p.me caps a single offramp at 100 USDC. Surfaced proactively in the UI via

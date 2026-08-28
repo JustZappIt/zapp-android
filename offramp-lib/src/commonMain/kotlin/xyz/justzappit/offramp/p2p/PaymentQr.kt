@@ -77,7 +77,16 @@ object PaymentQrParser {
         if (detected != null && detected != currency) {
             return PaymentQrParseResult.Failure(PaymentQrError.InvalidFormat)
         }
-        return when (currency) {
+        return parseForRail(currency, qrData, dynamicPixResolver, orderId)
+    }
+
+    private suspend fun parseForRail(
+        currency: CurrencyCode,
+        qrData: String,
+        dynamicPixResolver: DynamicPixResolver?,
+        orderId: String?,
+    ): PaymentQrParseResult =
+        when (currency) {
             CurrencyCode.Inr -> UpiQrParser.parseQr(qrData).toPaymentQrResult()
             CurrencyCode.Idr -> QrisQrParser.parse(qrData)
             CurrencyCode.Brl -> PixQrParser.parse(qrData, dynamicPixResolver, orderId)
@@ -85,8 +94,12 @@ object PaymentQrParser {
             CurrencyCode.Ven -> PagoMovilQrParser.parse(qrData)
             CurrencyCode.Ngn -> NgnQrParser.parse(qrData)
             CurrencyCode.Cop -> CopQrParser.parse(qrData)
+            CurrencyCode.Bob -> BobQrParser.parse(qrData)
+            CurrencyCode.Cup -> CupQrParser.parse(qrData)
+            CurrencyCode.Ecu -> EcuQrParser.parse(qrData)
+            CurrencyCode.Pen -> PenQrParser.parse(qrData)
+            CurrencyCode.Php -> PhpQrParser.parse(qrData)
         }
-    }
 
     private const val MAX_PAYMENT_QR_BYTES = 16 * 1024
 

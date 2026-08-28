@@ -62,6 +62,11 @@ internal fun P2pPaymentMethod.title() =
         P2pPaymentMethod.PAGO_MOVIL -> stringResource(R.string.settings_p2p_payment_method_pago_movil)
         P2pPaymentMethod.NIP -> stringResource(R.string.settings_p2p_payment_method_nip)
         P2pPaymentMethod.TRANSFERENCIA -> stringResource(R.string.settings_p2p_payment_method_transferencia)
+        P2pPaymentMethod.QR_SIMPLE -> stringResource(R.string.settings_p2p_payment_method_qr_simple)
+        P2pPaymentMethod.TRANSFERMOVIL -> stringResource(R.string.settings_p2p_payment_method_transfermovil)
+        P2pPaymentMethod.DEUNA -> stringResource(R.string.settings_p2p_payment_method_deuna)
+        P2pPaymentMethod.YAPE_PLIN -> stringResource(R.string.settings_p2p_payment_method_yape_plin)
+        P2pPaymentMethod.QR_PH -> stringResource(R.string.settings_p2p_payment_method_qr_ph)
     }
 
 @Composable
@@ -74,6 +79,11 @@ internal fun P2pPaymentMethod.subtitle() =
         P2pPaymentMethod.PAGO_MOVIL -> stringResource(R.string.settings_p2p_payment_method_pago_movil_subtitle)
         P2pPaymentMethod.NIP -> stringResource(R.string.settings_p2p_payment_method_nip_subtitle)
         P2pPaymentMethod.TRANSFERENCIA -> stringResource(R.string.settings_p2p_payment_method_transferencia_subtitle)
+        P2pPaymentMethod.QR_SIMPLE -> stringResource(R.string.settings_p2p_payment_method_qr_simple_subtitle)
+        P2pPaymentMethod.TRANSFERMOVIL -> stringResource(R.string.settings_p2p_payment_method_transfermovil_subtitle)
+        P2pPaymentMethod.DEUNA -> stringResource(R.string.settings_p2p_payment_method_deuna_subtitle)
+        P2pPaymentMethod.YAPE_PLIN -> stringResource(R.string.settings_p2p_payment_method_yape_plin_subtitle)
+        P2pPaymentMethod.QR_PH -> stringResource(R.string.settings_p2p_payment_method_qr_ph_subtitle)
     }
 
 private const val CURRENCY_SEPARATOR = ", "

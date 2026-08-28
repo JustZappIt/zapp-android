@@ -862,6 +862,11 @@ internal class OnrampVM(
             CurrencyCode.Ven -> stringRes("Pago Móvil")
             CurrencyCode.Ngn -> stringRes(R.string.onramp_payment_rail_bank_transfer)
             CurrencyCode.Cop -> stringRes("Nequi")
+            CurrencyCode.Bob -> stringRes("QR Simple")
+            CurrencyCode.Cup -> stringRes("Transfermóvil")
+            CurrencyCode.Ecu -> stringRes("DeUna")
+            CurrencyCode.Pen -> stringRes("Yape/Plin")
+            CurrencyCode.Php -> stringRes("QR Ph")
         }
 
     /**
