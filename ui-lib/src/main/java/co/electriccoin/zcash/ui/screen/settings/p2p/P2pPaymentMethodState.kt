@@ -29,15 +29,15 @@ internal data class P2pPaymentMethodItemState(
 /**
  * The Scan & Pay rails offered in settings.
  *
- * [available] is a merchant-liquidity switch, not a build flag. A corridor is configured on the
- * Diamond and fully implemented here long before anyone is on the other side of it, and an order
- * placed into a circle with no assignable merchant is accepted by the chain and then never filled
- * — it just expires, after the user has paid gas. So a corridor stays unavailable until its circle
- * actually has merchants, and flipping the flag is all that enabling it takes.
+ * [available] is a merchant-liquidity switch, not a build flag: a corridor is configured on the
+ * Diamond and fully implemented here long before anyone is on the other side of it. An order into
+ * an empty circle is refused locally — the orchestrator selects a circle before it funds anything,
+ * so no gas is spent — but the user reaches a dead end, so the corridor is not offered at all.
  *
- * Checked against `getAssignableMerchantsFromCircle` for orderType PAY, the same read the SDK's
- * router makes before committing an order. Re-check with `bun scripts/circles.ts <operator>` in
- * p2p-onramp-operator before flipping one of these to `true`.
+ * It is deliberately coarse. Assignability is per amount, not per corridor, so this flag only
+ * carries corridors that serve *nothing*; an amount-level gap is caught at quote time by the probe
+ * in `UpiOfframpVM`, which asks the chain rather than trusting a constant. Re-measure with
+ * `bun scripts/circles.ts <operator> pay` in p2p-onramp-operator before changing one.
  */
 internal enum class P2pPaymentMethod(
     val available: Boolean,
@@ -51,11 +51,12 @@ internal enum class P2pPaymentMethod(
     NIP(available = true, currency = CurrencyCode.Ngn),
     TRANSFERENCIA(available = true, currency = CurrencyCode.Cop),
 
-    // Bolivia's circle 17 has one registered merchant and none assignable; Peru's circle 13 has
-    // none at all. Verified 2026-08-28 at 1/5/20/50/100 USDC. Flip to `true` once they staff up.
-    QR_SIMPLE(available = false, currency = CurrencyCode.Bob),
+    QR_SIMPLE(available = true, currency = CurrencyCode.Bob),
     TRANSFERMOVIL(available = true, currency = CurrencyCode.Cup),
     DEUNA(available = true, currency = CurrencyCode.Ecu),
+
+    // Peru's circle 13 assigns no merchant for PAY at any size. Flip to `true` once it staffs up;
+    // amount-level gaps are caught at quote time instead, by the probe in UpiOfframpVM.
     YAPE_PLIN(available = false, currency = CurrencyCode.Pen),
     QR_PH(available = true, currency = CurrencyCode.Php),
     ;

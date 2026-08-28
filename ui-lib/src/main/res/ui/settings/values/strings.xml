@@ -75,7 +75,7 @@
     <string name="settings_p2p_payment_method_qr_ph_subtitle">Philippines</string>
     <string name="settings_p2p_payment_method_info_content_description">How this works</string>
     <string name="settings_p2p_payment_method_info_title">How this works</string>
-    <string name="settings_p2p_payment_method_info_rails">Pay merchants directly over local P2P rails. We currently support UPI in India, PIX in Brazil, QRIS in Indonesia, MercadoPago in Argentina, Pago Móvil in Venezuela, NIP in Nigeria, Transferencia in Colombia, QR Simple in Bolivia, Transfermóvil in Cuba, DeUna in Ecuador, Yape/Plin in Peru, and QR Ph in the Philippines.</string>
+    <string name="settings_p2p_payment_method_info_rails">Pay merchants directly over local P2P rails. We currently support UPI in India, PIX in Brazil, QRIS in Indonesia, MercadoPago in Argentina, Pago Móvil in Venezuela, NIP in Nigeria, Transferencia in Colombia, QR Simple in Bolivia, Transfermóvil in Cuba, DeUna in Ecuador, and QR Ph in the Philippines. Anything marked “coming soon” has no merchants yet.</string>
     <string name="settings_p2p_payment_method_info_flow">Your ZEC is converted and settled on Base, where the merchant is paid in their local currency. No KYC, and the merchant only ever sees your Base account, not your Zcash address.</string>
     <string name="settings_p2p_payment_method_info_base_label">Your Base wallet</string>
     <string name="settings_p2p_payment_method_info_copy_content_description">Copy Base address</string>

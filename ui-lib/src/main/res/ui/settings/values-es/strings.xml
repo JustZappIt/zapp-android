@@ -75,7 +75,7 @@
     <string name="settings_p2p_payment_method_qr_ph_subtitle">Filipinas</string>
     <string name="settings_p2p_payment_method_info_content_description">Cómo funciona</string>
     <string name="settings_p2p_payment_method_info_title">Cómo funciona</string>
-    <string name="settings_p2p_payment_method_info_rails">Paga a comercios directamente a través de rieles P2P locales. Actualmente admitimos UPI en India, PIX en Brasil, QRIS en Indonesia, MercadoPago en Argentina, Pago Móvil en Venezuela, NIP en Nigeria, Transferencia en Colombia, QR Simple en Bolivia, Transfermóvil en Cuba, DeUna en Ecuador, Yape/Plin en Perú y QR Ph en Filipinas.</string>
+    <string name="settings_p2p_payment_method_info_rails">Paga a comercios directamente a través de rieles P2P locales. Actualmente admitimos UPI en India, PIX en Brasil, QRIS en Indonesia, MercadoPago en Argentina, Pago Móvil en Venezuela, NIP en Nigeria, Transferencia en Colombia, QR Simple en Bolivia, Transfermóvil en Cuba, DeUna en Ecuador y QR Ph en Filipinas. Lo que aparece como “próximamente” aún no tiene comercios.</string>
     <string name="settings_p2p_payment_method_info_flow">Tu ZEC se convierte y se liquida en Base, donde el comercio recibe el pago en su moneda local. Sin KYC, y el comercio solo ve tu cuenta de Base, no tu dirección de Zcash.</string>
     <string name="settings_p2p_payment_method_info_base_label">Tu billetera Base</string>
     <string name="settings_p2p_payment_method_info_copy_content_description">Copiar dirección de Base</string>

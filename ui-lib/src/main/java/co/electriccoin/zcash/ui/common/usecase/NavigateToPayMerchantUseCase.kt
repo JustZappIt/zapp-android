@@ -3,6 +3,7 @@ package co.electriccoin.zcash.ui.common.usecase
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.model.P2pRail
 import co.electriccoin.zcash.ui.common.provider.PreferredP2pPaymentMethodProvider
+import co.electriccoin.zcash.ui.screen.settings.p2p.P2pPaymentMethod
 import co.electriccoin.zcash.ui.screen.swap.UpiOfframpArgs
 import co.electriccoin.zcash.ui.screen.swap.peer.PeerCashOutArgs
 import xyz.justzappit.offramp.peer.PeerConfigProvider
@@ -17,7 +18,15 @@ class NavigateToPayMerchantUseCase(
         // selection behind), so an unavailable one falls back rather than opening a dead flow.
         when (val rail = preferredP2pPaymentMethodProvider.get()) {
             is P2pRail.ScanAndPay -> {
-                navigationRouter.forward(UpiOfframpArgs(currencyCode = rail.currency.code))
+                // The picker refuses an unavailable rail, but a stored selection predates the flag:
+                // a corridor withdrawn after the user chose it would otherwise still open here.
+                val currency =
+                    if (P2pPaymentMethod.fromCurrency(rail.currency).available) {
+                        rail.currency
+                    } else {
+                        P2pRail.DEFAULT.currency
+                    }
+                navigationRouter.forward(UpiOfframpArgs(currencyCode = currency.code))
             }
 
             is P2pRail.PeerCashOut -> {

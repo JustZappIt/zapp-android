@@ -103,6 +103,7 @@
     <string name="upi_offramp_info_body_privacy">No KYC is required, and your funds leave from your shielded balance, so the merchant only sees the Base account that pays them, not your Zcash address.</string>
     <string name="upi_offramp_estimate_disclaimer">Estimated. Final amount locks in when the merchant accepts.</string>
     <string name="upi_offramp_limit_hint">Maximum 100 USDC per offramp.</string>
+    <string name="upi_offramp_error_no_merchant">No merchant is available for this amount right now. Try a smaller one.</string>
     <string name="upi_offramp_error_invalid_upi">That doesn\'t look like a UPI handle (expected something like name@bank).</string>
     <string name="upi_offramp_send_button">Pay</string>
     <string name="upi_offramp_resume_button">Resume in-flight offramp</string>

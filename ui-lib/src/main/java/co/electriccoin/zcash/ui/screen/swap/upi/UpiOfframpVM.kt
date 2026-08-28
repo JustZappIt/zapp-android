@@ -40,6 +40,7 @@ import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.offramp.config.P2pNetworkConfig
 import xyz.justzappit.offramp.config.P2pNetworks
 import xyz.justzappit.offramp.orchestrator.OfframpCheckpoint
+import xyz.justzappit.offramp.orchestrator.OfframpDriver
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.p2p.getPriceConfig
@@ -56,6 +57,7 @@ internal class UpiOfframpVM(
     private val network: P2pNetworkConfig,
     private val baseBalance: BaseBalanceRepository,
     private val checkpointStorage: OfframpCheckpointStorageProvider,
+    private val orchestrator: OfframpDriver,
     private val currency: CurrencyCode,
     private val prescanned: PrescannedMerchantQr = PrescannedMerchantQr.EMPTY,
 ) : ViewModel() {
@@ -68,6 +70,27 @@ internal class UpiOfframpVM(
         )
     private val pricing = MutableStateFlow(Pricing(rate = fallbackRate(currency)))
     private val inFlight = MutableStateFlow<OfframpCheckpoint?>(null)
+
+    /**
+     * Whether a merchant can actually be assigned for the amount currently typed.
+     *
+     * A corridor is not simply live or dead — assignability is per amount, and the two move
+     * independently. At the time of writing PHP serves 10 USDC and refuses 11, so a corridor-level
+     * flag cannot express it and a value measured last week cannot be trusted. The order would fail
+     * safely either way, because the orchestrator selects a circle before it funds anything, but it
+     * would fail after the user committed to an amount rather than while they were choosing one.
+     */
+    private val merchantProbe = MutableStateFlow<MerchantProbe>(MerchantProbe.Unknown)
+
+    private sealed interface MerchantProbe {
+        /** Nothing typed yet, or a probe is still in flight — never blocks the button. */
+        object Unknown : MerchantProbe
+
+        data class Checked(
+            val usdc: Usdc6,
+            val isAvailable: Boolean
+        ) : MerchantProbe
+    }
 
     // The two contract reads that drive the order math, held together so buildState sees a consistent
     // pair: the sell rate (INR→USDC) and the fixed fee the Diamond pulls on top of the placed amount.
@@ -94,12 +117,14 @@ internal class UpiOfframpVM(
             pricing,
             inFlight,
             baseBalance.balance,
-        ) { inr, currentPricing, checkpoint, balance ->
+            merchantProbe,
+        ) { inr, currentPricing, checkpoint, balance, probe ->
             buildState(
                 inr = inr,
                 pricing = currentPricing,
                 inFlightCheckpoint = checkpoint,
                 balance = balance.loadedOrNull,
+                probe = probe,
             )
         }.onStart { activeSubscribers.update { it + 1 } }
             .onCompletion { activeSubscribers.update { (it - 1).coerceAtLeast(0) } }
@@ -112,6 +137,7 @@ internal class UpiOfframpVM(
                         pricing = pricing.value,
                         inFlightCheckpoint = inFlight.value,
                         balance = baseBalance.balance.value.loadedOrNull,
+                        probe = merchantProbe.value,
                     ),
             )
 
@@ -138,6 +164,7 @@ internal class UpiOfframpVM(
                     pollPricing()
                 }
         }
+        viewModelScope.launch { pollMerchantAvailability() }
     }
 
     // The rate moves; the fee schedule is Diamond config, so it is read once per visit and again at
@@ -174,16 +201,12 @@ internal class UpiOfframpVM(
         pricing: Pricing,
         inFlightCheckpoint: OfframpCheckpoint?,
         balance: Usdc6?,
+        probe: MerchantProbe,
     ): UpiOfframpState {
         // INR is the source of truth; USDC re-derives at the placed precision (see [alignUsdc]) and
         // nulls a sub-micro amount that floors to 0 USDC so Send stays disabled.
         val usdcAmount: BigDecimal? = inr.amount?.let { alignUsdc(it, pricing.rate) }
-        val validationError =
-            if (inFlightCheckpoint != null) {
-                stringRes(R.string.upi_offramp_error_in_flight)
-            } else {
-                validate(usdcAmount)
-            }
+        val validationError = errorFor(inFlightCheckpoint, usdcAmount, probe)
         val orderAmount: Usdc6? =
             if (inFlightCheckpoint == null && validationError == null && usdcAmount != null) {
                 Usdc6.ofWhole(usdcAmount)
@@ -285,10 +308,63 @@ internal class UpiOfframpVM(
 
     private fun onHistoryClick() = navigationRouter.forward(P2pTransactionsArgs)
 
+    private fun errorFor(
+        inFlightCheckpoint: OfframpCheckpoint?,
+        usdc: BigDecimal?,
+        probe: MerchantProbe,
+    ): StringResource? =
+        if (inFlightCheckpoint != null) {
+            stringRes(R.string.upi_offramp_error_in_flight)
+        } else {
+            validate(usdc) ?: noMerchantError(usdc, probe)
+        }
+
     private fun validate(usdc: BigDecimal?): StringResource? {
         // The 100-USDC cap only surfaces when the user actually exceeds it (no always-on hint).
         if (usdc != null && usdc > USDC_CAP) return stringRes(R.string.upi_offramp_limit_hint)
         return null
+    }
+
+    /**
+     * Only speaks for the amount it was measured at. A probe for a different amount says nothing
+     * about this one, and an in-flight probe must not disable Send — the user would see the button
+     * die under their fingers on every keystroke.
+     */
+    private fun noMerchantError(usdc: BigDecimal?, probe: MerchantProbe): StringResource? {
+        val checked = probe as? MerchantProbe.Checked ?: return null
+        val speaksForThisAmount = usdc != null && checked.usdc == Usdc6.ofWhole(usdc)
+        return if (speaksForThisAmount && !checked.isAvailable) {
+            stringRes(R.string.upi_offramp_error_no_merchant)
+        } else {
+            null
+        }
+    }
+
+    /**
+     * Re-probes once the amount stops moving. Debounced because each probe is a subgraph read plus
+     * an eligibility call per candidate circle, and the answer only matters once the user has
+     * settled on a number.
+     */
+    private suspend fun pollMerchantAvailability() {
+        inrState
+            .map { it.amount }
+            .distinctUntilChanged()
+            .collectLatest { fiat ->
+                val usdc = fiat?.let { alignUsdc(it, pricing.value.rate) }
+                if (usdc == null || usdc.signum() <= 0 || usdc > USDC_CAP) {
+                    merchantProbe.update { MerchantProbe.Unknown }
+                    return@collectLatest
+                }
+                delay(MERCHANT_PROBE_DEBOUNCE_MS)
+                val amount = Usdc6.ofWhole(usdc)
+                merchantProbe.update { MerchantProbe.Unknown }
+                val available =
+                    runCatching { orchestrator.isMerchantAvailable(amount, currency) }
+                        .onFailure { Twig.warn(it) { "UpiOfframpVM: merchant probe failed for ${currency.code}" } }
+                        // A probe that cannot run must not block an order the router may still fill.
+                        .getOrDefault(true)
+                merchantProbe.update { MerchantProbe.Checked(usdc = amount, isAvailable = available) }
+            }
     }
 
     private fun onInrChange(next: NumberTextFieldInnerState) {
@@ -487,5 +563,7 @@ internal class UpiOfframpVM(
         private const val USDC_INPUT_SCALE = 6
 
         private const val RATE_REFRESH_INTERVAL_MS = 30_000L
+
+        private const val MERCHANT_PROBE_DEBOUNCE_MS = 600L
     }
 }

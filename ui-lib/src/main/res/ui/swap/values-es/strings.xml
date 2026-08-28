@@ -103,6 +103,7 @@
     <string name="upi_offramp_info_body_privacy">No se requiere KYC, y tus fondos salen de tu saldo blindado, por lo que el comerciante solo ve la cuenta de Base que le paga, no tu dirección de Zcash.</string>
     <string name="upi_offramp_estimate_disclaimer">Estimado. El monto final se fija cuando el comerciante acepta.</string>
     <string name="upi_offramp_limit_hint">Máximo 100 USDC por retiro.</string>
+    <string name="upi_offramp_error_no_merchant">No hay ningún comerciante disponible para este importe ahora mismo. Prueba con uno menor.</string>
     <string name="upi_offramp_error_invalid_upi">Eso no parece un identificador UPI (esperaba algo como nombre@banco).</string>
     <string name="upi_offramp_send_button">Pagar</string>
     <string name="upi_offramp_resume_button">Reanudar offramp en curso</string>

@@ -13,13 +13,14 @@ import kotlin.test.assertTrue
  */
 class P2pPaymentMethodTest {
     /**
-     * Bolivia and Peru are implemented but their circles have no assignable merchant, so they show
-     * as "coming soon" rather than taking orders that can only expire. This test exists to make
-     * enabling them a deliberate act — if you flip one, re-run the circle check first.
+     * Peru's circle assigns no merchant for PAY at any amount, so it shows as "coming soon" rather
+     * than opening a flow that can only dead-end. The flag is corridor-level on purpose: an
+     * amount-level gap is caught at quote time by the probe in UpiOfframpVM, not here. This test
+     * exists to make enabling a corridor deliberate — if you flip one, re-measure first.
      */
     @Test
     fun `corridors without merchants are not selectable`() {
-        val gated = setOf(CurrencyCode.Bob, CurrencyCode.Pen)
+        val gated = setOf(CurrencyCode.Pen)
 
         P2pPaymentMethod.entries.forEach { method ->
             if (method.currency in gated) {
