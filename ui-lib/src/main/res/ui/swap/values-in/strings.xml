@@ -281,4 +281,14 @@
     <string name="country_indonesia">Indonesia</string>
     <string name="country_argentina">Argentina</string>
     <string name="country_venezuela">Venezuela</string>
+    <string name="currency_bob_name">Boliviano Bolivia</string>
+    <string name="currency_cup_name">Peso Kuba</string>
+    <string name="currency_ecu_name">Dolar AS</string>
+    <string name="currency_pen_name">Sol Peru</string>
+    <string name="currency_php_name">Peso Filipina</string>
+    <string name="country_bolivia">Bolivia</string>
+    <string name="country_cuba">Kuba</string>
+    <string name="country_ecuador">Ekuador</string>
+    <string name="country_peru">Peru</string>
+    <string name="country_philippines">Filipina</string>
 </resources>
