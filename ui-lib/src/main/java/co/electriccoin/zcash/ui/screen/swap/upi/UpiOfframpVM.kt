@@ -604,8 +604,17 @@ internal class UpiOfframpVM(
                 CurrencyCode.Php -> BigDecimal("60.5")
             }
 
-        // p2p.me caps a single offramp at 100 USDC. Surfaced proactively in the UI via
-        // R.string.upi_offramp_limit_hint and enforced here as a hard input cap.
+        // Ours, not p2p.me's. Measured on mainnet 2026-08-28: the Diamond assigns merchants well
+        // past this — INR to ~200 USDC, BRL and IDR to ~300 — the SDK's corridor metadata carries
+        // no amount bounds at all, and the eligibility read answers identically for a fresh address
+        // and for one with 150 completed orders, so user reputation does not move it either. The
+        // only ceilings actually enforced on chain are per-currency *monthly* volume and per-user
+        // rolling buy limits, neither of which is a per-order cap.
+        //
+        // Keep it as the deliberate self-custody safety rail it is, but do not mistake it for the
+        // real limit: that is merchant liquidity, which is per corridor and per amount, and lower
+        // than this in places — PHP stops around 10 USDC. The probe above is what actually knows.
+        // Surfaced via R.string.upi_offramp_limit_hint and enforced here as a hard input cap.
         private val USDC_CAP: BigDecimal = BigDecimal("100")
 
         // Round a prefilled top-up amount up to the nearest 0.01 USDC (10_000 micros).
