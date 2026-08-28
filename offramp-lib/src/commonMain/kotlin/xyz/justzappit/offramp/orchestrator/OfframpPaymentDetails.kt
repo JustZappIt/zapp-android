@@ -10,8 +10,9 @@ import xyz.justzappit.offramp.p2p.OrderSnapshot
 /**
  * Merchant payment details captured after a PAY order is accepted.
  *
- * [rawPayload] is the exact scanned QR payload to sign/encrypt for setSellOrderUpi. This mirrors the
- * p2p.me web client, which validates the QR but submits the original scanned string.
+ * [rawPayload] is the exact scanned QR payload to sign/encrypt for setSellOrderUpi: validated, but
+ * submitted verbatim rather than re-serialised, which is also what `@p2pdotme/sdk`'s parsers hand
+ * back. The merchant decodes what their rail issued, so re-serialising is a chance to differ.
  */
 data class OfframpPaymentDetails(
     val rawPayload: String,

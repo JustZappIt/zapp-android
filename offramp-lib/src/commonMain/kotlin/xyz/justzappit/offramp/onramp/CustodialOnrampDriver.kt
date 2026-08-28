@@ -15,6 +15,7 @@ import xyz.justzappit.offramp.p2p.Usdc6
  * Drives an onramp order entirely through the operator service: this device places nothing on-chain
  * and reads neither the chain nor the subgraph. Every transition comes from `GET /v1/orders/{id}`.
  */
+@Suppress("TooManyFunctions")
 class CustodialOnrampDriver(
     private val client: CustodialOnrampClient,
     private val deviceSignals: OnrampDeviceSignalsProvider,
@@ -26,6 +27,12 @@ class CustodialOnrampDriver(
 ) : OnrampDriver {
     override suspend fun limits(currency: CurrencyCode): OnrampLimits =
         runCatching { client.config(currency).toLimits() }.getOrDefault(OnrampLimits.DISABLED)
+
+    // No currency on the request: naming one the service does not serve is rejected outright, and
+    // this call exists precisely to find out which those are. The default corridor's response
+    // carries the same list.
+    override suspend fun buyCorridors(): Set<CurrencyCode> =
+        runCatching { client.config().buyCorridors() }.getOrDefault(emptySet())
 
     override suspend fun recipientAddress(): Address = recipientProvider.recipient()
 

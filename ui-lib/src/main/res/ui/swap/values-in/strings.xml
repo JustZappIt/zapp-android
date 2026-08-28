@@ -103,6 +103,8 @@
     <string name="upi_offramp_info_body_privacy">Tidak perlu KYC, dan dana Anda keluar dari saldo terlindungi, sehingga merchant hanya melihat akun Base yang membayar mereka, bukan alamat Zcash Anda.</string>
     <string name="upi_offramp_estimate_disclaimer">Perkiraan. Jumlah akhir dikunci saat merchant menerima.</string>
     <string name="upi_offramp_limit_hint">Maksimum 100 USDC per offramp.</string>
+    <string name="upi_offramp_error_no_merchant">Tidak ada merchant yang tersedia untuk jumlah ini saat ini. Coba jumlah yang lebih kecil.</string>
+    <string name="upi_offramp_error_quote_failed">Tidak dapat memastikan kurs saat ini. Periksa koneksi Anda dan coba lagi.</string>
     <string name="upi_offramp_error_invalid_upi">Itu tidak tampak seperti handle UPI (seharusnya seperti nama@bank).</string>
     <string name="upi_offramp_send_button">Bayar</string>
     <string name="upi_offramp_resume_button">Lanjutkan offramp yang berjalan</string>
@@ -280,4 +282,14 @@
     <string name="country_indonesia">Indonesia</string>
     <string name="country_argentina">Argentina</string>
     <string name="country_venezuela">Venezuela</string>
+    <string name="currency_bob_name">Boliviano Bolivia</string>
+    <string name="currency_cup_name">Peso Kuba</string>
+    <string name="currency_ecu_name">Dolar AS</string>
+    <string name="currency_pen_name">Sol Peru</string>
+    <string name="currency_php_name">Peso Filipina</string>
+    <string name="country_bolivia">Bolivia</string>
+    <string name="country_cuba">Kuba</string>
+    <string name="country_ecuador">Ekuador</string>
+    <string name="country_peru">Peru</string>
+    <string name="country_philippines">Filipina</string>
 </resources>

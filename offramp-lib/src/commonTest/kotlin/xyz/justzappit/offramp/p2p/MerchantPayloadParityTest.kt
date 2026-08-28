@@ -42,7 +42,7 @@ class MerchantPayloadParityTest {
                         "NumFac: TEST00000001\nNitFac: 900000000\nValFac: 100.00\nCUFE: ${"0".repeat(96)}",
                         "0".repeat(96),
                     ),
-                )
+                ) + newCorridorCases()
 
             cases.forEach { case ->
                 val parsed =
@@ -53,6 +53,32 @@ class MerchantPayloadParityTest {
                 assertEquals(case.paymentAddress, parsed.parsed.paymentAddress, case.currency.code)
             }
         }
+
+    /** The corridors added alongside SDK 1.2.21. PEN/PHP/BOB hand back the whole payload. */
+    private fun newCorridorCases(): List<Case> {
+        fun tlv(tag: String, value: String) = tag + value.length.toString().padStart(2, '0') + value
+
+        fun withCrc(data: String) = data + "6304" + EmvQr.calculateCrc16(data)
+
+        val pen = withCrc("000201" + tlv("53", "604") + tlv("58", "PE") + tlv("59", "YAPERO"))
+        val php = withCrc("000201" + tlv("53", "608") + tlv("58", "PH") + tlv("59", "TEST SHOP"))
+        val bob = withCrc("000201" + tlv("53", "068") + tlv("58", "BO") + tlv("59", "TIENDA"))
+        return listOf(
+            Case(CurrencyCode.Pen, pen, pen),
+            Case(CurrencyCode.Php, php, php),
+            Case(CurrencyCode.Bob, bob, bob),
+            Case(
+                CurrencyCode.Cup,
+                "TRANSFERMOVIL_ETECSA,TRANSFERENCIA,9204959800000000,58555555,",
+                "58555555|9204959800000000",
+            ),
+            Case(
+                CurrencyCode.Ecu,
+                "https://pagar.deuna.app/demo/merchant?id=demomerchant123",
+                "demomerchant123",
+            ),
+        )
+    }
 
     private data class Case(
         val currency: CurrencyCode,

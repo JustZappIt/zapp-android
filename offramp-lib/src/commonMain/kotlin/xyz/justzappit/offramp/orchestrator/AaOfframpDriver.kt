@@ -64,8 +64,11 @@ class AaOfframpDriver(
             emitAll(buildOrchestrator().bridgeToBase(addUsdc, resumeBridgeHandle))
         }
 
-    override suspend fun isMerchantAvailable(usdc: Usdc6, currency: CurrencyCode): Boolean =
-        buildOrchestrator().isMerchantAvailable(usdc, currency)
+    override suspend fun merchantAvailability(
+        usdc: Usdc6,
+        fiat: Usdc6,
+        currency: CurrencyCode,
+    ): MerchantAvailability = buildOrchestrator().merchantAvailability(usdc, fiat, currency)
 
     override fun bridgeFundsBackToZec(orderId: BigInteger?, resume: RefundResume?): Flow<OfframpStatus> =
         flow {

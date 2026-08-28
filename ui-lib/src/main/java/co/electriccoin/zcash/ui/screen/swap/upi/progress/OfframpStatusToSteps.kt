@@ -170,6 +170,11 @@ private val CurrencyCode.railName: String
             CurrencyCode.Ven -> "Pago Móvil"
             CurrencyCode.Ngn -> "NIP"
             CurrencyCode.Cop -> "Transferencia"
+            CurrencyCode.Bob -> "QR Simple"
+            CurrencyCode.Cup -> "Transfermóvil"
+            CurrencyCode.Ecu -> "DeUna"
+            CurrencyCode.Pen -> "Yape/Plin"
+            CurrencyCode.Php -> "QR Ph"
         }
 
 private fun stepDetail(status: OfframpStatus, step: OfframpStep): List<StringResource> =

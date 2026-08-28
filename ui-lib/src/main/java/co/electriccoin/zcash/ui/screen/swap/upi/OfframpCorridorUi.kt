@@ -68,4 +68,44 @@ internal fun CurrencyCode.toOfframpCorridorUi(): OfframpCorridorUi =
                 R.string.country_venezuela,
             )
         }
+
+        CurrencyCode.Bob -> {
+            OfframpCorridorUi(
+                R.drawable.ic_corridor_bo,
+                R.string.currency_bob_name,
+                R.string.country_bolivia,
+            )
+        }
+
+        CurrencyCode.Cup -> {
+            OfframpCorridorUi(
+                R.drawable.ic_corridor_cu,
+                R.string.currency_cup_name,
+                R.string.country_cuba,
+            )
+        }
+
+        CurrencyCode.Ecu -> {
+            OfframpCorridorUi(
+                R.drawable.ic_corridor_ec,
+                R.string.currency_ecu_name,
+                R.string.country_ecuador,
+            )
+        }
+
+        CurrencyCode.Pen -> {
+            OfframpCorridorUi(
+                R.drawable.ic_corridor_pe,
+                R.string.currency_pen_name,
+                R.string.country_peru,
+            )
+        }
+
+        CurrencyCode.Php -> {
+            OfframpCorridorUi(
+                R.drawable.ic_corridor_ph,
+                R.string.currency_php_name,
+                R.string.country_philippines,
+            )
+        }
     }

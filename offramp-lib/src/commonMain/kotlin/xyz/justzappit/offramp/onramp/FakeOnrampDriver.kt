@@ -17,6 +17,9 @@ import xyz.justzappit.offramp.p2p.Usdc6
 class FakeOnrampDriver(
     private val stepDelayMillis: Long = DEFAULT_STEP_DELAY_MILLIS,
 ) : OnrampDriver {
+    /** The demo driver serves whatever it is asked for, so every corridor this build knows buys. */
+    override suspend fun buyCorridors(): Set<CurrencyCode> = CurrencyCode.entries.toSet()
+
     override suspend fun limits(currency: CurrencyCode): OnrampLimits =
         OnrampLimits(
             enabled = true,

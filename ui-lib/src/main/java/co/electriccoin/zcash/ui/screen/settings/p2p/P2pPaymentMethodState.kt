@@ -26,6 +26,24 @@ internal data class P2pPaymentMethodItemState(
     val onClick: () -> Unit,
 )
 
+/**
+ * The Scan & Pay rails offered in settings.
+ *
+ * [available] is a merchant-liquidity switch, not a build flag: a corridor is configured on the
+ * Diamond and fully implemented here long before anyone is on the other side of it. An order into
+ * an empty circle is refused locally — the orchestrator selects a circle before it funds anything,
+ * so no gas is spent — but the user reaches a dead end, so the corridor is not offered at all.
+ *
+ * It speaks for PAY only, and must not be used to authorise a buy. The two are separate markets
+ * with separate merchants and they disagree in both directions: Bolivia pays at any size but buys
+ * only 1 USDC, Peru pays at every size but stops buying at 20. What the onramp serves comes from
+ * `OnrampDriver.buyCorridors()`, which asks the service.
+ *
+ * It is also deliberately coarse. Assignability is per amount, not per corridor, so this flag only
+ * carries corridors that serve *nothing*; an amount-level gap is caught at quote time by the probe
+ * in `UpiOfframpVM`, which asks the chain rather than trusting a constant. Re-measure with
+ * `bun scripts/circles.ts <operator> pay` in p2p-onramp-operator before changing one.
+ */
 internal enum class P2pPaymentMethod(
     val available: Boolean,
     val currency: CurrencyCode,
@@ -37,6 +55,15 @@ internal enum class P2pPaymentMethod(
     PAGO_MOVIL(available = true, currency = CurrencyCode.Ven),
     NIP(available = true, currency = CurrencyCode.Ngn),
     TRANSFERENCIA(available = true, currency = CurrencyCode.Cop),
+
+    QR_SIMPLE(available = true, currency = CurrencyCode.Bob),
+    TRANSFERMOVIL(available = true, currency = CurrencyCode.Cup),
+    DEUNA(available = true, currency = CurrencyCode.Ecu),
+
+    // Peru's circle 13 assigns no merchant for PAY at any size. Flip to `true` once it staffs up;
+    // amount-level gaps are caught at quote time instead, by the probe in UpiOfframpVM.
+    YAPE_PLIN(available = false, currency = CurrencyCode.Pen),
+    QR_PH(available = true, currency = CurrencyCode.Php),
     ;
 
     companion object {

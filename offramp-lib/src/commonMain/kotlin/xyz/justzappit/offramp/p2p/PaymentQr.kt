@@ -77,7 +77,16 @@ object PaymentQrParser {
         if (detected != null && detected != currency) {
             return PaymentQrParseResult.Failure(PaymentQrError.InvalidFormat)
         }
-        return when (currency) {
+        return parseForRail(currency, qrData, dynamicPixResolver, orderId)
+    }
+
+    private suspend fun parseForRail(
+        currency: CurrencyCode,
+        qrData: String,
+        dynamicPixResolver: DynamicPixResolver?,
+        orderId: String?,
+    ): PaymentQrParseResult =
+        when (currency) {
             CurrencyCode.Inr -> UpiQrParser.parseQr(qrData).toPaymentQrResult()
             CurrencyCode.Idr -> QrisQrParser.parse(qrData)
             CurrencyCode.Brl -> PixQrParser.parse(qrData, dynamicPixResolver, orderId)
@@ -85,8 +94,12 @@ object PaymentQrParser {
             CurrencyCode.Ven -> PagoMovilQrParser.parse(qrData)
             CurrencyCode.Ngn -> NgnQrParser.parse(qrData)
             CurrencyCode.Cop -> CopQrParser.parse(qrData)
+            CurrencyCode.Bob -> BobQrParser.parse(qrData)
+            CurrencyCode.Cup -> CupQrParser.parse(qrData)
+            CurrencyCode.Ecu -> EcuQrParser.parse(qrData)
+            CurrencyCode.Pen -> PenQrParser.parse(qrData)
+            CurrencyCode.Php -> PhpQrParser.parse(qrData)
         }
-    }
 
     private const val MAX_PAYMENT_QR_BYTES = 16 * 1024
 
@@ -113,9 +126,23 @@ object PaymentQrParser {
 }
 
 /**
+ * EMVCo tag-54 grammar: digits with at most one fractional part. Mirrors the SDK's `DECIMAL_AMOUNT`
+ * (`qr-parsers/utils/amount.ts`) rather than letting [BigDecimal] decide what a number is.
+ *
+ * The gate is not cosmetic parity. `BigDecimal` accepts exponent notation, so a hostile QR carrying
+ * `1E2000000000` — twelve characters, well inside tag 54's 99-char limit — parses as positive and
+ * then costs gigabytes the moment anything renders it, which the scan path does immediately. It
+ * also drops the Android/iOS split where the JVM accepts Unicode digits and ionspin throws.
+ */
+private val DECIMAL_AMOUNT = Regex("^\\d+(\\.\\d+)?$")
+
+/**
  * Parses an EMV tag-54 / dynamic-PIX amount string to a positive [BigDecimal], or null if absent,
- * unparseable, or non-positive. Mirrors `parseAmount` (`qr-parsers/utils/amount.ts`) rejecting
- * NaN/<=0; callers decide how to surface null for a present amount field.
+ * unparseable, or non-positive. Callers decide how to surface null for a present amount field.
  */
 internal fun parsePositiveFiatAmount(raw: String): BigDecimal? =
-    runCatching { BigDecimal(raw.trim()) }.getOrNull()?.takeIf { it.signum() > 0 }
+    raw
+        .trim()
+        .takeIf { DECIMAL_AMOUNT.matches(it) }
+        ?.let { runCatching { BigDecimal(it) }.getOrNull() }
+        ?.takeIf { it.signum() > 0 }

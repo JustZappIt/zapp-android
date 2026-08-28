@@ -103,6 +103,8 @@
     <string name="upi_offramp_info_body_privacy">No se requiere KYC, y tus fondos salen de tu saldo blindado, por lo que el comerciante solo ve la cuenta de Base que le paga, no tu dirección de Zcash.</string>
     <string name="upi_offramp_estimate_disclaimer">Estimado. El monto final se fija cuando el comerciante acepta.</string>
     <string name="upi_offramp_limit_hint">Máximo 100 USDC por retiro.</string>
+    <string name="upi_offramp_error_no_merchant">No hay ningún comerciante disponible para este importe ahora mismo. Prueba con uno menor.</string>
+    <string name="upi_offramp_error_quote_failed">No se pudo confirmar el tipo de cambio actual. Revisa tu conexión e inténtalo de nuevo.</string>
     <string name="upi_offramp_error_invalid_upi">Eso no parece un identificador UPI (esperaba algo como nombre@banco).</string>
     <string name="upi_offramp_send_button">Pagar</string>
     <string name="upi_offramp_resume_button">Reanudar offramp en curso</string>
@@ -270,4 +272,14 @@
     <string name="country_indonesia">Indonesia</string>
     <string name="country_argentina">Argentina</string>
     <string name="country_venezuela">Venezuela</string>
+    <string name="currency_bob_name">Boliviano</string>
+    <string name="currency_cup_name">Peso cubano</string>
+    <string name="currency_ecu_name">Dólar estadounidense</string>
+    <string name="currency_pen_name">Sol peruano</string>
+    <string name="currency_php_name">Peso filipino</string>
+    <string name="country_bolivia">Bolivia</string>
+    <string name="country_cuba">Cuba</string>
+    <string name="country_ecuador">Ecuador</string>
+    <string name="country_peru">Perú</string>
+    <string name="country_philippines">Filipinas</string>
 </resources>
