@@ -15,6 +15,19 @@ interface OnrampDriver {
      */
     suspend fun limits(currency: CurrencyCode): OnrampLimits
 
+    /**
+     * The corridors the service will actually sell ZEC in.
+     *
+     * Buying and paying are separate markets with separate merchants, so this is not the set a
+     * Scan & Pay picker offers: Bolivia pays at any size but buys only 1 USDC, Peru pays at every
+     * size but stops buying at 20. Asking the service rather than mirroring its list here keeps a
+     * corridor's arrival or withdrawal from needing an app release.
+     *
+     * Empty when the service cannot be reached — "no idea", so callers fall back to the default
+     * corridor rather than trusting a stale preference.
+     */
+    suspend fun buyCorridors(): Set<CurrencyCode>
+
     /** The address that signs requests, and therefore the only address USDC may settle to. */
     suspend fun recipientAddress(): Address
 

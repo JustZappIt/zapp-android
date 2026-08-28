@@ -34,7 +34,12 @@ internal data class P2pPaymentMethodItemState(
  * an empty circle is refused locally — the orchestrator selects a circle before it funds anything,
  * so no gas is spent — but the user reaches a dead end, so the corridor is not offered at all.
  *
- * It is deliberately coarse. Assignability is per amount, not per corridor, so this flag only
+ * It speaks for PAY only, and must not be used to authorise a buy. The two are separate markets
+ * with separate merchants and they disagree in both directions: Bolivia pays at any size but buys
+ * only 1 USDC, Peru pays at every size but stops buying at 20. What the onramp serves comes from
+ * `OnrampDriver.buyCorridors()`, which asks the service.
+ *
+ * It is also deliberately coarse. Assignability is per amount, not per corridor, so this flag only
  * carries corridors that serve *nothing*; an amount-level gap is caught at quote time by the probe
  * in `UpiOfframpVM`, which asks the chain rather than trusting a constant. Re-measure with
  * `bun scripts/circles.ts <operator> pay` in p2p-onramp-operator before changing one.

@@ -269,6 +269,12 @@ data class OnrampConfigDto(
     val maxFiat: String? = null,
     val perUserDailyFiat: String? = null,
     val chainId: Long? = null,
+    /**
+     * Every corridor this deployment buys in — the server's own answer to "what may I ask for?",
+     * carried on every config response regardless of which corridor was requested. Absent on an
+     * older service, which reads as "no idea", not as "none".
+     */
+    val currencies: List<OnrampCurrencyDto> = emptyList(),
 ) {
     /**
      * A corridor this build has no [CurrencyCode] for is disabled, never quietly re-labelled. The
@@ -285,7 +291,19 @@ data class OnrampConfigDto(
             perUserDailyFiat = perUserDailyFiat.toUsdc6OrNull() ?: Usdc6.ZERO,
         )
     }
+
+    /**
+     * The served corridors this build has a [CurrencyCode] for. A code this app does not know is
+     * dropped rather than guessed at, the same way [toLimits] refuses to re-label one.
+     */
+    fun buyCorridors(): Set<CurrencyCode> = currencies.mapNotNull { CurrencyCode.fromCodeOrNull(it.code) }.toSet()
 }
+
+/** One entry of `/v1/config`'s corridor list. Only the code is read; the rest is display metadata. */
+@Serializable
+data class OnrampCurrencyDto(
+    val code: String,
+)
 
 @Serializable
 data class OnrampQuoteDto(

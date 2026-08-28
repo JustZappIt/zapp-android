@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import xyz.justzappit.evm.hd.EvmKeyDerivation
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.util.hexToBytes
+import xyz.justzappit.offramp.p2p.CurrencyCode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -44,6 +45,34 @@ class CustodialOnrampDriverTest {
             assertIs<OnrampPaymentInstruction.Upi>(awaiting.instruction)
             // Polling must stop here: the next move belongs to the user, not the service.
             assertEquals(4, statuses.size)
+        }
+
+    @Test
+    fun `buyCorridors reports what the service lists and not what Scan and Pay offers`() =
+        runTest {
+            val corridors = driverFor(order(PHASE_PLACING)).buyCorridors()
+
+            assertEquals(SERVED_CURRENCIES.size, corridors.size)
+            assertTrue(CurrencyCode.Php in corridors)
+            // Both are live Scan & Pay corridors. Neither is buyable — the whole point of the split.
+            assertFalse(CurrencyCode.Bob in corridors)
+            assertFalse(CurrencyCode.Pen in corridors)
+        }
+
+    @Test
+    fun `buyCorridors drops a served corridor this build has no currency for`() =
+        runTest {
+            val driver = driverForConfig(configBodyFor("INR", served = listOf("INR", "MEX")))
+
+            assertEquals(setOf(CurrencyCode.Inr), driver.buyCorridors())
+        }
+
+    @Test
+    fun `buyCorridors is empty rather than wrong when the service cannot be reached`() =
+        runTest {
+            val driver = driverForConfig("""{"error":"nope"}""", status = HttpStatusCode.BadGateway)
+
+            assertTrue(driver.buyCorridors().isEmpty())
         }
 
     @Test
@@ -297,6 +326,20 @@ class CustodialOnrampDriverTest {
             assertEquals(SMART_ACCOUNT.lowercase(), driver.recipientAddress().checksumHex.lowercase())
         }
 
+    /** A driver whose `/v1/config` answers with exactly [body]; nothing else is called. */
+    private fun driverForConfig(body: String, status: HttpStatusCode = HttpStatusCode.OK): CustodialOnrampDriver =
+        CustodialOnrampDriver(
+            client =
+                CustodialOnrampClient(
+                    httpClient = HttpClient(MockEngine { respond(body, status, jsonHeaders) }),
+                    baseUrl = "https://onramp.example",
+                    signerProvider = { signer },
+                ),
+            deviceSignals = { DEVICE },
+            recipientProvider = { Address.parse(SMART_ACCOUNT) },
+            fallbackCurrency = CurrencyCode.Inr,
+        )
+
     private fun driverFor(
         vararg orderBodies: String,
         errorBody: String? = null,
@@ -419,16 +462,23 @@ class CustodialOnrampDriverTest {
         // Caps come off each corridor's own live buy price, so BRL's are a different number
         // from INR's rather than the same number in another symbol. Values are the live
         // service's, read from /v1/config on 2026-08-07.
-        fun configBodyFor(currency: String): String {
+        fun configBodyFor(currency: String, served: List<String> = SERVED_CURRENCIES): String {
             val caps =
                 when (currency) {
                     "BRL" -> Triple("5160000", "103200000", "258000000")
                     else -> Triple("104260000", "2085200000", "5213000000")
                 }
+            val currencies = served.joinToString(",") { """{"code":"$it"}""" }
             return """{"nonce":"$NONCE","enabled":true,"currency":"$currency",""" +
                 """"minFiat":"${caps.first}","maxFiat":"${caps.second}",""" +
-                """"perUserDailyFiat":"${caps.third}","chainId":8453}"""
+                """"perUserDailyFiat":"${caps.third}","chainId":8453,""" +
+                """"currencies":[$currencies]}"""
         }
+
+        // What the deployed operator's ENABLED_CURRENCIES actually lists. BOB and PEN are absent
+        // for buying even though both are live Scan & Pay corridors — the case this guards.
+        val SERVED_CURRENCIES =
+            listOf("INR", "IDR", "BRL", "ARS", "VEN", "COP", "NGN", "CUP", "ECU", "PHP")
 
         val jsonHeaders = headersOf(HttpHeaders.ContentType, "application/json")
 
