@@ -495,21 +495,25 @@ class DirectOnrampDriver(
         return when {
             // Every poll failed. That says nothing about the order — it is very probably still
             // running — so this must not be the branch that discards it.
-            status == null ->
+            status == null -> {
                 OnrampStatus.Failed(OnrampFailureCode.NETWORK_UNAVAILABLE, phase, handle, handle)
+            }
 
             // The user has paid. The merchant is late, not absent, and the order can still complete
             // long after this screen gives up watching it.
-            settling ->
+            settling -> {
                 OnrampStatus.Failed(OnrampFailureCode.SETTLEMENT_PENDING, phase, handle, handle)
+            }
 
             // The decision is the contract's, not our clock's: a keeper sweeps expired orders, so
             // one can sit in `placed` a while before it flips.
-            status == OrderStatus.PLACED && isExpiredOnChain(orderId) ->
+            status == OrderStatus.PLACED && isExpiredOnChain(orderId) -> {
                 OnrampStatus.Failed(OnrampFailureCode.ORDER_EXPIRED, phase, handle, handle)
+            }
 
-            else ->
+            else -> {
                 OnrampStatus.Failed(OnrampFailureCode.NO_MERCHANT, phase, handle, handle)
+            }
         }
     }
 

@@ -1,7 +1,6 @@
 package co.electriccoin.zcash.ui.common.usecase
 
 import co.electriccoin.zcash.spackle.Twig
-import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.screen.onramp.OnrampArgs
 import co.electriccoin.zcash.ui.screen.reputation.ReputationArgs
@@ -28,20 +27,19 @@ class NavigateToOnrampUseCase(
     }
 
     /**
-     * On the direct route the order is placed by the user's own smart account, and the Diamond
-     * refuses a BUY from an address with no reputation — so a cold wallet is sent to Reputation
-     * rather than to an amount field it cannot submit.
+     * The order is placed by the user's own smart account, and the Diamond refuses a BUY from an
+     * address with no reputation — so a wallet that cannot buy yet is sent to Reputation rather
+     * than to an amount field it cannot submit.
      *
-     * The custodial route places every order from the operator's own reputation-bearing account,
-     * where the user's standing gates nothing. Every existing Zapp user sits at 0 RP, so applying
-     * the gate there would block a purchase that works today.
+     * ☠ This gate now applies to everyone. It used to be skipped on the custodial route, which
+     * placed every order from the operator's own reputation-bearing account and so gated nothing;
+     * with that route gone, an existing user at 0 RP must verify before they can buy again.
      *
      * An unreadable chain lets them through: the failure is ours, and the onramp screen quotes
      * against the same limit before it takes an amount.
      */
-    private suspend fun canBuy(corridor: CurrencyCode): Boolean {
-        if (!BuildConfig.P2P_ONRAMP_DIRECT) return true
-        return try {
+    private suspend fun canBuy(corridor: CurrencyCode): Boolean =
+        try {
             reputationReader.read(accountProvider.resolve().address, corridor).canBuy
         } catch (e: CancellationException) {
             throw e
@@ -53,5 +51,4 @@ class NavigateToOnrampUseCase(
             Twig.warn(e) { "Reputation read failed before onramp; letting the buy proceed" }
             true
         }
-    }
 }

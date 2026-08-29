@@ -113,7 +113,6 @@ tasks {
 
             // Route + credential switches for the p2p on-ramp. Developers flip these in
             // local.properties; a non-default value committed here would ship the wrong route.
-            "P2P_ONRAMP_DIRECT" to "false",
             "P2P_SCREENING_API_URL" to "",
             "P2P_SCREENING_KEY" to "",
             "RECLAIM_APP_ID" to "",

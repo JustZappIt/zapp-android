@@ -199,14 +199,6 @@ androidComponents {
             )
         )
         variant.buildConfigFields?.put(
-            "P2P_ONRAMP_BASE_URL",
-            BuildConfigField(
-                type = "String",
-                value = "\"${project.property("P2P_ONRAMP_BASE_URL")?.toString().orEmpty()}\"",
-                comment = "Zapp onramp service base URL; the operator account places every BUY there"
-            )
-        )
-        variant.buildConfigFields?.put(
             "P2P_ONRAMP_USE_FAKE_DRIVER",
             BuildConfigField(
                 type = "boolean",
@@ -220,14 +212,6 @@ androidComponents {
                 type = "boolean",
                 value = project.property("P2P_ONRAMP_AUTO_ZEC_ENABLED").toString().toBoolean().toString(),
                 comment = "Whether new P2P onramps may automatically deliver ZEC"
-            )
-        )
-        variant.buildConfigFields?.put(
-            "P2P_ONRAMP_DIRECT",
-            BuildConfigField(
-                type = "boolean",
-                value = project.property("P2P_ONRAMP_DIRECT").toString().toBoolean().toString(),
-                comment = "Whether a BUY is placed by the user's own smart account instead of the operator service"
             )
         )
         variant.buildConfigFields?.put(

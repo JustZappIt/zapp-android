@@ -47,16 +47,11 @@ import org.koin.core.qualifier.named
 import org.koin.dsl.bind
 import org.koin.dsl.module
 import xyz.justzappit.evm.rpc.BaseRpcClient
-import xyz.justzappit.offramp.account.OfframpAccountProvider
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
 import xyz.justzappit.offramp.config.P2pNetworkConfig
-import xyz.justzappit.offramp.onramp.CustodialOnrampClient
-import xyz.justzappit.offramp.onramp.CustodialOnrampDriver
 import xyz.justzappit.offramp.onramp.DirectOnrampDriver
 import xyz.justzappit.offramp.onramp.FakeOnrampDriver
-import xyz.justzappit.offramp.onramp.OnrampBackendConfig
 import xyz.justzappit.offramp.onramp.OnrampDriver
-import xyz.justzappit.offramp.onramp.OnrampRequestSigner
 import xyz.justzappit.offramp.onramp.OnrampScreeningClient
 import xyz.justzappit.offramp.onramp.OnrampScreeningConfig
 import xyz.justzappit.offramp.orchestrator.AaOfframpDriver
@@ -184,25 +179,19 @@ val repositoryModule =
                 credentials = get(),
             )
         }
-        single { OnrampBackendConfig(baseUrl = BuildConfig.P2P_ONRAMP_BASE_URL) }
         single {
             OnrampScreeningConfig(
                 apiUrl = BuildConfig.P2P_SCREENING_API_URL,
                 encryptionKeyHex = BuildConfig.P2P_SCREENING_KEY,
             )
         }
-        // Which route places a BUY. Both ship for at least one release, so the cutover is a config
-        // change rather than a build, and rolls back the same way.
-        //
-        // On the operator route the service places every BUY, so nothing here is signed on-chain.
-        // Requests are authenticated with the seed-derived Base EOA; USDC settles to the ERC-4337
-        // smart account that EOA owns, which is where offramp, the Base balance and Pay Merchant
-        // already look. The service derives the same account from the signer and refuses any other
-        // address, so the two providers are not interchangeable — see OnrampRecipientProvider.
+        // A BUY is placed by the user's own smart account, on chain. The operator service that
+        // used to place them is gone; what remains of it is the shared CustodialOnrampDriver, which
+        // this app no longer builds and only the iOS framework still uses.
         factory<OnrampDriver> {
             if (BuildConfig.DEBUG && BuildConfig.P2P_ONRAMP_USE_FAKE_DRIVER) {
                 FakeOnrampDriver()
-            } else if (BuildConfig.P2P_ONRAMP_DIRECT) {
+            } else {
                 val screeningConfig: OnrampScreeningConfig = get()
                 DirectOnrampDriver(
                     rpc = get(),
@@ -232,23 +221,6 @@ val repositoryModule =
                     // where its owner is buying.
                     country = Locale.getDefault().country.takeIf { it.isNotBlank() },
                     nowMillis = System::currentTimeMillis,
-                )
-            } else {
-                val config: OnrampBackendConfig = get()
-                val accountProvider: OfframpAccountProvider = get()
-                val smartAccountProvider: SmartOfframpAccountProvider = get()
-                CustodialOnrampDriver(
-                    client =
-                        CustodialOnrampClient(
-                            httpClient = get(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)),
-                            baseUrl = config.baseUrl,
-                            signerProvider = {
-                                OnrampRequestSigner(accountProvider.nextOfframpAccount(), config.appId)
-                            },
-                            appId = config.appId,
-                        ),
-                    deviceSignals = get(),
-                    recipientProvider = { smartAccountProvider.resolve().address },
                 )
             }
         }
