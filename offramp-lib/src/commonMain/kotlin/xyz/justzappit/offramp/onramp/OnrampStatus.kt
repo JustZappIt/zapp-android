@@ -84,12 +84,29 @@ enum class OnrampFailureCode {
     NO_MERCHANT,
     ORDER_EXPIRED,
     NETWORK_UNAVAILABLE,
+
+    /**
+     * The user's fiat has left their account and the merchant's leg is still outstanding. Not a
+     * dead order: the merchant can still settle it, and on the direct route it is the only state
+     * where money has moved but nothing has been received.
+     */
+    SETTLEMENT_PENDING,
     UNKNOWN,
     ;
 
-    /** Retryable without user intervention; everything else needs a new order or a new quote. */
+    /**
+     * Retryable without user intervention; everything else needs a new order or a new quote.
+     *
+     * [SETTLEMENT_PENDING] belongs here for a different reason than the rest: not because retrying
+     * is cheap, but because the order is alive and paid. Dropping its checkpoint would strand fiat
+     * the user has already sent and cancel the ZEC delivery that checkpoint drives.
+     */
     val isTransient: Boolean
-        get() = this == UPSTREAM_FAILED || this == OPERATOR_UNAVAILABLE || this == NETWORK_UNAVAILABLE
+        get() =
+            this == UPSTREAM_FAILED ||
+                this == OPERATOR_UNAVAILABLE ||
+                this == NETWORK_UNAVAILABLE ||
+                this == SETTLEMENT_PENDING
 
     companion object {
         fun fromWire(value: String?): OnrampFailureCode =

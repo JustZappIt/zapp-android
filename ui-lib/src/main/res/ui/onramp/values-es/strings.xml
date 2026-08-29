@@ -73,6 +73,7 @@
     <string name="onramp_error_quote_expired">La tasa caducó antes de colocar la orden. Inténtalo de nuevo.</string>
     <string name="onramp_error_no_merchant">Ningún comerciante aceptó la orden a tiempo. No se cobró nada.</string>
     <string name="onramp_error_order_expired">La orden caducó antes de confirmar el pago.</string>
+    <string name="onramp_error_settlement_pending">Tu pago sigue en manos del comerciante. La orden continúa abierta: vuelve a abrir Comprar para consultarla.</string>
     <string name="onramp_quote_disclaimer">Verás el importe y la tasa exactos en la siguiente pantalla antes de colocar nada.</string>
     <string name="onramp_get_quote">Obtener cotización</string>
     <string name="onramp_daily_limit_label">Límite diario</string>

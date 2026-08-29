@@ -848,6 +848,8 @@ internal class OnrampVM(
 
             OnrampFailureCode.ORDER_EXPIRED -> stringRes(R.string.onramp_error_order_expired)
 
+            OnrampFailureCode.SETTLEMENT_PENDING -> stringRes(R.string.onramp_error_settlement_pending)
+
             OnrampFailureCode.UNKNOWN -> stringRes(R.string.onramp_error_progress)
         }
 

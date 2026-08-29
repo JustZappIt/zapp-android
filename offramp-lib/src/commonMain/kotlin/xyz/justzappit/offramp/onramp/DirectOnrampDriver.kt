@@ -209,7 +209,7 @@ class DirectOnrampDriver(
     override fun resume(checkpoint: OnrampCheckpoint): Flow<OnrampStatus> =
         flow {
             val account = submitters.resolve()
-            val orderId = checkpoint.orderId?.toBigIntegerOrNull() ?: recoverOrderId(checkpoint, account.address)
+            val orderId = checkpoint.orderId?.toBigIntegerOrNull() ?: recoverOrderId(checkpoint, account)
             if (orderId == null) {
                 emit(failed(OnrampFailureCode.ORDER_NOT_FOUND, checkpoint.phase, checkpoint))
                 return@flow
@@ -227,7 +227,14 @@ class DirectOnrampDriver(
                         to = network.diamondAddress,
                         data = DiamondCalls.cancelOrderCalldata(orderId),
                     )
-                account.submitter.awaitReceipt(hash)
+                // A merchant who accepts between the last poll and this cancellation being included
+                // makes cancelOrder revert, and the order is then very much alive. Saying
+                // "cancelled" there drops the checkpoint and forgets an order the user is about to
+                // be asked to pay, so the chain's own answer is what the screen goes back to.
+                if (!account.submitter.awaitReceipt(hash).success) {
+                    watch(orderId, account, fromPaid = false)
+                    return@flow
+                }
             }
             emit(OnrampStatus.Cancelled(checkpoint.id, checkpoint.orderId))
         }.guarded(checkpoint.phase, checkpoint.id, checkpoint.orderId)
@@ -463,7 +470,7 @@ class DirectOnrampDriver(
             val settling = fromPaid || snapshot?.status == OrderStatus.PAID
             val cap = if (settling) settlePollAttempts else acceptPollAttempts
             if (attempts >= cap) {
-                emit(timedOut(snapshot?.status, handle, orderId))
+                emit(timedOut(snapshot?.status, settling, handle, orderId))
                 return
             }
             attempts++
@@ -471,23 +478,40 @@ class DirectOnrampDriver(
         }
     }
 
+    /**
+     * Why the wait ended, told apart by what the chain actually said — because the answer decides
+     * whether the checkpoint survives, and the checkpoint is what pays the ZEC out later.
+     *
+     * "No merchant came" is the only one of these that may forget the order, and it is the only one
+     * where nothing of the user's has moved.
+     */
     private suspend fun timedOut(
         status: OrderStatus?,
+        settling: Boolean,
         handle: String,
         orderId: BigInteger,
-    ): OnrampStatus =
-        if (status == OrderStatus.PLACED && isExpiredOnChain(orderId)) {
+    ): OnrampStatus {
+        val phase = if (settling) OnrampPhase.AWAITING_SETTLEMENT else OnrampPhase.AWAITING_MERCHANT
+        return when {
+            // Every poll failed. That says nothing about the order — it is very probably still
+            // running — so this must not be the branch that discards it.
+            status == null ->
+                OnrampStatus.Failed(OnrampFailureCode.NETWORK_UNAVAILABLE, phase, handle, handle)
+
+            // The user has paid. The merchant is late, not absent, and the order can still complete
+            // long after this screen gives up watching it.
+            settling ->
+                OnrampStatus.Failed(OnrampFailureCode.SETTLEMENT_PENDING, phase, handle, handle)
+
             // The decision is the contract's, not our clock's: a keeper sweeps expired orders, so
             // one can sit in `placed` a while before it flips.
-            OnrampStatus.Failed(OnrampFailureCode.ORDER_EXPIRED, OnrampPhase.AWAITING_MERCHANT, handle, handle)
-        } else {
-            OnrampStatus.Failed(
-                OnrampFailureCode.NO_MERCHANT,
-                if (status == OrderStatus.PAID) OnrampPhase.AWAITING_SETTLEMENT else OnrampPhase.AWAITING_MERCHANT,
-                handle,
-                handle,
-            )
+            status == OrderStatus.PLACED && isExpiredOnChain(orderId) ->
+                OnrampStatus.Failed(OnrampFailureCode.ORDER_EXPIRED, phase, handle, handle)
+
+            else ->
+                OnrampStatus.Failed(OnrampFailureCode.NO_MERCHANT, phase, handle, handle)
         }
+    }
 
     private suspend fun completed(snapshot: OrderSnapshot, handle: String, recipient: Address): OnrampStatus {
         // The order tuple never carries the settled amounts; they live in their own read and are
@@ -547,7 +571,7 @@ class DirectOnrampDriver(
             orderId = handle,
             instruction = paymentInstruction(payTo, orderId, fiat, snapshot.corridor()),
             fiatAmount = fiat,
-            expiresAtMillis = null,
+            expiresAtMillis = orderExpiresAtMillis(orderId),
         )
     }
 
@@ -644,6 +668,31 @@ class DirectOnrampDriver(
             null
         }
 
+    /**
+     * When the contract stops accepting payment for this order, as epoch millis.
+     *
+     * This is the whole reason the payment screen can close itself. Polling stops once an order is
+     * accepted, so nothing else is watching the window; without a deadline here the screen stays
+     * payable for as long as it is open, and a user who comes back late sends fiat into an order
+     * the contract will no longer settle.
+     *
+     * The tuple counts in seconds and the screen counts in millis. Null when the read fails or the
+     * contract names no deadline — no countdown, rather than one that reads as already passed.
+     */
+    private suspend fun orderExpiresAtMillis(orderId: BigInteger): Long? =
+        try {
+            val ret =
+                rpc.ethCall(
+                    to = network.diamondAddress,
+                    data = DiamondCalls.getOrderExpiresAtCalldata(orderId),
+                )
+            if (ret.isEmpty()) null else BigInteger(1, ret).toLong().takeIf { it > 0L }?.times(MILLIS_PER_SECOND)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (ignored: Exception) {
+            null
+        }
+
     private suspend fun isExpiredOnChain(orderId: BigInteger): Boolean =
         try {
             readBoolean(DiamondCalls.isOrderExpiredCalldata(orderId))
@@ -657,14 +706,23 @@ class DirectOnrampDriver(
      * The order id, recovered from the placement hash the checkpoint recorded before the receipt
      * existed. A cold start after a killed process lands here.
      */
-    private suspend fun recoverOrderId(checkpoint: OnrampCheckpoint, user: Address): BigInteger? {
-        val receipt = receiptOrNull(checkpoint.id) ?: return null
-        return OrderEvents.parseOrderIdFromReceipt(receipt, network.diamondAddress, user)
-    }
+    private suspend fun recoverOrderId(checkpoint: OnrampCheckpoint, account: SubmittingAccount): BigInteger? =
+        receiptOrNull(checkpoint.id, account)
+            // A placement that reverted left no order to recover, and its receipt carries no log.
+            ?.takeIf { it.success }
+            ?.let { OrderEvents.parseOrderIdFromReceipt(it, network.diamondAddress, account.address) }
 
-    private suspend fun receiptOrNull(hash: String): TransactionReceipt? =
+    /**
+     * ☠ Through the submitter, never through [rpc]. The handle a placement returns is a *userOpHash*
+     * on the 4337 route, and no node has heard of it — `eth_getTransactionReceipt` answers null for
+     * a perfectly good order. Only the bundler can resolve it, and the submitter is the way in.
+     *
+     * Getting this wrong is invisible until a process dies mid-placement: every cold-start recovery
+     * then reports "no order", the checkpoint is cleared, and a live on-chain order is orphaned.
+     */
+    private suspend fun receiptOrNull(hash: String, account: SubmittingAccount): TransactionReceipt? =
         try {
-            rpc.ethGetTransactionReceipt(TxHash.fromHex(hash))
+            account.submitter.awaitReceipt(TxHash.fromHex(hash))
         } catch (e: CancellationException) {
             throw e
         } catch (ignored: Exception) {
@@ -710,6 +768,7 @@ class DirectOnrampDriver(
     private fun CurrencyCode.paymentMethodName(): String = if (this == CurrencyCode.Inr) "UPI" else code
 
     private companion object {
+        const val MILLIS_PER_SECOND = 1_000L
         const val QUOTE_ID_PREFIX = "direct-"
         const val QUOTE_TTL_MILLIS = 90_000L
 

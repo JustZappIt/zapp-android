@@ -236,7 +236,13 @@ class ReclaimVerificationDriver(
                     value = Wei.ZERO,
                     data = calldata,
                 )
-            account.submitter.awaitReceipt(txHash)
+            // Inclusion is not success. A sponsored operation that reverts still gets mined and
+            // still returns a receipt, and without this the user reaches the "verified" screen with
+            // reputation that never changed — and no reason on screen for why the limit did not move.
+            if (!account.submitter.awaitReceipt(txHash).success) {
+                emit(ReclaimStatus.Failed(ReclaimFailure.VerificationRejected))
+                return
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (
