@@ -97,6 +97,7 @@ import co.electriccoin.zcash.ui.common.usecase.NavigateToPayMerchantUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToPeerCashOutUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToPeerOrderUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToReceiveUseCase
+import co.electriccoin.zcash.ui.common.usecase.NavigateToReputationUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToRequestShieldedUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToResetWalletUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToScanGenericAddressUseCase
@@ -149,6 +150,7 @@ import co.electriccoin.zcash.ui.common.usecase.RequestSwapQuoteUseCase
 import co.electriccoin.zcash.ui.common.usecase.RescanBlockchainUseCase
 import co.electriccoin.zcash.ui.common.usecase.RescanQrUseCase
 import co.electriccoin.zcash.ui.common.usecase.ResetTransactionFiltersUseCase
+import co.electriccoin.zcash.ui.common.usecase.ResolveBuyCorridorUseCase
 import co.electriccoin.zcash.ui.common.usecase.ResolveChatConversationForAddressUseCase
 import co.electriccoin.zcash.ui.common.usecase.RestoreWalletAndNavigateUseCase
 import co.electriccoin.zcash.ui.common.usecase.RestoreWalletUseCase
@@ -333,6 +335,8 @@ val useCaseModule =
         factoryOf(::ValidateSwapABContactAddressUseCase)
         factoryOf(::NavigateToNearPayUseCase)
         factoryOf(::NavigateToOnrampUseCase)
+        factoryOf(::NavigateToReputationUseCase)
+        factoryOf(::ResolveBuyCorridorUseCase)
         factoryOf(::NavigateToPayMerchantUseCase)
         factoryOf(::NavigateToPeerCashOutUseCase)
         factoryOf(::NavigateToPeerOrderUseCase)

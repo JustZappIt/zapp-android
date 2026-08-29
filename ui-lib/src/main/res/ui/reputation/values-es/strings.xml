@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reputation_title">Reputación</string>
+    <string name="reputation_info_content_description">Cómo funciona</string>
+
+    <string name="reputation_points_label">PUNTOS DE REPUTACIÓN</string>
+
+    <string name="reputation_limits_group">TUS LÍMITES</string>
+    <string name="reputation_buy_limit">Límite de compra</string>
+    <string name="reputation_max_limit">Máximo que puedes alcanzar</string>
+    <string name="reputation_sell_limit">Límite de retiro</string>
+    <string name="reputation_limit_per_purchase">$%1$s por compra</string>
+    <string name="reputation_limit_per_payout">$%1$s por retiro</string>
+    <string name="reputation_amount_usd">$%1$s</string>
+    <string name="reputation_limit_locked">Bloqueado hasta que verifiques una cuenta</string>
+    <string name="reputation_limits_footer">Retirar nunca está limitado por la reputación.</string>
+    <string name="reputation_limits_footer_at_ceiling">Estás en el límite más alto. Retirar nunca está limitado por la reputación.</string>
+
+    <string name="reputation_verified_group">VERIFICADAS</string>
+    <string name="reputation_unverified_group">AÚN SIN VERIFICAR</string>
+    <string name="reputation_ceiling_footer">Estás en el límite más alto: verificar más cuentas no lo subirá.</string>
+    <string name="reputation_rp_amount">%1$s RP</string>
+    <string name="reputation_limit_gain">+$%1$s a tu límite</string>
+
+    <string name="reputation_raise_limit">Subir mi límite</string>
+    <string name="reputation_buy">Comprar</string>
+    <string name="reputation_verify_to_buy">Verifica para comprar</string>
+    <string name="reputation_retry">Reintentar</string>
+
+    <string name="reputation_unreadable_title">No pudimos conectar con Base</string>
+    <string name="reputation_unreadable_body">No pudimos leer tus límites en el exchange. Nada ha cambiado: inténtalo de nuevo en un momento.</string>
+
+    <string name="reputation_blacklisted_title">Esta billetera no puede comprar</string>
+    <string name="reputation_blacklisted_body">El exchange ha bloqueado esta billetera. Verificar una cuenta no lo cambiará.</string>
+
+    <string name="reputation_info_title">Por qué hay un límite</string>
+    <string name="reputation_info_trade">Comprar es un intercambio con un desconocido. Tú envías dinero a su cuenta; esa persona te libera USDC. Ninguno de los dos puede recuperar el dinero del otro.</string>
+    <string name="reputation_info_cap">El exchange limita cuánto puede intercambiar de una vez una cuenta nueva. Una billetera recién creada puede retirar pero no comprar, y retirar no cuenta para el límite de compra, por mucho tiempo que lleves haciéndolo. Verificar una cuenta que ya tienes es lo que sube el límite.</string>
+    <string name="reputation_info_privacy">Qué puede ver Zapp: nada. La prueba dice “esta persona controla una cuenta de X con más de un año”. No incluye tu usuario, ni tu contraseña, ni nada de lo que hayas publicado.</string>
+    <string name="reputation_info_source">De dónde viene el límite: del contrato del exchange en Base, no de Zapp. Nosotros lo leemos; no podemos subirlo.</string>
+    <string name="increase_reputation_title">Subir mi límite</string>
+    <string name="increase_reputation_info_content_description">Cómo funciona la verificación</string>
+    <string name="increase_reputation_intro">Verifica una cuenta que ya tengas. No compartes nada con Zapp.</string>
+    <string name="increase_reputation_group">CUENTAS QUE PUEDES VERIFICAR</string>
+    <string name="increase_reputation_reward">+%1$s RP</string>
+    <string name="increase_reputation_verified">Verificada</string>
+    <string name="increase_reputation_age_requirement">Necesita una cuenta de aproximadamente un año</string>
+
+    <string name="increase_reputation_step_open">Abrir Reclaim</string>
+    <string name="increase_reputation_step_prove">Demostrar tu cuenta</string>
+    <string name="increase_reputation_step_save">Guardar tu verificación</string>
+
+    <string name="increase_reputation_preparing">Preparando…</string>
+    <string name="increase_reputation_ready">Se abrirá Reclaim. Inicia sesión en %1$s allí y vuelve aquí.</string>
+    <string name="increase_reputation_waiting">Esperando a Reclaim…</string>
+    <string name="increase_reputation_waiting_help">Mantén Zapp abierto. Si cerraste Reclaim antes de terminar, cancela aquí y vuelve a empezar.</string>
+    <string name="increase_reputation_saving">Guardando tu verificación…</string>
+    <string name="increase_reputation_done">%1$s verificada</string>
+    <string name="increase_reputation_failed">Esa verificación no se completó.</string>
+
+    <string name="increase_reputation_open">Abrir Reclaim</string>
+    <string name="increase_reputation_cancel">Cancelar</string>
+    <string name="increase_reputation_saving_action">Guardando…</string>
+    <string name="increase_reputation_finish">Listo</string>
+
+    <string name="increase_reputation_error_unavailable">La verificación no está disponible en esta versión de Zapp.</string>
+    <string name="increase_reputation_error_criteria">Esta cuenta no cumple los requisitos del proveedor: debe tener aproximadamente un año.</string>
+    <string name="increase_reputation_error_proof">Reclaim no pudo completar la comprobación. Inténtalo otra vez o elige otra cuenta.</string>
+    <string name="increase_reputation_error_expired">Esa verificación caducó. Vuelve a empezar para obtener un enlace nuevo.</string>
+    <string name="increase_reputation_error_already_used">Esa cuenta ya está verificada en otra billetera.</string>
+    <string name="increase_reputation_error_mismatch">Esa verificación se hizo para otra billetera. Vuelve a empezar.</string>
+    <string name="increase_reputation_error_rejected">El exchange no pudo verificar esa prueba.</string>
+    <string name="increase_reputation_error_gas">Ahora mismo no podemos cubrir la comisión de red. Inténtalo en un rato.</string>
+    <string name="increase_reputation_error_network">No pudimos conectar con la red. Inténtalo en un momento.</string>
+
+    <string name="increase_reputation_info_title">Cómo funciona la verificación</string>
+    <string name="increase_reputation_info_step_pick">Elige una cuenta que ya tengas.</string>
+    <string name="increase_reputation_info_step_open">Zapp abre Reclaim, una app aparte que hace la comprobación. Instálala si no la tienes: es gratis.</string>
+    <string name="increase_reputation_info_step_sign_in">Inicia sesión en tu cuenta dentro de Reclaim. Zapp nunca ve eso.</string>
+    <string name="increase_reputation_info_step_proof">Reclaim genera una prueba matemática y la devuelve. Zapp la escribe en el contrato del exchange y tu límite sube.</string>
+    <string name="increase_reputation_info_gas">Nosotros pagamos la comisión de red. No necesitas ETH ni ninguna otra moneda.</string>
+    <string name="increase_reputation_info_time">Tarda unos minutos, sobre todo por instalar Reclaim e iniciar sesión.</string>
+    <string name="increase_reputation_info_age">Solo cuentas antiguas. X, GitHub e Instagram necesitan una cuenta de aproximadamente un año. Una más nueva devuelve “no cumple los criterios”: es la regla del proveedor, no nuestra.</string>
+    <string name="increase_reputation_info_once">Una vez por cuenta. La misma cuenta de X no se puede verificar en una segunda billetera, ni siquiera en una que recuperes con una frase semilla nueva.</string>
+</resources>

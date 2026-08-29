@@ -5,6 +5,7 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.offramp.config.P2pNetworkConfig
+import xyz.justzappit.offramp.config.P2pNetworks
 import xyz.justzappit.offramp.p2p.OrderStatus
 import xyz.justzappit.offramp.p2p.OrderType
 import xyz.justzappit.offramp.p2p.P2pOrderHistoryItem
@@ -83,6 +84,7 @@ class P2pTransactionsFormatTest {
                 rpcUrl = "https://example.invalid/rpc",
                 diamondAddress = Address.parse("0x4cad6ec90e65babec9335cad728ddc610c316368"),
                 usdcAddress = Address.parse("0x833589fcD6edb6e08f4c7c32D4f71b54bdA02913"),
+                reputationManagerAddress = Address.parse(P2pNetworks.MAINNET_REPUTATION_MANAGER),
                 subgraphUrl = "https://example.invalid/subgraph",
                 baseExplorerUrl = "https://basescan.org",
             )

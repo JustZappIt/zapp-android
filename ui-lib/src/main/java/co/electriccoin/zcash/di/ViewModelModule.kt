@@ -55,6 +55,8 @@ import co.electriccoin.zcash.ui.screen.onboarding.ZappRestoreFlowVM
 import co.electriccoin.zcash.ui.screen.onramp.OnrampVM
 import co.electriccoin.zcash.ui.screen.qrcode.QrCodeVM
 import co.electriccoin.zcash.ui.screen.receive.ReceiveVM
+import co.electriccoin.zcash.ui.screen.reputation.ReputationVM
+import co.electriccoin.zcash.ui.screen.reputation.increase.IncreaseReputationVM
 import co.electriccoin.zcash.ui.screen.request.viewmodel.RequestVM
 import co.electriccoin.zcash.ui.screen.restore.date.RestoreBDDateVM
 import co.electriccoin.zcash.ui.screen.restore.estimation.RestoreBDEstimationVM
@@ -199,6 +201,8 @@ val viewModelModule =
         viewModelOf(::BalanceChartVM)
         viewModelOf(::HomeVM)
         viewModelOf(::OnrampVM)
+        viewModelOf(::ReputationVM)
+        viewModelOf(::IncreaseReputationVM)
         viewModelOf(::KeepOpenVM)
         viewModelOf(::WalletSyncStateVM)
         viewModelOf(::RestoreBDHeightVM)

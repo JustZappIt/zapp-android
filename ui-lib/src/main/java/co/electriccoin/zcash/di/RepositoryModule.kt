@@ -52,10 +52,13 @@ import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
 import xyz.justzappit.offramp.config.P2pNetworkConfig
 import xyz.justzappit.offramp.onramp.CustodialOnrampClient
 import xyz.justzappit.offramp.onramp.CustodialOnrampDriver
+import xyz.justzappit.offramp.onramp.DirectOnrampDriver
 import xyz.justzappit.offramp.onramp.FakeOnrampDriver
 import xyz.justzappit.offramp.onramp.OnrampBackendConfig
 import xyz.justzappit.offramp.onramp.OnrampDriver
 import xyz.justzappit.offramp.onramp.OnrampRequestSigner
+import xyz.justzappit.offramp.onramp.OnrampScreeningClient
+import xyz.justzappit.offramp.onramp.OnrampScreeningConfig
 import xyz.justzappit.offramp.orchestrator.AaOfframpDriver
 import xyz.justzappit.offramp.orchestrator.OfframpDriver
 import xyz.justzappit.offramp.p2p.CircleRouter
@@ -67,6 +70,12 @@ import xyz.justzappit.offramp.p2p.P2pOrderHistorySource
 import xyz.justzappit.offramp.p2p.RelayIdentityStore
 import xyz.justzappit.offramp.p2p.SubgraphOrderReader
 import xyz.justzappit.offramp.p2p.getUsdcBalance
+import xyz.justzappit.offramp.reclaim.ReclaimAppCredentials
+import xyz.justzappit.offramp.reclaim.ReclaimPoller
+import xyz.justzappit.offramp.reclaim.ReclaimSessionMinter
+import xyz.justzappit.offramp.reclaim.ReclaimVerificationDriver
+import xyz.justzappit.offramp.reputation.ReputationReader
+import java.util.Locale
 
 val repositoryModule =
     module {
@@ -149,15 +158,81 @@ val repositoryModule =
                 orderRecipientUpiCache = get(),
             )
         }
+        single { ReputationReader(rpc = get(), network = get()) }
+        single {
+            ReclaimAppCredentials(
+                appId = BuildConfig.RECLAIM_APP_ID,
+                appSecret = BuildConfig.RECLAIM_APP_SECRET,
+            )
+        }
+        // No server sits in this path: sessions are minted on the device and the proof goes
+        // straight from Reclaim to the ReputationManager. The Reclaim API is a third-party host,
+        // not our RPC, but it shares the offramp client for its logging and retry behaviour.
+        single {
+            ReclaimVerificationDriver(
+                minter =
+                    ReclaimSessionMinter(
+                        httpClient = get(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)),
+                        credentials = get(),
+                        nowMillis = System::currentTimeMillis,
+                    ),
+                poller = ReclaimPoller(httpClient = get(named(OFFRAMP_HTTP_CLIENT_QUALIFIER))),
+                submitters = get(),
+                reputationReader = get(),
+                rpc = get(),
+                network = get(),
+                credentials = get(),
+            )
+        }
         single { OnrampBackendConfig(baseUrl = BuildConfig.P2P_ONRAMP_BASE_URL) }
-        // The operator service places every BUY, so nothing here is signed on-chain. Requests are
-        // authenticated with the seed-derived Base EOA; USDC settles to the ERC-4337 smart account
-        // that EOA owns, which is where offramp, the Base balance and Pay Merchant already look.
-        // The service derives the same account from the signer and refuses any other address, so
-        // the two providers are not interchangeable — see OnrampRecipientProvider.
+        single {
+            OnrampScreeningConfig(
+                apiUrl = BuildConfig.P2P_SCREENING_API_URL,
+                encryptionKeyHex = BuildConfig.P2P_SCREENING_KEY,
+            )
+        }
+        // Which route places a BUY. Both ship for at least one release, so the cutover is a config
+        // change rather than a build, and rolls back the same way.
+        //
+        // On the operator route the service places every BUY, so nothing here is signed on-chain.
+        // Requests are authenticated with the seed-derived Base EOA; USDC settles to the ERC-4337
+        // smart account that EOA owns, which is where offramp, the Base balance and Pay Merchant
+        // already look. The service derives the same account from the signer and refuses any other
+        // address, so the two providers are not interchangeable — see OnrampRecipientProvider.
         factory<OnrampDriver> {
             if (BuildConfig.DEBUG && BuildConfig.P2P_ONRAMP_USE_FAKE_DRIVER) {
                 FakeOnrampDriver()
+            } else if (BuildConfig.P2P_ONRAMP_DIRECT) {
+                val screeningConfig: OnrampScreeningConfig = get()
+                DirectOnrampDriver(
+                    rpc = get(),
+                    network = get(),
+                    submitters = get(),
+                    accountProvider = get(),
+                    subgraph = get(),
+                    // The chain, not the indexer: the subgraph returns `encUpi` empty, and that
+                    // field is the entire payment step.
+                    orderReader = get<OnChainOrderReader>(),
+                    screening =
+                        screeningConfig
+                            .takeIf { it.isConfigured }
+                            ?.let {
+                                OnrampScreeningClient(
+                                    httpClient = get(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)),
+                                    config = it,
+                                    deviceSignals = get(),
+                                    screeningSession = get(),
+                                    nowMillis = System::currentTimeMillis,
+                                )
+                            },
+                    relayIdentityStore = get(),
+                    orderRecipientUpiCache = get(),
+                    // Best-effort, and only ever a hint to the screening service: the device's
+                    // region says where the phone was set up, which is usually but not always
+                    // where its owner is buying.
+                    country = Locale.getDefault().country.takeIf { it.isNotBlank() },
+                    nowMillis = System::currentTimeMillis,
+                )
             } else {
                 val config: OnrampBackendConfig = get()
                 val accountProvider: OfframpAccountProvider = get()

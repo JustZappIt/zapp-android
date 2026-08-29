@@ -78,6 +78,42 @@ object DiamondCalls {
     fun cancelOrderCalldata(orderId: BigInteger): ByteArray =
         AbiEncoder.encodeFunctionCall("cancelOrder(uint256)", listOf(AbiUint(orderId)))
 
+    /**
+     * The buy-side "I have paid" — a *claim* that fiat moved, not proof of it. The merchant then
+     * calls `completeOrder` and the USDC lands at the order's recipient.
+     *
+     * Never retried automatically, on any schedule: a false claim costs the user `lyingUserRp()`
+     * (5 RP, and at 1 RP = $1 that is $5 off the buy limit).
+     */
+    fun paidBuyOrderCalldata(orderId: BigInteger): ByteArray =
+        AbiEncoder.encodeFunctionCall("paidBuyOrder(uint256)", listOf(AbiUint(orderId)))
+
+    fun getSmallOrderFixedFeeBuyCalldata(currency: CurrencyCode): ByteArray =
+        AbiEncoder.encodeFunctionCall(
+            "getSmallOrderFixedFeeBuy(bytes32)",
+            listOf(AbiEncoder.bytes32String(currency.code)),
+        )
+
+    /**
+     * ⚠ `contractVersion()`, not `getContractVersion()` — the latter is unregistered and the
+     * Diamond answers `Diamond: Function does not exist`, naming nothing. Returns **bytes32**
+     * (`"0.0.10"`, NUL-padded, on mainnet).
+     */
+    fun contractVersionCalldata(): ByteArray = AbiEncoder.encodeFunctionCall("contractVersion()", emptyList())
+
+    fun getProcessingTimeCalldata(): ByteArray = AbiEncoder.encodeFunctionCall("getProcessingTime()", emptyList())
+
+    fun getExchangeStatusCalldata(): ByteArray = AbiEncoder.encodeFunctionCall("getExchangeStatus()", emptyList())
+
+    fun isCurrencySupportedCalldata(currency: CurrencyCode): ByteArray =
+        AbiEncoder.encodeFunctionCall(
+            "isCurrencySupported(bytes32)",
+            listOf(AbiEncoder.bytes32String(currency.code)),
+        )
+
+    fun getOrderExpiresAtCalldata(orderId: BigInteger): ByteArray =
+        AbiEncoder.encodeFunctionCall("getOrderExpiresAt(uint256)", listOf(AbiUint(orderId)))
+
     fun isOrderExpiredCalldata(orderId: BigInteger): ByteArray =
         AbiEncoder.encodeFunctionCall("isOrderExpired(uint256)", listOf(AbiUint(orderId)))
 

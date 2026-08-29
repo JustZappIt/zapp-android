@@ -1,0 +1,23 @@
+package co.electriccoin.zcash.ui.screen.reputation.increase
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.serialization.Serializable
+import org.koin.androidx.compose.koinViewModel
+import org.koin.core.parameter.parametersOf
+
+@Composable
+fun IncreaseReputationScreen(args: IncreaseReputationArgs) {
+    val vm = koinViewModel<IncreaseReputationVM> { parametersOf(args) }
+    val state by vm.state.collectAsStateWithLifecycle()
+    IncreaseReputationView(state)
+    BackHandler { state.onBack() }
+}
+
+/** The corridor decides what a verification is worth, so it travels with the route. */
+@Serializable
+data class IncreaseReputationArgs(
+    val currencyCode: String,
+)
