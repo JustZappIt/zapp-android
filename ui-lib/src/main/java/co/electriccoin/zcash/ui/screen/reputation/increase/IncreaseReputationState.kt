@@ -24,6 +24,12 @@ internal data class VerifiableRow(
     val name: String,
     val reward: StringResource,
     /**
+     * What verifying this account would actually add to the buy limit — the only number on the row
+     * the user is really shopping for. Null when already verified, when the corridor's RP-to-limit
+     * ratio is unreadable, and at the ceiling, where the honest answer is nothing.
+     */
+    val limitGain: StringResource?,
+    /**
      * The provider's own rule, said before the user spends five minutes finding out: a too-new
      * account comes back as a *successful* proof that verifies nothing.
      */

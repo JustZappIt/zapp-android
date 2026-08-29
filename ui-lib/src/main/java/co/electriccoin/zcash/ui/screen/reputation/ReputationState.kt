@@ -2,7 +2,6 @@ package co.electriccoin.zcash.ui.screen.reputation
 
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.util.StringResource
-import xyz.justzappit.offramp.reputation.SocialPlatform
 
 internal data class ReputationState(
     val content: ReputationContent,
@@ -26,14 +25,19 @@ internal sealed interface ReputationContent {
 
     data class Ready(
         val points: String,
-        /** The Diamond's own number, or the locked line — never a rendered "$0", which reads as a bug. */
+        /**
+         * The Diamond's own number, or the single word that stands in for it while buying is
+         * locked — never a rendered "$0", which reads as a bug rather than as a gate.
+         */
         val buyLimit: StringResource,
-        val maxBuyLimit: StringResource,
-        val sellLimit: StringResource,
-        val limitsFooter: StringResource,
+        /** Underneath the figure, with room to wrap: what it means, or what to do about it. */
+        val buyLimitCaption: StringResource,
+        val isLocked: Boolean,
+        /**
+         * Only the accounts already verified. The ones that are *not* are a list of things to do,
+         * and doing them lives on Raise my limit, where the rows are actually tappable.
+         */
         val verified: List<PlatformRow>,
-        val unverified: List<PlatformRow>,
-        val isAtCeiling: Boolean,
     ) : ReputationContent
 
     /** Terminal: verifying will not help, so the screen says so and offers nothing. */
@@ -44,10 +48,7 @@ internal sealed interface ReputationContent {
 }
 
 internal data class PlatformRow(
-    val platform: SocialPlatform,
     /** The brand's own name, as the contract spells it. Not translated. */
     val name: String,
     val reward: StringResource,
-    /** "+$50 to your limit", suppressed when the corridor's ratio is unreadable or at the ceiling. */
-    val limitGain: StringResource?,
 )

@@ -161,10 +161,20 @@ private fun PlatformRow(row: VerifiableRow) {
                     )
                 }
             } else {
-                BasicText(
-                    text = row.reward.getValue(),
-                    style = ZappTheme.typography.rowSubtitle.copy(color = c.accentText),
-                )
+                // Two lines, right-aligned: what the account is worth in points, and what that is
+                // worth in dollars of limit. The second is the one people actually decide on.
+                Column(horizontalAlignment = Alignment.End) {
+                    BasicText(
+                        text = row.reward.getValue(),
+                        style = ZappTheme.typography.rowSubtitle.copy(color = c.accentText),
+                    )
+                    row.limitGain?.let {
+                        BasicText(
+                            text = it.getValue(),
+                            style = ZappTheme.typography.caption.copy(color = c.textMuted),
+                        )
+                    }
+                }
             }
         },
         // Verified rows stay listed and inert: hiding one reads as a bug, and nothing else in the

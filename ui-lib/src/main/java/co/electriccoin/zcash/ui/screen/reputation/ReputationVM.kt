@@ -115,35 +115,35 @@ internal class ReputationVM(
         )
     }
 
+    /**
+     * The cash-out limit is deliberately absent. This screen is only ever reached on the way to a
+     * buy, reputation does not gate cashing out at all, and a second limit beside the one that is
+     * blocking them invites the reading that both are. The info sheet says so in words instead.
+     */
     private fun content(summary: ReputationSummary) =
         ReputationContent.Ready(
             points = summary.points.toString(),
             buyLimit =
                 if (summary.canBuy) {
-                    stringRes(R.string.reputation_limit_per_purchase, summary.buyLimit.usd())
+                    stringRes(R.string.reputation_amount_usd, summary.buyLimit.usd())
                 } else {
                     stringRes(R.string.reputation_limit_locked)
                 },
-            maxBuyLimit = stringRes(R.string.reputation_amount_usd, summary.maxBuyLimit.usd()),
-            sellLimit = stringRes(R.string.reputation_limit_per_payout, summary.sellLimit.usd()),
-            limitsFooter =
-                if (summary.isAtCeiling) {
-                    stringRes(R.string.reputation_limits_footer_at_ceiling)
-                } else {
-                    stringRes(R.string.reputation_limits_footer)
+            buyLimitCaption =
+                when {
+                    !summary.canBuy -> stringRes(R.string.reputation_limit_locked_caption)
+                    summary.isAtCeiling -> stringRes(R.string.reputation_limit_caption_at_ceiling)
+                    else -> stringRes(R.string.reputation_limit_caption)
                 },
-            // Listed in awards order, so the most valuable account to verify is always first.
+            isLocked = !summary.canBuy,
+            // Listed in awards order, so the most valuable account is always first.
             verified = SocialPlatform.entries.filter { it in summary.verified }.map { summary.row(it) },
-            unverified = summary.unverified.map { summary.row(it) },
-            isAtCeiling = summary.isAtCeiling,
         )
 
     private fun ReputationSummary.row(platform: SocialPlatform) =
         PlatformRow(
-            platform = platform,
             name = platform.onChainName,
             reward = stringRes(R.string.reputation_rp_amount, award(platform).toString()),
-            limitGain = limitGainFor(platform)?.let { stringRes(R.string.reputation_limit_gain, it.usd()) },
         )
 
     private fun Usdc6.usd(): String = toDisplayString(stripTrailingZeros = true)

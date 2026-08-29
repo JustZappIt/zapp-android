@@ -5,10 +5,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -37,15 +39,16 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappCompactButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRow
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRowDivider
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
+import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSettingsGroup
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSummaryRow
-import co.electriccoin.zcash.ui.design.component.zapp.ZappValueCard
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 
@@ -111,17 +114,23 @@ internal fun ReputationView(state: ReputationState) {
 @Composable
 private fun ReputationContentBody(state: ReputationState) {
     when (val content = state.content) {
-        ReputationContent.Loading -> LoadingContent()
-        ReputationContent.Unreadable -> UnreadableContent(state)
-        ReputationContent.Blacklisted -> BlacklistedContent()
-        is ReputationContent.Ready -> ReadyContent(content, state)
-    }
-}
+        ReputationContent.Loading -> {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = ZappTheme.colors.accent)
+            }
+        }
 
-@Composable
-private fun LoadingContent() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator(color = ZappTheme.colors.accent)
+        ReputationContent.Unreadable -> {
+            UnreadableContent(state)
+        }
+
+        ReputationContent.Blacklisted -> {
+            BlacklistedContent()
+        }
+
+        is ReputationContent.Ready -> {
+            ReadyContent(content, state)
+        }
     }
 }
 
@@ -151,41 +160,53 @@ private fun BlacklistedContent() {
 @Composable
 private fun ReadyContent(content: ReputationContent.Ready, state: ReputationState) {
     Column(verticalArrangement = Arrangement.spacedBy(SECTION_GAP.dp)) {
-        ZappValueCard(
-            value = content.points,
-            label = stringResource(R.string.reputation_points_label),
-        )
-        ZappSettingsGroup(
-            title = stringResource(R.string.reputation_limits_group),
-            footer = content.limitsFooter.getValue(),
-        ) {
-            SummaryLine(stringResource(R.string.reputation_buy_limit), content.buyLimit.getValue())
-            ZappRowDivider()
-            SummaryLine(stringResource(R.string.reputation_max_limit), content.maxBuyLimit.getValue())
-            ZappRowDivider()
-            SummaryLine(stringResource(R.string.reputation_sell_limit), content.sellLimit.getValue())
-        }
+        BuyLimitCard(content)
         if (content.verified.isNotEmpty()) {
             ZappSettingsGroup(title = stringResource(R.string.reputation_verified_group)) {
                 content.verified.forEachIndexed { index, row ->
                     if (index > 0) ZappRowDivider()
-                    PlatformListRow(row = row, isVerified = true)
-                }
-            }
-        }
-        if (content.unverified.isNotEmpty()) {
-            ZappSettingsGroup(
-                title = stringResource(R.string.reputation_unverified_group),
-                footer =
-                    if (content.isAtCeiling) stringResource(R.string.reputation_ceiling_footer) else null,
-            ) {
-                content.unverified.forEachIndexed { index, row ->
-                    if (index > 0) ZappRowDivider()
-                    PlatformListRow(row = row, isVerified = false)
+                    VerifiedPlatformRow(row)
                 }
             }
         }
         RaiseLimitAction(state)
+    }
+}
+
+/**
+ * The figure the user came for, given the full width instead of the right-hand column of a table.
+ *
+ * The locked state is a sentence, not a value, and that is the whole reason this is a card: as a
+ * row it was clipped to "Locked until you verify one acc…", which is a table cell apologising for
+ * being a table cell. Here the number and the sentence each get their own line.
+ */
+@Composable
+private fun BuyLimitCard(content: ReputationContent.Ready) {
+    val c = ZappTheme.colors
+    ZappBorderedCard(
+        modifier = Modifier.padding(horizontal = CARD_GUTTER.dp),
+        padding = HERO_PADDING.dp,
+    ) {
+        ZappSectionLabel(text = stringResource(R.string.reputation_buy_limit))
+        Spacer(Modifier.height(HERO_LABEL_GAP.dp))
+        BasicText(
+            text = content.buyLimit.getValue(),
+            style =
+                ZappTheme.typography.display
+                    .copy(color = if (content.isLocked) c.textMuted else c.text),
+        )
+        Spacer(Modifier.height(HERO_CAPTION_GAP.dp))
+        BasicText(
+            text = content.buyLimitCaption.getValue(),
+            style = ZappTheme.typography.body.copy(color = c.textMuted),
+        )
+        Spacer(Modifier.height(HERO_DIVIDER_GAP.dp))
+        ZappRowDivider()
+        Spacer(Modifier.height(HERO_DIVIDER_GAP.dp))
+        ZappSummaryRow(
+            label = stringResource(R.string.reputation_points_row),
+            value = content.points,
+        )
     }
 }
 
@@ -204,34 +225,22 @@ private fun RaiseLimitAction(state: ReputationState) {
     }
 }
 
+/**
+ * No chevron and no click: this group reports what the user has already earned. Everything that
+ * can still be done about it is one button away, so the two never compete.
+ */
 @Composable
-private fun SummaryLine(label: String, value: String) {
-    ZappSummaryRow(
-        label = label,
-        value = value,
-        modifier = Modifier.padding(horizontal = ROW_PADDING.dp, vertical = ROW_VERTICAL_PADDING.dp),
-    )
-}
-
-@Composable
-private fun PlatformListRow(row: PlatformRow, isVerified: Boolean) {
+private fun VerifiedPlatformRow(row: PlatformRow) {
     val c = ZappTheme.colors
     ZappRow(
         title = row.name,
-        // The one computed value on this screen: what verifying this account would actually add.
-        subtitle = if (isVerified) null else row.limitGain?.getValue(),
-        icon = if (isVerified) Icons.Default.Check else null,
+        icon = Icons.Default.Check,
         iconTint = c.success,
         iconBackground = c.successSoft,
-        titleColor = if (isVerified) c.text else c.textMuted,
-        // No chevron: this group reports where the user stands, it is not a way in. Verifying is
-        // one button, below, so the two never compete.
         trailing = {
             BasicText(
                 text = row.reward.getValue(),
-                style =
-                    ZappTheme.typography.rowSubtitle
-                        .copy(color = if (isVerified) c.textMuted else c.accentText),
+                style = ZappTheme.typography.rowSubtitle.copy(color = c.textMuted),
             )
         },
     )
@@ -248,7 +257,10 @@ private const val HORIZONTAL_PADDING = 18
 private const val VERTICAL_PADDING = 16
 private const val BOTTOM_BAR_GAP = 12
 private const val SECTION_GAP = 16
-private const val ROW_PADDING = 18
-private const val ROW_VERTICAL_PADDING = 14
 private const val NOTICE_PADDING = 12
+private const val CARD_GUTTER = 14
+private const val HERO_PADDING = 18
+private const val HERO_LABEL_GAP = 10
+private const val HERO_CAPTION_GAP = 6
+private const val HERO_DIVIDER_GAP = 16
 private const val INFO_TAP_TARGET = 48

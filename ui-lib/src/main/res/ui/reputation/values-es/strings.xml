@@ -3,24 +3,17 @@
     <string name="reputation_title">Reputación</string>
     <string name="reputation_info_content_description">Cómo funciona</string>
 
-    <string name="reputation_points_label">PUNTOS DE REPUTACIÓN</string>
-
-    <string name="reputation_limits_group">TUS LÍMITES</string>
     <string name="reputation_buy_limit">Límite de compra</string>
-    <string name="reputation_max_limit">Máximo que puedes alcanzar</string>
-    <string name="reputation_sell_limit">Límite de retiro</string>
-    <string name="reputation_limit_per_purchase">$%1$s por compra</string>
-    <string name="reputation_limit_per_payout">$%1$s por retiro</string>
     <string name="reputation_amount_usd">$%1$s</string>
-    <string name="reputation_limit_locked">Bloqueado hasta que verifiques una cuenta</string>
-    <string name="reputation_limits_footer">Retirar nunca está limitado por la reputación.</string>
-    <string name="reputation_limits_footer_at_ceiling">Estás en el límite más alto. Retirar nunca está limitado por la reputación.</string>
+    <string name="reputation_limit_locked">Bloqueado</string>
+    <string name="reputation_limit_caption">Lo máximo que puedes gastar en una sola compra.</string>
+    <string name="reputation_limit_caption_at_ceiling">Lo máximo que puedes gastar en una sola compra. Estás en el límite más alto que existe.</string>
+    <string name="reputation_limit_locked_caption">Verifica una cuenta que ya tengas y se desbloqueará la compra. Retirar nunca está limitado por la reputación.</string>
+
+    <string name="reputation_points_row">Puntos de reputación</string>
 
     <string name="reputation_verified_group">VERIFICADAS</string>
-    <string name="reputation_unverified_group">AÚN SIN VERIFICAR</string>
-    <string name="reputation_ceiling_footer">Estás en el límite más alto: verificar más cuentas no lo subirá.</string>
     <string name="reputation_rp_amount">%1$s RP</string>
-    <string name="reputation_limit_gain">+$%1$s a tu límite</string>
 
     <string name="reputation_raise_limit">Subir mi límite</string>
     <string name="reputation_buy">Comprar</string>
@@ -43,6 +36,7 @@
     <string name="increase_reputation_intro">Verifica una cuenta que ya tengas. No compartes nada con Zapp.</string>
     <string name="increase_reputation_group">CUENTAS QUE PUEDES VERIFICAR</string>
     <string name="increase_reputation_reward">+%1$s RP</string>
+    <string name="increase_reputation_limit_gain">+$%1$s de límite</string>
     <string name="increase_reputation_verified">Verificada</string>
     <string name="increase_reputation_age_requirement">Necesita una cuenta de aproximadamente un año</string>
 
@@ -56,6 +50,7 @@
     <string name="increase_reputation_waiting_help">Mantén Zapp abierto. Si cerraste Reclaim antes de terminar, cancela aquí y vuelve a empezar.</string>
     <string name="increase_reputation_saving">Guardando tu verificación…</string>
     <string name="increase_reputation_done">%1$s verificada</string>
+    <string name="increase_reputation_new_limit">Ahora puedes comprar hasta $%1$s en una sola compra.</string>
     <string name="increase_reputation_failed">Esa verificación no se completó.</string>
 
     <string name="increase_reputation_open">Abrir Reclaim</string>

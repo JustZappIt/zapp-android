@@ -119,6 +119,13 @@ internal class IncreaseReputationVM(
                         } else {
                             stringRes(R.string.increase_reputation_reward, read.award(platform).toString())
                         },
+                    limitGain =
+                        read.limitGainFor(platform)?.let {
+                            stringRes(
+                                R.string.increase_reputation_limit_gain,
+                                it.toDisplayString(stripTrailingZeros = true),
+                            )
+                        },
                     requirement =
                         if (platform.requiresMatureAccount && platform !in read.verified) {
                             stringRes(R.string.increase_reputation_age_requirement)
@@ -206,7 +213,7 @@ internal class IncreaseReputationVM(
                 newPoints = summary?.points?.toString(),
                 newBuyLimit =
                     summary?.let {
-                        stringRes(R.string.reputation_limit_per_purchase, it.buyLimit.usd())
+                        stringRes(R.string.increase_reputation_new_limit, it.buyLimit.usd())
                     },
             )
         mutableState.update {

@@ -3,24 +3,17 @@
     <string name="reputation_title">Reputation</string>
     <string name="reputation_info_content_description">How this works</string>
 
-    <string name="reputation_points_label">REPUTATION POINTS</string>
-
-    <string name="reputation_limits_group">YOUR LIMITS</string>
     <string name="reputation_buy_limit">Buy limit</string>
-    <string name="reputation_max_limit">Most you can reach</string>
-    <string name="reputation_sell_limit">Cash-out limit</string>
-    <string name="reputation_limit_per_purchase">$%1$s per purchase</string>
-    <string name="reputation_limit_per_payout">$%1$s per payout</string>
     <string name="reputation_amount_usd">$%1$s</string>
-    <string name="reputation_limit_locked">Locked until you verify one account</string>
-    <string name="reputation_limits_footer">Cashing out is never limited by reputation.</string>
-    <string name="reputation_limits_footer_at_ceiling">You\'re at the highest limit. Cashing out is never limited by reputation.</string>
+    <string name="reputation_limit_locked">Locked</string>
+    <string name="reputation_limit_caption">The most you can spend on a single purchase.</string>
+    <string name="reputation_limit_caption_at_ceiling">The most you can spend on a single purchase. You\'re at the highest limit there is.</string>
+    <string name="reputation_limit_locked_caption">Verify one account you already own and buying unlocks. Cashing out is never limited by reputation.</string>
+
+    <string name="reputation_points_row">Reputation points</string>
 
     <string name="reputation_verified_group">VERIFIED</string>
-    <string name="reputation_unverified_group">NOT YET VERIFIED</string>
-    <string name="reputation_ceiling_footer">You\'re at the highest limit — verifying more accounts won\'t raise it.</string>
     <string name="reputation_rp_amount">%1$s RP</string>
-    <string name="reputation_limit_gain">+$%1$s to your limit</string>
 
     <string name="reputation_raise_limit">Raise my limit</string>
     <string name="reputation_buy">Buy</string>
@@ -43,6 +36,7 @@
     <string name="increase_reputation_intro">Verify an account you already own. Nothing is shared with Zapp.</string>
     <string name="increase_reputation_group">ACCOUNTS YOU CAN VERIFY</string>
     <string name="increase_reputation_reward">+%1$s RP</string>
+    <string name="increase_reputation_limit_gain">+$%1$s limit</string>
     <string name="increase_reputation_verified">Verified</string>
     <string name="increase_reputation_age_requirement">Needs an account about a year old</string>
 
@@ -56,6 +50,7 @@
     <string name="increase_reputation_waiting_help">Keep Zapp open. If you closed Reclaim before finishing, cancel here and start again.</string>
     <string name="increase_reputation_saving">Saving your verification…</string>
     <string name="increase_reputation_done">%1$s verified</string>
+    <string name="increase_reputation_new_limit">You can now buy up to $%1$s in one purchase.</string>
     <string name="increase_reputation_failed">That verification didn\'t go through.</string>
 
     <string name="increase_reputation_open">Open Reclaim</string>
