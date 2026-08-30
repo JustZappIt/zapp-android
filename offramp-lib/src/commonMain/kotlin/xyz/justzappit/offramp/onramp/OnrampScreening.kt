@@ -197,7 +197,7 @@ class OnrampScreeningClient(
                     ),
                 )
             }
-        if (!response.status.isSuccess()) onLinkFailed("link-order answered ${'$'}{response.status}")
+        if (!response.status.isSuccess()) onLinkFailed("link-order answered " + response.status)
     }
 
     /**

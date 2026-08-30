@@ -11,9 +11,11 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import xyz.justzappit.evm.hd.EvmKeyDerivation
+import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.offramp.p2p.CurrencyCode
@@ -23,6 +25,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -45,16 +48,20 @@ class OnrampScreeningTest {
         )
 
     /** A client whose screening endpoint answers with exactly [body]. */
-    private fun clientAnswering(body: String, status: HttpStatusCode = HttpStatusCode.OK) =
-        OnrampScreeningClient(
-            httpClient =
-                HttpClient(
-                    MockEngine { respond(body, status, headersOf(HttpHeaders.ContentType, "application/json")) },
-                ),
-            config = OnrampScreeningConfig(apiUrl = "https://screening.invalid/api/v1", encryptionKeyHex = KEY_HEX),
-            deviceSignals = { SIGNALS },
-            nowMillis = { 1_756_450_000_123L },
-        )
+    private fun clientAnswering(
+        body: String,
+        status: HttpStatusCode = HttpStatusCode.OK,
+        onLinkFailed: (String) -> Unit = {},
+    ) = OnrampScreeningClient(
+        httpClient =
+            HttpClient(
+                MockEngine { respond(body, status, headersOf(HttpHeaders.ContentType, "application/json")) },
+            ),
+        config = OnrampScreeningConfig(apiUrl = "https://screening.invalid/api/v1", encryptionKeyHex = KEY_HEX),
+        deviceSignals = { SIGNALS },
+        nowMillis = { 1_756_450_000_123L },
+        onLinkFailed = onLinkFailed,
+    )
 
     @Test
     fun `the signed headers carry seconds, and bind both addresses`() {
@@ -165,6 +172,37 @@ class OnrampScreeningTest {
                     .screenBuyOrder(signer, ORDER, country = "IN")
 
             assertEquals("a-1", assertIs<OnrampScreeningOutcome.Approved>(outcome).activityLogId.jsonPrimitive.content)
+        }
+
+    @Test
+    fun `a rejected link reports the status it was refused with`() =
+        runTest {
+            // ☠ The reason this is a test at all: the callback took a string, and a string is where
+            // an escaping slip hides. Asserting on the *code* is what makes it real — a message
+            // that merely mentions a failure tells you nothing a 401 and a 503 do not share.
+            var reported: String? = null
+            clientAnswering(
+                body = """{"error":"nope"}""",
+                status = HttpStatusCode.Unauthorized,
+                onLinkFailed = { reported = it },
+            ).linkOrder(signer, JsonPrimitive("a-1"), orderId = bigIntegerValueOf(7))
+
+            assertTrue(
+                reported.orEmpty().contains("401"),
+                "the status code has to survive into the log, got: $reported",
+            )
+        }
+
+    @Test
+    fun `a linked order says nothing at all`() =
+        runTest {
+            var reported: String? = null
+            clientAnswering(
+                body = """{"ok":true}""",
+                onLinkFailed = { reported = it },
+            ).linkOrder(signer, JsonPrimitive("a-1"), orderId = bigIntegerValueOf(7))
+
+            assertNull(reported)
         }
 
     private companion object {

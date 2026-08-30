@@ -68,15 +68,20 @@ class ReclaimPoller(
                 // A dropped request mid-verification is not a verdict; the next tick asks again.
                 return null
             }
-        // Checked before parsing: an expired session answers with a message and no session object,
-        // and the shapes differ enough that decoding it as a status would only obscure the reason.
-        if (body.contains(SESSION_NOT_FOUND, ignoreCase = true)) return ReclaimPollResult.SessionGone
         val status =
             try {
                 json.decodeFromString(ReclaimSessionStatus.serializer(), body)
             } catch (ignored: SerializationException) {
-                return null
+                // Not a shape we model — a proxy's error page, say. The raw check is the only tool
+                // left, and it is worth reaching for: a dead session that goes unrecognised here
+                // is not wrong, just slow, and "slow" means the user watches "Waiting for
+                // Reclaim…" for the full ten minutes before being told the same thing.
+                return ReclaimPollResult.SessionGone.takeIf { body.contains(SESSION_NOT_FOUND, ignoreCase = true) }
             }
+        // An expired session answers with a message and no session object.
+        if (status.message?.contains(SESSION_NOT_FOUND, ignoreCase = true) == true) {
+            return ReclaimPollResult.SessionGone
+        }
         val session = status.session ?: return null
         if (session.proofs.isNotEmpty()) {
             return if (ReclaimProofTransform.isCriteriaNotMet(session.proofs)) {
