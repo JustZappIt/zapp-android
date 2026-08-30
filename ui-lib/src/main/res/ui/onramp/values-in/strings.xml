@@ -75,6 +75,7 @@
     <string name="onramp_error_order_expired">Pesanan kedaluwarsa sebelum pembayaran dikonfirmasi.</string>
     <string name="onramp_quote_disclaimer">Anda akan melihat jumlah dan kurs yang tepat di layar berikutnya sebelum apa pun ditempatkan.</string>
     <string name="onramp_get_quote">Dapatkan penawaran</string>
+    <string name="onramp_transaction_limit_label">Batas transaksi Anda</string>
     <string name="onramp_daily_limit_label">Batas harian</string>
     <string name="onramp_confirm_title">Konfirmasi pesanan Anda</string>
     <string name="onramp_you_pay_label">Anda membayar</string>

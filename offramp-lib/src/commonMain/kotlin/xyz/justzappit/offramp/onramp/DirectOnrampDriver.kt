@@ -17,7 +17,6 @@ import xyz.justzappit.evm.abi.AbiEncoder
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.evm.rpc.BaseRpcClient
-import xyz.justzappit.evm.rpc.TransactionReceipt
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.evm.util.hexToBytes
@@ -219,12 +218,27 @@ class DirectOnrampDriver(
     override fun resume(checkpoint: OnrampCheckpoint): Flow<OnrampStatus> =
         flow {
             val account = submitters.resolve()
-            val orderId = checkpoint.orderId?.toBigIntegerOrNull() ?: recoverOrderId(checkpoint, account)
-            if (orderId == null) {
-                emit(failed(OnrampFailureCode.ORDER_NOT_FOUND, checkpoint.phase, checkpoint))
-                return@flow
+            val recovery =
+                checkpoint.orderId
+                    ?.toBigIntegerOrNull()
+                    ?.let(OrderRecovery::Found)
+                    ?: recoverOrderId(checkpoint, account)
+            when (recovery) {
+                is OrderRecovery.Found -> {
+                    watch(recovery.orderId, account, fromPaid = false)
+                }
+
+                OrderRecovery.NotFound -> {
+                    emit(failed(OnrampFailureCode.ORDER_NOT_FOUND, checkpoint.phase, checkpoint))
+                }
+
+                OrderRecovery.Unresolved -> {
+                    // A bundler outage or a successful receipt whose logs are not yet available
+                    // says nothing about whether placement landed. Keep the tx hash checkpoint so
+                    // the next resume can resolve it instead of orphaning a live order.
+                    emit(failed(OnrampFailureCode.NETWORK_UNAVAILABLE, checkpoint.phase, checkpoint))
+                }
             }
-            watch(orderId, account, fromPaid = false)
         }.guarded(checkpoint.phase, checkpoint.id, checkpoint.orderId)
 
     override fun cancel(checkpoint: OnrampCheckpoint): Flow<OnrampStatus> =
@@ -510,8 +524,9 @@ class DirectOnrampDriver(
      * Why the wait ended, told apart by what the chain actually said — because the answer decides
      * whether the checkpoint survives, and the checkpoint is what pays the ZEC out later.
      *
-     * "No merchant came" is the only one of these that may forget the order, and it is the only one
-     * where nothing of the user's has moved.
+     * A still-placed order remains a resting state. The polling budget belongs to this screen, not
+     * to the contract, so exhausting it cannot turn a live order into "no merchant" and discard
+     * the only handle that can cancel or resume it.
      */
     private suspend fun timedOut(
         status: OrderStatus?,
@@ -537,6 +552,10 @@ class DirectOnrampDriver(
             // one can sit in `placed` a while before it flips.
             status == OrderStatus.PLACED && isExpiredOnChain(orderId) -> {
                 OnrampStatus.Failed(OnrampFailureCode.ORDER_EXPIRED, phase, handle, handle)
+            }
+
+            status == OrderStatus.PLACED -> {
+                OnrampStatus.AwaitingMerchant(handle, handle)
             }
 
             else -> {
@@ -714,29 +733,53 @@ class DirectOnrampDriver(
     /**
      * The order id, recovered from the placement hash the checkpoint recorded before the receipt
      * existed. A cold start after a killed process lands here.
-     */
-    private suspend fun recoverOrderId(checkpoint: OnrampCheckpoint, account: SubmittingAccount): BigInteger? =
-        receiptOrNull(checkpoint.id, account)
-            // A placement that reverted left no order to recover, and its receipt carries no log.
-            ?.takeIf { it.success }
-            ?.let { OrderEvents.parseOrderIdFromReceipt(it, network.diamondAddress, account.address) }
-
-    /**
-     * ☠ Through the submitter, never through [rpc]. The handle a placement returns is a *userOpHash*
-     * on the 4337 route, and no node has heard of it — `eth_getTransactionReceipt` answers null for
-     * a perfectly good order. Only the bundler can resolve it, and the submitter is the way in.
      *
-     * Getting this wrong is invisible until a process dies mid-placement: every cold-start recovery
-     * then reports "no order", the checkpoint is cleared, and a live on-chain order is orphaned.
+     * ☠ Through the submitter, never through [rpc]. The handle a placement returns is a
+     * *userOpHash* on the 4337 route, and no node has heard of it —
+     * `eth_getTransactionReceipt` answers null for a perfectly good order. Only the bundler can
+     * resolve it, and the submitter is the way in.
+     *
+     * Getting this wrong is invisible until a process dies mid-placement: every cold-start
+     * recovery then reports "no order", the checkpoint is cleared, and a live on-chain order is
+     * orphaned.
      */
-    private suspend fun receiptOrNull(hash: String, account: SubmittingAccount): TransactionReceipt? =
-        try {
-            account.submitter.awaitReceipt(TxHash.fromHex(hash))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (ignored: Exception) {
-            null
+    private suspend fun recoverOrderId(
+        checkpoint: OnrampCheckpoint,
+        account: SubmittingAccount,
+    ): OrderRecovery {
+        val hash = runCatching { TxHash.fromHex(checkpoint.id) }.getOrNull()
+        return if (hash == null) {
+            OrderRecovery.NotFound
+        } else {
+            val receipt =
+                try {
+                    account.submitter.awaitReceipt(hash)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (ignored: Exception) {
+                    null
+                }
+            when {
+                receipt == null -> {
+                    OrderRecovery.Unresolved
+                }
+
+                !receipt.success -> {
+                    OrderRecovery.NotFound
+                }
+
+                else -> {
+                    OrderEvents
+                        .parseOrderIdFromReceipt(receipt, network.diamondAddress, account.address)
+                        ?.let(OrderRecovery::Found)
+                        // A successful receipt without the placement log may be incomplete
+                        // upstream. It is not evidence that no order exists, so retain the
+                        // recovery hash and try again later.
+                        ?: OrderRecovery.Unresolved
+                }
+            }
         }
+    }
 
     // ---- plumbing ----
 
@@ -744,6 +787,16 @@ class DirectOnrampDriver(
         OnrampStatus.Failed(code, phase, checkpoint.id, checkpoint.orderId)
 
     private fun String.toBigIntegerOrNull(): BigInteger? = runCatching { BigInteger(this) }.getOrNull()
+
+    private sealed interface OrderRecovery {
+        data class Found(
+            val orderId: BigInteger,
+        ) : OrderRecovery
+
+        data object NotFound : OrderRecovery
+
+        data object Unresolved : OrderRecovery
+    }
 
     private fun Flow<OnrampStatus>.guarded(
         phase: OnrampPhase,

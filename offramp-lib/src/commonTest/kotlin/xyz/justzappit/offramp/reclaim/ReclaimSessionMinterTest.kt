@@ -10,6 +10,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import xyz.justzappit.evm.types.Address
+import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.reputation.SocialPlatform
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -87,6 +88,7 @@ class ReclaimSessionMinterTest {
 
     @Test
     fun `the template carries somewhere for the Verifier to send the user back to`() {
+        val returnUrl = ReclaimReturn.url(RETURN_URL, "s-1", SocialPlatform.X, CurrencyCode.Inr)
         val template =
             minter.templateData(
                 sessionId = "s-1",
@@ -95,12 +97,17 @@ class ReclaimSessionMinterTest {
                 signature = "0xsig",
                 context = buildJsonObject { put("contextAddress", "0x1") },
                 resolvedProviderVersion = "21.0.0",
+                returnUrl = returnUrl,
             )
 
         // Empty here is what left users on Reclaim's "you can now return to Zapp" screen with no
         // way back but the launcher. Cancelling has to come back too.
-        assertEquals(RETURN_URL, template["redirectUrl"]?.jsonPrimitive?.content)
-        assertEquals(RETURN_URL, template["cancelRedirectUrl"]?.jsonPrimitive?.content)
+        assertEquals(returnUrl, template["redirectUrl"]?.jsonPrimitive?.content)
+        assertEquals(returnUrl, template["cancelRedirectUrl"]?.jsonPrimitive?.content)
+        assertEquals(
+            "$RETURN_URL?sessionId=s-1&socialPlatform=X&currency=INR",
+            returnUrl,
+        )
     }
 
     @Test

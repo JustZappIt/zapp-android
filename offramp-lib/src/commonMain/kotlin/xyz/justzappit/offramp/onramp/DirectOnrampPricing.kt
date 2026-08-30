@@ -100,8 +100,9 @@ object DirectOnrampPricing {
             minFiat = minFiat,
             maxFiat = maxFiat,
             // Nothing on chain caps a day's buying beyond the per-order limit, so claiming a
-            // separate daily figure would be inventing one.
-            perUserDailyFiat = maxFiat,
+            // separate daily figure would be inventing one. The UI reads maxFiat for the real
+            // per-transaction limit; this legacy field remains for the custodial/Apple route.
+            perUserDailyFiat = Usdc6.ZERO,
         )
     }
 

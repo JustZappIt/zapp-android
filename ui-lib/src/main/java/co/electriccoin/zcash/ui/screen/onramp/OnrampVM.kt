@@ -175,7 +175,14 @@ internal class OnrampVM(
                     isBaseRefundSupported = network.chainId == ChainId.BASE_MAINNET,
                     minFiat = corridor.minFiat.toFiatString(currency),
                     maxFiat = corridor.maxFiat.toFiatString(currency),
-                    dailyLimit = corridor.perUserDailyFiat.toFiatString(currency),
+                    transactionLimit =
+                        corridor.maxFiat
+                            .takeIf { corridor.perUserDailyFiat == Usdc6.ZERO }
+                            ?.toFiatString(currency),
+                    dailyLimit =
+                        corridor.perUserDailyFiat
+                            .takeIf { daily -> daily > Usdc6.ZERO }
+                            ?.toFiatString(currency),
                     error = if (servesCorridor && address == null) stringRes(R.string.onramp_error_loading) else null,
                 )
             }

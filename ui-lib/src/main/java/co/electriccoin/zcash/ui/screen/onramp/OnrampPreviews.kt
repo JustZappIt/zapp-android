@@ -147,7 +147,7 @@ internal fun PreviewOnramp(
                 ),
             minFiat = "100",
             maxFiat = "500",
-            dailyLimit = "1000",
+            transactionLimit = "1000",
             quotedFiat = "100",
             quotedNetUsdc = "0.910153",
             quotedFee = "0.05",

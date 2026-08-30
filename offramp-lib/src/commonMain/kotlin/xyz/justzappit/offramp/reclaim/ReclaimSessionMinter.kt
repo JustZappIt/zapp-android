@@ -26,6 +26,7 @@ import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.evm.util.padLeftToWord
 import xyz.justzappit.evm.util.toHex
+import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.reputation.SocialPlatform
 
 /** A live Reclaim session: where to send the user, and what to poll while they are gone. */
@@ -70,7 +71,11 @@ class ReclaimSessionMinter(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun mint(platform: SocialPlatform, contextAddress: Address): ReclaimSession {
+    suspend fun mint(
+        platform: SocialPlatform,
+        contextAddress: Address,
+        currency: CurrencyCode,
+    ): ReclaimSession {
         require(credentials.isConfigured) { "Reclaim app credentials are not configured" }
         val timestamp = nowMillis().toString()
         val signature = signInit(platform.providerId, timestamp)
@@ -79,6 +84,7 @@ class ReclaimSessionMinter(
         // The TEE nonce hashes the sessionId, so it cannot be derived until the session exists.
         val nonce = attestationNonce(opened.sessionId, timestamp)
         val context = context(nonce, opened.sessionId, timestamp, platform, contextAddress)
+        val sessionReturnUrl = ReclaimReturn.url(redirectUrl, opened.sessionId, platform, currency)
         val template =
             templateData(
                 sessionId = opened.sessionId,
@@ -87,6 +93,7 @@ class ReclaimSessionMinter(
                 signature = signature,
                 context = context,
                 resolvedProviderVersion = opened.resolvedProviderVersion.orEmpty(),
+                returnUrl = sessionReturnUrl,
             )
 
         val requestUrl = shorten(shareLink(template))
@@ -170,6 +177,7 @@ class ReclaimSessionMinter(
         signature: String,
         context: JsonObject,
         resolvedProviderVersion: String,
+        returnUrl: String = redirectUrl,
     ): JsonObject =
         buildJsonObject {
             put("sessionId", sessionId)
@@ -183,12 +191,12 @@ class ReclaimSessionMinter(
             put("providerVersion", "")
             put("resolvedProviderVersion", resolvedProviderVersion)
             putJsonObject("parameters") {}
-            put("redirectUrl", redirectUrl)
+            put("redirectUrl", returnUrl)
             putJsonObject("redirectUrlOptions") { put("method", "GET") }
             put("cancelCallbackUrl", "$baseUrl$PATH_CANCEL_CALLBACK$sessionId")
             // Cancelling is a return too: the user who backs out in the Verifier has the same
             // problem finding their way back as the one who finishes.
-            put("cancelRedirectUrl", redirectUrl)
+            put("cancelRedirectUrl", returnUrl)
             putJsonObject("cancelRedirectUrlOptions") { put("method", "GET") }
             put("acceptAiProviders", false)
             // What the Verifier app negotiates against. Pinned, and bumped deliberately.

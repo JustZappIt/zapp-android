@@ -24,4 +24,6 @@ fun IncreaseReputationScreen(args: IncreaseReputationArgs) {
 @Serializable
 data class IncreaseReputationArgs(
     val currency: CurrencyCode,
+    val reclaimSessionId: String? = null,
+    val reclaimPlatform: String? = null,
 )

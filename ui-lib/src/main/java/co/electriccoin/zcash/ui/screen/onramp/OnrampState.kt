@@ -31,6 +31,7 @@ internal data class OnrampState(
     val amountInput: NumberTextFieldState,
     val minFiat: String? = null,
     val maxFiat: String? = null,
+    val transactionLimit: String? = null,
     val dailyLimit: String? = null,
     val quotedFiat: String? = null,
     val quotedNetUsdc: String? = null,

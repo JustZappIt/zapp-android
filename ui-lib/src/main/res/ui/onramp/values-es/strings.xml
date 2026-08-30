@@ -76,6 +76,8 @@
     <string name="onramp_error_settlement_pending">Tu pago sigue en manos del comerciante. La orden continúa abierta: vuelve a abrir Comprar para consultarla.</string>
     <string name="onramp_quote_disclaimer">Verás el importe y la tasa exactos en la siguiente pantalla antes de colocar nada.</string>
     <string name="onramp_get_quote">Obtener cotización</string>
+    <string name="onramp_transaction_limit_label">Tu límite por transacción</string>
+    <string name="onramp_transaction_limit_info">Por qué existe este límite por orden y cómo aumentarlo</string>
     <string name="onramp_daily_limit_label">Límite diario</string>
     <string name="onramp_daily_limit_info">Por qué existe este límite y cómo aumentarlo</string>
     <string name="onramp_confirm_title">Confirma tu orden</string>

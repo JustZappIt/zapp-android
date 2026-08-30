@@ -85,6 +85,8 @@
     <string name="onramp_error_no_merchant">No merchant accepted the order in time. Nothing was charged.</string>
     <string name="onramp_error_order_expired">The order expired before payment was confirmed.</string>
     <string name="onramp_error_settlement_pending">Your payment is still with the merchant. The order is still open — reopen Buy to check on it.</string>
+    <string name="onramp_transaction_limit_label">Your transaction limit</string>
+    <string name="onramp_transaction_limit_info">Why this per-order limit exists, and how to raise it</string>
     <string name="onramp_daily_limit_label">Daily limit</string>
     <string name="onramp_daily_limit_info">Why this limit, and how to raise it</string>
     <string name="onramp_confirm_title">Confirm your order</string>

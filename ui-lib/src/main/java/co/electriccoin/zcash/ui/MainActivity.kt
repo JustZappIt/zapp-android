@@ -108,7 +108,7 @@ class MainActivity : FragmentActivity() {
 
         monitorForBackgroundSync()
 
-        forwardUriIntent(intent)
+        forwardUriIntent(intent, resumeReclaim = true)
         forwardChatNotificationIntent(intent)
         handleMigrationIntent(intent)
     }
@@ -117,7 +117,7 @@ class MainActivity : FragmentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
 
-        forwardUriIntent(intent)
+        forwardUriIntent(intent, resumeReclaim = false)
         forwardChatNotificationIntent(intent)
         handleMigrationIntent(intent)
     }
@@ -128,7 +128,7 @@ class MainActivity : FragmentActivity() {
      * A gift link is bearer money, so every rejection here is deliberate (§3.7). The URI is never
      * logged at any level, including error paths.
      */
-    private fun forwardUriIntent(intent: Intent) {
+    private fun forwardUriIntent(intent: Intent, resumeReclaim: Boolean) {
         val data = intent.data ?: return
         when {
             // Recents re-delivers the original intent. Nothing here may act on it twice: for a
@@ -136,12 +136,7 @@ class MainActivity : FragmentActivity() {
             // else it would reopen the scanner over whatever the user came back to.
             (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0 -> Unit
 
-            // The Verifier returning the user from a Reclaim session. Consumed and deliberately
-            // not navigated: the verification screen is still up and still polling the session, so
-            // the link's whole job is bringing the task forward — singleTask has already done that
-            // by the time this runs. Forwarding anywhere would tear down a run in progress, and
-            // falling through to the scanner would put the camera over it.
-            isReclaimReturnUri(intent, data) -> intent.data = null
+            isReclaimReturnUri(intent, data) -> openReclaimReturn(intent, data, resumeReclaim)
 
             isGiftUri(intent, data) -> openGiftClaim(intent, data)
 
@@ -153,6 +148,23 @@ class MainActivity : FragmentActivity() {
         intent.action == Intent.ACTION_VIEW &&
             ReclaimReturnLink.SCHEME.equals(data.scheme, ignoreCase = true) &&
             ReclaimReturnLink.HOST.equals(data.host, ignoreCase = true)
+
+    private fun openReclaimReturn(
+        intent: Intent,
+        data: Uri,
+        resumeReclaim: Boolean,
+    ) {
+        // A live process already has the screen and poller; singleTask only needed to bring it
+        // forward. A cold process has lost both, so rebuild the route from the callback fields.
+        intent.data = null
+        if (!resumeReclaim) return
+        ReclaimReturnLink
+            .resumeArgs(
+                sessionId = data.getQueryParameter(ReclaimReturnLink.SESSION_ID_QUERY),
+                platformName = data.getQueryParameter(ReclaimReturnLink.PLATFORM_QUERY),
+                currencyCode = data.getQueryParameter(ReclaimReturnLink.CURRENCY_QUERY),
+            )?.let { navigationRouter.forward(it) }
+    }
 
     private fun openGiftClaim(intent: Intent, data: Uri) {
         val raw = intent.dataString ?: data.toString()

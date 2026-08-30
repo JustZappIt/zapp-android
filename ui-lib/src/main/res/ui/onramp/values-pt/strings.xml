@@ -75,6 +75,7 @@
     <string name="onramp_error_order_expired">A ordem expirou antes de o pagamento ser confirmado.</string>
     <string name="onramp_quote_disclaimer">Você verá o valor e a taxa exatos na próxima tela antes de colocar qualquer coisa.</string>
     <string name="onramp_get_quote">Obter cotação</string>
+    <string name="onramp_transaction_limit_label">Seu limite por transação</string>
     <string name="onramp_daily_limit_label">Limite diário</string>
     <string name="onramp_confirm_title">Confirme seu pedido</string>
     <string name="onramp_you_pay_label">Você paga</string>

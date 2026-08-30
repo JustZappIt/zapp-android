@@ -139,10 +139,29 @@ class ReclaimVerificationDriver(
             emit(ReclaimStatus.Preparing)
 
             val account = submitters.resolve()
-            val session = mintAndHold(platform, account.address, launchSignal) ?: return@flow
+            val session = mintAndHold(platform, currency, account.address, launchSignal) ?: return@flow
 
             emit(ReclaimStatus.Verifying)
             val proofs = awaitProofs(session.sessionId) ?: return@flow
+
+            emit(ReclaimStatus.Submitting)
+            submit(platform, currency, account, proofs)
+        }
+
+    /** Continues the session named by the return link after Android recreated the app process. */
+    fun resume(
+        platform: SocialPlatform,
+        currency: CurrencyCode,
+        sessionId: String,
+    ): Flow<ReclaimStatus> =
+        flow {
+            if (sessionId.isBlank()) {
+                emit(ReclaimStatus.Failed(ReclaimFailure.SessionExpired))
+                return@flow
+            }
+            emit(ReclaimStatus.Verifying)
+            val account = submitters.resolve()
+            val proofs = awaitProofs(sessionId) ?: return@flow
 
             emit(ReclaimStatus.Submitting)
             submit(platform, currency, account, proofs)
@@ -158,13 +177,14 @@ class ReclaimVerificationDriver(
      */
     private suspend fun FlowCollector<ReclaimStatus>.mintAndHold(
         platform: SocialPlatform,
+        currency: CurrencyCode,
         smartAccount: Address,
         launchSignal: ReclaimLaunchSignal,
     ): ReclaimSession? {
         // §5.2: minted for the smart account, because that is the msg.sender the contract sees.
         var session =
             try {
-                minter.mint(platform, smartAccount)
+                minter.mint(platform, smartAccount, currency)
             } catch (e: CancellationException) {
                 throw e
             } catch (ignored: Exception) {
@@ -176,7 +196,7 @@ class ReclaimVerificationDriver(
         while (withTimeoutOrNull(remintIntervalMillis) { launchSignal.await() } == null) {
             val reminted =
                 try {
-                    minter.mint(platform, smartAccount)
+                    minter.mint(platform, smartAccount, currency)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (ignored: Exception) {

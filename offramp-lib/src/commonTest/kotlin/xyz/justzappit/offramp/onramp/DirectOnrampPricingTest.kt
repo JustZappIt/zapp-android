@@ -66,6 +66,8 @@ class DirectOnrampPricingTest {
         assertTrue(limits.enabled)
         // $50 at 100.46 — what the Diamond will actually let this wallet place.
         assertEquals(Usdc6.ofMicros(50_000_000L * 100_460_000L / 1_000_000L), limits.maxFiat)
+        // Direct orders have a per-transaction ceiling, not an invented daily allowance.
+        assertEquals(Usdc6.ZERO, limits.perUserDailyFiat)
         // A dollar of USDC on top of the fee, so the fee is never most of the order.
         assertEquals(Usdc6.ofMicros(1_050_000L * 100_460_000L / 1_000_000L), limits.minFiat)
     }

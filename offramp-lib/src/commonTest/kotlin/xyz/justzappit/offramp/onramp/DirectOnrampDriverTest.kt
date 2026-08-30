@@ -171,17 +171,37 @@ class DirectOnrampDriverTest {
         }
 
     @Test
-    fun `no merchant is the only ending allowed to forget the order`() =
+    fun `a live placed order outlasting the watch remains resumable`() =
         runTest {
             orderReader.answer = snapshot(OrderStatus.PLACED)
             isOrderExpired = ENCODED_ZERO
 
-            val failed = assertIs<OnrampStatus.Failed>(driver().resume(checkpoint()).toList().last())
+            val statuses = driver().resume(checkpoint()).toList()
+            val awaiting = assertIs<OnrampStatus.AwaitingMerchant>(statuses.last())
 
-            assertEquals(OnrampFailureCode.NO_MERCHANT, failed.code)
-            // The only branch of the four where nothing of the user's has moved, and so the only
-            // one that may drop the checkpoint.
-            assertFalse(failed.leavesOrderAlive)
+            assertEquals(ORDER_ID.toString(), awaiting.orderId)
+            assertFalse(awaiting.isTerminal)
+            assertTrue(statuses.none { it is OnrampStatus.Failed })
+        }
+
+    @Test
+    fun `an inconclusive placement receipt keeps the recovery checkpoint`() =
+        runTest {
+            // The bundler mock throws as soon as receipt recovery starts. That means the UserOp's
+            // fate is unknown, not that it reverted or failed to create an order.
+            val checkpoint =
+                OnrampCheckpoint(
+                    id = PLACEMENT_HASH,
+                    phase = OnrampPhase.PLACING,
+                    orderId = null,
+                )
+
+            val failed = assertIs<OnrampStatus.Failed>(driver().resume(checkpoint).toList().single())
+
+            assertEquals(OnrampFailureCode.NETWORK_UNAVAILABLE, failed.code)
+            assertEquals(PLACEMENT_HASH, failed.id)
+            assertNull(failed.orderId)
+            assertTrue(failed.leavesOrderAlive, "an unresolved receipt must remain recoverable")
         }
 
     @Test
@@ -426,6 +446,8 @@ class DirectOnrampDriverTest {
 
         val ORDER_ID: BigInteger = bigIntegerValueOf(7)
         const val SMART_ACCOUNT = "0x111111111111111111111111111111111111baaf"
+        const val PLACEMENT_HASH =
+            "0x1111111111111111111111111111111111111111111111111111111111111111"
         const val SELECTOR_BYTES = 4
         const val WORD_BYTES = 32
         const val DETAILS_WORDS = 7

@@ -15,6 +15,7 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -49,6 +50,12 @@ internal class IncreaseReputationVM(
     private val verificationDriver: ReclaimVerificationDriver,
 ) : ViewModel() {
     private val currency = args.currency
+    private val resumeSession =
+        args.reclaimSessionId?.let { sessionId ->
+            SocialPlatform.entries
+                .firstOrNull { it.name == args.reclaimPlatform }
+                ?.let { platform -> platform to sessionId }
+        }
     private var summary: ReputationSummary? = null
     private var loadJob: Job? = null
     private var runJob: Job? = null
@@ -73,6 +80,7 @@ internal class IncreaseReputationVM(
 
     init {
         load()
+        resumeSession?.let { (platform, sessionId) -> resumeRun(platform, sessionId) }
     }
 
     private fun load() {
@@ -154,9 +162,19 @@ internal class IncreaseReputationVM(
         val signal = ReclaimLaunchSignal()
         launchSignal = signal
         ready = null
+        collectRun(platform, verificationDriver.verify(platform, currency, signal))
+    }
+
+    private fun resumeRun(platform: SocialPlatform, sessionId: String) {
+        if (runJob?.isActive == true) return
+        launchSignal = null
+        ready = null
+        collectRun(platform, verificationDriver.resume(platform, currency, sessionId))
+    }
+
+    private fun collectRun(platform: SocialPlatform, statuses: Flow<ReclaimStatus>) {
         runJob =
-            verificationDriver
-                .verify(platform, currency, signal)
+            statuses
                 .onEach { status -> onStatus(platform, status) }
                 .catch { e ->
                     if (e is CancellationException) throw e
