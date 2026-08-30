@@ -10,6 +10,7 @@ import xyz.justzappit.offramp.onramp.OnrampDestination
 import xyz.justzappit.offramp.onramp.OnrampPaymentInstruction
 import xyz.justzappit.offramp.onramp.OnrampStatus
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryStatus
+import xyz.justzappit.offramp.onramp.leavesOrderAlive
 import xyz.justzappit.offramp.p2p.CurrencyCode
 
 internal data class OnrampState(
@@ -75,8 +76,8 @@ internal data class OnrampState(
     val onDone: () -> Unit,
 ) {
     /**
-     * The service's payment window has closed. Money sent after this is not settled against the
-     * order, so the pay actions must go away rather than merely look stale.
+     * The payment window has closed. Money sent after this is not settled against the order, so
+     * the pay actions must go away rather than merely look stale.
      */
     val isPaymentWindowClosed: Boolean
         get() = paymentSecondsRemaining != null && paymentSecondsRemaining <= 0L
@@ -85,9 +86,13 @@ internal data class OnrampState(
     val isPayable: Boolean
         get() = !isPaymentWindowClosed && !isPaymentAmountUntrusted
 
-    /** The order has settled against the user: nothing is left to cancel, only a way forward. */
-    val isSettledAgainstUser: Boolean
-        get() = progress is OnrampStatus.Failed || progress is OnrampStatus.Cancelled
+    /** The order is terminal: nothing is left to cancel or resume, only a way forward. */
+    val isOrderTerminal: Boolean
+        get() = progress is OnrampStatus.Cancelled || (progress is OnrampStatus.Failed && !progress.leavesOrderAlive)
+
+    /** A failed observation of an order that is still live on chain and must keep its checkpoint. */
+    val isLiveFailure: Boolean
+        get() = progress is OnrampStatus.Failed && progress.leavesOrderAlive
 
     val isDeliveryFailed: Boolean
         get() = delivery is OnrampZecDeliveryStatus.Failed
@@ -126,17 +131,25 @@ internal data class OnrampState(
                     )
                 }
 
-                // A settled order leaves nothing to cancel, so the dock has to offer a way forward
+                // A terminal order leaves nothing to cancel, so the dock has to offer a way forward
                 // rather than a disabled button and the back arrow.
                 OnrampMode.PROGRESS -> {
-                    if (isSettledAgainstUser) {
-                        ButtonState(stringRes(R.string.onramp_start_over), onClick = onRetry)
-                    } else {
-                        ButtonState(
-                            text = stringRes(R.string.onramp_cancel_order),
-                            isEnabled = progress is OnrampStatus.AwaitingMerchant,
-                            onClick = onCancel,
-                        )
+                    when {
+                        isLiveFailure -> {
+                            ButtonState(stringRes(R.string.onramp_retry), onClick = onRetry)
+                        }
+
+                        isOrderTerminal -> {
+                            ButtonState(stringRes(R.string.onramp_start_over), onClick = onRetry)
+                        }
+
+                        else -> {
+                            ButtonState(
+                                text = stringRes(R.string.onramp_cancel_order),
+                                isEnabled = progress is OnrampStatus.AwaitingMerchant,
+                                onClick = onCancel,
+                            )
+                        }
                     }
                 }
 
@@ -189,6 +202,7 @@ internal data class OnrampState(
             when (val instruction = paymentInstruction) {
                 is OnrampPaymentInstruction.Upi -> instruction.intentUrl
                 is OnrampPaymentInstruction.Qr -> instruction.payload
+                is OnrampPaymentInstruction.Fields -> instruction.qrPayload
                 else -> null
             }
 
@@ -212,7 +226,7 @@ internal data class OnrampState(
                 }
 
                 is OnrampPaymentInstruction.Fields -> {
-                    instruction.fields.joinToString("\n") { "${it.label}: ${it.value}" }
+                    instruction.copyValue.takeIf(String::isNotBlank)
                 }
 
                 null -> {

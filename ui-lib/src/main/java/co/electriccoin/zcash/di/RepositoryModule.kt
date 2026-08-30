@@ -72,7 +72,6 @@ import xyz.justzappit.offramp.reclaim.ReclaimPoller
 import xyz.justzappit.offramp.reclaim.ReclaimSessionMinter
 import xyz.justzappit.offramp.reclaim.ReclaimVerificationDriver
 import xyz.justzappit.offramp.reputation.ReputationReader
-import java.util.Locale
 
 val repositoryModule =
     module {
@@ -191,9 +190,7 @@ val repositoryModule =
                 encryptionKeyHex = BuildConfig.P2P_SCREENING_KEY,
             )
         }
-        // A BUY is placed by the user's own smart account, on chain. The operator service that
-        // used to place them is gone; what remains of it is the shared CustodialOnrampDriver, which
-        // this app no longer builds and only the iOS framework still uses.
+        // Android places BUY orders directly from the user's smart account.
         factory<OnrampDriver> {
             if (BuildConfig.DEBUG && BuildConfig.P2P_ONRAMP_USE_FAKE_DRIVER) {
                 FakeOnrampDriver()
@@ -224,10 +221,6 @@ val repositoryModule =
                             },
                     relayIdentityStore = get(),
                     orderRecipientUpiCache = get(),
-                    // Best-effort, and only ever a hint to the screening service: the device's
-                    // region says where the phone was set up, which is usually but not always
-                    // where its owner is buying.
-                    country = Locale.getDefault().country.takeIf { it.isNotBlank() },
                     nowMillis = System::currentTimeMillis,
                     onUnrecognisedRevert = { revert ->
                         Twig.warn { "BUY reverted with no mapping — reporting it as upstream: $revert" }

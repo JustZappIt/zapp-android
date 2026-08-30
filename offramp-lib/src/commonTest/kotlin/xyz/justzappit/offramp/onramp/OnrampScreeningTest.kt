@@ -88,7 +88,12 @@ class OnrampScreeningTest {
     @Test
     fun `amounts are JSON numbers in whole units, at full precision`() =
         runTest {
-            val payload = client(1_756_450_000_000L).payloadJson(ORDER, country = "IN")
+            val payload =
+                client(1_756_450_999_999L).payloadJson(
+                    order = ORDER,
+                    country = "India",
+                    timestampMillis = 1_756_450_000_000L,
+                )
             val body = Json.parseToJsonElement(payload).jsonObject
             val tx = body.getValue("transaction_details").jsonObject
             // Unquoted numbers, and six decimals survive: a double would not hold 5.123456 exactly.
@@ -96,6 +101,17 @@ class OnrampScreeningTest {
             assertEquals(false, tx.getValue("crypto_amount").jsonPrimitive.isString)
             assertEquals("539.26", tx.getValue("fiat_amount").jsonPrimitive.content)
             assertEquals(SMART_ACCOUNT.lowercaseHex, tx.getValue("recipient_address").jsonPrimitive.content)
+            assertEquals("UPI", tx.getValue("payment_method").jsonPrimitive.content)
+            assertEquals("1-3 minutes", tx.getValue("estimated_processing_time").jsonPrimitive.content)
+            assertEquals(
+                "India",
+                body
+                    .getValue("user_details")
+                    .jsonObject
+                    .getValue("country")
+                    .jsonPrimitive
+                    .content,
+            )
             // The body timestamp is milliseconds.
             assertEquals("1756450000000", tx.getValue("order_timestamp").jsonPrimitive.content)
         }
@@ -103,7 +119,7 @@ class OnrampScreeningTest {
     @Test
     fun `the record says plainly that this device has no SEON session`() =
         runTest {
-            val payload = client(1L).payloadJson(ORDER, country = "IN")
+            val payload = client(1L).payloadJson(ORDER, country = "IN", timestampMillis = 1L)
             val device =
                 Json
                     .parseToJsonElement(payload)
@@ -227,7 +243,7 @@ class OnrampScreeningTest {
                 fee = Usdc6.ofMicros(50_000L),
                 amountAfterFee = Usdc6.ofMicros(5_073_456L),
                 paymentMethod = "UPI",
-                estimatedProcessingTimeSeconds = 120L,
+                estimatedProcessingTime = "1-3 minutes",
             )
 
         val SIGNALS =

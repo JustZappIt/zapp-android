@@ -152,7 +152,7 @@ internal class OnrampVM(
             val address = runCatching { driver.recipientAddress() }.getOrNull()
             recipient = address
             val checkpoint = readCheckpoint()
-            // The service serves one corridor at a time. Its bounds are only this corridor's if it
+            // The driver serves one corridor at a time. Its bounds are only this corridor's if it
             // agrees, otherwise they would render under the wrong symbol and precision and the
             // quote would be rejected only after the user had typed an amount.
             val servesCorridor = corridor.enabled && corridor.currency == currency
@@ -217,8 +217,8 @@ internal class OnrampVM(
     }
 
     /**
-     * The service quantises the requested amount and returns its own [OnrampQuote.fiatAmount], so
-     * everything shown from here on is the quote's numbers, not what the user typed.
+     * The driver returns its accepted [OnrampQuote.fiatAmount], so everything shown from here on is
+     * the quote's numbers rather than the unvalidated input.
      */
     private fun requestQuote() {
         if (mutableState.value.isSendingBaseBalanceToZec || quoteJob?.isActive == true) return
@@ -555,6 +555,12 @@ internal class OnrampVM(
 
     private fun onRetry() {
         if (mutableState.value.isSendingBaseBalanceToZec) return
+        if (mutableState.value.progress?.leavesOrderAlive == true) {
+            viewModelScope.launch {
+                readCheckpoint()?.let(::resume) ?: load()
+            }
+            return
+        }
         quote = null
         zecEstimate = null
         expiryRecheckedFor = null
@@ -722,8 +728,7 @@ internal class OnrampVM(
                 onTick = { remaining -> mutableState.update { it.copy(paymentSecondsRemaining = remaining) } },
             ) {
                 // Polling stops at AWAITING_PAYMENT, so nothing else would notice the window
-                // closing, and once per order because the service can leave an order there past
-                // its own expiresAt.
+                // closing, and once per order because an order can remain there past expiresAt.
                 if (expiryRecheckedFor != status.id) {
                     expiryRecheckedFor = status.id
                     readCheckpoint()?.let(::resume)
@@ -732,9 +737,8 @@ internal class OnrampVM(
     }
 
     /**
-     * Ticks a service deadline down and runs [onExpired] once it lapses. A deadline the service did
-     * not give must not read as "already expired": that fires [onExpired] with no delay before it,
-     * which for the quote means re-quoting in a tight loop.
+     * Ticks a driver deadline down and runs [onExpired] once it lapses. A missing deadline must not
+     * read as "already expired": that fires [onExpired] with no delay and re-quotes in a tight loop.
      */
     private fun countdown(
         expiresAtMillis: Long?,
@@ -916,8 +920,8 @@ internal class OnrampVM(
         }
 
     /**
-     * The service documents these as milliseconds. A seconds value read as millis lands in 1970 and
-     * the window reads as permanently closed. Null means no deadline, not one that has passed.
+     * Drivers expose these as milliseconds. A seconds value read as millis lands in 1970 and the
+     * window reads as permanently closed. Null means no deadline, not one that has passed.
      */
     private fun asEpochMillis(value: Long): Long? =
         when {

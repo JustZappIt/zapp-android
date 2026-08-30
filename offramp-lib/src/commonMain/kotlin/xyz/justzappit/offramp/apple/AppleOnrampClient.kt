@@ -586,7 +586,7 @@ private fun OnrampStatus.toApple(): AppleOnrampStatus {
             (instruction as? OnrampPaymentInstruction.Fields)
                 ?.fields
                 ?.map {
-                    AppleOnrampField(it.label, it.value)
+                    AppleOnrampField(it.label ?: it.kind?.name.orEmpty(), it.value)
                 }.orEmpty(),
         fiatMicros = (payment?.fiatAmount ?: completed?.fiatAmount)?.micros?.toString(),
         netUsdcMicros = completed?.netUsdc?.micros?.toString(),
@@ -619,6 +619,7 @@ private val OnrampPaymentInstruction.payload: String?
         when (this) {
             is OnrampPaymentInstruction.Upi -> intentUrl
             is OnrampPaymentInstruction.Qr -> payload
+            is OnrampPaymentInstruction.Fields -> qrPayload
             else -> null
         }
 
@@ -702,5 +703,5 @@ private fun String.toInstruction(payload: String): OnrampPaymentInstruction =
         "upi" -> OnrampPaymentInstruction.Upi(address = "", intentUrl = payload, amount = "")
         "qr" -> OnrampPaymentInstruction.Qr(payload)
         "plain" -> OnrampPaymentInstruction.Plain(payload)
-        else -> OnrampPaymentInstruction.Fields(emptyList())
+        else -> OnrampPaymentInstruction.Fields(emptyList(), qrPayload = payload)
     }

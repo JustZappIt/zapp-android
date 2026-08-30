@@ -22,6 +22,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappStepList
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSummaryRow
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.stringRes
+import xyz.justzappit.offramp.onramp.OnrampPaymentFieldKind
 import xyz.justzappit.offramp.onramp.OnrampPaymentInstruction
 
 @Composable
@@ -51,9 +52,8 @@ internal fun PaymentContent(state: OnrampState) {
                 ZappSummaryRow(stringResource(R.string.onramp_expires_in_label), formatCountdown(it))
             }
         }
-        // Rendered exactly as the service sent it. Its tr={orderId} is what the merchant
-        // reconciles the transfer against and its am= is what the order settles for, so a payload
-        // rebuilt here would be paid against the wrong order or for the wrong amount.
+        // Keep the protocol payload intact. Rebuilding a corridor-specific QR here can change its
+        // merchant reference, amount, or integrity field.
         val qrPayload = state.qrPayload?.takeIf { state.isPayable }
         qrPayload?.let { payload ->
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -68,10 +68,8 @@ internal fun PaymentContent(state: OnrampState) {
                 )
             }
         }
-        // Deliberately no "open my payment app" action. NPCI circular OC-76A disallows intent
-        // initiation modes 04 and 05 for person-to-person payees, and every merchant here is a
-        // person, so a payment app opens, prefills, takes the user's PIN and only then declines.
-        // These three routes are the ones the circular leaves open, so the screen names them.
+        // Scanning and copying work across every supported rail. An "open payment app" action does
+        // not: several QR formats are not URIs, and UPI blocks intent initiation for P2P payees.
         qrPayload?.let {
             BasicText(
                 text = stringResource(R.string.onramp_pay_manually_hint),
@@ -112,7 +110,7 @@ private fun InstructionRows(instruction: OnrampPaymentInstruction) {
         }
 
         is OnrampPaymentInstruction.Fields -> {
-            instruction.fields.forEach { ZappSummaryRow(it.label, it.value) }
+            instruction.fields.forEach { field -> ZappSummaryRow(field.label(), field.value) }
         }
 
         is OnrampPaymentInstruction.Qr -> {
@@ -120,6 +118,10 @@ private fun InstructionRows(instruction: OnrampPaymentInstruction) {
         }
     }
 }
+
+@Composable
+private fun OnrampPaymentInstruction.Field.label(): String =
+    label ?: stringResource(PAYMENT_FIELD_LABELS.getValue(kind))
 
 private fun formatCountdown(totalSeconds: Long): String {
     val minutes = totalSeconds / SECONDS_PER_MINUTE
@@ -129,3 +131,20 @@ private fun formatCountdown(totalSeconds: Long): String {
 
 private const val ROW_GAP = 6
 private const val SECONDS_PER_MINUTE = 60
+
+private val PAYMENT_FIELD_LABELS =
+    mapOf(
+        OnrampPaymentFieldKind.PHONE_NUMBER to R.string.onramp_payment_field_phone_number,
+        OnrampPaymentFieldKind.DOCUMENT_ID to R.string.onramp_payment_field_document_id,
+        OnrampPaymentFieldKind.BANK to R.string.onramp_payment_field_bank,
+        OnrampPaymentFieldKind.ACCOUNT_NUMBER to R.string.onramp_payment_field_account_number,
+        OnrampPaymentFieldKind.BANK_NAME to R.string.onramp_payment_field_bank_name,
+        OnrampPaymentFieldKind.ACCOUNT_NAME to R.string.onramp_payment_field_account_name,
+        OnrampPaymentFieldKind.CARD_NUMBER to R.string.onramp_payment_field_card_number,
+        OnrampPaymentFieldKind.ACCOUNT_TYPE to R.string.onramp_payment_field_account_type,
+        OnrampPaymentFieldKind.CEDULA to R.string.onramp_payment_field_cedula,
+        OnrampPaymentFieldKind.CCI to R.string.onramp_payment_field_cci,
+        OnrampPaymentFieldKind.PIX_KEY to R.string.onramp_payment_field_pix_key,
+        OnrampPaymentFieldKind.PAYMENT_ALIAS to R.string.onramp_payment_field_alias,
+        null to R.string.onramp_payment_address_label,
+    )

@@ -10,8 +10,8 @@ import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.Usdc6
 
 /**
- * Order lifecycle as the service reports it. The service owns every transition; the app never
- * advances a phase on the strength of a request it has merely sent.
+ * Order lifecycle reported by the active driver. A phase advances only from confirmed service or
+ * chain state, never merely because the app sent a request.
  */
 @Serializable
 enum class OnrampPhase {
@@ -74,8 +74,8 @@ data class OnrampLimits(
 }
 
 /**
- * A single-use price lock, roughly 90 seconds. [fiatAmount] is the service's own quantisation of
- * the requested amount, so it is what the user must be shown and charged, not what they typed.
+ * A single-use price lock, roughly 90 seconds. [fiatAmount] is the driver's accepted amount, so it
+ * is what the user must be shown and charged rather than the unvalidated input.
  */
 data class OnrampQuote(
     val quoteId: String,
@@ -109,7 +109,11 @@ sealed interface OnrampPaymentInstruction {
 
     data class Fields(
         val fields: List<Field>,
+        val qrPayload: String? = null,
     ) : OnrampPaymentInstruction {
+        val copyValue: String
+            get() = fields.joinToString("|") { it.value }
+
         override fun toString(): String = "Fields(<redacted>)"
     }
 
@@ -120,9 +124,26 @@ sealed interface OnrampPaymentInstruction {
     }
 
     data class Field(
-        val label: String,
+        val label: String?,
         val value: String,
+        val kind: OnrampPaymentFieldKind? = null,
     )
+}
+
+/** Stable field identities for direct orders; Android localises them at the display boundary. */
+enum class OnrampPaymentFieldKind {
+    PHONE_NUMBER,
+    DOCUMENT_ID,
+    BANK,
+    ACCOUNT_NUMBER,
+    BANK_NAME,
+    ACCOUNT_NAME,
+    CARD_NUMBER,
+    ACCOUNT_TYPE,
+    CEDULA,
+    CCI,
+    PIX_KEY,
+    PAYMENT_ALIAS,
 }
 
 /**

@@ -68,6 +68,28 @@ class OnrampIntentAmountTest {
             )
         }
 
+    @Test
+    fun `a QR retained alongside payment fields is still amount checked`() =
+        runTest {
+            val instruction =
+                OnrampPaymentInstruction.Fields(
+                    fields =
+                        listOf(
+                            OnrampPaymentInstruction.Field(
+                                label = null,
+                                value = "merchant@example.com",
+                                kind = OnrampPaymentFieldKind.PIX_KEY,
+                            ),
+                        ),
+                    qrPayload = pixPayload("25.00"),
+                )
+
+            assertEquals(
+                Usdc6.ofMicros(25_000_000),
+                OnrampIntentAmount.declaredAmount(CurrencyCode.Brl, instruction),
+            )
+        }
+
     /** A corridor whose payload is read against the wrong rail must not silently pass as "agrees". */
     @Test
     fun `a payload that does not parse for the order currency declares nothing`() =
@@ -96,9 +118,10 @@ class OnrampIntentAmountTest {
         )
 
     private fun pix(amount: String) =
-        OnrampPaymentInstruction.Qr(
-            emv(currency = "986", country = "BR", amount = amount).let { it + "6304" + EmvQr.calculateCrc16(it) },
-        )
+        OnrampPaymentInstruction.Qr(pixPayload(amount))
+
+    private fun pixPayload(amount: String) =
+        emv(currency = "986", country = "BR", amount = amount).let { it + "6304" + EmvQr.calculateCrc16(it) }
 
     private fun qris(amount: String) =
         OnrampPaymentInstruction.Qr(emv(currency = "360", country = "ID", amount = amount))

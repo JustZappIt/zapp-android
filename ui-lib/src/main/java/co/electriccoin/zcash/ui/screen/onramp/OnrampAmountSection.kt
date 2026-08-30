@@ -151,7 +151,7 @@ private fun DestinationSelector(state: OnrampState) {
     )
 }
 
-/** Everything here is the service's quote, not what the user typed: it quantises the amount. */
+/** Everything here uses the driver's accepted quote rather than the unvalidated input. */
 @Composable
 internal fun ConfirmationContent(state: OnrampState) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {

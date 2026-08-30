@@ -42,7 +42,6 @@ import xyz.justzappit.offramp.p2p.PriceConfig
 import xyz.justzappit.offramp.p2p.PriceConfigDecoder
 import xyz.justzappit.offramp.p2p.RelayIdentityStore
 import xyz.justzappit.offramp.p2p.SubgraphClient
-import xyz.justzappit.offramp.p2p.UpiPayUri
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.p2p.getAdditionalOrderDetails
 import xyz.justzappit.offramp.p2p.getOrCreate
@@ -83,7 +82,6 @@ class DirectOnrampDriver(
     private val relayIdentityStore: RelayIdentityStore,
     private val orderRecipientUpiCache: OrderRecipientUpiCache,
     private val router: CircleRouter = CircleRouter(),
-    private val country: String? = null,
     private val nowMillis: () -> Long = { 0L },
     private val acceptPollMillis: Long = ACCEPT_POLL_MILLIS,
     private val settlePollMillis: Long = SETTLE_POLL_MILLIS,
@@ -283,8 +281,8 @@ class DirectOnrampDriver(
         }
 
         val fiatAmountLimit = DirectOnrampPricing.fiatAmountLimit(quote.netUsdc, quote.buyPrice)
-        val circleId = selectCircle(quote, account.address, fiatAmountLimit)
-        val screened = screen(quote, account, fiatAmountLimit)
+        val circleId = selectCircle(quote, account.address)
+        val screened = screen(quote, account)
         if (screened is ScreeningResult.Rejected) {
             emit(
                 OnrampStatus.Failed(
@@ -302,7 +300,7 @@ class DirectOnrampDriver(
 
         // Merchants drop out of a circle while all of the above happens, and a stale circle makes
         // placeOrder revert.
-        check(validateCircle(circleId, quote, account.address, fiatAmountLimit)) {
+        check(validateCircle(circleId, quote, account.address)) {
             "circle $circleId lost its assignable merchant before placement"
         }
 
@@ -343,13 +341,12 @@ class DirectOnrampDriver(
     private suspend fun selectCircle(
         quote: OnrampQuote,
         user: Address,
-        fiatAmountLimit: Usdc6,
     ): BigInteger {
         val currencyHex = "0x" + AbiEncoder.bytes32String(quote.currency.code).value.toHex()
         val circles = subgraph.circlesForRouting(currencyHex)
         return router
             .selectCircleForOrder(circles, currencyHex) { id ->
-                validateCircle(id.value, quote, user, fiatAmountLimit)
+                validateCircle(id.value, quote, user)
             }.value
     }
 
@@ -357,7 +354,6 @@ class DirectOnrampDriver(
         circleId: BigInteger,
         quote: OnrampQuote,
         user: Address,
-        fiatAmountLimit: Usdc6,
     ): Boolean {
         val ret =
             rpc.ethCall(
@@ -369,7 +365,7 @@ class DirectOnrampDriver(
                         currency = quote.currency,
                         user = user,
                         usdtAmount = quote.netUsdc,
-                        fiatAmount = fiatAmountLimit,
+                        fiatAmount = quote.fiatAmount,
                         orderType = OrderType.BUY,
                     ),
             )
@@ -395,7 +391,6 @@ class DirectOnrampDriver(
     private suspend fun screen(
         quote: OnrampQuote,
         account: SubmittingAccount,
-        fiatAmountLimit: Usdc6,
     ): ScreeningResult {
         val client = screening ?: return ScreeningResult.Unavailable
         val outcome =
@@ -405,15 +400,15 @@ class DirectOnrampDriver(
                     order =
                         OnrampScreeningOrder(
                             cryptoAmount = quote.grossUsdc,
-                            fiatAmount = fiatAmountLimit,
+                            fiatAmount = quote.fiatAmount,
                             currency = quote.currency,
                             recipientAddress = account.address,
                             fee = quote.feeUsdc,
                             amountAfterFee = quote.netUsdc,
-                            paymentMethod = quote.currency.paymentMethodName(),
-                            estimatedProcessingTimeSeconds = readProcessingTimeOrNull(),
+                            paymentMethod = quote.currency.directOnrampMetadata.paymentMethod,
+                            estimatedProcessingTime = readProcessingTimeOrNull(),
                         ),
-                    country = country,
+                    country = quote.currency.directOnrampMetadata.country,
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -686,10 +681,17 @@ class DirectOnrampDriver(
         return ret.isNotEmpty() && BigInteger(1, ret).signum() != 0
     }
 
-    private suspend fun readProcessingTimeOrNull(): Long? =
+    private suspend fun readProcessingTimeOrNull(): String? =
         try {
             val ret = rpc.ethCall(to = network.diamondAddress, data = DiamondCalls.getProcessingTimeCalldata())
-            if (ret.isEmpty()) null else BigInteger(1, ret).toLong()
+            if (ret.isEmpty()) {
+                null
+            } else {
+                val decoder = AbiDecoder(ret).also { it.requireWords(PROCESSING_TIME_WORDS) }
+                val buyMin = decoder.uint(0).toLong()
+                val buyMax = decoder.uint(1).toLong()
+                "${buyMin.toMinutes()}-${buyMax.toMinutes()} minutes"
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (ignored: Exception) {
@@ -829,8 +831,6 @@ class DirectOnrampDriver(
         return OnrampFailureCode.UPSTREAM_FAILED
     }
 
-    private fun CurrencyCode.paymentMethodName(): String = if (this == CurrencyCode.Inr) "UPI" else code
-
     private companion object {
         const val MILLIS_PER_SECOND = 1_000L
 
@@ -838,6 +838,7 @@ class DirectOnrampDriver(
         const val REVERT_LOG_CHARS = 400
         const val QUOTE_ID_PREFIX = "direct-"
         const val QUOTE_TTL_MILLIS = 90_000L
+        const val PROCESSING_TIME_WORDS = 4
 
         /** 3s while placed: merchants accept in 20–90 seconds. */
         const val ACCEPT_POLL_MILLIS = 3_000L
@@ -903,47 +904,6 @@ class DirectOnrampDriver(
             )
     }
 }
-
-/**
- * How a corridor is payable differs in kind, not in formatting: INR is a UPI intent the phone can
- * open, and the EMVCo corridors hand over a complete QR payload that is unpayable as text on a
- * screen.
- *
- * Everything else is rendered as the merchant's handle verbatim. Venezuela in particular is *not*
- * split into labelled fields here: its payload is a base64 envelope followed by `?` and a suffix,
- * and the whole raw string is what the merchant is paid at (`PagoMovilQrParser`, which is
- * byte-compatible with p2p's own parser). Splitting it on a guessed separator would show three
- * boxes of garbage. If a corridor really does need labelled fields, read one live order first.
- *
- * ☠ A null [currency] — a resumed order whose currency word would not decode — falls to the
- * verbatim handle. It must never fall to the UPI branch: that would wrap a QR payload in a
- * `upi://` intent and label it INR. Kept out of the driver so every corridor, null included, is
- * checkable without a live order.
- */
-internal fun paymentInstructionFor(
-    payTo: String,
-    orderId: BigInteger,
-    fiat: Usdc6,
-    currency: CurrencyCode?,
-): OnrampPaymentInstruction =
-    when (currency) {
-        CurrencyCode.Inr -> {
-            OnrampPaymentInstruction.Upi(
-                address = payTo,
-                intentUrl = UpiPayUri.buildBuyIntent(payTo, orderId, fiat, currency.code),
-                amount = UpiPayUri.twoDecimalAmount(fiat),
-            )
-        }
-
-        // Already a complete EMVCo payload: rendered as a QR, never as the string itself.
-        CurrencyCode.Pen, CurrencyCode.Php, CurrencyCode.Bob -> {
-            OnrampPaymentInstruction.Qr(payTo)
-        }
-
-        else -> {
-            OnrampPaymentInstruction.Plain(payTo)
-        }
-    }
 
 /**
  * Decodes the Diamond's `bytes32` currency word back to a corridor: ASCII, NUL-padded to the

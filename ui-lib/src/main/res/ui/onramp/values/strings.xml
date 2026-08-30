@@ -132,4 +132,16 @@
     <string name="onramp_conversion_failed_on_base">The conversion did not start. Your USDC remains in your Base account.</string>
     <string name="onramp_conversion_recipient_mismatch">The settlement account does not match your current Base account. Do not retry this conversion; contact support.</string>
     <string name="onramp_conversion_status_uncertain">The transfer may already be in progress. Check its status; Zapp will not send the USDC again automatically.</string>
+    <string name="onramp_payment_field_phone_number">Phone number</string>
+    <string name="onramp_payment_field_document_id">ID / RIF</string>
+    <string name="onramp_payment_field_bank">Bank</string>
+    <string name="onramp_payment_field_account_number">Account number</string>
+    <string name="onramp_payment_field_bank_name">Bank name</string>
+    <string name="onramp_payment_field_account_name">Account name</string>
+    <string name="onramp_payment_field_card_number">Card number</string>
+    <string name="onramp_payment_field_account_type">Account type</string>
+    <string name="onramp_payment_field_cedula">Cédula</string>
+    <string name="onramp_payment_field_cci">CCI</string>
+    <string name="onramp_payment_field_pix_key">PIX key</string>
+    <string name="onramp_payment_field_alias">Payment alias</string>
 </resources>

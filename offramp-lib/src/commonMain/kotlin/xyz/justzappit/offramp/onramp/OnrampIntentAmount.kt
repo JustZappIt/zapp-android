@@ -52,6 +52,7 @@ object OnrampIntentAmount {
         when (instruction) {
             is OnrampPaymentInstruction.Upi -> instruction.intentUrl
             is OnrampPaymentInstruction.Qr -> instruction.payload
+            is OnrampPaymentInstruction.Fields -> instruction.qrPayload
             else -> null
         }
 

@@ -69,7 +69,7 @@ data class OnrampScreeningOrder(
     val fee: Usdc6,
     val amountAfterFee: Usdc6,
     val paymentMethod: String?,
-    val estimatedProcessingTimeSeconds: Long?,
+    val estimatedProcessingTime: String?,
 )
 
 sealed interface OnrampScreeningOutcome {
@@ -125,12 +125,10 @@ class OnrampScreeningClient(
         country: String?,
     ): OnrampScreeningOutcome {
         require(config.isConfigured) { "screening is not configured" }
-        // ☠ Two timestamps, two units, one request: the header is SECONDS, the body and the AAD
-        // are MILLISECONDS, and the AAD must reuse the exact millisecond value sent in the body or
-        // the payload fails to decrypt server-side with nothing pointing at the cause.
+        // The encrypted payload, AAD, and outer envelope share this exact millisecond timestamp.
         val bodyMillis = nowMillis()
         val userAddress = signer.subject.lowercaseHex
-        val payload = payloadJson(order, country)
+        val payload = payloadJson(order, country, bodyMillis)
         val encrypted =
             encrypt(
                 plaintext = payload,
@@ -221,7 +219,11 @@ class OnrampScreeningClient(
         )
     }
 
-    internal suspend fun payloadJson(order: OnrampScreeningOrder, country: String?): String {
+    internal suspend fun payloadJson(
+        order: OnrampScreeningOrder,
+        country: String?,
+        timestampMillis: Long,
+    ): String {
         val body =
             buildJsonObject {
                 putJsonObject("user_details") {
@@ -241,8 +243,8 @@ class OnrampScreeningClient(
                     put("fee", order.fee.asJsonNumber())
                     put("amount_after_fee", order.amountAfterFee.asJsonNumber())
                     put("payment_method", order.paymentMethod)
-                    put("estimated_processing_time", order.estimatedProcessingTimeSeconds?.toString())
-                    put("order_timestamp", nowMillis())
+                    put("estimated_processing_time", order.estimatedProcessingTime)
+                    put("order_timestamp", timestampMillis)
                     put("order_source", ORDER_SOURCE)
                 }
                 put("device_details", deviceJson())

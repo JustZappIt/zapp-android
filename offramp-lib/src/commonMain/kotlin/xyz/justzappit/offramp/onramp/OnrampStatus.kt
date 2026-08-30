@@ -140,8 +140,8 @@ enum class OnrampFailureCode {
 }
 
 /**
- * Whether the order survives this failure on the service. Only a transient failure leaves it
- * running, so only then may the resume checkpoint be kept.
+ * Whether the underlying order survives this failure. Only a transient failure leaves it running,
+ * so only then may the resume checkpoint be kept.
  */
 val OnrampStatus.leavesOrderAlive: Boolean
     get() = this is OnrampStatus.Failed && code.isTransient
