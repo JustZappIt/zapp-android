@@ -76,7 +76,7 @@
     <string name="onramp_error_daily_limit">You\'ve reached today\'s buying limit. Try again tomorrow.</string>
     <string name="onramp_error_volume_limit">You\'ve reached your buying limit for now. It resets at the start of the next period.</string>
     <string name="onramp_error_blacklisted">The exchange has blocked this wallet from buying. Verifying an account won\'t change that.</string>
-    <string name="onramp_error_screening_rejected">This order could not be screened, so it cannot be placed. No money has moved.</string>
+    <string name="onramp_error_screening_rejected">The exchange didn\'t approve this order. No money has moved.</string>
     <string name="onramp_error_progress">The order needs attention. Review its status before retrying.</string>
     <string name="onramp_error_limits">Enter an amount within the allowed limits.</string>
     <string name="onramp_error_backend_unavailable">Zapp could not reach the onramp service. Your money has not moved.</string>

@@ -661,7 +661,7 @@ internal class OnrampVM(
                         paymentInstruction = null,
                         paymentSecondsRemaining = null,
                         isPaidConfirmVisible = false,
-                        error = status.code.toStringResource(),
+                        error = status.errorMessage(),
                     )
                 }
 
@@ -828,6 +828,24 @@ internal class OnrampVM(
     private fun Throwable.toStringResource(): StringResource =
         (this as? OnrampException)?.code?.toStringResource() ?: stringRes(R.string.onramp_error_starting)
 
+    /**
+     * The service's own sentence wins when it gave one. A refusal it can explain ("new accounts
+     * cannot place buy orders at this time") says something no fixed string of ours can, and we
+     * spent a release showing a generic line while the useful one sat in the response.
+     *
+     * Capped, and only ever displayed — [OnrampStatus.Failed.code] remains the thing anything
+     * branches on.
+     */
+    private fun OnrampStatus.errorMessage(): StringResource =
+        (this as? OnrampStatus.Failed)
+            ?.detail
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?.take(SERVICE_DETAIL_MAX_CHARS)
+            ?.let(::stringRes)
+            ?: (this as? OnrampStatus.Failed)?.code?.toStringResource()
+            ?: stringRes(R.string.onramp_error_progress)
+
     @Suppress("CyclomaticComplexMethod")
     private fun OnrampFailureCode.toStringResource(): StringResource =
         when (this) {
@@ -902,6 +920,9 @@ internal class OnrampVM(
         }
 
     private companion object {
+        /** Long enough for any sentence the service actually sends; short enough to stay a sentence. */
+        const val SERVICE_DETAIL_MAX_CHARS = 200
+
         const val MILLIS_PER_SECOND = 1_000L
         val PERCENT: BigDecimal = BigDecimal(100)
 

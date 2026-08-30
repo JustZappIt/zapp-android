@@ -96,7 +96,7 @@
     <string name="onramp_error_daily_limit">Has alcanzado el límite de compra de hoy. Vuelve a intentarlo mañana.</string>
     <string name="onramp_error_volume_limit">Has alcanzado tu límite de compra por ahora. Se restablece al inicio del siguiente período.</string>
     <string name="onramp_error_blacklisted">El intercambio ha bloqueado la compra desde esta billetera. Verificar una cuenta no lo cambiará.</string>
-    <string name="onramp_error_screening_rejected">Esta orden no pudo verificarse, así que no puede colocarse. No se movió dinero.</string>
+    <string name="onramp_error_screening_rejected">El intercambio no aprobó esta orden. No se movió dinero.</string>
     <string name="onramp_payment_window_closed">Esta ventana de pago se cerró. No envíes dinero ahora: no se asociará a tu orden. Empieza de nuevo para obtener una nueva.</string>
     <string name="onramp_error_amount_mismatch">Los datos de pago no coinciden con el importe de tu orden. No pagues esta solicitud. Empieza de nuevo para obtener datos nuevos.</string>
     <string name="onramp_pay_manually_hint">Escanea este código con tu app de pago, o haz una captura y paga desde tu galería. También puedes copiar el ID de arriba y pagar ese importe manualmente.</string>

@@ -229,6 +229,9 @@ val repositoryModule =
                     // where its owner is buying.
                     country = Locale.getDefault().country.takeIf { it.isNotBlank() },
                     nowMillis = System::currentTimeMillis,
+                    onUnrecognisedRevert = { revert ->
+                        Twig.warn { "BUY reverted with no mapping — reporting it as upstream: $revert" }
+                    },
                 )
             }
         }

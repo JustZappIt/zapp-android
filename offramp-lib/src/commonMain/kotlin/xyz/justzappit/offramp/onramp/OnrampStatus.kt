@@ -61,6 +61,18 @@ sealed interface OnrampStatus {
         val phase: OnrampPhase,
         val id: String?,
         val orderId: String?,
+        /**
+         * A sentence from the service, to show *instead of* [code]'s own wording when it has one.
+         *
+         * ☠ Display only. Never branch on this — that is what [code] is for, and the reason the
+         * enum exists. It is here because a refusal the service can explain ("new accounts cannot
+         * place buy orders at this time") tells the user something no fixed string of ours can,
+         * and dropping it left them reading a generic sentence while the useful one existed.
+         *
+         * Carries the service's own language, so it is not localised. An accurate sentence in the
+         * wrong language beats a translated one that describes a different failure.
+         */
+        val detail: String? = null,
     ) : OnrampStatus
 }
 

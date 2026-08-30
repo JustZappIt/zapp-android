@@ -90,6 +90,14 @@ class DirectOnrampDriver(
     private val settlePollMillis: Long = SETTLE_POLL_MILLIS,
     private val acceptPollAttempts: Int = ACCEPT_POLL_ATTEMPTS,
     private val settlePollAttempts: Int = SETTLE_POLL_ATTEMPTS,
+    /**
+     * Called with a revert this build has no mapping for, before it is reported as a generic
+     * upstream failure. [REVERTS] is transcribed from p2p.me's client as of a point in time and is
+     * not a contract they owe us — their RpHelper was replaced under this app mid-development,
+     * taking a new error with it. Without this the first sign of the next change is a user who
+     * cannot buy and a log that says nothing.
+     */
+    private val onUnrecognisedRevert: (String) -> Unit = {},
 ) : OnrampDriver {
     override suspend fun limits(currency: CurrencyCode): OnrampLimits {
         // No screening service means orders that place and then never fill. Closing the corridor
@@ -264,7 +272,17 @@ class DirectOnrampDriver(
         val circleId = selectCircle(quote, account.address, fiatAmountLimit)
         val screened = screen(quote, account, fiatAmountLimit)
         if (screened is ScreeningResult.Rejected) {
-            emit(OnrampStatus.Failed(OnrampFailureCode.SCREENING_REJECTED, OnrampPhase.PLACING, null, null))
+            emit(
+                OnrampStatus.Failed(
+                    code = OnrampFailureCode.SCREENING_REJECTED,
+                    phase = OnrampPhase.PLACING,
+                    id = null,
+                    orderId = null,
+                    // The service's own sentence, when it gave one: it says *why* this wallet was
+                    // refused, which is the part a fixed string cannot.
+                    detail = screened.message.takeIf { it.isNotBlank() },
+                ),
+            )
             return null
         }
 
@@ -351,7 +369,9 @@ class DirectOnrampDriver(
             val activityLogId: JsonElement
         ) : ScreeningResult
 
-        data object Rejected : ScreeningResult
+        data class Rejected(
+            val message: String
+        ) : ScreeningResult
 
         /** Reached nothing, or was answered badly. The order still places; nothing to link. */
         data object Unavailable : ScreeningResult
@@ -390,7 +410,7 @@ class DirectOnrampDriver(
             }
         return when (outcome) {
             is OnrampScreeningOutcome.Approved -> ScreeningResult.Approved(outcome.activityLogId)
-            OnrampScreeningOutcome.Rejected -> ScreeningResult.Rejected
+            is OnrampScreeningOutcome.Rejected -> ScreeningResult.Rejected(outcome.message)
             OnrampScreeningOutcome.Unavailable -> ScreeningResult.Unavailable
         }
     }
@@ -751,13 +771,18 @@ class DirectOnrampDriver(
      */
     private fun classify(e: Exception): OnrampFailureCode {
         val message = e.message.orEmpty()
-        return REVERTS.entries.firstOrNull { it.key in message }?.value ?: OnrampFailureCode.UPSTREAM_FAILED
+        REVERTS.entries.firstOrNull { it.key in message }?.let { return it.value }
+        onUnrecognisedRevert(message.take(REVERT_LOG_CHARS))
+        return OnrampFailureCode.UPSTREAM_FAILED
     }
 
     private fun CurrencyCode.paymentMethodName(): String = if (this == CurrencyCode.Inr) "UPI" else code
 
     private companion object {
         const val MILLIS_PER_SECOND = 1_000L
+
+        /** Enough to carry a selector and the sentence around it; bundler errors run long. */
+        const val REVERT_LOG_CHARS = 400
         const val QUOTE_ID_PREFIX = "direct-"
         const val QUOTE_TTL_MILLIS = 90_000L
 

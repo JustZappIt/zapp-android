@@ -151,7 +151,9 @@ class OnrampScreeningTest {
                 clientAnswering("""{"approved":false,"message":"sanctioned jurisdiction"}""")
                     .screenBuyOrder(signer, ORDER, country = "IN")
 
-            assertEquals(OnrampScreeningOutcome.Rejected, outcome)
+            // The service's own sentence has to survive: it is what the user is shown, and it is
+            // routinely more specific than anything we can say from a failure code.
+            assertEquals("sanctioned jurisdiction", assertIs<OnrampScreeningOutcome.Rejected>(outcome).message)
         }
 
     @Test

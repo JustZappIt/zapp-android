@@ -296,6 +296,31 @@ class DirectOnrampDriverTest {
             assertEquals(OnrampFailureCode.UPSTREAM_FAILED, failed.code)
         }
 
+    @Test
+    fun `a refusal the service explained is passed on in its own words`() =
+        runTest {
+            // ☠ Live example: "new accounts cannot place buy orders at this time" — which says
+            // both what happened and what would change it. Our own string can say neither, and
+            // dropping this left the user reading a generic line while the useful one existed.
+            val refusal = "Transaction not approved: new accounts cannot place buy orders at this time"
+
+            val failed =
+                assertIs<OnrampStatus.Failed>(
+                    OnrampStatus.Failed(
+                        code = OnrampFailureCode.SCREENING_REJECTED,
+                        phase = OnrampPhase.PLACING,
+                        id = null,
+                        orderId = null,
+                        detail = refusal,
+                    ),
+                )
+
+            assertEquals(refusal, failed.detail)
+            // The code still decides everything; the sentence is only shown.
+            assertEquals(OnrampFailureCode.SCREENING_REJECTED, failed.code)
+            assertFalse(failed.leavesOrderAlive, "a refused order was never placed")
+        }
+
     // ---- harness ----
 
     /** Seals [plaintext] to the relay key, the way the merchant does when accepting. */

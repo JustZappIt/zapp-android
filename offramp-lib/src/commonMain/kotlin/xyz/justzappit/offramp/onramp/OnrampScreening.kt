@@ -79,12 +79,14 @@ sealed interface OnrampScreeningOutcome {
     ) : OnrampScreeningOutcome
 
     /**
-     * The only outcome that stops a placement. The service's own wording is deliberately not
-     * carried: [OnrampStatus.Failed] has no message slot, and [OnrampFailureCode]'s contract is to
-     * branch on the code and localise from it. A field that every caller drops reads like a
-     * promise the UI keeps, and it does not.
+     * The only outcome that stops a placement. [message] is the service's own sentence and is
+     * shown as written — it is routinely more specific than anything we can say from a code, and
+     * a live refusal proved the point: "new accounts cannot place buy orders at this time" against
+     * our own "this order could not be screened", which was not even what happened.
      */
-    data object Rejected : OnrampScreeningOutcome
+    data class Rejected(
+        val message: String
+    ) : OnrampScreeningOutcome
 
     /**
      * The service could not be reached or answered badly. Fail-open: the order still places, and
@@ -163,7 +165,9 @@ class OnrampScreeningClient(
         val approved =
             body["approved"]?.jsonPrimitive?.content?.toBooleanStrictOrNull()
                 ?: return OnrampScreeningOutcome.Unavailable
-        if (!approved) return OnrampScreeningOutcome.Rejected
+        if (!approved) {
+            return OnrampScreeningOutcome.Rejected(body["message"]?.jsonPrimitive?.content.orEmpty())
+        }
         val logId = body["activity_log_id"] ?: return OnrampScreeningOutcome.Unavailable
         return OnrampScreeningOutcome.Approved(logId)
     }
