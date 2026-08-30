@@ -38,6 +38,7 @@
     <string name="increase_reputation_reward">+%1$s RP</string>
     <string name="increase_reputation_limit_gain">+$%1$s limit</string>
     <string name="increase_reputation_verified">Verified</string>
+    <string name="increase_reputation_verified_reward">Verified · %1$s</string>
     <string name="increase_reputation_age_requirement">Needs an account about a year old</string>
 
     <string name="increase_reputation_step_open">Open Reclaim</string>

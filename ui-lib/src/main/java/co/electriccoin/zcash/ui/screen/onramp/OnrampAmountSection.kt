@@ -51,7 +51,14 @@ internal fun AmountContent(state: OnrampState) {
             )
         }
         state.dailyLimit?.let {
-            ZappSummaryRow(stringResource(R.string.onramp_daily_limit_label), "${state.currencySymbol}$it")
+            ZappSummaryRow(
+                label = stringResource(R.string.onramp_daily_limit_label),
+                value = "${state.currencySymbol}$it",
+                // The number is reputation-derived, so the only useful explanation is the screen
+                // that raises it.
+                onInfoClick = state.onRaiseLimit,
+                infoContentDescription = stringResource(R.string.onramp_daily_limit_info),
+            )
         }
         ZappSummaryRow(stringResource(R.string.onramp_payment_rail_label), state.paymentRail.getValue())
         Notice(stringResource(R.string.onramp_quote_disclaimer))

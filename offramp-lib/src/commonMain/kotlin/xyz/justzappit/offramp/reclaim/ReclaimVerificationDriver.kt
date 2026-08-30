@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withTimeoutOrNull
-import xyz.justzappit.evm.abi.Selector4
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.rpc.RpcException
 import xyz.justzappit.evm.types.Address
@@ -118,6 +117,13 @@ class ReclaimVerificationDriver(
     private val network: P2pNetworkConfig,
     private val credentials: ReclaimAppCredentials,
     private val remintIntervalMillis: Long = DEFAULT_REMINT_INTERVAL_MS,
+    /**
+     * Called with the selector of a revert this build has no mapping for. Every unmapped selector
+     * reaches the user as the same generic "couldn't verify that proof", so without this the
+     * difference between a real VerificationFailed and a brand-new contract error is invisible in
+     * a log — which is how `UserIdAlreadyVerified` went undiagnosed.
+     */
+    private val onUnrecognisedRevert: (String) -> Unit = {},
 ) {
     fun verify(
         platform: SocialPlatform,
@@ -292,52 +298,29 @@ class ReclaimVerificationDriver(
             (e as? RpcException.ExecutionReverted)?.let(::classifyRevert)
         }
 
+    @Suppress("ReturnCount")
     private fun classify(e: Exception): ReclaimFailure {
         if (e is RpcException.ExecutionReverted) return classifyRevert(e)
         // The bundler reports an on-chain revert as text, so the selector arrives inside a message
         // rather than as structured data.
         val message = e.message.orEmpty()
-        return when {
-            message.contains(ADDRESS_MISMATCH, ignoreCase = true) -> {
-                ReclaimFailure.AddressMismatch
-            }
-
-            REPLAY_SELECTOR.hex in message -> {
-                ReclaimFailure.AlreadyVerifiedElsewhere
-            }
-
-            VERIFICATION_FAILED_SELECTOR.hex in message -> {
-                ReclaimFailure.VerificationRejected
-            }
-
-            SPONSORSHIP_MARKERS.any { message.contains(it, ignoreCase = true) } -> {
-                ReclaimFailure.SponsorshipUnavailable
-            }
-
-            else -> {
-                ReclaimFailure.Network
-            }
+        if (message.contains(ADDRESS_MISMATCH, ignoreCase = true)) return ReclaimFailure.AddressMismatch
+        REVERTS.entries.firstOrNull { it.key in message }?.let { return it.value }
+        if (SPONSORSHIP_MARKERS.any { message.contains(it, ignoreCase = true) }) {
+            return ReclaimFailure.SponsorshipUnavailable
         }
+        return ReclaimFailure.Network
     }
 
-    private fun classifyRevert(e: RpcException.ExecutionReverted): ReclaimFailure =
-        when {
-            e.solidityErrorString?.contains(ADDRESS_MISMATCH, ignoreCase = true) == true -> {
-                ReclaimFailure.AddressMismatch
-            }
-
-            e.selector == REPLAY_SELECTOR -> {
-                ReclaimFailure.AlreadyVerifiedElsewhere
-            }
-
-            e.selector == VERIFICATION_FAILED_SELECTOR -> {
-                ReclaimFailure.VerificationRejected
-            }
-
-            else -> {
-                ReclaimFailure.VerificationRejected
-            }
+    private fun classifyRevert(e: RpcException.ExecutionReverted): ReclaimFailure {
+        if (e.solidityErrorString?.contains(ADDRESS_MISMATCH, ignoreCase = true) == true) {
+            return ReclaimFailure.AddressMismatch
         }
+        val selector = e.selector?.hex
+        REVERTS[selector]?.let { return it }
+        onUnrecognisedRevert(selector ?: e.solidityErrorString ?: "revert with no data")
+        return ReclaimFailure.VerificationRejected
+    }
 
     private companion object {
         /** Re-mint well inside the ~10-minute session life, and only before the user leaves. */
@@ -345,9 +328,32 @@ class ReclaimVerificationDriver(
 
         const val ADDRESS_MISMATCH = "User address mismatch"
 
-        /** The Reclaim verifier's replay rejection: one social account, one wallet, forever. */
-        val REPLAY_SELECTOR: Selector4 = Selector4.fromHex("0x2f850b6b")
-        val VERIFICATION_FAILED_SELECTOR: Selector4 = Selector4.fromHex("0x439cc0cd")
+        /**
+         * The RpHelper's `Errors.sol` selectors, transcribed from p2p.me's own client
+         * (`user-app-client/src/lib/errors.ts`) rather than guessed. Keyed by hex because the
+         * bundler hands the same value back as text inside a message.
+         *
+         * ☠ Three different errors mean "one account, one wallet", and the contract picks between
+         * them by *which field* collided — the social handle, the provider's user id, or the
+         * nullifier. All three are the same sentence to the user, and mapping only the first is
+         * what made a already-used Facebook login read as "the exchange couldn't verify that proof".
+         */
+        val REVERTS: Map<String, ReclaimFailure> =
+            mapOf(
+                // One social account, one wallet, forever.
+                "0x2f850b6b" to ReclaimFailure.AlreadyVerifiedElsewhere, // SocialAlreadyVerified
+                "0xa18ea4e8" to ReclaimFailure.AlreadyVerifiedElsewhere, // UserIdAlreadyVerified
+                "0x69470b13" to ReclaimFailure.AlreadyVerifiedElsewhere, // UsernameAlreadyVerified
+                "0x0f165e7b" to ReclaimFailure.AlreadyVerifiedElsewhere, // NullifierAlreadyVerified
+                // The proof came back without the field the contract reads. Retrying can fix it;
+                // picking a different account usually does.
+                "0x4d460588" to ReclaimFailure.ProofGenerationFailed, // UserIdFieldNotInProof
+                "0x8390b2dd" to ReclaimFailure.ProofGenerationFailed, // UsernameNotInProof
+                // No year in the proof is how the age rule actually surfaces on chain.
+                "0x466f52a8" to ReclaimFailure.CriteriaNotMet, // YearFieldNotInProof
+                "0x2366073b" to ReclaimFailure.VerificationRejected, // InvalidSocialPlatform
+                "0x439cc0cd" to ReclaimFailure.VerificationRejected, // VerificationFailed
+            )
 
         val SPONSORSHIP_MARKERS =
             listOf("paymaster", "sponsor", "AA31", "AA33", "prefund")

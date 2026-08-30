@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.di
 
+import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepository
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepositoryImpl
@@ -177,6 +178,9 @@ val repositoryModule =
                 rpc = get(),
                 network = get(),
                 credentials = get(),
+                onUnrecognisedRevert = { selector ->
+                    Twig.warn { "Reclaim socialVerify reverted with an unmapped selector: $selector" }
+                },
             )
         }
         single {

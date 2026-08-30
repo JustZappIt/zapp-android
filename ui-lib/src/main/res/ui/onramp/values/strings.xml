@@ -73,6 +73,9 @@
     <string name="onramp_error_order_not_found">That order no longer exists on the onramp service.</string>
     <string name="onramp_error_wrong_phase">The order has already moved on. Review its status before retrying.</string>
     <string name="onramp_error_cap_exceeded">That would go over your limit for now. Try a smaller amount or come back later.</string>
+    <string name="onramp_error_daily_limit">You\'ve reached today\'s buying limit. Try again tomorrow.</string>
+    <string name="onramp_error_volume_limit">You\'ve reached your buying limit for now. It resets at the start of the next period.</string>
+    <string name="onramp_error_blacklisted">The exchange has blocked this wallet from buying. Verifying an account won\'t change that.</string>
     <string name="onramp_error_screening_rejected">This order could not be screened, so it cannot be placed. No money has moved.</string>
     <string name="onramp_error_progress">The order needs attention. Review its status before retrying.</string>
     <string name="onramp_error_limits">Enter an amount within the allowed limits.</string>
@@ -83,6 +86,7 @@
     <string name="onramp_error_order_expired">The order expired before payment was confirmed.</string>
     <string name="onramp_error_settlement_pending">Your payment is still with the merchant. The order is still open — reopen Buy to check on it.</string>
     <string name="onramp_daily_limit_label">Daily limit</string>
+    <string name="onramp_daily_limit_info">Why this limit, and how to raise it</string>
     <string name="onramp_confirm_title">Confirm your order</string>
     <string name="onramp_you_pay_label">You pay</string>
     <string name="onramp_you_receive_label">You receive</string>

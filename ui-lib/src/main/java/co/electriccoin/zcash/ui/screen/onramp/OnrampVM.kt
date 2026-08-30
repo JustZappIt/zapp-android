@@ -10,6 +10,7 @@ import co.electriccoin.zcash.ui.common.provider.OnrampCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.repository.BaseBalance
 import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepository
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
+import co.electriccoin.zcash.ui.common.usecase.NavigateToReputationUseCase
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -65,6 +66,7 @@ internal class OnrampVM(
     private val baseRefundDriver: BaseRefundDriver,
     private val checkpointStorage: OnrampCheckpointStorageProvider,
     private val copyToClipboard: CopyToClipboardUseCase,
+    private val navigateToReputation: NavigateToReputationUseCase,
 ) : ViewModel() {
     private val currency = CurrencyCode.fromCodeOrNull(args.currencyCode) ?: CurrencyCode.Inr
     private var limits: OnrampLimits = OnrampLimits.DISABLED
@@ -112,6 +114,7 @@ internal class OnrampVM(
                 onConfirmPaid = ::onConfirmPaid,
                 onDismissPaidConfirm = ::onDismissPaidConfirm,
                 onCancel = ::onCancel,
+                onRaiseLimit = ::onRaiseLimit,
                 onDeliveryAction = ::onDeliveryAction,
                 onDone = ::onDone,
             ),
@@ -366,6 +369,15 @@ internal class OnrampVM(
                 driver.confirmPaid(stored).collect(::handleStatus)
             }
         confirmPaidJob = driverJob
+    }
+
+    /**
+     * The daily limit is the corridor's reputation-derived cap, so "why is it this number" and
+     * "how do I raise it" are the same screen. Sent with the corridor already resolved — the same
+     * one this screen is quoting in — rather than re-resolving and risking a different answer.
+     */
+    private fun onRaiseLimit() {
+        navigateToReputation(currency)
     }
 
     private fun onCancel() {
@@ -836,6 +848,12 @@ internal class OnrampVM(
             OnrampFailureCode.QUOTE_EXPIRED -> stringRes(R.string.onramp_error_quote_expired)
 
             OnrampFailureCode.CAP_EXCEEDED -> stringRes(R.string.onramp_error_cap_exceeded)
+
+            OnrampFailureCode.DAILY_LIMIT_EXCEEDED -> stringRes(R.string.onramp_error_daily_limit)
+
+            OnrampFailureCode.VOLUME_LIMIT_EXCEEDED -> stringRes(R.string.onramp_error_volume_limit)
+
+            OnrampFailureCode.USER_BLACKLISTED -> stringRes(R.string.onramp_error_blacklisted)
 
             OnrampFailureCode.SCREENING_REJECTED -> stringRes(R.string.onramp_error_screening_rejected)
 

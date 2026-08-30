@@ -69,10 +69,20 @@ class DirectOnrampDriverTest {
     private var additionalDetails = ENCODED_DETAILS_ALL_ZERO
     private var rpcIsDown = false
 
+    /** A Diamond revert selector to answer the next eth_call with, as the chain would. */
+    private var nextRevert: String? = null
+
     private val rpcEngine =
         MockEngine { request ->
             if (rpcIsDown) {
                 respond("""{"error":"upstream is having a day"}""", HttpStatusCode.BadGateway, jsonHeaders)
+            } else if (nextRevert != null) {
+                // A revert is an HTTP 200 carrying a JSON-RPC error, not an HTTP failure.
+                respond(
+                    """{"jsonrpc":"2.0","id":1,"error":{"code":3,"message":"execution reverted","data":"$nextRevert"}}""",
+                    HttpStatusCode.OK,
+                    jsonHeaders,
+                )
             } else {
                 val bytes = (request.body as io.ktor.http.content.OutgoingContent.ByteArrayContent).bytes()
                 val payload = Json.parseToJsonElement(bytes.decodeToString()) as JsonObject
@@ -196,6 +206,42 @@ class DirectOnrampDriverTest {
             assertEquals(ORDER_ID.toString(), failed.orderId)
         }
 
+    @Test
+    fun `a rolling daily cap is told apart from a per-order one`() =
+        runTest {
+            // Both are "too much", but only one is fixed by entering a smaller number, so they
+            // must not collapse into the same sentence.
+            nextRevert = DAILY_BUY_ORDER_LIMIT_EXCEEDED
+
+            val failed = assertIs<OnrampStatus.Failed>(driver().resume(checkpoint()).toList().single())
+
+            assertEquals(OnrampFailureCode.DAILY_LIMIT_EXCEEDED, failed.code)
+            assertFalse(failed.leavesOrderAlive, "a capped order is not coming back on its own")
+        }
+
+    @Test
+    fun `a blocked wallet is named, not reported as an upstream failure`() =
+        runTest {
+            nextRevert = USER_IS_BLACKLISTED
+
+            val failed = assertIs<OnrampStatus.Failed>(driver().resume(checkpoint()).toList().single())
+
+            assertEquals(OnrampFailureCode.USER_BLACKLISTED, failed.code)
+        }
+
+    @Test
+    fun `a selector this build has never seen still reaches the user as a status`() =
+        runTest {
+            // The catch-all stays transient: an unknown revert says nothing about whether the
+            // order survived, so the checkpoint has to.
+            nextRevert = "0xdeadbeef"
+
+            val failed = assertIs<OnrampStatus.Failed>(driver().resume(checkpoint()).toList().single())
+
+            assertEquals(OnrampFailureCode.UPSTREAM_FAILED, failed.code)
+            assertTrue(failed.leavesOrderAlive)
+        }
+
     // ---- harness ----
 
     /**
@@ -300,6 +346,12 @@ class DirectOnrampDriverTest {
         val jsonHeaders = headersOf(HttpHeaders.ContentType, "application/json")
 
         const val INR_BYTES32 = "0x494e520000000000000000000000000000000000000000000000000000000000"
+
+        /** p2p.me's `DailyBuyOrderLimitExceeded`. */
+        const val DAILY_BUY_ORDER_LIMIT_EXCEEDED = "0xe595a7bf"
+
+        /** p2p.me's `UserIsBlacklisted`. */
+        const val USER_IS_BLACKLISTED = "0xebb6f34b"
 
         const val ENCODED_ZERO = "0x" + "0000000000000000000000000000000000000000000000000000000000000000"
         const val ENCODED_ONE = "0x" + "0000000000000000000000000000000000000000000000000000000000000001"

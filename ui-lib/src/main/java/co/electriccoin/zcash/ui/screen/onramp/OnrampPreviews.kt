@@ -179,6 +179,7 @@ internal fun PreviewOnramp(
             onConfirmPaid = {},
             onDismissPaidConfirm = {},
             onCancel = {},
+            onRaiseLimit = {},
             onDeliveryAction = {},
             onDone = {},
         ),

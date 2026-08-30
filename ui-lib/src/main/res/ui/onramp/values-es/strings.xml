@@ -77,6 +77,7 @@
     <string name="onramp_quote_disclaimer">Verás el importe y la tasa exactos en la siguiente pantalla antes de colocar nada.</string>
     <string name="onramp_get_quote">Obtener cotización</string>
     <string name="onramp_daily_limit_label">Límite diario</string>
+    <string name="onramp_daily_limit_info">Por qué existe este límite y cómo aumentarlo</string>
     <string name="onramp_confirm_title">Confirma tu orden</string>
     <string name="onramp_you_pay_label">Pagas</string>
     <string name="onramp_you_receive_label">Recibes</string>
@@ -92,6 +93,9 @@
     <string name="onramp_error_order_not_found">Esa orden ya no existe en el servicio de compra.</string>
     <string name="onramp_error_wrong_phase">La orden ya avanzó. Revisa su estado antes de reintentar.</string>
     <string name="onramp_error_cap_exceeded">Eso superaría tu límite por ahora. Prueba con un importe menor o vuelve más tarde.</string>
+    <string name="onramp_error_daily_limit">Has alcanzado el límite de compra de hoy. Vuelve a intentarlo mañana.</string>
+    <string name="onramp_error_volume_limit">Has alcanzado tu límite de compra por ahora. Se restablece al inicio del siguiente período.</string>
+    <string name="onramp_error_blacklisted">El intercambio ha bloqueado la compra desde esta billetera. Verificar una cuenta no lo cambiará.</string>
     <string name="onramp_error_screening_rejected">Esta orden no pudo verificarse, así que no puede colocarse. No se movió dinero.</string>
     <string name="onramp_payment_window_closed">Esta ventana de pago se cerró. No envíes dinero ahora: no se asociará a tu orden. Empieza de nuevo para obtener una nueva.</string>
     <string name="onramp_error_amount_mismatch">Los datos de pago no coinciden con el importe de tu orden. No pagues esta solicitud. Empieza de nuevo para obtener datos nuevos.</string>

@@ -155,8 +155,10 @@ private fun PlatformRow(row: VerifiableRow) {
                         tint = c.success,
                         modifier = Modifier.size(CHECK_SIZE),
                     )
+                    // Says the state, not just the reward: a bare "50 RP" beside a tick reads as
+                    // an offer rather than as points already banked.
                     BasicText(
-                        text = row.reward.getValue(),
+                        text = stringResource(R.string.increase_reputation_verified_reward, row.reward.getValue()),
                         style = ZappTheme.typography.rowSubtitle.copy(color = c.success),
                     )
                 }

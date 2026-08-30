@@ -778,14 +778,14 @@ class DirectOnrampDriver(
             }
         }
 
+    /**
+     * The Diamond's revert, named. Matched as text rather than as a decoded selector because a
+     * sponsored operation's revert reaches us through the bundler as a message, not as structured
+     * error data.
+     */
     private fun classify(e: Exception): OnrampFailureCode {
         val message = e.message.orEmpty()
-        return when {
-            BUY_LIMIT_SELECTOR in message || NO_REPUTATION_SELECTOR in message -> OnrampFailureCode.CAP_EXCEEDED
-            NO_MERCHANT_SELECTOR in message -> OnrampFailureCode.NO_MERCHANT
-            EXPIRED_SELECTOR in message -> OnrampFailureCode.ORDER_EXPIRED
-            else -> OnrampFailureCode.UPSTREAM_FAILED
-        }
+        return REVERTS.entries.firstOrNull { it.key in message }?.value ?: OnrampFailureCode.UPSTREAM_FAILED
     }
 
     private fun CurrencyCode.paymentMethodName(): String = if (this == CurrencyCode.Inr) "UPI" else code
@@ -809,10 +809,54 @@ class DirectOnrampDriver(
 
         val ASSIGN_UP_TO: BigInteger = bigIntegerValueOf(3L)
 
-        const val BUY_LIMIT_SELECTOR = "0x91da284f"
-        const val NO_REPUTATION_SELECTOR = "0x071ea33c"
-        const val NO_MERCHANT_SELECTOR = "0x5d04ff4c"
-        const val EXPIRED_SELECTOR = "0xc56873ba"
+        /**
+         * The Diamond's `Errors.sol` selectors, transcribed from p2p.me's own client
+         * (`user-app-client/src/lib/errors.ts`) rather than guessed, and narrowed to the ones a
+         * BUY can actually hit. Anything absent falls to [OnrampFailureCode.UPSTREAM_FAILED],
+         * which is honest — "something on their side" — but says nothing the user can act on, so
+         * a revert worth a sentence belongs here.
+         */
+        val REVERTS: Map<String, OnrampFailureCode> =
+            mapOf(
+                // Per-order size, and the reputation that sets it. Same sentence either way: the
+                // amount is above what this wallet may buy at once.
+                "0x91da284f" to OnrampFailureCode.CAP_EXCEEDED, // BuyOrderAmountExceedsLimit
+                "0x071ea33c" to OnrampFailureCode.CAP_EXCEEDED, // UserHasNoReputation
+                "0xd2e1e6e0" to OnrampFailureCode.CAP_EXCEEDED, // ZeroReputationPoints
+                "0x4b29cf0a" to OnrampFailureCode.CAP_EXCEEDED, // BuyAmountExceedsUsdcLimit
+                "0xf42e41a1" to OnrampFailureCode.CAP_EXCEEDED, // OrderAmountExceedsLimit
+                // Rolling caps. Distinct from the above because the fix is waiting, not a smaller
+                // amount — telling someone to try less when nothing will pass today is a dead end.
+                "0xe595a7bf" to OnrampFailureCode.DAILY_LIMIT_EXCEEDED, // DailyBuyOrderLimitExceeded
+                "0x917c7aef" to OnrampFailureCode.DAILY_LIMIT_EXCEEDED, // DailyBuyOrderPlacementLimitExceeded
+                "0x7e2ee654" to OnrampFailureCode.DAILY_LIMIT_EXCEEDED, // DailyVolumeLimitExceeded
+                "0x675dbc86" to OnrampFailureCode.VOLUME_LIMIT_EXCEEDED, // MonthlyBuyOrderLimitExceeded
+                "0x49de1789" to OnrampFailureCode.VOLUME_LIMIT_EXCEEDED, // MonthlyVolumeLimitExceeded
+                "0xb14a1ff3" to OnrampFailureCode.VOLUME_LIMIT_EXCEEDED, // UserYearlyVolumeLimitExceeded
+                // Nothing the user can do, and verifying an account will not change it.
+                "0xebb6f34b" to OnrampFailureCode.USER_BLACKLISTED, // UserIsBlacklisted
+                // No one on the other side of the trade.
+                "0x5d04ff4c" to OnrampFailureCode.NO_MERCHANT, // NotEnoughEligibleMerchants
+                "0x1775c43e" to OnrampFailureCode.NO_MERCHANT, // OrderNotAssigned
+                "0x9ae55bc7" to OnrampFailureCode.NO_MERCHANT, // MerchantBlacklisted
+                "0xa6af7ebe" to OnrampFailureCode.NO_MERCHANT, // MerchantNotRegistered
+                "0x7290a612" to OnrampFailureCode.NO_MERCHANT, // MerchantNotApproved
+                "0xc56873ba" to OnrampFailureCode.ORDER_EXPIRED, // OrderExpired
+                "0x02a6fdd2" to OnrampFailureCode.ROUTE_DISABLED, // CurrencyNotSupported
+                "0x2c5211c6" to OnrampFailureCode.BAD_REQUEST, // InvalidAmount
+                "0x3eb17c88" to OnrampFailureCode.BAD_REQUEST, // InvalidBlockAmount
+                "0xaa60ec26" to OnrampFailureCode.BAD_REQUEST, // InvalidOrderUpi
+                // The order moved on without us — a resumed screen acting on a stale phase.
+                "0x7f61b868" to OnrampFailureCode.WRONG_PHASE, // OrderAlreadyPaid
+                "0x03683687" to OnrampFailureCode.WRONG_PHASE, // OrderAlreadyCompleted
+                "0x181b1b2e" to OnrampFailureCode.WRONG_PHASE, // OrderStatusInvalid
+                "0x6b1b90b4" to OnrampFailureCode.WRONG_PHASE, // OrderNotAccepted
+                "0x2e757a60" to OnrampFailureCode.WRONG_PHASE, // OrderTypeIncorrect
+                "0x688c176f" to OnrampFailureCode.WRONG_PHASE, // InvalidOrderType
+                "0x1e3b9629" to OnrampFailureCode.WRONG_PHASE, // OrderNotPaid
+                "0xf8bfad32" to OnrampFailureCode.WRONG_PHASE, // NotPaidBuyOrder
+                "0x58db8ed6" to OnrampFailureCode.ORDER_NOT_FOUND, // OrderNotPlaced
+            )
     }
 }
 

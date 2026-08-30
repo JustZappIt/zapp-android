@@ -86,6 +86,19 @@ enum class OnrampFailureCode {
     NETWORK_UNAVAILABLE,
 
     /**
+     * A rolling cap, not a per-order one. Kept apart from [CAP_EXCEEDED] because the remedy is
+     * different: no amount will pass until the window rolls over, so "try a smaller amount" is a
+     * dead end here.
+     */
+    DAILY_LIMIT_EXCEEDED,
+
+    /** The monthly or yearly cap. Same shape as [DAILY_LIMIT_EXCEEDED] over a longer window. */
+    VOLUME_LIMIT_EXCEEDED,
+
+    /** The exchange has blocked this wallet. Verifying an account does not lift it. */
+    USER_BLACKLISTED,
+
+    /**
      * The user's fiat has left their account and the merchant's leg is still outstanding. Not a
      * dead order: the merchant can still settle it, and on the direct route it is the only state
      * where money has moved but nothing has been received.

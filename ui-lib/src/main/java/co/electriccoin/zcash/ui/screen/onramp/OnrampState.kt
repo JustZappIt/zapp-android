@@ -68,6 +68,8 @@ internal data class OnrampState(
     val onConfirmPaid: () -> Unit,
     val onDismissPaidConfirm: () -> Unit,
     val onCancel: () -> Unit,
+    /** The daily limit is set by reputation, so the explanation is the screen that raises it. */
+    val onRaiseLimit: () -> Unit,
     val onDeliveryAction: () -> Unit,
     val onDone: () -> Unit,
 ) {
