@@ -39,8 +39,8 @@ data class PlaceOrderArgs(
 object DiamondCalls {
     fun placeOrderCalldata(args: PlaceOrderArgs): ByteArray {
         val isBuy = args.orderType == OrderType.BUY
-        val pubKey = if (isBuy) "" else args.relayPubKeyEthCrypto
-        val userPubKey = if (isBuy) args.relayPubKeyEthCrypto else ""
+        val pubKey = if (isBuy) args.relayPubKeyEthCrypto else ""
+        val userPubKey = if (isBuy) "" else args.relayPubKeyEthCrypto
 
         val abiArgs =
             listOf<AbiArg>(
