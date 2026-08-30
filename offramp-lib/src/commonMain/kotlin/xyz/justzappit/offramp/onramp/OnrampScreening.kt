@@ -28,6 +28,7 @@ import xyz.justzappit.evm.abi.keccak256
 import xyz.justzappit.evm.hd.EvmKey
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.types.Address
+import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.evm.util.padLeftToWord
 import xyz.justzappit.evm.util.toHex
 import xyz.justzappit.offramp.p2p.CurrencyCode
@@ -77,10 +78,13 @@ sealed interface OnrampScreeningOutcome {
         val activityLogId: JsonElement
     ) : OnrampScreeningOutcome
 
-    /** The only outcome that stops a placement. Show [message] as the service worded it. */
-    data class Rejected(
-        val message: String
-    ) : OnrampScreeningOutcome
+    /**
+     * The only outcome that stops a placement. The service's own wording is deliberately not
+     * carried: [OnrampStatus.Failed] has no message slot, and [OnrampFailureCode]'s contract is to
+     * branch on the code and localise from it. A field that every caller drops reads like a
+     * promise the UI keeps, and it does not.
+     */
+    data object Rejected : OnrampScreeningOutcome
 
     /**
      * The service could not be reached or answered badly. Fail-open: the order still places, and
@@ -144,10 +148,16 @@ class OnrampScreeningClient(
         if (!response.status.isSuccess()) return OnrampScreeningOutcome.Unavailable
 
         val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
-        val approved = body["approved"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false
-        if (!approved) {
-            return OnrampScreeningOutcome.Rejected(body["message"]?.jsonPrimitive?.content.orEmpty())
-        }
+        // ☠ Only an explicit `approved: false` rejects. A 200 whose body simply lacks the field —
+        // an envelope change, a proxy answering for the service — is "answered badly", not a
+        // rejection, and gets the same Unavailable treatment as a missing `activity_log_id` two
+        // lines down and a body that does not parse at all. Defaulting the absent field to `false`
+        // would stop every order on the corridor the first time the schema drifted, worded to the
+        // user as though they had been turned down.
+        val approved =
+            body["approved"]?.jsonPrimitive?.content?.toBooleanStrictOrNull()
+                ?: return OnrampScreeningOutcome.Unavailable
+        if (!approved) return OnrampScreeningOutcome.Rejected
         val logId = body["activity_log_id"] ?: return OnrampScreeningOutcome.Unavailable
         return OnrampScreeningOutcome.Approved(logId)
     }
@@ -231,7 +241,7 @@ class OnrampScreeningClient(
      * an IV-prefixing cipher produces for a 12-byte GCM nonce and a 16-byte tag. The IV comes from
      * the provider's CSPRNG per call rather than being passed in: supplying one is a delicate API
      * precisely because reusing a GCM nonce under a fixed key is catastrophic, and there is
-     * nothing here that needs a chosen IV. [OnrampScreeningEncryptionTest] pins the layout.
+     * nothing here that needs a chosen IV. [OnrampScreeningTest] pins the layout.
      *
      * The AAD binds the record's type, its subject and its millisecond timestamp, so a payload
      * cannot be replayed under a different header.
@@ -272,14 +282,17 @@ class OnrampScreeningClient(
             ).toHex()
     }
 
+    /**
+     * The length check stays here — AES-256 is the only key this endpoint accepts, and a shorter
+     * one would otherwise fail much later inside the cipher. The decode itself is [hexToBytes],
+     * which deliberately keeps the input out of its error messages: this one is a symmetric key.
+     */
     private fun String.decodeKeyHex(): ByteArray {
         val raw = removePrefix("0x")
         require(raw.length == AES_256_KEY_HEX_LEN) {
             "screening key must be a 32-byte hex AES-256 key"
         }
-        return ByteArray(raw.length / 2) { i ->
-            raw.substring(i * 2, i * 2 + 2).toInt(HEX_RADIX).toByte()
-        }
+        return raw.hexToBytes()
     }
 
     private companion object {
@@ -291,7 +304,6 @@ class OnrampScreeningClient(
         const val PATH_LINK_ORDER = "/activity-logs/link-order"
         const val MILLIS_PER_SECOND = 1_000L
         const val AES_256_KEY_HEX_LEN = 64
-        const val HEX_RADIX = 16
         const val V_OFFSET = 27
         const val HEX_PREFIX = "0x"
         const val EIP191_HEADER = "Ethereum Signed Message:\n"

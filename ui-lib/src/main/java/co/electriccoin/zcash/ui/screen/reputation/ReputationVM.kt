@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
-import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.reputation.ReputationReader
 import xyz.justzappit.offramp.reputation.ReputationSummary
@@ -34,7 +33,7 @@ internal class ReputationVM(
     private val accountProvider: SmartOfframpAccountProvider,
     private val reputationReader: ReputationReader,
 ) : ViewModel() {
-    private val currency = CurrencyCode.fromCodeOrNull(args.currencyCode) ?: CurrencyCode.Inr
+    private val currency = args.currency
     private var loadJob: Job? = null
 
     private val mutableState =
@@ -155,7 +154,7 @@ internal class ReputationVM(
     }
 
     private fun onRaiseLimit() {
-        navigationRouter.forward(IncreaseReputationArgs(currencyCode = currency.code))
+        navigationRouter.forward(IncreaseReputationArgs(currency = currency))
     }
 
     private fun onBack() {

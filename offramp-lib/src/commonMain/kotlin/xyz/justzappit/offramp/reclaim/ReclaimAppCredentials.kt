@@ -19,14 +19,19 @@ data class ReclaimAppCredentials(
     val appId: String,
     val appSecret: String,
 ) {
+    /**
+     * ☠ Checked, never thrown on. This is registered as a lazy Koin `single`, so a `require` here
+     * would surface as a crash inside composition — the first `koinViewModel<IncreaseReputationVM>()`
+     * — for a developer whose `local.properties` holds a truncated paste. [ReclaimVerificationDriver]
+     * already branches on this to emit [ReclaimFailure.NotConfigured], which says "verification is
+     * unavailable" instead. A build without working credentials is a build that cannot verify, not
+     * a build that cannot run.
+     *
+     * Note what this does *not* police: the appId travels as the exact string Reclaim was
+     * registered with, because the TEE nonce hashes that string rather than the address, so
+     * re-casing it silently changes the nonce. [Address.parseOrNull] is case-insensitive and
+     * cannot catch that.
+     */
     val isConfigured: Boolean
         get() = appSecret.isNotBlank() && Address.parseOrNull(appId) != null
-
-    init {
-        // The appId travels as the exact string Reclaim was registered with: the TEE nonce hashes
-        // that string, not the address, so re-casing it silently changes the nonce.
-        require(appId.isBlank() || Address.parseOrNull(appId) != null) {
-            "RECLAIM_APP_ID must be an EVM address, the signer's own"
-        }
-    }
 }

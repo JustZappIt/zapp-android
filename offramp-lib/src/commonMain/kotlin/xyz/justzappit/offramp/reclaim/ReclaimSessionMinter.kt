@@ -156,7 +156,6 @@ class ReclaimSessionMinter(
             put("reclaimSessionId", sessionId)
         }
 
-    @Suppress("LongParameterList")
     internal fun templateData(
         sessionId: String,
         providerId: String,
@@ -207,10 +206,24 @@ class ReclaimSessionMinter(
         return "$SHARE_LINK_BASE$encoded"
     }
 
-    /** Android's store-then-resume fallback, for a device with nothing registered for an https link. */
-    fun installIntentUrl(requestUrl: String): String =
-        "intent://details?id=$VERIFIER_PACKAGE&url=${requestUrl.encodeURLParameter()}" +
-            "#Intent;scheme=market;action=android.intent.action.VIEW;package=com.android.vending;end;"
+    /**
+     * The store fallback, for a device with nothing registered for the https share link.
+     *
+     * ☠ Plain `market://`, not an `intent://` string. The only consumer is Compose's
+     * `LocalUriHandler`, and the stock `AndroidUriHandler` does `startActivity(ACTION_VIEW,
+     * Uri.parse(url))` — which resolves nothing for scheme `intent` and throws. Turning an
+     * `intent://` string into a launchable Intent needs `Intent.parseUri(…, URI_INTENT_SCHEME)`,
+     * which nothing in this app calls.
+     *
+     * [requestUrl] is deliberately dropped: it only rode along as the `intent://` extra that made
+     * the store resume the session after installing, and that never executed. The user comes back
+     * to a screen that is still holding the live session anyway.
+     *
+     * On a build with no Play Store — the `foss` flavour on a de-Googled device — this resolves to
+     * nothing either. That is the honest end of the chain: we are already in the branch where no
+     * browser handled the https link, so there is nothing left to hand the user.
+     */
+    fun installIntentUrl(requestUrl: String): String = "market://details?id=$VERIFIER_PACKAGE"
 
     private suspend fun openSession(providerId: String, timestamp: String, signature: String): InitSessionDto {
         val body =

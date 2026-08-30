@@ -72,7 +72,7 @@ internal fun ReputationView(state: ReputationState) {
                 Box(
                     modifier =
                         Modifier
-                            .size(INFO_TAP_TARGET.dp)
+                            .size(INFO_TAP_TARGET)
                             .clickable { showInfo = true }
                             .semantics {
                                 role = Role.Button
@@ -90,7 +90,7 @@ internal fun ReputationView(state: ReputationState) {
                     .weight(1f)
                     .fillMaxWidth()
                     .verticalScroll(scrollState)
-                    .padding(horizontal = HORIZONTAL_PADDING.dp, vertical = VERTICAL_PADDING.dp),
+                    .padding(horizontal = HORIZONTAL_PADDING, vertical = VERTICAL_PADDING),
         ) {
             ReputationContentBody(state)
         }
@@ -101,7 +101,7 @@ internal fun ReputationView(state: ReputationState) {
                     ZappButton(
                         text = action.text.getValue(),
                         enabled = action.isEnabled,
-                        modifier = Modifier.weight(1f).padding(start = BOTTOM_BAR_GAP.dp),
+                        modifier = Modifier.weight(1f).padding(start = BOTTOM_BAR_GAP),
                         onClick = action.onClick,
                     )
                 }
@@ -136,7 +136,7 @@ private fun ReputationContentBody(state: ReputationState) {
 
 @Composable
 private fun UnreadableContent(state: ReputationState) {
-    Column(verticalArrangement = Arrangement.spacedBy(SECTION_GAP.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(SECTION_GAP)) {
         BasicText(
             text = stringResource(R.string.reputation_unreadable_title),
             style = ZappTheme.typography.sectionTitle.copy(color = ZappTheme.colors.text),
@@ -148,7 +148,7 @@ private fun UnreadableContent(state: ReputationState) {
 
 @Composable
 private fun BlacklistedContent() {
-    Column(verticalArrangement = Arrangement.spacedBy(SECTION_GAP.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(SECTION_GAP)) {
         BasicText(
             text = stringResource(R.string.reputation_blacklisted_title),
             style = ZappTheme.typography.sectionTitle.copy(color = ZappTheme.colors.text),
@@ -159,7 +159,7 @@ private fun BlacklistedContent() {
 
 @Composable
 private fun ReadyContent(content: ReputationContent.Ready, state: ReputationState) {
-    Column(verticalArrangement = Arrangement.spacedBy(SECTION_GAP.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(SECTION_GAP)) {
         BuyLimitCard(content)
         if (content.verified.isNotEmpty()) {
             ZappSettingsGroup(title = stringResource(R.string.reputation_verified_group)) {
@@ -184,25 +184,25 @@ private fun ReadyContent(content: ReputationContent.Ready, state: ReputationStat
 private fun BuyLimitCard(content: ReputationContent.Ready) {
     val c = ZappTheme.colors
     ZappBorderedCard(
-        modifier = Modifier.padding(horizontal = CARD_GUTTER.dp),
-        padding = HERO_PADDING.dp,
+        modifier = Modifier.padding(horizontal = CARD_GUTTER),
+        padding = HERO_PADDING,
     ) {
         ZappSectionLabel(text = stringResource(R.string.reputation_buy_limit))
-        Spacer(Modifier.height(HERO_LABEL_GAP.dp))
+        Spacer(Modifier.height(HERO_LABEL_GAP))
         BasicText(
             text = content.buyLimit.getValue(),
             style =
                 ZappTheme.typography.display
                     .copy(color = if (content.isLocked) c.textMuted else c.text),
         )
-        Spacer(Modifier.height(HERO_CAPTION_GAP.dp))
+        Spacer(Modifier.height(HERO_CAPTION_GAP))
         BasicText(
             text = content.buyLimitCaption.getValue(),
             style = ZappTheme.typography.body.copy(color = c.textMuted),
         )
-        Spacer(Modifier.height(HERO_DIVIDER_GAP.dp))
+        Spacer(Modifier.height(HERO_DIVIDER_GAP))
         ZappRowDivider()
-        Spacer(Modifier.height(HERO_DIVIDER_GAP.dp))
+        Spacer(Modifier.height(HERO_DIVIDER_GAP))
         ZappSummaryRow(
             label = stringResource(R.string.reputation_points_row),
             value = content.points,
@@ -248,19 +248,19 @@ private fun VerifiedPlatformRow(row: PlatformRow) {
 
 @Composable
 private fun Notice(text: String) {
-    Box(modifier = Modifier.fillMaxWidth().background(ZappTheme.colors.surfaceAlt).padding(NOTICE_PADDING.dp)) {
+    Box(modifier = Modifier.fillMaxWidth().background(ZappTheme.colors.surfaceAlt).padding(NOTICE_PADDING)) {
         BasicText(text, style = ZappTheme.typography.body.copy(color = ZappTheme.colors.textMuted))
     }
 }
 
-private const val HORIZONTAL_PADDING = 18
-private const val VERTICAL_PADDING = 16
-private const val BOTTOM_BAR_GAP = 12
-private const val SECTION_GAP = 16
-private const val NOTICE_PADDING = 12
-private const val CARD_GUTTER = 14
-private const val HERO_PADDING = 18
-private const val HERO_LABEL_GAP = 10
-private const val HERO_CAPTION_GAP = 6
-private const val HERO_DIVIDER_GAP = 16
-private const val INFO_TAP_TARGET = 48
+private val HORIZONTAL_PADDING = 18.dp
+private val VERTICAL_PADDING = 16.dp
+private val BOTTOM_BAR_GAP = 12.dp
+private val SECTION_GAP = 16.dp
+private val NOTICE_PADDING = 12.dp
+private val CARD_GUTTER = 14.dp
+private val HERO_PADDING = 18.dp
+private val HERO_LABEL_GAP = 10.dp
+private val HERO_CAPTION_GAP = 6.dp
+private val HERO_DIVIDER_GAP = 16.dp
+private val INFO_TAP_TARGET = 48.dp

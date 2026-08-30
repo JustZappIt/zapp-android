@@ -4,6 +4,11 @@
 package xyz.justzappit.offramp.onramp
 
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -16,6 +21,7 @@ import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.io.encoding.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
@@ -36,6 +42,18 @@ class OnrampScreeningTest {
             config = OnrampScreeningConfig(apiUrl = "https://screening.invalid/api/v1", encryptionKeyHex = KEY_HEX),
             deviceSignals = { SIGNALS },
             nowMillis = { nowMillis },
+        )
+
+    /** A client whose screening endpoint answers with exactly [body]. */
+    private fun clientAnswering(body: String, status: HttpStatusCode = HttpStatusCode.OK) =
+        OnrampScreeningClient(
+            httpClient =
+                HttpClient(
+                    MockEngine { respond(body, status, headersOf(HttpHeaders.ContentType, "application/json")) },
+                ),
+            config = OnrampScreeningConfig(apiUrl = "https://screening.invalid/api/v1", encryptionKeyHex = KEY_HEX),
+            deviceSignals = { SIGNALS },
+            nowMillis = { 1_756_450_000_123L },
         )
 
     @Test
@@ -105,6 +123,49 @@ class OnrampScreeningTest {
             second.copyOfRange(0, IV_BYTES).toList(),
         )
     }
+
+    @Test
+    fun `a 200 that does not mention approved is unavailable, not a rejection`() =
+        runTest {
+            // ☠ The whole corridor rides on this. Rejected is the one outcome that stops a
+            // placement, so defaulting an absent field to "not approved" would turn any envelope
+            // change on the service into every Android buy failing, worded as a refusal.
+            val outcome =
+                clientAnswering("""{"status":"ok","data":{"activity_log_id":"a-1"}}""")
+                    .screenBuyOrder(signer, ORDER, country = "IN")
+
+            assertEquals(OnrampScreeningOutcome.Unavailable, outcome)
+        }
+
+    @Test
+    fun `only an explicit approved false stops the order`() =
+        runTest {
+            val outcome =
+                clientAnswering("""{"approved":false,"message":"sanctioned jurisdiction"}""")
+                    .screenBuyOrder(signer, ORDER, country = "IN")
+
+            assertEquals(OnrampScreeningOutcome.Rejected, outcome)
+        }
+
+    @Test
+    fun `an approval with no activity log id is unavailable, since there is nothing to link`() =
+        runTest {
+            val outcome =
+                clientAnswering("""{"approved":true}""")
+                    .screenBuyOrder(signer, ORDER, country = "IN")
+
+            assertEquals(OnrampScreeningOutcome.Unavailable, outcome)
+        }
+
+    @Test
+    fun `an approval carries the id the order will be linked to`() =
+        runTest {
+            val outcome =
+                clientAnswering("""{"approved":true,"activity_log_id":"a-1"}""")
+                    .screenBuyOrder(signer, ORDER, country = "IN")
+
+            assertEquals("a-1", assertIs<OnrampScreeningOutcome.Approved>(outcome).activityLogId.jsonPrimitive.content)
+        }
 
     private companion object {
         const val SIGNING_KEY_HEX = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"

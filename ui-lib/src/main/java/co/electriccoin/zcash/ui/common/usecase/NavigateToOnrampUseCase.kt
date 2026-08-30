@@ -3,7 +3,6 @@ package co.electriccoin.zcash.ui.common.usecase
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.screen.onramp.OnrampArgs
-import co.electriccoin.zcash.ui.screen.reputation.ReputationArgs
 import kotlinx.coroutines.CancellationException
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
 import xyz.justzappit.offramp.p2p.CurrencyCode
@@ -13,17 +12,16 @@ class NavigateToOnrampUseCase(
     private val resolveBuyCorridor: ResolveBuyCorridorUseCase,
     private val accountProvider: SmartOfframpAccountProvider,
     private val reputationReader: ReputationReader,
+    private val navigateToReputation: NavigateToReputationUseCase,
     private val navigationRouter: NavigationRouter,
 ) {
     suspend operator fun invoke() {
         val corridor = resolveBuyCorridor()
-        navigationRouter.forward(
-            if (canBuy(corridor)) {
-                OnrampArgs(currencyCode = corridor.code)
-            } else {
-                ReputationArgs(currencyCode = corridor.code)
-            },
-        )
+        if (canBuy(corridor)) {
+            navigationRouter.forward(OnrampArgs(currencyCode = corridor.code))
+        } else {
+            navigateToReputation(corridor)
+        }
     }
 
     /**

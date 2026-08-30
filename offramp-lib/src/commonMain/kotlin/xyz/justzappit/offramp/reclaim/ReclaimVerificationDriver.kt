@@ -177,7 +177,12 @@ class ReclaimVerificationDriver(
                     // verification the user has not even started.
                     null
                 }
-            if (reminted != null) {
+            // ☠ The loop only tests the signal at the top, so a tap that lands while the mint
+            // above is in flight is invisible here. Adopting the fresh session then would leave
+            // the user verifying against the link they actually opened while `awaitProofs` polls
+            // a session nobody ever touched — ten minutes of "Waiting for Reclaim…" ending in a
+            // bogus "session expired" on a verification that in fact succeeded.
+            if (reminted != null && !launchSignal.isLaunched) {
                 session = reminted
                 emit(ready(session))
             }

@@ -45,12 +45,12 @@ internal class IncreaseReputationVM(
     private val reputationReader: ReputationReader,
     private val verificationDriver: ReclaimVerificationDriver,
 ) : ViewModel() {
-    private val currency = CurrencyCode.fromCodeOrNull(args.currencyCode) ?: CurrencyCode.Inr
+    private val currency = args.currency
     private var summary: ReputationSummary? = null
     private var loadJob: Job? = null
     private var runJob: Job? = null
     private var launchSignal: ReclaimLaunchSignal? = null
-    private var launchUrls: Pair<String, String>? = null
+    private var ready: ReclaimStatus.Ready? = null
     private var lastActiveStage = VerificationStage.READY
 
     private val mutableState =
@@ -150,7 +150,7 @@ internal class IncreaseReputationVM(
         if (runJob?.isActive == true) return
         val signal = ReclaimLaunchSignal()
         launchSignal = signal
-        launchUrls = null
+        ready = null
         runJob =
             verificationDriver
                 .verify(platform, currency, signal)
@@ -169,7 +169,7 @@ internal class IncreaseReputationVM(
             }
 
             is ReclaimStatus.Ready -> {
-                launchUrls = status.requestUrl to status.installIntentUrl
+                ready = status
                 emitRun(platform, VerificationStage.READY)
             }
 
@@ -208,8 +208,8 @@ internal class IncreaseReputationVM(
                 steps = steps(stage),
                 message = message(platform, stage),
                 error = failure?.let(::failureMessage),
-                launchUrl = launchUrls?.first,
-                installIntentUrl = launchUrls?.second,
+                launchUrl = ready?.requestUrl,
+                installIntentUrl = ready?.installIntentUrl,
                 newPoints = summary?.points?.toString(),
                 newBuyLimit =
                     summary?.let {

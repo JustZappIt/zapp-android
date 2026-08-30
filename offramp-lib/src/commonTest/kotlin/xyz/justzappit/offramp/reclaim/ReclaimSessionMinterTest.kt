@@ -83,14 +83,12 @@ class ReclaimSessionMinterTest {
     }
 
     @Test
-    fun `the install intent points at the Verifier's package and carries the session url`() {
-        val intent = minter.installIntentUrl("https://share.reclaimprotocol.org/link/?template=abc")
-        assertTrue(intent.startsWith("intent://details?id=org.reclaimprotocol.app&url="))
-        assertTrue(
-            intent.endsWith(
-                "#Intent;scheme=market;action=android.intent.action.VIEW;package=com.android.vending;end;",
-            ),
-        )
+    fun `the store fallback is a scheme Compose's UriHandler can actually open`() {
+        val url = minter.installIntentUrl("https://share.reclaimprotocol.org/link/?template=abc")
+
+        // AndroidUriHandler does ACTION_VIEW on Uri.parse. `market:` resolves to Play; `intent:`
+        // resolves to nothing and throws, which is what this used to emit.
+        assertEquals("market://details?id=org.reclaimprotocol.app", url)
     }
 
     private fun decodeUrlComponent(value: String): String {

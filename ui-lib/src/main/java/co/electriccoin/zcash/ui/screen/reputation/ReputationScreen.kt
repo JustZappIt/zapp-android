@@ -8,6 +8,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.serialization.Serializable
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
+import xyz.justzappit.offramp.p2p.CurrencyCode
 
 @Composable
 fun ReputationScreen(args: ReputationArgs) {
@@ -29,5 +30,5 @@ fun ReputationScreen(args: ReputationArgs) {
  */
 @Serializable
 data class ReputationArgs(
-    val currencyCode: String,
+    val currency: CurrencyCode,
 )

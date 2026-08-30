@@ -24,6 +24,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -108,6 +109,37 @@ class BaseRpcClientTest {
             assertEquals("deadbeef", result.toHex())
             val sentParams = handledRequests.last()["params"]!!.toString()
             assertTrue(sentParams.contains("\"0x0102\""), "expected hex-encoded data in params, got $sentParams")
+        }
+
+    @Test
+    fun `ethCall carries a sender when one is given`() =
+        runTest {
+            // Simulating a write is the reason this parameter exists: the ReputationManager
+            // compares a proof's context address against msg.sender, so a simulation with no
+            // sender proves nothing about the account that will actually submit.
+            nextResponse = """{"jsonrpc":"2.0","id":1,"result":"0x01"}"""
+            val from = Address.parse("0x000000000000000000000000000000000000F70F")
+            val to = Address.parse("0x0000000000000000000000000000000000000010")
+
+            rpc.ethCall(to = to, data = byteArrayOf(0x01), from = from)
+
+            val sentParams = handledRequests.last()["params"]!!.toString()
+            assertTrue(sentParams.contains(from.checksumHex), "expected the sender in params, got $sentParams")
+        }
+
+    @Test
+    fun `ethCall omits the sender entirely when there is none`() =
+        runTest {
+            // Every pre-existing call site passes no sender, and a `view` read does not care. The
+            // field must stay absent rather than being sent as null or the zero address, either of
+            // which some nodes treat as a real caller.
+            nextResponse = """{"jsonrpc":"2.0","id":1,"result":"0x01"}"""
+            val to = Address.parse("0x0000000000000000000000000000000000000010")
+
+            rpc.ethCall(to = to, data = byteArrayOf(0x01))
+
+            val sentParams = handledRequests.last()["params"]!!.toString()
+            assertFalse(sentParams.contains("from"), "expected no from key at all, got $sentParams")
         }
 
     @Test

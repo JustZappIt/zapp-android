@@ -15,10 +15,12 @@ import kotlinx.serialization.json.JsonElement
 import xyz.justzappit.evm.abi.AbiDecoder
 import xyz.justzappit.evm.abi.AbiEncoder
 import xyz.justzappit.evm.math.BigInteger
+import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.rpc.TransactionReceipt
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
+import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.evm.util.toHex
 import xyz.justzappit.offramp.account.Erc4337SubmitterProvider
 import xyz.justzappit.offramp.account.OfframpAccountProvider
@@ -66,7 +68,7 @@ import xyz.justzappit.offramp.reputation.ReputationCalls
  *   wallet holds. Losing that key leaves an order that cannot be paid; the custodial route had no
  *   such failure mode because the service held the key.
  */
-@Suppress("TooManyFunctions", "LongParameterList")
+@Suppress("TooManyFunctions")
 class DirectOnrampDriver(
     private val rpc: BaseRpcClient,
     private val network: P2pNetworkConfig,
@@ -198,7 +200,7 @@ class DirectOnrampDriver(
                     data = DiamondCalls.paidBuyOrderCalldata(orderId),
                 )
             require(account.submitter.awaitReceipt(hash).success) { "paidBuyOrder reverted" }
-            watch(orderId, account, fromPaid = true)
+            watch(orderId, account, fromPaid = true, paidTx = hash.hex)
         }.guarded(OnrampPhase.CONFIRMING_PAID, checkpoint.id, checkpoint.orderId)
 
     /**
@@ -388,7 +390,7 @@ class DirectOnrampDriver(
             }
         return when (outcome) {
             is OnrampScreeningOutcome.Approved -> ScreeningResult.Approved(outcome.activityLogId)
-            is OnrampScreeningOutcome.Rejected -> ScreeningResult.Rejected
+            OnrampScreeningOutcome.Rejected -> ScreeningResult.Rejected
             OnrampScreeningOutcome.Unavailable -> ScreeningResult.Unavailable
         }
     }
@@ -428,6 +430,12 @@ class DirectOnrampDriver(
         orderId: BigInteger,
         account: SubmittingAccount,
         fromPaid: Boolean,
+        /**
+         * The `paidBuyOrder` transaction, when this wait began with one. Only [confirmPaid] has it:
+         * a cold-start [resume] never sent it and cannot recover it from the order, so null there
+         * is the honest answer rather than a hash guessed from the chain.
+         */
+        paidTx: String? = null,
     ) {
         val handle = orderId.toString()
         var attempts = 0
@@ -436,7 +444,7 @@ class DirectOnrampDriver(
             val snapshot = readOrder(orderId)
             when (snapshot?.status) {
                 OrderStatus.COMPLETED -> {
-                    emit(completed(snapshot, handle, account.address))
+                    emit(completed(snapshot, handle, account.address, paidTx))
                     return
                 }
 
@@ -517,7 +525,18 @@ class DirectOnrampDriver(
         }
     }
 
-    private suspend fun completed(snapshot: OrderSnapshot, handle: String, recipient: Address): OnrampStatus {
+    /**
+     * [paidTx] is the user's own on-chain payment confirmation, not the merchant's settlement — the
+     * custodial route's `paidTx` came off the service's order record and meant the latter. It is
+     * still the transaction this wallet sent and the one worth linking to an explorer; label it as
+     * the payment, never as the settlement.
+     */
+    private suspend fun completed(
+        snapshot: OrderSnapshot,
+        handle: String,
+        recipient: Address,
+        paidTx: String?,
+    ): OnrampStatus {
         // The order tuple never carries the settled amounts; they live in their own read and are
         // zero until the merchant completes. Falling back to the placed figures keeps the receipt
         // honest rather than showing a zero.
@@ -527,7 +546,7 @@ class DirectOnrampDriver(
             orderId = handle,
             netUsdc = settled?.actualUsdcAmount?.takeIf { it > Usdc6.ZERO } ?: snapshot.usdcAmount,
             fiatAmount = settled?.actualFiatAmount?.takeIf { it > Usdc6.ZERO } ?: snapshot.fiatAmount,
-            paidTx = null,
+            paidTx = paidTx,
             recipientAddress = recipient,
         )
     }
@@ -788,9 +807,7 @@ class DirectOnrampDriver(
         /** ~15 minutes of headroom for settlement. */
         const val SETTLE_POLL_ATTEMPTS = 90
 
-        val ASSIGN_UP_TO: BigInteger =
-            xyz.justzappit.evm.math
-                .bigIntegerValueOf(3L)
+        val ASSIGN_UP_TO: BigInteger = bigIntegerValueOf(3L)
 
         const val BUY_LIMIT_SELECTOR = "0x91da284f"
         const val NO_REPUTATION_SELECTOR = "0x071ea33c"
@@ -805,15 +822,6 @@ class DirectOnrampDriver(
  * reads back as the wrong corridor would build a payment intent in the wrong currency.
  */
 internal fun corridorFromBytes32(currencyHex: String): CurrencyCode? =
-    CurrencyCode.fromCodeOrNull(
-        currencyHex
-            .removePrefix("0x")
-            .chunked(2)
-            .map { it.toInt(HEX_RADIX).toByte() }
-            .toByteArray()
-            .decodeToString()
-            .trimEnd(NUL_CHAR),
-    )
+    CurrencyCode.fromCodeOrNull(currencyHex.hexToBytes().decodeToString().trimEnd(NUL_CHAR))
 
-private const val HEX_RADIX = 16
 private const val NUL_CHAR = '\u0000'

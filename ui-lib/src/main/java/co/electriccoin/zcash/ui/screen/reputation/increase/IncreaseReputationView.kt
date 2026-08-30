@@ -74,7 +74,7 @@ internal fun IncreaseReputationView(state: IncreaseReputationState) {
                 Box(
                     modifier =
                         Modifier
-                            .size(INFO_TAP_TARGET.dp)
+                            .size(INFO_TAP_TARGET)
                             .clickable { showInfo = true }
                             .semantics {
                                 role = Role.Button
@@ -92,7 +92,7 @@ internal fun IncreaseReputationView(state: IncreaseReputationState) {
                     .weight(1f)
                     .fillMaxWidth()
                     .verticalScroll(scrollState)
-                    .padding(horizontal = HORIZONTAL_PADDING.dp, vertical = VERTICAL_PADDING.dp),
+                    .padding(horizontal = HORIZONTAL_PADDING, vertical = VERTICAL_PADDING),
         ) {
             when {
                 state.run != null -> RunContent(state.run, state)
@@ -114,7 +114,7 @@ private fun LoadingContent() {
 
 @Composable
 private fun ListContent(state: IncreaseReputationState) {
-    Column(verticalArrangement = Arrangement.spacedBy(SECTION_GAP.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(SECTION_GAP)) {
         BasicText(
             text = stringResource(R.string.increase_reputation_intro),
             style = ZappTheme.typography.body.copy(color = ZappTheme.colors.textMuted),
@@ -146,14 +146,14 @@ private fun PlatformRow(row: VerifiableRow) {
         trailing = {
             if (row.isVerified) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(ROW_TRAILING_GAP.dp),
+                    horizontalArrangement = Arrangement.spacedBy(ROW_TRAILING_GAP),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = null,
                         tint = c.success,
-                        modifier = Modifier.size(CHECK_SIZE.dp),
+                        modifier = Modifier.size(CHECK_SIZE),
                     )
                     BasicText(
                         text = row.reward.getValue(),
@@ -185,7 +185,7 @@ private fun PlatformRow(row: VerifiableRow) {
 
 @Composable
 private fun RunContent(run: VerificationRun, state: IncreaseReputationState) {
-    Column(verticalArrangement = Arrangement.spacedBy(SECTION_GAP.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(SECTION_GAP)) {
         if (run.stage == VerificationStage.DONE) {
             ZappSuccessHeader(
                 title = run.message,
@@ -229,7 +229,7 @@ private fun BottomDock(state: IncreaseReputationState, uriHandler: UriHandler) {
         onBack = state.onBack,
         primaryAction = {
             val action = state.primaryAction ?: return@ZappBottomActionBar
-            val modifier = Modifier.weight(1f).padding(start = BOTTOM_BAR_GAP.dp)
+            val modifier = Modifier.weight(1f).padding(start = BOTTOM_BAR_GAP)
             when {
                 run?.stage == VerificationStage.DONE -> {
                     ZappDoneButton(text = action.text.getValue(), modifier = modifier, onClick = action.onClick)
@@ -279,17 +279,17 @@ private fun Notice(text: String) {
             Modifier
                 .fillMaxWidth()
                 .background(ZappTheme.colors.surfaceAlt)
-                .padding(NOTICE_PADDING.dp),
+                .padding(NOTICE_PADDING),
     ) {
         BasicText(text, style = ZappTheme.typography.body.copy(color = ZappTheme.colors.textMuted))
     }
 }
 
-private const val HORIZONTAL_PADDING = 18
-private const val VERTICAL_PADDING = 16
-private const val BOTTOM_BAR_GAP = 12
-private const val SECTION_GAP = 16
-private const val NOTICE_PADDING = 12
-private const val CHECK_SIZE = 18
-private const val ROW_TRAILING_GAP = 6
-private const val INFO_TAP_TARGET = 48
+private val HORIZONTAL_PADDING = 18.dp
+private val VERTICAL_PADDING = 16.dp
+private val BOTTOM_BAR_GAP = 12.dp
+private val SECTION_GAP = 16.dp
+private val NOTICE_PADDING = 12.dp
+private val CHECK_SIZE = 18.dp
+private val ROW_TRAILING_GAP = 6.dp
+private val INFO_TAP_TARGET = 48.dp

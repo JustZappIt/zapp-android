@@ -7,6 +7,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.serialization.Serializable
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
+import xyz.justzappit.offramp.p2p.CurrencyCode
 
 @Composable
 fun IncreaseReputationScreen(args: IncreaseReputationArgs) {
@@ -19,5 +20,5 @@ fun IncreaseReputationScreen(args: IncreaseReputationArgs) {
 /** The corridor decides what a verification is worth, so it travels with the route. */
 @Serializable
 data class IncreaseReputationArgs(
-    val currencyCode: String,
+    val currency: CurrencyCode,
 )
