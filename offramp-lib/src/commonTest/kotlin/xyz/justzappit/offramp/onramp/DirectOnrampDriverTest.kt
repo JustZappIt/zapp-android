@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import xyz.justzappit.evm.crypto.Ecies
 import xyz.justzappit.evm.hd.EvmKey
 import xyz.justzappit.evm.hd.EvmKeyDerivation
 import xyz.justzappit.evm.math.BigInteger
@@ -37,6 +38,7 @@ import xyz.justzappit.offramp.p2p.OrderReadSource
 import xyz.justzappit.offramp.p2p.OrderSnapshot
 import xyz.justzappit.offramp.p2p.OrderStatus
 import xyz.justzappit.offramp.p2p.OrderType
+import xyz.justzappit.offramp.p2p.RelayIdentities
 import xyz.justzappit.offramp.p2p.SubgraphClient
 import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.test.AfterTest
@@ -62,6 +64,7 @@ class DirectOnrampDriverTest {
 
     /** Selectors, taken from the real calldata builders so a signature change fails here first. */
     private val getAddressSelector = ThirdwebSmartAccount.getAddressCalldata(owner.address).selector()
+    private val expiresAtSelector = DiamondCalls.getOrderExpiresAtCalldata(bigIntegerOne).selector()
     private val isOrderExpiredSelector = DiamondCalls.isOrderExpiredCalldata(bigIntegerOne).selector()
     private val additionalDetailsSelector = DiamondCalls.getAdditionalOrderDetailsCalldata(bigIntegerOne).selector()
 
@@ -99,6 +102,8 @@ class DirectOnrampDriverTest {
 
                         additionalDetailsSelector in params -> additionalDetails
 
+                        expiresAtSelector in params -> ENCODED_ZERO
+
                         else -> error("Unexpected eth_call on the watch path: $params")
                     }
                 respond("""{"jsonrpc":"2.0","id":1,"result":"$result"}""", HttpStatusCode.OK, jsonHeaders)
@@ -111,6 +116,9 @@ class DirectOnrampDriverTest {
 
     private val rpc = BaseRpcClient(rpcHttp, "http://mock/rpc")
     private val orderReader = FixedOrderReadSource()
+
+    /** A real relay key: the merchant handle is ECIES-sealed to it, exactly as the chain stores it. */
+    private val relay = RelayIdentities.generate()
 
     @AfterTest
     fun shutdown() {
@@ -242,7 +250,57 @@ class DirectOnrampDriverTest {
             assertTrue(failed.leavesOrderAlive)
         }
 
+    @Test
+    fun `an accepted order hands over the merchant handle and stops for the user`() =
+        runTest {
+            orderReader.answer = snapshot(OrderStatus.ACCEPTED, encryptedUserUpi = sealed(VPA))
+
+            val statuses = driver().resume(checkpoint()).toList()
+
+            val awaiting = assertIs<OnrampStatus.AwaitingPayment>(statuses.single())
+            val upi = assertIs<OnrampPaymentInstruction.Upi>(awaiting.instruction)
+            assertEquals(VPA, upi.address)
+            // A resting state: the next move is the user's, so polling must stop here.
+        }
+
+    @Test
+    fun `a resumed order whose corridor will not decode is never paid over UPI`() =
+        runTest {
+            // ☠ The regression. MEX is a real p2p market Zapp does not serve, so its currency word
+            // decodes to nothing — and an unreadable word used to default to INR, which is the one
+            // branch that wraps the handle in a upi:// intent and stamps a currency on it. For an
+            // EMVCo corridor the "handle" is a whole QR payload, so that is a payment instruction
+            // to the wrong rail in the wrong currency.
+            orderReader.answer =
+                snapshot(
+                    OrderStatus.ACCEPTED,
+                    currencyHex = UNSERVED_CORRIDOR_BYTES32,
+                    encryptedUserUpi = sealed(EMVCO_PAYLOAD),
+                )
+
+            val awaiting = assertIs<OnrampStatus.AwaitingPayment>(driver().resume(checkpoint()).toList().single())
+
+            val plain = assertIs<OnrampPaymentInstruction.Plain>(awaiting.instruction)
+            assertEquals(EMVCO_PAYLOAD, plain.address)
+        }
+
+    @Test
+    fun `an order whose handle cannot be decrypted fails rather than showing a placeholder`() =
+        runTest {
+            // The relay key is the only way to read it. Losing it means the order cannot be paid,
+            // and a partial address would send real money to nobody.
+            orderReader.answer = snapshot(OrderStatus.ACCEPTED, encryptedUserUpi = "not-a-cipher")
+
+            val failed = assertIs<OnrampStatus.Failed>(driver().resume(checkpoint()).toList().single())
+
+            assertEquals(OnrampFailureCode.UPSTREAM_FAILED, failed.code)
+        }
+
     // ---- harness ----
+
+    /** Seals [plaintext] to the relay key, the way the merchant does when accepting. */
+    private fun sealed(plaintext: String): String =
+        Ecies.cipherStringify(Ecies.encryptWithPublicKey(relay.publicKeyHex, plaintext))
 
     /**
      * Poll intervals of zero and a cap of two keep the timeout branches reachable in a test; these
@@ -275,7 +333,7 @@ class DirectOnrampDriverTest {
             subgraph = SubgraphClient(subgraphHttp, "http://mock/graph"),
             orderReader = orderReader,
             screening = null,
-            relayIdentityStore = InMemoryRelayIdentityStore(),
+            relayIdentityStore = InMemoryRelayIdentityStore(relay),
             orderRecipientUpiCache = InMemoryOrderRecipientUpiCache(),
             nowMillis = { 0L },
             acceptPollMillis = 0,
@@ -292,30 +350,33 @@ class DirectOnrampDriverTest {
             orderId = ORDER_ID.toString(),
         )
 
-    private fun snapshot(status: OrderStatus) =
-        OrderSnapshot(
-            orderId = ORDER_ID,
-            status = status,
-            orderType = OrderType.BUY,
-            circleId = bigIntegerOne,
-            userAddress = Address.parse(SMART_ACCOUNT),
-            usdcAmount = Usdc6.ofMicros(5_000_000),
-            fiatAmount = Usdc6.ofMicros(445_000_000),
-            currencyHex = INR_BYTES32,
-            acceptedMerchantAddress = null,
-            merchantPubKey = "",
-            encryptedUserUpi = "",
-            encryptedMerchantUpi = "",
-            placedAtEpochSeconds = 1_779_000_000L,
-            acceptedAtEpochSeconds = null,
-            paidAtEpochSeconds = null,
-            completedAtEpochSeconds = null,
-            cancelledAtEpochSeconds = null,
-            actualUsdcAmount = null,
-            actualFiatAmount = null,
-            placedTxHash = null,
-            source = OrderSnapshot.Source.OnChain,
-        )
+    private fun snapshot(
+        status: OrderStatus,
+        currencyHex: String = INR_BYTES32,
+        encryptedUserUpi: String = "",
+    ) = OrderSnapshot(
+        orderId = ORDER_ID,
+        status = status,
+        orderType = OrderType.BUY,
+        circleId = bigIntegerOne,
+        userAddress = Address.parse(SMART_ACCOUNT),
+        usdcAmount = Usdc6.ofMicros(5_000_000),
+        fiatAmount = Usdc6.ofMicros(445_000_000),
+        currencyHex = currencyHex,
+        acceptedMerchantAddress = null,
+        merchantPubKey = "",
+        encryptedUserUpi = encryptedUserUpi,
+        encryptedMerchantUpi = "",
+        placedAtEpochSeconds = 1_779_000_000L,
+        acceptedAtEpochSeconds = null,
+        paidAtEpochSeconds = null,
+        completedAtEpochSeconds = null,
+        cancelledAtEpochSeconds = null,
+        actualUsdcAmount = null,
+        actualFiatAmount = null,
+        placedTxHash = null,
+        source = OrderSnapshot.Source.OnChain,
+    )
 
     private fun ByteArray.selector(): String = copyOfRange(0, SELECTOR_BYTES).toHex()
 
@@ -346,6 +407,16 @@ class DirectOnrampDriverTest {
         val jsonHeaders = headersOf(HttpHeaders.ContentType, "application/json")
 
         const val INR_BYTES32 = "0x494e520000000000000000000000000000000000000000000000000000000000"
+
+        /** "MEX", NUL-padded: a real p2p market this app deliberately does not carry. */
+        const val UNSERVED_CORRIDOR_BYTES32 =
+            "0x4d45580000000000000000000000000000000000000000000000000000000000"
+
+        const val VPA = "merchant@upi"
+
+        /** What an EMVCo corridor puts in the handle field: a whole QR string, not an address. */
+        const val EMVCO_PAYLOAD =
+            "00020101021226580014BR.GOV.BCB.PIX0136abc-def5204000053039865802BR6304A1B2"
 
         /** p2p.me's `DailyBuyOrderLimitExceeded`. */
         const val DAILY_BUY_ORDER_LIMIT_EXCEEDED = "0xe595a7bf"

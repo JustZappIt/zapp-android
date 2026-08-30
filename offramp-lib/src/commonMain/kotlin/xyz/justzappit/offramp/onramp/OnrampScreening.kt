@@ -109,6 +109,12 @@ class OnrampScreeningClient(
     private val deviceSignals: OnrampDeviceSignalsProvider,
     private val screeningSession: OnrampScreeningSessionProvider = OnrampScreeningSessionProvider.ABSENT,
     private val nowMillis: () -> Long,
+    /**
+     * Where a failed link goes. The order stands either way, so this is never surfaced — but an
+     * unlinked record is the ~1-in-20-fill failure this whole class exists to avoid, and a 4xx
+     * here is otherwise indistinguishable from success.
+     */
+    private val onLinkFailed: (String) -> Unit = {},
 ) {
     @Suppress("ReturnCount")
     suspend fun screenBuyOrder(
@@ -166,7 +172,9 @@ class OnrampScreeningClient(
      * Ties the screening record to the order id. This is the call that makes the record findable
      * from the order, so a merchant looking at the order can see it was screened.
      *
-     * Fire-and-forget: a failure is logged and never surfaced, and the order stands either way.
+     * Fire-and-forget as far as the user is concerned — the order stands either way — but the
+     * outcome reaches [onLinkFailed], because an order whose record never linked is one that
+     * routes and prices normally and is then never accepted.
      */
     suspend fun linkOrder(
         signer: OnrampScreeningSigner,
@@ -174,20 +182,22 @@ class OnrampScreeningClient(
         orderId: BigInteger,
     ) {
         require(config.isConfigured) { "screening is not configured" }
-        httpClient.patch("${config.apiUrl.trimEnd('/')}$PATH_LINK_ORDER") {
-            contentType(ContentType.Application.Json)
-            signedHeaders(signer, ACTION_LINK_ORDER).forEach { (name, value) -> header(name, value) }
-            setBody(
-                Json.encodeToString(
-                    JsonObject.serializer(),
-                    buildJsonObject {
-                        put("activity_log_id", activityLogId)
-                        put("order_id", orderId.toString())
-                        put("user_address", signer.subject.lowercaseHex)
-                    },
-                ),
-            )
-        }
+        val response =
+            httpClient.patch("${config.apiUrl.trimEnd('/')}$PATH_LINK_ORDER") {
+                contentType(ContentType.Application.Json)
+                signedHeaders(signer, ACTION_LINK_ORDER).forEach { (name, value) -> header(name, value) }
+                setBody(
+                    Json.encodeToString(
+                        JsonObject.serializer(),
+                        buildJsonObject {
+                            put("activity_log_id", activityLogId)
+                            put("order_id", orderId.toString())
+                            put("user_address", signer.subject.lowercaseHex)
+                        },
+                    ),
+                )
+            }
+        if (!response.status.isSuccess()) onLinkFailed("link-order answered ${'$'}{response.status}")
     }
 
     /**

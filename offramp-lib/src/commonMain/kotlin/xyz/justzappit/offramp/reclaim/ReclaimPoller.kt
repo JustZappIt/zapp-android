@@ -7,6 +7,9 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.io.IOException
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
 /** Why polling stopped. Only [Proofs] is a success; the rest each need their own sentence to the user. */
@@ -42,18 +45,18 @@ class ReclaimPoller(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun await(sessionId: String): ReclaimPollResult {
-        var waited = 0L
-        while (waited < timeoutMillis) {
-            when (val outcome = pollOnce(sessionId)) {
-                null -> Unit
-                else -> return outcome
+    suspend fun await(sessionId: String): ReclaimPollResult =
+        // ☠ The budget has to cover the requests, not just the sleeps between them. Counting only
+        // `delay` let a session whose reads were slow outlive the ten minutes it is documented to
+        // get — and outlive the session itself, which cannot be extended.
+        withTimeoutOrNull(timeoutMillis) {
+            while (true) {
+                pollOnce(sessionId)?.let { return@withTimeoutOrNull it }
+                delay(intervalMillis)
             }
-            delay(intervalMillis)
-            waited += intervalMillis
-        }
-        return ReclaimPollResult.TimedOut
-    }
+            @Suppress("UNREACHABLE_CODE")
+            null
+        } ?: ReclaimPollResult.TimedOut
 
     /** One read. Null means "nothing yet" — the only case that keeps the loop going. */
     @Suppress("ReturnCount")
@@ -61,7 +64,7 @@ class ReclaimPoller(
         val body =
             try {
                 httpClient.get("$baseUrl$PATH_SESSION$sessionId").bodyAsText()
-            } catch (ignored: kotlinx.io.IOException) {
+            } catch (ignored: IOException) {
                 // A dropped request mid-verification is not a verdict; the next tick asks again.
                 return null
             }
@@ -71,7 +74,7 @@ class ReclaimPoller(
         val status =
             try {
                 json.decodeFromString(ReclaimSessionStatus.serializer(), body)
-            } catch (ignored: kotlinx.serialization.SerializationException) {
+            } catch (ignored: SerializationException) {
                 return null
             }
         val session = status.session ?: return null

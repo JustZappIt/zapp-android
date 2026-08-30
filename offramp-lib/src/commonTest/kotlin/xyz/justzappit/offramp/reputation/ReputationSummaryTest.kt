@@ -18,7 +18,7 @@ class ReputationSummaryTest {
         val cold = summary(points = 0, buy = 0)
         assertFalse(cold.canBuy)
         assertFalse(cold.isAtCeiling)
-        assertEquals(SocialPlatform.entries.toList(), cold.unverified)
+        assertTrue(cold.verified.isEmpty())
     }
 
     @Test
@@ -90,7 +90,6 @@ class ReputationSummaryTest {
         verified = verified,
         awards = awards.mapValues { bigIntegerValueOf(it.value) },
         buyLimit = Usdc6.ofMicros(buy),
-        sellLimit = Usdc6.ofMicros(200_000_000L),
         maxBuyLimit = Usdc6.ofMicros(maxBuy),
         rpPerUsdc = RpPerUsdcLimit(bigIntegerValueOf(1), bigIntegerValueOf(1)),
     )

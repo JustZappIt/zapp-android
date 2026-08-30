@@ -62,8 +62,6 @@ enum class SocialPlatform(
          * makes reading the tuple positionally wrong.
          */
         const val PASSPORT_FLAG_INDEX = PASSPORT_FLAG
-
-        fun fromOnChainName(name: String): SocialPlatform? = entries.firstOrNull { it.onChainName == name }
     }
 }
 

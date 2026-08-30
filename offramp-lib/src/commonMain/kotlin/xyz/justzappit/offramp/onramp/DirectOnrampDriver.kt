@@ -575,8 +575,7 @@ class DirectOnrampDriver(
         snapshot: OrderSnapshot,
         handle: String,
     ): OnrampStatus {
-        // Only ever from the order itself: the subgraph returns this field empty, and it is the
-        // whole payment step.
+        // Read from the order itself, never the indexer — see [orderReader].
         val ciphertext = snapshot.encryptedUserUpi.ifBlank { snapshot.encryptedMerchantUpi }
         val payTo =
             PaymentAddressDecryptor.decrypt(ciphertext, relayIdentityStore.get())
@@ -592,54 +591,21 @@ class DirectOnrampDriver(
         return OnrampStatus.AwaitingPayment(
             id = handle,
             orderId = handle,
-            instruction = paymentInstruction(payTo, orderId, fiat, snapshot.corridor()),
+            instruction = paymentInstructionFor(payTo, orderId, fiat, snapshot.corridor()),
             fiatAmount = fiat,
             expiresAtMillis = orderExpiresAtMillis(orderId),
         )
     }
 
     /**
-     * How a corridor is payable differs in kind, not in formatting: INR is a UPI intent the phone
-     * can open, and the EMVCo corridors hand over a complete QR payload that is unpayable as text
-     * on a screen.
-     *
-     * Everything else is rendered as the merchant's handle verbatim. Venezuela in particular is
-     * *not* split into labelled fields here: its payload is a base64 envelope followed by `?` and
-     * a suffix, and the whole raw string is what the merchant is paid at (`PagoMovilQrParser`,
-     * which is byte-compatible with p2p's own parser). Splitting it on a guessed separator would
-     * show three boxes of garbage. If a corridor really does need labelled fields, read one live
-     * order first.
-     */
-    private fun paymentInstruction(
-        payTo: String,
-        orderId: BigInteger,
-        fiat: Usdc6,
-        currency: CurrencyCode,
-    ): OnrampPaymentInstruction =
-        when (currency) {
-            CurrencyCode.Inr -> {
-                OnrampPaymentInstruction.Upi(
-                    address = payTo,
-                    intentUrl = UpiPayUri.buildBuyIntent(payTo, orderId, fiat, currency.code),
-                    amount = UpiPayUri.twoDecimalAmount(fiat),
-                )
-            }
-
-            // Already a complete EMVCo payload: rendered as a QR, never as the string itself.
-            CurrencyCode.Pen, CurrencyCode.Php, CurrencyCode.Bob -> {
-                OnrampPaymentInstruction.Qr(payTo)
-            }
-
-            else -> {
-                OnrampPaymentInstruction.Plain(payTo)
-            }
-        }
-
-    /**
      * The corridor as the chain records it on the order, rather than as the caller remembers it —
      * a resumed order has no caller left to ask.
+     *
+     * ☠ Null is a real answer and must stay one. Defaulting an unreadable currency word to INR
+     * sends a PEN/PHP/BOB payload — a complete EMVCo QR string — out as `upi://pay?pa=…&cu=INR`,
+     * which is a payment instruction to the wrong rail in the wrong currency.
      */
-    private fun OrderSnapshot.corridor(): CurrencyCode = corridorFromBytes32(currencyHex) ?: CurrencyCode.Inr
+    private fun OrderSnapshot.corridor(): CurrencyCode? = corridorFromBytes32(currencyHex)
 
     private suspend fun readOrder(orderId: BigInteger): OrderSnapshot? =
         try {
@@ -859,6 +825,47 @@ class DirectOnrampDriver(
             )
     }
 }
+
+/**
+ * How a corridor is payable differs in kind, not in formatting: INR is a UPI intent the phone can
+ * open, and the EMVCo corridors hand over a complete QR payload that is unpayable as text on a
+ * screen.
+ *
+ * Everything else is rendered as the merchant's handle verbatim. Venezuela in particular is *not*
+ * split into labelled fields here: its payload is a base64 envelope followed by `?` and a suffix,
+ * and the whole raw string is what the merchant is paid at (`PagoMovilQrParser`, which is
+ * byte-compatible with p2p's own parser). Splitting it on a guessed separator would show three
+ * boxes of garbage. If a corridor really does need labelled fields, read one live order first.
+ *
+ * ☠ A null [currency] — a resumed order whose currency word would not decode — falls to the
+ * verbatim handle. It must never fall to the UPI branch: that would wrap a QR payload in a
+ * `upi://` intent and label it INR. Kept out of the driver so every corridor, null included, is
+ * checkable without a live order.
+ */
+internal fun paymentInstructionFor(
+    payTo: String,
+    orderId: BigInteger,
+    fiat: Usdc6,
+    currency: CurrencyCode?,
+): OnrampPaymentInstruction =
+    when (currency) {
+        CurrencyCode.Inr -> {
+            OnrampPaymentInstruction.Upi(
+                address = payTo,
+                intentUrl = UpiPayUri.buildBuyIntent(payTo, orderId, fiat, currency.code),
+                amount = UpiPayUri.twoDecimalAmount(fiat),
+            )
+        }
+
+        // Already a complete EMVCo payload: rendered as a QR, never as the string itself.
+        CurrencyCode.Pen, CurrencyCode.Php, CurrencyCode.Bob -> {
+            OnrampPaymentInstruction.Qr(payTo)
+        }
+
+        else -> {
+            OnrampPaymentInstruction.Plain(payTo)
+        }
+    }
 
 /**
  * Decodes the Diamond's `bytes32` currency word back to a corridor: ASCII, NUL-padded to the

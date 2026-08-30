@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
+
 package co.electriccoin.zcash.ui.common.usecase
 
 import co.electriccoin.zcash.ui.NavigationRouter

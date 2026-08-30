@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
+
 package co.electriccoin.zcash.ui.screen.reputation.increase
 
 /**
@@ -18,7 +21,9 @@ package co.electriccoin.zcash.ui.screen.reputation.increase
  * untrusted second source for something already known.
  */
 object ReclaimReturnLink {
+    const val SCHEME = "zcash"
+
     const val HOST = "reclaim-return"
 
-    const val URL = "zcash://$HOST"
+    const val URL = "$SCHEME://$HOST"
 }

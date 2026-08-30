@@ -38,13 +38,11 @@ class DirectOnrampPricingTest {
     @Test
     fun `fiatAmountLimit is the contract's own arithmetic on the net`() {
         val quote = DirectOnrampPricing.quote(Usdc6.ofMicros(500_000_000L), INR_PRICE, THRESHOLD, FEE)
+        val limit = DirectOnrampPricing.fiatAmountLimit(quote.netUsdc, quote.buyPrice)
         // netUsdc × buyPrice ÷ 1e6, integer division and all — a merchant reads this as the rate.
-        assertEquals(
-            Usdc6.ofMicros(4_927_105L * 100_460_000L / 1_000_000L),
-            quote.fiatAmountLimit,
-        )
+        assertEquals(Usdc6.ofMicros(4_927_105L * 100_460_000L / 1_000_000L), limit)
         // Never zero: zero disables the check and lets a merchant fill at any rate.
-        assertTrue(quote.fiatAmountLimit.micros.signum() > 0)
+        assertTrue(limit.micros.signum() > 0)
     }
 
     @Test

@@ -94,13 +94,6 @@ object DiamondCalls {
             listOf(AbiEncoder.bytes32String(currency.code)),
         )
 
-    /**
-     * ⚠ `contractVersion()`, not `getContractVersion()` — the latter is unregistered and the
-     * Diamond answers `Diamond: Function does not exist`, naming nothing. Returns **bytes32**
-     * (`"0.0.10"`, NUL-padded, on mainnet).
-     */
-    fun contractVersionCalldata(): ByteArray = AbiEncoder.encodeFunctionCall("contractVersion()", emptyList())
-
     fun getProcessingTimeCalldata(): ByteArray = AbiEncoder.encodeFunctionCall("getProcessingTime()", emptyList())
 
     fun getExchangeStatusCalldata(): ByteArray = AbiEncoder.encodeFunctionCall("getExchangeStatus()", emptyList())

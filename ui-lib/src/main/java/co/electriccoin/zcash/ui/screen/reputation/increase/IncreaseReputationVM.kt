@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
+
 package co.electriccoin.zcash.ui.screen.reputation.increase
 
 import androidx.lifecycle.ViewModel
@@ -210,6 +213,7 @@ internal class IncreaseReputationVM(
                 error = failure?.let(::failureMessage),
                 launchUrl = ready?.requestUrl,
                 installIntentUrl = ready?.installIntentUrl,
+                storeUrl = ready?.storeUrl,
                 newPoints = summary?.points?.toString(),
                 newBuyLimit =
                     summary?.let {
@@ -316,10 +320,7 @@ internal class IncreaseReputationVM(
             }
         }
 
-    /**
-     * Called once the Verifier has actually been opened. From here the live session is the one
-     * being polled, so re-minting stops — replacing it would abort a verification under way.
-     */
+    /** Called once the Verifier has actually been opened; this is what stops the re-minting. */
     private fun onReclaimLaunched() {
         launchSignal?.markLaunched()
     }

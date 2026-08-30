@@ -13,6 +13,7 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.zapp.ZappCompactButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappFieldBalance
 import co.electriccoin.zcash.ui.design.component.zapp.ZappOfframpHeroAmountField
+import co.electriccoin.zcash.ui.design.component.zapp.ZappRowInfoAction
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSegment
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSegmentedSelector
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSummaryRow
@@ -56,8 +57,11 @@ internal fun AmountContent(state: OnrampState) {
                 value = "${state.currencySymbol}$it",
                 // The number is reputation-derived, so the only useful explanation is the screen
                 // that raises it.
-                onInfoClick = state.onRaiseLimit,
-                infoContentDescription = stringResource(R.string.onramp_daily_limit_info),
+                info =
+                    ZappRowInfoAction(
+                        onClick = state.onRaiseLimit,
+                        contentDescription = stringResource(R.string.onramp_daily_limit_info),
+                    ),
             )
         }
         ZappSummaryRow(stringResource(R.string.onramp_payment_rail_label), state.paymentRail.getValue())

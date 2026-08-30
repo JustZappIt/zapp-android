@@ -205,8 +205,7 @@ val repositoryModule =
                     submitters = get(),
                     accountProvider = get(),
                     subgraph = get(),
-                    // The chain, not the indexer: the subgraph returns `encUpi` empty, and that
-                    // field is the entire payment step.
+                    // The chain, not the indexer; DirectOnrampDriver's own param says why.
                     orderReader = get<OnChainOrderReader>(),
                     screening =
                         screeningConfig
@@ -218,6 +217,9 @@ val repositoryModule =
                                     deviceSignals = get(),
                                     screeningSession = get(),
                                     nowMillis = System::currentTimeMillis,
+                                    onLinkFailed = { reason ->
+                                        Twig.warn { "Screening record never linked to its order: $reason" }
+                                    },
                                 )
                             },
                     relayIdentityStore = get(),

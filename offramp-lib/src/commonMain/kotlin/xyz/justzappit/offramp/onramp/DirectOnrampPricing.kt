@@ -29,12 +29,6 @@ data class DirectBuyQuote(
     val feeUsdc: Usdc6,
     /** What is actually placed: BUY subtracts the fee client-side and places the net. */
     val netUsdc: Usdc6,
-    /**
-     * The rate the merchant reads off the order. Exactly `netUsdc × buyPrice ÷ 1e6` — the
-     * contract's own arithmetic, integer division included. There is no slippage tolerance to add
-     * here: a price tick reverts `SlippageExceeded`, and the handling for that is to re-quote.
-     */
-    val fiatAmountLimit: Usdc6,
     val buyPrice: Usdc6,
 )
 
@@ -65,7 +59,6 @@ object DirectOnrampPricing {
             grossUsdc = gross,
             feeUsdc = fee,
             netUsdc = net,
-            fiatAmountLimit = fiatAmountLimit(net, price.buyPrice),
             buyPrice = price.buyPrice,
         )
     }
@@ -99,8 +92,8 @@ object DirectOnrampPricing {
         }
         val cappedUsdc = if (buyLimit > P2pOrderLimits.MAX_ORDER) P2pOrderLimits.MAX_ORDER else buyLimit
         val minUsdc = Usdc6(fixedFeeBuy.micros + MICROS)
-        val maxFiat = fiatFor(cappedUsdc, price.buyPrice)
-        val minFiat = fiatFor(minUsdc, price.buyPrice)
+        val maxFiat = fiatAmountLimit(cappedUsdc, price.buyPrice)
+        val minFiat = fiatAmountLimit(minUsdc, price.buyPrice)
         return OnrampLimits(
             enabled = minFiat < maxFiat,
             currency = currency,
@@ -111,8 +104,6 @@ object DirectOnrampPricing {
             perUserDailyFiat = maxFiat,
         )
     }
-
-    private fun fiatFor(usdc: Usdc6, buyPrice: Usdc6): Usdc6 = Usdc6(usdc.micros * buyPrice.micros / MICROS)
 
     /** One whole unit in the 6-decimal fixed-point the Diamond prices everything in. */
     private const val MICROS_PER_UNIT = 1_000_000L

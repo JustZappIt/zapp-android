@@ -25,6 +25,16 @@ import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 
 /**
+ * A tappable explanation for a row's number. One type rather than two optional parameters: a
+ * handler without a description ships an unlabelled button, and the pair is only ever correct
+ * together.
+ */
+data class ZappRowInfoAction(
+    val onClick: () -> Unit,
+    val contentDescription: String,
+)
+
+/**
  * Label left, value right: the one detail row for every money flow's summary and receipt. The value
  * is the emphasised half, and it ellipsizes rather than wrapping so a long one cannot push the
  * label off the row.
@@ -39,8 +49,7 @@ fun ZappSummaryRow(
      * Turns the label into a tappable explanation. Set only where the row's number is one the user
      * can act on — the tap has to lead somewhere, or the icon is a promise the row does not keep.
      */
-    onInfoClick: (() -> Unit)? = null,
-    infoContentDescription: String? = null,
+    info: ZappRowInfoAction? = null,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -57,15 +66,15 @@ fun ZappSummaryRow(
                     ZappTheme.typography.caption
                         .copy(color = ZappTheme.colors.textMuted, fontWeight = FontWeight.Medium),
             )
-            onInfoClick?.let { onClick ->
+            info?.let { action ->
                 Box(
                     modifier =
                         Modifier
                             .size(INFO_TAP_TARGET.dp)
-                            .clickable(onClick = onClick)
+                            .clickable(onClick = action.onClick)
                             .semantics {
                                 role = Role.Button
-                                infoContentDescription?.let { contentDescription = it }
+                                contentDescription = action.contentDescription
                             },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -91,6 +100,8 @@ fun ZappSummaryRow(
 private const val VALUE_GAP = 10
 private const val LABEL_ICON_GAP = 2
 
-/** Small enough to sit on a caption line, with a tap target that still clears the 24dp minimum. */
+/** Small enough to sit on a caption line. */
 private const val INFO_ICON_SIZE = 14
-private const val INFO_TAP_TARGET = 24
+
+/** Android's own minimum, and the size the feature's other info button already uses. */
+private const val INFO_TAP_TARGET = 48

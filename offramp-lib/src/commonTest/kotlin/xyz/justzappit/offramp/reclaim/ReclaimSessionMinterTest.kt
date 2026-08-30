@@ -105,7 +105,7 @@ class ReclaimSessionMinterTest {
 
     @Test
     fun `the store fallback is a scheme Compose's UriHandler can actually open`() {
-        val url = minter.installIntentUrl("https://share.reclaimprotocol.org/link/?template=abc")
+        val url = minter.installIntentUrl()
 
         // AndroidUriHandler does ACTION_VIEW on Uri.parse. `market:` resolves to Play; `intent:`
         // resolves to nothing and throws, which is what this used to emit.

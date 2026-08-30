@@ -26,13 +26,17 @@ sealed interface ReclaimStatus {
     data object Preparing : ReclaimStatus
 
     /**
-     * A session is live and the user has ~10 minutes to use it. [requestUrl] resolves to the
-     * Verifier app when it is installed; [installIntentUrl] is the store-then-resume fallback for
-     * when nothing on the device handles the link.
+     * A session is live and the user has ~10 minutes to use it.
+     *
+     * Three links, tried in order, because each fails on a device the next one handles:
+     * [requestUrl] resolves to the Verifier app when it is installed and to a browser otherwise;
+     * [installIntentUrl] is the Play deep link for a device with neither; [storeUrl] is the same
+     * store page over https, which is all a `foss` build on a de-Googled phone can open.
      */
     data class Ready(
         val requestUrl: String,
         val installIntentUrl: String,
+        val storeUrl: String,
     ) : ReclaimStatus
 
     data object Verifying : ReclaimStatus
@@ -97,11 +101,8 @@ class ReclaimLaunchSignal {
  *
  * Two things here are less obvious than they look.
  *
- * **The session is re-minted while the user waits to tap.** A session lives about ten minutes and
- * cannot be extended, and installing the Verifier and signing in can eat most of that — so a link
- * minted on screen entry is often dead by the time it is used. Re-minting stops the instant the
- * user leaves, because from then on the live session is the one being polled and replacing it
- * would abort a verification already in progress.
+ * **The session is re-minted while the user waits to tap**, and stops the instant they leave. Why,
+ * and what goes wrong either way, is on [mintAndHold].
  *
  * **Every send is simulated first.** `eth_call` with the smart account as `from` runs the real
  * proof against the real contract for nothing, which turns "User address mismatch" from a revert
@@ -282,7 +283,8 @@ class ReclaimVerificationDriver(
     private fun ready(session: ReclaimSession) =
         ReclaimStatus.Ready(
             requestUrl = session.requestUrl,
-            installIntentUrl = minter.installIntentUrl(session.requestUrl),
+            installIntentUrl = minter.installIntentUrl(),
+            storeUrl = ReclaimSessionMinter.VERIFIER_STORE_URL,
         )
 
     /** Null when the call would succeed. Costs nothing and runs before every send. */

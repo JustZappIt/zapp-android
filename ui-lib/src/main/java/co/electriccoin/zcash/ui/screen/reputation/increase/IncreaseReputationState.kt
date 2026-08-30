@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
+
 package co.electriccoin.zcash.ui.screen.reputation.increase
 
 import co.electriccoin.zcash.ui.design.component.ButtonState
@@ -45,9 +48,14 @@ internal data class VerificationRun(
     val steps: List<ZappStep>,
     val message: StringResource,
     val error: StringResource?,
-    /** Where the Verifier lives for this session, and the store fallback for a device without it. */
+    /**
+     * Where the Verifier lives for this session, then two store fallbacks for a device that has
+     * nothing registered for it — the Play deep link, then the same page over https for a build
+     * with no Play Store at all.
+     */
     val launchUrl: String?,
     val installIntentUrl: String?,
+    val storeUrl: String?,
     /** Set only at [VerificationStage.DONE]: what the chain says now, not what we predicted. */
     val newPoints: String? = null,
     val newBuyLimit: StringResource? = null,

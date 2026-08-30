@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
+
 package co.electriccoin.zcash.ui.screen.reputation
 
 import androidx.compose.foundation.background
@@ -72,7 +75,7 @@ internal fun ReputationView(state: ReputationState) {
                 Box(
                     modifier =
                         Modifier
-                            .size(INFO_TAP_TARGET)
+                            .size(REPUTATION_INFO_TAP_TARGET)
                             .clickable { showInfo = true }
                             .semantics {
                                 role = Role.Button
@@ -90,7 +93,7 @@ internal fun ReputationView(state: ReputationState) {
                     .weight(1f)
                     .fillMaxWidth()
                     .verticalScroll(scrollState)
-                    .padding(horizontal = HORIZONTAL_PADDING, vertical = VERTICAL_PADDING),
+                    .padding(horizontal = REPUTATION_HORIZONTAL_PADDING, vertical = REPUTATION_VERTICAL_PADDING),
         ) {
             ReputationContentBody(state)
         }
@@ -101,7 +104,7 @@ internal fun ReputationView(state: ReputationState) {
                     ZappButton(
                         text = action.text.getValue(),
                         enabled = action.isEnabled,
-                        modifier = Modifier.weight(1f).padding(start = BOTTOM_BAR_GAP),
+                        modifier = Modifier.weight(1f).padding(start = REPUTATION_BOTTOM_BAR_GAP),
                         onClick = action.onClick,
                     )
                 }
@@ -136,30 +139,30 @@ private fun ReputationContentBody(state: ReputationState) {
 
 @Composable
 private fun UnreadableContent(state: ReputationState) {
-    Column(verticalArrangement = Arrangement.spacedBy(SECTION_GAP)) {
+    Column(verticalArrangement = Arrangement.spacedBy(REPUTATION_SECTION_GAP)) {
         BasicText(
             text = stringResource(R.string.reputation_unreadable_title),
             style = ZappTheme.typography.sectionTitle.copy(color = ZappTheme.colors.text),
         )
-        Notice(stringResource(R.string.reputation_unreadable_body))
+        ReputationNotice(stringResource(R.string.reputation_unreadable_body))
         RaiseLimitAction(state)
     }
 }
 
 @Composable
 private fun BlacklistedContent() {
-    Column(verticalArrangement = Arrangement.spacedBy(SECTION_GAP)) {
+    Column(verticalArrangement = Arrangement.spacedBy(REPUTATION_SECTION_GAP)) {
         BasicText(
             text = stringResource(R.string.reputation_blacklisted_title),
             style = ZappTheme.typography.sectionTitle.copy(color = ZappTheme.colors.text),
         )
-        Notice(stringResource(R.string.reputation_blacklisted_body))
+        ReputationNotice(stringResource(R.string.reputation_blacklisted_body))
     }
 }
 
 @Composable
 private fun ReadyContent(content: ReputationContent.Ready, state: ReputationState) {
-    Column(verticalArrangement = Arrangement.spacedBy(SECTION_GAP)) {
+    Column(verticalArrangement = Arrangement.spacedBy(REPUTATION_SECTION_GAP)) {
         BuyLimitCard(content)
         if (content.verified.isNotEmpty()) {
             ZappSettingsGroup(title = stringResource(R.string.reputation_verified_group)) {
@@ -246,21 +249,8 @@ private fun VerifiedPlatformRow(row: PlatformRow) {
     )
 }
 
-@Composable
-private fun Notice(text: String) {
-    Box(modifier = Modifier.fillMaxWidth().background(ZappTheme.colors.surfaceAlt).padding(NOTICE_PADDING)) {
-        BasicText(text, style = ZappTheme.typography.body.copy(color = ZappTheme.colors.textMuted))
-    }
-}
-
-private val HORIZONTAL_PADDING = 18.dp
-private val VERTICAL_PADDING = 16.dp
-private val BOTTOM_BAR_GAP = 12.dp
-private val SECTION_GAP = 16.dp
-private val NOTICE_PADDING = 12.dp
 private val CARD_GUTTER = 14.dp
 private val HERO_PADDING = 18.dp
 private val HERO_LABEL_GAP = 10.dp
 private val HERO_CAPTION_GAP = 6.dp
 private val HERO_DIVIDER_GAP = 16.dp
-private val INFO_TAP_TARGET = 48.dp

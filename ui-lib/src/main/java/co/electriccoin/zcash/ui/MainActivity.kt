@@ -150,7 +150,9 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun isReclaimReturnUri(intent: Intent, data: Uri): Boolean =
-        intent.action == Intent.ACTION_VIEW && ReclaimReturnLink.HOST.equals(data.host, ignoreCase = true)
+        intent.action == Intent.ACTION_VIEW &&
+            ReclaimReturnLink.SCHEME.equals(data.scheme, ignoreCase = true) &&
+            ReclaimReturnLink.HOST.equals(data.host, ignoreCase = true)
 
     private fun openGiftClaim(intent: Intent, data: Uri) {
         val raw = intent.dataString ?: data.toString()

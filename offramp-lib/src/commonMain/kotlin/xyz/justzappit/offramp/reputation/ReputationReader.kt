@@ -73,7 +73,6 @@ class ReputationReader(
                 verified = verified.await(),
                 awards = awards.awaitAll().toMap(),
                 buyLimit = txLimits.buy,
-                sellLimit = txLimits.sell,
                 maxBuyLimit = maxBuy.await(),
                 rpPerUsdc = rpPerUsdc.await(),
             )

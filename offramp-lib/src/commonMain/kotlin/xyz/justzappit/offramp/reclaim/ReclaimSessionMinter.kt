@@ -14,6 +14,7 @@ import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -223,15 +224,15 @@ class ReclaimSessionMinter(
      * `intent://` string into a launchable Intent needs `Intent.parseUri(…, URI_INTENT_SCHEME)`,
      * which nothing in this app calls.
      *
-     * [requestUrl] is deliberately dropped: it only rode along as the `intent://` extra that made
-     * the store resume the session after installing, and that never executed. The user comes back
-     * to a screen that is still holding the live session anyway.
+     * Nothing about the session rides along. The old `intent://` form carried the request URL so
+     * the store could resume it after installing, and that never executed; the user comes back to
+     * a screen still holding the live session anyway.
      *
-     * On a build with no Play Store — the `foss` flavour on a de-Googled device — this resolves to
-     * nothing either. That is the honest end of the chain: we are already in the branch where no
-     * browser handled the https link, so there is nothing left to hand the user.
+     * Two links, in order. `market://` is what a device with Play resolves; [VERIFIER_STORE_URL]
+     * is the https form, which a `foss` build on a de-Googled device can still open in a browser.
+     * Callers try them in that order.
      */
-    fun installIntentUrl(requestUrl: String): String = "market://details?id=$VERIFIER_PACKAGE"
+    fun installIntentUrl(): String = "market://details?id=$VERIFIER_PACKAGE"
 
     private suspend fun openSession(providerId: String, timestamp: String, signature: String): InitSessionDto {
         val body =
@@ -253,7 +254,7 @@ class ReclaimSessionMinter(
         }
         return try {
             json.decodeFromString(InitSessionDto.serializer(), text)
-        } catch (e: kotlinx.serialization.SerializationException) {
+        } catch (e: SerializationException) {
             throw ReclaimException("Reclaim returned an unreadable session", e)
         }
     }

@@ -25,7 +25,6 @@ data class ReputationSummary(
     /** Reputation each platform awards, read from the RM — the §3.1 table is config, not a constant. */
     val awards: Map<SocialPlatform, BigInteger>,
     val buyLimit: Usdc6,
-    val sellLimit: Usdc6,
     val maxBuyLimit: Usdc6,
     val rpPerUsdc: RpPerUsdcLimit,
 ) {
@@ -37,8 +36,6 @@ data class ReputationSummary(
 
     /** At the exchange's ceiling for this corridor: further verifications buy nothing. */
     val isAtCeiling: Boolean get() = buyLimit >= maxBuyLimit
-
-    val unverified: List<SocialPlatform> get() = SocialPlatform.entries.filter { it !in verified }
 
     fun award(platform: SocialPlatform): BigInteger = awards[platform] ?: bigIntegerZero
 

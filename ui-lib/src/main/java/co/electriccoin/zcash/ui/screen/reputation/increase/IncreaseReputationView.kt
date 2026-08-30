@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
+
 package co.electriccoin.zcash.ui.screen.reputation.increase
 
 import androidx.compose.foundation.background
@@ -52,6 +55,13 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappStepList
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSuccessHeader
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.getValue
+import co.electriccoin.zcash.ui.screen.reputation.REPUTATION_BOTTOM_BAR_GAP
+import co.electriccoin.zcash.ui.screen.reputation.REPUTATION_HORIZONTAL_PADDING
+import co.electriccoin.zcash.ui.screen.reputation.REPUTATION_INFO_TAP_TARGET
+import co.electriccoin.zcash.ui.screen.reputation.REPUTATION_NOTICE_PADDING
+import co.electriccoin.zcash.ui.screen.reputation.REPUTATION_SECTION_GAP
+import co.electriccoin.zcash.ui.screen.reputation.REPUTATION_VERTICAL_PADDING
+import co.electriccoin.zcash.ui.screen.reputation.ReputationNotice
 
 @Composable
 internal fun IncreaseReputationView(state: IncreaseReputationState) {
@@ -74,7 +84,7 @@ internal fun IncreaseReputationView(state: IncreaseReputationState) {
                 Box(
                     modifier =
                         Modifier
-                            .size(INFO_TAP_TARGET)
+                            .size(REPUTATION_INFO_TAP_TARGET)
                             .clickable { showInfo = true }
                             .semantics {
                                 role = Role.Button
@@ -92,7 +102,7 @@ internal fun IncreaseReputationView(state: IncreaseReputationState) {
                     .weight(1f)
                     .fillMaxWidth()
                     .verticalScroll(scrollState)
-                    .padding(horizontal = HORIZONTAL_PADDING, vertical = VERTICAL_PADDING),
+                    .padding(horizontal = REPUTATION_HORIZONTAL_PADDING, vertical = REPUTATION_VERTICAL_PADDING),
         ) {
             when {
                 state.run != null -> RunContent(state.run, state)
@@ -114,7 +124,7 @@ private fun LoadingContent() {
 
 @Composable
 private fun ListContent(state: IncreaseReputationState) {
-    Column(verticalArrangement = Arrangement.spacedBy(SECTION_GAP)) {
+    Column(verticalArrangement = Arrangement.spacedBy(REPUTATION_SECTION_GAP)) {
         BasicText(
             text = stringResource(R.string.increase_reputation_intro),
             style = ZappTheme.typography.body.copy(color = ZappTheme.colors.textMuted),
@@ -187,7 +197,7 @@ private fun PlatformRow(row: VerifiableRow) {
 
 @Composable
 private fun RunContent(run: VerificationRun, state: IncreaseReputationState) {
-    Column(verticalArrangement = Arrangement.spacedBy(SECTION_GAP)) {
+    Column(verticalArrangement = Arrangement.spacedBy(REPUTATION_SECTION_GAP)) {
         if (run.stage == VerificationStage.DONE) {
             ZappSuccessHeader(
                 title = run.message,
@@ -206,7 +216,7 @@ private fun RunContent(run: VerificationRun, state: IncreaseReputationState) {
             )
             ZappStepList(steps = run.steps)
             if (run.stage == VerificationStage.VERIFYING) {
-                Notice(stringResource(R.string.increase_reputation_waiting_help))
+                ReputationNotice(stringResource(R.string.increase_reputation_waiting_help))
             }
         }
         run.error?.let {
@@ -231,7 +241,7 @@ private fun BottomDock(state: IncreaseReputationState, uriHandler: UriHandler) {
         onBack = state.onBack,
         primaryAction = {
             val action = state.primaryAction ?: return@ZappBottomActionBar
-            val modifier = Modifier.weight(1f).padding(start = BOTTOM_BAR_GAP)
+            val modifier = Modifier.weight(1f).padding(start = REPUTATION_BOTTOM_BAR_GAP)
             when {
                 run?.stage == VerificationStage.DONE -> {
                     ZappDoneButton(text = action.text.getValue(), modifier = modifier, onClick = action.onClick)
@@ -265,33 +275,16 @@ private fun BottomDock(state: IncreaseReputationState, uriHandler: UriHandler) {
 
 /**
  * Android resolves the share link to the Verifier when it is installed and to a browser otherwise.
- * A device with nothing registered for it throws, and the market intent takes the user to the
- * store and back to this same session after installing.
+ * A device with neither throws, so the store links follow — `market://` first, then the same page
+ * over https, which is all a `foss` build on a de-Googled phone can open.
+ *
+ * The user is not resumed into this session afterwards; nothing carries it across an install.
+ * They come back to this screen, which is still holding the live session, and tap again.
  */
 private fun openVerifier(uriHandler: UriHandler, run: VerificationRun) {
-    val url = run.launchUrl ?: return
-    runCatching { uriHandler.openUri(url) }
-        .onFailure { run.installIntentUrl?.let { intent -> runCatching { uriHandler.openUri(intent) } } }
+    val candidates = listOfNotNull(run.launchUrl, run.installIntentUrl, run.storeUrl)
+    candidates.firstOrNull { url -> runCatching { uriHandler.openUri(url) }.isSuccess }
 }
 
-@Composable
-private fun Notice(text: String) {
-    Box(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .background(ZappTheme.colors.surfaceAlt)
-                .padding(NOTICE_PADDING),
-    ) {
-        BasicText(text, style = ZappTheme.typography.body.copy(color = ZappTheme.colors.textMuted))
-    }
-}
-
-private val HORIZONTAL_PADDING = 18.dp
-private val VERTICAL_PADDING = 16.dp
-private val BOTTOM_BAR_GAP = 12.dp
-private val SECTION_GAP = 16.dp
-private val NOTICE_PADDING = 12.dp
 private val CHECK_SIZE = 18.dp
 private val ROW_TRAILING_GAP = 6.dp
-private val INFO_TAP_TARGET = 48.dp

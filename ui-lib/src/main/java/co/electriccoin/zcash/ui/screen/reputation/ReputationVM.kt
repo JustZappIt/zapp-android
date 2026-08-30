@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
+
 package co.electriccoin.zcash.ui.screen.reputation
 
 import androidx.lifecycle.ViewModel
@@ -13,6 +16,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
 import xyz.justzappit.offramp.p2p.Usdc6
@@ -61,8 +65,7 @@ internal class ReputationVM(
     private fun load() {
         val hadContent = mutableState.value.content is ReputationContent.Ready
         if (!hadContent) {
-            mutableState.value =
-                mutableState.value.copy(content = ReputationContent.Loading, primaryAction = null)
+            mutableState.update { it.copy(content = ReputationContent.Loading, primaryAction = null) }
         }
         loadJob =
             viewModelScope.launch {
@@ -79,30 +82,30 @@ internal class ReputationVM(
                         Twig.warn(e) { "Reputation read failed for ${currency.code}" }
                         // A failed *refresh* leaves the last good read on screen: it was true a
                         // moment ago, and blanking it over a dropped request is the worse lie.
-                        if (!hadContent) mutableState.value = unreadableState()
+                        if (!hadContent) mutableState.update(::unreadableState)
                         return@launch
                     }
-                mutableState.value = readyState(summary)
+                mutableState.update { readyState(it, summary) }
             }
     }
 
-    private fun unreadableState() =
-        mutableState.value.copy(
+    private fun unreadableState(current: ReputationState) =
+        current.copy(
             content = ReputationContent.Unreadable,
             // Still let them into the verification list: a read failure is ours, not theirs.
             isRaiseLimitVisible = true,
             primaryAction = ButtonState(text = stringRes(R.string.reputation_retry), onClick = ::load),
         )
 
-    private fun readyState(summary: ReputationSummary): ReputationState {
+    private fun readyState(current: ReputationState, summary: ReputationSummary): ReputationState {
         if (summary.isBlacklisted) {
-            return mutableState.value.copy(
+            return current.copy(
                 content = ReputationContent.Blacklisted,
                 isRaiseLimitVisible = false,
                 primaryAction = null,
             )
         }
-        return mutableState.value.copy(
+        return current.copy(
             content = content(summary),
             isRaiseLimitVisible = summary.canBuy && !summary.isAtCeiling,
             primaryAction =
