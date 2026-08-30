@@ -208,7 +208,7 @@ internal class IncreaseReputationVM(
                 platform = platform,
                 name = platform.onChainName,
                 stage = stage,
-                steps = steps(stage),
+                steps = verificationSteps(stage, lastActiveStage),
                 message = message(platform, stage),
                 error = failure?.let(::failureMessage),
                 launchUrl = ready?.requestUrl,
@@ -225,35 +225,6 @@ internal class IncreaseReputationVM(
                 run = run,
                 primaryAction = primaryFor(stage),
                 secondaryAction = secondaryFor(stage),
-            )
-        }
-    }
-
-    private fun steps(stage: VerificationStage): List<ZappStep> {
-        val order = listOf(VerificationStage.READY, VerificationStage.VERIFYING, VerificationStage.SUBMITTING)
-        val labels =
-            listOf(
-                R.string.increase_reputation_step_open,
-                R.string.increase_reputation_step_prove,
-                R.string.increase_reputation_step_save,
-            )
-        val reached =
-            when (stage) {
-                VerificationStage.PREPARING -> -1
-                VerificationStage.DONE -> order.size
-                VerificationStage.FAILED -> order.indexOf(lastActiveStage)
-                else -> order.indexOf(stage)
-            }
-        return labels.mapIndexed { index, label ->
-            ZappStep(
-                label = stringRes(label),
-                status =
-                    when {
-                        stage == VerificationStage.FAILED && index == reached -> ZappStepStatus.Failed
-                        index < reached -> ZappStepStatus.Completed
-                        index == reached -> ZappStepStatus.InProgress
-                        else -> ZappStepStatus.Pending
-                    },
             )
         }
     }
@@ -358,5 +329,38 @@ internal class IncreaseReputationVM(
     private companion object {
         val ACTIVE_STAGES =
             setOf(VerificationStage.READY, VerificationStage.VERIFYING, VerificationStage.SUBMITTING)
+    }
+}
+
+/** The first active indicator starts only after the user leaves Zapp to begin verification. */
+internal fun verificationSteps(
+    stage: VerificationStage,
+    lastActiveStage: VerificationStage,
+): List<ZappStep> {
+    val order = listOf(VerificationStage.READY, VerificationStage.VERIFYING, VerificationStage.SUBMITTING)
+    val labels =
+        listOf(
+            R.string.increase_reputation_step_open,
+            R.string.increase_reputation_step_prove,
+            R.string.increase_reputation_step_save,
+        )
+    val reached =
+        when (stage) {
+            VerificationStage.PREPARING, VerificationStage.READY -> -1
+            VerificationStage.DONE -> order.size
+            VerificationStage.FAILED -> order.indexOf(lastActiveStage)
+            else -> order.indexOf(stage)
+        }
+    return labels.mapIndexed { index, label ->
+        ZappStep(
+            label = stringRes(label),
+            status =
+                when {
+                    stage == VerificationStage.FAILED && index == reached -> ZappStepStatus.Failed
+                    index < reached -> ZappStepStatus.Completed
+                    index == reached -> ZappStepStatus.InProgress
+                    else -> ZappStepStatus.Pending
+                },
+        )
     }
 }
