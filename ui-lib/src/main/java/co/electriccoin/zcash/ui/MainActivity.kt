@@ -56,6 +56,7 @@ import co.electriccoin.zcash.ui.screen.gift.GiftClaimArgs
 import co.electriccoin.zcash.ui.screen.gift.model.GIFT_LINK_HOST
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkIntake
 import co.electriccoin.zcash.ui.screen.gift.model.PendingGiftLinkStore
+import co.electriccoin.zcash.ui.screen.reputation.increase.ReclaimReturnLink
 import co.electriccoin.zcash.ui.screen.scan.thirdparty.ThirdPartyScan
 import co.electriccoin.zcash.ui.screen.splash.ZappSplashAnimation
 import co.electriccoin.zcash.ui.screen.warning.viewmodel.StorageCheckViewModel
@@ -135,8 +136,21 @@ class MainActivity : FragmentActivity() {
         // would reopen the scanner over whatever the user came back to.
         if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return
 
+        // The Verifier returning the user from a Reclaim session. Consumed and deliberately not
+        // navigated: the verification screen is still up and still polling the session, so the
+        // link's whole job is bringing the task forward — singleTask has already done that by the
+        // time this runs. Forwarding anywhere would tear down a run in progress, and falling
+        // through to the scanner below would put the camera over it.
+        if (isReclaimReturnUri(intent, data)) {
+            intent.data = null
+            return
+        }
+
         if (isGiftUri(intent, data)) openGiftClaim(intent, data) else navigationRouter.forward(ThirdPartyScan)
     }
+
+    private fun isReclaimReturnUri(intent: Intent, data: Uri): Boolean =
+        intent.action == Intent.ACTION_VIEW && ReclaimReturnLink.HOST.equals(data.host, ignoreCase = true)
 
     private fun openGiftClaim(intent: Intent, data: Uri) {
         val raw = intent.dataString ?: data.toString()

@@ -60,6 +60,12 @@ class ReclaimSessionMinter(
     private val credentials: ReclaimAppCredentials,
     private val nowMillis: () -> Long,
     private val baseUrl: String = RECLAIM_API_BASE,
+    /**
+     * Where the Verifier sends the user once it is done. Empty means "nowhere", which strands them
+     * on Reclaim's "you can now return" screen with the app still polling behind it. Any scheme
+     * Android can resolve works; this is not restricted to https and needs no dashboard entry.
+     */
+    private val redirectUrl: String = "",
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -176,10 +182,12 @@ class ReclaimSessionMinter(
             put("providerVersion", "")
             put("resolvedProviderVersion", resolvedProviderVersion)
             putJsonObject("parameters") {}
-            put("redirectUrl", "")
+            put("redirectUrl", redirectUrl)
             putJsonObject("redirectUrlOptions") { put("method", "GET") }
             put("cancelCallbackUrl", "$baseUrl$PATH_CANCEL_CALLBACK$sessionId")
-            put("cancelRedirectUrl", "")
+            // Cancelling is a return too: the user who backs out in the Verifier has the same
+            // problem finding their way back as the one who finishes.
+            put("cancelRedirectUrl", redirectUrl)
             putJsonObject("cancelRedirectUrlOptions") { put("method", "GET") }
             put("acceptAiProviders", false)
             // What the Verifier app negotiates against. Pinned, and bumped deliberately.

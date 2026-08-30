@@ -6,7 +6,9 @@ package xyz.justzappit.offramp.reclaim
 import io.ktor.client.HttpClient
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.reputation.SocialPlatform
 import kotlin.test.Test
@@ -27,6 +29,7 @@ class ReclaimSessionMinterTest {
             httpClient = HttpClient(),
             credentials = ReclaimAppCredentials(appId = APP_ID, appSecret = APP_SECRET),
             nowMillis = { TIMESTAMP.toLong() },
+            redirectUrl = RETURN_URL,
         )
 
     @Test
@@ -83,6 +86,24 @@ class ReclaimSessionMinterTest {
     }
 
     @Test
+    fun `the template carries somewhere for the Verifier to send the user back to`() {
+        val template =
+            minter.templateData(
+                sessionId = "s-1",
+                providerId = "p-1",
+                timestamp = "1700000000000",
+                signature = "0xsig",
+                context = buildJsonObject { put("contextAddress", "0x1") },
+                resolvedProviderVersion = "21.0.0",
+            )
+
+        // Empty here is what left users on Reclaim's "you can now return to Zapp" screen with no
+        // way back but the launcher. Cancelling has to come back too.
+        assertEquals(RETURN_URL, template["redirectUrl"]?.jsonPrimitive?.content)
+        assertEquals(RETURN_URL, template["cancelRedirectUrl"]?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun `the store fallback is a scheme Compose's UriHandler can actually open`() {
         val url = minter.installIntentUrl("https://share.reclaimprotocol.org/link/?template=abc")
 
@@ -118,6 +139,10 @@ class ReclaimSessionMinterTest {
     private companion object {
         // A throwaway key — a Reclaim appSecret is exactly this: an Ethereum private key.
         const val APP_SECRET = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+
+        /** Stands in for the app's own scheme; the minter never inspects it. */
+        const val RETURN_URL = "zcash://reclaim-return"
+
         const val APP_ID = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
         const val PROVIDER_ID = "aad95818-f726-4a34-be97-8d1f47631b03"
         const val TIMESTAMP = "1788010828404"

@@ -43,6 +43,7 @@ import co.electriccoin.zcash.ui.common.repository.WalletSnapshotRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepository
 import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepositoryImpl
 import co.electriccoin.zcash.ui.screen.chat.linkpreview.LinkPreviewRepository
+import co.electriccoin.zcash.ui.screen.reputation.increase.ReclaimReturnLink
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.qualifier.named
 import org.koin.dsl.bind
@@ -171,6 +172,7 @@ val repositoryModule =
                         httpClient = get(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)),
                         credentials = get(),
                         nowMillis = System::currentTimeMillis,
+                        redirectUrl = ReclaimReturnLink.URL,
                     ),
                 poller = ReclaimPoller(httpClient = get(named(OFFRAMP_HTTP_CLIENT_QUALIFIER))),
                 submitters = get(),
