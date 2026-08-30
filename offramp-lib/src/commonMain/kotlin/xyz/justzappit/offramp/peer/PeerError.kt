@@ -56,6 +56,13 @@ enum class PeerErrorCode(
 
     // Ours: Peer Cash never funds the account, its caller does.
     FUNDING_BRIDGE_FAILED(retryable = true),
+
+    /**
+     * The app could not read its own recovery record. It therefore cannot say what was already
+     * broadcast, which rules out both halves of a retry: resending may open a second escrow, and
+     * releasing the amount the attempt reserved may spend the same coins twice.
+     */
+    RECOVERY_STATE_UNREADABLE(retryable = false, allowsManualRetry = false, nothingEscrowed = false),
 }
 
 /**
