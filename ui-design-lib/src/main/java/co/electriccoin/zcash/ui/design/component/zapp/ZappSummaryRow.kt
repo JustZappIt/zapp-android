@@ -25,16 +25,6 @@ import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 
 /**
- * A tappable explanation for a row's number. One type rather than two optional parameters: a
- * handler without a description ships an unlabelled button, and the pair is only ever correct
- * together.
- */
-data class ZappRowInfoAction(
-    val onClick: () -> Unit,
-    val contentDescription: String,
-)
-
-/**
  * Label left, value right: the one detail row for every money flow's summary and receipt. The value
  * is the emphasised half, and it ellipsizes rather than wrapping so a long one cannot push the
  * label off the row.

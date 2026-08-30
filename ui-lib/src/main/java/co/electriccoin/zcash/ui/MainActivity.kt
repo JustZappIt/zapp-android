@@ -130,23 +130,23 @@ class MainActivity : FragmentActivity() {
      */
     private fun forwardUriIntent(intent: Intent) {
         val data = intent.data ?: return
+        when {
+            // Recents re-delivers the original intent. Nothing here may act on it twice: for a
+            // gift link that would re-enqueue a claim already on the back stack, and for anything
+            // else it would reopen the scanner over whatever the user came back to.
+            (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0 -> Unit
 
-        // Recents re-delivers the original intent. Nothing here may act on it twice: for a gift
-        // link that would re-enqueue a claim already on the back stack, and for anything else it
-        // would reopen the scanner over whatever the user came back to.
-        if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return
+            // The Verifier returning the user from a Reclaim session. Consumed and deliberately
+            // not navigated: the verification screen is still up and still polling the session, so
+            // the link's whole job is bringing the task forward — singleTask has already done that
+            // by the time this runs. Forwarding anywhere would tear down a run in progress, and
+            // falling through to the scanner would put the camera over it.
+            isReclaimReturnUri(intent, data) -> intent.data = null
 
-        // The Verifier returning the user from a Reclaim session. Consumed and deliberately not
-        // navigated: the verification screen is still up and still polling the session, so the
-        // link's whole job is bringing the task forward — singleTask has already done that by the
-        // time this runs. Forwarding anywhere would tear down a run in progress, and falling
-        // through to the scanner below would put the camera over it.
-        if (isReclaimReturnUri(intent, data)) {
-            intent.data = null
-            return
+            isGiftUri(intent, data) -> openGiftClaim(intent, data)
+
+            else -> navigationRouter.forward(ThirdPartyScan)
         }
-
-        if (isGiftUri(intent, data)) openGiftClaim(intent, data) else navigationRouter.forward(ThirdPartyScan)
     }
 
     private fun isReclaimReturnUri(intent: Intent, data: Uri): Boolean =

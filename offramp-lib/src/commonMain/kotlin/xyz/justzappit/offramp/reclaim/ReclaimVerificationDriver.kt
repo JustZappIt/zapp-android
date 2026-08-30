@@ -315,13 +315,22 @@ class ReclaimVerificationDriver(
     }
 
     private fun classifyRevert(e: RpcException.ExecutionReverted): ReclaimFailure {
-        if (e.solidityErrorString?.contains(ADDRESS_MISMATCH, ignoreCase = true) == true) {
-            return ReclaimFailure.AddressMismatch
-        }
         val selector = e.selector?.hex
-        REVERTS[selector]?.let { return it }
-        onUnrecognisedRevert(selector ?: e.solidityErrorString ?: "revert with no data")
-        return ReclaimFailure.VerificationRejected
+        val mapped = selector?.let(REVERTS::get)
+        return when {
+            e.solidityErrorString?.contains(ADDRESS_MISMATCH, ignoreCase = true) == true -> {
+                ReclaimFailure.AddressMismatch
+            }
+
+            mapped != null -> {
+                mapped
+            }
+
+            else -> {
+                onUnrecognisedRevert(selector ?: e.solidityErrorString ?: "revert with no data")
+                ReclaimFailure.VerificationRejected
+            }
+        }
     }
 
     private companion object {

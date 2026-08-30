@@ -82,7 +82,8 @@ class DirectOnrampDriverTest {
             } else if (nextRevert != null) {
                 // A revert is an HTTP 200 carrying a JSON-RPC error, not an HTTP failure.
                 respond(
-                    """{"jsonrpc":"2.0","id":1,"error":{"code":3,"message":"execution reverted","data":"$nextRevert"}}""",
+                    """{"jsonrpc":"2.0","id":1,"error":""" +
+                        """{"code":3,"message":"execution reverted","data":"$nextRevert"}}""",
                     HttpStatusCode.OK,
                     jsonHeaders,
                 )
