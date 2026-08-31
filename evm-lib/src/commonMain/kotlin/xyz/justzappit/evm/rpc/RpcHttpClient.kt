@@ -18,6 +18,7 @@ import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.util.AttributeKey
 import kotlinx.io.IOException
 
 object RpcHttpClient {
@@ -67,10 +68,13 @@ object RpcHttpClient {
         }
         install(HttpRequestRetry) {
             maxRetries = config.maxRetries
-            retryOnExceptionIf { _, cause -> isTransientTransportError(cause) }
-            retryIf { _, response ->
+            retryOnExceptionIf { request, cause ->
+                !request.attributes.contains(NoRpcRetry) && isTransientTransportError(cause)
+            }
+            retryIf { request, response ->
                 val status = response.status.value
-                status in SERVER_ERROR_RANGE || response.status == HttpStatusCode.TooManyRequests
+                !request.attributes.contains(NoRpcRetry) &&
+                    (status in SERVER_ERROR_RANGE || response.status == HttpStatusCode.TooManyRequests)
             }
             exponentialDelay(
                 base = 2.0,
@@ -90,5 +94,11 @@ object RpcHttpClient {
 
     private val SERVER_ERROR_RANGE = 500..599
 }
+
+/**
+ * Transaction sends are not safe HTTP retry operations. A server can accept the bytes and lose the
+ * response; replaying the POST can then return an error that falsely looks like a definite reject.
+ */
+internal val NoRpcRetry = AttributeKey<Unit>("NoRpcRetry")
 
 internal expect fun createDefaultRpcHttpClient(config: RpcHttpClient.Config): HttpClient

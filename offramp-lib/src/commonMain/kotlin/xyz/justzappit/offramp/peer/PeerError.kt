@@ -25,6 +25,15 @@ enum class PeerErrorCode(
     val allowsManualRetry: Boolean = true,
     val nothingEscrowed: Boolean = true,
 ) {
+    /** The Apple facade rejected malformed identifiers or request fields before any send. */
+    INVALID_REQUEST(retryable = false),
+
+    /** Account/provider or other local setup failed before any transaction was prepared. */
+    INITIALIZATION_FAILED(retryable = true),
+
+    /** A caller asked the identity-only resolver to execute a state that could broadcast. */
+    RECOVERY_ACTION_UNSAFE(retryable = false, allowsManualRetry = false, nothingEscrowed = false),
+
     // Reached only by decoding an escrow revert; nothing rejects a rail up front.
     UNSUPPORTED_PLATFORM(retryable = false),
     UNSUPPORTED_PLATFORM_CURRENCY(retryable = false),

@@ -123,7 +123,9 @@ data class ApplePeerAttempt(
 /** An attempt matched to the deposit it turned out to open, so its reservation can be released. */
 data class ApplePeerReconciliation(
     val attemptId: String,
-    val depositIdComposite: String,
+    val depositIdComposite: String? = null,
+    /** True when an exact included receipt proved the attempt escrowed nothing and was retired. */
+    val retiredWithoutEscrow: Boolean = false,
 )
 
 /**

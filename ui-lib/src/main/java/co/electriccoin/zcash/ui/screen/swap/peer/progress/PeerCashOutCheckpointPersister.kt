@@ -31,6 +31,8 @@ internal class PeerCashOutCheckpointPersister(
     private var payeeHash: PayeeHash? = null
     private var bridgeDepositAddress: String? = null
     private var approveTxHash: TxHash? = null
+    private var createDepositSubmissionHash: TxHash? = null
+    private var createDepositSubmissionNonceDecimal: String? = null
     private var createDepositTxHash: TxHash? = null
     private var blockBeforeCreateDeposit: String? = null
     private var depositId: PeerDepositId? = null
@@ -41,6 +43,8 @@ internal class PeerCashOutCheckpointPersister(
         payeeHash = checkpoint.payeeHash
         bridgeDepositAddress = checkpoint.bridgeDepositAddress
         approveTxHash = checkpoint.approveTxHash
+        createDepositSubmissionHash = checkpoint.createDepositSubmissionHash
+        createDepositSubmissionNonceDecimal = checkpoint.createDepositSubmissionNonceDecimal
         createDepositTxHash = checkpoint.createDepositTxHash
         blockBeforeCreateDeposit = checkpoint.blockBeforeCreateDeposit
         depositId = checkpoint.depositId
@@ -72,7 +76,8 @@ internal class PeerCashOutCheckpointPersister(
             }
 
             is PeerCashOutStatus.CreatingDeposit -> {
-                blockBeforeCreateDeposit = status.fromBlockNumber
+                createDepositSubmissionHash = status.submissionHash
+                status.submissionNonceDecimal?.let { createDepositSubmissionNonceDecimal = it }
                 status.txHash?.let { createDepositTxHash = it }
             }
 
@@ -113,7 +118,11 @@ internal class PeerCashOutCheckpointPersister(
         status.error.nothingEscrowed && hasAttemptedDeposit
 
     private val hasAttemptedDeposit: Boolean
-        get() = depositId != null || createDepositTxHash != null || blockBeforeCreateDeposit != null
+        get() =
+            depositId != null ||
+                createDepositSubmissionHash != null ||
+                createDepositTxHash != null ||
+                blockBeforeCreateDeposit != null
 
     /**
      * Writes whenever there is something a resume would need, which crucially includes the block
@@ -134,6 +143,8 @@ internal class PeerCashOutCheckpointPersister(
                 amountMicroDecimal = request.amount.micros.toString(),
                 bridgeDepositAddress = bridgeDepositAddress,
                 approveTxHash = approveTxHash,
+                createDepositSubmissionHash = createDepositSubmissionHash,
+                createDepositSubmissionNonceDecimal = createDepositSubmissionNonceDecimal,
                 createDepositTxHash = createDepositTxHash,
                 blockBeforeCreateDeposit = blockBeforeCreateDeposit,
                 depositId = depositId,

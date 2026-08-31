@@ -29,6 +29,7 @@ internal class OfframpCheckpointPersister(
 ) {
     private var lastApproveTxHash: TxHash? = null
     private var lastPlaceOrderTxHash: TxHash? = null
+    private var lastPlaceOrderNonceDecimal: String? = null
     private var lastBridgeDepositAddress: String? = null
 
     /**
@@ -38,6 +39,7 @@ internal class OfframpCheckpointPersister(
     fun seedFrom(checkpoint: OfframpCheckpoint?) {
         lastApproveTxHash = checkpoint?.approveTxHash
         lastPlaceOrderTxHash = checkpoint?.placeOrderTxHash
+        lastPlaceOrderNonceDecimal = checkpoint?.placeOrderNonceDecimal
         lastBridgeDepositAddress = checkpoint?.bridgeDepositAddress
     }
 
@@ -48,10 +50,22 @@ internal class OfframpCheckpointPersister(
 
     private fun capture(status: OfframpStatus) {
         when (status) {
-            is OfframpStatus.ApprovingUsdc -> lastApproveTxHash = status.txHash
-            is OfframpStatus.PlacingOrder -> lastPlaceOrderTxHash = status.txHash
-            is OfframpStatus.BridgingFunds -> status.depositAddress?.let { lastBridgeDepositAddress = it }
-            else -> Unit
+            is OfframpStatus.ApprovingUsdc -> {
+                lastApproveTxHash = status.txHash
+            }
+
+            is OfframpStatus.PlacingOrder -> {
+                lastPlaceOrderTxHash = status.txHash
+                status.submissionNonceDecimal?.let { lastPlaceOrderNonceDecimal = it }
+            }
+
+            is OfframpStatus.BridgingFunds -> {
+                status.depositAddress?.let { lastBridgeDepositAddress = it }
+            }
+
+            else -> {
+                Unit
+            }
         }
     }
 
@@ -73,7 +87,11 @@ internal class OfframpCheckpointPersister(
                     !bridgeTerminallyDead &&
                         status.step == OfframpStep.FUNDING &&
                         lastBridgeDepositAddress != null
-                if (transientFundingFailure) {
+                val unresolvedPlaceOrder =
+                    status.step == OfframpStep.PLACING_ORDER &&
+                        lastPlaceOrderTxHash != null &&
+                        !status.nothingEscrowed
+                if (transientFundingFailure || unresolvedPlaceOrder) {
                     persistCheckpoint(orderId = null, status = status)
                 } else {
                     storage.clear()
@@ -85,7 +103,7 @@ internal class OfframpCheckpointPersister(
                 // Persist once there's either an order id OR an in-flight bridge to resume — the
                 // bridge deposit address must survive process death so resume re-polls it instead of
                 // opening a second bridge. Pre-bridge steps (Idle/SelectingCircle) carry nothing.
-                if (orderId == null && lastBridgeDepositAddress == null) return
+                if (orderId == null && lastBridgeDepositAddress == null && lastPlaceOrderTxHash == null) return
                 persistCheckpoint(orderId = orderId?.toString(), status = status)
             }
         }
@@ -100,6 +118,7 @@ internal class OfframpCheckpointPersister(
                 bridgeDepositAddress = lastBridgeDepositAddress ?: previous?.bridgeDepositAddress,
                 approveTxHash = lastApproveTxHash ?: previous?.approveTxHash,
                 placeOrderTxHash = lastPlaceOrderTxHash ?: previous?.placeOrderTxHash,
+                placeOrderNonceDecimal = lastPlaceOrderNonceDecimal ?: previous?.placeOrderNonceDecimal,
                 setUpiTxHash =
                     (status as? OfframpStatus.SendingEncryptedUpi)?.txHash
                         ?: previous?.setUpiTxHash,

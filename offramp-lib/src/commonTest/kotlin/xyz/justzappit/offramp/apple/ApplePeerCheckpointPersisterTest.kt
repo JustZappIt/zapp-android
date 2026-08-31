@@ -4,6 +4,7 @@
 package xyz.justzappit.offramp.apple
 
 import kotlinx.coroutines.test.runTest
+import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.peer.PayeeHash
@@ -38,23 +39,20 @@ class ApplePeerCheckpointPersisterTest {
             assertTrue(book.all().isEmpty())
         }
 
-    /**
-     * The block read immediately before broadcasting, persisted before the send returns. Without it
-     * a submission whose hash never came back leaves no trace at all, and the next launch has
-     * nothing to look the order up from — so it would send again.
-     */
+    /** The signed identity is durable before the send, so a lost response is exactly queryable. */
     @Test
-    fun `the pre-broadcast block floor is persisted before any hash exists`() =
+    fun `the signed submission identity is persisted before broadcast`() =
         runTest {
             val book = ApplePeerCheckpointBook(FakePeerStorage())
             val persister = persister(book)
             persister.onStatus(PeerCashOutStatus.ValidatingPayee(PeerPlatform.REVOLUT, PayeeHash.parse(HASH)))
-            persister.onStatus(PeerCashOutStatus.CreatingDeposit(AMOUNT, BLOCK))
+            persister.onStatus(PeerCashOutStatus.CreatingDeposit(AMOUNT, TX, NONCE))
 
             val stored = assertNotNull(book.get(ID))
-            assertEquals(BLOCK.toLong(), stored.blockFloor)
+            assertEquals(TX, stored.createDepositSubmissionHash)
+            assertEquals(NONCE, stored.createDepositSubmissionNonceDecimal)
             assertNull(stored.createDepositTxHash)
-            assertEquals(PeerResumeAction.ReconcileSubmission, stored.resumeAction)
+            assertEquals(PeerResumeAction.ReconcileSubmission(TX, BigInteger(NONCE)), stored.resumeAction)
             assertTrue(stored.holdsUnescrowedFunds)
         }
 
@@ -64,11 +62,11 @@ class ApplePeerCheckpointPersisterTest {
             val book = ApplePeerCheckpointBook(FakePeerStorage())
             val persister = persister(book)
             persister.onStatus(PeerCashOutStatus.ValidatingPayee(PeerPlatform.REVOLUT, PayeeHash.parse(HASH)))
-            persister.onStatus(PeerCashOutStatus.CreatingDeposit(AMOUNT, BLOCK))
-            persister.onStatus(PeerCashOutStatus.CreatingDeposit(AMOUNT, BLOCK, TX))
+            persister.onStatus(PeerCashOutStatus.CreatingDeposit(AMOUNT, TX, NONCE))
+            persister.onStatus(PeerCashOutStatus.CreatingDeposit(AMOUNT, TX, NONCE, TX))
 
             val stored = assertNotNull(book.get(ID))
-            assertEquals(PeerResumeAction.ResolveSubmittedDeposit(TX), stored.resumeAction)
+            assertEquals(PeerResumeAction.ResolveSubmittedDeposit(TX, BigInteger(NONCE)), stored.resumeAction)
         }
 
     /** Once the deposit exists the chain is the whole record, on any device and after a reinstall. */
@@ -78,7 +76,7 @@ class ApplePeerCheckpointPersisterTest {
             val book = ApplePeerCheckpointBook(FakePeerStorage())
             val persister = persister(book)
             persister.onStatus(PeerCashOutStatus.ValidatingPayee(PeerPlatform.REVOLUT, PayeeHash.parse(HASH)))
-            persister.onStatus(PeerCashOutStatus.CreatingDeposit(AMOUNT, BLOCK, TX))
+            persister.onStatus(PeerCashOutStatus.CreatingDeposit(AMOUNT, TX, NONCE, TX))
             persister.onStatus(PeerCashOutStatus.OrderLive(peerOrderSnapshot(remaining = AMOUNT)))
 
             assertTrue(book.all().isEmpty())
@@ -95,7 +93,7 @@ class ApplePeerCheckpointPersisterTest {
             val book = ApplePeerCheckpointBook(FakePeerStorage())
             val persister = persister(book)
             persister.onStatus(PeerCashOutStatus.ValidatingPayee(PeerPlatform.REVOLUT, PayeeHash.parse(HASH)))
-            persister.onStatus(PeerCashOutStatus.CreatingDeposit(AMOUNT, BLOCK, TX))
+            persister.onStatus(PeerCashOutStatus.CreatingDeposit(AMOUNT, TX, NONCE, TX))
             persister.onStatus(
                 PeerCashOutStatus.Failed(
                     step = PeerCashOutStep.CREATING_DEPOSIT,
@@ -116,7 +114,7 @@ class ApplePeerCheckpointPersisterTest {
             val book = ApplePeerCheckpointBook(FakePeerStorage())
             val persister = persister(book)
             persister.onStatus(PeerCashOutStatus.ValidatingPayee(PeerPlatform.REVOLUT, PayeeHash.parse(HASH)))
-            persister.onStatus(PeerCashOutStatus.CreatingDeposit(AMOUNT, BLOCK))
+            persister.onStatus(PeerCashOutStatus.CreatingDeposit(AMOUNT, TX, NONCE))
             persister.onStatus(
                 PeerCashOutStatus.Failed(
                     step = PeerCashOutStep.CREATING_DEPOSIT,
@@ -125,7 +123,7 @@ class ApplePeerCheckpointPersisterTest {
             )
 
             val stored = assertNotNull(book.get(ID))
-            assertEquals(PeerResumeAction.ReconcileSubmission, stored.resumeAction)
+            assertEquals(PeerResumeAction.ReconcileSubmission(TX, BigInteger(NONCE)), stored.resumeAction)
             assertTrue(stored.holdsUnescrowedFunds)
         }
 
@@ -156,7 +154,7 @@ class ApplePeerCheckpointPersisterTest {
             val book = ApplePeerCheckpointBook(FakePeerStorage())
             val first = persister(book)
             first.onStatus(PeerCashOutStatus.ValidatingPayee(PeerPlatform.REVOLUT, PayeeHash.parse(HASH)))
-            first.onStatus(PeerCashOutStatus.CreatingDeposit(AMOUNT, BLOCK, TX))
+            first.onStatus(PeerCashOutStatus.CreatingDeposit(AMOUNT, TX, NONCE, TX))
 
             val stored = assertNotNull(book.get(ID))
             val resumed = persister(book)
@@ -165,7 +163,7 @@ class ApplePeerCheckpointPersisterTest {
 
             val after = assertNotNull(book.get(ID))
             assertEquals(TX, after.createDepositTxHash)
-            assertEquals(BLOCK.toLong(), after.blockFloor)
+            assertEquals(TX, after.createDepositSubmissionHash)
             assertEquals(stored.createdAtMillis, after.createdAtMillis)
         }
 
@@ -179,7 +177,7 @@ class ApplePeerCheckpointPersisterTest {
             val book = ApplePeerCheckpointBook(FakePeerStorage())
             val other = persister(book, PeerCashOutId.of(OTHER_ID))
             other.onStatus(PeerCashOutStatus.ValidatingPayee(PeerPlatform.REVOLUT, PayeeHash.parse(HASH)))
-            other.onStatus(PeerCashOutStatus.CreatingDeposit(AMOUNT, BLOCK, TX))
+            other.onStatus(PeerCashOutStatus.CreatingDeposit(AMOUNT, TX, NONCE, TX))
 
             val mine = persister(book)
             mine.seedFrom(assertNotNull(book.get(PeerCashOutId.of(OTHER_ID))))
@@ -211,8 +209,8 @@ class ApplePeerCheckpointPersisterTest {
         const val OTHER_ID = "fedcba9876543210fedcba9876543210"
         val HASH = "0x" + "11".repeat(HASH_BYTES)
         const val HASH_BYTES = 32
-        const val BLOCK = "33000000"
         const val CREATED_AT = 1_700_000_000_000L
+        const val NONCE = "7"
         val AMOUNT: Usdc6 = Usdc6.ofMicros(20_000_000L)
         val TX: TxHash = TxHash.fromHex("0x" + "aa".repeat(TxHash.LEN))
     }

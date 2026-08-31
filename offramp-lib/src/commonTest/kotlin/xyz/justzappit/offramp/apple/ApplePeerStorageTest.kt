@@ -8,6 +8,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.peer.PayeeHash
 import xyz.justzappit.offramp.peer.PeerCashOutCheckpoint
@@ -89,7 +90,46 @@ class ApplePeerStorageTest {
             val storage = FakePeerStorage()
             storage.storePeerCheckpointBookJson("{\"entries\":[{\"id\":\"nonsense\"}]}")
 
-            assertFailsWith<IllegalStateException> { ApplePeerCheckpointBook(storage).all() }
+            assertFailsWith<ApplePeerRecoveryStorageException> { ApplePeerCheckpointBook(storage).all() }
+        }
+
+    @Test
+    fun `a negative commitment fails rather than increasing spendable balance`() =
+        runTest {
+            val storage = FakePeerStorage()
+            val valid = Json.encodeToString(PeerCashOutCheckpoint.serializer(), checkpoint(ID_A))
+            val malformed = valid.replace("\"amountMicroDecimal\":\"20000000\"", "\"amountMicroDecimal\":\"-1\"")
+            storage.storePeerCheckpointBookJson("{\"entries\":[$malformed]}")
+
+            assertFailsWith<ApplePeerRecoveryStorageException> { ApplePeerCheckpointBook(storage).all() }
+        }
+
+    @Test
+    fun `checkpoint host IO failures keep their typed recovery boundary`() =
+        runTest {
+            val readFailure = FakePeerStorage().apply { failReads = true }
+            assertFailsWith<ApplePeerRecoveryStorageException> { ApplePeerCheckpointBook(readFailure).all() }
+
+            val writeFailure = FakePeerStorage().apply { failWrites = true }
+            assertFailsWith<ApplePeerRecoveryStorageException> {
+                ApplePeerCheckpointBook(writeFailure).store(checkpoint(ID_A))
+            }
+        }
+
+    @Test
+    fun `fresh start and Apple impossible bridge records are rejected`() =
+        runTest {
+            listOf(
+                checkpoint(ID_A).copy(createDepositSubmissionHash = null),
+                checkpoint(ID_A).copy(createDepositSubmissionHash = null, bridgeDepositAddress = "legacy-bridge"),
+                checkpoint(ID_A).copy(createDepositSubmissionHash = null, blockBeforeCreateDeposit = "123"),
+            ).forEach { unsafe ->
+                val storage = FakePeerStorage()
+                val entry = Json.encodeToString(PeerCashOutCheckpoint.serializer(), unsafe)
+                storage.storePeerCheckpointBookJson("{\"entries\":[$entry]}")
+
+                assertFailsWith<ApplePeerRecoveryStorageException> { ApplePeerCheckpointBook(storage).all() }
+            }
         }
 
     /** A handle is PII: it must never appear in the record that describes a broadcast transaction. */
@@ -146,8 +186,8 @@ class ApplePeerStorageTest {
             currencies = listOf(PeerCurrency.EUR),
             payeeHashHex = PAYEE_HASH_HEX,
             amountMicroDecimal = amountMicros,
+            createDepositSubmissionHash = createTx ?: TX_A,
             createDepositTxHash = createTx,
-            blockBeforeCreateDeposit = createTx?.let { BLOCK },
             createdAtMillis = 1_700_000_000_000L,
         )
 
@@ -158,7 +198,6 @@ class ApplePeerStorageTest {
         val PAYEE_HASH_HEX = "0x" + "11".repeat(HASH_BYTES)
         const val HASH_BYTES = 32
         const val HANDLE = "somerevtag"
-        const val BLOCK = "33000000"
         const val CONCURRENT_ATTEMPTS = 32
         const val HEX = 16
         val TX_A: TxHash = TxHash.fromHex("0x" + "aa".repeat(TxHash.LEN))

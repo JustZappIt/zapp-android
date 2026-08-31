@@ -47,6 +47,8 @@ sealed class OfframpStatus {
         val txHash: TxHash,
         val circleId: BigInteger,
         val amount: Usdc6,
+        /** EntryPoint nonce paired with [txHash] when this is the pre-broadcast marker. */
+        val submissionNonceDecimal: String? = null,
     ) : OfframpStatus()
 
     data class WaitingForMerchantAcceptance(
@@ -138,6 +140,8 @@ sealed class OfframpStatus {
          */
         val sdkErrorMessage: String? = null,
         val solidityErrorString: String? = null,
+        /** True only when placeOrder was definitely rejected or its included receipt reverted. */
+        val nothingEscrowed: Boolean = false,
         val cause: Throwable? = null,
     ) : OfframpStatus()
 }

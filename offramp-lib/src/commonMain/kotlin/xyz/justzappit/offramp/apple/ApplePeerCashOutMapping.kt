@@ -74,7 +74,7 @@ internal fun PeerCashOutCheckpoint.toApple(): ApplePeerAttempt =
             when (resumeAction) {
                 is PeerResumeAction.ReadOrder -> ApplePeerAttempt.RESUME_READ_ORDER
                 is PeerResumeAction.ResolveSubmittedDeposit -> ApplePeerAttempt.RESUME_RESOLVE_SUBMITTED
-                PeerResumeAction.ReconcileSubmission -> ApplePeerAttempt.RESUME_RECONCILE
+                is PeerResumeAction.ReconcileSubmission -> ApplePeerAttempt.RESUME_RECONCILE
                 is PeerResumeAction.ResumeBridge -> ApplePeerAttempt.RESUME_BRIDGE
                 PeerResumeAction.FreshStart -> ApplePeerAttempt.RESUME_FRESH_START
             },

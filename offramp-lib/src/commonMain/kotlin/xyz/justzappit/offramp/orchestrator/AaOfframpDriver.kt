@@ -56,7 +56,7 @@ class AaOfframpDriver(
         paymentDetailsProvider: OfframpPaymentDetailsProvider?,
     ): Flow<OfframpStatus> =
         flow {
-            emitAll(buildOrchestrator().resume(checkpoint, paymentDetailsProvider))
+            emitAll(buildOrchestrator(checkpoint).resume(checkpoint, paymentDetailsProvider))
         }
 
     override fun bridgeToBase(addUsdc: Usdc6, resumeBridgeHandle: String?): Flow<BridgeToBaseStatus> =
@@ -75,11 +75,15 @@ class AaOfframpDriver(
             emitAll(buildOrchestrator().bridgeFundsBackToZec(orderId, resume))
         }
 
-    private suspend fun buildOrchestrator(): OfframpOrchestrator {
+    private suspend fun buildOrchestrator(checkpoint: OfframpCheckpoint? = null): OfframpOrchestrator {
         val account = submitters.resolve()
+        checkpoint?.takeIf { it.hasUnresolvedPlaceSubmission }?.let { unresolved ->
+            account.submitter.restorePendingTransaction(checkNotNull(unresolved.placeOrderTxHash), unresolved.placeOrderNonce)
+        }
         return OfframpOrchestrator(
             rpc = rpc,
             submitter = account.submitter,
+            allowanceTransactions = account.allowanceTransactions,
             accountAddress = account.address,
             network = network,
             subgraph = subgraph,

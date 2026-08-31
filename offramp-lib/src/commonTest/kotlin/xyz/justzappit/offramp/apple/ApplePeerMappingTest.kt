@@ -14,6 +14,7 @@ import xyz.justzappit.offramp.peer.PeerNetworks
 import xyz.justzappit.offramp.peer.PeerPlatform
 import xyz.justzappit.offramp.peer.PeerRecovery
 import xyz.justzappit.offramp.peer.asError
+import xyz.justzappit.offramp.peer.asException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -36,7 +37,7 @@ class ApplePeerMappingTest {
                 PeerCashOutStatus.BridgingFunds(ONE),
                 PeerCashOutStatus.FundedFromBase(ONE, ONE),
                 PeerCashOutStatus.ApprovingUsdc(TX, ONE),
-                PeerCashOutStatus.CreatingDeposit(ONE, "1"),
+                PeerCashOutStatus.CreatingDeposit(ONE, TX),
                 PeerCashOutStatus.OrderLive(peerOrderSnapshot(remaining = ONE)),
                 PeerCashOutStatus.Withdrawing(DEPOSIT_ID, ONE),
                 PeerCashOutStatus.Withdrawn(DEPOSIT_ID, ONE),
@@ -128,6 +129,35 @@ class ApplePeerMappingTest {
         assertNotNull(failure)
         assertFalse(failure.nothingEscrowed)
         assertFalse(failure.allowsManualRetry)
+    }
+
+    @Test
+    fun `only typed recovery storage failures map to unreadable recovery`() {
+        assertEquals(
+            PeerErrorCode.RECOVERY_STATE_UNREADABLE,
+            applePeerFacadeErrorCode(
+                railAvailable = true,
+                error = IllegalStateException("flow wrapper", ApplePeerRecoveryStorageException("unreadable")),
+            ),
+        )
+        assertEquals(
+            PeerErrorCode.INITIALIZATION_FAILED,
+            applePeerFacadeErrorCode(
+                railAvailable = true,
+                error =
+                    PeerErrorCode.INITIALIZATION_FAILED.asException(
+                        cause = ApplePeerRecoveryStorageException("marker write failed"),
+                    ),
+            ),
+        )
+        assertEquals(
+            PeerErrorCode.INVALID_REQUEST,
+            applePeerFacadeErrorCode(railAvailable = true, error = IllegalArgumentException("bad request")),
+        )
+        assertEquals(
+            PeerErrorCode.INITIALIZATION_FAILED,
+            applePeerFacadeErrorCode(railAvailable = true, error = IllegalStateException("account construction")),
+        )
     }
 
     /**

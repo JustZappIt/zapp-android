@@ -22,6 +22,7 @@ import xyz.justzappit.evm.math.plus
 import xyz.justzappit.evm.math.times
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.rpc.BundlerClient
+import xyz.justzappit.evm.rpc.RpcException
 import xyz.justzappit.evm.rpc.TransactionReceipt
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
@@ -30,6 +31,7 @@ import xyz.justzappit.evm.types.Wei
 import xyz.justzappit.evm.util.hexToBigInteger
 import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.evm.util.padLeftToWord
+import xyz.justzappit.evm.util.toHex
 import kotlin.time.TimeSource
 
 /**
@@ -69,6 +71,8 @@ class Erc4337Submitter(
      * is still outstanding without handing the next send a nonce one of them already owns.
      */
     private val outstanding = mutableSetOf<TxHash>()
+    private val unknownNonceOutstanding = mutableSetOf<TxHash>()
+    private var hasUnidentifiedPendingTransaction = false
 
     /**
      * One send at a time per account. Reading the cursor, building the operation around it and
@@ -82,10 +86,22 @@ class Erc4337Submitter(
      */
     private val sendLock = Mutex()
 
-    override suspend fun sendTransaction(to: Address, value: Wei, data: ByteArray): TxHash =
-        sendLock.withLock { send(to, value, data) }
+    override suspend fun sendTransaction(
+        to: Address,
+        value: Wei,
+        data: ByteArray,
+        beforeBroadcast: suspend (PreparedTransaction) -> Unit,
+    ): TxHash = sendLock.withLock { send(to, value, data, beforeBroadcast) }
 
-    private suspend fun send(to: Address, value: Wei, data: ByteArray): TxHash {
+    private suspend fun send(
+        to: Address,
+        value: Wei,
+        data: ByteArray,
+        beforeBroadcast: suspend (PreparedTransaction) -> Unit,
+    ): TxHash {
+        check(!hasUnidentifiedPendingTransaction && unknownNonceOutstanding.isEmpty()) {
+            "A legacy unresolved transaction blocks new sends from this smart account"
+        }
         val initCode =
             if (rpc.ethGetCode(smartAccount).isEmpty()) {
                 ThirdwebSmartAccount.initCode(accountFactory, owner.address)
@@ -126,36 +142,82 @@ class Erc4337Submitter(
             withGas.copy(
                 paymasterAndData = bundler.sponsorUserOperation(withGas).paymasterAndData.hexToBytes(),
             )
-        val signed = sponsored.copy(signature = signOwner(sponsored.userOpHash(entryPoint, chainId)))
-        val txHash = bundler.sendUserOperation(signed)
-        // Advance optimistically so back-to-back sends don't collide on the same nonce. Only a
-        // submission whose fate stays unknown, with nothing else riding on the cursor, takes it back.
+        val userOpHash = sponsored.userOpHash(entryPoint, chainId)
+        val signed = sponsored.copy(signature = signOwner(userOpHash))
+        val txHash = TxHash.fromHex("0x${userOpHash.toHex()}")
+        // This is the last local action before the network send. A recovery record written by the
+        // callback identifies these exact signed fields, while a callback failure proves the
+        // operation never reached the bundler.
+        beforeBroadcast(PreparedTransaction(hash = txHash, nonce = nonce))
+        // The durable marker now owns this nonce. Advance before making the network call: a request
+        // can reach the bundler even when its response is lost, and reusing the nonce then would
+        // replace the exact operation recovery is still tracking. A callback failure stays above
+        // this boundary, so a marker that could not be stored advances nothing.
         nonceCursor = nonce + bigIntegerOne
         outstanding += txHash
+        val returnedHash =
+            try {
+                bundler.sendUserOperation(signed)
+            } catch (error: RpcException) {
+                if (error.isDefiniteSendRejection()) {
+                    // A JSON-RPC/HTTP rejection proves the bundler did not accept this operation.
+                    // Reclaim its nonce while still holding sendLock. A transport failure does not
+                    // enter here: the request may have landed and keeps its nonce ownership.
+                    outstanding -= txHash
+                    nonceCursor = if (outstanding.isEmpty()) null else nonce
+                }
+                throw error
+            }
+        check(returnedHash == txHash) {
+            "Bundler returned $returnedHash for signed UserOperation $txHash"
+        }
         return txHash
     }
 
+    override suspend fun restorePendingTransaction(hash: TxHash?, nonce: BigInteger?) =
+        sendLock.withLock {
+            if (hash == null) {
+                hasUnidentifiedPendingTransaction = true
+                return@withLock
+            }
+            if (nonce == null) {
+                unknownNonceOutstanding += hash
+                return@withLock
+            }
+            val chainNonce = nonceCursor ?: entryPointNonce()
+            if (chainNonce <= nonce) {
+                outstanding += hash
+                val afterPending = nonce + bigIntegerOne
+                nonceCursor = if (chainNonce >= afterPending) chainNonce else afterPending
+            } else {
+                nonceCursor = chainNonce
+            }
+        }
+
+    private fun RpcException.isDefiniteSendRejection(): Boolean =
+        method == METHOD_SEND_USER_OPERATION && this !is RpcException.TransportError
+
+    override suspend fun receiptIfIncluded(txHash: TxHash): TransactionReceipt? {
+        val receipt = bundler.getUserOperationReceipt(txHash) ?: return null
+        settle(txHash)
+        return receipt
+    }
+
     /**
-     * A poll that throws and a caller cancelled mid-wait leave the operation's fate as unknown as a
-     * timeout does, so every exit settles. A hash left behind in [outstanding] is never taken out
-     * again, and holds the cursor against invalidation for the life of the process.
+     * Only an included receipt settles nonce ownership. A failed poll, cancellation, or timeout says
+     * nothing about whether the bundler accepted the operation, so its hash stays [outstanding] and
+     * the next send stays above its nonce. Reusing it would replace the exact identity recovery is
+     * still tracking.
      */
     override suspend fun awaitReceipt(txHash: TxHash): TransactionReceipt {
         val started = TimeSource.Monotonic.markNow()
-        // An included operation consumed its nonce whether or not its execution reverted, so the
-        // cursor stays where it is: re-reading the chain would hand the next send a nonce an
-        // operation already queued behind this one is using.
-        var wasIncluded = false
-        try {
-            while (started.elapsedNow().inWholeMilliseconds < receiptTimeoutMs) {
-                bundler.getUserOperationReceipt(txHash)?.let { receipt ->
-                    wasIncluded = true
-                    return receipt
-                }
-                delay(receiptPollIntervalMs)
+        while (started.elapsedNow().inWholeMilliseconds < receiptTimeoutMs) {
+            bundler.getUserOperationReceipt(txHash)?.let { receipt ->
+                // Included consumes the nonce whether execution succeeded or reverted.
+                settle(txHash)
+                return receipt
             }
-        } finally {
-            settle(txHash, invalidateCursor = !wasIncluded)
+            delay(receiptPollIntervalMs)
         }
         val minutes = receiptTimeoutMs / 60_000
         error(
@@ -164,14 +226,14 @@ class Erc4337Submitter(
         )
     }
 
-    /** [NonCancellable] because taking the lock suspends, and a cancelled caller must still release its hash. */
-    private suspend fun settle(txHash: TxHash, invalidateCursor: Boolean) =
+    /** [NonCancellable] because an included operation must release its in-memory ownership. */
+    private suspend fun settle(txHash: TxHash) =
         withContext(NonCancellable) {
             sendLock.withLock {
                 outstanding -= txHash
-                // With nothing else riding on the cursor, force a re-read rather than AA25-storming
-                // against a value nothing can confirm.
-                if (invalidateCursor && outstanding.isEmpty()) nonceCursor = null
+                unknownNonceOutstanding -= txHash
+                // An anonymous legacy blocker has no identity to pass to awaitReceipt, so it
+                // deliberately remains until the host resolves or discards that recovery record.
             }
         }
 
@@ -208,6 +270,7 @@ class Erc4337Submitter(
         private const val DEFAULT_POLL_INTERVAL_MS = 2_000L
         private const val V_OFFSET = 27
         private const val EIP191_BYTE: Byte = 0x19
+        private const val METHOD_SEND_USER_OPERATION = "eth_sendUserOperation"
 
         private val EIP191_PREFIX =
             byteArrayOf(EIP191_BYTE) + "Ethereum Signed Message:\n32".encodeToByteArray()

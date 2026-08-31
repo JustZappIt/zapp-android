@@ -31,6 +31,7 @@ import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.evm.util.padLeftToWord
 import xyz.justzappit.evm.util.toHex
+import xyz.justzappit.offramp.account.AllowanceTransactionGuard
 import xyz.justzappit.offramp.config.P2pNetworkConfig
 import xyz.justzappit.offramp.funding.FundingOutcome
 import xyz.justzappit.offramp.funding.OfframpFunding
@@ -106,6 +107,7 @@ interface OfframpDriver {
 class OfframpOrchestrator(
     private val rpc: BaseRpcClient,
     private val submitter: TxSubmitter,
+    private val allowanceTransactions: AllowanceTransactionGuard = AllowanceTransactionGuard(),
     private val accountAddress: Address,
     private val network: P2pNetworkConfig,
     private val subgraph: SubgraphClient,
@@ -164,6 +166,9 @@ class OfframpOrchestrator(
         var currentStep = OfframpStep.INITIALIZATION
         var lastTxHash: TxHash? = null
         try {
+            // Validate the host-authorized quote before selecting/funding. The fee is read again
+            // inside the allowance critical section so a config update cannot race this check.
+            requireAuthorizedPayFee(request)
             val relay = relayIdentityStore.getOrCreate()
             val currencyHex = "0x" + AbiEncoder.bytes32String(request.currency.code).value.toHex()
 
@@ -198,65 +203,82 @@ class OfframpOrchestrator(
                 "Selected circle $circleId lost its assignable merchant during funding — not placing the order"
             }
 
-            currentStep = OfframpStep.APPROVING_USDC
-            // Match the official Scan & Pay UI: the fixed PAY fee applies only when the placed
-            // amount is at or below the configured small-order threshold.
-            val payFee = readPayFixedFeeFor(request.usdcAmount, request.currency)
-            val approveAmount = Usdc6(request.usdcAmount.micros + payFee.micros)
-            val approveHash =
-                submitter.sendTransaction(
-                    to = network.usdcAddress,
-                    data = Erc20Calls.approveCalldata(network.diamondAddress, approveAmount),
-                )
-            lastTxHash = approveHash
-            emit(OfframpStatus.ApprovingUsdc(txHash = approveHash, amount = approveAmount))
-            require(submitter.awaitReceipt(approveHash).success) { "USDC approve reverted" }
+            allowanceTransactions.withApprovalAndSpend {
+                currentStep = OfframpStep.APPROVING_USDC
+                // Match the official Scan & Pay UI: the fixed PAY fee applies only when the placed
+                // amount is at or below the configured small-order threshold.
+                val payFee = requireAuthorizedPayFee(request)
+                val approveAmount = request.authorizedRequiredBalance ?: (request.usdcAmount + payFee)
+                val approveHash =
+                    submitter.sendTransaction(
+                        to = network.usdcAddress,
+                        data = Erc20Calls.approveCalldata(network.diamondAddress, approveAmount),
+                    )
+                lastTxHash = approveHash
+                emit(OfframpStatus.ApprovingUsdc(txHash = approveHash, amount = approveAmount))
+                require(submitter.awaitReceipt(approveHash).success) { "USDC approve reverted" }
 
-            currentStep = OfframpStep.PLACING_ORDER
-            val placeOrderHash =
-                submitter.sendTransaction(
-                    to = network.diamondAddress,
-                    data =
-                        DiamondCalls.placeOrderCalldata(
-                            PlaceOrderArgs(
-                                relayPubKeyEthCrypto = relay.publicKeyHex,
-                                usdcAmount = request.usdcAmount,
-                                recipientAddress = accountAddress,
-                                orderType = OrderType.PAY,
-                                currency = request.currency,
-                                circleId = circleId,
-                                fiatAmountLimit = request.fiatAmountLimit ?: Usdc6.ZERO,
+                currentStep = OfframpStep.PLACING_ORDER
+                val placeOrderHash =
+                    submitter.sendTransaction(
+                        to = network.diamondAddress,
+                        data =
+                            DiamondCalls.placeOrderCalldata(
+                                PlaceOrderArgs(
+                                    relayPubKeyEthCrypto = relay.publicKeyHex,
+                                    usdcAmount = request.usdcAmount,
+                                    recipientAddress = accountAddress,
+                                    orderType = OrderType.PAY,
+                                    currency = request.currency,
+                                    circleId = circleId,
+                                    fiatAmountLimit = request.fiatAmountLimit ?: Usdc6.ZERO,
+                                ),
                             ),
-                        ),
-                )
-            lastTxHash = placeOrderHash
-            emit(
-                OfframpStatus.PlacingOrder(
-                    txHash = placeOrderHash,
-                    circleId = circleId,
-                    amount = request.usdcAmount,
-                ),
-            )
-            val placeReceipt = submitter.awaitReceipt(placeOrderHash)
-            require(placeReceipt.success) { "placeOrder reverted" }
+                    ) { submission ->
+                        // Persist the exact signed identity and nonce before the bundler request.
+                        // A collector failure aborts this callback, so no placeOrder is sent.
+                        try {
+                            emit(
+                                OfframpStatus.PlacingOrder(
+                                    txHash = submission.hash,
+                                    circleId = circleId,
+                                    amount = request.usdcAmount,
+                                    submissionNonceDecimal = submission.nonce.toString(),
+                                ),
+                            )
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            throw PlaceOrderMarkerPersistenceException(error)
+                        }
+                    }
+                lastTxHash = placeOrderHash
+                val placeReceipt = submitter.awaitReceipt(placeOrderHash)
+                if (!placeReceipt.success) throw PlaceOrderRevertedException()
 
-            orderId = OrderEvents.parseOrderIdFromReceipt(
-                receipt = placeReceipt,
-                diamondAddress = network.diamondAddress,
-                userAddress = accountAddress,
-            ) ?: error("placeOrder receipt did not contain an OrderPlaced log")
+                orderId =
+                    OrderEvents.parseOrderIdFromReceipt(
+                        receipt = placeReceipt,
+                        diamondAddress = network.diamondAddress,
+                        userAddress = accountAddress,
+                    ) ?: error("placeOrder receipt did not contain an OrderPlaced log")
+            }
 
             awaitMerchantAndComplete(
-                orderId = orderId,
+                orderId = requireNotNull(orderId),
                 request = request,
                 knownSetUpiHash = null,
                 paymentDetailsProvider = paymentDetailsProvider,
                 onStep = { currentStep = it },
                 onTxHash = { lastTxHash = it },
             )
+        } catch (e: PlaceOrderMarkerPersistenceException) {
+            // The marker callback failed before TxSubmitter reached the network. Let the facade
+            // retire a host write that may have committed atomically and then thrown.
+            throw e
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Throwable) {
+        } catch (e: Exception) {
             emit(buildFailedStatus(e, orderId, currentStep, lastTxHash))
         }
     }
@@ -273,29 +295,42 @@ class OfframpOrchestrator(
             emit(OfframpStatus.Idle)
             val fallbackFiat = checkpoint.fiatAmount ?: resolveFallbackFiat(checkpoint)
             val request = checkpoint.toRequest(fallbackFiatAmount = fallbackFiat)
-            val orderId = checkpoint.orderIdBig
-            if (orderId == null) {
-                driveNewOrder(
-                    request = request,
-                    resumeBridgeHandle = checkpoint.bridgeDepositAddress,
-                    paymentDetailsProvider = paymentDetailsProvider,
-                )
-                return@flow
-            }
+            var orderId = checkpoint.orderIdBig
             var currentStep = checkpoint.currentStep
             var lastTxHash: TxHash? = checkpoint.setUpiTxHash ?: checkpoint.placeOrderTxHash
             try {
+                if (orderId == null && checkpoint.placeOrderTxHash != null) {
+                    currentStep = OfframpStep.PLACING_ORDER
+                    val receipt = submitter.awaitReceipt(checkpoint.placeOrderTxHash)
+                    if (!receipt.success) throw PlaceOrderRevertedException()
+                    orderId =
+                        OrderEvents.parseOrderIdFromReceipt(
+                            receipt = receipt,
+                            diamondAddress = network.diamondAddress,
+                            userAddress = accountAddress,
+                        ) ?: error("placeOrder receipt did not contain an OrderPlaced log")
+                }
+                if (orderId == null) {
+                    driveNewOrder(
+                        request = request,
+                        resumeBridgeHandle = checkpoint.bridgeDepositAddress,
+                        paymentDetailsProvider = paymentDetailsProvider,
+                    )
+                    return@flow
+                }
                 awaitMerchantAndComplete(
-                    orderId = orderId,
+                    orderId = requireNotNull(orderId),
                     request = request,
                     knownSetUpiHash = checkpoint.setUpiTxHash,
                     paymentDetailsProvider = paymentDetailsProvider,
                     onStep = { currentStep = it },
                     onTxHash = { lastTxHash = it },
                 )
+            } catch (e: PlaceOrderMarkerPersistenceException) {
+                throw e
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
                 emit(buildFailedStatus(e, orderId, currentStep, lastTxHash))
             }
         }
@@ -530,41 +565,52 @@ class OfframpOrchestrator(
 
         validateQrAmountAdjustment(placedMicros, updatedAmount)
 
-        if (updatedAmount > placedMicros) {
-            // Diamond pulls (updatedAmount - placed) AND the small-order fixed fee at setUpi.
-            // Top up to cover both — initial approve was `placed + fee`, of which `placed` is
-            // already gone, leaving `fee`. Re-approving to `updatedAmount + fee` overwrites that.
-            val topUpFee = readPayFixedFeeFor(request.usdcAmount, request.currency)
-            val additionalDebit = Usdc6(updatedAmount - placedMicros + topUpFee.micros)
-            val availableBalance = Usdc6(usdcBalanceOf(accountAddress))
-            require(availableBalance >= additionalDebit) {
-                "Base balance is insufficient for the scanned QR adjustment and payment fee"
+        return allowanceTransactions.withApprovalAndSpend {
+            // placeOrder already pulled `placed`. setSellOrderUpi pulls only a positive QR
+            // adjustment plus the fixed PAY fee. Always write that exact immediate allowance under
+            // the shared guard: another rail may have overwritten the leftover allowance while we
+            // waited for merchant acceptance, even when the scanned amount did not increase.
+            val payFee = requireAuthorizedPayFee(request)
+            val adjustment = if (updatedAmount > placedMicros) updatedAmount - placedMicros else BigInteger("0")
+            val immediateDebit = Usdc6(adjustment + payFee.micros)
+            request.authorizedRequiredBalance?.let { authorized ->
+                require(request.usdcAmount + immediateDebit <= authorized) {
+                    "The scanned amount or PAY fee exceeds the quoted Base debit; request a new quote"
+                }
             }
-            val topUpAmount = Usdc6(updatedAmount + topUpFee.micros)
-            val topUpHash =
+            if (immediateDebit > Usdc6.ZERO) {
+                val availableBalance = Usdc6(usdcBalanceOf(accountAddress))
+                require(availableBalance >= immediateDebit) {
+                    "Base balance is insufficient for the scanned QR adjustment and payment fee"
+                }
+                val approveHash =
+                    submitter.sendTransaction(
+                        to = network.usdcAddress,
+                        data = Erc20Calls.approveCalldata(network.diamondAddress, immediateDebit),
+                    )
+                require(submitter.awaitReceipt(approveHash).success) {
+                    "USDC allowance for setSellOrderUpi reverted"
+                }
+            }
+
+            orderRecipientUpiCache.put(orderId.toString(), paymentDetails.paymentAddress)
+
+            val relay = relayIdentityStore.getOrCreate()
+            val cipherHex = encryptUpiEnvelopeForMerchant(relay, paymentPayload, merchantPubKey)
+            onStep(OfframpStep.SENDING_UPI)
+            val setUpiHash =
                 submitter.sendTransaction(
-                    to = network.usdcAddress,
-                    data = Erc20Calls.approveCalldata(network.diamondAddress, topUpAmount),
+                    to = network.diamondAddress,
+                    data =
+                        DiamondCalls.setSellOrderUpiCalldata(
+                            orderId = orderId,
+                            encryptedUpiHex = cipherHex,
+                            updatedAmount = updatedAmount,
+                        ),
                 )
-            require(submitter.awaitReceipt(topUpHash).success) {
-                "USDC allowance top-up reverted (updatedAmount=$updatedAmount > placed=$placedMicros)"
-            }
+            require(submitter.awaitReceipt(setUpiHash).success) { "setSellOrderUpi reverted" }
+            setUpiHash
         }
-
-        orderRecipientUpiCache.put(orderId.toString(), paymentDetails.paymentAddress)
-
-        val relay = relayIdentityStore.getOrCreate()
-        val cipherHex = encryptUpiEnvelopeForMerchant(relay, paymentPayload, merchantPubKey)
-        onStep(OfframpStep.SENDING_UPI)
-        return submitter.sendTransaction(
-            to = network.diamondAddress,
-            data =
-                DiamondCalls.setSellOrderUpiCalldata(
-                    orderId = orderId,
-                    encryptedUpiHex = cipherHex,
-                    updatedAmount = updatedAmount,
-                ),
-        )
     }
 
     private suspend fun resolvePaymentDetails(
@@ -587,6 +633,23 @@ class OfframpOrchestrator(
 
     private suspend fun readPayFixedFeeFor(amount: Usdc6, currency: CurrencyCode): Usdc6 =
         rpc.getPayFeeConfig(network.diamondAddress, currency).feeFor(amount)
+
+    /**
+     * Returns the live fee after proving it still matches the caller's accepted quote. This check
+     * runs immediately before each allowance/spend pair as well as before funding, because the
+     * fixed fee is charged later by setSellOrderUpi rather than snapshotted by placeOrder.
+     */
+    private suspend fun requireAuthorizedPayFee(request: OfframpRequest): Usdc6 {
+        val live = readPayFixedFeeFor(request.usdcAmount, request.currency)
+        val authorized = request.authorizedPayFee ?: return live
+        require(live == authorized) {
+            "The PAY fee changed since this quote; request a new quote before continuing"
+        }
+        require(request.authorizedRequiredBalance == request.usdcAmount + authorized) {
+            "The authorized Base debit no longer matches the order amount and PAY fee"
+        }
+        return authorized
+    }
 
     private suspend fun resolveFallbackFiat(checkpoint: OfframpCheckpoint): Usdc6 {
         val rate = runCatching { readSellPriceInrPerUsdc(checkpoint.currency) }.getOrNull()
@@ -665,7 +728,6 @@ class OfframpOrchestrator(
                     acceptedAtEpochSeconds = accepted.acceptedAtEpochSeconds,
                 ),
             )
-            require(submitter.awaitReceipt(setUpiHash).success) { "setSellOrderUpi reverted" }
         }
 
         onStep(OfframpStep.WAITING_FOR_COMPLETION)
@@ -918,6 +980,7 @@ private fun buildFailedStatus(
                 sdkErrorName = lookup.sdkName,
                 sdkErrorMessage = lookup.sdkMessage,
                 solidityErrorString = error.solidityErrorString,
+                nothingEscrowed = step == OfframpStep.PLACING_ORDER && error.provesPlaceOrderNotEscrowed,
                 cause = error,
             )
         }
@@ -937,6 +1000,7 @@ private fun buildFailedStatus(
                 knownRevertReason = lookup.reason,
                 sdkErrorName = lookup.sdkName,
                 sdkErrorMessage = lookup.sdkMessage,
+                nothingEscrowed = step == OfframpStep.PLACING_ORDER && error.provesPlaceOrderNotEscrowed,
                 cause = error,
             )
         }
@@ -947,7 +1011,23 @@ private fun buildFailedStatus(
                 orderId = orderId,
                 step = step,
                 txHash = lastTxHash,
+                nothingEscrowed = step == OfframpStep.PLACING_ORDER && error.provesPlaceOrderNotEscrowed,
                 cause = error,
             )
         }
     }
+
+private class PlaceOrderRevertedException : Exception("placeOrder reverted")
+
+internal class PlaceOrderMarkerPersistenceException(
+    cause: Exception,
+) : Exception("placeOrder recovery marker could not be persisted", cause)
+
+private val Throwable.provesPlaceOrderNotEscrowed: Boolean
+    get() =
+        this is PlaceOrderRevertedException ||
+            (
+                this is RpcException &&
+                    method in setOf("eth_sendUserOperation", "eth_sendRawTransaction") &&
+                    this !is RpcException.TransportError
+            )

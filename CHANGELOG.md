@@ -18,6 +18,7 @@ and this application adheres to [Semantic Versioning](https://semver.org/spec/v2
 
 ### Fixed:
 - We fixed an issue where a Keystone hardware wallet signature could be accepted even though its firmware couldn't produce a transaction the app can broadcast. Keystone signing now requires firmware 3.0.1 or later; older or version-less firmware is blocked before broadcast, and the prompt reports the firmware version exactly as your device displays it.
+- We fixed a case where interrupting a p2p.me payment or cash-out between sending a transaction and reading its result could leave your USDC escrowed with no way to resume. Payments, cash-outs, refunds and top-ups now draw on one shared Base balance, record the exact submission they sent, and resume from it instead of starting a second one.
 
 ## [3.3.1 (1643)] - 2026-04-10
 

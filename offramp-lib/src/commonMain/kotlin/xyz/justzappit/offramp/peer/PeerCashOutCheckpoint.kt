@@ -32,7 +32,12 @@ data class PeerCashOutCheckpoint(
     val amountMicroDecimal: String,
     val bridgeDepositAddress: String? = null,
     val approveTxHash: TxHash? = null,
+    /** Hash of the fully signed UserOperation, persisted before its bundler send begins. */
+    val createDepositSubmissionHash: TxHash? = null,
+    /** EntryPoint nonce owned by [createDepositSubmissionHash], as an unsigned decimal integer. */
+    val createDepositSubmissionNonceDecimal: String? = null,
     val createDepositTxHash: TxHash? = null,
+    /** Legacy recovery anchor. New writers use [createDepositSubmissionHash]. */
     val blockBeforeCreateDeposit: String? = null,
     val depositId: PeerDepositId? = null,
     val createdAtMillis: Long,
@@ -42,8 +47,22 @@ data class PeerCashOutCheckpoint(
         require(runCatching { PayeeHash.parse(payeeHashHex) }.isSuccess) {
             "PeerCashOutCheckpoint.payeeHashHex must be a 32-byte hash"
         }
-        require(runCatching { BigInteger(amountMicroDecimal) }.isSuccess) {
-            "PeerCashOutCheckpoint.amountMicroDecimal must be a decimal integer"
+        val parsedAmount = runCatching { BigInteger(amountMicroDecimal) }.getOrNull()
+        require(
+            parsedAmount != null && parsedAmount >= BigInteger(PeerNetworks.MIN_CASHOUT_MICROS.toString()),
+        ) {
+            "PeerCashOutCheckpoint.amountMicroDecimal must meet the protocol minimum"
+        }
+        if (blockBeforeCreateDeposit != null) {
+            require(blockBeforeCreateDeposit.toLongOrNull()?.let { it >= 0L } == true) {
+                "PeerCashOutCheckpoint.blockBeforeCreateDeposit must be a nonnegative Long"
+            }
+        }
+        if (createDepositSubmissionNonceDecimal != null) {
+            val nonce = runCatching { BigInteger(createDepositSubmissionNonceDecimal!!) }.getOrNull()
+            require(nonce != null && nonce.signum() >= 0) {
+                "PeerCashOutCheckpoint.createDepositSubmissionNonceDecimal must be a nonnegative integer"
+            }
         }
     }
 
@@ -59,13 +78,17 @@ data class PeerCashOutCheckpoint(
                 }
 
                 createDepositTxHash != null -> {
-                    PeerResumeAction.ResolveSubmittedDeposit(createDepositTxHash)
+                    PeerResumeAction.ResolveSubmittedDeposit(createDepositTxHash, createDepositSubmissionNonce)
                 }
 
-                // A send that returned no hash may still have broadcast, so [blockFloor] becomes the
-                // floor to look the order up from. Sending again escrows a second lot.
+                createDepositSubmissionHash != null -> {
+                    PeerResumeAction.ReconcileSubmission(createDepositSubmissionHash, createDepositSubmissionNonce)
+                }
+
+                // A legacy send marker has no exact identity. It remains an unknown outcome, but
+                // recovery must fail closed rather than fuzzy-match a later, similar order.
                 blockBeforeCreateDeposit != null -> {
-                    PeerResumeAction.ReconcileSubmission
+                    PeerResumeAction.ReconcileSubmission(submissionHash = null, submissionNonce = null)
                 }
 
                 bridgeDepositAddress != null -> {
@@ -86,7 +109,10 @@ data class PeerCashOutCheckpoint(
      */
     val holdsUnescrowedFunds: Boolean get() = depositId == null
 
-    val blockFloor: Long? get() = blockBeforeCreateDeposit?.toLongOrNull()
+    val blockFloor: Long? get() = blockBeforeCreateDeposit?.toLong()
+
+    val createDepositSubmissionNonce: BigInteger?
+        get() = createDepositSubmissionNonceDecimal?.let(::BigInteger)
 
     companion object {
         fun of(
@@ -117,13 +143,14 @@ sealed interface PeerResumeAction {
 
     data class ResolveSubmittedDeposit(
         val txHash: TxHash,
+        val submissionNonce: BigInteger? = null,
     ) : PeerResumeAction
 
-    /**
-     * A `createDeposit` was attempted and its hash never came back. Look it up from
-     * [PeerCashOutCheckpoint.blockFloor], never resend.
-     */
-    data object ReconcileSubmission : PeerResumeAction
+    /** A send returned no response. Query its pre-persisted signed submission identity, never resend. */
+    data class ReconcileSubmission(
+        val submissionHash: TxHash?,
+        val submissionNonce: BigInteger? = null,
+    ) : PeerResumeAction
 
     data class ResumeBridge(
         val depositAddress: String,

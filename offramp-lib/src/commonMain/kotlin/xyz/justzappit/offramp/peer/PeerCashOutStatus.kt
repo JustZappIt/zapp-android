@@ -40,17 +40,14 @@ sealed class PeerCashOutStatus {
     ) : PeerCashOutStatus()
 
     /**
-     * Emitted twice: once with a null [txHash] carrying the [fromBlockNumber] read immediately
-     * before broadcasting, then again once the submission returns. The first emission is what a
-     * collector persists to make the send recoverable, so the block number is never absent: without
-     * it a submission whose hash never came back would have left no trace at all.
-     *
-     * The point of no return: after this the USDC belongs to the protocol until a fill or a
-     * withdrawal.
+     * Emitted immediately before broadcast with the deterministic [submissionHash], then again
+     * after the bundler acknowledges the send with [txHash]. A collector durably persists the first
+     * emission before the network call begins, so a lost response can be queried by exact identity.
      */
     data class CreatingDeposit(
         val amount: Usdc6,
-        val fromBlockNumber: String,
+        val submissionHash: TxHash,
+        val submissionNonceDecimal: String? = null,
         val txHash: TxHash? = null,
     ) : PeerCashOutStatus()
 

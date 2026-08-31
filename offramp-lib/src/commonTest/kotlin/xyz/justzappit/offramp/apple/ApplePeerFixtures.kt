@@ -92,10 +92,12 @@ internal class FakePeerStorage : ApplePeerCashOutStorage {
 
     /** Set to make a read fail the way an unreachable or undecodable store would. */
     var failReads: Boolean = false
+    var failWrites: Boolean = false
 
     override fun peerCheckpointBookJson(): AppleStorageValue = read { checkpointBook }
 
     override fun storePeerCheckpointBookJson(value: String) {
+        check(!failWrites) { "storage unavailable" }
         checkpointBook = value
     }
 

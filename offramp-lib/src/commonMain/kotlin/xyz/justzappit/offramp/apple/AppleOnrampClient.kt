@@ -148,6 +148,16 @@ class AppleOnrampClient private constructor(
     @Throws(Exception::class)
     suspend fun checkpoint(): AppleOnrampCheckpoint? = checkpoints.getOrNull()?.toApple()
 
+    /**
+     * USDC an unfinished ZEC delivery still owns on Base, including a transfer whose broadcast
+     * outcome is ambiguous. Once a Base receipt proves the funds reached NEAR, or delivery/refund
+     * is terminal, the raw Base balance is authoritative and this returns null. Decode/I/O errors
+     * propagate so reservation hydration fails closed.
+     */
+    @Throws(Exception::class)
+    suspend fun pendingBaseCommitmentMicros(): String? =
+        checkpoints.getOrNull()?.zecDelivery?.pendingBaseCommitmentMicros
+
     @Throws(Exception::class)
     suspend fun clearCheckpoint() = checkpoints.clear()
 
@@ -696,6 +706,20 @@ private fun OnrampZecDeliveryCheckpoint.toApple() =
         acceptedCostBps = acceptedCostBps,
         fundsLocation = fundsLocation.name,
     )
+
+internal val OnrampZecDeliveryCheckpoint.pendingBaseCommitmentMicros: String?
+    get() =
+        when (fundsLocation) {
+            FundsLocation.BASE_ACCOUNT,
+            FundsLocation.TRANSFER_AMBIGUOUS,
+            -> usdcMicros
+
+            FundsLocation.RECIPIENT_MISMATCH,
+            FundsLocation.NEAR_INTENT,
+            FundsLocation.ZCASH_WALLET,
+            FundsLocation.BASE_REFUND_CONFIRMED,
+            -> null
+        }
 
 private fun String.toInstruction(payload: String): OnrampPaymentInstruction =
     when (lowercase()) {

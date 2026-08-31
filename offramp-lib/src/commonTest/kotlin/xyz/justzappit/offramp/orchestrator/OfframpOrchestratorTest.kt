@@ -11,11 +11,13 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import xyz.justzappit.evm.abi.keccak256
 import xyz.justzappit.evm.hd.EvmKeyDerivation
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.math.bigIntegerOne
@@ -23,6 +25,8 @@ import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.signer.EoaSigner
 import xyz.justzappit.evm.types.Address
+import xyz.justzappit.evm.util.hexToBytes
+import xyz.justzappit.evm.util.toHex
 import xyz.justzappit.offramp.config.P2pNetworks
 import xyz.justzappit.offramp.funding.FundingOutcome
 import xyz.justzappit.offramp.funding.OfframpFunding
@@ -43,6 +47,8 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -52,6 +58,7 @@ class OfframpOrchestratorTest {
 
     private val rpcRequestLog = mutableListOf<String>()
     private val rawTxLog = mutableListOf<String>()
+    private val rawTxHashes = mutableListOf<String>()
     private var getAssignableResponse = ENCODED_ADDRESS_ARRAY_OF_ONE
 
     // Raw params of every getAssignableMerchantsFromCircle call, so a test can check which amounts
@@ -84,11 +91,11 @@ class OfframpOrchestratorTest {
                     }
 
                     "eth_sendRawTransaction" -> {
-                        rawTxLog += payload["params"]!!.toString().substringAfter('"').substringBefore('"')
-                        // Synthetic but valid 32-byte hash so TxHash.fromHex parses it. The trailing
-                        // byte indexes the broadcast (1..N) for the receipt mock to discriminate on.
-                        val tag = rawTxLog.size.toString(16).padStart(2, '0')
-                        """{"jsonrpc":"2.0","id":1,"result":"0x${"00".repeat(31)}$tag"}"""
+                        val raw = payload["params"]!!.toString().substringAfter('"').substringBefore('"')
+                        rawTxLog += raw
+                        val hash = "0x${keccak256(raw.hexToBytes()).toHex()}"
+                        rawTxHashes += hash
+                        """{"jsonrpc":"2.0","id":1,"result":"$hash"}"""
                     }
 
                     "eth_getTransactionReceipt" -> {
@@ -107,7 +114,10 @@ class OfframpOrchestratorTest {
         }
 
     private var nextUsdcBalance = ENCODED_ZERO
+    private var nextFixedFee = ENCODED_SMALL_ORDER_FIXED_FEE_PAY
     private var nextIsOrderExpired = ENCODED_ZERO
+    private var placeOrderReceiptSuccess = true
+    private var failPlaceOrderReceiptRead = false
     private var nextSubgraphResponse = SUBGRAPH_OK_ONE_CIRCLE
     private val subgraphEngine =
         MockEngine {
@@ -170,13 +180,17 @@ class OfframpOrchestratorTest {
         // any of them to `companion object` / `@JvmStatic` — at which point silent cross-test
         // contamination would otherwise depend on JUnit's reflection ordering.
         nextUsdcBalance = ENCODED_ZERO
+        nextFixedFee = ENCODED_SMALL_ORDER_FIXED_FEE_PAY
         nextIsOrderExpired = ENCODED_ZERO
+        placeOrderReceiptSuccess = true
+        failPlaceOrderReceiptRead = false
         nextSubgraphResponse = SUBGRAPH_OK_ONE_CIRCLE
         getAssignableResponse = ENCODED_ADDRESS_ARRAY_OF_ONE
         failEligibilityCall = false
         eligibilityCalldataLog.clear()
         rpcRequestLog.clear()
         rawTxLog.clear()
+        rawTxHashes.clear()
         tickCounter = 0L
     }
 
@@ -189,6 +203,7 @@ class OfframpOrchestratorTest {
     @Test
     fun `happy path emits the full status sequence and ends in Completed`() =
         runTest {
+            nextUsdcBalance = ENCODED_FIVE_USDC
             orderReader.enqueue(
                 snapshot(status = OrderStatus.ACCEPTED, pubkey = MERCHANT_PUBKEY, merchant = MERCHANT_ADDRESS),
                 snapshot(
@@ -217,8 +232,8 @@ class OfframpOrchestratorTest {
             assertTrue(classes.indexOf("SendingEncryptedUpi") < classes.indexOf("WaitingForCompletion"))
             assertTrue(classes.indexOf("WaitingForCompletion") < classes.indexOf("Completed"))
 
-            // 3 broadcasts: approve, placeOrder, setSellOrderUpi.
-            assertEquals(3, rawTxLog.size, "expected 3 broadcasts, got ${rawTxLog.size}")
+            // 4 broadcasts: approve, placeOrder, exact fee re-approve, setSellOrderUpi.
+            assertEquals(4, rawTxLog.size, "expected 4 broadcasts, got ${rawTxLog.size}")
         }
 
     @Test
@@ -233,6 +248,66 @@ class OfframpOrchestratorTest {
 
             val approving = statuses.filterIsInstance<OfframpStatus.ApprovingUsdc>().single()
             assertEquals(Usdc6.ofMicros(5_100_000), approving.amount)
+        }
+
+    @Test
+    fun `fee increase after an authorized quote fails before the first broadcast`() =
+        runTest {
+            nextFixedFee = ENCODED_TWO_TENTHS_USDC
+
+            val statuses =
+                orchestrator
+                    .run(
+                        payRequest(
+                            authorizedPayFee = Usdc6.ofMicros(100_000),
+                            authorizedRequiredBalance = Usdc6.ofMicros(5_100_000),
+                        ),
+                    ).toList()
+
+            val failure = assertIs<OfframpStatus.Failed>(statuses.last())
+            assertEquals(OfframpStep.INITIALIZATION, failure.step)
+            assertTrue(failure.message.contains("fee changed"))
+            assertEquals(0, rawTxLog.size)
+        }
+
+    @Test
+    fun `place marker persistence failure aborts before the placeOrder send`() =
+        runTest {
+            val failure =
+                assertFailsWith<PlaceOrderMarkerPersistenceException> {
+                    orchestrator.run(payRequest()).collect { status ->
+                        if (status is OfframpStatus.PlacingOrder) error("disk full")
+                    }
+                }
+
+            assertTrue(failure.cause?.message?.contains("disk full") == true)
+            assertEquals(1, rawTxLog.size, "only the already-confirmed approval may have broadcast")
+        }
+
+    @Test
+    fun `reverted exact placeOrder receipt retires the unresolved marker`() =
+        runTest {
+            placeOrderReceiptSuccess = false
+
+            val statuses = orchestrator.resume(unresolvedPlaceCheckpoint()).toList()
+
+            val failure = assertIs<OfframpStatus.Failed>(statuses.last())
+            assertEquals(OfframpStep.PLACING_ORDER, failure.step)
+            assertTrue(failure.nothingEscrowed)
+            assertEquals(0, rawTxLog.size)
+        }
+
+    @Test
+    fun `unreadable exact placeOrder receipt preserves the unresolved marker`() =
+        runTest {
+            failPlaceOrderReceiptRead = true
+
+            val statuses = orchestrator.resume(unresolvedPlaceCheckpoint()).toList()
+
+            val failure = assertIs<OfframpStatus.Failed>(statuses.last())
+            assertEquals(OfframpStep.PLACING_ORDER, failure.step)
+            assertFalse(failure.nothingEscrowed)
+            assertEquals(0, rawTxLog.size)
         }
 
     @Test
@@ -270,6 +345,7 @@ class OfframpOrchestratorTest {
     @Test
     fun `orchestrator absorbs OrderReadSource exceptions during polling and continues`() =
         runTest {
+            nextUsdcBalance = ENCODED_FIVE_USDC
             // Regression for: a single bad poll mid-flight used to throw out of orderReader.fetchOrder
             // and bail the orchestrator into Failed, orphaning escrowed USDC. The orchestrator now
             // wraps each fetchOrder call in a runCatching so a thrown reader collapses to "no
@@ -311,6 +387,7 @@ class OfframpOrchestratorTest {
     @Test
     fun `WaitingForMerchantAcceptance carries expired=true when Diamond reports the order as expired`() =
         runTest {
+            nextUsdcBalance = ENCODED_FIVE_USDC
             nextIsOrderExpired = ENCODED_ONE
             orderReader.enqueue(null) // one extra null poll so a WaitingFor* emission with expired=true is observed
             orderReader.enqueue(snapshot(status = OrderStatus.PLACED, pubkey = "", merchant = null))
@@ -387,6 +464,7 @@ class OfframpOrchestratorTest {
     @Test
     fun `resume of a pre order bridge re polls the persisted handle and never re quotes`() =
         runTest {
+            nextUsdcBalance = ENCODED_FIVE_USDC
             // Crash after the ZEC deposit but before the order was placed. The checkpoint carries the
             // 1-Click depositAddress and no orderId. Resume MUST hand that handle back to funding (so it
             // re-polls the in-flight bridge) instead of opening a second bridge — the double-send fix.
@@ -724,6 +802,8 @@ class OfframpOrchestratorTest {
         usdcAmount: Usdc6 = Usdc6.ofMicros(5_000_000),
         fiatAmount: Usdc6 = Usdc6.ofMicros(445_000_000),
         fiatAmountLimit: Usdc6? = Usdc6.ofMicros(445_000_000),
+        authorizedPayFee: Usdc6? = null,
+        authorizedRequiredBalance: Usdc6? = null,
     ) =
         OfframpRequest(
             recipientUpi = "merchant@upi",
@@ -731,6 +811,8 @@ class OfframpOrchestratorTest {
             fiatAmount = fiatAmount,
             fiatAmountLimit = fiatAmountLimit,
             currency = CurrencyCode.Inr,
+            authorizedPayFee = authorizedPayFee,
+            authorizedRequiredBalance = authorizedRequiredBalance,
         )
 
     private fun orchestratorWith(
@@ -766,6 +848,21 @@ class OfframpOrchestratorTest {
             orderId = null,
             currentStep = OfframpStep.FUNDING,
             bridgeDepositAddress = depositAddress,
+            recipientUpi = "merchant@upi",
+            usdcAmountMicroDecimal = "5000000",
+            fiatAmountMicroDecimal = "445000000",
+            fiatAmountLimitMicroDecimal = "445000000",
+            currency = CurrencyCode.Inr,
+            createdAtMillis = 0,
+        )
+
+    private fun unresolvedPlaceCheckpoint() =
+        OfframpCheckpoint(
+            orderId = null,
+            currentStep = OfframpStep.PLACING_ORDER,
+            placeOrderTxHash =
+                xyz.justzappit.evm.types.TxHash
+                    .fromHex(PLACE_ORDER_TX_HASH),
             recipientUpi = "merchant@upi",
             usdcAmountMicroDecimal = "5000000",
             fiatAmountMicroDecimal = "445000000",
@@ -855,11 +952,18 @@ class OfframpOrchestratorTest {
 
     private fun receiptFor(payload: JsonObject): String {
         val txParam = payload["params"]!!.toString().substringAfter('"').substringBefore('"')
-        // The mock encodes the broadcast index into the trailing byte of the synthetic hash; the
-        // second broadcast (placeOrder) needs to return the receipt with an OrderPlaced log.
-        return when (txParam) {
-            PLACE_ORDER_TX_HASH -> placeOrderReceiptJson()
-            else -> simpleSuccessReceiptJson(txParam)
+        return when {
+            failPlaceOrderReceiptRead && txParam == PLACE_ORDER_TX_HASH -> {
+                """{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"receipt unavailable"}}"""
+            }
+
+            txParam == PLACE_ORDER_TX_HASH || txParam == rawTxHashes.getOrNull(1) -> {
+                placeOrderReceiptJson(txParam, success = placeOrderReceiptSuccess)
+            }
+
+            else -> {
+                simpleSuccessReceiptJson(txParam)
+            }
         }
     }
 
@@ -897,7 +1001,7 @@ class OfframpOrchestratorTest {
 
             params.contains("0x1e277523") -> {
                 // getSmallOrderFixedFeePay(bytes32)
-                """{"jsonrpc":"2.0","id":1,"result":"$ENCODED_SMALL_ORDER_FIXED_FEE_PAY"}"""
+                """{"jsonrpc":"2.0","id":1,"result":"$nextFixedFee"}"""
             }
 
             else -> {
@@ -917,14 +1021,14 @@ class OfframpOrchestratorTest {
         }}
         """.trimIndent()
 
-    private fun placeOrderReceiptJson(): String {
+    private fun placeOrderReceiptJson(txHash: String, success: Boolean): String {
         val userTopic = "0x" + "0".repeat(24) + account.address.lowercaseHex.removePrefix("0x")
         val orderIdTopic = "0x" + ORDER_ID.toString(16).padStart(64, '0')
         return """
             {"jsonrpc":"2.0","id":1,"result":{
-              "transactionHash":"$PLACE_ORDER_TX_HASH",
+              "transactionHash":"$txHash",
               "blockNumber":"0x10",
-              "status":"0x1",
+              "status":"${if (success) "0x1" else "0x0"}",
               "gasUsed":"0x5208",
               "logs":[
                 {
@@ -935,7 +1039,7 @@ class OfframpOrchestratorTest {
                             "0x${"0".repeat(64)}"],
                   "data":"0x",
                   "blockNumber":"0x10",
-                  "transactionHash":"$PLACE_ORDER_TX_HASH",
+                  "transactionHash":"$txHash",
                   "logIndex":"0x0"
                 }
               ]
@@ -978,6 +1082,8 @@ class OfframpOrchestratorTest {
         const val ENCODED_TEN_USDC = "0x" + "0000000000000000000000000000000000000000000000000000000000989680"
         const val ENCODED_SMALL_ORDER_FIXED_FEE_PAY =
             "0x" + "00000000000000000000000000000000000000000000000000000000000186a0"
+        const val ENCODED_TWO_TENTHS_USDC =
+            "0x" + "0000000000000000000000000000000000000000000000000000000000030d40"
 
         // Four packed uint256s: buyPrice=91 sellPrice=89 buyPriceOffset=0 baseSpread=1.5 (6-dec micros).
         const val ENCODED_PRICE_CONFIG_INR =

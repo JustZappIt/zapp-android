@@ -12,6 +12,13 @@ import xyz.justzappit.offramp.peer.PayeeHash
 import xyz.justzappit.offramp.peer.PeerCashOutCheckpoint
 import xyz.justzappit.offramp.peer.PeerCashOutId
 import xyz.justzappit.offramp.peer.PeerPlatform
+import xyz.justzappit.offramp.peer.PeerResumeAction
+
+/** A decode, validation, or host-I/O failure at the Peer recovery authority. */
+internal class ApplePeerRecoveryStorageException(
+    message: String,
+    cause: Exception? = null,
+) : Exception(message, cause)
 
 /**
  * The two encrypted blobs the Peer rail owns on iOS. The host stores opaque JSON and knows nothing
@@ -49,12 +56,15 @@ internal class ApplePeerCheckpointBook(
 ) {
     private val mutex = Mutex()
 
-    suspend fun all(): List<PeerCashOutCheckpoint> =
-        storage
-            .peerCheckpointBookJson()
-            .value
-            ?.let { decode(it).entries }
-            .orEmpty()
+    suspend fun all(): List<PeerCashOutCheckpoint> {
+        val value =
+            try {
+                storage.peerCheckpointBookJson().value
+            } catch (error: Exception) {
+                throw ApplePeerRecoveryStorageException("The saved Peer cash-out records could not be read.", error)
+            }
+        return value?.let { decode(it).entries }.orEmpty()
+    }
 
     suspend fun get(id: PeerCashOutId): PeerCashOutCheckpoint? = all().firstOrNull { it.id == id }
 
@@ -69,9 +79,14 @@ internal class ApplePeerCheckpointBook(
         }
 
     private fun write(entries: List<PeerCashOutCheckpoint>) {
-        storage.storePeerCheckpointBookJson(
-            JSON.encodeToString(Book.serializer(), Book(entries)),
-        )
+        entries.forEach(::validateRecoverable)
+        try {
+            storage.storePeerCheckpointBookJson(
+                JSON.encodeToString(Book.serializer(), Book(entries)),
+            )
+        } catch (error: Exception) {
+            throw ApplePeerRecoveryStorageException("The saved Peer cash-out records could not be written.", error)
+        }
     }
 
     /**
@@ -82,15 +97,50 @@ internal class ApplePeerCheckpointBook(
      */
     private fun decode(value: String): Book =
         try {
-            JSON.decodeFromString(Book.serializer(), value)
+            JSON.decodeFromString(Book.serializer(), value).also { book ->
+                book.entries.forEach(::validateRecoverable)
+            }
+        } catch (error: ApplePeerRecoveryStorageException) {
+            throw error
         } catch (
             @Suppress("TooGenericExceptionCaught") error: Exception,
         ) {
-            throw IllegalStateException(
+            throw ApplePeerRecoveryStorageException(
                 "The saved Peer cash-out records are incompatible or corrupted. Their recovery data was preserved.",
                 error,
             )
         }
+
+    /**
+     * iOS has never initiated Peer's legacy bridge path. A record that would approve and send from
+     * scratch is not recovery at all, while a legacy fuzzy marker has no safe order identity. All
+     * three fail closed instead of turning unauthenticated local JSON into a new deposit.
+     */
+    private fun validateRecoverable(checkpoint: PeerCashOutCheckpoint) {
+        when (val action = checkpoint.resumeAction) {
+            is PeerResumeAction.ReadOrder,
+            is PeerResumeAction.ResolveSubmittedDeposit,
+            -> {
+                Unit
+            }
+
+            is PeerResumeAction.ReconcileSubmission -> {
+                if (action.submissionHash == null) {
+                    throw ApplePeerRecoveryStorageException(
+                        "The saved Peer cash-out record predates exact submission recovery.",
+                    )
+                }
+            }
+
+            is PeerResumeAction.ResumeBridge -> {
+                throw ApplePeerRecoveryStorageException("A Peer bridge record is not recoverable on Apple platforms.")
+            }
+
+            PeerResumeAction.FreshStart -> {
+                throw ApplePeerRecoveryStorageException("A fresh Peer request is not a recovery record.")
+            }
+        }
+    }
 
     @Serializable
     private data class Book(

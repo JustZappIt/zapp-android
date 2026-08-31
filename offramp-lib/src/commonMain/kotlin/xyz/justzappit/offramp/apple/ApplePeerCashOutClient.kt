@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
 
 package xyz.justzappit.offramp.apple
+
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
@@ -29,6 +30,7 @@ import xyz.justzappit.offramp.peer.PeerCuratorClient
 import xyz.justzappit.offramp.peer.PeerCurrency
 import xyz.justzappit.offramp.peer.PeerDepositId
 import xyz.justzappit.offramp.peer.PeerErrorCode
+import xyz.justzappit.offramp.peer.PeerException
 import xyz.justzappit.offramp.peer.PeerIndexerClient
 import xyz.justzappit.offramp.peer.PeerMarket
 import xyz.justzappit.offramp.peer.PeerMarketSnapshot
@@ -37,6 +39,7 @@ import xyz.justzappit.offramp.peer.PeerNetworks
 import xyz.justzappit.offramp.peer.PeerOracleRate
 import xyz.justzappit.offramp.peer.PeerOrderSnapshot
 import xyz.justzappit.offramp.peer.PeerPlatform
+import xyz.justzappit.offramp.peer.PeerResumeAction
 import xyz.justzappit.offramp.peer.asError
 import xyz.justzappit.offramp.peer.depositId
 import xyz.justzappit.offramp.peer.step
@@ -51,8 +54,8 @@ import xyz.justzappit.offramp.peer.step
  *    wrong escrows the user's USDC twice and there must be exactly one implementation of it;
  *  - the payee book, because pairing a curator hash with the exact handle it was registered for is
  *    what stops a reused hash funding a deposit that pays somebody else;
- *  - reconciliation, because deciding that a stored attempt opened a particular order needs the
- *    protocol's own `couldHaveBeenOpenedBy` predicate.
+ *  - reconciliation, because only the protocol layer can resolve a persisted UserOperation
+ *    identity to the deposit receipt it created.
  *
  * What stays in Swift: task ownership, reservations for attempts too young to have a checkpoint,
  * local authentication, navigation, and every user-visible string.
@@ -186,25 +189,23 @@ class ApplePeerCashOutClient private constructor(
         val driving = drivingAttemptIds.mapNotNull(PeerCashOutId::ofOrNull).toSet()
         val stored = checkpoints.all()
         val unresolved = stored.filterNot { it.id in driving }.filter(::isReconcilable)
-        // Only pay for the order read when there is something for it to be matched against.
-        val orders =
-            if (unresolved.isEmpty()) {
-                emptyList()
-            } else {
-                runCatching { peer.orchestrator.allOrders() }.getOrNull().orEmpty()
+        return unresolved.mapNotNull { checkpoint ->
+            try {
+                stamp(checkpoint.id, peer.orchestrator.resolveCheckpoint(checkpoint))
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: PeerException) {
+                if (!error.error.nothingEscrowed) return@mapNotNull null
+                checkpoints.clear(checkpoint.id)
+                ApplePeerReconciliation(
+                    attemptId = checkpoint.id.value,
+                    retiredWithoutEscrow = true,
+                )
+            } catch (
+                @Suppress("SwallowedException", "TooGenericExceptionCaught") error: Exception,
+            ) {
+                null
             }
-        // One order per attempt: two identical cash-outs on the same rail for the same amount match
-        // each other's predicate, and letting both claim one order leaves the other still counted.
-        // Every stored record contributes its deposit, the ones being driven included.
-        val claimed = stored.mapNotNull { it.depositId }.toMutableSet()
-        return unresolved.sortedBy { it.createdAtMillis }.mapNotNull { checkpoint ->
-            orders
-                .filter { it.id !in claimed && it.couldHaveBeenOpenedBy(checkpoint, checkpoint.blockFloor) }
-                .minByOrNull { it.creationBlockNumber ?: Long.MAX_VALUE }
-                ?.let { order ->
-                    claimed += order.id
-                    stamp(checkpoint.id, order.id)
-                }
         }
     }
 
@@ -216,18 +217,26 @@ class ApplePeerCashOutClient private constructor(
      */
     @Throws(Exception::class)
     suspend fun activeOrders(): List<ApplePeerOrder> =
-        ordersOrEmpty { it.activeOrders() }.filterNot { it.phase.isFinished }.map(::orderOf)
+        (rail ?: return emptyList())
+            .orchestrator
+            .activeOrders()
+            .filterNot { it.phase.isFinished }
+            .map(::orderOf)
 
     /** Closed orders included, newest first. A history needs the ones the active list drops. */
     @Throws(Exception::class)
     suspend fun allOrders(): List<ApplePeerOrder> =
-        ordersOrEmpty { it.allOrders() }.sortedByDescending { it.creationBlockNumber ?: 0L }.map(::orderOf)
+        (rail ?: return emptyList())
+            .orchestrator
+            .allOrders()
+            .sortedByDescending { it.creationBlockNumber ?: 0L }
+            .map(::orderOf)
 
-    /** A read failure is null, and the caller keeps the snapshot it already had. */
+    /** A missing order is null. Read failures propagate so an outage cannot look like deletion. */
     @Throws(Exception::class)
     suspend fun order(depositIdComposite: String): ApplePeerOrder? {
         val peer = rail ?: return null
-        return runCatching { peer.indexer.order(depositIdOf(depositIdComposite)) }.getOrNull()?.let(::orderOf)
+        return peer.indexer.order(depositIdOf(depositIdComposite))?.let(::orderOf)
     }
 
     fun transactionUrl(txHash: String): String = network.txUrl(txHash)
@@ -286,15 +295,32 @@ class ApplePeerCashOutClient private constructor(
         persister.seedFrom(checkpoint)
         rememberTypedHandle(request)
         val source = if (checkpoint != null) orchestrator.resume(checkpoint) else orchestrator.createOrder(request)
-        source
-            .transformWhile { status ->
-                emit(status)
-                status !is PeerCashOutStatus.OrderLive
-            }.collect { status ->
-                persister.onStatus(status)
-                rememberRegisteredHandle(status, request)
-                emit(status.asApple(id.value))
+        try {
+            source
+                .transformWhile { status ->
+                    emit(status)
+                    status !is PeerCashOutStatus.OrderLive
+                }.collect { status ->
+                    persister.onStatus(status)
+                    rememberRegisteredHandle(status, request)
+                    emit(status.asApple(id.value))
+                }
+        } catch (error: PeerException) {
+            if (error.error.code == PeerErrorCode.INITIALIZATION_FAILED && error.hasRecoveryStorageCause()) {
+                try {
+                    // The host may atomically replace the JSON and then fail while applying file
+                    // attributes. The submitter still did not send because its callback threw, so
+                    // make a second best-effort atomic replacement that retires that stale marker.
+                    checkpoints.clear(id)
+                } catch (
+                    @Suppress("SwallowedException", "TooGenericExceptionCaught") cleanupError: Exception,
+                ) {
+                    // If the same post-write attribute step failed again, the clear still landed.
+                    // If the underlying write failed, the original marker write did not land either.
+                }
             }
+            throw error
+        }
     }
 
     private suspend fun freshRequestOf(request: ApplePeerCashOutRequest): PeerCashOutRequest {
@@ -366,9 +392,9 @@ class ApplePeerCashOutClient private constructor(
      * as "finished" on an operation that never ran. Every entry point reports the failure as a
      * status instead.
      *
-     * Only two things can land here, and they demand opposite answers, so neither may be guessed:
-     * an absent rail proves nothing was sent and releases what the attempt reserved, while anything
-     * else means the app could not read its own recovery record and therefore cannot say.
+     * Recovery storage has its own typed boundary because only that failure makes the previous
+     * outcome unknowable. Malformed input and setup failures are proven pre-send and must not retain
+     * an untouched balance indefinitely.
      */
     private fun statusFlow(
         subjectId: String,
@@ -381,11 +407,10 @@ class ApplePeerCashOutClient private constructor(
             } catch (error: CancellationException) {
                 throw error
             } catch (
-                @Suppress("SwallowedException", "TooGenericExceptionCaught") error: Throwable,
+                @Suppress("SwallowedException", "TooGenericExceptionCaught")
+                error: Exception,
             ) {
-                val code =
-                    if (rail == null) PeerErrorCode.UNSUPPORTED_PLATFORM else PeerErrorCode.RECOVERY_STATE_UNREADABLE
-                emit(failed(subjectId, code, step))
+                emit(failed(subjectId, applePeerFacadeErrorCode(rail != null, error), step))
             }
         }
 
@@ -400,23 +425,25 @@ class ApplePeerCashOutClient private constructor(
             ?.takeIf(::isReconcilable)
             ?.let {
                 checkpoints.store(it.copy(depositId = depositId))
-                ApplePeerReconciliation(attemptId = id.value, depositIdComposite = depositId.composite)
+                ApplePeerReconciliation(
+                    attemptId = id.value,
+                    depositIdComposite = depositId.composite,
+                )
             }
 
     /**
-     * Only an attempt that actually broadcast a `createDeposit`, which is what the block floor
-     * records. Earlier than that the amount is still in the account, and the match would have no
-     * floor to keep it off an older order of the same size on the same rail.
+     * Only an attempt with an exact signed submission identity can be reconciled. Earlier states
+     * remain committed but must never be matched to an order by mutable business fields.
      */
     private fun isReconcilable(checkpoint: PeerCashOutCheckpoint): Boolean =
-        checkpoint.holdsUnescrowedFunds && checkpoint.blockFloor != null
+        checkpoint.holdsUnescrowedFunds &&
+            when (checkpoint.resumeAction) {
+                is PeerResumeAction.ResolveSubmittedDeposit,
+                is PeerResumeAction.ReconcileSubmission,
+                -> true
 
-    private suspend fun ordersOrEmpty(
-        read: suspend (PeerCashOutOrchestrator) -> List<PeerOrderSnapshot>,
-    ): List<PeerOrderSnapshot> {
-        val peer = rail ?: return emptyList()
-        return runCatching { read(peer.orchestrator) }.getOrDefault(emptyList())
-    }
+                else -> false
+            }
 
     private suspend fun readMarket(
         peer: Rail,
@@ -454,16 +481,16 @@ class ApplePeerCashOutClient private constructor(
     private fun requireRail(): Rail = checkNotNull(rail) { "Peer cash-out is only available on Base mainnet." }
 
     private fun platformOf(code: String): PeerPlatform =
-        checkNotNull(PeerPlatform.fromWireNameOrNull(code)) { "Unknown Peer platform '$code'" }
+        requireNotNull(PeerPlatform.fromWireNameOrNull(code)) { "Unknown Peer platform '$code'" }
 
     private fun currencyOf(code: String): PeerCurrency =
-        checkNotNull(PeerCurrency.fromCodeOrNull(code)) { "Unknown Peer currency '$code'" }
+        requireNotNull(PeerCurrency.fromCodeOrNull(code)) { "Unknown Peer currency '$code'" }
 
     private fun depositIdOf(composite: String): PeerDepositId =
-        checkNotNull(PeerDepositId.parseOrNull(composite)) { "Malformed Peer deposit id" }
+        requireNotNull(PeerDepositId.parseOrNull(composite)) { "Malformed Peer deposit id" }
 
     private fun cashOutIdOf(value: String): PeerCashOutId =
-        checkNotNull(PeerCashOutId.ofOrNull(value)) { "Malformed Peer cash-out id" }
+        requireNotNull(PeerCashOutId.ofOrNull(value)) { "Malformed Peer cash-out id" }
 
     /** One Peer deployment and the three clients scoped to it. Absent means the rails are absent. */
     internal class Rail(
@@ -490,15 +517,27 @@ class ApplePeerCashOutClient private constructor(
         suspend fun create(
             account: AppleBaseAccount,
             storage: ApplePeerCashOutStorage,
-        ): ApplePeerCashOutClient =
-            ApplePeerCashOutClient(
-                rail = PeerConfigProvider(account.network.name).currentOrNull()?.let { railFor(account, it) },
+        ): ApplePeerCashOutClient {
+            val checkpointBook = ApplePeerCheckpointBook(storage)
+            val peerNetwork = PeerConfigProvider(account.network.name).currentOrNull()
+            if (peerNetwork != null) {
+                val pending = checkpointBook.all().mapNotNull { it.pendingSubmissionForNonceRestore() }
+                if (pending.isNotEmpty()) {
+                    val submitter = account.submitters.resolve().submitter
+                    pending.forEach { submission ->
+                        submitter.restorePendingTransaction(submission.hash, submission.nonce)
+                    }
+                }
+            }
+            return ApplePeerCashOutClient(
+                rail = peerNetwork?.let { railFor(account, it) },
                 network = account.network,
                 smartAccounts = account.smartAccounts,
                 rpc = account.rpc,
-                checkpoints = ApplePeerCheckpointBook(storage),
+                checkpoints = checkpointBook,
                 payees = ApplePeerPayeeBook(storage),
             )
+        }
 
         private fun railFor(account: AppleBaseAccount, network: PeerNetworkConfig): Rail {
             val indexer = PeerIndexerClient(account.httpClient, network.indexerUrl)
@@ -528,3 +567,50 @@ class ApplePeerCashOutClient private constructor(
         private fun usdcOrNull(micros: String): Usdc6? = runCatching { usdcFromMicros(micros) }.getOrNull()
     }
 }
+
+private data class PendingApplePeerSubmission(
+    val hash: xyz.justzappit.evm.types.TxHash?,
+    val nonce: xyz.justzappit.evm.math.BigInteger?,
+)
+
+private fun PeerCashOutCheckpoint.pendingSubmissionForNonceRestore(): PendingApplePeerSubmission? =
+    when (val action = resumeAction) {
+        is PeerResumeAction.ResolveSubmittedDeposit -> {
+            PendingApplePeerSubmission(action.txHash, action.submissionNonce)
+        }
+
+        is PeerResumeAction.ReconcileSubmission -> {
+            PendingApplePeerSubmission(action.submissionHash, action.submissionNonce)
+        }
+
+        else -> {
+            null
+        }
+    }
+
+internal fun applePeerFacadeErrorCode(railAvailable: Boolean, error: Exception): PeerErrorCode =
+    when {
+        !railAvailable -> PeerErrorCode.UNSUPPORTED_PLATFORM
+
+        // An explicit protocol classification carries transaction context that a nested cause does
+        // not. In particular, a checkpoint-marker write can fail before the submitter sends; its
+        // storage cause must not convert that proven pre-send outcome into an indefinite reservation.
+        error is PeerException -> error.error.code
+
+        error.hasRecoveryStorageCause() -> PeerErrorCode.RECOVERY_STATE_UNREADABLE
+
+        error is IllegalArgumentException -> PeerErrorCode.INVALID_REQUEST
+
+        else -> PeerErrorCode.INITIALIZATION_FAILED
+    }
+
+private fun Throwable.hasRecoveryStorageCause(): Boolean {
+    var current: Throwable? = this
+    repeat(MAX_CAUSE_DEPTH) {
+        if (current is ApplePeerRecoveryStorageException) return true
+        current = current?.cause
+    }
+    return false
+}
+
+private const val MAX_CAUSE_DEPTH = 8

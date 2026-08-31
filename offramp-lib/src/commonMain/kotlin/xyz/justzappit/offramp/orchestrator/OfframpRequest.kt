@@ -24,9 +24,25 @@ data class OfframpRequest(
     val payeeName: String? = null,
     /** `placeOrder._fiatAmountLimit`: contract slippage floor. Null/ZERO disables it. */
     val fiatAmountLimit: Usdc6? = null,
+    /**
+     * Fee and total Base debit the caller explicitly authorized from a displayed quote. Apple
+     * supplies both values so a later contract-config change cannot spend beyond the account-wide
+     * reservation. Internal/legacy callers may omit both and accept the live fee.
+     */
+    val authorizedPayFee: Usdc6? = null,
+    val authorizedRequiredBalance: Usdc6? = null,
 ) {
     init {
         require(usdcAmount > Usdc6.ZERO) { "usdcAmount must be positive" }
         require(fiatAmount > Usdc6.ZERO) { "fiatAmount must be positive" }
+        require((authorizedPayFee == null) == (authorizedRequiredBalance == null)) {
+            "authorizedPayFee and authorizedRequiredBalance must be supplied together"
+        }
+        if (authorizedPayFee != null && authorizedRequiredBalance != null) {
+            require(authorizedPayFee >= Usdc6.ZERO) { "authorizedPayFee must be nonnegative" }
+            require(authorizedRequiredBalance == usdcAmount + authorizedPayFee) {
+                "authorizedRequiredBalance must equal usdcAmount plus authorizedPayFee"
+            }
+        }
     }
 }

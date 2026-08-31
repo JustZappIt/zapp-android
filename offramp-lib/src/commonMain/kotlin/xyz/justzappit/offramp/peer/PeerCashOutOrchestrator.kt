@@ -7,14 +7,17 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.rpc.RpcException
 import xyz.justzappit.evm.rpc.TransactionReceipt
+import xyz.justzappit.evm.signer.PreparedTransaction
 import xyz.justzappit.evm.signer.TxSubmitter
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
-import xyz.justzappit.evm.util.hexToBigInteger
+import xyz.justzappit.offramp.account.AllowanceTransactionGuard
 import xyz.justzappit.offramp.funding.OfframpTopUp
 import xyz.justzappit.offramp.orchestrator.KnownReverts
 import xyz.justzappit.offramp.p2p.Erc20Calls
@@ -40,6 +43,9 @@ interface PeerCashOutOrchestrator {
 
     /** Closed ones included, which is what a checkpoint written before the deposit existed needs. */
     suspend fun allOrders(): List<PeerOrderSnapshot>
+
+    /** Resolves one durable submission by exact identity without starting an order poll. */
+    suspend fun resolveCheckpoint(checkpoint: PeerCashOutCheckpoint): PeerDepositId
 }
 
 @Suppress("TooManyFunctions")
@@ -47,6 +53,7 @@ class PeerCashOutOrchestratorImpl(
     private val network: PeerNetworkConfig,
     private val account: Address,
     private val txSubmitter: TxSubmitter,
+    private val allowanceTransactions: AllowanceTransactionGuard = AllowanceTransactionGuard(),
     private val rpcClient: BaseRpcClient,
     private val curatorClient: PeerCuratorClient,
     private val indexerClient: PeerIndexerClient,
@@ -63,17 +70,19 @@ class PeerCashOutOrchestratorImpl(
             cursor.step = PeerCashOutStep.FUNDING
             fund(request.amount)
 
-            cursor.step = PeerCashOutStep.APPROVING_USDC
-            approve(request.amount)
-
-            cursor.step = PeerCashOutStep.CREATING_DEPOSIT
             val depositId =
-                createDeposit(
-                    platform = request.platform,
-                    currencies = request.currencies,
-                    amount = request.amount,
-                    payeeHash = payeeHash,
-                )
+                allowanceTransactions.withApprovalAndSpend {
+                    cursor.step = PeerCashOutStep.APPROVING_USDC
+                    approve(request.amount)
+
+                    cursor.step = PeerCashOutStep.CREATING_DEPOSIT
+                    createDeposit(
+                        platform = request.platform,
+                        currencies = request.currencies,
+                        amount = request.amount,
+                        payeeHash = payeeHash,
+                    )
+                }
 
             cursor.depositId = depositId
             pollOrder(depositId)
@@ -90,22 +99,22 @@ class PeerCashOutOrchestratorImpl(
 
                 is PeerResumeAction.ResolveSubmittedDeposit -> {
                     cursor.step = PeerCashOutStep.CREATING_DEPOSIT
-                    pollOrder(resolveSubmittedDeposit(action, checkpoint))
+                    pollOrder(resolveSubmittedDeposit(action, oneShot = false))
                 }
 
-                PeerResumeAction.ReconcileSubmission -> {
+                is PeerResumeAction.ReconcileSubmission -> {
                     cursor.step = PeerCashOutStep.CREATING_DEPOSIT
-                    pollOrder(reconcileSubmission(checkpoint))
+                    pollOrder(reconcileSubmission(action, oneShot = false))
                 }
 
                 is PeerResumeAction.ResumeBridge -> {
                     cursor.step = PeerCashOutStep.FUNDING
-                    resumeFrom(checkpoint, action.depositAddress)
+                    resumeFrom(checkpoint, action.depositAddress, cursor)
                 }
 
                 PeerResumeAction.FreshStart -> {
                     cursor.step = PeerCashOutStep.FUNDING
-                    resumeFrom(checkpoint, null)
+                    resumeFrom(checkpoint, null, cursor)
                 }
             }
         }
@@ -141,7 +150,6 @@ class PeerCashOutOrchestratorImpl(
      * reached, so the single broad catch lives here rather than being repeated per method. The
      * cursor is what lets the body report how far it got.
      */
-    @Suppress("TooGenericExceptionCaught")
     private fun peerFlow(
         initialStep: PeerCashOutStep,
         initialDepositId: PeerDepositId? = null,
@@ -149,13 +157,16 @@ class PeerCashOutOrchestratorImpl(
     ): Flow<PeerCashOutStatus> =
         flow {
             val cursor = StepCursor(step = initialStep, depositId = initialDepositId)
-            try {
-                body(cursor)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                emit(failure(e, cursor.step, cursor.depositId))
-            }
+            emitAll(
+                flow { body(cursor) }
+                    .catch { error ->
+                        if (error is CancellationException) throw error
+                        // Preserve the public boundary's Exception-only contract. Fatal VM errors
+                        // and other non-Exception Throwables must never become a financial status.
+                        if (error !is Exception) throw error
+                        emit(failure(error, cursor.step, cursor.depositId))
+                    },
+            )
         }
 
     /** An expired intent can hold the balance; pruning it first is what makes the withdrawal land. */
@@ -199,20 +210,38 @@ class PeerCashOutOrchestratorImpl(
 
     override suspend fun allOrders(): List<PeerOrderSnapshot> = indexerClient.allOrdersFor(account)
 
+    override suspend fun resolveCheckpoint(checkpoint: PeerCashOutCheckpoint): PeerDepositId =
+        when (val action = checkpoint.resumeAction) {
+            is PeerResumeAction.ReadOrder -> action.depositId
+
+            is PeerResumeAction.ResolveSubmittedDeposit -> resolveSubmittedDeposit(action, oneShot = true)
+
+            is PeerResumeAction.ReconcileSubmission -> reconcileSubmission(action, oneShot = true)
+
+            is PeerResumeAction.ResumeBridge,
+            PeerResumeAction.FreshStart,
+            -> throw PeerErrorCode.RECOVERY_ACTION_UNSAFE.asException()
+        }
+
     private suspend fun FlowCollector<PeerCashOutStatus>.resumeFrom(
         checkpoint: PeerCashOutCheckpoint,
         bridgeHandle: String?,
+        cursor: StepCursor,
     ) {
         fund(checkpoint.amount, bridgeHandle)
-        approve(checkpoint.amount)
-        pollOrder(
-            createDeposit(
-                platform = checkpoint.platform,
-                currencies = checkpoint.currencies,
-                amount = checkpoint.amount,
-                payeeHash = checkpoint.payeeHash,
-            ),
-        )
+        val depositId =
+            allowanceTransactions.withApprovalAndSpend {
+                cursor.step = PeerCashOutStep.APPROVING_USDC
+                approve(checkpoint.amount)
+                cursor.step = PeerCashOutStep.CREATING_DEPOSIT
+                createDeposit(
+                    platform = checkpoint.platform,
+                    currencies = checkpoint.currencies,
+                    amount = checkpoint.amount,
+                    payeeHash = checkpoint.payeeHash,
+                )
+            }
+        pollOrder(depositId)
     }
 
     private suspend fun FlowCollector<PeerCashOutStatus>.resolvePayeeHash(
@@ -293,20 +322,45 @@ class PeerCashOutOrchestratorImpl(
                 oracleAdapter = network.oracleAdapterAddress,
                 intentAmountMin = PeerDepositParams.defaultIntentAmountMin(amount),
             )
-        // Read the head before broadcasting so a lost receipt still has a lower bound to scan from.
-        // The collector persists this before the send returns, which is what makes a submission
-        // whose hash never came back recoverable instead of repeatable — so a failed read stops the
-        // send rather than escrowing against an anchor that does not exist. Decimal, because that is
-        // what the indexer reports block numbers in.
-        val fromBlock =
-            runPeerCatching { hexToBigInteger(rpcClient.ethGetBlockByNumber().number).toString() }
-                .getOrElse { throw PeerErrorCode.TRANSACTION_FAILED.asException(cause = it) }
-        emit(PeerCashOutStatus.CreatingDeposit(amount = amount, fromBlockNumber = fromBlock))
-
+        var persistedSubmissionHash: TxHash? = null
+        var persistedSubmissionNonceDecimal: String? = null
         val txHash =
-            runPeerCatching { submit(PeerEscrowCalls.createDepositCalldata(params)) }
-                .getOrElse { throw it.asSubmissionFailure() }
-        emit(PeerCashOutStatus.CreatingDeposit(amount = amount, fromBlockNumber = fromBlock, txHash = txHash))
+            try {
+                submit(PeerEscrowCalls.createDepositCalldata(params)) { submission ->
+                    // Flow delivery is sequential: this returns only after the Apple collector has
+                    // durably stored the identity. A storage failure aborts the callback, and the
+                    // submitter consequently never starts the network send.
+                    try {
+                        emit(
+                            PeerCashOutStatus.CreatingDeposit(
+                                amount = amount,
+                                submissionHash = submission.hash,
+                                submissionNonceDecimal = submission.nonce.toString(),
+                            ),
+                        )
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        // This exception came from the marker consumer, before the submitter crossed
+                        // its broadcast boundary. Give it an explicit proven-pre-send identity so a
+                        // nested storage exception cannot turn untouched USDC into an indefinite hold.
+                        throw PeerErrorCode.INITIALIZATION_FAILED.asException(cause = error)
+                    }
+                    persistedSubmissionHash = submission.hash
+                    persistedSubmissionNonceDecimal = submission.nonce.toString()
+                }
+            } catch (error: Exception) {
+                throw error.asSubmissionFailure(persistedSubmissionHash)
+            }
+        val submissionHash = checkNotNull(persistedSubmissionHash)
+        emit(
+            PeerCashOutStatus.CreatingDeposit(
+                amount = amount,
+                submissionHash = submissionHash,
+                submissionNonceDecimal = persistedSubmissionNonceDecimal,
+                txHash = txHash,
+            ),
+        )
 
         return resolveDepositFromReceipt(txHash)
     }
@@ -333,51 +387,48 @@ class PeerCashOutOrchestratorImpl(
      */
     private suspend fun resolveSubmittedDeposit(
         action: PeerResumeAction.ResolveSubmittedDeposit,
-        checkpoint: PeerCashOutCheckpoint,
+        oneShot: Boolean,
+    ): PeerDepositId = resolveSubmission(action.txHash, PeerErrorCode.TRANSACTION_STATUS_UNKNOWN, oneShot)
+
+    /**
+     * The bundler send returned no response. A new checkpoint carries the deterministic signed
+     * UserOperation hash, so recovery asks the bundler about that exact operation. Legacy records
+     * without an identity stay unresolved rather than claiming a later lookalike order.
+     */
+    private suspend fun reconcileSubmission(
+        action: PeerResumeAction.ReconcileSubmission,
+        oneShot: Boolean,
     ): PeerDepositId {
-        val receipt = runPeerCatching { txSubmitter.awaitReceipt(action.txHash) }.getOrNull()
-        if (receipt != null) {
-            // A known revert is the one case where nothing was escrowed, so it is a plain failure
-            // rather than a hunt for an order that does not exist.
-            if (!receipt.success) throw PeerErrorCode.TRANSACTION_FAILED.asException()
-            PeerDepositReceipt.depositIdFrom(receipt, network.escrowAddress)?.let { return it }
-        }
-        val orders = ownDeposits()
-        val match =
-            minedHash(receipt)?.let { mined -> orders.firstOrNull { it.wasCreatedBy(mined) } }
-                ?: orders.firstOrNull { it.couldHaveBeenOpenedBy(checkpoint, checkpoint.blockFloor) }
-        return match?.id
-            ?: throw PeerErrorCode.DEPOSIT_RESOLUTION_FAILED.asException(
-                recovery = PeerRecovery.InspectBaseTransaction(action.txHash, OPERATION_CREATE_DEPOSIT),
-            )
+        val submissionHash =
+            action.submissionHash
+                ?: throw PeerErrorCode.TRANSACTION_SUBMISSION_UNKNOWN.asException(
+                    recovery = PeerRecovery.InspectDepositor(account),
+                )
+        return resolveSubmission(submissionHash, PeerErrorCode.TRANSACTION_SUBMISSION_UNKNOWN, oneShot)
     }
 
-    /**
-     * The checkpoint's hash is a userOp hash; the indexer records the bundle transaction that
-     * carried it. The two never compare equal, so the receipt is where they meet — without it the
-     * exact match cannot fire and every recovery falls through to the fuzzy one.
-     */
-    private fun minedHash(receipt: TransactionReceipt?): TxHash? =
-        receipt?.let { runCatching { TxHash.fromHex(it.transactionHash) }.getOrNull() }
-
-    /**
-     * The submission returned no hash, which does not mean it failed to broadcast. The order is
-     * looked up from the block read before sending; if it is not there that is a hard stop rather
-     * than a retry, because the alternative is escrowing the amount a second time.
-     */
-    private suspend fun reconcileSubmission(checkpoint: PeerCashOutCheckpoint): PeerDepositId =
-        ownDeposits()
-            .firstOrNull { it.couldHaveBeenOpenedBy(checkpoint, checkpoint.blockFloor) }
-            ?.id
-            ?: throw PeerErrorCode.TRANSACTION_SUBMISSION_UNKNOWN.asException(
-                recovery = PeerRecovery.InspectDepositor(account),
+    private suspend fun resolveSubmission(
+        txHash: TxHash,
+        unresolvedCode: PeerErrorCode,
+        oneShot: Boolean,
+    ): PeerDepositId {
+        val receipt =
+            try {
+                if (oneShot) txSubmitter.receiptIfIncluded(txHash) else txSubmitter.awaitReceipt(txHash)
+            } catch (error: Exception) {
+                throw unresolvedCode.asException(
+                    recovery = PeerRecovery.InspectBaseTransaction(txHash, OPERATION_CREATE_DEPOSIT),
+                    cause = error,
+                )
+            } ?: throw unresolvedCode.asException(
+                recovery = PeerRecovery.InspectBaseTransaction(txHash, OPERATION_CREATE_DEPOSIT),
             )
-
-    // A read failure here must not read as "the deposit is not there": that is the one conclusion
-    // that would justify sending again.
-    private suspend fun ownDeposits(): List<PeerOrderSnapshot> =
-        runPeerCatching { allOrders() }
-            .getOrElse { throw PeerErrorCode.INDEXER_UNAVAILABLE.asException(cause = it) }
+        if (!receipt.success) throw PeerErrorCode.TRANSACTION_FAILED.asException()
+        return PeerDepositReceipt.depositIdFrom(receipt, network.escrowAddress)
+            ?: throw PeerErrorCode.DEPOSIT_RESOLUTION_FAILED.asException(
+                recovery = PeerRecovery.InspectBaseTransaction(txHash, OPERATION_CREATE_DEPOSIT),
+            )
+    }
 
     private suspend fun prune(id: PeerDepositId) {
         val txHash = submit(PeerEscrowCalls.pruneExpiredIntentsCalldata(id.onchainValue))
@@ -404,8 +455,11 @@ class PeerCashOutOrchestratorImpl(
 
     private suspend fun readOrder(id: PeerDepositId): PeerOrderSnapshot? = indexerClient.order(id)
 
-    private suspend fun submit(data: ByteArray, to: Address = network.escrowAddress): TxHash =
-        txSubmitter.sendTransaction(to = to, data = data)
+    private suspend fun submit(
+        data: ByteArray,
+        to: Address = network.escrowAddress,
+        beforeBroadcast: suspend (PreparedTransaction) -> Unit = {},
+    ): TxHash = txSubmitter.sendTransaction(to = to, data = data, beforeBroadcast = beforeBroadcast)
 
     private fun requireSuccess(receipt: TransactionReceipt) {
         if (!receipt.success) {
@@ -415,15 +469,23 @@ class PeerCashOutOrchestratorImpl(
         }
     }
 
-    private fun Throwable.asSubmissionFailure(): Throwable =
-        if (this is PeerException) {
-            this
-        } else {
+    private fun Exception.asSubmissionFailure(persistedSubmissionHash: TxHash?): Exception =
+        if (persistedSubmissionHash != null && !isDefiniteSendRejection()) {
             PeerErrorCode.TRANSACTION_SUBMISSION_UNKNOWN.asException(
-                recovery = PeerRecovery.InspectDepositor(account),
+                recovery = PeerRecovery.InspectBaseTransaction(persistedSubmissionHash, OPERATION_CREATE_DEPOSIT),
                 cause = this,
             )
+        } else {
+            // Preparation and durable-marker failures happen before the submitter's network call.
+            // A marker failure is already a PeerException with an explicit proven-pre-send code;
+            // ordinary preparation failures become a proven TRANSACTION_FAILED in [failure].
+            this
         }
+
+    private fun Exception.isDefiniteSendRejection(): Boolean =
+        this is RpcException &&
+            method in DEFINITE_SEND_METHODS &&
+            this !is RpcException.TransportError
 
     private fun Throwable.isBenignEscrowRevert(): Boolean =
         EscrowRevert.fromSelector(selectorOf(this))?.isBenign == true
@@ -466,5 +528,6 @@ class PeerCashOutOrchestratorImpl(
         const val DEFAULT_POLL_INTERVAL_MILLIS = 5_000L
         const val OPERATION_CREATE_DEPOSIT = "createDeposit"
         const val OPERATION_SEND = "send"
+        val DEFINITE_SEND_METHODS = setOf("eth_sendUserOperation", "eth_sendRawTransaction")
     }
 }

@@ -76,6 +76,9 @@ interface PeerCashOutRepository {
      */
     fun onDepositReconciled(id: PeerCashOutId, depositId: PeerDepositId)
 
+    /** Exact receipt proved the unresolved submission reverted before escrow. */
+    fun onAttemptRetiredWithoutEscrow(id: PeerCashOutId)
+
     /** Suspends until nothing is still driving the previous wallet's smart account. */
     suspend fun reset()
 }
@@ -96,6 +99,7 @@ data class PeerCashOutRun(
      * reserved alongside the order it turned out to open.
      */
     val reconciledDepositId: PeerDepositId? = null,
+    val retiredWithoutEscrow: Boolean = false,
 ) {
     val latest: PeerCashOutStatus get() = statuses.lastOrNull() ?: PeerCashOutStatus.Idle
 
@@ -115,6 +119,7 @@ data class PeerCashOutRun(
      */
     val holdsFunds: Boolean
         get() {
+            if (retiredWithoutEscrow) return false
             if (depositId != null) return false
             val failed = failure ?: return true
             return statuses.any { it is PeerCashOutStatus.CreatingDeposit } && !failed.error.nothingEscrowed
@@ -380,6 +385,14 @@ internal class PeerCashOutRepositoryImpl(
             val run = current[id] ?: return@update current
             if (run.isDriving || run.depositId != null) return@update current
             current + (id to run.copy(reconciledDepositId = depositId))
+        }
+    }
+
+    override fun onAttemptRetiredWithoutEscrow(id: PeerCashOutId) {
+        state.update { current ->
+            val run = current[id] ?: return@update current
+            if (run.isDriving || run.depositId != null) return@update current
+            current + (id to run.copy(retiredWithoutEscrow = true))
         }
     }
 

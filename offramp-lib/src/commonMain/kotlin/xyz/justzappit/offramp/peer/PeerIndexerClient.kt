@@ -9,6 +9,7 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
@@ -35,7 +36,7 @@ class PeerIndexerClient(
 ) {
     suspend fun order(id: PeerDepositId): PeerOrderSnapshot? {
         val data = query(ORDER_QUERY, buildJsonObject { put(VAR_ID, id.composite) })
-        val row = data[FIELD_DEPOSIT]?.jsonArray?.firstOrNull()?.jsonObject ?: return null
+        val row = data.requiredRows(FIELD_DEPOSIT).firstOrNull()?.jsonObject ?: return null
         return parseDeposit(row)
     }
 
@@ -59,7 +60,7 @@ class PeerIndexerClient(
      */
     private suspend fun ordersFor(document: String, depositor: Address): List<PeerOrderSnapshot> {
         val data = query(document, buildJsonObject { put(VAR_DEPOSITOR, depositor.lowercaseHex) })
-        return data[FIELD_DEPOSIT]?.jsonArray?.map { parseDeposit(it.jsonObject) }.orEmpty()
+        return data.requiredRows(FIELD_DEPOSIT).map { parseDeposit(it.jsonObject) }
     }
 
     /**
@@ -134,7 +135,7 @@ class PeerIndexerClient(
             id = id,
             status =
                 PeerDepositStatus.fromWireOrNull(row.string(FIELD_STATUS))
-                    ?: PeerDepositStatus.CLOSED,
+                    ?: throw PeerErrorCode.INDEXER_UNAVAILABLE.asException(),
             acceptingIntents = row[FIELD_ACCEPTING_INTENTS]?.jsonPrimitive?.booleanOrNull ?: false,
             remaining = row.usdc(FIELD_REMAINING),
             outstandingIntentAmount = row.usdc(FIELD_OUTSTANDING),
@@ -216,6 +217,9 @@ class PeerIndexerClient(
             throw PeerErrorCode.INDEXER_UNAVAILABLE.asException()
         }
     }
+
+    private fun JsonObject.requiredRows(field: String): JsonArray =
+        this[field] as? JsonArray ?: throw PeerErrorCode.INDEXER_UNAVAILABLE.asException()
 
     companion object {
         const val QUEUE_SAMPLE_LIMIT = 120
