@@ -24,8 +24,10 @@ data class QuoteResponseDto(
 @JsonIgnoreUnknownKeys
 @Serializable
 data class QuoteDetails(
+    // Absent on a dry quote, which prices a swap without reserving anything.
+    // The funded path fails closed on a blank value rather than sending to one.
     @SerialName("depositAddress")
-    val depositAddress: String,
+    val depositAddress: String = "",
     @SerialName("amountIn")
     @Serializable(with = BigDecimalSerializer::class)
     val amountIn: BigDecimal,

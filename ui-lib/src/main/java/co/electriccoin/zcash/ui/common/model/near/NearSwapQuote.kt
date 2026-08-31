@@ -106,22 +106,12 @@ data class NearSwapQuote(
             )
 
     override val affiliateFeeZatoshi: Zatoshi =
-        if (originAsset is ZecSwapAsset) {
-            response.quote.amountInFormatted
-                .coerceAtLeast(BigDecimal(0))
-                .multiply(
-                    BigDecimal(AFFILIATE_FEE_BPS).divide(BigDecimal("10000"), MathContext.DECIMAL128),
-                    MathContext.DECIMAL128
-                ).convertZecToZatoshi()
-        } else {
-            response.quote.amountOutUsd
-                .coerceAtLeast(BigDecimal(0))
-                .multiply(
-                    BigDecimal(AFFILIATE_FEE_BPS).divide(BigDecimal("10000"), MathContext.DECIMAL128),
-                    MathContext.DECIMAL128
-                ).divide(zecExchangeRate, MathContext.DECIMAL128)
-                .convertZecToZatoshi()
-        }
+        computeAffiliateFeeZatoshi(
+            originAsset = originAsset,
+            amountInFormatted = response.quote.amountInFormatted,
+            amountInUsd = response.quote.amountInUsd,
+            amountOutUsd = response.quote.amountOutUsd
+        )
 
     override val affiliateFeeUsd: BigDecimal =
         response.quote.amountInUsd
@@ -150,6 +140,34 @@ data class NearSwapQuote(
 
     private fun getZecFeeUsd(proposal: Proposal?): BigDecimal =
         zecExchangeRate.multiply(getZecFee(proposal) ?: BigDecimal.ZERO, MathContext.DECIMAL128)
+}
+
+/**
+ * Shared by the executable quote and the dry price probe so the fee the preview shows is the fee the
+ * real quote will charge. Both derive from [AFFILIATE_FEE_BPS], which is currently 0.
+ */
+internal fun computeAffiliateFeeZatoshi(
+    originAsset: SwapAsset,
+    amountInFormatted: BigDecimal,
+    amountInUsd: BigDecimal,
+    amountOutUsd: BigDecimal
+): Zatoshi {
+    val feeRate = BigDecimal(AFFILIATE_FEE_BPS).divide(BigDecimal("10000"), MathContext.DECIMAL128)
+    if (originAsset is ZecSwapAsset) {
+        return amountInFormatted
+            .coerceAtLeast(BigDecimal(0))
+            .multiply(feeRate, MathContext.DECIMAL128)
+            .convertZecToZatoshi()
+    }
+    require(amountInFormatted.signum() > 0) {
+        "Swap quote has non-positive amountInFormatted=$amountInFormatted"
+    }
+    val zecExchangeRate = amountInUsd.divide(amountInFormatted, MathContext.DECIMAL128)
+    return amountOutUsd
+        .coerceAtLeast(BigDecimal(0))
+        .multiply(feeRate, MathContext.DECIMAL128)
+        .divide(zecExchangeRate, MathContext.DECIMAL128)
+        .convertZecToZatoshi()
 }
 
 internal fun requireConsistent(name: String, raw: BigDecimal?, formatted: BigDecimal?, decimals: Int) {
