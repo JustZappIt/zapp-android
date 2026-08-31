@@ -29,6 +29,13 @@ enum class OnrampPhase {
     val isTerminal: Boolean
         get() = this == COMPLETED || this == EXPIRED || this == CANCELLED || this == FAILED
 
+    /**
+     * The user's fiat has left their account. Nothing shown from here may say it has not: the order
+     * settles once, and that reassurance invites a second transfer against it.
+     */
+    val hasSentFiat: Boolean
+        get() = this == CONFIRMING_PAID || this == AWAITING_SETTLEMENT || this == COMPLETED
+
     companion object {
         fun fromWire(value: String): OnrampPhase? = entries.firstOrNull { it.name.equals(value, ignoreCase = true) }
     }

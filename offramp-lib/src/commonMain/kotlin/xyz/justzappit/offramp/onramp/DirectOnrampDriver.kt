@@ -455,7 +455,7 @@ class DirectOnrampDriver(
      * in a spinner that runs for as long as the screen is open.
      */
     @Suppress("ReturnCount")
-    private suspend fun FlowCollector<OnrampStatus>.watch(
+    internal suspend fun FlowCollector<OnrampStatus>.watch(
         orderId: BigInteger,
         account: SubmittingAccount,
         fromPaid: Boolean,
@@ -468,7 +468,6 @@ class DirectOnrampDriver(
     ) {
         val handle = orderId.toString()
         var attempts = 0
-        var announcedPayment = false
         while (true) {
             val snapshot = readOrder(orderId)
             when (snapshot?.status) {
@@ -483,12 +482,14 @@ class DirectOnrampDriver(
                 }
 
                 OrderStatus.ACCEPTED -> {
-                    if (!announcedPayment) {
+                    // ☠ Never after confirmPaid: its receipt already proved the order PAID, so an
+                    // `accepted` read is a lagging node, and announcing payment on it sends a user
+                    // who has paid back to the QR. Keep polling instead.
+                    if (!fromPaid) {
+                        // A resting state: nothing moves until the user pays and confirms it.
                         emit(awaitingPayment(orderId, snapshot, handle))
-                        announcedPayment = true
+                        return
                     }
-                    // A resting state: nothing moves until the user pays and confirms it.
-                    if (!fromPaid) return
                 }
 
                 OrderStatus.PAID -> {
@@ -531,16 +532,17 @@ class DirectOnrampDriver(
     ): OnrampStatus {
         val phase = if (settling) OnrampPhase.AWAITING_SETTLEMENT else OnrampPhase.AWAITING_MERCHANT
         return when {
-            // Every poll failed. That says nothing about the order — it is very probably still
-            // running — so this must not be the branch that discards it.
-            status == null -> {
-                OnrampStatus.Failed(OnrampFailureCode.NETWORK_UNAVAILABLE, phase, handle, handle)
-            }
-
-            // The user has paid. The merchant is late, not absent, and the order can still complete
-            // long after this screen gives up watching it.
+            // ☠ Ahead of the unreadable case, not after it. The user has paid; the merchant is
+            // late, not absent. Reporting a run of failed polls as a network problem here tells
+            // someone whose fiat is gone that their money has not moved.
             settling -> {
                 OnrampStatus.Failed(OnrampFailureCode.SETTLEMENT_PENDING, phase, handle, handle)
+            }
+
+            // Every poll failed and nothing was paid. That says nothing about the order — it is
+            // very probably still running — so this must not be the branch that discards it.
+            status == null -> {
+                OnrampStatus.Failed(OnrampFailureCode.NETWORK_UNAVAILABLE, phase, handle, handle)
             }
 
             // The decision is the contract's, not our clock's: a keeper sweeps expired orders, so

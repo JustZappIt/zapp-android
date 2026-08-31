@@ -11,6 +11,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -342,7 +343,49 @@ class DirectOnrampDriverTest {
             assertFalse(failed.leavesOrderAlive, "a refused order was never placed")
         }
 
+    @Test
+    fun `a wait that began with a payment never sends the user back to the QR`() =
+        runTest {
+            // A node a block behind the paidBuyOrder receipt still says `accepted`. Announcing
+            // payment on that read asks someone who has already paid to pay again.
+            orderReader.answer = snapshot(OrderStatus.ACCEPTED, encryptedUserUpi = sealed(VPA))
+
+            val statuses = watchFromPaid()
+
+            assertTrue(
+                statuses.none { it is OnrampStatus.AwaitingPayment },
+                "a confirmed payment must not reopen the payment screen",
+            )
+            assertEquals(OnrampFailureCode.SETTLEMENT_PENDING, assertIs<OnrampStatus.Failed>(statuses.last()).code)
+        }
+
+    @Test
+    fun `a paid order whose polls all failed is pending, not a money-has-not-moved failure`() =
+        runTest {
+            // ☠ The regression. `status == null` used to win over `settling`, so a run of failed
+            // polls after the user had paid reported NETWORK_UNAVAILABLE — whose sentence tells
+            // them their money has not moved, which invites a second transfer.
+            orderReader.answer = null
+
+            val failed = assertIs<OnrampStatus.Failed>(watchFromPaid().last())
+
+            assertEquals(OnrampFailureCode.SETTLEMENT_PENDING, failed.code)
+            assertEquals(OnrampPhase.AWAITING_SETTLEMENT, failed.phase)
+            assertTrue(failed.leavesOrderAlive, "a paid order outlives the screen that was watching it")
+        }
+
     // ---- harness ----
+
+    /**
+     * The tail as [DirectOnrampDriver.confirmPaid] enters it, without standing up a bundler to
+     * send the `paidBuyOrder` this wait always begins with.
+     */
+    private suspend fun watchFromPaid(): List<OnrampStatus> {
+        val submitters = submitters()
+        val driver = driver(submitters)
+        val account = submitters.resolve()
+        return flow { with(driver) { watch(ORDER_ID, account, fromPaid = true) } }.toList()
+    }
 
     /** Seals [plaintext] to the relay key, the way the merchant does when accepting. */
     private fun sealed(plaintext: String): String =
@@ -352,29 +395,32 @@ class DirectOnrampDriverTest {
      * Poll intervals of zero and a cap of two keep the timeout branches reachable in a test; these
      * four parameters exist for exactly this and have no production caller.
      */
-    private fun driver(): DirectOnrampDriver {
+    private fun submitters(): Erc4337SubmitterProvider {
         val smartAccounts =
             SmartOfframpAccountProvider(
                 accountProvider = FixedAccountProvider(owner),
                 rpc = rpc,
                 accountFactory = network.accountFactoryAddress,
             )
-        return DirectOnrampDriver(
+        return Erc4337SubmitterProvider(
+            rpc = rpc,
+            bundler =
+                BundlerClient(
+                    httpClient = bundlerHttp,
+                    bundlerUrl = "http://mock/bundler",
+                    entryPoint = network.entryPointAddress,
+                    chainId = network.chainId,
+                ),
+            network = network,
+            accountProvider = smartAccounts,
+        )
+    }
+
+    private fun driver(submitters: Erc4337SubmitterProvider = submitters()): DirectOnrampDriver =
+        DirectOnrampDriver(
             rpc = rpc,
             network = network,
-            submitters =
-                Erc4337SubmitterProvider(
-                    rpc = rpc,
-                    bundler =
-                        BundlerClient(
-                            httpClient = bundlerHttp,
-                            bundlerUrl = "http://mock/bundler",
-                            entryPoint = network.entryPointAddress,
-                            chainId = network.chainId,
-                        ),
-                    network = network,
-                    accountProvider = smartAccounts,
-                ),
+            submitters = submitters,
             accountProvider = FixedAccountProvider(owner),
             subgraph = SubgraphClient(subgraphHttp, "http://mock/graph"),
             orderReader = orderReader,
@@ -387,7 +433,6 @@ class DirectOnrampDriverTest {
             acceptPollAttempts = 2,
             settlePollAttempts = 2,
         )
-    }
 
     private fun checkpoint() =
         OnrampCheckpoint(

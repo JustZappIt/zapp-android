@@ -68,7 +68,7 @@
     <string name="onramp_error_starting">No se pudo iniciar la orden. No se envió ninguna confirmación de pago.</string>
     <string name="onramp_error_progress">La orden necesita atención. Revisa su estado antes de reintentar.</string>
     <string name="onramp_error_limits">Introduce un importe dentro de los límites permitidos.</string>
-    <string name="onramp_error_backend_unavailable">Zapp no pudo contactar con el servicio de compra. Tu dinero no se ha movido.</string>
+    <string name="onramp_error_backend_unavailable">Zapp no pudo contactar con el exchange. Tu dinero no se ha movido.</string>
     <string name="onramp_error_corridor_disabled">La compra está pausada para esta moneda en este momento.</string>
     <string name="onramp_error_quote_expired">La tasa caducó antes de colocar la orden. Inténtalo de nuevo.</string>
     <string name="onramp_error_no_merchant">Ningún comerciante aceptó la orden a tiempo. No se cobró nada.</string>
@@ -92,7 +92,7 @@
     <string name="onramp_paid_confirm_cancel">Todavía no</string>
     <string name="onramp_error_unauthenticated">Zapp no pudo autenticarse con el servicio de compra. No se movió dinero.</string>
     <string name="onramp_error_recipient_not_allowed">Los USDC solo pueden enviarse a tu propia dirección de Base. No se movió dinero.</string>
-    <string name="onramp_error_order_not_found">Esa orden ya no existe en el servicio de compra.</string>
+    <string name="onramp_error_order_not_found">Esa orden ya no existe en el exchange.</string>
     <string name="onramp_error_wrong_phase">La orden ya avanzó. Revisa su estado antes de reintentar.</string>
     <string name="onramp_error_cap_exceeded">Eso superaría tu límite por ahora. Prueba con un importe menor o vuelve más tarde.</string>
     <string name="onramp_error_daily_limit">Has alcanzado el límite de compra de hoy. Vuelve a intentarlo mañana.</string>

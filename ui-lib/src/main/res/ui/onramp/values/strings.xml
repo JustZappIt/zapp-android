@@ -70,7 +70,7 @@
     <string name="onramp_error_starting">The order could not be started. No payment confirmation was sent.</string>
     <string name="onramp_error_unauthenticated">Zapp could not authenticate with the onramp service. No money has moved.</string>
     <string name="onramp_error_recipient_not_allowed">USDC can only be sent to your own Base address. No money has moved.</string>
-    <string name="onramp_error_order_not_found">That order no longer exists on the onramp service.</string>
+    <string name="onramp_error_order_not_found">That order no longer exists on the exchange.</string>
     <string name="onramp_error_wrong_phase">The order has already moved on. Review its status before retrying.</string>
     <string name="onramp_error_cap_exceeded">That would go over your limit for now. Try a smaller amount or come back later.</string>
     <string name="onramp_error_daily_limit">You\'ve reached today\'s buying limit. Try again tomorrow.</string>
@@ -79,7 +79,7 @@
     <string name="onramp_error_screening_rejected">The exchange didn\'t approve this order. No money has moved.</string>
     <string name="onramp_error_progress">The order needs attention. Review its status before retrying.</string>
     <string name="onramp_error_limits">Enter an amount within the allowed limits.</string>
-    <string name="onramp_error_backend_unavailable">Zapp could not reach the onramp service. Your money has not moved.</string>
+    <string name="onramp_error_backend_unavailable">Zapp could not reach the exchange. Your money has not moved.</string>
     <string name="onramp_error_corridor_disabled">Buying is paused for this currency right now.</string>
     <string name="onramp_error_quote_expired">The rate expired before the order was placed. Try again.</string>
     <string name="onramp_error_no_merchant">No merchant accepted the order in time. Nothing was charged.</string>

@@ -837,7 +837,8 @@ internal class OnrampVM(
                 (this is OnrampStatus.Failed && !leavesOrderAlive)
 
     private fun Throwable.toStringResource(): StringResource =
-        (this as? OnrampException)?.code?.toStringResource() ?: stringRes(R.string.onramp_error_starting)
+        (this as? OnrampException)?.code?.let { onrampFailureMessage(it, phase = null) }
+            ?: stringRes(R.string.onramp_error_starting)
 
     /**
      * The service's own sentence wins when it gave one. A refusal it can explain ("new accounts
@@ -847,58 +848,15 @@ internal class OnrampVM(
      * Capped, and only ever displayed — [OnrampStatus.Failed.code] remains the thing anything
      * branches on.
      */
-    private fun OnrampStatus.errorMessage(): StringResource =
-        (this as? OnrampStatus.Failed)
-            ?.detail
+    private fun OnrampStatus.errorMessage(): StringResource {
+        val failed = this as? OnrampStatus.Failed ?: return stringRes(R.string.onramp_error_progress)
+        return failed.detail
             ?.trim()
             ?.takeIf { it.isNotBlank() }
             ?.take(SERVICE_DETAIL_MAX_CHARS)
             ?.let(::stringRes)
-            ?: (this as? OnrampStatus.Failed)?.code?.toStringResource()
-            ?: stringRes(R.string.onramp_error_progress)
-
-    @Suppress("CyclomaticComplexMethod")
-    private fun OnrampFailureCode.toStringResource(): StringResource =
-        when (this) {
-            OnrampFailureCode.BAD_REQUEST -> stringRes(R.string.onramp_error_limits)
-
-            OnrampFailureCode.UNAUTHENTICATED,
-            OnrampFailureCode.NONCE_INVALID,
-            -> stringRes(R.string.onramp_error_unauthenticated)
-
-            OnrampFailureCode.RECIPIENT_NOT_ALLOWED -> stringRes(R.string.onramp_error_recipient_not_allowed)
-
-            OnrampFailureCode.ROUTE_DISABLED -> stringRes(R.string.onramp_error_corridor_disabled)
-
-            OnrampFailureCode.ORDER_NOT_FOUND -> stringRes(R.string.onramp_error_order_not_found)
-
-            OnrampFailureCode.WRONG_PHASE -> stringRes(R.string.onramp_error_wrong_phase)
-
-            OnrampFailureCode.QUOTE_EXPIRED -> stringRes(R.string.onramp_error_quote_expired)
-
-            OnrampFailureCode.CAP_EXCEEDED -> stringRes(R.string.onramp_error_cap_exceeded)
-
-            OnrampFailureCode.DAILY_LIMIT_EXCEEDED -> stringRes(R.string.onramp_error_daily_limit)
-
-            OnrampFailureCode.VOLUME_LIMIT_EXCEEDED -> stringRes(R.string.onramp_error_volume_limit)
-
-            OnrampFailureCode.USER_BLACKLISTED -> stringRes(R.string.onramp_error_blacklisted)
-
-            OnrampFailureCode.SCREENING_REJECTED -> stringRes(R.string.onramp_error_screening_rejected)
-
-            OnrampFailureCode.UPSTREAM_FAILED,
-            OnrampFailureCode.OPERATOR_UNAVAILABLE,
-            OnrampFailureCode.NETWORK_UNAVAILABLE,
-            -> stringRes(R.string.onramp_error_backend_unavailable)
-
-            OnrampFailureCode.NO_MERCHANT -> stringRes(R.string.onramp_error_no_merchant)
-
-            OnrampFailureCode.ORDER_EXPIRED -> stringRes(R.string.onramp_error_order_expired)
-
-            OnrampFailureCode.SETTLEMENT_PENDING -> stringRes(R.string.onramp_error_settlement_pending)
-
-            OnrampFailureCode.UNKNOWN -> stringRes(R.string.onramp_error_progress)
-        }
+            ?: onrampFailureMessage(failed.code, failed.phase)
+    }
 
     // Rail names are brand nouns and identical across locales, so they are literals. NGN and ECU are
     // the exceptions: "Bank transfer" is prose, and prose goes through strings.xml. Note these are
