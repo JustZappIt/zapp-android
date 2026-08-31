@@ -292,6 +292,8 @@ class PeerCashOutRepositoryTest {
         override suspend fun activeOrders(): List<PeerOrderSnapshot> = emptyList()
 
         override suspend fun allOrders(): List<PeerOrderSnapshot> = emptyList()
+
+        override suspend fun resolveCheckpoint(checkpoint: PeerCashOutCheckpoint): PeerDepositId = error("Unused")
     }
 
     private class InMemoryCheckpointStorage : PeerCashOutCheckpointStorageProvider {

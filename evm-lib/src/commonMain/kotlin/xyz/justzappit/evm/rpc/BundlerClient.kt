@@ -12,6 +12,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import kotlinx.coroutines.delay
 import kotlinx.io.IOException
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -164,10 +165,19 @@ class BundlerClient(
                 ?: error("Bundler returned a malformed UserOperation receipt")
         val receipt = response["receipt"] ?: error("Bundler UserOperation result is missing its receipt")
         val decoded = json.decodeFromJsonElement(TransactionReceipt.serializer(), receipt)
+        // `receipt.logs` belongs to the whole handleOps bundle and can contain events from several
+        // UserOperations. The result-level array is scoped to the queried userOp; exact recovery
+        // must parse only that array or one cash-out can claim a neighbour's DepositReceived log.
+        val scopedLogs =
+            response["logs"]?.let { json.decodeFromJsonElement(ListSerializer(EvmLog.serializer()), it) }
+                ?: error("Bundler UserOperation result is missing its scoped logs")
         val operationSucceeded =
             response["success"]?.jsonPrimitive?.takeUnless { it.isString }?.booleanOrNull
                 ?: error("Bundler UserOperation receipt is missing a boolean success verdict")
-        return if (operationSucceeded) decoded else decoded.copy(status = FAILED_STATUS)
+        return decoded.copy(
+            status = if (operationSucceeded) decoded.status else FAILED_STATUS,
+            logs = scopedLogs,
+        )
     }
 
     private fun userOpJson(op: UserOperationV06): JsonObject =
@@ -226,6 +236,7 @@ class BundlerClient(
             try {
                 httpClient.post(bundlerUrl) {
                     contentType(ContentType.Application.Json)
+                    if (method == METHOD_SEND_USER_OPERATION) attributes.put(NoRpcRetry, Unit)
                     setBody(payload)
                 }
             } catch (e: IOException) {
@@ -257,6 +268,7 @@ class BundlerClient(
     }
 
     companion object {
+        private const val METHOD_SEND_USER_OPERATION = "eth_sendUserOperation"
         private const val HEX_BASE = 16
         private const val NONCE_LAG_MAX_ATTEMPTS = 3
         private const val NONCE_LAG_BASE_BACKOFF_MS = 1_500L

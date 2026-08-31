@@ -6,6 +6,8 @@ package xyz.justzappit.offramp.apple
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import xyz.justzappit.evm.math.BigDecimal
@@ -43,6 +45,7 @@ import xyz.justzappit.offramp.orchestrator.OfframpPaymentDetailsProvider
 import xyz.justzappit.offramp.orchestrator.OfframpRequest
 import xyz.justzappit.offramp.orchestrator.OfframpStatus
 import xyz.justzappit.offramp.orchestrator.OfframpStep
+import xyz.justzappit.offramp.orchestrator.PlaceOrderMarkerPersistenceException
 import xyz.justzappit.offramp.orchestrator.orderId
 import xyz.justzappit.offramp.orchestrator.platformCurrentTimeMillis
 import xyz.justzappit.offramp.orchestrator.step
@@ -76,7 +79,8 @@ class AppleOfframpClient private constructor(
     private val dynamicPixResolver: DirectPixResolver,
     private val storage: AppleOfframpStorage,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = CHECKPOINT_JSON
+    private val checkpointMutationMutex = Mutex()
 
     val networkName: String get() = network.name
     val explorerUrl: String get() = network.baseExplorerUrl
@@ -173,8 +177,35 @@ class AppleOfframpClient private constructor(
     suspend fun checkpointCurrencyCode(): String? =
         storage.checkpointJson().value?.let { decodeCheckpoint(it).currency.code }
 
+    /**
+     * Base USDC promised to an unfinished Scan & Pay order but potentially still present in the
+     * raw account balance. Before placeOrder settles this is the quoted principal plus fee; once an
+     * order id proves the principal was consumed, only the still-pending fee remains. The persisted
+     * quote is authoritative so a later fee-config change cannot resize the reservation. A legacy
+     * record is atomically upgraded with the fee read used for hydration before that value is
+     * returned. Storage, decode, and fee-read failures throw: callers must fail closed rather than
+     * treating an unreadable financial record as empty.
+     */
     @Throws(Exception::class)
-    suspend fun discardCheckpoint() = storage.clearCheckpoint()
+    suspend fun pendingBaseCommitmentMicros(): String? {
+        var checkpoint = storage.checkpointJson().value?.let(::decodeCheckpoint) ?: return null
+        if (!checkpoint.currentStep.holdsUnescrowedP2pCommitment) return null
+        checkpoint = bindAuthorizedFee()
+        val fee = requireNotNull(checkpoint.authorizedPayFee)
+        return checkpoint.pendingBaseCommitment(fee)?.micros?.toString()
+    }
+
+    /** The Base USDC owned by an unfinished refund bridge, or null when none exists. */
+    @Throws(Exception::class)
+    suspend fun pendingRefundCommitmentMicros(): String? =
+        storage
+            .refundCheckpointJson()
+            .value
+            ?.let(::decodeRefundCheckpoint)
+            ?.usdcMicros
+
+    @Throws(Exception::class)
+    suspend fun discardCheckpoint() = checkpointMutationMutex.withLock { storage.clearCheckpoint() }
 
     @Throws(Exception::class)
     suspend fun hasTopUpCheckpoint(): Boolean = storage.topUpCheckpointJson().value != null
@@ -203,6 +234,12 @@ class AppleOfframpClient private constructor(
                     ),
                 )
             val order = usdcFromMicros(quote.usdcMicros)
+            val authorizedFee = usdcFromMicros(quote.fixedFeeMicros)
+            val authorizedRequired = usdcFromMicros(quote.requiredBalanceMicros)
+            require(authorizedFee >= Usdc6.ZERO) { "Quoted PAY fee must be nonnegative" }
+            require(authorizedRequired == order + authorizedFee) {
+                "Quoted required balance must equal the order amount plus PAY fee"
+            }
             val fiatLimit = Usdc6((order.micros * rateMicros) / MICROS_PER_UNIT)
             val request =
                 OfframpRequest(
@@ -211,25 +248,37 @@ class AppleOfframpClient private constructor(
                     currency = currency,
                     payeeName = payeeName,
                     fiatAmountLimit = fiatLimit,
+                    authorizedPayFee = authorizedFee,
+                    authorizedRequiredBalance = authorizedRequired,
                 )
             val checkpointJson = storage.checkpointJson().value
             val existing: OfframpCheckpoint? =
-                if (checkpointJson == null) null else decodeCheckpoint(checkpointJson)
+                if (checkpointJson == null) {
+                    null
+                } else {
+                    decodeCheckpoint(checkpointJson)
+                    bindAuthorizedFee()
+                }
             // A resume belongs to the persisted request. Never let a fresh screen quote overwrite
             // its currency or amounts while checkpointing later resume statuses.
             val persistedRequest = existing?.toRequest(fallbackFiatAmount = request.fiatAmount) ?: request
-            val persister = AppleCheckpointPersister(storage, persistedRequest, json)
+            val persister = AppleCheckpointPersister(storage, persistedRequest, json, checkpointMutationMutex)
             persister.seedFrom(existing)
             val detailsProvider = paymentDetailsProvider.asSharedProvider()
             val upstream =
-                if (existing?.orderIdBig != null || existing?.bridgeDepositAddress != null) {
-                    driver.resume(checkNotNull(existing), detailsProvider)
+                if (existing != null) {
+                    driver.resume(existing, detailsProvider)
                 } else {
-                    driver.run(request, detailsProvider)
+                    driver.run(persistedRequest, detailsProvider)
                 }
-            upstream.collect { status ->
-                persister.onStatus(status)
-                emit(status.toAppleStatus())
+            try {
+                upstream.collect { status ->
+                    persister.onStatus(status)
+                    emit(status.toAppleStatus())
+                }
+            } catch (error: PlaceOrderMarkerPersistenceException) {
+                retireFailedPlaceOrderMarker()
+                throw error
             }
         }
 
@@ -237,17 +286,58 @@ class AppleOfframpClient private constructor(
         paymentDetailsProvider: AppleOfframpPaymentDetailsProvider,
     ): Flow<AppleOfframpStatus> =
         flow {
-            val checkpoint =
-                requireNotNull(storage.checkpointJson().value?.let { decodeCheckpoint(it) }) {
-                    "No P2P payment is available to resume"
-                }
-            val persistedRequest = checkpoint.toRequest(fallbackFiatAmount = checkpoint.usdcAmount)
-            val persister = AppleCheckpointPersister(storage, persistedRequest, json)
-            persister.seedFrom(checkpoint)
-            driver.resume(checkpoint, paymentDetailsProvider.asSharedProvider()).collect { status ->
-                persister.onStatus(status)
-                emit(status.toAppleStatus())
+            requireNotNull(storage.checkpointJson().value?.let { decodeCheckpoint(it) }) {
+                "No P2P payment is available to resume"
             }
+            val checkpoint = bindAuthorizedFee()
+            val persistedRequest = checkpoint.toRequest(fallbackFiatAmount = checkpoint.usdcAmount)
+            val persister = AppleCheckpointPersister(storage, persistedRequest, json, checkpointMutationMutex)
+            persister.seedFrom(checkpoint)
+            try {
+                driver.resume(checkpoint, paymentDetailsProvider.asSharedProvider()).collect { status ->
+                    persister.onStatus(status)
+                    emit(status.toAppleStatus())
+                }
+            } catch (error: PlaceOrderMarkerPersistenceException) {
+                retireFailedPlaceOrderMarker()
+                throw error
+            }
+        }
+
+    private suspend fun retireFailedPlaceOrderMarker() {
+        try {
+            checkpointMutationMutex.withLock { storage.clearCheckpoint() }
+        } catch (
+            @Suppress("SwallowedException", "TooGenericExceptionCaught") cleanupError: Exception,
+        ) {
+            // The host can commit its atomic replacement and then fail while applying file
+            // attributes. Repeating with an empty record retires that committed-but-unsent marker.
+        }
+    }
+
+    /**
+     * Migrates pre-reservation checkpoints to an immutable fee/debit pair. Persisting before use is
+     * essential: returning a live fee without binding it would let the contract config change
+     * between Swift's claim and setSellOrderUpi's later transferFrom.
+     */
+    private suspend fun bindAuthorizedFee(): OfframpCheckpoint =
+        checkpointMutationMutex.withLock {
+            // Another pending/resume call can advance or bind the single checkpoint while this one
+            // is reading the fee. Re-read under the mutation lock and use exactly the record whose
+            // binding will be returned to Swift.
+            val latest =
+                requireNotNull(storage.checkpointJson().value?.let(::decodeCheckpoint)) {
+                    "The saved P2P payment changed while its fee was being bound"
+                }
+            if (latest.authorizedPayFee != null) return@withLock latest
+            val fee = rpc.getPayFeeConfig(network.diamondAddress, latest.currency).feeFor(latest.usdcAmount)
+            val bound =
+                latest.copy(
+                    authorizedPayFeeMicroDecimal = fee.micros.toString(),
+                    authorizedRequiredBalanceMicroDecimal = (latest.usdcAmount + fee).micros.toString(),
+                )
+            storage.storeCheckpointJson(json.encodeToString(OfframpCheckpoint.serializer(), bound))
+            bound
         }
 
     fun bridgeToBase(usdcMicros: String, resumeDepositAddress: String? = null): Flow<AppleOfframpStatus> =
@@ -395,6 +485,23 @@ class AppleOfframpClient private constructor(
         ): AppleOfframpClient {
             val network = account.network
             val rpc = account.rpc
+            val storedCheckpoint =
+                storage.checkpointJson().value?.let { value ->
+                    try {
+                        CHECKPOINT_JSON.decodeFromString(OfframpCheckpoint.serializer(), value)
+                    } catch (error: Exception) {
+                        throw IllegalStateException(
+                            "The saved P2P payment is incompatible or corrupted. Its recovery data was preserved.",
+                            error,
+                        )
+                    }
+                }
+            storedCheckpoint?.takeIf { it.hasUnresolvedPlaceSubmission }?.let { unresolved ->
+                account.submitters
+                    .resolve()
+                    .submitter
+                    .restorePendingTransaction(checkNotNull(unresolved.placeOrderTxHash), unresolved.placeOrderNonce)
+            }
             val subgraph = SubgraphClient(account.httpClient, network.subgraphUrl)
             val relayStore = AppleRelayIdentityStore(storage)
             val recipientCache = AppleOrderRecipientCache(storage)
@@ -461,6 +568,7 @@ class AppleOfframpClient private constructor(
         }
 
         private val MICROS_PER_UNIT = bigIntegerValueOf(1_000_000L)
+        private val CHECKPOINT_JSON = Json { ignoreUnknownKeys = true }
         private const val USDC_SCALE = 6
 
         private val CORRIDORS =
@@ -495,46 +603,69 @@ private class AppleCheckpointPersister(
     private val storage: AppleOfframpStorage,
     private val request: OfframpRequest,
     private val json: Json,
+    private val mutationMutex: Mutex,
 ) {
     private var approveHash: TxHash? = null
     private var placeHash: TxHash? = null
+    private var placeNonceDecimal: String? = null
     private var bridgeHandle: String? = null
 
     fun seedFrom(value: OfframpCheckpoint?) {
         approveHash = value?.approveTxHash
         placeHash = value?.placeOrderTxHash
+        placeNonceDecimal = value?.placeOrderNonceDecimal
         bridgeHandle = value?.bridgeDepositAddress
     }
 
-    suspend fun onStatus(status: OfframpStatus) {
-        when (status) {
-            is OfframpStatus.ApprovingUsdc -> approveHash = status.txHash
-            is OfframpStatus.PlacingOrder -> placeHash = status.txHash
-            is OfframpStatus.BridgingFunds -> status.depositAddress?.let { bridgeHandle = it }
-            else -> Unit
-        }
-        when (status) {
-            is OfframpStatus.Completed,
-            is OfframpStatus.Cancelled,
-            is OfframpStatus.FundsRecovered,
-            -> {
-                storage.clearCheckpoint()
-            }
+    suspend fun onStatus(status: OfframpStatus) =
+        mutationMutex.withLock {
+            when (status) {
+                is OfframpStatus.ApprovingUsdc -> {
+                    approveHash = status.txHash
+                }
 
-            is OfframpStatus.Failed -> {
-                val resumable =
-                    status.step == OfframpStep.FUNDING &&
-                        bridgeHandle != null &&
-                        status.cause !is AppleBridgeTerminalException
-                if (resumable) persist(status.orderId?.toString(), status) else storage.clearCheckpoint()
-            }
+                is OfframpStatus.PlacingOrder -> {
+                    placeHash = status.txHash
+                    status.submissionNonceDecimal?.let { placeNonceDecimal = it }
+                }
 
-            else -> {
-                val orderId = status.orderId?.toString()
-                if (orderId != null || bridgeHandle != null) persist(orderId, status)
+                is OfframpStatus.BridgingFunds -> {
+                    status.depositAddress?.let { bridgeHandle = it }
+                }
+
+                else -> {
+                    Unit
+                }
+            }
+            when (status) {
+                is OfframpStatus.Completed,
+                is OfframpStatus.Cancelled,
+                is OfframpStatus.FundsRecovered,
+                -> {
+                    storage.clearCheckpoint()
+                }
+
+                is OfframpStatus.Failed -> {
+                    val resumable =
+                        (
+                            status.step == OfframpStep.FUNDING &&
+                                bridgeHandle != null &&
+                                status.cause !is AppleBridgeTerminalException
+                        ) ||
+                            (
+                                status.step == OfframpStep.PLACING_ORDER &&
+                                    placeHash != null &&
+                                    !status.nothingEscrowed
+                            )
+                    if (resumable) persist(status.orderId?.toString(), status) else storage.clearCheckpoint()
+                }
+
+                else -> {
+                    val orderId = status.orderId?.toString()
+                    if (orderId != null || bridgeHandle != null || placeHash != null) persist(orderId, status)
+                }
             }
         }
-    }
 
     private suspend fun persist(orderId: String?, status: OfframpStatus) {
         val previous =
@@ -548,10 +679,13 @@ private class AppleCheckpointPersister(
                 bridgeDepositAddress = bridgeHandle ?: previous?.bridgeDepositAddress,
                 approveTxHash = approveHash ?: previous?.approveTxHash,
                 placeOrderTxHash = placeHash ?: previous?.placeOrderTxHash,
+                placeOrderNonceDecimal = placeNonceDecimal ?: previous?.placeOrderNonceDecimal,
                 setUpiTxHash = (status as? OfframpStatus.SendingEncryptedUpi)?.txHash ?: previous?.setUpiTxHash,
                 recipientUpi =
                     (status as? OfframpStatus.SendingEncryptedUpi)?.paymentAddress ?: request.recipientUpi,
                 usdcAmountMicroDecimal = request.usdcAmount.micros.toString(),
+                authorizedPayFeeMicroDecimal = request.authorizedPayFee?.micros?.toString(),
+                authorizedRequiredBalanceMicroDecimal = request.authorizedRequiredBalance?.micros?.toString(),
                 fiatAmountMicroDecimal = request.fiatAmount.micros.toString(),
                 fiatAmountLimitMicroDecimal = request.fiatAmountLimit?.micros?.toString(),
                 payeeName = request.payeeName,
@@ -573,6 +707,31 @@ private fun PaymentQrError.appleCode(): String =
         is PaymentQrError.DynamicFetchFailed -> "dynamic_fetch_failed"
         is PaymentQrError.UnsupportedCurrency -> "unsupported_currency"
     }
+
+private val OfframpStep.holdsUnescrowedP2pCommitment: Boolean
+    get() =
+        when (this) {
+            OfframpStep.INITIALIZATION,
+            OfframpStep.SELECTING_CIRCLE,
+            OfframpStep.FUNDING,
+            OfframpStep.APPROVING_USDC,
+            OfframpStep.PLACING_ORDER,
+            OfframpStep.WAITING_FOR_ACCEPTANCE,
+            OfframpStep.WAITING_FOR_PAYMENT_DETAILS,
+            OfframpStep.ENCRYPTING_UPI,
+            -> true
+
+            OfframpStep.SENDING_UPI,
+            OfframpStep.WAITING_FOR_COMPLETION,
+            -> false
+        }
+
+internal fun OfframpCheckpoint.pendingBaseCommitment(resolvedFee: Usdc6): Usdc6? {
+    if (!currentStep.holdsUnescrowedP2pCommitment) return null
+    val required = authorizedRequiredBalance ?: (usdcAmount + resolvedFee)
+    val commitment = if (orderIdBig == null) required else resolvedFee
+    return commitment.takeIf { it > Usdc6.ZERO }
+}
 
 @Serializable
 private data class AppleTopUpCheckpoint(

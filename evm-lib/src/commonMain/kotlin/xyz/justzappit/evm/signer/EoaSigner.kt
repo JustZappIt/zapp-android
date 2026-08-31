@@ -4,7 +4,9 @@
 package xyz.justzappit.evm.signer
 
 import kotlinx.coroutines.delay
+import xyz.justzappit.evm.abi.keccak256
 import xyz.justzappit.evm.hd.EvmKey
+import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.rpc.TransactionReceipt
@@ -28,6 +30,7 @@ class EoaSigner(
         to: Address,
         value: Wei,
         data: ByteArray,
+        beforeBroadcast: suspend (PreparedTransaction) -> Unit,
     ): TxHash {
         val nonce = rpc.ethGetTransactionCount(account.address, blockTag = "pending")
         val tip: Wei = rpc.ethMaxPriorityFeePerGas()
@@ -54,7 +57,14 @@ class EoaSigner(
                 data = data,
             )
         val sig = account.signRecoverable(tx.signingHash())
-        return rpc.ethSendRawTransaction("0x" + tx.encodeSigned(sig).toHex())
+        val encoded = tx.encodeSigned(sig)
+        val txHash = TxHash.fromHex("0x${keccak256(encoded).toHex()}")
+        beforeBroadcast(PreparedTransaction(hash = txHash, nonce = nonce.value))
+        val returnedHash = rpc.ethSendRawTransaction("0x${encoded.toHex()}")
+        check(returnedHash == txHash) {
+            "RPC returned $returnedHash for signed transaction $txHash"
+        }
+        return txHash
     }
 
     override suspend fun awaitReceipt(txHash: TxHash): TransactionReceipt {
@@ -65,6 +75,10 @@ class EoaSigner(
         }
         error("Timed out after ${receiptTimeoutMs}ms waiting for receipt of ${txHash.hex}")
     }
+
+    override suspend fun receiptIfIncluded(txHash: TxHash): TransactionReceipt? = rpc.ethGetTransactionReceipt(txHash)
+
+    override suspend fun restorePendingTransaction(hash: TxHash?, nonce: BigInteger?) = Unit
 
     companion object {
         private const val DEFAULT_BASE_FEE_MULTIPLIER = 2

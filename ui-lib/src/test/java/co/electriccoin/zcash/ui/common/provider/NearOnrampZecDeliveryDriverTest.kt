@@ -5,7 +5,9 @@ package co.electriccoin.zcash.ui.common.provider
 
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.rpc.TransactionReceipt
+import xyz.justzappit.evm.signer.PreparedTransaction
 import xyz.justzappit.evm.signer.TxSubmitter
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
@@ -641,15 +643,26 @@ class NearOnrampZecDeliveryDriverTest {
         var value: Wei? = null
         var data: ByteArray? = null
 
-        override suspend fun sendTransaction(to: Address, value: Wei, data: ByteArray): TxHash {
+        override suspend fun sendTransaction(
+            to: Address,
+            value: Wei,
+            data: ByteArray,
+            beforeBroadcast: suspend (PreparedTransaction) -> Unit,
+        ): TxHash {
             this.to = to
             this.value = value
             this.data = data
-            return TxHash.fromHex(USER_OPERATION_HASH)
+            val hash = TxHash.fromHex(USER_OPERATION_HASH)
+            beforeBroadcast(PreparedTransaction(hash, BigInteger("0")))
+            return hash
         }
 
         override suspend fun awaitReceipt(txHash: TxHash): TransactionReceipt =
             TransactionReceipt(BASE_TRANSACTION_HASH, "0x1", "0x1", "0x1")
+
+        override suspend fun receiptIfIncluded(txHash: TxHash): TransactionReceipt? = awaitReceipt(txHash)
+
+        override suspend fun restorePendingTransaction(hash: TxHash?, nonce: BigInteger?) = Unit
     }
 
     private companion object {

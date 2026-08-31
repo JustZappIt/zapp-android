@@ -364,6 +364,11 @@
     <ID>MaxLineLength:WalletAddressField.kt$return if ((t.startsWith("t1") || t.startsWith("t3")) &amp;&amp; t.length in 34..36) AddrValidation.VALID else AddrValidation.INVALID</ID>
     <ID>MaxLineLength:WalletAddressField.kt$val scanDescription = stringResource(R.string.address_book_scan_addr_qr_content_description, label)</ID>
     <ID>MaxLineLength:build.gradle.kts$.</ID>
+    <ID>MaxLineLength:AaOfframpDriver.kt$AaOfframpDriver$account.submitter.restorePendingTransaction(checkNotNull(unresolved.placeOrderTxHash), unresolved.placeOrderNonce)</ID>
+    <ID>MaxLineLength:AaPeerCashOutDriver.kt$val code = if (hasUnresolvedSubmission) PeerErrorCode.TRANSACTION_STATUS_UNKNOWN else PeerErrorCode.INITIALIZATION_FAILED</ID>
+    <ID>MaxLineLength:OfframpCheckpoint.kt$OfframpCheckpoint$"OfframpCheckpoint.fiatAmountMicroDecimal must be a positive decimal integer, got '$fiatAmountMicroDecimal'"</ID>
+    <ID>MaxLineLength:OfframpCheckpoint.kt$OfframpCheckpoint$require</ID>
+    <ID>MaxLineLength:OfframpCheckpoint.kt$OfframpCheckpoint$runCatching { BigInteger(fiatAmountLimitMicroDecimal!!) }.getOrNull()?.signum()?.let { it &gt;= 0 } == true</ID>
     <ID>MayBeConst:CurrencyUtil.kt$val CURRENCY_TICKER: String = "ZEC"</ID>
     <ID>NestedBlockDepth:FileUtils.kt$FileUtils$fun getFileName(context: Context, uri: Uri): String?</ID>
     <ID>NestedBlockDepth:MigrationDriveOnce.kt$MigrationDriveOnce$@Suppress("ReturnCount") private suspend fun handleExecuted( sdk: OrchardMigrationSdk, accountKeyId: String, result: TransferResult, snapshotBefore: LiveMigrationSnapshot?, sentWasPrep: Boolean, ): DriveOnceResult</ID>
@@ -504,11 +509,13 @@
     <ID>CyclomaticComplexMethod:VotingErrorMapper.kt$VotingErrorMapper$fun toUserFriendlyMessage(rawMessage: String): StringResource</ID>
     <ID>CyclomaticComplexMethod:VotingRecoveryRepository.kt$private fun String.toVotingRecoverySnapshot(): VotingRecoverySnapshot</ID>
     <ID>CyclomaticComplexMethod:VotingRequests.kt$VoteCommitmentBundle$override fun equals(other: Any?): Boolean</ID>
+    <ID>CyclomaticComplexMethod:AppleOfframpClient.kt$AppleCheckpointPersister$suspend fun onStatus(status: OfframpStatus)</ID>
     <ID>InstanceOfCheckForException:RefreshVotingRoundsUseCase.kt$RefreshVotingRoundsUseCase$exception is CancellationException</ID>
     <ID>InstanceOfCheckForException:VoteChainConfigVM.kt$VoteChainConfigVM$throwable is CancellationException</ID>
     <ID>InstanceOfCheckForException:VotingApiProvider.kt$KtorVotingApiProvider$exception is CancellationException</ID>
     <ID>InstanceOfCheckForException:VotingServerFailoverException.kt$exception is CancellationException</ID>
     <ID>LargeClass:SubmitVotesUseCase.kt$SubmitVotesUseCase</ID>
+    <ID>LargeClass:OfframpOrchestrator.kt$OfframpOrchestrator : OfframpDriver</ID>
     <ID>LoopWithTooManyJumpStatements:VotingChainConfigRepository.kt$for</ID>
     <ID>LoopWithTooManyJumpStatements:VotingRecoveryRepository.kt$VotingRecoveryRepositoryImpl$for</ID>
     <ID>RethrowCaughtException:SubmitVotesUseCase.kt$SubmitVotesUseCase$throw exception</ID>
@@ -527,6 +534,7 @@
     <ID>ReturnCount:VotingApiProvider.kt$private suspend fun ResponseException.isNoActiveRoundResponse(): Boolean</ID>
     <ID>ReturnCount:VotingRecoveryRepository.kt$VotingRecoveryRepositoryImpl$override suspend fun get( accountUuid: String, roundId: String ): VotingRecoverySnapshot?</ID>
     <ID>ReturnCount:VotingRecoveryRepository.kt$VotingRecoveryRepositoryImpl$override suspend fun setPendingKeystoneRouteStage( accountUuid: String, roundId: String, routeStage: VotingKeystoneRouteStage )</ID>
+    <ID>ReturnCount:AppleOfframpClient.kt$AppleOfframpClient$@Throws(Exception::class) suspend fun pendingBaseCommitmentMicros(): String?</ID>
     <ID>SwallowedException:VotingApiProvider.kt$KtorVotingApiProvider$responseException: ResponseException</ID>
     <ID>ThrowsCount:ChainDto.kt$private fun validateChainProposals(proposals: List&lt;Proposal&gt;)</ID>
     <ID>ThrowsCount:StaticVotingConfig.kt$PinnedConfigSource.Companion$fun parse(raw: String): PinnedConfigSource</ID>
@@ -534,6 +542,10 @@
     <ID>ThrowsCount:SubmitVotesUseCase.kt$SubmitVotesUseCase$private suspend fun delegateSharesWithRetry(payloads: List&lt;SharePayload&gt;): List&lt;DelegatedShareInfo&gt;</ID>
     <ID>ThrowsCount:VotingServerFailoverException.kt$internal suspend fun &lt;T&gt; withVoteServerFailover( path: String, serverUrls: List&lt;String&gt;, shouldTryNext: (Throwable) -&gt; Boolean = ::shouldTryNextVoteServer, operation: suspend (String) -&gt; T ): T</ID>
     <ID>ThrowsCount:VotingServiceConfig.kt$VotingServiceConfig$fun validate()</ID>
+    <ID>ThrowsCount:ApplePeerCashOutStorage.kt$ApplePeerCheckpointBook$private fun validateRecoverable(checkpoint: PeerCashOutCheckpoint)</ID>
+    <ID>ThrowsCount:OfframpOrchestrator.kt$OfframpOrchestrator$private suspend fun FlowCollector&lt;OfframpStatus&gt;.driveNewOrder( request: OfframpRequest, resumeBridgeHandle: String?, paymentDetailsProvider: OfframpPaymentDetailsProvider?, )</ID>
+    <ID>ThrowsCount:PeerCashOutOrchestrator.kt$PeerCashOutOrchestratorImpl$private suspend fun FlowCollector&lt;PeerCashOutStatus&gt;.createDeposit( platform: PeerPlatform, currencies: List&lt;PeerCurrency&gt;, amount: Usdc6, payeeHash: PayeeHash, ): PeerDepositId</ID>
+    <ID>ThrowsCount:PeerCashOutOrchestrator.kt$PeerCashOutOrchestratorImpl$private suspend fun resolveSubmission( txHash: TxHash, unresolvedCode: PeerErrorCode, oneShot: Boolean, ): PeerDepositId</ID>
     <ID>TooGenericExceptionCaught:RefreshVotingRoundsUseCase.kt$RefreshVotingRoundsUseCase$exception: Exception</ID>
     <ID>TooGenericExceptionCaught:SubmitVotesUseCase.kt$SubmitVotesUseCase$exception: Exception</ID>
     <ID>TooGenericExceptionCaught:VoteChainConfigVM.kt$VoteChainConfigVM$throwable: Throwable</ID>
@@ -542,6 +554,13 @@
     <ID>TooGenericExceptionCaught:VotingApiProvider.kt$KtorVotingApiProvider$exception: Exception</ID>
     <ID>TooGenericExceptionCaught:VotingApiProvider.kt$KtorVotingApiProvider$throwable: Throwable</ID>
     <ID>TooGenericExceptionCaught:VotingServerFailoverException.kt$exception: Exception</ID>
+    <ID>TooGenericExceptionCaught:AaPeerCashOutDriver.kt$AaPeerCashOutDriver$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:AppleOfframpClient.kt$AppleOfframpClient.Companion$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:ApplePeerCashOutStorage.kt$ApplePeerCheckpointBook$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:OfframpOrchestrator.kt$OfframpOrchestrator$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:OfframpOrchestrator.kt$OfframpOrchestrator$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:PeerCashOutOrchestrator.kt$PeerCashOutOrchestratorImpl$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:PeerCashOutUseCases.kt$ReconcilePeerCheckpointsUseCase$error: Exception</ID>
     <ID>TooManyFunctions:SignKeystoneVotingVM.kt$SignKeystoneVotingVM : ViewModel</ID>
     <ID>TooManyFunctions:SubmitVotesUseCase.kt$SubmitVotesUseCase</ID>
     <ID>TooManyFunctions:VoteChainConfigVM.kt$VoteChainConfigVM : ViewModel</ID>
@@ -558,6 +577,7 @@
     <ID>TooManyFunctions:VotingRecoveryRepository.kt$VotingRecoveryRepository</ID>
     <ID>TooManyFunctions:VotingRecoveryRepository.kt$VotingRecoveryRepositoryImpl : VotingRecoveryRepository</ID>
     <ID>TooManyFunctions:VotingSubmissionParsers.kt$co.electriccoin.zcash.ui.common.model.voting.VotingSubmissionParsers.kt</ID>
+    <ID>TooManyFunctions:PeerIndexerClient.kt$PeerIndexerClient</ID>
     <ID>UseCheckOrError:SubmitVotesUseCase.kt$SubmitVotesUseCase$throw lastRetryableError ?: IllegalStateException("No voting server accepted share")</ID>
 </CurrentIssues>
 </SmellBaseline>

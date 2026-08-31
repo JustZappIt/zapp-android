@@ -6,6 +6,7 @@ import co.electriccoin.zcash.ui.common.provider.PeerCashOutCheckpointStorageProv
 import co.electriccoin.zcash.ui.common.repository.PeerCashOutRepository
 import co.electriccoin.zcash.ui.screen.swap.peer.PeerCashOutArgs
 import co.electriccoin.zcash.ui.screen.swap.peer.order.PeerOrderArgs
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
@@ -20,11 +21,13 @@ import xyz.justzappit.offramp.peer.PeerCashOutStatus
 import xyz.justzappit.offramp.peer.PeerConfigProvider
 import xyz.justzappit.offramp.peer.PeerCurrency
 import xyz.justzappit.offramp.peer.PeerDepositId
+import xyz.justzappit.offramp.peer.PeerException
 import xyz.justzappit.offramp.peer.PeerIndexerClient
 import xyz.justzappit.offramp.peer.PeerMarket
 import xyz.justzappit.offramp.peer.PeerMarketSnapshot
 import xyz.justzappit.offramp.peer.PeerOrderSnapshot
 import xyz.justzappit.offramp.peer.PeerPlatform
+import xyz.justzappit.offramp.peer.PeerResumeAction
 
 class NavigateToPeerCashOutUseCase(
     private val navigationRouter: NavigationRouter,
@@ -109,36 +112,36 @@ class ReconcilePeerCheckpointsUseCase(
         // attempt that has failed or settled is driving nothing, and excluding it too is what left a
         // submission with an unknown outcome counted against the balance for the rest of the process.
         val unresolved = stored.filterNot { isDriving(it.id) }.filter(::isReconcilable)
-        if (unresolved.isEmpty()) return
-        val orders =
-            runCatching { orchestrator.allOrders() }
-                .onFailure { Twig.warn(it) { "ReconcilePeerCheckpointsUseCase: order read failed" } }
-                .getOrNull()
-                .orEmpty()
-        // One order per attempt: two identical cash-outs on the same rail for the same amount match
-        // each other's predicate, and letting both claim one order leaves the other still counted.
-        // Every stored record contributes, driven ones included: an order already resolved by the
-        // runner is no more available to another checkpoint than one resolved here.
-        val claimed = stored.mapNotNull { it.depositId }.toMutableSet()
-        unresolved.sortedBy { it.createdAtMillis }.forEach { checkpoint ->
-            orders
-                .filter { it.id !in claimed && it.couldHaveBeenOpenedBy(checkpoint, checkpoint.blockFloor) }
-                .minByOrNull { it.creationBlockNumber ?: Long.MAX_VALUE }
-                ?.let {
-                    claimed += it.id
-                    stamp(checkpoint.id, it.id)
+        unresolved.forEach { checkpoint ->
+            try {
+                stamp(checkpoint.id, orchestrator.resolveCheckpoint(checkpoint))
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: PeerException) {
+                if (error.error.nothingEscrowed) {
+                    retire(checkpoint.id)
+                } else {
+                    Twig.warn(error) { "ReconcilePeerCheckpointsUseCase: submission remains unresolved" }
                 }
+            } catch (error: Exception) {
+                Twig.warn(error) { "ReconcilePeerCheckpointsUseCase: submission read failed" }
+            }
         }
     }
 
     /**
-     * Only an attempt that actually broadcast a `createDeposit`, which is what [blockFloor] records.
-     * Earlier than that the amount is still in the account and belongs in the committed total, and
-     * the match would have no block floor to keep it off an older order of the same size on the same
-     * rail — stamping which would retire a bridge that is still moving the user's ZEC.
+     * Only a submitted deposit identity is reconcilable. A bridge/fresh record has not reached the
+     * consuming call, and matching one by amount/payee would let a later identical order steal it.
      */
     private fun isReconcilable(checkpoint: PeerCashOutCheckpoint): Boolean =
-        checkpoint.holdsUnescrowedFunds && checkpoint.blockFloor != null
+        checkpoint.holdsUnescrowedFunds &&
+            when (checkpoint.resumeAction) {
+                is PeerResumeAction.ResolveSubmittedDeposit,
+                is PeerResumeAction.ReconcileSubmission,
+                -> true
+
+                else -> false
+            }
 
     /**
      * Re-read under the same conditions the decision was made on. The order read is a network round
@@ -158,6 +161,14 @@ class ReconcilePeerCheckpointsUseCase(
                 checkpointStorage.store(it.copy(depositId = depositId))
                 repository.onDepositReconciled(id, depositId)
             }
+    }
+
+    private suspend fun retire(id: PeerCashOutId) {
+        if (isDriving(id)) return
+        checkpointStorage.get(id)?.takeIf(::isReconcilable)?.let {
+            checkpointStorage.clear(id)
+            repository.onAttemptRetiredWithoutEscrow(id)
+        }
     }
 
     private suspend fun stored(): List<PeerCashOutCheckpoint> {

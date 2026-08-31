@@ -34,6 +34,9 @@ object UnavailablePeerCashOutOrchestrator : PeerCashOutOrchestrator {
 
     override suspend fun allOrders(): List<PeerOrderSnapshot> = emptyList()
 
+    override suspend fun resolveCheckpoint(checkpoint: PeerCashOutCheckpoint): PeerDepositId =
+        throw PeerErrorCode.UNSUPPORTED_PLATFORM.asException()
+
     private fun unavailable(step: PeerCashOutStep, depositId: PeerDepositId? = null) =
         flowOf(
             PeerCashOutStatus.Failed(

@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.common.repository
 
+import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.peer.PeerCashOutId
 import xyz.justzappit.offramp.peer.PeerCashOutStatus
@@ -85,7 +86,7 @@ class PeerCashOutRunTest {
         )
 
     private fun creatingDeposit() =
-        PeerCashOutStatus.CreatingDeposit(amount = Usdc6.ofMicros(ONE_USDC), fromBlockNumber = "1000")
+        PeerCashOutStatus.CreatingDeposit(amount = Usdc6.ofMicros(ONE_USDC), submissionHash = SUBMISSION_HASH)
 
     private fun failure(step: PeerCashOutStep, code: PeerErrorCode) =
         PeerCashOutStatus.Failed(step = step, error = code.asError())
@@ -95,5 +96,7 @@ class PeerCashOutRunTest {
         val ID: PeerCashOutId = PeerCashOutId.of(ByteArray(PeerCashOutId.SIZE_BYTES) { 7 })
         val DEPOSIT_ID: PeerDepositId =
             PeerDepositId(escrowHex = "0x0000000000000000000000000000000000000001", onchain = "7")
+        val SUBMISSION_HASH: TxHash =
+            TxHash.fromHex("0x${"12".repeat(TxHash.LEN)}")
     }
 }

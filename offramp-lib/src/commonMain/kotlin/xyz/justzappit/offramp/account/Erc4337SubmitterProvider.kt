@@ -16,6 +16,7 @@ import xyz.justzappit.offramp.config.P2pNetworkConfig
 data class SubmittingAccount(
     val address: Address,
     val submitter: TxSubmitter,
+    val allowanceTransactions: AllowanceTransactionGuard = AllowanceTransactionGuard(),
 )
 
 /**

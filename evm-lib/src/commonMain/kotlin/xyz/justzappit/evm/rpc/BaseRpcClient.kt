@@ -165,6 +165,7 @@ class BaseRpcClient(
             try {
                 httpClient.post(rpcUrl) {
                     contentType(ContentType.Application.Json)
+                    if (method == METHOD_SEND_RAW_TRANSACTION) attributes.put(NoRpcRetry, Unit)
                     setBody(payload)
                 }
             } catch (e: IOException) {
@@ -221,6 +222,7 @@ class BaseRpcClient(
     private val emptyJsonArray = JsonArray(emptyList())
 
     companion object {
+        private const val METHOD_SEND_RAW_TRANSACTION = "eth_sendRawTransaction"
         private const val EXECUTION_REVERTED_CODE = 3
         private const val METHOD_NOT_FOUND_CODE = -32_601
         private const val INVALID_PARAMS_CODE = -32_602

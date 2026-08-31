@@ -27,6 +27,7 @@ import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.evm.types.Wei
+import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.evm.util.toHex
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -63,7 +64,8 @@ class EoaSignerTest {
                         "eth_sendRawTransaction" -> {
                             val raw = payload["params"]!!.toString().substringAfter('"').substringBefore('"')
                             sentRawTxs += raw
-                            """{"jsonrpc":"2.0","id":1,"result":"$RETURNED_TX_HASH_HEX"}"""
+                            val hash = "0x${keccak256(raw.hexToBytes()).toHex()}"
+                            """{"jsonrpc":"2.0","id":1,"result":"$hash"}"""
                         }
 
                         else -> {
@@ -94,11 +96,11 @@ class EoaSignerTest {
                     to = Address.parse("0x000000000000000000000000000000000000dEaD"),
                     value = Wei.ofLong(1_000),
                 )
-            assertEquals(TxHash.fromHex(RETURNED_TX_HASH_HEX), txHash)
             assertEquals(1, sentRawTxs.size)
 
             val signedTxHex = sentRawTxs.first().removePrefix("0x")
             val signedTxBytes = signedTxHex.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+            assertEquals(TxHash.fromHex("0x${keccak256(signedTxBytes).toHex()}"), txHash)
 
             assertEquals(0x02.toByte(), signedTxBytes[0])
 
@@ -237,9 +239,5 @@ class EoaSignerTest {
         const val MNEMONIC =
             "abandon abandon abandon abandon abandon abandon " +
                 "abandon abandon abandon abandon abandon about"
-
-        // Synthetic but valid 32-byte tx hash used by the mock RPC.
-        private const val RETURNED_TX_HASH_HEX =
-            "0xfeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedfacefeedface"
     }
 }

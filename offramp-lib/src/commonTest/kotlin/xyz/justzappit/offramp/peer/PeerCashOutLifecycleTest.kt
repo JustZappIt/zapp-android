@@ -47,29 +47,38 @@ class PeerCashOutLifecycleTest {
             checkpoint(
                 id = idOf(1),
                 amount = Usdc6.ofMicros(1_000_000L),
+                createDepositSubmissionHash = TxHash.fromHex("0x" + "cd".repeat(BYTES32)),
                 createDepositTxHash = TxHash.fromHex("0x" + "ab".repeat(BYTES32)),
-                blockBeforeCreateDeposit = "1000",
             )
         val b = checkpoint(id = idOf(2), amount = Usdc6.ofMicros(2_000_000L))
 
         assertNotEquals(a.id, b.id)
         assertNull(b.createDepositTxHash)
-        assertNull(b.blockBeforeCreateDeposit)
+        assertNull(b.createDepositSubmissionHash)
         assertTrue(a.resumeAction is PeerResumeAction.ResolveSubmittedDeposit)
         assertEquals(PeerResumeAction.FreshStart, b.resumeAction)
     }
 
     @Test
     fun `an unindexed checkpoint holds funds and an indexed one has already spent them`() {
-        val pending = checkpoint(id = idOf(1), blockBeforeCreateDeposit = "1000")
+        val pending = checkpoint(id = idOf(1), createDepositSubmissionHash = SUBMISSION_HASH)
         val indexed =
             checkpoint(
                 id = idOf(1),
-                blockBeforeCreateDeposit = "1000",
+                createDepositSubmissionHash = SUBMISSION_HASH,
                 depositId = PeerDepositId(escrowHex = ESCROW, onchain = "42"),
             )
         assertTrue(pending.holdsUnescrowedFunds)
         assertFalse(indexed.holdsUnescrowedFunds)
+    }
+
+    @Test
+    fun `malformed legacy block floors are rejected instead of becoming unbounded matches`() {
+        listOf("-1", "9223372036854775808", "not-a-block").forEach { floor ->
+            assertFailsWith<IllegalArgumentException> {
+                checkpoint(id = idOf(1), blockBeforeCreateDeposit = floor)
+            }
+        }
     }
 
     /**
@@ -167,6 +176,7 @@ class PeerCashOutLifecycleTest {
         id: PeerCashOutId,
         amount: Usdc6 = Usdc6.ofMicros(1_000_000L),
         payeeHash: String = payeeHashHex,
+        createDepositSubmissionHash: TxHash? = null,
         createDepositTxHash: TxHash? = null,
         blockBeforeCreateDeposit: String? = null,
         depositId: PeerDepositId? = null,
@@ -176,6 +186,7 @@ class PeerCashOutLifecycleTest {
         currencies = listOf(PeerCurrency.EUR),
         payeeHashHex = payeeHash,
         amountMicroDecimal = amount.micros.toString(),
+        createDepositSubmissionHash = createDepositSubmissionHash,
         createDepositTxHash = createDepositTxHash,
         blockBeforeCreateDeposit = blockBeforeCreateDeposit,
         depositId = depositId,
@@ -185,5 +196,6 @@ class PeerCashOutLifecycleTest {
     private companion object {
         const val BYTES32 = 32
         const val ESCROW = "0x777777779d229cdF3110e9de47943791c26300Ef"
+        val SUBMISSION_HASH: TxHash = TxHash.fromHex("0x" + "cd".repeat(BYTES32))
     }
 }

@@ -1,7 +1,10 @@
-package co.electriccoin.zcash.ui.screen.swap.peer.progress
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
 
-import co.electriccoin.zcash.ui.common.provider.PeerCashOutCheckpointStorageProvider
+package xyz.justzappit.offramp.apple
+
 import xyz.justzappit.evm.types.TxHash
+import xyz.justzappit.offramp.orchestrator.platformCurrentTimeMillis
 import xyz.justzappit.offramp.peer.PayeeHash
 import xyz.justzappit.offramp.peer.PeerCashOutCheckpoint
 import xyz.justzappit.offramp.peer.PeerCashOutId
@@ -22,13 +25,13 @@ import xyz.justzappit.offramp.peer.depositId
  * Everything it writes is scoped to [id]. Carrying a value forward from whatever happened to be
  * stored produces a record with one attempt's amount over another's transaction hashes.
  */
-internal class PeerCashOutCheckpointPersister(
-    private val storage: PeerCashOutCheckpointStorageProvider,
+internal class ApplePeerCheckpointPersister(
+    private val checkpoints: ApplePeerCheckpointBook,
     private val id: PeerCashOutId,
     private val request: PeerCashOutRequest,
-    private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val nowMillis: () -> Long = ::platformCurrentTimeMillis,
 ) {
-    private var payeeHash: PayeeHash? = null
+    private var payeeHash: PayeeHash? = request.cachedPayeeHash
     private var bridgeDepositAddress: String? = null
     private var approveTxHash: TxHash? = null
     private var createDepositSubmissionHash: TxHash? = null
@@ -49,10 +52,6 @@ internal class PeerCashOutCheckpointPersister(
         blockBeforeCreateDeposit = checkpoint.blockBeforeCreateDeposit
         depositId = checkpoint.depositId
         createdAtMillis = checkpoint.createdAtMillis
-    }
-
-    fun rememberPayeeHash(hash: PayeeHash) {
-        payeeHash = hash
     }
 
     suspend fun onStatus(status: PeerCashOutStatus) {
@@ -91,27 +90,21 @@ internal class PeerCashOutCheckpointPersister(
         when {
             // From here the chain is the whole record: the order is recoverable from the indexer
             // with the smart account alone, on any device.
-            status is PeerCashOutStatus.OrderLive || status is PeerCashOutStatus.Withdrawn -> {
-                storage.clear(id)
-            }
+            status is PeerCashOutStatus.OrderLive || status is PeerCashOutStatus.Withdrawn -> checkpoints.clear(id)
 
-            status is PeerCashOutStatus.Failed && retires(status) -> {
-                storage.clear(id)
-            }
+            status is PeerCashOutStatus.Failed && retires(status) -> checkpoints.clear(id)
 
-            else -> {
-                persist()
-            }
+            else -> persist()
         }
     }
 
     /**
      * A `createDeposit` that provably reverted escrowed nothing: there is no order to resolve and no
      * funds left reserved, so the record is retired rather than kept. Leaving it behind is what makes
-     * a failed attempt subtract its amount from Available until the wallet is wiped, and makes every
-     * retry resolve the same reverted receipt.
+     * a failed attempt subtract its amount from the spendable balance until the wallet is wiped, and
+     * makes every retry resolve the same reverted receipt.
      *
-     * Only past the send. Earlier than that the bridge handle is still the sole record of ZEC in
+     * Only past the send. Earlier than that the bridge handle is still the sole record of funds in
      * flight, and a funding failure must not take it with it.
      */
     private fun retires(status: PeerCashOutStatus.Failed): Boolean =
@@ -151,9 +144,9 @@ internal class PeerCashOutCheckpointPersister(
                 createdAtMillis = createdAtMillis ?: nowMillis().also { createdAtMillis = it },
             )
         if (checkpoint.isRecoverable) {
-            storage.store(checkpoint)
+            checkpoints.store(checkpoint)
         } else {
-            storage.clear(id)
+            checkpoints.clear(id)
         }
     }
 }

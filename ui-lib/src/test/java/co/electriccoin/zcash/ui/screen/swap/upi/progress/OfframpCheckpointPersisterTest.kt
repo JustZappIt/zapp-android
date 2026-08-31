@@ -225,20 +225,25 @@ class OfframpCheckpointPersisterTest {
         }
 
     @Test
-    fun `pre-orderId statuses do not save a checkpoint`() =
+    fun `a broadcast placeOrder is checkpointed before its order id is known`() =
         runBlocking {
-            // ApprovingUsdc and PlacingOrder fire before the order has an on-chain id; they must NOT
-            // produce a half-formed checkpoint or the user will see a "resume" prompt for an order
-            // that never actually got placed.
+            // ApprovingUsdc moves no escrow, so it must not produce a half-formed checkpoint. Once
+            // placeOrder is broadcast the USDC can already be escrowed, so the submission has to
+            // survive process death with a null orderId: resume resolves it by exact identity
+            // rather than placing a second order.
             val repo = InMemoryCheckpointStorage()
             val persister = OfframpCheckpointPersister(repo, freshRequest())
 
             persister.onStatus(OfframpStatus.ApprovingUsdc(txHash = APPROVE_HASH, amount = AMOUNT))
+            assertNull(repo.get())
+
             persister.onStatus(
                 OfframpStatus.PlacingOrder(txHash = PLACE_ORDER_HASH, circleId = BigInteger.ONE, amount = AMOUNT),
             )
 
-            assertNull(repo.get())
+            val saved = repo.get()!!
+            assertNull(saved.orderId)
+            assertEquals(PLACE_ORDER_HASH, saved.placeOrderTxHash)
         }
 
     @Test

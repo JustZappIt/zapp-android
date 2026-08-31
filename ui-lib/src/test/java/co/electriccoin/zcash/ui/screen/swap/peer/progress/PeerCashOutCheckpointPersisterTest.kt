@@ -192,7 +192,7 @@ class PeerCashOutCheckpointPersisterTest {
         )
 
     private fun creatingDeposit(amount: Usdc6, txHash: TxHash?) =
-        PeerCashOutStatus.CreatingDeposit(amount = amount, fromBlockNumber = "1000", txHash = txHash)
+        PeerCashOutStatus.CreatingDeposit(amount = amount, submissionHash = txHashA, txHash = txHash)
 
     private fun failed(step: PeerCashOutStep, code: PeerErrorCode) =
         PeerCashOutStatus.Failed(step = step, error = code.asError())
