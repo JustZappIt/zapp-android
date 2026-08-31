@@ -128,6 +128,10 @@ import co.electriccoin.zcash.ui.screen.receive.info.ShieldedAddressInfoArgs
 import co.electriccoin.zcash.ui.screen.receive.info.ShieldedAddressInfoScreen
 import co.electriccoin.zcash.ui.screen.receive.info.TransparentAddressInfoArgs
 import co.electriccoin.zcash.ui.screen.receive.info.TransparentAddressInfoScreen
+import co.electriccoin.zcash.ui.screen.reputation.ReputationArgs
+import co.electriccoin.zcash.ui.screen.reputation.ReputationScreen
+import co.electriccoin.zcash.ui.screen.reputation.increase.IncreaseReputationArgs
+import co.electriccoin.zcash.ui.screen.reputation.increase.IncreaseReputationScreen
 import co.electriccoin.zcash.ui.screen.request.RequestScreen
 import co.electriccoin.zcash.ui.screen.restore.date.RestoreBDDateArgs
 import co.electriccoin.zcash.ui.screen.restore.date.RestoreBDDateScreen
@@ -379,6 +383,8 @@ fun NavGraphBuilder.walletNavGraph(
         composable<CurrencyConversionPickerArgs> { CurrencyConversionPickerScreen(it.toRoute()) }
         composable<SwapArgs> { SwapScreen() }
         composable<OnrampArgs> { OnrampScreen(it.toRoute()) }
+        composable<ReputationArgs> { ReputationScreen(it.toRoute()) }
+        composable<IncreaseReputationArgs> { IncreaseReputationScreen(it.toRoute()) }
         composable<UpiOfframpArgs> {
             val offrampArgs = it.toRoute<UpiOfframpArgs>()
             SwapScreen(

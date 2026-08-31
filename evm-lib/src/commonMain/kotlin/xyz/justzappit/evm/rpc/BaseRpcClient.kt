@@ -71,11 +71,23 @@ class BaseRpcClient(
             ),
         )
 
-    suspend fun ethCall(to: Address, data: ByteArray, blockTag: String = "latest"): ByteArray =
+    /**
+     * [from] is only needed when the contract's answer depends on the caller — a `view` read does
+     * not care, but simulating a write before paying for it does: the ReputationManager compares
+     * the proof's context address against `msg.sender`, and a simulation with no sender proves
+     * nothing about the account that will actually submit.
+     */
+    suspend fun ethCall(
+        to: Address,
+        data: ByteArray,
+        blockTag: String = "latest",
+        from: Address? = null,
+    ): ByteArray =
         rpcCall(
             "eth_call",
             buildJsonArray {
                 addJsonObject {
+                    from?.let { put("from", it.checksumHex) }
                     put("to", to.checksumHex)
                     put("data", "0x" + data.toHex())
                 }

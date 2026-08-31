@@ -29,7 +29,24 @@ class ViemCalldataParityTest {
     }
 
     @Test
-    fun `placeOrder PAY INR calldata with relay pubkey matches viem`() {
+    fun `placeOrder BUY INR puts relay key in pubKey and matches viem`() {
+        val got =
+            DiamondCalls
+                .placeOrderCalldata(
+                    PlaceOrderArgs(
+                        relayPubKeyEthCrypto = RELAY_PUBKEY,
+                        usdcAmount = Usdc6.ofMicros(5_000_000),
+                        recipientAddress = Address.parse("0x000000000000000000000000000000000000dead"),
+                        orderType = OrderType.BUY,
+                        currency = CurrencyCode.Inr,
+                        circleId = bigIntegerOne,
+                    ),
+                ).toHex()
+        assertEquals(VIEM_PLACE_ORDER_BUY.removePrefix("0x"), got)
+    }
+
+    @Test
+    fun `placeOrder PAY INR puts relay key in userPubKey and matches viem`() {
         val got =
             DiamondCalls
                 .placeOrderCalldata(
@@ -42,7 +59,7 @@ class ViemCalldataParityTest {
                         circleId = bigIntegerOne,
                     ),
                 ).toHex()
-        assertEquals(VIEM_PLACE_ORDER.removePrefix("0x"), got)
+        assertEquals(VIEM_PLACE_ORDER_PAY.removePrefix("0x"), got)
     }
 
     @Test
@@ -107,12 +124,15 @@ class ViemCalldataParityTest {
             "0x095ea7b3000000000000000000000000ce868398fdadca368eac203222874d68" +
                 "88532ae200000000000000000000000000000000000000000000000000000000000f4240"
 
-        private const val VIEM_PLACE_ORDER =
+        // BUY semantics are intentionally asymmetric: the relay key is `_pubKey` (argument 0),
+        // while `_userPubKey` (argument 5) is empty. This fixture was generated with viem using
+        // the same mapping as @p2pdotme/sdk 1.2.20, which the official frontend pins.
+        private const val VIEM_PLACE_ORDER_BUY =
             "0x1dc46885" +
                 "0000000000000000000000000000000000000000000000000000000000000140" +
                 "00000000000000000000000000000000000000000000000000000000004c4b40" +
                 "000000000000000000000000000000000000000000000000000000000000dead" +
-                "0000000000000000000000000000000000000000000000000000000000000002" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
                 "00000000000000000000000000000000000000000000000000000000000001e0" +
                 "0000000000000000000000000000000000000000000000000000000000000200" +
                 "494e520000000000000000000000000000000000000000000000000000000000" +
@@ -126,6 +146,26 @@ class ViemCalldataParityTest {
                 "6466646638313230613766363339646535313232643437613639613865386431" +
                 "0000000000000000000000000000000000000000000000000000000000000000" +
                 "0000000000000000000000000000000000000000000000000000000000000000"
+
+        private const val VIEM_PLACE_ORDER_PAY =
+            "0x1dc46885" +
+                "0000000000000000000000000000000000000000000000000000000000000140" +
+                "00000000000000000000000000000000000000000000000000000000004c4b40" +
+                "000000000000000000000000000000000000000000000000000000000000dead" +
+                "0000000000000000000000000000000000000000000000000000000000000002" +
+                "0000000000000000000000000000000000000000000000000000000000000160" +
+                "0000000000000000000000000000000000000000000000000000000000000180" +
+                "494e520000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000001" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000080" +
+                "3162383463353536376231323634343039393564336564356161626130353635" +
+                "6437316531383334363034383139666639633137663565396435646430373866" +
+                "3730626561663866353838623534313530376665643661363432633561623432" +
+                "6466646638313230613766363339646535313232643437613639613865386431"
 
         private const val VIEM_SET_SELL_ORDER_UPI =
             "0xe8576b23" +

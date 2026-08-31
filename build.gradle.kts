@@ -111,6 +111,13 @@ tasks {
             "ZCASH_GOOGLE_PLAY_DEPLOY_TRACK" to "internal",
             "ZCASH_GOOGLE_PLAY_DEPLOY_STATUS" to "draft",
 
+            // Route + credential switches for the p2p on-ramp. Developers flip these in
+            // local.properties; a non-default value committed here would ship the wrong route.
+            "P2P_SCREENING_API_URL" to "",
+            "P2P_SCREENING_KEY" to "",
+            "RECLAIM_APP_ID" to "",
+            "RECLAIM_APP_SECRET" to "",
+
             "ZCASH_FLEXA_KEY" to "",
             "ZCASH_CMC_KEY" to "",
             "SDK_INCLUDED_BUILD_PATH" to "",

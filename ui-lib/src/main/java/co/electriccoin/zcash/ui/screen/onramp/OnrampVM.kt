@@ -10,6 +10,7 @@ import co.electriccoin.zcash.ui.common.provider.OnrampCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.repository.BaseBalance
 import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepository
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
+import co.electriccoin.zcash.ui.common.usecase.NavigateToReputationUseCase
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -65,6 +66,7 @@ internal class OnrampVM(
     private val baseRefundDriver: BaseRefundDriver,
     private val checkpointStorage: OnrampCheckpointStorageProvider,
     private val copyToClipboard: CopyToClipboardUseCase,
+    private val navigateToReputation: NavigateToReputationUseCase,
 ) : ViewModel() {
     private val currency = CurrencyCode.fromCodeOrNull(args.currencyCode) ?: CurrencyCode.Inr
     private var limits: OnrampLimits = OnrampLimits.DISABLED
@@ -112,6 +114,7 @@ internal class OnrampVM(
                 onConfirmPaid = ::onConfirmPaid,
                 onDismissPaidConfirm = ::onDismissPaidConfirm,
                 onCancel = ::onCancel,
+                onRaiseLimit = ::onRaiseLimit,
                 onDeliveryAction = ::onDeliveryAction,
                 onDone = ::onDone,
             ),
@@ -149,7 +152,7 @@ internal class OnrampVM(
             val address = runCatching { driver.recipientAddress() }.getOrNull()
             recipient = address
             val checkpoint = readCheckpoint()
-            // The service serves one corridor at a time. Its bounds are only this corridor's if it
+            // The driver serves one corridor at a time. Its bounds are only this corridor's if it
             // agrees, otherwise they would render under the wrong symbol and precision and the
             // quote would be rejected only after the user had typed an amount.
             val servesCorridor = corridor.enabled && corridor.currency == currency
@@ -172,7 +175,14 @@ internal class OnrampVM(
                     isBaseRefundSupported = network.chainId == ChainId.BASE_MAINNET,
                     minFiat = corridor.minFiat.toFiatString(currency),
                     maxFiat = corridor.maxFiat.toFiatString(currency),
-                    dailyLimit = corridor.perUserDailyFiat.toFiatString(currency),
+                    transactionLimit =
+                        corridor.maxFiat
+                            .takeIf { corridor.perUserDailyFiat == Usdc6.ZERO }
+                            ?.toFiatString(currency),
+                    dailyLimit =
+                        corridor.perUserDailyFiat
+                            .takeIf { daily -> daily > Usdc6.ZERO }
+                            ?.toFiatString(currency),
                     error = if (servesCorridor && address == null) stringRes(R.string.onramp_error_loading) else null,
                 )
             }
@@ -207,8 +217,8 @@ internal class OnrampVM(
     }
 
     /**
-     * The service quantises the requested amount and returns its own [OnrampQuote.fiatAmount], so
-     * everything shown from here on is the quote's numbers, not what the user typed.
+     * The driver returns its accepted [OnrampQuote.fiatAmount], so everything shown from here on is
+     * the quote's numbers rather than the unvalidated input.
      */
     private fun requestQuote() {
         if (mutableState.value.isSendingBaseBalanceToZec || quoteJob?.isActive == true) return
@@ -366,6 +376,15 @@ internal class OnrampVM(
                 driver.confirmPaid(stored).collect(::handleStatus)
             }
         confirmPaidJob = driverJob
+    }
+
+    /**
+     * The daily limit is the corridor's reputation-derived cap, so "why is it this number" and
+     * "how do I raise it" are the same screen. Sent with the corridor already resolved — the same
+     * one this screen is quoting in — rather than re-resolving and risking a different answer.
+     */
+    private fun onRaiseLimit() {
+        navigateToReputation(currency)
     }
 
     private fun onCancel() {
@@ -536,6 +555,12 @@ internal class OnrampVM(
 
     private fun onRetry() {
         if (mutableState.value.isSendingBaseBalanceToZec) return
+        if (mutableState.value.progress?.leavesOrderAlive == true) {
+            viewModelScope.launch {
+                readCheckpoint()?.let(::resume) ?: load()
+            }
+            return
+        }
         quote = null
         zecEstimate = null
         expiryRecheckedFor = null
@@ -649,7 +674,7 @@ internal class OnrampVM(
                         paymentInstruction = null,
                         paymentSecondsRemaining = null,
                         isPaidConfirmVisible = false,
-                        error = status.code.toStringResource(),
+                        error = status.errorMessage(),
                     )
                 }
 
@@ -703,8 +728,7 @@ internal class OnrampVM(
                 onTick = { remaining -> mutableState.update { it.copy(paymentSecondsRemaining = remaining) } },
             ) {
                 // Polling stops at AWAITING_PAYMENT, so nothing else would notice the window
-                // closing, and once per order because the service can leave an order there past
-                // its own expiresAt.
+                // closing, and once per order because an order can remain there past expiresAt.
                 if (expiryRecheckedFor != status.id) {
                     expiryRecheckedFor = status.id
                     readCheckpoint()?.let(::resume)
@@ -713,9 +737,8 @@ internal class OnrampVM(
     }
 
     /**
-     * Ticks a service deadline down and runs [onExpired] once it lapses. A deadline the service did
-     * not give must not read as "already expired": that fires [onExpired] with no delay before it,
-     * which for the quote means re-quoting in a tight loop.
+     * Ticks a driver deadline down and runs [onExpired] once it lapses. A missing deadline must not
+     * read as "already expired": that fires [onExpired] with no delay and re-quotes in a tight loop.
      */
     private fun countdown(
         expiresAtMillis: Long?,
@@ -814,42 +837,26 @@ internal class OnrampVM(
                 (this is OnrampStatus.Failed && !leavesOrderAlive)
 
     private fun Throwable.toStringResource(): StringResource =
-        (this as? OnrampException)?.code?.toStringResource() ?: stringRes(R.string.onramp_error_starting)
+        (this as? OnrampException)?.code?.let { onrampFailureMessage(it, phase = null) }
+            ?: stringRes(R.string.onramp_error_starting)
 
-    @Suppress("CyclomaticComplexMethod")
-    private fun OnrampFailureCode.toStringResource(): StringResource =
-        when (this) {
-            OnrampFailureCode.BAD_REQUEST -> stringRes(R.string.onramp_error_limits)
-
-            OnrampFailureCode.UNAUTHENTICATED,
-            OnrampFailureCode.NONCE_INVALID,
-            -> stringRes(R.string.onramp_error_unauthenticated)
-
-            OnrampFailureCode.RECIPIENT_NOT_ALLOWED -> stringRes(R.string.onramp_error_recipient_not_allowed)
-
-            OnrampFailureCode.ROUTE_DISABLED -> stringRes(R.string.onramp_error_corridor_disabled)
-
-            OnrampFailureCode.ORDER_NOT_FOUND -> stringRes(R.string.onramp_error_order_not_found)
-
-            OnrampFailureCode.WRONG_PHASE -> stringRes(R.string.onramp_error_wrong_phase)
-
-            OnrampFailureCode.QUOTE_EXPIRED -> stringRes(R.string.onramp_error_quote_expired)
-
-            OnrampFailureCode.CAP_EXCEEDED -> stringRes(R.string.onramp_error_cap_exceeded)
-
-            OnrampFailureCode.SCREENING_REJECTED -> stringRes(R.string.onramp_error_screening_rejected)
-
-            OnrampFailureCode.UPSTREAM_FAILED,
-            OnrampFailureCode.OPERATOR_UNAVAILABLE,
-            OnrampFailureCode.NETWORK_UNAVAILABLE,
-            -> stringRes(R.string.onramp_error_backend_unavailable)
-
-            OnrampFailureCode.NO_MERCHANT -> stringRes(R.string.onramp_error_no_merchant)
-
-            OnrampFailureCode.ORDER_EXPIRED -> stringRes(R.string.onramp_error_order_expired)
-
-            OnrampFailureCode.UNKNOWN -> stringRes(R.string.onramp_error_progress)
-        }
+    /**
+     * The service's own sentence wins when it gave one. A refusal it can explain ("new accounts
+     * cannot place buy orders at this time") says something no fixed string of ours can, and we
+     * spent a release showing a generic line while the useful one sat in the response.
+     *
+     * Capped, and only ever displayed — [OnrampStatus.Failed.code] remains the thing anything
+     * branches on.
+     */
+    private fun OnrampStatus.errorMessage(): StringResource {
+        val failed = this as? OnrampStatus.Failed ?: return stringRes(R.string.onramp_error_progress)
+        return failed.detail
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?.take(SERVICE_DETAIL_MAX_CHARS)
+            ?.let(::stringRes)
+            ?: onrampFailureMessage(failed.code, failed.phase)
+    }
 
     // Rail names are brand nouns and identical across locales, so they are literals. NGN and ECU are
     // the exceptions: "Bank transfer" is prose, and prose goes through strings.xml. Note these are
@@ -871,8 +878,8 @@ internal class OnrampVM(
         }
 
     /**
-     * The service documents these as milliseconds. A seconds value read as millis lands in 1970 and
-     * the window reads as permanently closed. Null means no deadline, not one that has passed.
+     * Drivers expose these as milliseconds. A seconds value read as millis lands in 1970 and the
+     * window reads as permanently closed. Null means no deadline, not one that has passed.
      */
     private fun asEpochMillis(value: Long): Long? =
         when {
@@ -882,6 +889,9 @@ internal class OnrampVM(
         }
 
     private companion object {
+        /** Long enough for any sentence the service actually sends; short enough to stay a sentence. */
+        const val SERVICE_DETAIL_MAX_CHARS = 200
+
         const val MILLIS_PER_SECOND = 1_000L
         val PERCENT: BigDecimal = BigDecimal(100)
 

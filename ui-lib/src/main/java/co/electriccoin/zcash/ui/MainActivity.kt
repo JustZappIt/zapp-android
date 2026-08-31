@@ -56,6 +56,7 @@ import co.electriccoin.zcash.ui.screen.gift.GiftClaimArgs
 import co.electriccoin.zcash.ui.screen.gift.model.GIFT_LINK_HOST
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkIntake
 import co.electriccoin.zcash.ui.screen.gift.model.PendingGiftLinkStore
+import co.electriccoin.zcash.ui.screen.reputation.increase.ReclaimReturnLink
 import co.electriccoin.zcash.ui.screen.scan.thirdparty.ThirdPartyScan
 import co.electriccoin.zcash.ui.screen.splash.ZappSplashAnimation
 import co.electriccoin.zcash.ui.screen.warning.viewmodel.StorageCheckViewModel
@@ -107,7 +108,7 @@ class MainActivity : FragmentActivity() {
 
         monitorForBackgroundSync()
 
-        forwardUriIntent(intent)
+        forwardUriIntent(intent, resumeReclaim = true)
         forwardChatNotificationIntent(intent)
         handleMigrationIntent(intent)
     }
@@ -116,7 +117,7 @@ class MainActivity : FragmentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
 
-        forwardUriIntent(intent)
+        forwardUriIntent(intent, resumeReclaim = false)
         forwardChatNotificationIntent(intent)
         handleMigrationIntent(intent)
     }
@@ -127,15 +128,42 @@ class MainActivity : FragmentActivity() {
      * A gift link is bearer money, so every rejection here is deliberate (§3.7). The URI is never
      * logged at any level, including error paths.
      */
-    private fun forwardUriIntent(intent: Intent) {
+    private fun forwardUriIntent(intent: Intent, resumeReclaim: Boolean) {
         val data = intent.data ?: return
+        when {
+            // Recents re-delivers the original intent. Nothing here may act on it twice: for a
+            // gift link that would re-enqueue a claim already on the back stack, and for anything
+            // else it would reopen the scanner over whatever the user came back to.
+            (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0 -> Unit
 
-        // Recents re-delivers the original intent. Nothing here may act on it twice: for a gift
-        // link that would re-enqueue a claim already on the back stack, and for anything else it
-        // would reopen the scanner over whatever the user came back to.
-        if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return
+            isReclaimReturnUri(intent, data) -> openReclaimReturn(intent, data, resumeReclaim)
 
-        if (isGiftUri(intent, data)) openGiftClaim(intent, data) else navigationRouter.forward(ThirdPartyScan)
+            isGiftUri(intent, data) -> openGiftClaim(intent, data)
+
+            else -> navigationRouter.forward(ThirdPartyScan)
+        }
+    }
+
+    private fun isReclaimReturnUri(intent: Intent, data: Uri): Boolean =
+        intent.action == Intent.ACTION_VIEW &&
+            ReclaimReturnLink.SCHEME.equals(data.scheme, ignoreCase = true) &&
+            ReclaimReturnLink.HOST.equals(data.host, ignoreCase = true)
+
+    private fun openReclaimReturn(
+        intent: Intent,
+        data: Uri,
+        resumeReclaim: Boolean,
+    ) {
+        // A live process already has the screen and poller; singleTask only needed to bring it
+        // forward. A cold process has lost both, so rebuild the route from the callback fields.
+        intent.data = null
+        if (!resumeReclaim) return
+        ReclaimReturnLink
+            .resumeArgs(
+                sessionId = data.getQueryParameter(ReclaimReturnLink.SESSION_ID_QUERY),
+                platformName = data.getQueryParameter(ReclaimReturnLink.PLATFORM_QUERY),
+                currencyCode = data.getQueryParameter(ReclaimReturnLink.CURRENCY_QUERY),
+            )?.let { navigationRouter.forward(it) }
     }
 
     private fun openGiftClaim(intent: Intent, data: Uri) {

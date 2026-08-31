@@ -71,6 +71,7 @@ android {
                     "src/main/res/ui/pay",
                     "src/main/res/ui/payment_request",
                     "src/main/res/ui/qr_code",
+                    "src/main/res/ui/reputation",
                     "src/main/res/ui/request",
                     "src/main/res/ui/receive",
                     "src/main/res/ui/review_keystone_transaction",
@@ -198,14 +199,6 @@ androidComponents {
             )
         )
         variant.buildConfigFields?.put(
-            "P2P_ONRAMP_BASE_URL",
-            BuildConfigField(
-                type = "String",
-                value = "\"${project.property("P2P_ONRAMP_BASE_URL")?.toString().orEmpty()}\"",
-                comment = "Zapp onramp service base URL; the operator account places every BUY there"
-            )
-        )
-        variant.buildConfigFields?.put(
             "P2P_ONRAMP_USE_FAKE_DRIVER",
             BuildConfigField(
                 type = "boolean",
@@ -219,6 +212,38 @@ androidComponents {
                 type = "boolean",
                 value = project.property("P2P_ONRAMP_AUTO_ZEC_ENABLED").toString().toBoolean().toString(),
                 comment = "Whether new P2P onramps may automatically deliver ZEC"
+            )
+        )
+        variant.buildConfigFields?.put(
+            "P2P_SCREENING_API_URL",
+            BuildConfigField(
+                type = "String",
+                value = "\"${project.property("P2P_SCREENING_API_URL")?.toString().orEmpty()}\"",
+                comment = "Device-screening service base URL; without it the direct BUY route stays closed"
+            )
+        )
+        variant.buildConfigFields?.put(
+            "P2P_SCREENING_KEY",
+            BuildConfigField(
+                type = "String",
+                value = "\"${project.property("P2P_SCREENING_KEY")?.toString().orEmpty()}\"",
+                comment = "32-byte hex AES-256 key for the screening payload; symmetric and client-side by design"
+            )
+        )
+        variant.buildConfigFields?.put(
+            "RECLAIM_APP_ID",
+            BuildConfigField(
+                type = "String",
+                value = "\"${project.property("RECLAIM_APP_ID")?.toString().orEmpty()}\"",
+                comment = "Reclaim application id — an EVM address, public by construction"
+            )
+        )
+        variant.buildConfigFields?.put(
+            "RECLAIM_APP_SECRET",
+            BuildConfigField(
+                type = "String",
+                value = "\"${project.property("RECLAIM_APP_SECRET")?.toString().orEmpty()}\"",
+                comment = "Reclaim application secret — the appId's private key; ships in the APK by design"
             )
         )
         variant.buildConfigFields?.put(

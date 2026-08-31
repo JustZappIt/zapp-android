@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reputation_title">Reputasi</string>
+    <string name="reputation_info_content_description">Cara kerjanya</string>
+
+    <string name="reputation_buy_limit">Batas pembelian</string>
+    <string name="reputation_amount_usd">$%1$s</string>
+    <string name="reputation_limit_locked">Terkunci</string>
+    <string name="reputation_limit_caption">Jumlah maksimum untuk satu kali pembelian.</string>
+    <string name="reputation_limit_caption_at_ceiling">Jumlah maksimum untuk satu kali pembelian. Anda sudah berada di batas tertinggi yang ada.</string>
+    <string name="reputation_limit_locked_caption">Verifikasi satu akun yang sudah Anda miliki, dan pembelian akan terbuka. Pencairan tidak pernah dibatasi oleh reputasi.</string>
+
+    <string name="reputation_points_row">Poin reputasi</string>
+
+    <string name="reputation_verified_group">TERVERIFIKASI</string>
+    <string name="reputation_rp_amount">%1$s RP</string>
+
+    <string name="reputation_raise_limit">Naikkan batas saya</string>
+    <string name="reputation_buy">Beli</string>
+    <string name="reputation_verify_to_buy">Verifikasi untuk membeli</string>
+    <string name="reputation_retry">Coba lagi</string>
+
+    <string name="reputation_unreadable_title">Tidak dapat menghubungi Base</string>
+    <string name="reputation_unreadable_body">Kami tidak dapat membaca batas Anda dari bursa. Tidak ada yang berubah — coba lagi sebentar.</string>
+
+    <string name="reputation_blacklisted_title">Dompet ini tidak dapat membeli</string>
+    <string name="reputation_blacklisted_body">Bursa telah memblokir dompet ini dari perdagangan. Memverifikasi akun tidak akan mengubahnya.</string>
+
+    <string name="reputation_info_title">Alasan adanya batas</string>
+    <string name="reputation_info_trade">Membeli adalah transaksi dengan orang asing. Anda mengirim uang ke rekening mereka; mereka melepaskan USDC kepada Anda. Tidak ada pihak yang bisa menarik kembali uang pihak lain.</string>
+    <string name="reputation_info_cap">Bursa membatasi berapa banyak yang bisa diperdagangkan akun baru sekaligus. Dompet yang benar-benar baru bisa mencairkan dana tetapi tidak bisa membeli — dan pencairan tidak dihitung untuk batas pembelian, seberapa lama pun Anda melakukannya. Memverifikasi akun yang sudah Anda miliki adalah cara menaikkan batas itu.</string>
+    <string name="reputation_info_privacy">Yang bisa dilihat Zapp: tidak ada. Buktinya menyatakan “orang ini menguasai akun X yang berumur lebih dari satu tahun”. Bukti itu tidak memuat nama pengguna, kata sandi, atau apa pun yang pernah Anda unggah.</string>
+    <string name="reputation_info_source">Dari mana batas itu berasal: kontrak bursa di Base, bukan dari Zapp. Kami membacanya; kami tidak bisa menaikkannya.</string>
+    <string name="increase_reputation_title">Naikkan batas saya</string>
+    <string name="increase_reputation_info_content_description">Cara kerja verifikasi</string>
+    <string name="increase_reputation_intro">Verifikasi akun yang sudah Anda miliki. Tidak ada yang dibagikan ke Zapp.</string>
+    <string name="increase_reputation_group">AKUN YANG BISA ANDA VERIFIKASI</string>
+    <string name="increase_reputation_reward">+%1$s RP</string>
+    <string name="increase_reputation_limit_gain">+$%1$s batas</string>
+    <string name="increase_reputation_verified">Terverifikasi</string>
+    <string name="increase_reputation_verified_reward">Terverifikasi · %1$s</string>
+    <string name="increase_reputation_age_requirement">Perlu akun berumur sekitar satu tahun</string>
+
+    <string name="increase_reputation_step_open">Buka Reclaim</string>
+    <string name="increase_reputation_step_prove">Buktikan akun Anda</string>
+    <string name="increase_reputation_step_save">Simpan verifikasi Anda</string>
+
+    <string name="increase_reputation_preparing">Menyiapkan…</string>
+    <string name="increase_reputation_ready">Reclaim akan terbuka. Masuk ke %1$s di sana, lalu kembali ke sini.</string>
+    <string name="increase_reputation_waiting">Menunggu Reclaim…</string>
+    <string name="increase_reputation_waiting_help">Biarkan Zapp tetap terbuka. Jika Anda menutup Reclaim sebelum selesai, batalkan di sini dan mulai lagi.</string>
+    <string name="increase_reputation_saving">Menyimpan verifikasi Anda…</string>
+    <string name="increase_reputation_done">%1$s terverifikasi</string>
+    <string name="increase_reputation_new_limit">Kini Anda bisa membeli hingga $%1$s dalam satu pembelian.</string>
+    <string name="increase_reputation_failed">Verifikasi itu tidak berhasil.</string>
+
+    <string name="increase_reputation_open">Buka Reclaim</string>
+    <string name="increase_reputation_cancel">Batal</string>
+    <string name="increase_reputation_saving_action">Menyimpan…</string>
+    <string name="increase_reputation_finish">Selesai</string>
+
+    <string name="increase_reputation_error_unavailable">Verifikasi tidak tersedia di versi Zapp ini.</string>
+    <string name="increase_reputation_error_criteria">Akun ini tidak memenuhi persyaratan penyedia — akun harus berumur sekitar satu tahun.</string>
+    <string name="increase_reputation_error_proof">Reclaim tidak dapat menyelesaikan pemeriksaan. Coba lagi, atau pilih akun lain.</string>
+    <string name="increase_reputation_error_expired">Verifikasi itu kedaluwarsa. Mulai lagi untuk mendapatkan tautan baru.</string>
+    <string name="increase_reputation_error_already_used">Akun itu sudah diverifikasi pada dompet lain.</string>
+    <string name="increase_reputation_error_mismatch">Verifikasi itu dibuat untuk dompet yang berbeda. Mulai lagi.</string>
+    <string name="increase_reputation_error_rejected">Bursa tidak dapat memverifikasi bukti itu.</string>
+    <string name="increase_reputation_error_gas">Kami tidak dapat menanggung biaya jaringan saat ini. Coba lagi beberapa saat lagi.</string>
+    <string name="increase_reputation_error_network">Kami tidak dapat menghubungi jaringan. Coba lagi sebentar.</string>
+
+    <string name="increase_reputation_info_title">Cara kerja verifikasi</string>
+    <string name="increase_reputation_info_step_pick">Pilih akun yang sudah Anda miliki.</string>
+    <string name="increase_reputation_info_step_open">Zapp membuka Reclaim, aplikasi terpisah yang melakukan pemeriksaan. Pasang jika Anda belum punya — aplikasinya gratis.</string>
+    <string name="increase_reputation_info_step_sign_in">Masuk ke akun Anda di dalam Reclaim. Zapp tidak pernah melihatnya.</string>
+    <string name="increase_reputation_info_step_proof">Reclaim menghasilkan bukti matematis dan mengembalikannya. Zapp menuliskannya ke kontrak bursa, dan batas Anda naik.</string>
+    <string name="increase_reputation_info_gas">Kami yang membayar biaya jaringan. Anda tidak perlu ETH atau koin lain.</string>
+    <string name="increase_reputation_info_time">Prosesnya beberapa menit, sebagian besar untuk memasang dan masuk ke Reclaim.</string>
+    <string name="increase_reputation_info_age">Hanya akun lama. X, GitHub, dan Instagram memerlukan akun berumur sekitar satu tahun. Akun yang lebih baru akan ditolak dengan “kriteria tidak terpenuhi” — itu aturan penyedia, bukan aturan kami.</string>
+    <string name="increase_reputation_info_once">Sekali per akun. Akun X yang sama tidak bisa diverifikasi ke dompet kedua — termasuk dompet yang Anda pulihkan dari seed baru.</string>
+</resources>

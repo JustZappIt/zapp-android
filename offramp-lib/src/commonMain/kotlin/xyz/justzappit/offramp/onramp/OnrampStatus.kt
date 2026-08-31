@@ -61,6 +61,18 @@ sealed interface OnrampStatus {
         val phase: OnrampPhase,
         val id: String?,
         val orderId: String?,
+        /**
+         * A sentence from the service, to show *instead of* [code]'s own wording when it has one.
+         *
+         * ☠ Display only. Never branch on this — that is what [code] is for, and the reason the
+         * enum exists. It is here because a refusal the service can explain ("new accounts cannot
+         * place buy orders at this time") tells the user something no fixed string of ours can,
+         * and dropping it left them reading a generic sentence while the useful one existed.
+         *
+         * Carries the service's own language, so it is not localised. An accurate sentence in the
+         * wrong language beats a translated one that describes a different failure.
+         */
+        val detail: String? = null,
     ) : OnrampStatus
 }
 
@@ -84,12 +96,42 @@ enum class OnrampFailureCode {
     NO_MERCHANT,
     ORDER_EXPIRED,
     NETWORK_UNAVAILABLE,
+
+    /**
+     * A rolling cap, not a per-order one. Kept apart from [CAP_EXCEEDED] because the remedy is
+     * different: no amount will pass until the window rolls over, so "try a smaller amount" is a
+     * dead end here.
+     */
+    DAILY_LIMIT_EXCEEDED,
+
+    /** The monthly or yearly cap. Same shape as [DAILY_LIMIT_EXCEEDED] over a longer window. */
+    VOLUME_LIMIT_EXCEEDED,
+
+    /** The exchange has blocked this wallet. Verifying an account does not lift it. */
+    USER_BLACKLISTED,
+
+    /**
+     * The user's fiat has left their account and the merchant's leg is still outstanding. Not a
+     * dead order: the merchant can still settle it, and on the direct route it is the only state
+     * where money has moved but nothing has been received.
+     */
+    SETTLEMENT_PENDING,
     UNKNOWN,
     ;
 
-    /** Retryable without user intervention; everything else needs a new order or a new quote. */
+    /**
+     * Retryable without user intervention; everything else needs a new order or a new quote.
+     *
+     * [SETTLEMENT_PENDING] belongs here for a different reason than the rest: not because retrying
+     * is cheap, but because the order is alive and paid. Dropping its checkpoint would strand fiat
+     * the user has already sent and cancel the ZEC delivery that checkpoint drives.
+     */
     val isTransient: Boolean
-        get() = this == UPSTREAM_FAILED || this == OPERATOR_UNAVAILABLE || this == NETWORK_UNAVAILABLE
+        get() =
+            this == UPSTREAM_FAILED ||
+                this == OPERATOR_UNAVAILABLE ||
+                this == NETWORK_UNAVAILABLE ||
+                this == SETTLEMENT_PENDING
 
     companion object {
         fun fromWire(value: String?): OnrampFailureCode =
@@ -98,8 +140,8 @@ enum class OnrampFailureCode {
 }
 
 /**
- * Whether the order survives this failure on the service. Only a transient failure leaves it
- * running, so only then may the resume checkpoint be kept.
+ * Whether the underlying order survives this failure. Only a transient failure leaves it running,
+ * so only then may the resume checkpoint be kept.
  */
 val OnrampStatus.leavesOrderAlive: Boolean
     get() = this is OnrampStatus.Failed && code.isTransient

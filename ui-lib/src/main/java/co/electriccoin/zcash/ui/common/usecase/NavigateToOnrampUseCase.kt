@@ -1,33 +1,52 @@
 package co.electriccoin.zcash.ui.common.usecase
 
+import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
-import co.electriccoin.zcash.ui.common.model.P2pRail
-import co.electriccoin.zcash.ui.common.provider.PreferredP2pPaymentMethodProvider
 import co.electriccoin.zcash.ui.screen.onramp.OnrampArgs
-import xyz.justzappit.offramp.onramp.OnrampDriver
+import kotlinx.coroutines.CancellationException
+import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
+import xyz.justzappit.offramp.p2p.CurrencyCode
+import xyz.justzappit.offramp.reputation.ReputationReader
 
 class NavigateToOnrampUseCase(
-    private val preferredP2pPaymentMethodProvider: PreferredP2pPaymentMethodProvider,
-    private val onrampDriver: OnrampDriver,
+    private val resolveBuyCorridor: ResolveBuyCorridorUseCase,
+    private val accountProvider: SmartOfframpAccountProvider,
+    private val reputationReader: ReputationReader,
+    private val navigateToReputation: NavigateToReputationUseCase,
     private val navigationRouter: NavigationRouter,
 ) {
     suspend operator fun invoke() {
-        // Buying runs over the p2p.me corridors only, and a Peer rail carries none of them, so a
-        // cash-out selection falls back to the default corridor rather than to a currency the
-        // onramp cannot serve.
-        //
-        // The stored selection is a Scan & Pay rail, which says only that the corridor has merchants
-        // willing to *pay*. Buying is a separate market with separate merchants — Bolivia pays at any
-        // size and buys only 1 USDC — so carrying the preference across requires the onramp's own
-        // list, not the picker's flag. Asking the service means a corridor opening or closing does
-        // not wait for an app release; if it cannot be reached the answer is empty and the user gets
-        // the default corridor, which is served in every deployment.
-        val buyable = onrampDriver.buyCorridors()
-        val corridor =
-            when (val rail = preferredP2pPaymentMethodProvider.get()) {
-                is P2pRail.ScanAndPay -> rail.takeIf { it.currency in buyable } ?: P2pRail.DEFAULT
-                is P2pRail.PeerCashOut -> P2pRail.DEFAULT
-            }
-        navigationRouter.forward(OnrampArgs(currencyCode = corridor.currency.code))
+        val corridor = resolveBuyCorridor()
+        if (canBuy(corridor)) {
+            navigationRouter.forward(OnrampArgs(currencyCode = corridor.code))
+        } else {
+            navigateToReputation(corridor)
+        }
     }
+
+    /**
+     * The order is placed by the user's own smart account, and the Diamond refuses a BUY from an
+     * address with no reputation — so a wallet that cannot buy yet is sent to Reputation rather
+     * than to an amount field it cannot submit.
+     *
+     * ☠ This gate now applies to everyone. It used to be skipped on the custodial route, which
+     * placed every order from the operator's own reputation-bearing account and so gated nothing;
+     * with that route gone, an existing user at 0 RP must verify before they can buy again.
+     *
+     * An unreadable chain lets them through: the failure is ours, and the onramp screen quotes
+     * against the same limit before it takes an amount.
+     */
+    private suspend fun canBuy(corridor: CurrencyCode): Boolean =
+        try {
+            reputationReader.read(accountProvider.resolve().address, corridor).canBuy
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            // Broad on purpose: any read failure means the same thing to the user, and the
+            // reason belongs in the log rather than on screen.
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            Twig.warn(e) { "Reputation read failed before onramp; letting the buy proceed" }
+            true
+        }
 }

@@ -13,6 +13,7 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.zapp.ZappCompactButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappFieldBalance
 import co.electriccoin.zcash.ui.design.component.zapp.ZappOfframpHeroAmountField
+import co.electriccoin.zcash.ui.design.component.zapp.ZappRowInfoAction
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSegment
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSegmentedSelector
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSummaryRow
@@ -44,15 +45,7 @@ internal fun AmountContent(state: OnrampState) {
         if (state.isZecDestinationEnabled) {
             DestinationSelector(state)
         }
-        if (state.minFiat != null && state.maxFiat != null) {
-            ZappSummaryRow(
-                stringResource(R.string.onramp_limits_label),
-                "${state.currencySymbol}${state.minFiat} – ${state.currencySymbol}${state.maxFiat}",
-            )
-        }
-        state.dailyLimit?.let {
-            ZappSummaryRow(stringResource(R.string.onramp_daily_limit_label), "${state.currencySymbol}$it")
-        }
+        LimitRows(state)
         ZappSummaryRow(stringResource(R.string.onramp_payment_rail_label), state.paymentRail.getValue())
         Notice(stringResource(R.string.onramp_quote_disclaimer))
         if (state.isBaseRefundSupported) {
@@ -98,6 +91,40 @@ internal fun AmountContent(state: OnrampState) {
 }
 
 @Composable
+private fun LimitRows(state: OnrampState) {
+    if (state.minFiat != null && state.maxFiat != null) {
+        ZappSummaryRow(
+            stringResource(R.string.onramp_limits_label),
+            "${state.currencySymbol}${state.minFiat} – ${state.currencySymbol}${state.maxFiat}",
+        )
+    }
+    state.transactionLimit?.let {
+        ZappSummaryRow(
+            label = stringResource(R.string.onramp_transaction_limit_label),
+            value = "${state.currencySymbol}$it",
+            // The number is reputation-derived, so the only useful explanation is the screen
+            // that raises it.
+            info =
+                ZappRowInfoAction(
+                    onClick = state.onRaiseLimit,
+                    contentDescription = stringResource(R.string.onramp_transaction_limit_info),
+                ),
+        )
+    }
+    state.dailyLimit?.let {
+        ZappSummaryRow(
+            label = stringResource(R.string.onramp_daily_limit_label),
+            value = "${state.currencySymbol}$it",
+            info =
+                ZappRowInfoAction(
+                    onClick = state.onRaiseLimit,
+                    contentDescription = stringResource(R.string.onramp_daily_limit_info),
+                ),
+        )
+    }
+}
+
+@Composable
 private fun DestinationSelector(state: OnrampState) {
     BasicText(
         text = stringResource(R.string.onramp_destination_label),
@@ -124,7 +151,7 @@ private fun DestinationSelector(state: OnrampState) {
     )
 }
 
-/** Everything here is the service's quote, not what the user typed: it quantises the amount. */
+/** Everything here uses the driver's accepted quote rather than the unvalidated input. */
 @Composable
 internal fun ConfirmationContent(state: OnrampState) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {

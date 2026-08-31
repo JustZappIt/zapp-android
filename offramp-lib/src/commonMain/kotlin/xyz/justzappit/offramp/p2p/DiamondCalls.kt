@@ -39,8 +39,8 @@ data class PlaceOrderArgs(
 object DiamondCalls {
     fun placeOrderCalldata(args: PlaceOrderArgs): ByteArray {
         val isBuy = args.orderType == OrderType.BUY
-        val pubKey = if (isBuy) "" else args.relayPubKeyEthCrypto
-        val userPubKey = if (isBuy) args.relayPubKeyEthCrypto else ""
+        val pubKey = if (isBuy) args.relayPubKeyEthCrypto else ""
+        val userPubKey = if (isBuy) "" else args.relayPubKeyEthCrypto
 
         val abiArgs =
             listOf<AbiArg>(
@@ -77,6 +77,35 @@ object DiamondCalls {
 
     fun cancelOrderCalldata(orderId: BigInteger): ByteArray =
         AbiEncoder.encodeFunctionCall("cancelOrder(uint256)", listOf(AbiUint(orderId)))
+
+    /**
+     * The buy-side "I have paid" — a *claim* that fiat moved, not proof of it. The merchant then
+     * calls `completeOrder` and the USDC lands at the order's recipient.
+     *
+     * Never retried automatically, on any schedule: a false claim costs the user `lyingUserRp()`
+     * (5 RP, and at 1 RP = $1 that is $5 off the buy limit).
+     */
+    fun paidBuyOrderCalldata(orderId: BigInteger): ByteArray =
+        AbiEncoder.encodeFunctionCall("paidBuyOrder(uint256)", listOf(AbiUint(orderId)))
+
+    fun getSmallOrderFixedFeeBuyCalldata(currency: CurrencyCode): ByteArray =
+        AbiEncoder.encodeFunctionCall(
+            "getSmallOrderFixedFeeBuy(bytes32)",
+            listOf(AbiEncoder.bytes32String(currency.code)),
+        )
+
+    fun getProcessingTimeCalldata(): ByteArray = AbiEncoder.encodeFunctionCall("getProcessingTime()", emptyList())
+
+    fun getExchangeStatusCalldata(): ByteArray = AbiEncoder.encodeFunctionCall("getExchangeStatus()", emptyList())
+
+    fun isCurrencySupportedCalldata(currency: CurrencyCode): ByteArray =
+        AbiEncoder.encodeFunctionCall(
+            "isCurrencySupported(bytes32)",
+            listOf(AbiEncoder.bytes32String(currency.code)),
+        )
+
+    fun getOrderExpiresAtCalldata(orderId: BigInteger): ByteArray =
+        AbiEncoder.encodeFunctionCall("getOrderExpiresAt(uint256)", listOf(AbiUint(orderId)))
 
     fun isOrderExpiredCalldata(orderId: BigInteger): ByteArray =
         AbiEncoder.encodeFunctionCall("isOrderExpired(uint256)", listOf(AbiUint(orderId)))

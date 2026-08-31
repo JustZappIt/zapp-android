@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reputation_title">Reputation</string>
+    <string name="reputation_info_content_description">How this works</string>
+
+    <string name="reputation_buy_limit">Buy limit</string>
+    <string name="reputation_amount_usd">$%1$s</string>
+    <string name="reputation_limit_locked">Locked</string>
+    <string name="reputation_limit_caption">The most you can spend on a single purchase.</string>
+    <string name="reputation_limit_caption_at_ceiling">The most you can spend on a single purchase. You\'re at the highest limit there is.</string>
+    <string name="reputation_limit_locked_caption">Verify one account you already own and buying unlocks. Cashing out is never limited by reputation.</string>
+
+    <string name="reputation_points_row">Reputation points</string>
+
+    <string name="reputation_verified_group">VERIFIED</string>
+    <string name="reputation_rp_amount">%1$s RP</string>
+
+    <string name="reputation_raise_limit">Raise my limit</string>
+    <string name="reputation_buy">Buy</string>
+    <string name="reputation_verify_to_buy">Verify to buy</string>
+    <string name="reputation_retry">Try again</string>
+
+    <string name="reputation_unreadable_title">Couldn\'t reach Base</string>
+    <string name="reputation_unreadable_body">We couldn\'t read your limits from the exchange. Nothing has changed — try again in a moment.</string>
+
+    <string name="reputation_blacklisted_title">This wallet can\'t buy</string>
+    <string name="reputation_blacklisted_body">The exchange has blocked this wallet from trading. Verifying an account won\'t change that.</string>
+
+    <string name="reputation_info_title">Why there\'s a limit</string>
+    <string name="reputation_info_trade">Buying is a trade with a stranger. You send money to their account; they release USDC to you. Neither of you can take the other\'s money back.</string>
+    <string name="reputation_info_cap">The exchange caps how much a new account can trade at once. A brand-new wallet can cash out but cannot buy — and cashing out doesn\'t count towards the buy limit, however long you\'ve been doing it. Verifying an account you already own is what raises the cap.</string>
+    <string name="reputation_info_privacy">What Zapp can see: nothing. The proof says “this person controls an X account older than a year”. It carries no handle, no password, and nothing you\'ve posted.</string>
+    <string name="reputation_info_source">Where the limit comes from: the exchange\'s contract on Base, not from Zapp. We read it; we can\'t raise it.</string>
+    <string name="increase_reputation_title">Raise my limit</string>
+    <string name="increase_reputation_info_content_description">How verifying works</string>
+    <string name="increase_reputation_intro">Verify an account you already own. Nothing is shared with Zapp.</string>
+    <string name="increase_reputation_group">ACCOUNTS YOU CAN VERIFY</string>
+    <string name="increase_reputation_reward">+%1$s RP</string>
+    <string name="increase_reputation_limit_gain">+$%1$s limit</string>
+    <string name="increase_reputation_verified">Verified</string>
+    <string name="increase_reputation_verified_reward">Verified · %1$s</string>
+    <string name="increase_reputation_age_requirement">Needs an account about a year old</string>
+
+    <string name="increase_reputation_step_open">Open Reclaim</string>
+    <string name="increase_reputation_step_prove">Prove your account</string>
+    <string name="increase_reputation_step_save">Save your verification</string>
+
+    <string name="increase_reputation_preparing">Setting up…</string>
+    <string name="increase_reputation_ready">Reclaim will open. Sign in to %1$s there, then come back.</string>
+    <string name="increase_reputation_waiting">Waiting for Reclaim…</string>
+    <string name="increase_reputation_waiting_help">Keep Zapp open. If you closed Reclaim before finishing, cancel here and start again.</string>
+    <string name="increase_reputation_saving">Saving your verification…</string>
+    <string name="increase_reputation_done">%1$s verified</string>
+    <string name="increase_reputation_new_limit">You can now buy up to $%1$s in one purchase.</string>
+    <string name="increase_reputation_failed">That verification didn\'t go through.</string>
+
+    <string name="increase_reputation_open">Open Reclaim</string>
+    <string name="increase_reputation_cancel">Cancel</string>
+    <string name="increase_reputation_saving_action">Saving…</string>
+    <string name="increase_reputation_finish">Done</string>
+
+    <string name="increase_reputation_error_unavailable">Verifying isn\'t available in this version of Zapp.</string>
+    <string name="increase_reputation_error_criteria">This account doesn\'t meet the provider\'s requirements — it must be about a year old.</string>
+    <string name="increase_reputation_error_proof">Reclaim couldn\'t complete the check. Try again, or pick another account.</string>
+    <string name="increase_reputation_error_expired">That verification expired. Start it again to get a fresh link.</string>
+    <string name="increase_reputation_error_already_used">That account is already verified on another wallet.</string>
+    <string name="increase_reputation_error_mismatch">That verification was made for a different wallet. Start it again.</string>
+    <string name="increase_reputation_error_rejected">The exchange couldn\'t verify that proof.</string>
+    <string name="increase_reputation_error_gas">We can\'t cover the network fee right now. Try again in a little while.</string>
+    <string name="increase_reputation_error_network">We couldn\'t reach the network. Try again in a moment.</string>
+
+    <string name="increase_reputation_info_title">How verifying works</string>
+    <string name="increase_reputation_info_step_pick">Pick an account you already have.</string>
+    <string name="increase_reputation_info_step_open">Zapp opens Reclaim, a separate app that does the checking. Install it if you haven\'t — it\'s free.</string>
+    <string name="increase_reputation_info_step_sign_in">Sign in to your account inside Reclaim. Zapp never sees that.</string>
+    <string name="increase_reputation_info_step_proof">Reclaim produces a mathematical proof and hands it back. Zapp writes it to the exchange\'s contract, and your limit goes up.</string>
+    <string name="increase_reputation_info_gas">We pay the network fee. You need no ETH and no other coin.</string>
+    <string name="increase_reputation_info_time">It takes a few minutes, mostly the Reclaim install and sign-in.</string>
+    <string name="increase_reputation_info_age">Older accounts only. X, GitHub and Instagram need an account about a year old. A newer one comes back as “criteria not met” — the provider\'s rule, not ours.</string>
+    <string name="increase_reputation_info_once">Once per account. The same X account can\'t be verified onto a second wallet — including a wallet you recover from a new seed.</string>
+</resources>

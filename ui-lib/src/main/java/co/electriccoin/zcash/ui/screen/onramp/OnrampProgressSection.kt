@@ -42,7 +42,7 @@ internal fun ProgressContent(state: OnrampState) {
         )
         OrderSummaryCard(state)
         ZappStepList(onrampSteps(state.progress, state.delivery, state.destination))
-        if (state.isSettledAgainstUser || state.isDeliveryFailed) {
+        if (state.isOrderTerminal || state.isDeliveryFailed) {
             FailureCard(state)
         } else {
             ErrorText(state)
@@ -132,7 +132,7 @@ private fun progressSubtitle(state: OnrampState): StringResource =
     when {
         state.mode == OnrampMode.CONVERTING_TO_ZEC -> stringRes(R.string.onramp_converting_subtitle)
         state.isDeliveryFailed -> deliveryFailureMessage(state)
-        state.isSettledAgainstUser -> stringRes(R.string.onramp_progress_subtitle_settled)
+        state.isOrderTerminal -> stringRes(R.string.onramp_progress_subtitle_settled)
         state.progress is OnrampStatus.AwaitingMerchant -> stringRes(R.string.onramp_progress_subtitle_matching)
         else -> stringRes(R.string.onramp_progress_subtitle_working)
     }
