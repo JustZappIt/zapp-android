@@ -5,9 +5,11 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-private const val COMPLETION_ARGB = 0xFFF7CD45
-private const val LIGHT_COMPLETION_SHADE_ARGB = 0xFFE2A91E
-private const val DARK_COMPLETION_SHADE_ARGB = 0xFFDCA31B
+// The success moment is the accent, not a hue of its own: a yellow medallion on an orange app
+// read as a different brand. Shades keep the same relative darkening the yellow ramp had.
+private const val COMPLETION_ARGB = 0xFFFF9417
+private const val LIGHT_COMPLETION_SHADE_ARGB = 0xFFE97A0A
+private const val DARK_COMPLETION_SHADE_ARGB = 0xFFE37609
 private const val ON_COMPLETION_ARGB = 0xFF211A08
 
 @Immutable

@@ -85,6 +85,7 @@ internal fun CardPeek(item: GiftCardListItem, stock: ZappGiftCardStock) {
             status = item.status,
             hasBeenChecked = item.lastCheckedAt != null,
             isCheckRecent = item.isLastCheckRecent,
+            check = item.check,
             stock = stock,
         )
     }
@@ -116,6 +117,7 @@ internal fun CardFront(item: GiftCardListItem, stock: ZappGiftCardStock) {
                 status = item.status,
                 hasBeenChecked = item.lastCheckedAt != null,
                 isCheckRecent = item.isLastCheckRecent,
+                check = item.check,
                 stock = stock,
             )
         }
@@ -347,8 +349,13 @@ private fun StatusPill(
     status: GiftCardListStatus,
     hasBeenChecked: Boolean,
     isCheckRecent: Boolean,
+    check: GiftCheckControl,
     stock: ZappGiftCardStock,
 ) {
+    // A scan runs for minutes, and the pill is the only status the front of a card shows. Left on
+    // the settled label it reads as "not checked" throughout the very check it was asked for.
+    val running = check as? GiftCheckControl.Running
+    val percent = running?.progress?.fraction?.let { (it * PERCENT).toInt() }
     val isSettled = status == GiftCardListStatus.CLAIMED
     val mark = if (isSettled) stock.inkFaint else ZappGiftCardStocks.LiveMark
     Row(
@@ -362,7 +369,12 @@ private fun StatusPill(
     ) {
         Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(mark))
         BasicText(
-            text = stringResource(status.chipRes(hasBeenChecked, isCheckRecent)),
+            text =
+                when {
+                    running == null -> stringResource(status.chipRes(hasBeenChecked, isCheckRecent))
+                    percent != null -> stringResource(R.string.gift_card_chip_checking_progress, percent)
+                    else -> stringResource(R.string.gift_card_chip_checking)
+                },
             style = ZappTheme.typography.chip.copy(color = if (isSettled) stock.inkMuted else stock.ink),
             maxLines = 1,
         )

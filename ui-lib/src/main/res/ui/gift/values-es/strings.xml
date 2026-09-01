@@ -152,6 +152,8 @@
     <string name="gift_card_chip_funded">Listo para compartir</string>
     <string name="gift_card_chip_shared">Sin cobrar</string>
     <string name="gift_card_chip_shared_unchecked">Compartido · sin comprobar</string>
+    <string name="gift_card_chip_checking">Comprobando…</string>
+    <string name="gift_card_chip_checking_progress">Comprobando · %1$d%%</string>
     <string name="gift_card_chip_shared_stale">Compartido · comprueba de nuevo</string>
     <string name="gift_card_chip_claimed">Cobrado</string>
     <string name="gift_card_list_status_unfunded">Sin fondos</string>
