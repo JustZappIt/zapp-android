@@ -478,7 +478,7 @@ fun ZappFab(
                 .size(size.dp)
                 .shadow(elevation = 4.dp, shape = RectangleShape, clip = false)
                 .background(c.accent, RectangleShape)
-                .border(BorderStroke(1.dp, c.border), RectangleShape)
+                .border(BorderStroke(1.dp, c.accentBorder), RectangleShape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = ripple(color = c.onAccent, bounded = true),

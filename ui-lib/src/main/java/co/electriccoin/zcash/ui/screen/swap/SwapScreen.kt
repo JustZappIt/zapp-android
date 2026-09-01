@@ -25,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -36,6 +37,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.appbar.ZashiTopAppBarVM
@@ -63,7 +65,17 @@ fun SwapScreen(
     prescannedMerchantQr: PrescannedMerchantQr = PrescannedMerchantQr.EMPTY,
 ) {
     val navigationRouter = koinInject<NavigationRouter>()
+    val getBaseAddress = koinInject<GetOfframpBaseAddressUseCase>()
     var showOfframpInfo by rememberSaveable { mutableStateOf(false) }
+    // Resolved with the tab rather than with the sheet: it is a network round-trip on a cold
+    // cache, and arriving late would insert a card above the sheet's OK button under the thumb.
+    val baseAddress by produceState<String?>(initialValue = null, key1 = tab) {
+        if (tab != SwapTab.OFFRAMP) return@produceState
+        value =
+            runCatching { getBaseAddress() }
+                .onFailure { Twig.warn(it) { "SwapScreen: Base address resolve failed" } }
+                .getOrNull()
+    }
 
     Column(
         modifier =
@@ -113,13 +125,16 @@ fun SwapScreen(
     }
 
     if (showOfframpInfo) {
-        OfframpInfoSheet(onDismiss = { showOfframpInfo = false })
+        OfframpInfoSheet(baseAddress = baseAddress, onDismiss = { showOfframpInfo = false })
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun OfframpInfoSheet(onDismiss: () -> Unit) {
+private fun OfframpInfoSheet(
+    baseAddress: String?,
+    onDismiss: () -> Unit,
+) {
     val c = ZappTheme.colors
     ZashiScreenModalBottomSheet(onDismissRequest = onDismiss) { contentPadding ->
         Column(
@@ -155,7 +170,7 @@ private fun OfframpInfoSheet(onDismiss: () -> Unit) {
                 text = stringResource(R.string.upi_offramp_estimate_disclaimer),
                 style = ZappTheme.typography.body.copy(color = c.textMuted),
             )
-            OfframpBaseAddress()
+            baseAddress?.let { OfframpBaseAddress(it) }
             ZappButton(
                 text = stringResource(co.electriccoin.zcash.ui.design.R.string.general_ok),
                 modifier = Modifier.fillMaxWidth(),
@@ -165,43 +180,37 @@ private fun OfframpInfoSheet(onDismiss: () -> Unit) {
     }
 }
 
-/**
- * The smart account merchant payments are settled from. Shown here because it is the address a
- * top-up has to land on, and the offramp screen otherwise never names it.
- */
+/** The smart account merchant payments settle from, and the address a top-up has to land on. */
 @Composable
-private fun OfframpBaseAddress() {
-    val getBaseAddress = koinInject<GetOfframpBaseAddressUseCase>()
+private fun OfframpBaseAddress(address: String) {
     val copyToClipboard = koinInject<CopyToClipboardUseCase>()
-    val address by produceState<String?>(initialValue = null) {
-        value = runCatching { getBaseAddress() }.getOrNull()
-    }
+    // Keyed on the tap count rather than the flag, so a second copy restarts the check mark
+    // instead of letting the first tap's timer clear it early.
+    var copyTaps by remember { mutableIntStateOf(0) }
     var isCopied by remember { mutableStateOf(false) }
-    LaunchedEffect(isCopied) {
-        if (isCopied) {
-            delay(COPY_FEEDBACK_MS)
-            isCopied = false
-        }
+    LaunchedEffect(copyTaps) {
+        if (copyTaps == 0) return@LaunchedEffect
+        isCopied = true
+        delay(COPY_FEEDBACK_MS)
+        isCopied = false
     }
-    address?.let {
-        ZappCopyableAddress(
-            label = stringResource(R.string.settings_p2p_payment_method_info_base_label),
-            address = it,
-            copyContentDescription =
-                stringResource(
-                    if (isCopied) {
-                        R.string.settings_p2p_payment_method_info_copied_content_description
-                    } else {
-                        R.string.settings_p2p_payment_method_info_copy_content_description
-                    },
-                ),
-            isCopied = isCopied,
-            onCopy = {
-                copyToClipboard(it)
-                isCopied = true
-            },
-        )
-    }
+    ZappCopyableAddress(
+        label = stringResource(R.string.settings_p2p_payment_method_info_base_label),
+        address = address,
+        copyContentDescription =
+            stringResource(
+                if (isCopied) {
+                    R.string.settings_p2p_payment_method_info_copied_content_description
+                } else {
+                    R.string.settings_p2p_payment_method_info_copy_content_description
+                },
+            ),
+        isCopied = isCopied,
+        onCopy = {
+            copyToClipboard(address)
+            copyTaps++
+        },
+    )
 }
 
 private const val COPY_FEEDBACK_MS = 2_000L

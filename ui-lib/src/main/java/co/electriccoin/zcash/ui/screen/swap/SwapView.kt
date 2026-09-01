@@ -50,6 +50,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -385,14 +386,20 @@ private fun SwapBottomBar(state: SwapState) {
 
 /** Public: also used by UnifiedSendView. */
 @Composable
-fun SlippageButton(state: ButtonState) {
+fun SlippageButton(
+    state: ButtonState,
+    modifier: Modifier = Modifier,
+) {
     val c = ZappTheme.colors
     val label = stringResource(R.string.swap_slippage_tolerance)
+    val value = state.text.getValue()
+    val iconTint = if (state.isEnabled) c.text else c.textSubtle
+    val textTint = if (state.isEnabled) c.textMuted else c.textSubtle
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
         modifier =
-            Modifier
+            modifier
                 .size(52.dp)
                 .background(c.surface)
                 .border(BorderStroke(1.dp, c.border))
@@ -402,7 +409,10 @@ fun SlippageButton(state: ButtonState) {
                     enabled = state.isEnabled,
                     onClick = state.onClick,
                 ).semantics {
+                    // clickable already merges descendants, so an explicit description here
+                    // would otherwise swallow the value printed inside.
                     contentDescription = label
+                    stateDescription = value
                     role = Role.Button
                 },
     ) {
@@ -411,12 +421,12 @@ fun SlippageButton(state: ButtonState) {
                 painter = painterResource(icon),
                 contentDescription = null,
                 modifier = Modifier.size(16.dp),
-                colorFilter = ColorFilter.tint(c.text),
+                colorFilter = ColorFilter.tint(iconTint),
             )
         }
         BasicText(
-            text = state.text.getValue(),
-            style = ZappTheme.typography.caption.copy(color = c.textMuted),
+            text = value,
+            style = ZappTheme.typography.caption.copy(color = textTint),
         )
     }
 }
