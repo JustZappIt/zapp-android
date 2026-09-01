@@ -23,8 +23,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -36,14 +39,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.appbar.ZashiTopAppBarVM
+import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetOfframpBaseAddressUseCase
 import co.electriccoin.zcash.ui.design.component.ZashiScreenModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappCopyableAddress
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.LocalNavController
 import co.electriccoin.zcash.ui.design.util.tryRequestFocus
 import co.electriccoin.zcash.ui.screen.swap.upi.PrescannedMerchantQr
 import co.electriccoin.zcash.ui.screen.swap.upi.UpiOfframpBody
+import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -148,6 +155,7 @@ private fun OfframpInfoSheet(onDismiss: () -> Unit) {
                 text = stringResource(R.string.upi_offramp_estimate_disclaimer),
                 style = ZappTheme.typography.body.copy(color = c.textMuted),
             )
+            OfframpBaseAddress()
             ZappButton(
                 text = stringResource(co.electriccoin.zcash.ui.design.R.string.general_ok),
                 modifier = Modifier.fillMaxWidth(),
@@ -156,6 +164,47 @@ private fun OfframpInfoSheet(onDismiss: () -> Unit) {
         }
     }
 }
+
+/**
+ * The smart account merchant payments are settled from. Shown here because it is the address a
+ * top-up has to land on, and the offramp screen otherwise never names it.
+ */
+@Composable
+private fun OfframpBaseAddress() {
+    val getBaseAddress = koinInject<GetOfframpBaseAddressUseCase>()
+    val copyToClipboard = koinInject<CopyToClipboardUseCase>()
+    val address by produceState<String?>(initialValue = null) {
+        value = runCatching { getBaseAddress() }.getOrNull()
+    }
+    var isCopied by remember { mutableStateOf(false) }
+    LaunchedEffect(isCopied) {
+        if (isCopied) {
+            delay(COPY_FEEDBACK_MS)
+            isCopied = false
+        }
+    }
+    address?.let {
+        ZappCopyableAddress(
+            label = stringResource(R.string.settings_p2p_payment_method_info_base_label),
+            address = it,
+            copyContentDescription =
+                stringResource(
+                    if (isCopied) {
+                        R.string.settings_p2p_payment_method_info_copied_content_description
+                    } else {
+                        R.string.settings_p2p_payment_method_info_copy_content_description
+                    },
+                ),
+            isCopied = isCopied,
+            onCopy = {
+                copyToClipboard(it)
+                isCopied = true
+            },
+        )
+    }
+}
+
+private const val COPY_FEEDBACK_MS = 2_000L
 
 @Composable
 private fun SwapBody() {

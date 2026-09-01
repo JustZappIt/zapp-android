@@ -19,7 +19,7 @@
     <string name="gift_card_amount_error_insufficient">Not enough spendable ZEC for this amount plus fees</string>
 
     <string name="gift_card_message_label">Message (optional)</string>
-    <string name="gift_card_message_placeholder">Happy birthday</string>
+    <string name="gift_card_message_placeholder">justzappit</string>
     <string name="gift_card_message_counter">%1$d / %2$d</string>
     <string name="gift_card_message_error_too_long">This message is too long to fit in a Zpacket link</string>
 

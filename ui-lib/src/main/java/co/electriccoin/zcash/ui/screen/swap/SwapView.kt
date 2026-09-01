@@ -46,6 +46,10 @@ import androidx.compose.ui.input.key.NativeKeyEvent
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -62,8 +66,6 @@ import co.electriccoin.zcash.ui.design.component.IconButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.component.TextFieldState
 import co.electriccoin.zcash.ui.design.component.ZashiAddressTextField
-import co.electriccoin.zcash.ui.design.component.ZashiButton
-import co.electriccoin.zcash.ui.design.component.ZashiButtonDefaults
 import co.electriccoin.zcash.ui.design.component.ZashiChipButton
 import co.electriccoin.zcash.ui.design.component.ZashiHorizontalDivider
 import co.electriccoin.zcash.ui.design.component.ZashiIconButton
@@ -133,18 +135,18 @@ internal fun SwapView(
                     Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 18.dp, vertical = 8.dp),
+                        .padding(horizontal = 18.dp, vertical = 4.dp),
             ) {
                 // Balance header
                 SwapBalanceHeader(state)
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // "You send" label
                 BasicText(
                     text = stringResource(R.string.swap_you_send),
                     style = ZappTheme.typography.eyebrow.copy(color = c.textMuted),
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 SwapAmountTextField(
                     state = state.amountTextField,
                     focusRequester = amountFocusRequester,
@@ -152,7 +154,7 @@ internal fun SwapView(
 
                 // Address field TOP (SWAP_INTO_ZEC refund)
                 if (state.addressLocation == TOP) {
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     AddressTextField(state = state)
                 }
 
@@ -164,27 +166,27 @@ internal fun SwapView(
                     text = stringResource(R.string.swap_you_receive),
                     style = ZappTheme.typography.eyebrow.copy(color = c.textMuted),
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 SwapAmountText(state = state.amountText)
 
                 // Rate info
                 if (state.infoItems.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     state.infoItems.forEach { ZashiSimpleListItem(state = it) }
                 }
 
                 // Receiving address (BOTTOM = SWAP_FROM_ZEC destination address)
                 if (state.addressLocation == BOTTOM) {
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     AddressTextField(state = state)
                 } else {
                     // Compact read-only "Receiving to" row (SWAP_INTO_ZEC)
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     ReceivingToRow(state)
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 if (state.errorFooter != null) {
                     SwapErrorFooter(state.errorFooter)
@@ -209,7 +211,7 @@ private fun SwapBalanceHeader(state: SwapState) {
     val t = ZappTheme.typography
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
     ) {
         BasicText(
             text = stringResource(R.string.swap_available_to_swap),
@@ -235,7 +237,7 @@ private fun SwapBalanceHeader(state: SwapState) {
             )
         }
         state.priceStats?.let { stats ->
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             SwapPriceStatsRow(stats)
         }
     }
@@ -285,7 +287,7 @@ private fun SwapPriceStatsRow(stats: SwapPriceStats) {
 private fun SwapDirectionToggle(state: SwapState) {
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
     ) {
         ZashiImageButton(state = state.changeModeButton)
     }
@@ -349,7 +351,7 @@ private fun SwapBottomBar(state: SwapState) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SwapSlippageButton(state.slippage)
+                SlippageButton(state.slippage)
                 // Top Up takes precedence when balance is zero
                 when {
                     state.topUpButton != null -> {
@@ -381,9 +383,11 @@ private fun SwapBottomBar(state: SwapState) {
     )
 }
 
+/** Public: also used by UnifiedSendView. */
 @Composable
-private fun SwapSlippageButton(state: ButtonState) {
+fun SlippageButton(state: ButtonState) {
     val c = ZappTheme.colors
+    val label = stringResource(R.string.swap_slippage_tolerance)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -397,7 +401,10 @@ private fun SwapSlippageButton(state: ButtonState) {
                     indication = ripple(color = c.text),
                     enabled = state.isEnabled,
                     onClick = state.onClick,
-                ),
+                ).semantics {
+                    contentDescription = label
+                    role = Role.Button
+                },
     ) {
         state.trailingIcon?.let { icon ->
             Image(
@@ -448,33 +455,6 @@ fun SwapErrorFooter(errorFooter: SwapErrorFooterState) {
     }
 }
 
-/** Public: also used by UnifiedSendView. */
-@Composable
-fun SlippageButton(
-    state: ButtonState,
-    modifier: Modifier = Modifier,
-) {
-    val c = ZappTheme.colors
-    val t = ZappTheme.typography
-    Row(
-        modifier = modifier,
-        verticalAlignment = CenterVertically,
-    ) {
-        Text(
-            text = stringResource(R.string.swap_slippage_tolerance),
-            style = t.caption,
-            fontWeight = FontWeight.Medium,
-            color = c.textMuted,
-        )
-        Spacer(modifier = Modifier.weight(1f))
-        ZashiButton(
-            state = state,
-            contentPadding = PaddingValues(start = 10.dp, end = 12.dp),
-            defaultPrimaryColors = ZashiButtonDefaults.tertiaryColors(),
-        )
-    }
-}
-
 @Composable
 private fun ColumnScope.AddressTextField(state: SwapState) {
     Row(
@@ -509,7 +489,7 @@ private fun ColumnScope.AddressTextField(state: SwapState) {
             )
         }
     }
-    Spacer(modifier = Modifier.height(6.dp))
+    Spacer(modifier = Modifier.height(4.dp))
     ZashiAddressTextField(
         state = state.address,
         modifier =

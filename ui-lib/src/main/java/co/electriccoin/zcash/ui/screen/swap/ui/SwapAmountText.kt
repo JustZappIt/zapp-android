@@ -52,7 +52,7 @@ internal fun SwapAmountText(
                 }
             }
         }
-        Spacer(8.dp)
+        Spacer(6.dp)
         Row(
             verticalAlignment = CenterVertically
         ) {
@@ -71,7 +71,7 @@ internal fun SwapAmountText(
                 )
             }
         }
-        Spacer(8.dp)
+        Spacer(6.dp)
         Row {
             SelectionContainer(
                 modifier = Modifier.weight(1f),

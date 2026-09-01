@@ -309,7 +309,7 @@ internal class UnifiedSendVMMapper {
         if (!state.isSwap) return null
         return ButtonState(
             text = stringResByNumber(state.slippage, minDecimals = 0) + stringRes("%"),
-            icon = R.drawable.ic_swap_slippage,
+            trailingIcon = R.drawable.ic_swap_slippage,
             // The repository reads the tolerance again when the request is built, so a change made
             // mid-flight would silently disagree with the quote the user is about to be shown.
             isEnabled = !state.isRequestingQuote,

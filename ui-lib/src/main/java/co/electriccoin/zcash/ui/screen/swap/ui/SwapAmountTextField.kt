@@ -103,7 +103,7 @@ private fun SwapTextFieldCard(
             SpendableBalanceButton(state)
         }
 
-        Spacer(8.dp)
+        Spacer(6.dp)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = CenterVertically
@@ -174,7 +174,7 @@ private fun SwapTextFieldCard(
                     },
             )
         }
-        Spacer(8.dp)
+        Spacer(6.dp)
         Row(
             verticalAlignment = CenterVertically
         ) {
