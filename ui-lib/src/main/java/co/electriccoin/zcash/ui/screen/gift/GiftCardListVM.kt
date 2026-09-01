@@ -328,7 +328,8 @@ class GiftCardListVM(
                             GiftCardCheckResult.UNKNOWN
                         } else {
                             checkGiftCardClaimed(card) { progress ->
-                                checkProgress.value = GiftCheckProgress(progress.fraction.takeIf { it > 0f })
+                                checkProgress.value =
+                                    GiftCheckProgress(progress.fraction.takeIf { it >= MIN_SHOWN_FRACTION })
                             }
                         }
                     errorFlow.value =
@@ -374,6 +375,9 @@ class GiftCardListVM(
         }
 
     private companion object {
+        /** Below this the figure rounds to "0%", which reads as stalled rather than starting. */
+        const val MIN_SHOWN_FRACTION = 0.01f
+
         /** Cards that still need a hand-off first, then newest first within each group. */
         val DISPLAY_ORDER =
             compareByDescending<StoredGiftCard> { it.isUnsharedFunds }

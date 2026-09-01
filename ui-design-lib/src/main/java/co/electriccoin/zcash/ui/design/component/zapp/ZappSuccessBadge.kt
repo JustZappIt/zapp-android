@@ -65,9 +65,13 @@ fun DrawScope.drawTrimmedCheck(
 }
 
 /**
- * The terminal-success moment for every money flow. A clean yellow medallion settles once while a
+ * The terminal-success moment for every money flow. A clean accent medallion settles once while a
  * complete outer ring resolves around it and the curved check draws on. Closing the ring makes the
  * final frame read as fully finished without adding translucent echoes, irregular blobs or gloss.
+ *
+ * Drawn in the accent rather than the completion ramp: the badge is the brand's moment, while the
+ * ramp stays with [ZappDoneButton], which needs a fill that differs from the primary button it
+ * replaces at exactly that instant.
  */
 @Composable
 fun ZappSuccessBadge(modifier: Modifier = Modifier) {
@@ -90,7 +94,7 @@ fun ZappSuccessBadge(modifier: Modifier = Modifier) {
         val orbitTopLeft = Offset(cx - orbitSide / 2f, cy - orbitSide / 2f)
 
         drawArc(
-            color = c.completionShade,
+            color = c.accentShade,
             startAngle = COMPLETE_ORBIT_START_DEGREES,
             sweepAngle = COMPLETE_ORBIT_SWEEP_DEGREES * orbit.value,
             useCenter = false,
@@ -105,13 +109,13 @@ fun ZappSuccessBadge(modifier: Modifier = Modifier) {
             alpha = COMPLETE_SHADOW_ALPHA * markIn.value,
         )
         drawCircle(
-            color = c.completionShade,
+            color = c.accentShade,
             radius = radius,
             center = Offset(cx, cy + COMPLETE_DEPTH_OFFSET.dp.toPx()),
             alpha = markIn.value,
         )
         drawCircle(
-            color = c.completion,
+            color = c.accent,
             radius = radius,
             center = Offset(cx, cy),
             alpha = markIn.value,

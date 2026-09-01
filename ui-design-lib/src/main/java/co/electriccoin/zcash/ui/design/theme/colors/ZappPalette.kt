@@ -5,12 +5,12 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-// The success moment is the accent, not a hue of its own: a yellow medallion on an orange app
-// read as a different brand. Shades keep the same relative darkening the yellow ramp had.
-private const val COMPLETION_ARGB = 0xFFFF9417
-private const val LIGHT_COMPLETION_SHADE_ARGB = 0xFFE97A0A
-private const val DARK_COMPLETION_SHADE_ARGB = 0xFFE37609
+private const val COMPLETION_ARGB = 0xFFF7CD45
+private const val LIGHT_COMPLETION_SHADE_ARGB = 0xFFE2A91E
+private const val DARK_COMPLETION_SHADE_ARGB = 0xFFDCA31B
 private const val ON_COMPLETION_ARGB = 0xFF211A08
+private const val LIGHT_ACCENT_SHADE_ARGB = 0xFFE97A0A
+private const val DARK_ACCENT_SHADE_ARGB = 0xFFE37609
 
 @Immutable
 data class ZappColors(
@@ -22,6 +22,8 @@ data class ZappColors(
     val borderStrong: Color,
     /** Outline for accent-filled controls. Transparent in light, where [border] reads as white. */
     val accentBorder: Color,
+    /** Depth and rings under an accent fill. */
+    val accentShade: Color,
     val text: Color,
     val textMuted: Color,
     val textSubtle: Color,
@@ -51,6 +53,7 @@ val LightZappColors =
         border = Color(0xFFEBE7E0),
         borderStrong = Color(0xFFD9D4CA),
         accentBorder = Color.Transparent,
+        accentShade = Color(LIGHT_ACCENT_SHADE_ARGB),
         text = Color(0xFF15120D),
         textMuted = Color(0xFF6B645A),
         textSubtle = Color(0xFF9A9288),
@@ -80,6 +83,7 @@ val DarkZappColors =
         border = Color(0xFF2A2622),
         borderStrong = Color(0xFF3A342D),
         accentBorder = Color(0xFF2A2622),
+        accentShade = Color(DARK_ACCENT_SHADE_ARGB),
         text = Color(0xFFF6F2EA),
         textMuted = Color(0xFFA59C90),
         textSubtle = Color(0xFF726A60),
