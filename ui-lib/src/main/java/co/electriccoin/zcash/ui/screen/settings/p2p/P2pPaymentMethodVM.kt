@@ -6,6 +6,7 @@ import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.CopyFeedback
 import co.electriccoin.zcash.ui.common.model.P2pProvider
 import co.electriccoin.zcash.ui.common.model.P2pRail
 import co.electriccoin.zcash.ui.common.provider.PreferredP2pPaymentMethodProvider
@@ -13,8 +14,6 @@ import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOfframpBaseAddressUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.util.stringRes
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -34,10 +33,9 @@ internal class P2pPaymentMethodVM(
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     private val baseAddress = MutableStateFlow<String?>(null)
-    private val isAddressCopied = MutableStateFlow(false)
     private val selectedRail = MutableStateFlow<P2pRail?>(null)
     private val isSaveInProgress = MutableStateFlow(false)
-    private var copyResetJob: Job? = null
+    private val copyFeedback = CopyFeedback(viewModelScope)
 
     init {
         viewModelScope.launch {
@@ -50,14 +48,14 @@ internal class P2pPaymentMethodVM(
     val state: StateFlow<P2pPaymentMethodState> =
         combine(
             baseAddress,
-            isAddressCopied,
+            copyFeedback.copiedValue,
             preferredP2pPaymentMethodProvider.observe(),
             selectedRail,
             isSaveInProgress,
         ) { addr, copied, savedRail, selected, saving ->
             createState(
                 baseAddress = addr,
-                isAddressCopied = copied,
+                isAddressCopied = copied != null,
                 savedRail = savedRail,
                 selectedRail = selected,
                 isSaveInProgress = saving,
@@ -173,21 +171,11 @@ internal class P2pPaymentMethodVM(
     private fun onCopyBaseAddress() {
         val addr = baseAddress.value ?: return
         copyToClipboard(addr)
-        isAddressCopied.update { true }
-        copyResetJob?.cancel()
-        copyResetJob =
-            viewModelScope.launch {
-                delay(COPY_FEEDBACK_MS)
-                isAddressCopied.update { false }
-            }
+        copyFeedback.mark(addr)
     }
 
     override fun onCleared() {
         super.onCleared()
-        copyResetJob?.cancel()
-    }
-
-    private companion object {
-        const val COPY_FEEDBACK_MS = 2_000L
+        copyFeedback.cancel()
     }
 }

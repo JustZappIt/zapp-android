@@ -10,12 +10,16 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 
 /**
  * Bordered card holding a monospaced value (key, address) with an optional [leading] visual,
  * [trailing] action and explanatory [caption] underneath.
+ *
+ * Carries its own [gutter] so screen-level columns can stay full-bleed; pass 0.dp inside a sheet
+ * or dialog that already pads its own content.
  */
 @Composable
 fun ZappValueCard(
@@ -24,12 +28,13 @@ fun ZappValueCard(
     label: String? = null,
     caption: String? = null,
     maxLines: Int = DEFAULT_MAX_LINES,
+    gutter: Dp = GUTTER,
     leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val c = ZappTheme.colors
     Column(modifier = modifier) {
-        ZappBorderedCard(modifier = Modifier.padding(horizontal = GUTTER)) {
+        ZappBorderedCard(modifier = Modifier.padding(horizontal = gutter)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),

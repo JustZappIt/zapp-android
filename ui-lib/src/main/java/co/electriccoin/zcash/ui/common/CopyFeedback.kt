@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
 
-package co.electriccoin.zcash.ui.screen.chat.common
+package co.electriccoin.zcash.ui.common
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -11,7 +11,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/** Holds the most recently copied value for a couple of seconds so a card can show a check. */
+/**
+ * Holds the most recently copied value for a couple of seconds so a card can show a check.
+ *
+ * A second tap restarts the window rather than inheriting the first tap's timer.
+ */
 class CopyFeedback(
     private val scope: CoroutineScope,
 ) {

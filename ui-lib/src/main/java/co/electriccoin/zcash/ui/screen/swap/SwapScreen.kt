@@ -23,12 +23,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -39,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.CopyFeedback
 import co.electriccoin.zcash.ui.common.appbar.ZashiTopAppBarVM
 import co.electriccoin.zcash.ui.common.bestEffort
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
@@ -52,7 +52,6 @@ import co.electriccoin.zcash.ui.design.util.LocalNavController
 import co.electriccoin.zcash.ui.design.util.tryRequestFocus
 import co.electriccoin.zcash.ui.screen.swap.upi.PrescannedMerchantQr
 import co.electriccoin.zcash.ui.screen.swap.upi.UpiOfframpBody
-import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -181,16 +180,10 @@ private fun OfframpInfoSheet(
 @Composable
 private fun OfframpBaseAddress(address: String) {
     val copyToClipboard = koinInject<CopyToClipboardUseCase>()
-    // Keyed on the tap count rather than the flag, so a second copy restarts the check mark
-    // instead of letting the first tap's timer clear it early.
-    var copyTaps by remember { mutableIntStateOf(0) }
-    var isCopied by remember { mutableStateOf(false) }
-    LaunchedEffect(copyTaps) {
-        if (copyTaps == 0) return@LaunchedEffect
-        isCopied = true
-        delay(COPY_FEEDBACK_MS)
-        isCopied = false
-    }
+    val scope = rememberCoroutineScope()
+    val copyFeedback = remember(scope) { CopyFeedback(scope) }
+    val copiedValue by copyFeedback.copiedValue.collectAsStateWithLifecycle()
+    val isCopied = copiedValue == address
     ZappCopyableAddress(
         label = stringResource(R.string.settings_p2p_payment_method_info_base_label),
         address = address,
@@ -205,12 +198,10 @@ private fun OfframpBaseAddress(address: String) {
         isCopied = isCopied,
         onCopy = {
             copyToClipboard(address)
-            copyTaps++
+            copyFeedback.mark(address)
         },
     )
 }
-
-private const val COPY_FEEDBACK_MS = 2_000L
 
 @Composable
 private fun SwapBody() {
