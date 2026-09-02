@@ -49,6 +49,7 @@ import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.colors.ZappGiftCardStock
 import co.electriccoin.zcash.ui.design.theme.colors.ZappGiftCardStocks
 import co.electriccoin.zcash.ui.design.util.getValue
+import kotlin.math.roundToInt
 
 // What is printed on a card in the deck. Split from GiftDeckCard, which owns the object — its
 // shape, its shadow, and the gestures that turn it. This owns what the two faces say.
@@ -85,6 +86,7 @@ internal fun CardPeek(item: GiftCardListItem, stock: ZappGiftCardStock) {
             status = item.status,
             hasBeenChecked = item.lastCheckedAt != null,
             isCheckRecent = item.isLastCheckRecent,
+            check = item.check,
             stock = stock,
         )
     }
@@ -116,6 +118,7 @@ internal fun CardFront(item: GiftCardListItem, stock: ZappGiftCardStock) {
                 status = item.status,
                 hasBeenChecked = item.lastCheckedAt != null,
                 isCheckRecent = item.isLastCheckRecent,
+                check = item.check,
                 stock = stock,
             )
         }
@@ -226,7 +229,7 @@ private fun CardTools(item: GiftCardListItem, stock: ZappGiftCardStock) {
                 // The ScanTrack draws the same figure but cannot say it, and the percentage is the
                 // one thing that distinguishes a long scan from a stalled one. Absent until the SDK
                 // measures something, which is a while into a scan — hence the plain label then.
-                val percent = check.progress?.fraction?.let { (it * PERCENT).toInt() }
+                val percent = check.progress?.fraction?.let { (it * PERCENT).roundToInt() }
                 CardTool(
                     icon = Icons.Default.Close,
                     label =
@@ -347,8 +350,13 @@ private fun StatusPill(
     status: GiftCardListStatus,
     hasBeenChecked: Boolean,
     isCheckRecent: Boolean,
+    check: GiftCheckControl,
     stock: ZappGiftCardStock,
 ) {
+    // A scan runs for minutes, and the pill is the only status the front of a card shows. Left on
+    // the settled label it reads as "not checked" throughout the very check it was asked for.
+    val running = check as? GiftCheckControl.Running
+    val percent = running?.progress?.fraction?.let { (it * PERCENT).roundToInt() }
     val isSettled = status == GiftCardListStatus.CLAIMED
     val mark = if (isSettled) stock.inkFaint else ZappGiftCardStocks.LiveMark
     Row(
@@ -362,7 +370,12 @@ private fun StatusPill(
     ) {
         Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(mark))
         BasicText(
-            text = stringResource(status.chipRes(hasBeenChecked, isCheckRecent)),
+            text =
+                when {
+                    running == null -> stringResource(status.chipRes(hasBeenChecked, isCheckRecent))
+                    percent != null -> stringResource(R.string.gift_card_chip_checking_progress, percent)
+                    else -> stringResource(R.string.gift_card_chip_checking)
+                },
             style = ZappTheme.typography.chip.copy(color = if (isSettled) stock.inkMuted else stock.ink),
             maxLines = 1,
         )

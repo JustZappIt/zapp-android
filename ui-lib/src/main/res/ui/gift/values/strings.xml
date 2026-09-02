@@ -19,7 +19,7 @@
     <string name="gift_card_amount_error_insufficient">Not enough spendable ZEC for this amount plus fees</string>
 
     <string name="gift_card_message_label">Message (optional)</string>
-    <string name="gift_card_message_placeholder">Happy birthday</string>
+    <string name="gift_card_message_placeholder">justzappit</string>
     <string name="gift_card_message_counter">%1$d / %2$d</string>
     <string name="gift_card_message_error_too_long">This message is too long to fit in a Zpacket link</string>
 
@@ -152,6 +152,8 @@
     <string name="gift_card_chip_funded">Ready to share</string>
     <string name="gift_card_chip_shared">Unclaimed</string>
     <string name="gift_card_chip_shared_unchecked">Shared · not checked</string>
+    <string name="gift_card_chip_checking">Checking…</string>
+    <string name="gift_card_chip_checking_progress">Checking · %1$d%%</string>
     <string name="gift_card_chip_shared_stale">Shared · check again</string>
     <string name="gift_card_chip_claimed">Collected</string>
     <string name="gift_card_list_status_unfunded">Not funded</string>

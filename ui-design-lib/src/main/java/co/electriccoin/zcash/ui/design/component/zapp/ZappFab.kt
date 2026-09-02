@@ -39,7 +39,7 @@ fun ZappFab(
                 .pressScale(interactionSource)
                 .shadow(elevation = 4.dp, shape = RectangleShape, clip = false)
                 .background(c.accent, RectangleShape)
-                .border(BorderStroke(1.dp, c.border), RectangleShape)
+                .border(BorderStroke(1.dp, c.accentBorder), RectangleShape)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = ripple(color = c.onAccent, bounded = true),

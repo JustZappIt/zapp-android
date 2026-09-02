@@ -126,14 +126,18 @@ private const val EDGE_SHEEN_Y = 0.5f
 /** Enough of a note to be worth reading at a glance without crowding the denomination. */
 private const val MESSAGE_LINES = 2
 
+/** Where the fiat conversion is set: printed on the card face, or stated under it. */
+internal enum class GiftFiatPlacement { CARD, BELOW }
+
 @Composable
 internal fun GiftCardPodium(
     amount: StringResource?,
     tier: GiftCardTier,
     isSettled: Boolean,
     modifier: Modifier = Modifier,
-    /** The same worth in the wallet's chosen currency, under the ZEC figure. Null when no rate. */
+    /** The same worth in the wallet's chosen currency. Null when no rate. */
     fiat: StringResource? = null,
+    fiatPlacement: GiftFiatPlacement = GiftFiatPlacement.CARD,
     caption: String? = null,
     /** Shown on the face, so the note lands on the card rather than in a row beneath it. */
     message: String? = null,
@@ -298,19 +302,36 @@ internal fun GiftCardPodium(
                             ).clip(shape)
                             .materialLighting(rotation = rotation, stock = stock),
                 ) {
-                    if (showBack) PodiumBack(stock) else PodiumFace(amount, fiat, caption, message, stock)
+                    if (showBack) {
+                        PodiumBack(stock)
+                    } else {
+                        PodiumFace(
+                            amount = amount,
+                            fiat = fiat.takeIf { fiatPlacement == GiftFiatPlacement.CARD },
+                            caption = caption,
+                            message = message,
+                            stock = stock,
+                        )
+                    }
                 }
             }
             // Stated under the card as well as printed on it: the face is turned away half the
-            // time, and what a gift is worth should not come and go with the rotation. In ZEC
-            // rather than fiat, because ZEC is what the card actually carries — the fiat figure
-            // is a conversion that drifts with the rate while the gift itself does not.
+            // time, and what a gift is worth should not come and go with the rotation.
             amount?.let {
                 BasicText(
                     text = it.getValue(),
                     style = ZappTheme.typography.displaySecondary.copy(color = ZappTheme.colors.text),
                     modifier = Modifier.padding(top = 14.dp),
                 )
+            }
+            if (fiatPlacement == GiftFiatPlacement.BELOW) {
+                fiat?.let {
+                    BasicText(
+                        text = it.getValue(),
+                        style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.textMuted),
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
         }
     }

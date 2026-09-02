@@ -188,12 +188,6 @@ internal fun UnifiedSendView(
                     Spacer(8.dp)
                 }
 
-                // ── Swap mode: Slippage ──────────────────────────────────────
-                if (state.slippage != null) {
-                    SlippageButton(state = state.slippage)
-                    Spacer(8.dp)
-                }
-
                 // ── ZEC-direct mode: Memo ────────────────────────────────────
                 val memo = state.memo
                 AnimatedVisibility(visible = memo != null) {
@@ -237,7 +231,14 @@ internal fun UnifiedSendView(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             ZappBackButton(onClick = state.onBack)
-            CtaButton(btn = state.primaryButton, modifier = Modifier.weight(1f).padding(start = 12.dp))
+            Row(
+                modifier = Modifier.weight(1f).padding(start = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                state.slippage?.let { SlippageButton(it) }
+                CtaButton(btn = state.primaryButton, modifier = Modifier.weight(1f))
+            }
         }
     }
 }

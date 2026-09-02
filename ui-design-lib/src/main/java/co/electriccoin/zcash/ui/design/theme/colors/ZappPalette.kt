@@ -6,9 +6,9 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 private const val COMPLETION_ARGB = 0xFFF7CD45
-private const val LIGHT_COMPLETION_SHADE_ARGB = 0xFFE2A91E
-private const val DARK_COMPLETION_SHADE_ARGB = 0xFFDCA31B
 private const val ON_COMPLETION_ARGB = 0xFF211A08
+private const val LIGHT_ACCENT_SHADE_ARGB = 0xFFE97A0A
+private const val DARK_ACCENT_SHADE_ARGB = 0xFFE37609
 
 @Immutable
 data class ZappColors(
@@ -18,6 +18,10 @@ data class ZappColors(
     val surfaceInput: Color,
     val border: Color,
     val borderStrong: Color,
+    /** Outline for accent-filled controls. Transparent in light, where [border] reads as white. */
+    val accentBorder: Color,
+    /** Depth and rings under an accent fill. */
+    val accentShade: Color,
     val text: Color,
     val textMuted: Color,
     val textSubtle: Color,
@@ -25,7 +29,6 @@ data class ZappColors(
     val accentSoft: Color,
     val accentText: Color,
     val completion: Color,
-    val completionShade: Color,
     val onCompletion: Color,
     val success: Color,
     val successSoft: Color,
@@ -46,6 +49,8 @@ val LightZappColors =
         surfaceInput = Color(0xFFF6F4F0),
         border = Color(0xFFEBE7E0),
         borderStrong = Color(0xFFD9D4CA),
+        accentBorder = Color.Transparent,
+        accentShade = Color(LIGHT_ACCENT_SHADE_ARGB),
         text = Color(0xFF15120D),
         textMuted = Color(0xFF6B645A),
         textSubtle = Color(0xFF9A9288),
@@ -53,7 +58,6 @@ val LightZappColors =
         accentSoft = Color(0xFFFFE7CC),
         accentText = Color(0xFFA65500),
         completion = Color(COMPLETION_ARGB),
-        completionShade = Color(LIGHT_COMPLETION_SHADE_ARGB),
         onCompletion = Color(ON_COMPLETION_ARGB),
         success = Color(0xFF2F9D6A),
         successSoft = Color(0xFFD7F0E3),
@@ -74,6 +78,8 @@ val DarkZappColors =
         surfaceInput = Color(0xFF201D19),
         border = Color(0xFF2A2622),
         borderStrong = Color(0xFF3A342D),
+        accentBorder = Color(0xFF2A2622),
+        accentShade = Color(DARK_ACCENT_SHADE_ARGB),
         text = Color(0xFFF6F2EA),
         textMuted = Color(0xFFA59C90),
         textSubtle = Color(0xFF726A60),
@@ -81,7 +87,6 @@ val DarkZappColors =
         accentSoft = Color(0xFF3A2713),
         accentText = Color(0xFFFFB26B),
         completion = Color(COMPLETION_ARGB),
-        completionShade = Color(DARK_COMPLETION_SHADE_ARGB),
         onCompletion = Color(ON_COMPLETION_ARGB),
         success = Color(0xFF5FD49C),
         successSoft = Color(0xFF1A2E24),

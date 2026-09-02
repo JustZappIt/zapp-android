@@ -1,14 +1,11 @@
 package co.electriccoin.zcash.ui.screen.settings.p2p
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,7 +25,6 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,7 +38,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -59,6 +54,7 @@ import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ZashiScreenModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappCopyableAddress
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRowDivider
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSettingsGroup
@@ -193,33 +189,20 @@ private fun P2pHowItWorksSheet(state: P2pPaymentMethodState, onDismiss: () -> Un
                 style = ZappTheme.typography.body.copy(color = c.textMuted),
             )
             state.baseAddress?.let { address ->
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .background(c.surfaceAlt, RectangleShape)
-                            .border(BorderStroke(1.dp, c.border), RectangleShape)
-                            .padding(16.dp),
-                ) {
-                    BasicText(
-                        text = stringResource(R.string.settings_p2p_payment_method_info_base_label),
-                        style = ZappTheme.typography.caption.copy(color = c.textMuted),
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        BasicText(
-                            text = address,
-                            style = ZappTheme.typography.mono.copy(color = c.text),
-                            modifier = Modifier.weight(1f),
-                            maxLines = 2,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        CopyIconButton(
-                            showCopiedFeedback = state.isAddressCopied,
-                            onClick = state.onCopyBaseAddress,
-                        )
-                    }
-                }
+                ZappCopyableAddress(
+                    label = stringResource(R.string.settings_p2p_payment_method_info_base_label),
+                    address = address,
+                    copyContentDescription =
+                        stringResource(
+                            if (state.isAddressCopied) {
+                                R.string.settings_p2p_payment_method_info_copied_content_description
+                            } else {
+                                R.string.settings_p2p_payment_method_info_copy_content_description
+                            },
+                        ),
+                    isCopied = state.isAddressCopied,
+                    onCopy = state.onCopyBaseAddress,
+                )
             }
             ZappButton(
                 text = stringResource(co.electriccoin.zcash.ui.design.R.string.general_ok),
@@ -227,35 +210,6 @@ private fun P2pHowItWorksSheet(state: P2pPaymentMethodState, onDismiss: () -> Un
                 onClick = onDismiss,
             )
         }
-    }
-}
-
-@Composable
-private fun CopyIconButton(showCopiedFeedback: Boolean, onClick: () -> Unit) {
-    val c = ZappTheme.colors
-    val label =
-        if (showCopiedFeedback) {
-            stringResource(R.string.settings_p2p_payment_method_info_copied_content_description)
-        } else {
-            stringResource(R.string.settings_p2p_payment_method_info_copy_content_description)
-        }
-    Box(
-        modifier =
-            Modifier
-                .size(48.dp)
-                .clickable(onClick = onClick)
-                .semantics {
-                    contentDescription = label
-                    role = Role.Button
-                },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = if (showCopiedFeedback) Icons.Default.Check else Icons.Default.ContentCopy,
-            contentDescription = null,
-            tint = if (showCopiedFeedback) c.success else c.textMuted,
-            modifier = Modifier.size(20.dp),
-        )
     }
 }
 
