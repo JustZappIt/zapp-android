@@ -37,10 +37,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.appbar.ZashiTopAppBarVM
+import co.electriccoin.zcash.ui.common.bestEffort
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetOfframpBaseAddressUseCase
 import co.electriccoin.zcash.ui.design.component.ZashiScreenModalBottomSheet
@@ -71,10 +71,7 @@ fun SwapScreen(
     // cache, and arriving late would insert a card above the sheet's OK button under the thumb.
     val baseAddress by produceState<String?>(initialValue = null, key1 = tab) {
         if (tab != SwapTab.OFFRAMP) return@produceState
-        value =
-            runCatching { getBaseAddress() }
-                .onFailure { Twig.warn(it) { "SwapScreen: Base address resolve failed" } }
-                .getOrNull()
+        bestEffort("SwapScreen: Base address resolve failed") { value = getBaseAddress() }
     }
 
     Column(

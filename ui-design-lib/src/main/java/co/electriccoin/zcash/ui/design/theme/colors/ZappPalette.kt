@@ -6,8 +6,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 private const val COMPLETION_ARGB = 0xFFF7CD45
-private const val LIGHT_COMPLETION_SHADE_ARGB = 0xFFE2A91E
-private const val DARK_COMPLETION_SHADE_ARGB = 0xFFDCA31B
 private const val ON_COMPLETION_ARGB = 0xFF211A08
 private const val LIGHT_ACCENT_SHADE_ARGB = 0xFFE97A0A
 private const val DARK_ACCENT_SHADE_ARGB = 0xFFE37609
@@ -31,7 +29,6 @@ data class ZappColors(
     val accentSoft: Color,
     val accentText: Color,
     val completion: Color,
-    val completionShade: Color,
     val onCompletion: Color,
     val success: Color,
     val successSoft: Color,
@@ -61,7 +58,6 @@ val LightZappColors =
         accentSoft = Color(0xFFFFE7CC),
         accentText = Color(0xFFA65500),
         completion = Color(COMPLETION_ARGB),
-        completionShade = Color(LIGHT_COMPLETION_SHADE_ARGB),
         onCompletion = Color(ON_COMPLETION_ARGB),
         success = Color(0xFF2F9D6A),
         successSoft = Color(0xFFD7F0E3),
@@ -91,7 +87,6 @@ val DarkZappColors =
         accentSoft = Color(0xFF3A2713),
         accentText = Color(0xFFFFB26B),
         completion = Color(COMPLETION_ARGB),
-        completionShade = Color(DARK_COMPLETION_SHADE_ARGB),
         onCompletion = Color(ON_COMPLETION_ARGB),
         success = Color(0xFF5FD49C),
         successSoft = Color(0xFF1A2E24),

@@ -39,7 +39,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -460,39 +459,6 @@ fun ZappGroupHeader(
         text = text,
         modifier = modifier.padding(start = 18.dp, top = 16.dp, bottom = 6.dp),
     )
-}
-
-/** Flat orange square FAB anchored above the floating nav pill. */
-@Composable
-fun ZappFab(
-    icon: ImageVector,
-    contentDescription: String?,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    size: Int = 56,
-) {
-    val c = ZappTheme.colors
-    Box(
-        modifier =
-            modifier
-                .size(size.dp)
-                .shadow(elevation = 4.dp, shape = RectangleShape, clip = false)
-                .background(c.accent, RectangleShape)
-                .border(BorderStroke(1.dp, c.accentBorder), RectangleShape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = ripple(color = c.onAccent, bounded = true),
-                    onClick = onClick,
-                ).semantics(mergeDescendants = true) { role = Role.Button },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = c.onAccent,
-            modifier = Modifier.size(22.dp),
-        )
-    }
 }
 
 /**
