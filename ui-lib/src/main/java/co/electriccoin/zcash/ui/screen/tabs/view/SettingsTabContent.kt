@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.HowToVote
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
@@ -101,6 +102,7 @@ internal fun SettingsTabContent(
     onBaseAccountClick: () -> Unit,
     onPortfolioChartClick: () -> Unit,
     onViewingKeyExportClick: () -> Unit,
+    onHardwareWalletClick: () -> Unit,
     // Null while the coinholder-polling kill switch is off, which hides the group entirely.
     onVotingClick: (() -> Unit)?,
     walletViewModel: WalletViewModel = koinViewModel(),
@@ -258,6 +260,15 @@ internal fun SettingsTabContent(
                         //     onClick = { /* route via TabsVM */ },
                         // )
                         // ZappRowDivider(inset = true)
+                        ZappRow(
+                            title = stringResource(R.string.settings_hardware_wallet_title),
+                            subtitle = stringResource(R.string.settings_hardware_wallet_subtitle),
+                            icon = Icons.Default.Memory,
+                            iconTint = c.accentText,
+                            iconBackground = c.accentSoft,
+                            onClick = onHardwareWalletClick,
+                        )
+                        ZappRowDivider(inset = true)
                         ZappRow(
                             title = stringResource(R.string.settings_portfolio_chart_title),
                             subtitle = stringResource(R.string.settings_portfolio_chart_subtitle),
