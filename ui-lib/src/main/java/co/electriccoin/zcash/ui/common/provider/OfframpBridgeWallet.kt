@@ -74,9 +74,7 @@ interface OfframpBridgeWallet {
  *
  * A cancelled biometric prompt submits nothing and never resolves [submitState], so the authorization
  * result is checked before that state is awaited and raised as [BridgeAuthorizationCancelledException].
- * A Keystone signs over the QR sign screen instead of returning from the submit call, so it sets a
- * return route on the proposal repository: the sign screen is then pushed rather than swapped in, this
- * screen stays on the back stack with its coroutine alive, and the scan hands control straight back.
+ * A Keystone signs over the QR screen, so it claims a return route to keep this screen on the stack.
  */
 class RealOfframpBridgeWallet(
     private val accountDataSource: AccountDataSource,
@@ -137,12 +135,7 @@ class RealOfframpBridgeWallet(
         }
     }
 
-    /**
-     * A Keystone signature arrives from the QR sign screen rather than from the submit call, and the
-     * user can walk away from that screen instead of scanning. Abandoning it clears the session, which
-     * nulls the proposal, so watch for that alongside the result and report it as the same terminal
-     * failure a declined prompt produces — otherwise this would wait for the life of the process.
-     */
+    /** Abandoning the sign screen clears the proposal instead of emitting a result, so watch both. */
     private suspend fun awaitKeystoneSubmitResult(): SubmitResult =
         merge(
             keystoneProposalRepository.submitState

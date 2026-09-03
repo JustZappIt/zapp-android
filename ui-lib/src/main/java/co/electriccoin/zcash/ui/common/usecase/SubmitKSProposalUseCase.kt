@@ -28,9 +28,6 @@ class SubmitKSProposalUseCase(
         val returnRoute = keystoneProposalRepository.signReturnRoute
         swapRepository.clear()
         submitKSProposal(proposal)
-        // A caller that owns its own progress UI (the offramp bridge) is still on the stack below the
-        // sign screen and is waiting on `submitState`, so hand the screen back to it instead of the
-        // transaction-progress screen it never navigated away from.
         if (returnRoute != null) {
             navigationRouter.backTo(returnRoute)
         } else {

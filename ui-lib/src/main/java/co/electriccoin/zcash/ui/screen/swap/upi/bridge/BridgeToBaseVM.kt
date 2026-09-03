@@ -277,9 +277,7 @@ internal class BridgeToBaseVM(
     private fun startBridge(addUsdc: Usdc6, resumeHandle: String?) {
         if (bridgeJob?.isActive == true) return
         phase.update { Phase.Bridging(addUsdc = addUsdc, depositAddress = resumeHandle) }
-        // A Keystone deposit is signed over the QR screen, which is pushed on top of this one rather
-        // than replacing it so [bridgeJob] survives to see the signature. Claim the return so the scan
-        // hands the screen back here instead of to the transaction-progress screen.
+        // Keeps this screen (and [bridgeJob]) alive while a Keystone signs over the QR screen.
         keystoneProposalRepository.signReturnRoute = BridgeToBaseArgs::class
         bridgeJob =
             viewModelScope.launch {

@@ -46,12 +46,7 @@ interface KeystoneProposalRepository {
 
     val submitState: StateFlow<SubmitProposalState?>
 
-    /**
-     * Where to return once the signature is scanned, for a caller that drives its own progress UI and
-     * waits on [submitState] rather than handing off to the transaction-progress screen — the offramp
-     * bridge, which must keep running after the signature. Null (the default) keeps the standard
-     * send/swap behaviour. Set before submitting; [clear] resets it.
-     */
+    /** Where the scan returns, for a caller awaiting [submitState]. Null keeps the standard flow. */
     var signReturnRoute: KClass<*>?
 
     @Throws(
