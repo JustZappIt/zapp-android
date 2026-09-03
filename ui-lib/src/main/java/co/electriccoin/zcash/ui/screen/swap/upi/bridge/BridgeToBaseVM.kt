@@ -277,13 +277,17 @@ internal class BridgeToBaseVM(
     private fun startBridge(addUsdc: Usdc6, resumeHandle: String?) {
         if (bridgeJob?.isActive == true) return
         phase.update { Phase.Bridging(addUsdc = addUsdc, depositAddress = resumeHandle) }
-        // Keeps this screen (and [bridgeJob]) alive while a Keystone signs over the QR screen.
-        keystoneProposalRepository.signReturnRoute = BridgeToBaseArgs::class
         bridgeJob =
             viewModelScope.launch {
-                orchestrator.bridgeToBase(addUsdc, resumeBridgeHandle = resumeHandle).collect { status ->
-                    Twig.info { "BridgeToBase status=${status::class.simpleName}" }
-                    onBridgeStatus(addUsdc, status)
+                // Keeps this screen (and this job) alive while a Keystone signs over the QR screen.
+                keystoneProposalRepository.signReturnRoute = BridgeToBaseArgs::class
+                try {
+                    orchestrator.bridgeToBase(addUsdc, resumeBridgeHandle = resumeHandle).collect { status ->
+                        Twig.info { "BridgeToBase status=${status::class.simpleName}" }
+                        onBridgeStatus(addUsdc, status)
+                    }
+                } finally {
+                    keystoneProposalRepository.signReturnRoute = null
                 }
             }
     }

@@ -32,9 +32,18 @@ class CancelProposalFlowUseCase(
                 is KeystoneAccount -> keystoneProposalRepository.getTransactionProposal()
             }
 
+        // A caller that stayed on the stack for the signature owns where a reject lands; the routes
+        // below were never pushed on its back stack, so they would silently no-op.
+        val signReturnRoute = keystoneProposalRepository.signReturnRoute
+
         zashiProposalRepository.clear()
         keystoneProposalRepository.clear()
         chatSendContext.clear()
+
+        if (signReturnRoute != null) {
+            navigationRouter.backTo(signReturnRoute)
+            return
+        }
 
         when (proposal) {
             is ExactInputSwapTransactionProposal -> {

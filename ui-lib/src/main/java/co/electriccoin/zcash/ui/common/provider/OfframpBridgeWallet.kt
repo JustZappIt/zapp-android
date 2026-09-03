@@ -95,17 +95,20 @@ class RealOfframpBridgeWallet(
                 memo = Memo(""),
                 proposal = null,
             )
-        // Build the proposal the same way the swap flow does, per account type.
-        val isKeystone = accountDataSource.getSelectedAccount() is KeystoneAccount
+        // Build the proposal the same way the swap flow does, per account type. Clear first: nothing on
+        // this path resets submitState, so the await below would resolve against the previous deposit's.
+        val account = accountDataSource.getSelectedAccount()
         val submitState: Flow<SubmitProposalState?> =
-            when (accountDataSource.getSelectedAccount()) {
+            when (account) {
                 is KeystoneAccount -> {
+                    keystoneProposalRepository.clear()
                     keystoneProposalRepository.createExactOutputSwapProposal(send, quote)
                     keystoneProposalRepository.createPCZTFromProposal()
                     keystoneProposalRepository.submitState
                 }
 
                 is ZashiAccount -> {
+                    zashiProposalRepository.clear()
                     zashiProposalRepository.createExactOutputSwapProposal(send, quote)
                     zashiProposalRepository.submitState
                 }
@@ -118,7 +121,7 @@ class RealOfframpBridgeWallet(
         // suspend for the life of the process. Turn it into a terminal failure the caller can clear.
         if (!submitProposal(navigateAfter = false)) throw BridgeAuthorizationCancelledException()
         val result =
-            if (isKeystone) {
+            if (account is KeystoneAccount) {
                 awaitKeystoneSubmitResult()
             } else {
                 submitState.filterIsInstance<SubmitProposalState.Result>().first().submitResult

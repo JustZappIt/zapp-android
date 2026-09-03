@@ -46,7 +46,7 @@ interface KeystoneProposalRepository {
 
     val submitState: StateFlow<SubmitProposalState?>
 
-    /** Where the scan returns, for a caller awaiting [submitState]. Null keeps the standard flow. */
+    /** Where the scan returns, for a caller awaiting [submitState]. Set and cleared by that caller. */
     var signReturnRoute: KClass<*>?
 
     @Throws(
@@ -318,7 +318,6 @@ class KeystoneProposalRepositoryImpl(
         submitState.update { null }
         proposalPczt = null
         pcztWithSignatures = null
-        signReturnRoute = null
     }
 
     private inline fun <T : TransactionProposal> createProposalInternal(block: () -> T): T {
