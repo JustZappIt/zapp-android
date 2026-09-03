@@ -19,7 +19,6 @@ import co.electriccoin.zcash.ui.common.model.SwapStatus
 import co.electriccoin.zcash.ui.common.model.ZashiAccount
 import co.electriccoin.zcash.ui.common.model.ZecSwapAsset
 import co.electriccoin.zcash.ui.common.model.near.requireQuoteMatchesUserAmount
-import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
 import co.electriccoin.zcash.ui.common.repository.SubmitProposalState
 import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepository
 import co.electriccoin.zcash.ui.common.usecase.SubmitProposalUseCase
@@ -76,7 +75,6 @@ interface OfframpBridgeWallet {
 class RealOfframpBridgeWallet(
     private val accountDataSource: AccountDataSource,
     private val zashiProposalRepository: ZashiProposalRepository,
-    private val keystoneProposalRepository: KeystoneProposalRepository,
     private val submitProposal: SubmitProposalUseCase,
     private val synchronizerProvider: SynchronizerProvider,
 ) : OfframpBridgeWallet {
@@ -95,10 +93,12 @@ class RealOfframpBridgeWallet(
         // Build the proposal the same way the swap flow does, per account type.
         val submitState: Flow<SubmitProposalState?> =
             when (accountDataSource.getSelectedAccount()) {
+                // The separate seam this class's kdoc calls for does not exist yet: `navigateAfter =
+                // false` suppresses the QR sign screen, so the deposit would never be signed and the
+                // await below would suspend for the life of the process. Refuse before building the
+                // PCZT or prompting, and let the UI report it as unfundable.
                 is KeystoneAccount -> {
-                    keystoneProposalRepository.createExactOutputSwapProposal(send, quote)
-                    keystoneProposalRepository.createPCZTFromProposal()
-                    keystoneProposalRepository.submitState
+                    throw KeystoneUnsupportedForBridgeException()
                 }
 
                 is ZashiAccount -> {
@@ -431,6 +431,16 @@ class BridgeTerminallyFailedException(
  */
 class BridgeAuthorizationCancelledException :
     RuntimeException("The ZEC deposit was not authorized, so no ZEC was sent and the bridge never opened."),
+    UnfundableBridgeHandle
+
+/**
+ * A Keystone signs over the QR sign screen, which `navigateAfter = false` deliberately suppresses, so
+ * the deposit would never be signed and the submit state would never resolve. Thrown before the
+ * proposal is built so nothing is in flight; like a cancelled authorization the handle is already
+ * persisted, so the bridge is unfundable rather than retryable.
+ */
+class KeystoneUnsupportedForBridgeException :
+    RuntimeException("Bridging ZEC is not supported while a Keystone account is selected."),
     UnfundableBridgeHandle
 
 /**

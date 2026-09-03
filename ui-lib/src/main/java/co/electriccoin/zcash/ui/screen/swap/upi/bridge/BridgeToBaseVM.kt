@@ -11,6 +11,7 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.provider.BridgeAuthorizationCancelledException
 import co.electriccoin.zcash.ui.common.provider.InsufficientZecForBridgeException
+import co.electriccoin.zcash.ui.common.provider.KeystoneUnsupportedForBridgeException
 import co.electriccoin.zcash.ui.common.provider.OfframpTopUpCheckpoint
 import co.electriccoin.zcash.ui.common.provider.OfframpTopUpCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.provider.OfframpTopUpPreview
@@ -331,6 +332,10 @@ internal class BridgeToBaseVM(
 
                                 status.cause is BridgeAuthorizationCancelledException -> {
                                     stringRes(R.string.bridge_to_base_failed_cancelled)
+                                }
+
+                                status.cause is KeystoneUnsupportedForBridgeException -> {
+                                    stringRes(R.string.bridge_to_base_failed_keystone)
                                 }
 
                                 terminal -> {

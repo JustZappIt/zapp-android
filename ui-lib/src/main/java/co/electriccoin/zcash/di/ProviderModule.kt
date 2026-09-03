@@ -381,7 +381,6 @@ val providerModule =
             RealOfframpBridgeWallet(
                 accountDataSource = get(),
                 zashiProposalRepository = get(),
-                keystoneProposalRepository = get(),
                 submitProposal = get(),
                 synchronizerProvider = get(),
             )

@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.electriccoin.zcash.di.koinActivityViewModel
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.appbar.ZashiMainTopAppBarState
 import co.electriccoin.zcash.ui.common.appbar.ZashiTopAppBarVM
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.usecase.EnsureSwapAssetsLoadedUseCase
@@ -162,6 +163,9 @@ internal fun WalletHomeView() {
             onBuyUsdc = homeVM::onBuyUsdcClick,
             onGift = homeVM::onGiftClick,
             modifier = Modifier.fillMaxSize(),
+            showPayMerchant =
+                topAppBarState.accountSwitchState.accountType !=
+                    ZashiMainTopAppBarState.AccountType.KEYSTONE,
         )
     }
 }
