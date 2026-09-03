@@ -251,7 +251,6 @@
     <string name="bridge_to_base_added_amount">Added %1$s USDC to Base</string>
     <string name="bridge_to_base_failed_terminal">The bridge couldn\'t complete. If your ZEC was refunded, it will appear at your wallet shortly.</string>
     <string name="bridge_to_base_failed_cancelled">You didn\'t approve the transfer, so no ZEC was sent. Try again when you\'re ready.</string>
-    <string name="bridge_to_base_failed_keystone">Bridging ZEC isn\'t available with a hardware wallet yet. Switch to your Zapp wallet to cash out.</string>
     <string name="bridge_to_base_failed_generic">Couldn\'t start the bridge. Check your connection and try again.</string>
     <string name="bridge_to_base_failed_retry">The bridge is still in progress. Try again to keep checking the same transfer.</string>
     <string name="bridge_to_base_leave_title">Bridge in progress</string>

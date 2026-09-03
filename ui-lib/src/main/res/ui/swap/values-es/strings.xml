@@ -237,7 +237,6 @@
     <string name="bridge_to_base_added_amount">Se agregaron %1$s USDC a Base</string>
     <string name="bridge_to_base_failed_terminal">La transferencia no pudo completarse. Si tus ZEC fueron reembolsados, aparecerán en tu billetera en breve.</string>
     <string name="bridge_to_base_failed_cancelled">No aprobaste la transferencia, así que no se enviaron ZEC. Inténtalo de nuevo cuando quieras.</string>
-    <string name="bridge_to_base_failed_keystone">Todavía no puedes usar el puente de ZEC con una billetera de hardware. Cambia a tu billetera Zapp para retirar.</string>
     <string name="bridge_to_base_failed_generic">No se pudo iniciar la transferencia. Revisa tu conexión e inténtalo de nuevo.</string>
     <string name="bridge_to_base_failed_retry">La transferencia sigue en curso. Reintenta para seguir revisando la misma transferencia.</string>
     <string name="bridge_to_base_leave_title">Transferencia en curso</string>

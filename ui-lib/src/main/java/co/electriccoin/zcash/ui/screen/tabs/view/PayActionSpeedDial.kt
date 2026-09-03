@@ -29,16 +29,13 @@ internal fun PayActionSpeedDial(
     onBuyUsdc: () -> Unit,
     onGift: () -> Unit,
     modifier: Modifier = Modifier,
-    // Cashing out bridges ZEC, which a Keystone cannot sign for yet (see OfframpBridgeWallet), so the
-    // action is withheld rather than dead-ending at the end of a quoted flow.
-    showPayMerchant: Boolean = true,
 ) {
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     ZappSpeedDialFab(
         expandContentDescription = stringResource(R.string.home_fab_actions_expand),
         collapseContentDescription = stringResource(R.string.home_fab_actions_collapse),
         actions =
-            listOfNotNull(
+            listOf(
                 ZappSpeedDialAction(
                     icon = Icons.Default.Wallet,
                     label = stringResource(R.string.onramp_speed_dial_buy_usdc),
@@ -48,7 +45,7 @@ internal fun PayActionSpeedDial(
                     icon = Icons.Default.Storefront,
                     label = stringResource(R.string.home_button_pay_merchant),
                     onClick = onPayMerchant,
-                ).takeIf { showPayMerchant },
+                ),
                 ZappSpeedDialAction(
                     icon = Icons.AutoMirrored.Filled.CallMade,
                     label = stringResource(R.string.home_button_send),

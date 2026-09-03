@@ -343,6 +343,8 @@ private object ExactOutputKeystoneProposalsFake : KeystoneProposalRepository {
     override val transactionProposal: StateFlow<TransactionProposal?> = MutableStateFlow(null)
     override val submitState: StateFlow<SubmitProposalState?> = MutableStateFlow(null)
 
+    override var signReturnRoute: KClass<*>? = null
+
     override suspend fun createProposal(zecSend: ZecSend) = error("unused")
 
     override suspend fun createExactInputSwapProposal(

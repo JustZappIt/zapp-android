@@ -91,7 +91,13 @@ class SubmitProposalUseCase(
                     // receipt, and leaving the latch set would attach the *next* unrelated
                     // Zashi send's receipt to this conversation/request.
                     chatSendContext.consume()
-                    if (navigateAfter) {
+                    // A Keystone always has to reach the QR sign screen — nothing can be signed
+                    // otherwise — so this ignores `navigateAfter`, which only suppresses the Zashi
+                    // progress screen. A caller that stays alive waiting on `submitState` sets a
+                    // return route, and `forward` keeps its screen (and coroutine) on the stack.
+                    if (keystoneProposalRepository.signReturnRoute != null) {
+                        navigationRouter.forward(SignKeystoneTransactionArgs)
+                    } else {
                         navigationRouter.replace(SignKeystoneTransactionArgs)
                     }
                 }

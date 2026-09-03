@@ -38,12 +38,21 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.reflect.KClass
 
 @Suppress("TooManyFunctions")
 interface KeystoneProposalRepository {
     val transactionProposal: StateFlow<TransactionProposal?>
 
     val submitState: StateFlow<SubmitProposalState?>
+
+    /**
+     * Where to return once the signature is scanned, for a caller that drives its own progress UI and
+     * waits on [submitState] rather than handing off to the transaction-progress screen — the offramp
+     * bridge, which must keep running after the signature. Null (the default) keeps the standard
+     * send/swap behaviour. Set before submitting; [clear] resets it.
+     */
+    var signReturnRoute: KClass<*>?
 
     @Throws(
         TransactionProposalNotCreatedException::class,
@@ -141,6 +150,8 @@ class KeystoneProposalRepositoryImpl(
     override val transactionProposal = MutableStateFlow<TransactionProposal?>(null)
 
     override val submitState = MutableStateFlow<SubmitProposalState?>(null)
+
+    override var signReturnRoute: KClass<*>? = null
 
     private val pcztWithProofs = MutableStateFlow(PcztState(isLoading = false, pczt = null))
     private var proposalPczt: Pczt? = null
@@ -312,6 +323,7 @@ class KeystoneProposalRepositoryImpl(
         submitState.update { null }
         proposalPczt = null
         pcztWithSignatures = null
+        signReturnRoute = null
     }
 
     private inline fun <T : TransactionProposal> createProposalInternal(block: () -> T): T {
