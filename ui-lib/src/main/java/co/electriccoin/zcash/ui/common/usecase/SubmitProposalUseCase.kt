@@ -49,12 +49,9 @@ class SubmitProposalUseCase(
     /**
      * Submit Zashi proposal and (by default) navigate to Transaction Progress / Keystone PCZT flow.
      *
-     * @param navigateAfter When true (default), navigates to [TransactionProgressArgs] (Zashi) or
-     *   [SignKeystoneTransactionArgs] (Keystone) after submit — the standard send/swap UX. When
-     *   false, both navigations are suppressed and the caller keeps the foreground. Used by the
-     *   UPI offramp's NEAR-bridge funding step so the user stays on the offramp progress screen
-     *   while the ZEC deposit submits in the background. The Zashi submit still runs on a
-     *   background coroutine either way.
+     * @param navigateAfter When true (default), navigates to [TransactionProgressArgs] after a Zashi
+     *   submit. When false the caller keeps the foreground, as the offramp bridge does. Keystone
+     *   always goes to [SignKeystoneTransactionArgs] — nothing can be signed otherwise.
      * @return true once the proposal is authorized and handed off, false if the user dismissed or
      *   failed the biometric prompt. A declined prompt submits nothing and emits no
      *   `SubmitProposalState.Result`, so a caller that awaits that state must check this first or it
@@ -91,7 +88,10 @@ class SubmitProposalUseCase(
                     // receipt, and leaving the latch set would attach the *next* unrelated
                     // Zashi send's receipt to this conversation/request.
                     chatSendContext.consume()
-                    if (navigateAfter) {
+                    // Always reaches the sign screen; `forward` keeps a waiting caller on the stack.
+                    if (keystoneProposalRepository.signReturnRoute != null) {
+                        navigationRouter.forward(SignKeystoneTransactionArgs)
+                    } else {
                         navigationRouter.replace(SignKeystoneTransactionArgs)
                     }
                 }

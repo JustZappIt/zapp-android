@@ -10,6 +10,7 @@ import co.electriccoin.zcash.ui.common.datasource.AFFILIATE_ADDRESS
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.SwapDataSource
 import co.electriccoin.zcash.ui.common.datasource.TokenNotFoundException
+import co.electriccoin.zcash.ui.common.datasource.TransactionProposal
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.SubmitResult
 import co.electriccoin.zcash.ui.common.model.SwapAsset
@@ -26,8 +27,11 @@ import co.electriccoin.zcash.ui.common.usecase.SubmitProposalUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.funding.FundingOutcome
@@ -70,8 +74,7 @@ interface OfframpBridgeWallet {
  *
  * A cancelled biometric prompt submits nothing and never resolves [submitState], so the authorization
  * result is checked before that state is awaited and raised as [BridgeAuthorizationCancelledException].
- * Keystone signing still routes through the QR sign screen — pre-Keystone-support [navigateAfter=false]
- * is Zashi-only; the Keystone path will need a separate seam.
+ * A Keystone signs over the QR screen, so it claims a return route to keep this screen on the stack.
  */
 class RealOfframpBridgeWallet(
     private val accountDataSource: AccountDataSource,
@@ -92,16 +95,20 @@ class RealOfframpBridgeWallet(
                 memo = Memo(""),
                 proposal = null,
             )
-        // Build the proposal the same way the swap flow does, per account type.
+        // Build the proposal the same way the swap flow does, per account type. Clear first: nothing on
+        // this path resets submitState, so the await below would resolve against the previous deposit's.
+        val account = accountDataSource.getSelectedAccount()
         val submitState: Flow<SubmitProposalState?> =
-            when (accountDataSource.getSelectedAccount()) {
+            when (account) {
                 is KeystoneAccount -> {
+                    keystoneProposalRepository.clear()
                     keystoneProposalRepository.createExactOutputSwapProposal(send, quote)
                     keystoneProposalRepository.createPCZTFromProposal()
                     keystoneProposalRepository.submitState
                 }
 
                 is ZashiAccount -> {
+                    zashiProposalRepository.clear()
                     zashiProposalRepository.createExactOutputSwapProposal(send, quote)
                     zashiProposalRepository.submitState
                 }
@@ -113,7 +120,12 @@ class RealOfframpBridgeWallet(
         // A declined prompt submits nothing and never emits a Result, so the await below would
         // suspend for the life of the process. Turn it into a terminal failure the caller can clear.
         if (!submitProposal(navigateAfter = false)) throw BridgeAuthorizationCancelledException()
-        val result = submitState.filterIsInstance<SubmitProposalState.Result>().first().submitResult
+        val result =
+            if (account is KeystoneAccount) {
+                awaitKeystoneSubmitResult()
+            } else {
+                submitState.filterIsInstance<SubmitProposalState.Result>().first().submitResult
+            }
         return when (result) {
             is SubmitResult.Success -> {
                 result.txIds.firstOrNull()
@@ -125,6 +137,17 @@ class RealOfframpBridgeWallet(
             }
         }
     }
+
+    /** Abandoning the sign screen clears the proposal instead of emitting a result, so watch both. */
+    private suspend fun awaitKeystoneSubmitResult(): SubmitResult =
+        merge(
+            keystoneProposalRepository.submitState
+                .filterIsInstance<SubmitProposalState.Result>()
+                .map<SubmitProposalState.Result, SubmitResult?> { it.submitResult },
+            keystoneProposalRepository.transactionProposal
+                .filter { it == null }
+                .map<TransactionProposal?, SubmitResult?> { null },
+        ).first() ?: throw BridgeAuthorizationCancelledException()
 
     private suspend fun walletAddress(address: String): WalletAddress =
         when (val r = synchronizerProvider.getSynchronizer().validateAddress(address)) {

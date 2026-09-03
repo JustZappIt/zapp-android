@@ -25,9 +25,14 @@ class SubmitKSProposalUseCase(
      */
     suspend operator fun invoke() {
         val proposal = keystoneProposalRepository.getTransactionProposal()
+        val returnRoute = keystoneProposalRepository.signReturnRoute
         swapRepository.clear()
         submitKSProposal(proposal)
-        navigationRouter.replace(TransactionProgressArgs)
+        if (returnRoute != null) {
+            navigationRouter.backTo(returnRoute)
+        } else {
+            navigationRouter.replace(TransactionProgressArgs)
+        }
     }
 
     private fun submitKSProposal(proposal: TransactionProposal) {

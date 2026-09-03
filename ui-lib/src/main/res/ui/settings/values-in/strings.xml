@@ -21,6 +21,8 @@
     <string name="settings_group_privacy">Privasi</string>
     <string name="settings_group_p2p">P2P</string>
     <string name="settings_group_wallet">Dompet</string>
+    <string name="settings_hardware_wallet_title">Dompet hardware</string>
+    <string name="settings_hardware_wallet_subtitle">Hubungkan Keystone atau ganti dompet</string>
     <string name="settings_contacts_subtitle">Kelola kontak obrolan Anda</string>
     <string name="settings_profile_identity_title">Profil &amp; identitas</string>
     <string name="settings_profile_identity_subtitle">Frasa pemulihan, kunci pesan, alamat dompet</string>

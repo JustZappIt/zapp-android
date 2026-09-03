@@ -637,8 +637,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: store-debug
-            gradle_tasks: ":app:assembleZcashmainnetStoreDebug :app:assembleZcashtestnetStoreDebug"
+          # One APK per shard: packaging both flavours in one invocation runs two
+          # PackageAndroidArtifact workers over the same ~25 native libs at once.
+          - name: store-debug-mainnet
+            gradle_tasks: ":app:assembleZcashmainnetStoreDebug"
+          - name: store-debug-testnet
+            gradle_tasks: ":app:assembleZcashtestnetStoreDebug"
           - name: store-mainnet-release
             gradle_tasks: ":app:bundleZcashmainnetStoreRelease :app:packageZcashmainnetStoreReleaseUniversalApk"
           - name: store-testnet-release
@@ -707,7 +711,7 @@ jobs:
           ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
           ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
         run: |
-          ./gradlew ${{ matrix.gradle_tasks }}
+          ./gradlew ${{ matrix.gradle_tasks }} --stacktrace
 
       - name: Collect Artifacts
         if: ${{ always() }}
@@ -821,7 +825,7 @@ jobs:
           # TODO [#1789] Re-enable Flexa integrations for FOSS variant
           # ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
         run: |
-          ./gradlew clean :app:assembleZcashmainnetFossRelease
+          ./gradlew clean :app:assembleZcashmainnetFossRelease --stacktrace
 
       - name: Collect Artifacts
         if: ${{ always() }}

@@ -23,6 +23,8 @@
     <string name="settings_group_privacy">Privacidad</string>
     <string name="settings_group_p2p">P2P</string>
     <string name="settings_group_wallet">Billetera</string>
+    <string name="settings_hardware_wallet_title">Billetera de hardware</string>
+    <string name="settings_hardware_wallet_subtitle">Conecta un Keystone o cambia de billetera</string>
     <string name="settings_portfolio_chart_title">Gráfico del portafolio</string>
     <string name="settings_portfolio_chart_subtitle">Visibilidad y privacidad</string>
     <string name="settings_portfolio_chart_section">Visualización</string>

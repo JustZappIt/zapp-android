@@ -21,6 +21,8 @@
     <string name="settings_group_privacy">Privacidade</string>
     <string name="settings_group_p2p">P2P</string>
     <string name="settings_group_wallet">Carteira</string>
+    <string name="settings_hardware_wallet_title">Carteira de hardware</string>
+    <string name="settings_hardware_wallet_subtitle">Conecte uma Keystone ou troque de carteira</string>
     <string name="settings_contacts_subtitle">Gerencie seus contatos de chat</string>
     <string name="settings_profile_identity_title">Perfil e identidade</string>
     <string name="settings_profile_identity_subtitle">Frase semente, chave de mensagens, endereço da carteira</string>

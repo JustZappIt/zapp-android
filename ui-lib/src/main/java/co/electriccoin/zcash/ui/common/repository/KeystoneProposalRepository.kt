@@ -38,12 +38,16 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.reflect.KClass
 
 @Suppress("TooManyFunctions")
 interface KeystoneProposalRepository {
     val transactionProposal: StateFlow<TransactionProposal?>
 
     val submitState: StateFlow<SubmitProposalState?>
+
+    /** Where the scan returns, for a caller awaiting [submitState]. Set and cleared by that caller. */
+    var signReturnRoute: KClass<*>?
 
     @Throws(
         TransactionProposalNotCreatedException::class,
@@ -141,6 +145,8 @@ class KeystoneProposalRepositoryImpl(
     override val transactionProposal = MutableStateFlow<TransactionProposal?>(null)
 
     override val submitState = MutableStateFlow<SubmitProposalState?>(null)
+
+    override var signReturnRoute: KClass<*>? = null
 
     private val pcztWithProofs = MutableStateFlow(PcztState(isLoading = false, pczt = null))
     private var proposalPczt: Pczt? = null

@@ -23,6 +23,8 @@
     <string name="settings_group_privacy">Privacy</string>
     <string name="settings_group_p2p">P2P</string>
     <string name="settings_group_wallet">Wallet</string>
+    <string name="settings_hardware_wallet_title">Hardware wallet</string>
+    <string name="settings_hardware_wallet_subtitle">Connect a Keystone or switch wallets</string>
     <string name="settings_portfolio_chart_title">Portfolio chart</string>
     <string name="settings_portfolio_chart_subtitle">Visibility and privacy</string>
     <string name="settings_portfolio_chart_section">Display</string>

@@ -19,6 +19,7 @@ import co.electriccoin.zcash.ui.common.provider.UnfundableBridgeHandle
 import co.electriccoin.zcash.ui.common.provider.evaluateBridgeGate
 import co.electriccoin.zcash.ui.common.repository.BaseBalance
 import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepository
+import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
@@ -73,6 +74,7 @@ internal class BridgeToBaseVM(
     private val topUpPreview: OfframpTopUpPreview,
     private val accountDataSource: AccountDataSource,
     private val checkpointStorage: OfframpTopUpCheckpointStorageProvider,
+    private val keystoneProposalRepository: KeystoneProposalRepository,
 ) : ViewModel() {
     private sealed interface Phase {
         data object Input : Phase
@@ -277,9 +279,15 @@ internal class BridgeToBaseVM(
         phase.update { Phase.Bridging(addUsdc = addUsdc, depositAddress = resumeHandle) }
         bridgeJob =
             viewModelScope.launch {
-                orchestrator.bridgeToBase(addUsdc, resumeBridgeHandle = resumeHandle).collect { status ->
-                    Twig.info { "BridgeToBase status=${status::class.simpleName}" }
-                    onBridgeStatus(addUsdc, status)
+                // Keeps this screen (and this job) alive while a Keystone signs over the QR screen.
+                keystoneProposalRepository.signReturnRoute = BridgeToBaseArgs::class
+                try {
+                    orchestrator.bridgeToBase(addUsdc, resumeBridgeHandle = resumeHandle).collect { status ->
+                        Twig.info { "BridgeToBase status=${status::class.simpleName}" }
+                        onBridgeStatus(addUsdc, status)
+                    }
+                } finally {
+                    keystoneProposalRepository.signReturnRoute = null
                 }
             }
     }

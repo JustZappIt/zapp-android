@@ -7,15 +7,19 @@ import co.electriccoin.zcash.ui.BaseNavigationCommand
 import co.electriccoin.zcash.ui.NavigationCommand
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
+import co.electriccoin.zcash.ui.common.datasource.ExactOutputSwapTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.MigrationSweepTransactionProposal
+import co.electriccoin.zcash.ui.common.datasource.TransactionProposal
 import co.electriccoin.zcash.ui.common.migration.MigrationNavigator
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.provider.ChatSendContextProvider
 import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepository
+import co.electriccoin.zcash.ui.screen.swap.upi.bridge.BridgeToBaseArgs
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -30,14 +34,48 @@ class CancelProposalFlowUseCaseTest {
     @Test
     fun migrationSweepProposalNavigatesBackToMigrationReviewInsteadOfSend() =
         runTest {
-            val proposal = MigrationSweepTransactionProposal(Zatoshi(500_000L), mockk<Proposal>())
-            val keystoneProposalRepository =
-                mockk<KeystoneProposalRepository>(relaxed = true) {
-                    coEvery { getTransactionProposal() } returns proposal
-                }
-            val router = FakeNavigationRouter()
-            val migrationNavigator = FakeMigrationNavigator()
-            val useCase =
+            val fixture = fixture(MigrationSweepTransactionProposal(Zatoshi(500_000L), mockk<Proposal>()))
+
+            fixture.useCase()
+
+            coVerify(exactly = 1) { fixture.keystoneProposalRepository.clear() }
+            assertEquals(0, fixture.router.backToCalls.size)
+            assertEquals(1, fixture.migrationNavigator.backToReviewCalls)
+        }
+
+    @Test
+    fun claimedSignReturnRouteWinsOverTheProposalShapedRoute() =
+        runTest {
+            val fixture =
+                fixture(
+                    proposal = mockk<ExactOutputSwapTransactionProposal>(relaxed = true),
+                    signReturnRoute = BridgeToBaseArgs::class,
+                )
+
+            fixture.useCase()
+
+            coVerify(exactly = 1) { fixture.keystoneProposalRepository.clear() }
+            assertEquals<KClass<*>>(BridgeToBaseArgs::class, fixture.router.backToCalls.single())
+            assertEquals(0, fixture.migrationNavigator.backToReviewCalls)
+        }
+
+    private class Fixture(
+        val useCase: CancelProposalFlowUseCase,
+        val keystoneProposalRepository: KeystoneProposalRepository,
+        val router: FakeNavigationRouter,
+        val migrationNavigator: FakeMigrationNavigator,
+    )
+
+    private fun fixture(proposal: TransactionProposal, signReturnRoute: KClass<*>? = null): Fixture {
+        val keystoneProposalRepository =
+            mockk<KeystoneProposalRepository>(relaxed = true) {
+                coEvery { getTransactionProposal() } returns proposal
+                every { this@mockk.signReturnRoute } returns signReturnRoute
+            }
+        val router = FakeNavigationRouter()
+        val migrationNavigator = FakeMigrationNavigator()
+        return Fixture(
+            useCase =
                 CancelProposalFlowUseCase(
                     zashiProposalRepository = mockk<ZashiProposalRepository>(relaxed = true),
                     keystoneProposalRepository = keystoneProposalRepository,
@@ -50,14 +88,12 @@ class CancelProposalFlowUseCaseTest {
                     swapRepository = mockk<SwapRepository>(relaxed = true),
                     chatSendContext = ChatSendContextProvider(),
                     migrationNavigator = migrationNavigator,
-                )
-
-            useCase()
-
-            coVerify(exactly = 1) { keystoneProposalRepository.clear() }
-            assertEquals(0, router.backToCalls.size)
-            assertEquals(1, migrationNavigator.backToReviewCalls)
-        }
+                ),
+            keystoneProposalRepository = keystoneProposalRepository,
+            router = router,
+            migrationNavigator = migrationNavigator,
+        )
+    }
 
     private class FakeMigrationNavigator : MigrationNavigator {
         var backToReviewCalls = 0

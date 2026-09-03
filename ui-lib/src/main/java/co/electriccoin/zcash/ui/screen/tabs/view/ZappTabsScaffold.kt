@@ -174,6 +174,7 @@ private fun ZappTabsScaffoldContent() {
                         onBaseAccountClick = tabsVM::onBaseAccountClick,
                         onPortfolioChartClick = tabsVM::onPortfolioChartClick,
                         onViewingKeyExportClick = tabsVM::onViewingKeyExportClick,
+                        onHardwareWalletClick = tabsVM::onHardwareWalletClick,
                         onVotingClick =
                             if (navigateToVoting.isEnabled) {
                                 { scope.launch { navigateToVoting() } }
