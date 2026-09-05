@@ -3,8 +3,10 @@ package co.electriccoin.zcash.ui.common.usecase
 import cash.z.ecc.android.sdk.AttentionReason
 import cash.z.ecc.android.sdk.MigrationBlocker
 import cash.z.ecc.android.sdk.MigrationState
+import cash.z.ecc.android.sdk.Synchronizer
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
+import co.electriccoin.zcash.ui.common.datasource.WalletSnapshotDataSource
 import co.electriccoin.zcash.ui.common.migration.MigrationHomeMessageSource
 import co.electriccoin.zcash.ui.common.model.migration.LiveMigrationSnapshot
 import co.electriccoin.zcash.ui.common.model.migration.MIGRATION_DUST_THRESHOLD_ZATOSHI
@@ -47,6 +49,7 @@ class MigrationHomeMessageSourceImpl(
     private val getOrchardMigrationSdk: GetOrchardMigrationSdkUseCase,
     private val observeMigrationLiveReadout: ObserveMigrationLiveReadoutUseCase,
     private val getOrchardBalance: GetOrchardBalanceUseCase,
+    private val walletSnapshotDataSource: WalletSnapshotDataSource,
     private val hasSeenMigrationCompleteStorageProvider: HasSeenMigrationCompleteStorageProvider,
     private val isBackgroundExecutionAvailableProvider: IsBackgroundExecutionAvailableProvider,
     private val navigationRouter: NavigationRouter,
@@ -70,7 +73,11 @@ class MigrationHomeMessageSourceImpl(
                 // never touches the engine) the balance is the only input that can hide the
                 // "Migrate required" banner once the Orchard funds are spent.
                 getOrchardBalance.observe(),
-            ) { hasSeenComplete, readout, orchardBalance ->
+                // Mirrors HomeVM's isSyncComplete: mid-sync the Orchard balance is a partial read
+                // of a still-changing DB, so the residue branch below must not act on it.
+                walletSnapshotDataSource.observe(),
+            ) { hasSeenComplete, readout, orchardBalance, walletSnapshot ->
+                val isFullySynced = walletSnapshot?.status == Synchronizer.Status.SYNCED
                 val sdkState = readout?.migrationState
                 val states = readout?.states
                 val snapshot =
@@ -113,6 +120,7 @@ class MigrationHomeMessageSourceImpl(
                     hasSeenComplete = hasSeenComplete,
                     orchardBalanceZatoshi = orchardBalance?.value ?: 0L,
                     dustThresholdZatoshi = dustThreshold,
+                    isFullySynced = isFullySynced,
                     isBackgroundExecutionAvailable = isBackgroundExecutionAvailableProvider.isAvailable(),
                     hasOverdueTransfers = readout?.hasOverdueTransfers ?: false,
                     attentionKind = attentionKind,
@@ -269,6 +277,7 @@ internal fun migrationMessageFor(
     hasSeenComplete: Boolean,
     orchardBalanceZatoshi: Long,
     dustThresholdZatoshi: Long = MIGRATION_DUST_THRESHOLD_ZATOSHI,
+    isFullySynced: Boolean = true,
     isBackgroundExecutionAvailable: Boolean = true,
     hasOverdueTransfers: Boolean = false,
     now: Instant = Clock.System.now(),
@@ -355,7 +364,11 @@ internal fun migrationMessageFor(
         // as "migration completed" and route to MigrationCompleteScreen, whose residue flow lets
         // the user LOCK it or MIGRATE it anyway. The reported balance is the *spendable* Orchard
         // balance (locked notes excluded), so locking makes this stop firing on its own.
+        // Gated on isFullySynced: mid-sync this is a partial read of a still-scanning DB, so a
+        // wallet already swept elsewhere can briefly report a balance in the residue gap and get
+        // a "migration complete" banner whose "migrate anyway" then has nothing to spend.
         !midRunAttention &&
+            isFullySynced &&
             orchardBalanceZatoshi > dustThresholdZatoshi &&
             orchardBalanceZatoshi < MIGRATION_RESIDUAL_MIN_ZATOSHI -> {
             MigrationHomeMessageData(isRunActive = false, isComplete = true)

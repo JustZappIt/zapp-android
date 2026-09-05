@@ -31,6 +31,9 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.core)
     implementation(projects.preferenceApiLib)
+    implementation(projects.spackleAndroidLib)
+
+    testImplementation(libs.kotlin.test)
 
     androidTestImplementation(libs.bundles.androidx.test)
     androidTestImplementation(libs.kotlinx.coroutines.test)

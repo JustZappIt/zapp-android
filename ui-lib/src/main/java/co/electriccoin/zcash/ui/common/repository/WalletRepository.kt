@@ -212,8 +212,15 @@ class WalletRepositoryImpl(
     private val _walletProvisioningError = MutableStateFlow<Throwable?>(null)
     override val walletProvisioningError: StateFlow<Throwable?> = _walletProvisioningError.asStateFlow()
 
+    @Suppress("TooGenericExceptionCaught")
     override fun init() {
-        scope.launch { migrateDecommissionedEndpointIfNeeded() }
+        scope.launch {
+            try {
+                migrateDecommissionedEndpointIfNeeded()
+            } catch (e: Exception) {
+                Twig.error(e) { "Decommissioned endpoint migration failed; will retry on next launch" }
+            }
+        }
     }
 
     private suspend fun migrateDecommissionedEndpointIfNeeded() {
