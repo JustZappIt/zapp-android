@@ -5,6 +5,7 @@ import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.ExactInputSwapTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.ExactOutputSwapTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.MigrationSweepTransactionProposal
+import co.electriccoin.zcash.ui.common.datasource.ShieldTransactionProposal
 import co.electriccoin.zcash.ui.common.migration.MigrationNavigator
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.ZashiAccount
@@ -62,6 +63,13 @@ class CancelProposalFlowUseCase(
                 // the `else` branch's `backTo(Send::class)` would silently no-op (no matching
                 // destination to pop to), leaving the user stuck on the Sign/reject sheet.
                 migrationNavigator.backToMigrationReview()
+            }
+
+            is ShieldTransactionProposal -> {
+                // ShieldFundsUseCase's Keystone branch forwards to Sign without popping the screen
+                // the shield prompt came from, so that screen is still directly beneath us and the
+                // `else` branch's `backTo` would no-op. A plain back() reveals it again.
+                navigationRouter.back()
             }
 
             else -> {

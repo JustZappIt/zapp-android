@@ -38,7 +38,6 @@ import co.electriccoin.zcash.ui.screen.common.WalletHeaderIconsState
 import co.electriccoin.zcash.ui.screen.voting.VoteConfirmationBottomSheet
 import co.electriccoin.zcash.ui.screen.voting.component.VoteAppBar
 import co.electriccoin.zcash.ui.screen.voting.voteBarAction
-import co.electriccoin.zcash.ui.screen.voting.votingerror.VotingErrorMapper
 
 /**
  * The last screen before votes leave the device, and the progress report once they do. Back is
@@ -206,17 +205,10 @@ private fun headerSubtitle(state: VoteConfirmSubmissionState): StringResource =
         }
 
         is VoteSubmissionStatus.SubmissionFailed -> {
-            status.error.toMessageOrDefault(
-                status.defaultError ?: stringRes(R.string.coinVote_confirmSubmission_submissionFailedMessage)
-            )
+            status.error
+                ?: status.defaultError
+                ?: stringRes(R.string.coinVote_confirmSubmission_submissionFailedMessage)
         }
-    }
-
-private fun String?.toMessageOrDefault(default: StringResource): StringResource =
-    if (isNullOrBlank()) {
-        default
-    } else {
-        VotingErrorMapper.toUserFriendlyMessage(this)
     }
 
 private fun previewState(status: VoteSubmissionStatus) =
@@ -247,6 +239,6 @@ private fun ConfirmSubmissionPreviewCompleted() =
 private fun ConfirmSubmissionPreviewFailed() =
     ProvideZappTheme {
         VoteConfirmSubmissionView(
-            previewState(VoteSubmissionStatus.SubmissionFailed("Network error. Please try again."))
+            previewState(VoteSubmissionStatus.SubmissionFailed(stringRes("Network error. Please try again.")))
         )
     }

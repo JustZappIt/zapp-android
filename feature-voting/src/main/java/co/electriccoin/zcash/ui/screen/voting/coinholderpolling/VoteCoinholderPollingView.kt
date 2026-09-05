@@ -20,7 +20,9 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,8 +45,12 @@ import co.electriccoin.zcash.ui.screen.voting.VoteConfirmationBottomSheet
 import co.electriccoin.zcash.ui.screen.voting.component.VoteAppBar
 import co.electriccoin.zcash.ui.screen.voting.component.VoteTrustIndicatorView
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VoteCoinholderPollingView(state: VoteCoinholderPollingState) {
+fun VoteCoinholderPollingView(
+    state: VoteCoinholderPollingState,
+    isRefreshing: Boolean = false,
+) {
     VoteConfirmationBottomSheet(state = state.configErrorSheet)
     VoteConfirmationBottomSheet(state = state.unverifiedPollWarningSheet)
     VoteConfirmationBottomSheet(state = state.noRoundsSheet)
@@ -56,13 +62,21 @@ fun VoteCoinholderPollingView(state: VoteCoinholderPollingState) {
             PollsLoading(padding)
         } else {
             val spacing = ZappTheme.spacing
-            LazyColumn(
+            // The scaffold padding is applied to the box, so the default top-aligned indicator
+            // already lands below the app bar — no extra offset needed here.
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = state.onRefresh,
                 modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(spacing.xl),
-                verticalArrangement = Arrangement.spacedBy(spacing.lg)
             ) {
-                items(activeRounds, key = { it.roundId }, contentType = { POLL_CARD }) { PollCard(it) }
-                items(pastRounds, key = { it.roundId }, contentType = { POLL_CARD }) { PollCard(it) }
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(spacing.xl),
+                    verticalArrangement = Arrangement.spacedBy(spacing.lg)
+                ) {
+                    items(activeRounds, key = { it.roundId }, contentType = { POLL_CARD }) { PollCard(it) }
+                    items(pastRounds, key = { it.roundId }, contentType = { POLL_CARD }) { PollCard(it) }
+                }
             }
         }
     }
