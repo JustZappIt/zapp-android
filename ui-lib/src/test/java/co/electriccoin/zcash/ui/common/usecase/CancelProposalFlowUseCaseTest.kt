@@ -9,6 +9,7 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.ExactOutputSwapTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.MigrationSweepTransactionProposal
+import co.electriccoin.zcash.ui.common.datasource.ShieldTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.TransactionProposal
 import co.electriccoin.zcash.ui.common.migration.MigrationNavigator
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
@@ -41,6 +42,18 @@ class CancelProposalFlowUseCaseTest {
             coVerify(exactly = 1) { fixture.keystoneProposalRepository.clear() }
             assertEquals(0, fixture.router.backToCalls.size)
             assertEquals(1, fixture.migrationNavigator.backToReviewCalls)
+        }
+
+    @Test
+    fun shieldProposalNavigatesBackInsteadOfSend() =
+        runTest {
+            val fixture = fixture(ShieldTransactionProposal(mockk<Proposal>()))
+
+            fixture.useCase()
+
+            coVerify(exactly = 1) { fixture.keystoneProposalRepository.clear() }
+            assertEquals(0, fixture.router.backToCalls.size)
+            assertEquals(1, fixture.router.backCalls)
         }
 
     @Test
@@ -110,13 +123,17 @@ class CancelProposalFlowUseCaseTest {
     private class FakeNavigationRouter : NavigationRouter {
         val backToCalls = mutableListOf<KClass<*>>()
 
+        var backCalls = 0
+
         override fun forward(vararg routes: Any) = Unit
 
         override fun replace(vararg routes: Any) = Unit
 
         override fun replaceAll(vararg routes: Any) = Unit
 
-        override fun back() = Unit
+        override fun back() {
+            backCalls++
+        }
 
         override fun backTo(route: KClass<*>) {
             backToCalls += route

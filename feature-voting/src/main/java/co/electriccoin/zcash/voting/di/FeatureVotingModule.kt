@@ -29,6 +29,7 @@ import co.electriccoin.zcash.ui.common.usecase.ParseVotingKeystonePCZTUseCase
 import co.electriccoin.zcash.ui.common.usecase.PrepareVotingRoundUseCase
 import co.electriccoin.zcash.ui.common.usecase.RefreshActiveVotingSessionUseCase
 import co.electriccoin.zcash.ui.common.usecase.RefreshVotingRoundsUseCase
+import co.electriccoin.zcash.ui.common.usecase.RefreshVotingServiceConfigUseCase
 import co.electriccoin.zcash.ui.common.usecase.ResolveVotingRoundSessionUseCase
 import co.electriccoin.zcash.ui.common.usecase.SkipRemainingKeystoneBundlesUseCase
 import co.electriccoin.zcash.ui.common.usecase.SubmitVotesUseCase
@@ -73,7 +74,14 @@ val featureVotingModule =
         // Providers
         singleOf(::VotingCryptoClientImpl) bind VotingCryptoClient::class
         singleOf(::VotingHotkeySeedProviderImpl) bind VotingHotkeySeedProvider::class
-        singleOf(::KtorVotingApiProvider) bind VotingApiProvider::class
+        single<VotingApiProvider> {
+            KtorVotingApiProvider(
+                httpClientProvider = get(),
+                configurationRepository = get(),
+                votingChainConfigRepository = get(),
+                votingCryptoClient = get()
+            )
+        }
         singleOf(::HttpPirSnapshotResolver) bind PirSnapshotResolver::class
         singleOf(::VotingShareTrackingScheduler)
 
@@ -93,6 +101,7 @@ val featureVotingModule =
 
         // Use cases
         factoryOf(::RefreshActiveVotingSessionUseCase)
+        factoryOf(::RefreshVotingServiceConfigUseCase)
         // Explicit factory: the defaulted logEndorsementFailure lambda must use its Kotlin
         // default — factoryOf resolves ALL constructor params via Koin and dies on the Function1
         // (mirrors CheckMigrationRecoveryUseCase's registration in featureMigrationModule).
