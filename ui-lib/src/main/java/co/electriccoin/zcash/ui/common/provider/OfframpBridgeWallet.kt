@@ -9,6 +9,7 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.datasource.AFFILIATE_ADDRESS
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.SwapDataSource
+import co.electriccoin.zcash.ui.common.datasource.SwapQuoteEstimate
 import co.electriccoin.zcash.ui.common.datasource.TokenNotFoundException
 import co.electriccoin.zcash.ui.common.datasource.TransactionProposal
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
@@ -293,20 +294,45 @@ class NearBridgeOfframpFunding(
     }
 
     /**
-     * Read-only ZEC→USDC quote for the top-up bridge UI: returns 1-Click's estimated time-to-settle in
-     * seconds, or null when the provider omits it (the UI then shows a static estimate). No ZEC moves.
+     * Read-only ZEC→USDC price probe for the top-up bridge UI. This runs whenever the screen opens or
+     * the amount changes, so it must go through the dry path: an executable quote would reserve a
+     * deposit address 1-Click then reports as a swap awaiting funds, and the vast majority of previews
+     * never become transfers. No ZEC moves and nothing is reserved.
      */
     override suspend fun estimate(account: Address, usdc: Usdc6): OfframpTopUpEstimate? =
         runCatching {
             val tokens = swapDataSource.getSupportedTokens()
-            val quote = requestBridgeQuote(account, usdc, tokens, refundAddress = wallet.zcashAddress())
+            val estimate = requestBridgeEstimate(account, usdc, tokens, refundAddress = wallet.zcashAddress())
             OfframpTopUpEstimate(
-                requiredZec = Zatoshi(quote.amountIn.toLong()),
-                estimatedDurationSeconds = quote.estimatedDurationSeconds,
-                affiliateFeeZec = quote.affiliateFeeZatoshi,
-                slippagePercent = quote.slippage,
+                requiredZec = Zatoshi(estimate.amountIn.toLong()),
+                estimatedDurationSeconds = estimate.estimatedDurationSeconds,
+                affiliateFeeZec = estimate.affiliateFeeZatoshi,
+                slippagePercent = estimate.slippage,
             )
+        }.onFailure {
+            // A dry response that stops deserializing would otherwise fail the preview in complete
+            // silence. Cancellation is the caller retargeting the probe, not a failure, so it flows on.
+            if (it is CancellationException) throw it
+            Twig.warn(it) { "NearBridgeOfframpFunding: top-up estimate failed" }
         }.getOrNull()
+
+    private suspend fun requestBridgeEstimate(
+        account: Address,
+        amount: Usdc6,
+        tokens: List<SwapAsset>,
+        refundAddress: String,
+    ): SwapQuoteEstimate =
+        swapDataSource.requestQuoteEstimate(
+            swapMode = SwapMode.EXACT_OUTPUT,
+            flexInput = false,
+            amount = amount.whole,
+            refundAddress = refundAddress,
+            originAsset = tokens.zecAsset(),
+            destinationAddress = account.checksumHex,
+            destinationAsset = tokens.usdcAsset(usdc),
+            slippage = slippageTolerancePercent,
+            affiliateAddress = AFFILIATE_ADDRESS,
+        )
 
     private suspend fun requestBridgeQuote(
         account: Address,

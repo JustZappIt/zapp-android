@@ -24,8 +24,10 @@ data class QuoteResponseDto(
 @JsonIgnoreUnknownKeys
 @Serializable
 data class QuoteDetails(
+    // Absent on a dry quote, which prices a swap without reserving anything. Null rather than blank so
+    // the type itself says "there may be no address", and every reader has to answer for it.
     @SerialName("depositAddress")
-    val depositAddress: String,
+    val depositAddress: String? = null,
     @SerialName("amountIn")
     @Serializable(with = BigDecimalSerializer::class)
     val amountIn: BigDecimal,

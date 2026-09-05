@@ -31,6 +31,7 @@ import co.electriccoin.zcash.ui.design.util.ellipsizeMiddle
 import co.electriccoin.zcash.ui.design.util.stringRes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -131,13 +132,16 @@ internal class BridgeToBaseVM(
     init {
         viewModelScope.launch { resolveAndPrime() }
         // Re-probe the amount-sensitive hints (merchant availability, ETA, required ZEC) when the entered
-        // amount changes; collectLatest cancels the prior probe so rapid typing doesn't pile up RPCs.
+        // amount changes. collectLatest cancels the prior block, so the leading delay debounces: typing
+        // an amount costs one probe once the typing stops, not one per keystroke.
         viewModelScope.launch {
             inr
                 .map { it.amount }
                 .distinctUntilChanged()
                 .collectLatest {
                     if (phase.value is Phase.Input) {
+                        markEstimateStale()
+                        delay(AMOUNT_SETTLE_DELAY_MS)
                         refreshEstimate()
                         refreshAvailability()
                     }
@@ -168,9 +172,10 @@ internal class BridgeToBaseVM(
                 .getOrNull() ?: return
         smartAccountAddress = account
         refreshRate()
-        if (!resumeIfInFlight()) {
-            applyPrefill()
-        }
+        val prefilled = if (resumeIfInFlight()) false else applyPrefill()
+        // A prefill moves the amount, which wakes the collector above; let that probe rather than
+        // opening a second one here for the same figure.
+        if (prefilled) return
         refreshEstimate()
         refreshAvailability()
     }
@@ -183,12 +188,13 @@ internal class BridgeToBaseVM(
 
     // The shortfall prefill arrives as USDC; convert it to INR (rounding up so the derived USDC still
     // covers the shortfall) once the rate is known, and only if the user hasn't typed anything yet.
-    private fun applyPrefill() {
-        val usdc = pendingPrefillUsdc ?: return
+    private fun applyPrefill(): Boolean {
+        val usdc = pendingPrefillUsdc
         pendingPrefillUsdc = null
-        if (inr.value.amount != null) return
+        if (usdc == null || inr.value.amount != null) return false
         val inrAmount = usdc.whole.multiply(priming.value.sellRate).setScale(INR_INPUT_SCALE, RoundingMode.CEILING)
         inr.update { NumberTextFieldInnerState.fromAmount(inrAmount) }
+        return true
     }
 
     // Best-effort warning, shown only when NO merchant currently has liquidity (no positive "available"
@@ -212,19 +218,31 @@ internal class BridgeToBaseVM(
         }
     }
 
+    // Drops the previous amount's figures immediately, so the debounce window never leaves a required-ZEC
+    // number on screen that belongs to an amount the user has already changed.
+    private fun markEstimateStale() {
+        if (smartAccountAddress == null) return
+        val entered = enteredUsdc()
+        priming.update {
+            it.copy(
+                requiredZec = null,
+                affiliateFeeZec = null,
+                estimateStatus = if (entered != null) EstimateStatus.LOADING else EstimateStatus.IDLE,
+            )
+        }
+    }
+
     // One read-only quote yields both the ETA and the ZEC the bridge will require; requiredZec is only
     // meaningful for an actually-entered amount, so it stays null while the field is empty.
     private suspend fun refreshEstimate() {
         val account = smartAccountAddress ?: return
         val entered = enteredUsdc()
-        priming.update {
-            it.copy(
-                requiredZec = null,
-                estimateStatus = if (entered != null) EstimateStatus.LOADING else EstimateStatus.IDLE,
-            )
-        }
+        markEstimateStale()
         val probe = entered ?: Usdc6.ofWhole(PROBE_USDC)
         val estimate = topUpPreview.estimate(account, probe)
+        // resolveAndPrime calls this outside collectLatest's cancellation, so an amount typed while the
+        // probe was in flight would otherwise be answered with the figure for the amount it started on.
+        if (enteredUsdc() != entered) return
         priming.update {
             it.copy(
                 etaSeconds = estimate?.estimatedDurationSeconds ?: it.etaSeconds,
@@ -658,6 +676,10 @@ internal class BridgeToBaseVM(
 
         // Nominal amount for the merchant-availability and ETA probes when no amount is entered yet.
         private val PROBE_USDC: BigDecimal = BigDecimal("5")
+
+        // How long the amount has to sit still before it is worth probing. Long enough that typing a
+        // four-digit figure costs one round trip, short enough that the quote still feels immediate.
+        private const val AMOUNT_SETTLE_DELAY_MS = 400L
 
         private const val USDC_INPUT_SCALE = 6
         private const val INR_INPUT_SCALE = 2
