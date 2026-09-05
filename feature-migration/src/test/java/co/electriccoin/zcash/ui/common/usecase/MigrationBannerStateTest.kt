@@ -375,4 +375,52 @@ class MigrationBannerStateTest {
         // ready-to-send branch must not have fired despite its other preconditions being met.
         assertEquals(MigrationHomeMessageData(isRunActive = false, completedCount = 1, totalCount = 2), result)
     }
+
+    // --- RESIDUE gated on isFullySynced (mid-sync staleness) ---
+
+    /**
+     * A wallet already swept elsewhere but still catching up on this device reads a partial
+     * Orchard balance, which can land in the (dust, migratable-minimum) gap and raise the residue
+     * banner. Its "migrate anyway" then has nothing to spend. The branch must wait for the tip.
+     */
+    @Test
+    fun residueBranchSuppressedWhileNotFullySynced() {
+        val result =
+            migrationMessageFor(
+                sdkState = null,
+                snapshot = null,
+                hasSeenComplete = false,
+                orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI + 1L,
+                isFullySynced = false,
+            )
+        assertNull(result, "Residue banner must not fire while the wallet is still mid-sync")
+    }
+
+    /** The same inputs, once synced, still raise it — the gate must not disable the branch. */
+    @Test
+    fun residueBranchFiresOnceFullySynced() {
+        val result =
+            migrationMessageFor(
+                sdkState = null,
+                snapshot = null,
+                hasSeenComplete = false,
+                orchardBalanceZatoshi = MIGRATION_DUST_THRESHOLD_ZATOSHI + 1L,
+                isFullySynced = true,
+            )
+        assertEquals(MigrationHomeMessageData(isRunActive = false, isComplete = true), result)
+    }
+
+    /** The "Migrate now" branch is deliberately left ungated: it is a CTA, not a one-click spend. */
+    @Test
+    fun migrateNowBranchStillFiresWhileNotFullySynced() {
+        val result =
+            migrationMessageFor(
+                sdkState = null,
+                snapshot = null,
+                hasSeenComplete = false,
+                orchardBalanceZatoshi = MIGRATION_RESIDUAL_MIN_ZATOSHI + 1L,
+                isFullySynced = false,
+            )
+        assertEquals(MigrationHomeMessageData(isRunActive = false), result)
+    }
 }
