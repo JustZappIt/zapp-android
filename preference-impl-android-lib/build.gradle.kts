@@ -33,6 +33,8 @@ dependencies {
     implementation(projects.preferenceApiLib)
     implementation(projects.spackleAndroidLib)
 
+    testImplementation(libs.kotlin.test)
+
     androidTestImplementation(libs.bundles.androidx.test)
     androidTestImplementation(libs.kotlinx.coroutines.test)
 
