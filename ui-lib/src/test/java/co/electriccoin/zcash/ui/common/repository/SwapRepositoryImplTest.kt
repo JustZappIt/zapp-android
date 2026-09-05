@@ -1,6 +1,7 @@
 package co.electriccoin.zcash.ui.common.repository
 
 import co.electriccoin.zcash.ui.common.datasource.SwapDataSource
+import co.electriccoin.zcash.ui.common.datasource.SwapQuoteEstimate
 import co.electriccoin.zcash.ui.common.model.DynamicSwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapBlockchain
@@ -245,6 +246,19 @@ private class FailingSwapDataSource(
         slippage: BigDecimal,
         affiliateAddress: String
     ): SwapQuote = throw failure
+
+    @Suppress("LongParameterList")
+    override suspend fun requestQuoteEstimate(
+        swapMode: SwapMode,
+        flexInput: Boolean,
+        amount: BigDecimal,
+        refundAddress: String,
+        originAsset: SwapAsset,
+        destinationAddress: String,
+        destinationAsset: SwapAsset,
+        slippage: BigDecimal,
+        affiliateAddress: String
+    ): SwapQuoteEstimate = throw failure
 
     override suspend fun submitDepositTransaction(txHash: String, depositAddress: String): Unit = throw failure
 

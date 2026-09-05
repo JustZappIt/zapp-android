@@ -286,6 +286,11 @@ class NearBridgeOfframpFunding(
                 affiliateFeeZec = estimate.affiliateFeeZatoshi,
                 slippagePercent = estimate.slippage,
             )
+        }.onFailure {
+            // A dry response that stops deserializing would otherwise fail the preview in complete
+            // silence. Cancellation is the caller retargeting the probe, not a failure, so it flows on.
+            if (it is CancellationException) throw it
+            Twig.warn(it) { "NearBridgeOfframpFunding: top-up estimate failed" }
         }.getOrNull()
 
     private suspend fun requestBridgeEstimate(

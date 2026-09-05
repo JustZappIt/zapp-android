@@ -31,8 +31,8 @@ interface SwapDataSource {
      * behind every time a screen opens or an amount changes. Use this for anything the user has not
      * yet committed to.
      *
-     * The default implementation falls back to [requestQuote], so a provider that cannot price
-     * without reserving still works — it just keeps the old cost.
+     * Deliberately has no default delegating to [requestQuote]: an implementation that forgets to
+     * price without reserving is the bug this exists to prevent, so it has to be a compile error.
      */
     @Throws(ResponseException::class, QuoteLowAmountException::class)
     suspend fun requestQuoteEstimate(
@@ -45,26 +45,7 @@ interface SwapDataSource {
         destinationAsset: SwapAsset,
         slippage: BigDecimal,
         affiliateAddress: String
-    ): SwapQuoteEstimate =
-        requestQuote(
-            swapMode = swapMode,
-            flexInput = flexInput,
-            amount = amount,
-            refundAddress = refundAddress,
-            originAsset = originAsset,
-            destinationAddress = destinationAddress,
-            destinationAsset = destinationAsset,
-            slippage = slippage,
-            affiliateAddress = affiliateAddress
-        ).let {
-            SwapQuoteEstimate(
-                amountIn = it.amountIn,
-                amountInFormatted = it.amountInFormatted,
-                estimatedDurationSeconds = it.estimatedDurationSeconds,
-                affiliateFeeZatoshi = it.affiliateFeeZatoshi,
-                slippage = it.slippage
-            )
-        }
+    ): SwapQuoteEstimate
 
     @Throws(ResponseException::class)
     suspend fun submitDepositTransaction(txHash: String, depositAddress: String)
@@ -76,7 +57,6 @@ interface SwapDataSource {
 /** What a swap would cost right now. Carries no deposit address: nothing was reserved. */
 data class SwapQuoteEstimate(
     val amountIn: BigDecimal,
-    val amountInFormatted: BigDecimal,
     val estimatedDurationSeconds: Int?,
     val affiliateFeeZatoshi: Zatoshi,
     val slippage: BigDecimal

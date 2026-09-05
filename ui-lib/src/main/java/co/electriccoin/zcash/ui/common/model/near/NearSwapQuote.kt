@@ -152,15 +152,17 @@ internal fun computeAffiliateFeeZatoshi(
     amountInUsd: BigDecimal,
     amountOutUsd: BigDecimal
 ): Zatoshi {
+    // Matches NearSwapQuote's init check, which guards every origin rather than only the divided path:
+    // a quote with a non-positive input amount is invalid whichever side the fee is taken from.
+    require(amountInFormatted.signum() > 0) {
+        "Swap quote has non-positive amountInFormatted=$amountInFormatted"
+    }
     val feeRate = BigDecimal(AFFILIATE_FEE_BPS).divide(BigDecimal("10000"), MathContext.DECIMAL128)
     if (originAsset is ZecSwapAsset) {
         return amountInFormatted
             .coerceAtLeast(BigDecimal(0))
             .multiply(feeRate, MathContext.DECIMAL128)
             .convertZecToZatoshi()
-    }
-    require(amountInFormatted.signum() > 0) {
-        "Swap quote has non-positive amountInFormatted=$amountInFormatted"
     }
     val zecExchangeRate = amountInUsd.divide(amountInFormatted, MathContext.DECIMAL128)
     return amountOutUsd

@@ -2,6 +2,7 @@ package co.electriccoin.zcash.ui.common.usecase
 
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.common.datasource.SwapDataSource
+import co.electriccoin.zcash.ui.common.datasource.SwapQuoteEstimate
 import co.electriccoin.zcash.ui.common.model.DynamicSwapAsset
 import co.electriccoin.zcash.ui.common.model.SimpleSwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapAsset
@@ -119,6 +120,18 @@ private class ThrowingSwapDataSource : SwapDataSource {
         slippage: BigDecimal,
         affiliateAddress: String
     ): SwapQuote = throw AssertionError("unused")
+
+    override suspend fun requestQuoteEstimate(
+        swapMode: SwapMode,
+        flexInput: Boolean,
+        amount: BigDecimal,
+        refundAddress: String,
+        originAsset: SwapAsset,
+        destinationAddress: String,
+        destinationAsset: SwapAsset,
+        slippage: BigDecimal,
+        affiliateAddress: String
+    ): SwapQuoteEstimate = throw AssertionError("unused")
 
     override suspend fun submitDepositTransaction(txHash: String, depositAddress: String) = Unit
 }

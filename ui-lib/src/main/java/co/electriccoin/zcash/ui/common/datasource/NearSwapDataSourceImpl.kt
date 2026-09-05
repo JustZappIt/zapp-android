@@ -23,6 +23,7 @@ import co.electriccoin.zcash.ui.common.model.near.SubmitDepositTransactionReques
 import co.electriccoin.zcash.ui.common.model.near.SwapAmountInconsistencyException
 import co.electriccoin.zcash.ui.common.model.near.SwapType
 import co.electriccoin.zcash.ui.common.model.near.computeAffiliateFeeZatoshi
+import co.electriccoin.zcash.ui.common.model.near.requireConsistent
 import co.electriccoin.zcash.ui.common.provider.NearApiProvider
 import co.electriccoin.zcash.ui.common.provider.ResponseWithNearErrorException
 import co.electriccoin.zcash.ui.common.provider.SwapAssetProvider
@@ -154,9 +155,27 @@ class NearSwapDataSourceImpl(
                 throw mapQuoteError(e, swapMode, originAsset, destinationAsset)
             }
 
+        require(response.quoteRequest.swapType == request.swapType) {
+            "Swap quote type mismatch: requested ${request.swapType} " +
+                "but server returned ${response.quoteRequest.swapType}"
+        }
+        // A preview quotes the same route the executable quote will, so it is held to the same
+        // amount-consistency check rather than displaying a figure the real quote would reject.
+        requireConsistent(
+            name = "amountIn",
+            raw = response.quote.amountIn,
+            formatted = response.quote.amountInFormatted,
+            decimals = originAsset.decimals
+        )
+        requireConsistent(
+            name = "amountOut",
+            raw = response.quote.amountOut,
+            formatted = response.quote.amountOutFormatted,
+            decimals = destinationAsset.decimals
+        )
+
         return SwapQuoteEstimate(
             amountIn = response.quote.amountIn,
-            amountInFormatted = response.quote.amountInFormatted,
             estimatedDurationSeconds = response.quote.timeEstimate,
             affiliateFeeZatoshi =
                 computeAffiliateFeeZatoshi(
@@ -242,14 +261,19 @@ class NearSwapDataSourceImpl(
                 SwapMode.EXACT_INPUT, SwapMode.FLEX_INPUT -> originAsset
                 SwapMode.EXACT_OUTPUT -> destinationAsset
             }
+        val tooLow = e.error.message.contains("Amount is too low for bridge, try at least", true)
         val lowAmount =
-            e.error.message
-                .split(" ")
-                .lastOrNull()
-                ?.toBigDecimalOrNull()
+            if (tooLow) {
+                e.error.message
+                    .split(" ")
+                    .lastOrNull()
+                    ?.toBigDecimalOrNull()
+            } else {
+                null
+            }
         return when {
             // An unparseable minimum falls through to the original error rather than inventing one.
-            e.error.message.contains("Amount is too low for bridge, try at least", true) && lowAmount != null -> {
+            tooLow && lowAmount != null -> {
                 QuoteLowAmountException(
                     asset = lowAsset,
                     amount = lowAmount,
@@ -265,7 +289,9 @@ class NearSwapDataSourceImpl(
                 )
             }
 
-            else -> e
+            else -> {
+                e
+            }
         }
     }
 
@@ -307,9 +333,11 @@ class NearSwapDataSourceImpl(
             }
 
     private suspend fun getDepositAddress(response: QuoteResponseDto, originAsset: SwapAsset): SwapAddress {
-        val address = response.quote.depositAddress
         // Only a dry quote legitimately omits this, and a dry quote never reaches here.
-        require(address.isNotBlank()) { "1Click returned an executable quote with no deposit address" }
+        val address =
+            requireNotNull(response.quote.depositAddress?.takeIf { it.isNotBlank() }) {
+                "1Click returned an executable quote with no deposit address"
+            }
         return if (originAsset is ZecSwapAsset) getZcashSwapAddress(address) else DynamicSwapAddress(address)
     }
 

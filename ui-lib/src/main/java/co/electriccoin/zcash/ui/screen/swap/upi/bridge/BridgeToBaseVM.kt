@@ -170,9 +170,10 @@ internal class BridgeToBaseVM(
                 .getOrNull() ?: return
         smartAccountAddress = account
         refreshRate()
-        if (!resumeIfInFlight()) {
-            applyPrefill()
-        }
+        val prefilled = if (resumeIfInFlight()) false else applyPrefill()
+        // A prefill moves the amount, which wakes the collector above; let that probe rather than
+        // opening a second one here for the same figure.
+        if (prefilled) return
         refreshEstimate()
         refreshAvailability()
     }
@@ -185,12 +186,13 @@ internal class BridgeToBaseVM(
 
     // The shortfall prefill arrives as USDC; convert it to INR (rounding up so the derived USDC still
     // covers the shortfall) once the rate is known, and only if the user hasn't typed anything yet.
-    private fun applyPrefill() {
-        val usdc = pendingPrefillUsdc ?: return
+    private fun applyPrefill(): Boolean {
+        val usdc = pendingPrefillUsdc
         pendingPrefillUsdc = null
-        if (inr.value.amount != null) return
+        if (usdc == null || inr.value.amount != null) return false
         val inrAmount = usdc.whole.multiply(priming.value.sellRate).setScale(INR_INPUT_SCALE, RoundingMode.CEILING)
         inr.update { NumberTextFieldInnerState.fromAmount(inrAmount) }
+        return true
     }
 
     // Best-effort warning, shown only when NO merchant currently has liquidity (no positive "available"
@@ -236,6 +238,9 @@ internal class BridgeToBaseVM(
         markEstimateStale()
         val probe = entered ?: Usdc6.ofWhole(PROBE_USDC)
         val estimate = topUpPreview.estimate(account, probe)
+        // resolveAndPrime calls this outside collectLatest's cancellation, so an amount typed while the
+        // probe was in flight would otherwise be answered with the figure for the amount it started on.
+        if (enteredUsdc() != entered) return
         priming.update {
             it.copy(
                 etaSeconds = estimate?.estimatedDurationSeconds ?: it.etaSeconds,
