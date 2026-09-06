@@ -11,7 +11,9 @@ import xyz.justzappit.evm.rpc.TransactionReceipt
 import xyz.justzappit.evm.types.Address
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class OrderEventsTest {
     @Test
@@ -186,6 +188,36 @@ class OrderEventsTest {
                     ),
             )
         assertEquals(orderId, OrderEvents.parseOrderIdFromLog(log))
+    }
+
+    @Test
+    fun `CancelledOrders topic matches the Diamond's emitted hash`() {
+        // Observed on Base mainnet in the setSellOrderUpi receipt of order 717006.
+        assertEquals(
+            "0x24e0e750e9b0658d9179ad1662912205ec2f1b2dc00bcbda15d801da1bb5a35a",
+            OrderEvents.CANCELLED_ORDERS_TOPIC,
+        )
+    }
+
+    @Test
+    fun `receiptCancelsOrder matches only our order on the Diamond`() {
+        val diamond = Address.parse("0xce868398fdadca368eac203222874d6888532ae2")
+        val other = Address.parse("0x0000000000000000000000000000000000000bad")
+        val orderId = bigIntegerValueOf(717006)
+        val orderIdTopic = "0x" + orderId.toString(16).padStart(64, '0')
+        val cancelled =
+            sampleLog(diamond.lowercaseHex, topics = listOf(OrderEvents.CANCELLED_ORDERS_TOPIC, orderIdTopic))
+
+        assertTrue(OrderEvents.receiptCancelsOrder(sampleReceipt(listOf(cancelled)), diamond, orderId))
+        assertFalse(OrderEvents.receiptCancelsOrder(sampleReceipt(listOf(cancelled)), diamond, bigIntegerOne))
+        assertFalse(
+            OrderEvents.receiptCancelsOrder(
+                sampleReceipt(listOf(sampleLog(other.lowercaseHex, topics = cancelled.topics))),
+                diamond,
+                orderId,
+            ),
+        )
+        assertFalse(OrderEvents.receiptCancelsOrder(sampleReceipt(emptyList()), diamond, orderId))
     }
 
     private fun sampleLog(address: String, topics: List<String>) =

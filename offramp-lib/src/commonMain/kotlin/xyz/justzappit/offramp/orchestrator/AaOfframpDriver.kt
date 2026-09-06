@@ -42,6 +42,7 @@ class AaOfframpDriver(
     private val router: CircleRouter = CircleRouter(),
     private val relayIdentityStore: RelayIdentityStore = InMemoryRelayIdentityStore(),
     private val orderRecipientUpiCache: OrderRecipientUpiCache = InMemoryOrderRecipientUpiCache(),
+    private val logger: OfframpLogger = OfframpLogger.None,
 ) : OfframpDriver {
     override fun run(
         request: OfframpRequest,
@@ -94,6 +95,7 @@ class AaOfframpDriver(
             router = router,
             relayIdentityStore = relayIdentityStore,
             orderRecipientUpiCache = orderRecipientUpiCache,
+            logger = logger,
         )
     }
 }

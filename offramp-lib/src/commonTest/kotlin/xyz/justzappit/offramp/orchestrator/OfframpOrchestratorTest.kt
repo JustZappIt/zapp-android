@@ -35,6 +35,7 @@ import xyz.justzappit.offramp.funding.OfframpTopUp
 import xyz.justzappit.offramp.funding.RefundResume
 import xyz.justzappit.offramp.p2p.CircleRouter
 import xyz.justzappit.offramp.p2p.CurrencyCode
+import xyz.justzappit.offramp.p2p.Erc20Calls
 import xyz.justzappit.offramp.p2p.OrderEvents
 import xyz.justzappit.offramp.p2p.OrderReadSource
 import xyz.justzappit.offramp.p2p.OrderSnapshot
@@ -66,6 +67,12 @@ class OfframpOrchestratorTest {
     private val eligibilityCalldataLog = mutableListOf<String>()
     private var failEligibilityCall = false
 
+    // Params of every eth_estimateGas, one per broadcast, so a test can read the exact calldata
+    // that went out rather than only how many transactions did.
+    private val estimateGasCalldataLog = mutableListOf<String>()
+    private var setUpiReceiptCancelsOrder = false
+    private val logger = RecordingOfframpLogger()
+
     private val rpcEngine =
         MockEngine { request ->
             val bytes = (request.body as io.ktor.http.content.OutgoingContent.ByteArrayContent).bytes()
@@ -87,6 +94,7 @@ class OfframpOrchestratorTest {
                     }
 
                     "eth_estimateGas" -> {
+                        estimateGasCalldataLog += payload["params"]!!.toString()
                         """{"jsonrpc":"2.0","id":1,"result":"0x5208"}"""
                     }
 
@@ -161,6 +169,7 @@ class OfframpOrchestratorTest {
             stalledAfterMs = 50,
             clockMs = ::nextTick,
             onChainOrderReader = onChainVerifier,
+            logger = logger,
         )
 
     // Monotonic per-call counter so tests don't depend on wall-clock advancing under runTest's
@@ -188,6 +197,10 @@ class OfframpOrchestratorTest {
         getAssignableResponse = ENCODED_ADDRESS_ARRAY_OF_ONE
         failEligibilityCall = false
         eligibilityCalldataLog.clear()
+        estimateGasCalldataLog.clear()
+        setUpiReceiptCancelsOrder = false
+        logger.infos.clear()
+        logger.warns.clear()
         rpcRequestLog.clear()
         rawTxLog.clear()
         rawTxHashes.clear()
@@ -203,7 +216,7 @@ class OfframpOrchestratorTest {
     @Test
     fun `happy path emits the full status sequence and ends in Completed`() =
         runTest {
-            nextUsdcBalance = ENCODED_FIVE_USDC
+            nextUsdcBalance = ENCODED_SIX_USDC
             orderReader.enqueue(
                 snapshot(status = OrderStatus.ACCEPTED, pubkey = MERCHANT_PUBKEY, merchant = MERCHANT_ADDRESS),
                 snapshot(
@@ -232,8 +245,50 @@ class OfframpOrchestratorTest {
             assertTrue(classes.indexOf("SendingEncryptedUpi") < classes.indexOf("WaitingForCompletion"))
             assertTrue(classes.indexOf("WaitingForCompletion") < classes.indexOf("Completed"))
 
-            // 4 broadcasts: approve, placeOrder, exact fee re-approve, setSellOrderUpi.
+            // 4 broadcasts: approve, placeOrder, exact re-approve, setSellOrderUpi.
             assertEquals(4, rawTxLog.size, "expected 4 broadcasts, got ${rawTxLog.size}")
+        }
+
+    @Test
+    fun `setSellOrderUpi is preceded by an approval covering the updated amount plus the fee`() =
+        runTest {
+            nextUsdcBalance = ENCODED_SIX_USDC
+            orderReader.enqueue(
+                snapshot(status = OrderStatus.ACCEPTED, pubkey = MERCHANT_PUBKEY, merchant = MERCHANT_ADDRESS),
+                snapshot(status = OrderStatus.COMPLETED, pubkey = MERCHANT_PUBKEY, merchant = MERCHANT_ADDRESS),
+            )
+
+            val statuses = orchestrator.run(payRequest()).toList()
+
+            // A PAY order escrows nothing at placeOrder: the Diamond pulls the whole 5.1 USDC inside
+            // setSellOrderUpi, so the approval right before it must cover updated + fee, not the fee
+            // alone. Mainnet orders 716976-717006 were cancelled in-call when it was 0.1 USDC.
+            assertIs<OfframpStatus.Completed>(statuses.last())
+            assertEquals(4, estimateGasCalldataLog.size, estimateGasCalldataLog.joinToString("\n"))
+            val approveAll =
+                "0x" + Erc20Calls.approveCalldata(network.diamondAddress, Usdc6.ofMicros(5_100_000)).toHex()
+            assertTrue(estimateGasCalldataLog[2].contains(approveAll), estimateGasCalldataLog[2])
+            assertTrue(estimateGasCalldataLog[3].contains("0xe8576b23"), estimateGasCalldataLog[3])
+            val approvingLine = logger.infos.single { it.startsWith("setSellOrderUpi order=$ORDER_ID") }
+            assertTrue(approvingLine.contains("approving=5100000"), approvingLine)
+        }
+
+    @Test
+    fun `a CancelledOrders log in the setSellOrderUpi receipt is reported as a failed USDC pull`() =
+        runTest {
+            nextUsdcBalance = ENCODED_SIX_USDC
+            setUpiReceiptCancelsOrder = true
+            orderReader.enqueue(
+                snapshot(status = OrderStatus.ACCEPTED, pubkey = MERCHANT_PUBKEY, merchant = MERCHANT_ADDRESS),
+                snapshot(status = OrderStatus.CANCELLED, pubkey = MERCHANT_PUBKEY, merchant = MERCHANT_ADDRESS),
+            )
+
+            val statuses = orchestrator.run(payRequest()).toList()
+
+            assertIs<OfframpStatus.Cancelled>(statuses.last())
+            val warning = logger.warns.single()
+            assertTrue(warning.contains("cancelled inside setSellOrderUpi"), warning)
+            assertTrue(warning.contains("5100000"), warning)
         }
 
     @Test
@@ -345,7 +400,7 @@ class OfframpOrchestratorTest {
     @Test
     fun `orchestrator absorbs OrderReadSource exceptions during polling and continues`() =
         runTest {
-            nextUsdcBalance = ENCODED_FIVE_USDC
+            nextUsdcBalance = ENCODED_SIX_USDC
             // Regression for: a single bad poll mid-flight used to throw out of orderReader.fetchOrder
             // and bail the orchestrator into Failed, orphaning escrowed USDC. The orchestrator now
             // wraps each fetchOrder call in a runCatching so a thrown reader collapses to "no
@@ -387,7 +442,7 @@ class OfframpOrchestratorTest {
     @Test
     fun `WaitingForMerchantAcceptance carries expired=true when Diamond reports the order as expired`() =
         runTest {
-            nextUsdcBalance = ENCODED_FIVE_USDC
+            nextUsdcBalance = ENCODED_SIX_USDC
             nextIsOrderExpired = ENCODED_ONE
             orderReader.enqueue(null) // one extra null poll so a WaitingFor* emission with expired=true is observed
             orderReader.enqueue(snapshot(status = OrderStatus.PLACED, pubkey = "", merchant = null))
@@ -464,7 +519,7 @@ class OfframpOrchestratorTest {
     @Test
     fun `resume of a pre order bridge re polls the persisted handle and never re quotes`() =
         runTest {
-            nextUsdcBalance = ENCODED_FIVE_USDC
+            nextUsdcBalance = ENCODED_SIX_USDC
             // Crash after the ZEC deposit but before the order was placed. The checkpoint carries the
             // 1-Click depositAddress and no orderId. Resume MUST hand that handle back to funding (so it
             // re-polls the in-flight bridge) instead of opening a second bridge — the double-send fix.
@@ -834,6 +889,7 @@ class OfframpOrchestratorTest {
         stalledAfterMs = 50,
         clockMs = ::nextTick,
         onChainOrderReader = onChainVerifier,
+        logger = logger,
     )
 
     private fun refundTo(target: Address?, onAwait: suspend (String) -> Unit = {}): OfframpRefund =
@@ -922,6 +978,19 @@ class OfframpOrchestratorTest {
         source = OrderSnapshot.Source.Subgraph,
     )
 
+    private class RecordingOfframpLogger : OfframpLogger {
+        val infos = mutableListOf<String>()
+        val warns = mutableListOf<String>()
+
+        override fun info(message: String) {
+            infos += message
+        }
+
+        override fun warn(message: String) {
+            warns += message
+        }
+    }
+
     private class ScriptedOrderReadSource : OrderReadSource {
         // Items are either an OrderSnapshot, null, or a throwable to raise. ArrayDeque<Any?> with
         // throwable sentinel keeps the test ergonomic without a separate field.
@@ -959,6 +1028,10 @@ class OfframpOrchestratorTest {
 
             txParam == PLACE_ORDER_TX_HASH || txParam == rawTxHashes.getOrNull(1) -> {
                 placeOrderReceiptJson(txParam, success = placeOrderReceiptSuccess)
+            }
+
+            setUpiReceiptCancelsOrder && txParam == rawTxHashes.getOrNull(SET_UPI_BROADCAST_INDEX) -> {
+                cancelledOrdersReceiptJson(txParam)
             }
 
             else -> {
@@ -1021,6 +1094,30 @@ class OfframpOrchestratorTest {
         }}
         """.trimIndent()
 
+    // What the Diamond emits when setSellOrderUpi's USDC pull fails: the call succeeds, the
+    // order is cancelled inside it and no paid event follows.
+    private fun cancelledOrdersReceiptJson(txHash: String): String {
+        val orderIdTopic = "0x" + ORDER_ID.toString(16).padStart(64, '0')
+        return """
+            {"jsonrpc":"2.0","id":1,"result":{
+              "transactionHash":"$txHash",
+              "blockNumber":"0x10",
+              "status":"0x1",
+              "gasUsed":"0x5208",
+              "logs":[
+                {
+                  "address":"${network.diamondAddress.lowercaseHex}",
+                  "topics":["${OrderEvents.CANCELLED_ORDERS_TOPIC}", "$orderIdTopic"],
+                  "data":"0x",
+                  "blockNumber":"0x10",
+                  "transactionHash":"$txHash",
+                  "logIndex":"0x0"
+                }
+              ]
+            }}
+            """.trimIndent()
+    }
+
     private fun placeOrderReceiptJson(txHash: String, success: Boolean): String {
         val userTopic = "0x" + "0".repeat(24) + account.address.lowercaseHex.removePrefix("0x")
         val orderIdTopic = "0x" + ORDER_ID.toString(16).padStart(64, '0')
@@ -1079,6 +1176,10 @@ class OfframpOrchestratorTest {
         const val ENCODED_ZERO = "0x" + "0000000000000000000000000000000000000000000000000000000000000000"
         const val ENCODED_ONE = "0x" + "0000000000000000000000000000000000000000000000000000000000000001"
         const val ENCODED_FIVE_USDC = "0x" + "00000000000000000000000000000000000000000000000000000000004c4b40"
+        const val ENCODED_SIX_USDC = "0x" + "00000000000000000000000000000000000000000000000000000000005b8d80"
+
+        // Broadcast order of a PAY run: approve, placeOrder, approve, setSellOrderUpi.
+        const val SET_UPI_BROADCAST_INDEX = 3
         const val ENCODED_TEN_USDC = "0x" + "0000000000000000000000000000000000000000000000000000000000989680"
         const val ENCODED_SMALL_ORDER_FIXED_FEE_PAY =
             "0x" + "00000000000000000000000000000000000000000000000000000000000186a0"

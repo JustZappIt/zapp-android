@@ -4,6 +4,7 @@
 package xyz.justzappit.offramp.p2p
 
 import xyz.justzappit.evm.abi.AbiAddress
+import xyz.justzappit.evm.abi.AbiUint
 import xyz.justzappit.evm.abi.keccak256
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.rpc.EvmLog
@@ -17,6 +18,12 @@ object OrderEvents {
         "0x" +
             keccak256(
                 ORDER_PLACED_CANONICAL_SIGNATURE.encodeToByteArray(),
+            ).toHex()
+
+    val CANCELLED_ORDERS_TOPIC: String =
+        "0x" +
+            keccak256(
+                CANCELLED_ORDERS_CANONICAL_SIGNATURE.encodeToByteArray(),
             ).toHex()
 
     fun parseOrderIdFromReceipt(
@@ -38,6 +45,23 @@ object OrderEvents {
             }?.let { topicToBigInteger(it.topics[1]) }
     }
 
+    // setSellOrderUpi cancels the order inside the call, without reverting, when its USDC pull
+    // fails; the receipt is the only place that shows it.
+    fun receiptCancelsOrder(
+        receipt: TransactionReceipt,
+        diamondAddress: Address,
+        orderId: BigInteger,
+    ): Boolean {
+        val orderTopic = "0x" + AbiUint(orderId).head().toHex()
+        val diamondHex = diamondAddress.lowercaseHex
+        return receipt.logs.any { log ->
+            log.address.equals(diamondHex, ignoreCase = true) &&
+                log.topics.size >= CANCELLED_ORDERS_TOPICS &&
+                log.topics[0].equals(CANCELLED_ORDERS_TOPIC, ignoreCase = true) &&
+                log.topics[1].equals(orderTopic, ignoreCase = true)
+        }
+    }
+
     fun parseOrderIdFromLog(log: EvmLog): BigInteger? {
         if (log.topics.firstOrNull()?.equals(ORDER_PLACED_TOPIC, ignoreCase = true) != true) return null
         if (log.topics.size < INDEXED_PARAMS + 1) return null
@@ -52,10 +76,17 @@ object OrderEvents {
 
     private const val INDEXED_PARAMS = 3
     private const val REQUIRED_TOPICS = INDEXED_PARAMS + 1
+    private const val CANCELLED_ORDERS_TOPICS = 2
 
     // Mirrors OrderPlaced from p2pdotme-sdk's order-flow-facet ABI.
     private const val ORDER_PLACED_CANONICAL_SIGNATURE =
         "OrderPlaced(uint256,address,address,uint256,uint8,uint256," +
+            "(uint256,uint256,uint256,uint256,uint256,address,address,address," +
+            "string,string,bool,uint8,uint8,(uint8,uint8,uint256,uint256)," +
+            "uint256,string,string,uint256,uint256[],bytes32,uint256,uint256))"
+
+    private const val CANCELLED_ORDERS_CANONICAL_SIGNATURE =
+        "CancelledOrders(uint256," +
             "(uint256,uint256,uint256,uint256,uint256,address,address,address," +
             "string,string,bool,uint8,uint8,(uint8,uint8,uint256,uint256)," +
             "uint256,string,string,uint256,uint256[],bytes32,uint256,uint256))"

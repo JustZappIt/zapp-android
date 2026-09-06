@@ -6,6 +6,7 @@ import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceReposit
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepositoryImpl
 import co.electriccoin.zcash.ui.common.provider.OrderRecipientUpiStorageProvider
 import co.electriccoin.zcash.ui.common.provider.RelayIdentityStorageProvider
+import co.electriccoin.zcash.ui.common.provider.TwigOfframpLogger
 import co.electriccoin.zcash.ui.common.repository.ApplicationStateRepository
 import co.electriccoin.zcash.ui.common.repository.ApplicationStateRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.AutomaticServerRepository
@@ -152,6 +153,7 @@ val repositoryModule =
                 router = get(),
                 relayIdentityStore = get(),
                 orderRecipientUpiCache = get(),
+                logger = TwigOfframpLogger,
             )
         }
         single { ReputationReader(rpc = get(), network = get()) }

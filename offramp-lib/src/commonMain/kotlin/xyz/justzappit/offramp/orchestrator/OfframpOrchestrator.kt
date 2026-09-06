@@ -140,6 +140,7 @@ class OfframpOrchestrator(
     // it later — encUpi on-chain is encrypted to the merchant, so the user cannot recover the
     // VPA from the chain alone. In-memory default for tests; Android injects encrypted prefs.
     private val orderRecipientUpiCache: OrderRecipientUpiCache = InMemoryOrderRecipientUpiCache(),
+    private val logger: OfframpLogger = OfframpLogger.None,
 ) : OfframpDriver {
     override fun run(
         request: OfframpRequest,
@@ -262,6 +263,10 @@ class OfframpOrchestrator(
                         diamondAddress = network.diamondAddress,
                         userAddress = accountAddress,
                     ) ?: error("placeOrder receipt did not contain an OrderPlaced log")
+                logger.info(
+                    "placeOrder confirmed order=$orderId usdc=${request.usdcAmount.micros} fee=${payFee.micros} " +
+                        "approved=${approveAmount.micros} circle=$circleId currency=${request.currency.code}",
+                )
             }
 
             awaitMerchantAndComplete(
@@ -566,31 +571,32 @@ class OfframpOrchestrator(
         validateQrAmountAdjustment(placedMicros, updatedAmount)
 
         return allowanceTransactions.withApprovalAndSpend {
-            // placeOrder already pulled `placed`. setSellOrderUpi pulls only a positive QR
-            // adjustment plus the fixed PAY fee. Always write that exact immediate allowance under
-            // the shared guard: another rail may have overwritten the leftover allowance while we
-            // waited for merchant acceptance, even when the scanned amount did not increase.
+            // A PAY order escrows nothing at placeOrder. setSellOrderUpi pulls `updatedAmount + fee`
+            // in one transferFrom and, when that pull fails, cancels the order inside the call
+            // instead of reverting. Write exactly that allowance under the shared guard: another
+            // rail may have overwritten the placement-time approval while we waited for acceptance.
             val payFee = requireAuthorizedPayFee(request)
-            val adjustment = if (updatedAmount > placedMicros) updatedAmount - placedMicros else BigInteger("0")
-            val immediateDebit = Usdc6(adjustment + payFee.micros)
+            val debit = Usdc6(updatedAmount + payFee.micros)
             request.authorizedRequiredBalance?.let { authorized ->
-                require(request.usdcAmount + immediateDebit <= authorized) {
+                require(debit <= authorized) {
                     "The scanned amount or PAY fee exceeds the quoted Base debit; request a new quote"
                 }
             }
-            if (immediateDebit > Usdc6.ZERO) {
-                val availableBalance = Usdc6(usdcBalanceOf(accountAddress))
-                require(availableBalance >= immediateDebit) {
-                    "Base balance is insufficient for the scanned QR adjustment and payment fee"
-                }
-                val approveHash =
-                    submitter.sendTransaction(
-                        to = network.usdcAddress,
-                        data = Erc20Calls.approveCalldata(network.diamondAddress, immediateDebit),
-                    )
-                require(submitter.awaitReceipt(approveHash).success) {
-                    "USDC allowance for setSellOrderUpi reverted"
-                }
+            val availableBalance = Usdc6(usdcBalanceOf(accountAddress))
+            require(availableBalance >= debit) {
+                "Base balance is insufficient for the scanned amount and payment fee"
+            }
+            logger.info(
+                "setSellOrderUpi order=$orderId placed=$placedMicros updated=$updatedAmount " +
+                    "fee=${payFee.micros} approving=${debit.micros} balance=${availableBalance.micros}",
+            )
+            val approveHash =
+                submitter.sendTransaction(
+                    to = network.usdcAddress,
+                    data = Erc20Calls.approveCalldata(network.diamondAddress, debit),
+                )
+            require(submitter.awaitReceipt(approveHash).success) {
+                "USDC allowance for setSellOrderUpi reverted"
             }
 
             orderRecipientUpiCache.put(orderId.toString(), paymentDetails.paymentAddress)
@@ -608,7 +614,16 @@ class OfframpOrchestrator(
                             updatedAmount = updatedAmount,
                         ),
                 )
-            require(submitter.awaitReceipt(setUpiHash).success) { "setSellOrderUpi reverted" }
+            val setUpiReceipt = submitter.awaitReceipt(setUpiHash)
+            require(setUpiReceipt.success) { "setSellOrderUpi reverted" }
+            if (OrderEvents.receiptCancelsOrder(setUpiReceipt, network.diamondAddress, orderId)) {
+                logger.warn(
+                    "order $orderId was cancelled inside setSellOrderUpi tx=$setUpiHash: the Diamond " +
+                        "cancels instead of reverting when its pull of updated + fee (${debit.micros}) fails",
+                )
+            } else {
+                logger.info("setSellOrderUpi confirmed order=$orderId tx=$setUpiHash")
+            }
             setUpiHash
         }
     }
