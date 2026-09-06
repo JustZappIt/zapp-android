@@ -3,6 +3,7 @@ package co.electriccoin.zcash.ui.integration.test.screen.scan.view
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -70,9 +71,12 @@ class ScanViewTest : UiTestPrerequisites() {
 
         testSetup.grantPermission()
 
-        composeTestRule.onNodeWithText(getStringResource(R.string.scan_cancel_button)).also {
-            it.assertIsDisplayed()
-        }
+        composeTestRule
+            .onNodeWithContentDescription(
+                getStringResource(co.electriccoin.zcash.ui.design.R.string.general_back_content_description)
+            ).also {
+                it.assertIsDisplayed()
+            }
 
         composeTestRule.onNodeWithTag(ScanTag.QR_FRAME).also {
             it.assertIsDisplayed()
