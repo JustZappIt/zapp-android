@@ -22,6 +22,8 @@ import co.electriccoin.zcash.ui.common.compose.ScreenSecurity
 import co.electriccoin.zcash.ui.common.usecase.ViewingKeyExportAccount
 import co.electriccoin.zcash.ui.common.usecase.ViewingKeyExportData
 import co.electriccoin.zcash.ui.common.usecase.ViewingKeyType
+import co.electriccoin.zcash.ui.design.LocalSheetStateManager
+import co.electriccoin.zcash.ui.design.rememberSheetStateManager
 import co.electriccoin.zcash.ui.design.theme.ProvideZappTheme
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.test.getStringResource
@@ -133,7 +135,9 @@ class ViewingKeyExportViewTest : UiTestPrerequisites() {
 
     private fun setContent(state: ViewingKeyExportState) {
         composeTestRule.setContent {
-            ProvideZappTheme { ViewingKeyExportView(state) }
+            CompositionLocalProvider(LocalSheetStateManager provides rememberSheetStateManager()) {
+                ProvideZappTheme { ViewingKeyExportView(state) }
+            }
         }
         composeTestRule.waitForIdle()
     }
