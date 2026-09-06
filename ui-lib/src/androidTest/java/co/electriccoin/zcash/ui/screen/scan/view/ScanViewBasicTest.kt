@@ -37,9 +37,12 @@ class ScanViewBasicTest : UiTestPrerequisites() {
 
         assertEquals(0, testSetup.getOnBackCount())
 
-        composeTestRule.onNodeWithText(getStringResource(R.string.scan_cancel_button)).also {
-            it.performClick()
-        }
+        composeTestRule
+            .onNodeWithContentDescription(
+                getStringResource(co.electriccoin.zcash.ui.design.R.string.general_back_content_description)
+            ).also {
+                it.performClick()
+            }
 
         assertEquals(1, testSetup.getOnBackCount())
     }
@@ -51,9 +54,12 @@ class ScanViewBasicTest : UiTestPrerequisites() {
 
         // Permission granted ui items (visible):
 
-        composeTestRule.onNodeWithText(getStringResource(R.string.scan_cancel_button)).also {
-            it.assertIsDisplayed()
-        }
+        composeTestRule
+            .onNodeWithContentDescription(
+                getStringResource(co.electriccoin.zcash.ui.design.R.string.general_back_content_description)
+            ).also {
+                it.assertIsDisplayed()
+            }
 
         // We don't test camera view, as it's not guaranteed to be laid out already.
 
