@@ -36,28 +36,13 @@ class CreateFlexaTransactionUseCase(
             )
             zashiProposalRepository.createProposal(getZecSend(transaction.getOrNull()))
 
-            when (val result = zashiProposalRepository.submit()) {
-                is SubmitResult.Success -> {
-                    Flexa
-                        .buildSpend()
-                        .transactionSent(
-                            commerceSessionId = transaction.getOrNull()?.commerceSessionId.orEmpty(),
-                            txSignature = result.txIds.first()
-                        )
-                }
-
-                is SubmitResult.GrpcFailure -> {
-                    Flexa
-                        .buildSpend()
-                        .transactionSent(
-                            commerceSessionId = transaction.getOrNull()?.commerceSessionId.orEmpty(),
-                            txSignature = result.txIds.first()
-                        )
-                }
-
-                else -> {
-                    // do nothing
-                }
+            zashiProposalRepository.submit().flexaTransactionSignatureOrNull()?.let { txSignature ->
+                Flexa
+                    .buildSpend()
+                    .transactionSent(
+                        commerceSessionId = transaction.getOrNull()?.commerceSessionId.orEmpty(),
+                        txSignature = txSignature
+                    )
             }
         } catch (_: BiometricsFailureException) {
             // do nothing
@@ -102,3 +87,13 @@ class CreateFlexaTransactionUseCase(
         )
     }
 }
+
+internal fun SubmitResult.flexaTransactionSignatureOrNull(): String? =
+    when (this) {
+        is SubmitResult.Success,
+        is SubmitResult.GrpcFailure -> txIds.firstOrNull()
+
+        is SubmitResult.Failure,
+        is SubmitResult.Partial,
+        is SubmitResult.Error -> null
+    }
