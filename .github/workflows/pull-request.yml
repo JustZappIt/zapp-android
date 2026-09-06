@@ -279,6 +279,77 @@ jobs:
           name: Test Kotlin modules results
           path: ~/artifacts
 
+  test_android_modules_unit:
+    needs: validate_gradle_wrapper
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        timeout-minutes: 5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0 # to fetch all commits
+      - name: Checkout zappMessaging
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zappmessaging-sdk
+          ref: ${{ env.ZAPP_MESSAGING_REF }}
+          path: zappMessaging
+      - name: Checkout bare-kit
+        timeout-minutes: 1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: holepunchto/bare-kit
+          ref: ${{ env.BARE_KIT_REF }}
+          path: bare-kit
+      - name: Set up bare-kit npm dependencies
+        uses: ./.github/actions/setup-bare-kit
+        timeout-minutes: 10
+      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
+        timeout-minutes: 30
+        uses: ./.github/actions/setup-sdk-companion
+      - name: Set up Java
+        uses: ./.github/actions/setup-java
+        timeout-minutes: 1
+      - name: Set up Gradle
+        uses: ./.github/actions/setup-gradle
+        timeout-minutes: 5
+      - name: Test
+        timeout-minutes: 30
+        env:
+          ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
+          ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
+        run: |
+          # The JVM unit tests of the Android modules, which nothing else here covers:
+          # test_kotlin_modules deliberately skips them ("to avoid compiling the Android
+          # modules"), and test_android_modules_wtf_* / _ftl need EMULATOR_WTF_API_KEY or the
+          # Firebase secrets and skip without them. That left ~2000 tests, and the compilation
+          # of the source sets holding them, unrun on every PR.
+          #
+          # Two task names because the flavored modules expose the variant-qualified task and
+          # the unflavored ones expose the plain one; together they reach every module that has
+          # unit tests. Instrumented tests are NOT covered here - those still need emulator.wtf.
+          ./gradlew testZcashmainnetStoreDebugUnitTest testDebugUnitTest
+      - name: Collect Artifacts
+        if: ${{ always() }}
+        timeout-minutes: 1
+        run: |
+          export ARTIFACTS_DIR_PATH=~/artifacts
+          export TEST_RESULTS_ZIP_PATH=${ARTIFACTS_DIR_PATH}/test_results.zip
+
+          mkdir ${ARTIFACTS_DIR_PATH}
+
+          zip -r ${TEST_RESULTS_ZIP_PATH} . -i \*/build/reports/tests/\* \*/build/test-results/\*
+      - name: Upload Artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        timeout-minutes: 1
+        with:
+          name: Test Android modules unit results
+          path: ~/artifacts
+
 # Emulator.wtf is preferred if it has an API key.
   test_android_modules_ftl:
     if: needs.check_firebase_secrets.outputs.has-secrets == 'true' && needs.check_emulator_wtf_secrets.outputs.has-secrets == 'false'
