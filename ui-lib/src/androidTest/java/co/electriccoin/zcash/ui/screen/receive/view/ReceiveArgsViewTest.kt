@@ -35,6 +35,5 @@ class ReceiveArgsViewTest {
                 ).assertExists()
         }
 
-
     private fun newTestSetup() = ReceiveViewTestSetup(composeTestRule)
 }
