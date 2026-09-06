@@ -353,7 +353,6 @@ jobs:
     # 20-25 min before the emulator/test steps even start; the emulator was previously
     # observed dying mid-run ("device not found") once the job ran past 45 min total.
     timeout-minutes: 90
-    continue-on-error: ${{ !matrix.blocking }}
     permissions:
       contents: read
     strategy:
@@ -470,6 +469,8 @@ jobs:
           disable-animations: false
           script: echo "Generated AVD snapshot for caching"
       - name: Run instrumentation tests
+        # A shard that is not blocking keeps its check green; its step and reports still show the failures.
+        continue-on-error: ${{ !matrix.blocking }}
         uses: reactivecircus/android-emulator-runner@v2
         env:
           # Force blank suffix for screenshot tests
