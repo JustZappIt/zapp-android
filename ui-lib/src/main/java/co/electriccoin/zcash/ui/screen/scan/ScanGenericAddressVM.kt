@@ -33,6 +33,9 @@ internal class ScanGenericAddressVM(
                             is Zip321ParseUriValidation.SingleAddress -> onZip321SingleAddressScanned(zip321Result)
                             else -> onAddressScanned(result)
                         }
+                    }.onFailure {
+                        // Without this the state never transitions and the scanner stops responding.
+                        state.update { ScanValidationState.INVALID }
                     }
                 }
             }
