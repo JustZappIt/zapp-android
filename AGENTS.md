@@ -51,7 +51,7 @@ crashes in the biometric gate on emulators. `adb shell pm clear <package>` recov
 - Exception: files intentionally copied byte-identical from a pinned upstream release keep
   upstream's comments and suppressions unchanged. Baseline any resulting fork-policy findings
   instead of editing the copied file; record the upstream tag in the syncing PR.
-- Instrumented/UI tests run only in CI (emulator.wtf / Firebase Test Lab, secret-gated).
+- Instrumented/UI tests run in CI on a hosted emulator (`test_android_modules_emulator`); locally they need a booted emulator or device.
 
 ## Do not commit
 

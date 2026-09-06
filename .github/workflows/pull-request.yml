@@ -1,5 +1,4 @@
 # Expected secrets
-# EMULATOR_WTF_API_KEY - Optional API key for emulator.wtf
 # FIREBASE_TEST_LAB_SERVICE_ACCOUNT - Email address of Firebase Test Lab service account
 # FIREBASE_TEST_LAB_WORKLOAD_IDENTITY_PROVIDER - Workload identity provider to generate temporary service account key
 # FIREBASE_DEBUG_JSON_BASE64 - Optional JSON to enable Firebase (e.g. Crashlytics) for debug builds
@@ -58,17 +57,6 @@ jobs:
           FIREBASE_TEST_LAB_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_TEST_LAB_SERVICE_ACCOUNT }}
           FIREBASE_TEST_LAB_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.FIREBASE_TEST_LAB_WORKLOAD_IDENTITY_PROVIDER }}
         if: "${{ env.FIREBASE_TEST_LAB_PROJECT != '' && env.FIREBASE_TEST_LAB_SERVICE_ACCOUNT != '' && env.FIREBASE_TEST_LAB_WORKLOAD_IDENTITY_PROVIDER != '' }}"
-        run: echo "defined=true" >> $GITHUB_OUTPUT
-
-  check_emulator_wtf_secrets:
-    runs-on: ubuntu-latest
-    outputs:
-      has-secrets: ${{ steps.check_emulator_wtf_secrets.outputs.defined }}
-    steps:
-      - id: check_emulator_wtf_secrets
-        env:
-          EMULATOR_WTF_API_KEY: ${{ secrets.EMULATOR_WTF_API_KEY }}
-        if: "${{ env.EMULATOR_WTF_API_KEY != '' }}"
         run: echo "defined=true" >> $GITHUB_OUTPUT
 
   check_properties:
@@ -324,13 +312,12 @@ jobs:
         run: |
           # The JVM unit tests of the Android modules, which nothing else here covers:
           # test_kotlin_modules deliberately skips them ("to avoid compiling the Android
-          # modules"), and test_android_modules_wtf_* / _ftl need EMULATOR_WTF_API_KEY or the
-          # Firebase secrets and skip without them. That left ~2000 tests, and the compilation
-          # of the source sets holding them, unrun on every PR.
+          # modules"). Before this job that left ~2000 tests, and the compilation of the
+          # source sets holding them, unrun on every PR.
           #
           # Two task names because the flavored modules expose the variant-qualified task and
           # the unflavored ones expose the plain one; together they reach every module that has
-          # unit tests. Instrumented tests are NOT covered here - those still need emulator.wtf.
+          # unit tests. Instrumented tests run in test_android_modules_emulator.
           ./gradlew testZcashmainnetStoreDebugUnitTest testDebugUnitTest
       - name: Collect Artifacts
         if: ${{ always() }}
@@ -350,14 +337,62 @@ jobs:
           name: Test Android modules unit results
           path: ~/artifacts
 
-# Emulator.wtf is preferred if it has an API key.
-  test_android_modules_ftl:
-    if: needs.check_firebase_secrets.outputs.has-secrets == 'true' && needs.check_emulator_wtf_secrets.outputs.has-secrets == 'false'
-    needs: [validate_gradle_wrapper, check_firebase_secrets, check_emulator_wtf_secrets]
+  # Runs Android instrumentation tests on a local KVM-accelerated
+  # emulator via reactivecircus/android-emulator-runner. The matrix splits the
+  # workload into three shards so they run in parallel: `libs` covers the library
+  # modules (with Jacoco coverage on), `app` covers `:app` and `:ui-integration-test`,
+  # and `screenshots` covers `:ui-screenshot-test` (coverage off, because Jacoco
+  # bytecode rewrite breaks screenshot tests) without blocking the workflow until it
+  # has proven stable on the hosted runner.
+  test_android_modules_emulator:
+    name: test_android_modules_emulator (${{ matrix.shard }})
+    needs: [validate_gradle_wrapper]
     runs-on: ubuntu-latest
+    # 90 rather than the usual 45: the app shards need the SDK compiled, and when
+    # SDK_COMMIT_PIN is set (see setup-sdk-companion) a cold cargo/target cache eats
+    # 20-25 min before the emulator/test steps even start; the emulator was previously
+    # observed dying mid-run ("device not found") once the job ran past 45 min total.
+    timeout-minutes: 90
     permissions:
       contents: read
-      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The flavored modules expose no connectedDebugAndroidTest, so ui-lib and
+          # crash-android-lib are named by variant; the bare-kit and zappMessaging suites are not ours to run.
+          - shard: libs
+            coverage: true
+            blocking: true
+            assemble-tasks: >-
+              assembleDebugAndroidTest
+              -x :bare-kit:assembleDebugAndroidTest
+              -x :zappmessaging:assembleDebugAndroidTest
+              :ui-lib:assembleZcashmainnetStoreDebugAndroidTest
+              :crash-android-lib:assembleZcashmainnetStoreDebugAndroidTest
+            gradle-tasks: >-
+              connectedDebugAndroidTest
+              -x :bare-kit:connectedDebugAndroidTest
+              -x :zappmessaging:connectedDebugAndroidTest
+              -x :ui-benchmark-test:connectedDebugAndroidTest
+              :ui-lib:connectedZcashmainnetStoreDebugAndroidTest
+              :crash-android-lib:connectedZcashmainnetStoreDebugAndroidTest
+          - shard: app
+            coverage: false
+            blocking: true
+            assemble-tasks: >-
+              :app:assembleZcashmainnetStoreDebugAndroidTest
+              :ui-integration-test:assembleZcashmainnetStoreDebug
+            gradle-tasks: >-
+              :app:connectedZcashmainnetStoreDebugAndroidTest
+              :ui-integration-test:connectedZcashmainnetStoreDebugAndroidTest
+          - shard: screenshots
+            coverage: false
+            blocking: false
+            assemble-tasks: >-
+              :ui-screenshot-test:assembleZcashmainnetStoreDebug
+            gradle-tasks: >-
+              :ui-screenshot-test:connectedZcashmainnetStoreDebugAndroidTest
     steps:
       - name: Checkout
         timeout-minutes: 5
@@ -378,86 +413,9 @@ jobs:
           repository: holepunchto/bare-kit
           ref: ${{ env.BARE_KIT_REF }}
           path: bare-kit
-      - name: Set up bare-kit npm dependencies
-        uses: ./.github/actions/setup-bare-kit
-        timeout-minutes: 10
-      - name: Set up Java
-        uses: ./.github/actions/setup-java
-        timeout-minutes: 1
-      - name: Set up Gradle
-        uses: ./.github/actions/setup-gradle
+      - name: Free runner disk space
+        uses: ./.github/actions/free-disk-space
         timeout-minutes: 5
-      - name: Build
-        timeout-minutes: 20
-        run: |
-          ./gradlew assembleZcashmainnetStoreDebug assembleZcashtestnetStoreDebug assembleAndroidTest
-      - name: Authenticate to Google Cloud for Firebase Test Lab
-        id: auth_test_lab
-        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
-        with:
-          create_credentials_file: true
-          project_id: ${{ vars.FIREBASE_TEST_LAB_PROJECT }}
-          service_account: ${{ secrets.FIREBASE_TEST_LAB_SERVICE_ACCOUNT }}
-          workload_identity_provider: ${{ secrets.FIREBASE_TEST_LAB_WORKLOAD_IDENTITY_PROVIDER }}
-          access_token_lifetime: '1200s'
-      - name: Test
-        timeout-minutes: 30
-        env:
-          # Force blank suffix for screenshot tests
-          ORG_GRADLE_PROJECT_ZCASH_DEBUG_APP_NAME_SUFFIX: ""
-          # Used by Flank, since the temporary token is missing the project name
-          GOOGLE_CLOUD_PROJECT: ${{ vars.FIREBASE_TEST_LAB_PROJECT }}
-          ORG_GRADLE_PROJECT_ZCASH_FIREBASE_TEST_LAB_API_KEY_PATH: ${{ steps.auth_test_lab.outputs.credentials_file_path }}
-          # Because Fulladle doesn't allow Test Orchestrator to be enabled/disabled for a specific submodule, it must be enabled for all modules
-          ORG_GRADLE_PROJECT_IS_USE_TEST_ORCHESTRATOR: true
-          ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
-          ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
-        run: |
-          ./gradlew runFlank
-      - name: Collect Artifacts
-        if: ${{ always() }}
-        timeout-minutes: 1
-        run: |
-          export ARTIFACTS_DIR_PATH=~/artifacts
-          export TEST_RESULTS_ZIP_PATH=${ARTIFACTS_DIR_PATH}/test_results.zip
-
-          mkdir ${ARTIFACTS_DIR_PATH}
-
-          zip -r ${TEST_RESULTS_ZIP_PATH} . -i build/fladle/\* \*/build/outputs/androidTest-results/\*
-      - name: Upload Artifacts
-        if: ${{ always() }}
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
-        timeout-minutes: 1
-        with:
-          name: Test Android modules with FTL results
-          path: ~/artifacts
-
-  test_android_modules_wtf_coverage:
-    if: needs.check_emulator_wtf_secrets.outputs.has-secrets == 'true'
-    needs: [ validate_gradle_wrapper, check_emulator_wtf_secrets]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        timeout-minutes: 5
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          fetch-depth: 0 # to fetch all commits
-      - name: Checkout zappMessaging
-        timeout-minutes: 1
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: JustZappIt/zappmessaging-sdk
-          ref: ${{ env.ZAPP_MESSAGING_REF }}
-          path: zappMessaging
-      - name: Checkout bare-kit
-        timeout-minutes: 1
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: holepunchto/bare-kit
-          ref: ${{ env.BARE_KIT_REF }}
-          path: bare-kit
       - name: Set up bare-kit npm dependencies
         uses: ./.github/actions/setup-bare-kit
         timeout-minutes: 10
@@ -470,17 +428,65 @@ jobs:
       - name: Set up Gradle
         uses: ./.github/actions/setup-gradle
         timeout-minutes: 5
-      - name: Build and test
-        timeout-minutes: 30
+      - name: Pre-build the instrumentation APKs
+        # Assembling (not running) the instrumentation APKs here forces compilation to
+        # finish before Enable KVM/emulator boot, so the later `connectedAndroidTest`
+        # step only installs and runs against already-built artifacts. Compiling while
+        # the emulator is up was observed causing rendering contention
+        # (ComposeTimeoutException, "Failed to find ColorBuffer") from CPU/memory
+        # pressure, not real UI regressions.
+        timeout-minutes: 60
         env:
-          # Force blank suffix for screenshot tests
           ORG_GRADLE_PROJECT_ZCASH_DEBUG_APP_NAME_SUFFIX: ""
-          ORG_GRADLE_PROJECT_ZCASH_EMULATOR_WTF_API_KEY: ${{ secrets.EMULATOR_WTF_API_KEY }}
-          ORG_GRADLE_PROJECT_IS_ANDROID_INSTRUMENTATION_TEST_COVERAGE_ENABLED: true
+          ORG_GRADLE_PROJECT_IS_ANDROID_INSTRUMENTATION_TEST_COVERAGE_ENABLED: ${{ matrix.coverage }}
           ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
           ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
         run: |
-          ./gradlew testDebugWithEmulatorWtf :ui-integration-test:testZcashmainnetStoreDebugWithEmulatorWtf
+          ./gradlew ${{ matrix.assemble-tasks }}
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: AVD cache
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-api-35-x86_64-pixel_6-default-v2
+      - name: Create AVD and generate snapshot for caching
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          target: default
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "Generated AVD snapshot for caching"
+      - name: Run instrumentation tests
+        # A shard that is not blocking keeps its check green; its step and reports still show the failures.
+        continue-on-error: ${{ !matrix.blocking }}
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          # Force blank suffix for screenshot tests
+          ORG_GRADLE_PROJECT_ZCASH_DEBUG_APP_NAME_SUFFIX: ""
+          ORG_GRADLE_PROJECT_IS_ANDROID_INSTRUMENTATION_TEST_COVERAGE_ENABLED: ${{ matrix.coverage }}
+          ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
+          ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          target: default
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: ./gradlew --continue ${{ matrix.gradle-tasks }}
       - name: Collect Artifacts
         if: ${{ always() }}
         timeout-minutes: 1
@@ -490,80 +496,13 @@ jobs:
 
           mkdir ${ARTIFACTS_DIR_PATH}
 
-          zip -r ${TEST_RESULTS_ZIP_PATH} . -i \*/build/test-results/\*
+          zip -r ${TEST_RESULTS_ZIP_PATH} . -i \*/build/outputs/androidTest-results/\* \*/build/reports/androidTests/\*
       - name: Upload Artifacts
         if: ${{ always() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         timeout-minutes: 1
         with:
-          name: Test Android libs with WTF results
-          path: ~/artifacts
-
-  test_android_modules_wtf_no_coverage:
-    if: needs.check_emulator_wtf_secrets.outputs.has-secrets == 'true'
-    needs: [ validate_gradle_wrapper, check_emulator_wtf_secrets]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        timeout-minutes: 5
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          fetch-depth: 0 # to fetch all commits
-      - name: Checkout zappMessaging
-        timeout-minutes: 1
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: JustZappIt/zappmessaging-sdk
-          ref: ${{ env.ZAPP_MESSAGING_REF }}
-          path: zappMessaging
-      - name: Checkout bare-kit
-        timeout-minutes: 1
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-        with:
-          repository: holepunchto/bare-kit
-          ref: ${{ env.BARE_KIT_REF }}
-          path: bare-kit
-      - name: Set up bare-kit npm dependencies
-        uses: ./.github/actions/setup-bare-kit
-        timeout-minutes: 10
-      - name: Set up companion SDK build (if SDK_COMMIT_PIN is set)
-        timeout-minutes: 30
-        uses: ./.github/actions/setup-sdk-companion
-      - name: Set up Java
-        uses: ./.github/actions/setup-java
-        timeout-minutes: 1
-      - name: Set up Gradle
-        uses: ./.github/actions/setup-gradle
-        timeout-minutes: 5
-      - name: Build and test
-        timeout-minutes: 30
-        env:
-          # Force blank suffix for screenshot tests
-          ORG_GRADLE_PROJECT_ZCASH_DEBUG_APP_NAME_SUFFIX: ""
-          ORG_GRADLE_PROJECT_ZCASH_EMULATOR_WTF_API_KEY: ${{ secrets.EMULATOR_WTF_API_KEY }}
-          ORG_GRADLE_PROJECT_IS_ANDROID_INSTRUMENTATION_TEST_COVERAGE_ENABLED: false
-          ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
-          ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
-        run: |
-          ./gradlew :app:testZcashmainnetStoreDebugWithEmulatorWtf :ui-screenshot-test:testZcashmainnetStoreDebugWithEmulatorWtf
-      - name: Collect Artifacts
-        if: ${{ always() }}
-        timeout-minutes: 1
-        run: |
-          export ARTIFACTS_DIR_PATH=~/artifacts
-          export TEST_RESULTS_ZIP_PATH=${ARTIFACTS_DIR_PATH}/test_results.zip
-
-          mkdir ${ARTIFACTS_DIR_PATH}
-
-          zip -r ${TEST_RESULTS_ZIP_PATH} . -i \*/build/test-results/\*
-      - name: Upload Artifacts
-        if: ${{ always() }}
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
-        timeout-minutes: 1
-        with:
-          name: Test Android app with WTF results
+          name: Test Android modules emulator results (${{ matrix.shard }})
           path: ~/artifacts
 
   # Performs a button mash test on the debug build of the app with strict mode enabled
