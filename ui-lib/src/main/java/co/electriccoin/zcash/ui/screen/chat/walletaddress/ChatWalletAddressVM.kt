@@ -112,7 +112,7 @@ class ChatWalletAddressVM(
     )
 
     private fun onCopyClick(address: String) {
-        copyToClipboard(address, isSensitive = false)
+        copyToClipboard(address, isSensitive = true)
         copyFeedback.mark(address)
     }
 
