@@ -456,7 +456,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-api-35-x86_64-pixel_6-default-emulated-camera-v1
+          key: avd-api-35-x86_64-pixel_6-default-v2
       - name: Create AVD and generate snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
@@ -466,7 +466,7 @@ jobs:
           profile: pixel_6
           target: default
           force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back emulated
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: false
           script: echo "Generated AVD snapshot for caching"
       - name: Run instrumentation tests
@@ -483,7 +483,7 @@ jobs:
           profile: pixel_6
           target: default
           force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back emulated
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: ./gradlew --continue ${{ matrix.gradle-tasks }}
       - name: Collect Artifacts
