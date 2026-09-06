@@ -11,6 +11,7 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.fixture.ConfigInfoFixture
 import co.electriccoin.zcash.ui.fixture.VersionInfoFixture
 import co.electriccoin.zcash.ui.test.getStringResource
+import co.electriccoin.zcash.ui.test.getStringResourceWithArgs
 import org.junit.Rule
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -28,13 +29,13 @@ class AboutViewTest {
 
         composeTestRule
             .onNodeWithContentDescription(
-                getStringResource(R.string.back_navigation_content_description),
+                getStringResource(co.electriccoin.zcash.ui.design.R.string.general_back_content_description),
                 ignoreCase = true
             ).also {
                 it.assertExists()
             }
 
-        composeTestRule.onNodeWithText(getStringResource(R.string.about_description)).also {
+        composeTestRule.onNodeWithText(getStringResource(R.string.about_legal_notice)).also {
             it.assertExists()
         }
     }
@@ -44,12 +45,12 @@ class AboutViewTest {
     fun version_setup_test() {
         newTestSetup()
 
-        composeTestRule.onNodeWithText(VersionInfoFixture.VERSION_NAME, substring = true).also {
-            it.assertExists()
-        }
-        composeTestRule.onNodeWithText(VersionInfoFixture.VERSION_CODE.toString(), substring = true).also {
-            it.assertExists()
-        }
+        composeTestRule
+            .onNodeWithText(
+                getStringResourceWithArgs(R.string.settings_version, VersionInfoFixture.VERSION_NAME)
+            ).also {
+                it.assertExists()
+            }
     }
 
     @Test
@@ -61,7 +62,7 @@ class AboutViewTest {
 
         composeTestRule
             .onNodeWithContentDescription(
-                getStringResource(R.string.back_navigation_content_description)
+                getStringResource(co.electriccoin.zcash.ui.design.R.string.general_back_content_description)
             ).also {
                 it.performClick()
             }
