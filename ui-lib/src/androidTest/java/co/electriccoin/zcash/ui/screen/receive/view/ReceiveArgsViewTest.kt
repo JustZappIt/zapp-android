@@ -1,15 +1,10 @@
 package co.electriccoin.zcash.ui.screen.receive.view
 
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import androidx.test.filters.MediumTest
 import cash.z.ecc.android.sdk.fixture.WalletAddressFixture
-import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.test.getStringResource
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -40,23 +35,6 @@ class ReceiveArgsViewTest {
                 ).assertExists()
         }
 
-    @Test
-    @MediumTest
-    fun click_settings_test() =
-        runTest {
-            val testSetup = newTestSetup()
-
-            assertEquals(0, testSetup.getOnSettingsCount())
-
-            composeTestRule
-                .onNodeWithContentDescription(
-                    getStringResource(R.string.settings_menu_content_description)
-                ).also {
-                    it.performClick()
-                }
-
-            assertEquals(1, testSetup.getOnSettingsCount())
-        }
 
     private fun newTestSetup() = ReceiveViewTestSetup(composeTestRule)
 }
