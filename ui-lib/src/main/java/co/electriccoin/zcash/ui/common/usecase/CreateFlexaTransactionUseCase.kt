@@ -88,6 +88,14 @@ class CreateFlexaTransactionUseCase(
     }
 }
 
+/**
+ * The transaction signature Flexa should be told about, or null when the payment must surface as a
+ * failure instead. A [SubmitResult.GrpcFailure] (timeout or gRPC-level rejection) is resubmittable
+ * precisely because the transaction was likely broadcast, so it reports as sent just like a success;
+ * otherwise a paid commerce session would hang even though the network may already have the
+ * transaction. A missing tx id reports nothing, so a session is never completed without a real
+ * transaction signature.
+ */
 internal fun SubmitResult.flexaTransactionSignatureOrNull(): String? =
     when (this) {
         is SubmitResult.Success,
