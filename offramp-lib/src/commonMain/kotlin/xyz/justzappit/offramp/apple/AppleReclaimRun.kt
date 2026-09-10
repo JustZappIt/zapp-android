@@ -13,11 +13,8 @@ import xyz.justzappit.offramp.reputation.SocialPlatform
 /**
  * Resolves the two routing keys Swift sends as strings, then admits one run at a time.
  *
- * [lock] is held for exactly as long as the collection lives, so cancelling an abandoned run
- * frees the next one. A second live session is what the guard exists to prevent: it leaves the
- * user verifying against the link they opened while the poller watches a session nobody ever
- * touched — ten minutes of waiting ending in a session expired on a verification that in fact
- * succeeded.
+ * [lock] is held for exactly as long as the collection lives, so cancelling an abandoned run frees
+ * the next one. What a second live session costs is on `ReclaimVerificationDriver.mintAndHold`.
  */
 internal fun singleRunFlow(
     lock: Mutex,

@@ -17,11 +17,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/**
- * The guard that keeps one verification live at a time. Everything it protects is invisible on
- * screen: a second session minted over the first leaves the user proving their account against a
- * link nobody is polling, and the failure arrives ten minutes later wearing the wrong name.
- */
+/** The guard that keeps one verification live at a time, walked through each of its exits. */
 class AppleReclaimRunTest {
     @Test
     fun `a second run while one is live is refused rather than started`() =

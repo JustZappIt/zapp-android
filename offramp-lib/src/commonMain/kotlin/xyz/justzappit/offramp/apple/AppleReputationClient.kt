@@ -34,20 +34,15 @@ class AppleReputationClient private constructor(
     private val runLock = Mutex()
 
     /**
-     * The live run's signal, published through a [MutableStateFlow] because [markVerifierOpened]
-     * is called from whatever thread Swift's `UIApplication.open` completes on. A plain field
-     * would let that call mark a signal it cannot see yet, which reads on screen as re-minting
-     * that never stops — replacing the very link the user has just opened.
+     * The live run's signal. A [MutableStateFlow] rather than a plain field because
+     * [markVerifierOpened] is called from whatever thread Swift's `UIApplication.open` completes
+     * on, and a call that cannot see the signal yet is a call that never stops the re-minting.
      */
     private val activeSignal = MutableStateFlow<ReclaimLaunchSignal?>(null)
 
     @Throws(Exception::class)
     suspend fun summary(currencyCode: String): AppleReputationSummary =
         reader.read(smartAccounts.resolve().address, CurrencyCode.fromCode(currencyCode)).toApple()
-
-    /** The smart account every proof binds to, and what `AppleOnrampClient.recipientAddress` returns. */
-    @Throws(Exception::class)
-    suspend fun accountAddress(): String = smartAccounts.resolve().address.checksumHex
 
     fun verify(platformId: String, currencyCode: String): Flow<AppleReclaimStatus> =
         singleRunFlow(runLock, platformId, currencyCode) { platform, currency ->
@@ -70,21 +65,14 @@ class AppleReputationClient private constructor(
         }
 
     /**
-     * Stops the re-minting. Call it once `UIApplication.open` has actually returned true, never on
-     * the tap: until it fires the session is refreshed every four minutes, because a session lives
-     * about ten and installing the Verifier and signing in eats most of that.
+     * Stops the re-minting. Call it once `UIApplication.open` has returned true, never on the tap;
+     * `ReclaimVerificationDriver.mintAndHold` is where what each mistake costs is written down.
+     *
+     * Swift owns which run this belongs to. Ending a run is likewise Swift's: cancelling the
+     * collection frees the lock and [verify]'s own `finally` forgets the signal.
      */
     fun markVerifierOpened() {
         activeSignal.value?.markLaunched()
-    }
-
-    /**
-     * Forgets the live run's signal. Ending the run is Swift's job — cancelling the collection is
-     * what frees it — but a launch callback can still land afterwards, and without this it would
-     * mark the *next* run as opened before the user has left for the Verifier.
-     */
-    fun cancel() {
-        activeSignal.value = null
     }
 
     companion object {
