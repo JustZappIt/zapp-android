@@ -12,13 +12,11 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.screen.chat.SupportChatArgs
 import co.electriccoin.zcash.ui.screen.chat.common.runChatCall
-import co.electriccoin.zcash.ui.screen.chat.media.FileUtils
-import co.electriccoin.zcash.ui.screen.chat.media.ImageProcessor
 import co.electriccoin.zcash.ui.screen.chat.media.MediaPickEffect
+import co.electriccoin.zcash.ui.screen.chat.media.MediaSendCoordinator
 import co.electriccoin.zcash.ui.screen.chat.model.ChatMessage
-import co.electriccoin.zcash.ui.screen.chat.model.MimeTypes
+import co.electriccoin.zcash.ui.screen.chat.model.mediaTransferKey
 import co.electriccoin.zcash.ui.screen.chat.repository.ChatConversationsRepository
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -30,7 +28,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import xyz.justzappit.zappmessaging.ZappMessagingSDK
 import xyz.justzappit.zappmessaging.models.ConversationType as SdkConversationType
 
@@ -56,6 +53,38 @@ class SupportChatVM(
     private var isVisible = false
 
     init {
+        viewModelScope.launch {
+            sdk.mediaTransferStates.collect { states ->
+                messages.update { list ->
+                    list.map { ui ->
+                        val media = ui.media
+                        val state = media?.let { states[it.mediaTransferKey] }
+                        if (media != null && state != null) {
+                            ui.copy(media = media.copy(mediaTransferState = state))
+                        } else {
+                            ui
+                        }
+                    }
+                }
+            }
+        }
+        viewModelScope.launch {
+            sdk.mediaDownloadComplete.collect { (id, path) ->
+                messages.update { list ->
+                    list.map { ui ->
+                        val media = ui.media
+                        if (media?.mediaId ==
+                            id
+                        ) {
+                            ui.copy(media = media.copy(mediaLocalPath = path, mediaTransferState = "complete"))
+                        } else {
+                            ui
+                        }
+                    }
+                }
+            }
+        }
+
         viewModelScope.launch { initialize() }
         subscribeToIncomingMessages()
         markActiveWhenConversationKnown()
@@ -173,11 +202,11 @@ class SupportChatVM(
     private suspend fun loadMessages() {
         val convId = conversationId.value ?: return
         runChatCall("SupportChatVM: loadMessages failed") {
-            messages.value =
-                sdk
-                    .getMessages(convId)
-                    .map(ChatMessage::from)
-                    .mapNotNull { it.toSupportUiMessageOrNull() }
+            val history =
+                sdk.getMessages(convId).map(ChatMessage::from).mapNotNull { message ->
+                    message.toSupportUiMessageOrNull()?.copy(onRetryMedia = { retryMedia(message) })
+                }
+            messages.update { current -> (current + history).distinctBy { it.id }.sortedBy { it.timestamp } }
         }
     }
 
@@ -185,7 +214,11 @@ class SupportChatVM(
         viewModelScope.launch {
             sdk.messageReceived.collect { (incomingConvId, zmMsg) ->
                 if (incomingConvId != conversationId.value) return@collect
-                val msg = ChatMessage.from(zmMsg).toSupportUiMessageOrNull() ?: return@collect
+                val incoming = ChatMessage.from(zmMsg)
+                val msg =
+                    incoming
+                        .toSupportUiMessageOrNull()
+                        ?.copy(onRetryMedia = { retryMedia(incoming) }) ?: return@collect
                 messages.update { current ->
                     if (current.any { it.id == msg.id }) current else current + msg
                 }
@@ -270,84 +303,32 @@ class SupportChatVM(
         viewModelScope.launch { sendCameraCapture(uri) }
     }
 
-    private suspend fun sendMediaFromUri(uri: Uri) {
-        val convId = conversationId.value ?: return
-        runChatCall("SupportChatVM: sendMedia failed") {
-            withContext(Dispatchers.IO) {
-                val mimeType = FileUtils.getMimeType(application, uri)
-                val thumbnail = thumbnailFor(uri, mimeType)
-                when {
-                    mimeType == MimeTypes.GIF -> {
-                        val cached =
-                            FileUtils.copyUriToCache(application, uri)
-                                ?: error("Failed to cache GIF")
-                        sendMediaMessage(convId, cached.absolutePath, MimeTypes.GIF, thumbnail)
-                    }
-
-                    mimeType.startsWith(MimeTypes.IMAGE_PREFIX) -> {
-                        val compressed =
-                            ImageProcessor.compressImage(application, uri)
-                                ?: error("Image compression failed")
-                        sendMediaMessage(convId, compressed.absolutePath, MimeTypes.IMAGE_JPEG, thumbnail)
-                    }
-
-                    else -> {
-                        val cached =
-                            FileUtils.copyUriToCache(application, uri)
-                                ?: error("Failed to cache media")
-                        sendMediaMessage(convId, cached.absolutePath, mimeType, thumbnail)
+    private val mediaSender =
+        MediaSendCoordinator(
+            context = application,
+            conversationId = { conversationId.value },
+            publish = { message ->
+                message.toSupportUiMessageOrNull()?.let { ui ->
+                    messages.update { list ->
+                        (list.filterNot { it.id == ui.id } + ui.copy(onRetryMedia = { retryMedia(message) }))
+                            .sortedBy { it.timestamp }
                     }
                 }
-            }
-        }
-    }
+            },
+            send = { convId, path, mime, caption, thumbnail, id ->
+                ChatMessage.from(sdk.sendMediaMessage(convId, path, mime, caption, thumbnail, clientMessageId = id))
+            },
+            retryAccepted = { convId, id -> sdk.retryMedia(convId, id) },
+        )
 
-    private suspend fun sendFileFromUri(uri: Uri) {
-        val convId = conversationId.value ?: return
-        runChatCall("SupportChatVM: sendFile failed") {
-            withContext(Dispatchers.IO) {
-                val cached =
-                    FileUtils.copyUriToCache(application, uri)
-                        ?: error("Failed to cache file")
-                val mimeType = FileUtils.getMimeType(application, uri)
-                val thumbnail = thumbnailFor(uri, mimeType)
-                sendMediaMessage(convId, cached.absolutePath, mimeType, thumbnail)
-            }
-        }
-    }
+    private suspend fun sendMediaFromUri(uri: Uri) = mediaSender.send(uri)
 
-    private suspend fun sendCameraCapture(uri: Uri) {
-        val convId = conversationId.value ?: return
-        runChatCall("SupportChatVM: sendCameraCapture failed") {
-            withContext(Dispatchers.IO) {
-                val thumbnail = ImageProcessor.generateThumbnail(application, uri)
-                val compressed =
-                    ImageProcessor.compressImage(application, uri)
-                        ?: error("Image compression failed")
-                sendMediaMessage(convId, compressed.absolutePath, MimeTypes.IMAGE_JPEG, thumbnail)
-            }
-        }
-    }
+    private suspend fun sendFileFromUri(uri: Uri) = mediaSender.send(uri, asFile = true)
 
-    private fun thumbnailFor(uri: Uri, mimeType: String): String? =
-        if (mimeType.startsWith(MimeTypes.IMAGE_PREFIX)) {
-            ImageProcessor.generateThumbnail(application, uri)
-        } else {
-            null
-        }
+    private suspend fun sendCameraCapture(uri: Uri) = mediaSender.send(uri)
 
-    private suspend fun sendMediaMessage(
-        convId: String,
-        mediaPath: String,
-        contentType: String,
-        thumbnailData: String?,
-    ) {
-        runChatCall("SupportChatVM: sendMediaMessage failed") {
-            val zmMessage = sdk.sendMediaMessage(convId, mediaPath, contentType, "", thumbnailData)
-            ChatMessage.from(zmMessage).toSupportUiMessageOrNull()?.let { ui ->
-                messages.update { it + ui }
-            }
-        }
+    private fun retryMedia(message: ChatMessage) {
+        viewModelScope.launch { mediaSender.retry(message) }
     }
 
     private fun onLeaveClick() {
@@ -401,5 +382,11 @@ private fun ChatMessage.toSupportUiMessageOrNull(): SupportUiMessage? {
         content = displayContent,
         origin = origin,
         timestamp = timestamp,
+        media =
+            if (contentType?.startsWith("image/") == true || contentType?.startsWith("video/") == true) {
+                this
+            } else {
+                null
+            },
     )
 }

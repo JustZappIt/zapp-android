@@ -74,6 +74,7 @@ internal fun MessageBubble(
     modifier: Modifier = Modifier,
     onReplyToMessage: ((ChatMessage) -> Unit)? = null,
     onImageClick: ((ChatMessage) -> Unit)? = null,
+    onRetryMedia: ((ChatMessage) -> Unit)? = null,
     localPublicKey: String? = null,
     fiatRate: ZecFiatRate? = null,
     paidRequestIds: Set<String> = emptySet(),
@@ -156,6 +157,7 @@ internal fun MessageBubble(
                     hasReply = hasReply,
                     contentModifier = contentModifier,
                     onImageClick = onImageClick,
+                    onRetryMedia = onRetryMedia,
                     localPublicKey = localPublicKey,
                     fiatRate = fiatRate,
                     paidRequestIds = paidRequestIds,
@@ -220,6 +222,7 @@ private fun MessageContent(
     hasReply: Boolean,
     contentModifier: Modifier,
     onImageClick: ((ChatMessage) -> Unit)?,
+    onRetryMedia: ((ChatMessage) -> Unit)?,
     localPublicKey: String?,
     fiatRate: ZecFiatRate?,
     paidRequestIds: Set<String>,
@@ -268,6 +271,7 @@ private fun MessageContent(
                 message = message,
                 isFromMe = isFromMe,
                 onImageClick = onImageClick,
+                onRetryMedia = onRetryMedia,
                 transferProgress = mediaTransferProgress,
             )
         }
@@ -276,6 +280,7 @@ private fun MessageContent(
             MediaBubble(
                 message = message,
                 isFromMe = isFromMe,
+                onRetryMedia = onRetryMedia,
                 transferProgress = mediaTransferProgress,
             )
         }

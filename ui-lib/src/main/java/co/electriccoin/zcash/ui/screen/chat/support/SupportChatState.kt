@@ -4,6 +4,7 @@
 package co.electriccoin.zcash.ui.screen.chat.support
 
 import android.net.Uri
+import co.electriccoin.zcash.ui.screen.chat.model.ChatMessage
 
 /**
  * Direction of a message in the support chat. Decouples bubble alignment from `isFromMe`
@@ -26,6 +27,8 @@ data class SupportUiMessage(
     val content: String,
     val origin: SupportMessageOrigin,
     val timestamp: Long,
+    val media: ChatMessage? = null,
+    val onRetryMedia: (() -> Unit)? = null,
 ) {
     val isFromLocalUser: Boolean get() = origin == SupportMessageOrigin.USER
 }

@@ -445,4 +445,11 @@
     <string name="chat_push_service_channel_name">Entrega de mensajes en segundo plano</string>
     <string name="chat_push_service_title">Zapp</string>
     <string name="chat_push_service_body">La entrega en segundo plano está activada</string>
+    <string name="chat_media_preparing">Preparando imagen…</string>
+    <string name="chat_media_queued">En cola · toca para reintentar</string>
+    <string name="chat_media_sending">Enviando imagen…</string>
+    <string name="chat_media_awaiting_verification">Enviada a la conexión · recepción sin confirmar</string>
+    <string name="chat_media_failed_retry">Error al transferir · toca para reintentar</string>
+    <string name="chat_media_downloading">Descargando imagen…</string>
+    <string name="chat_media_waiting_peer">Esperando un contacto con esta imagen · toca para reintentar</string>
 </resources>

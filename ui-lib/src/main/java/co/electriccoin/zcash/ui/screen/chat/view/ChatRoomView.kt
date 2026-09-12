@@ -148,6 +148,7 @@ internal fun ChatRoomView(
                                 message = item.message,
                                 onReplyToMessage = onReplyToMessage,
                                 onImageClick = { viewerMessage = it },
+                                onRetryMedia = state.onRetryMedia,
                                 modifier = Modifier.animateItem(),
                                 localPublicKey = state.localPublicKey,
                                 fiatRate = state.fiatRate,

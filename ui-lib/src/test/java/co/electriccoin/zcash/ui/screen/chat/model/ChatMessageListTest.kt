@@ -79,4 +79,30 @@ class ChatMessageListTest {
         assertEquals(listOf("a", "b"), result.map { it.id })
         assertEquals(1_000, result.first().timestamp)
     }
+
+    @Test
+    fun `media response replaces temporary and history twins without duplicate keys`() {
+        val placeholder = message("stable-client-id", 1000).copy(mediaTransferState = "preparing")
+        val stored = placeholder.copy(mediaId = "hash", mediaTransferState = "queued", timestamp = 2000)
+        val historyRace = listOf(placeholder).mergedWithHistory(listOf(stored))
+        val reconciled = historyRace.reconciledMediaMessage(stored)
+        assertEquals(1, reconciled.size)
+        assertEquals("hash", reconciled.single().mediaId)
+        assertEquals("queued", reconciled.single().mediaTransferState)
+    }
+
+    @Test
+    fun `media response cannot erase an early read receipt or treat buffered bytes as delivered`() {
+        val stored = message("media", 1000).copy(status = MessageStatus.QUEUED, mediaTransferState = "queued_socket")
+        assertEquals(MessageStatus.QUEUED, emptyList<ChatMessage>().reconciledMediaMessage(stored).single().status)
+        val earlyReceipt = stored.copy(status = MessageStatus.READ)
+        assertEquals(MessageStatus.READ, listOf(earlyReceipt).reconciledMediaMessage(stored).single().status)
+    }
+
+    @Test
+    fun `successful media retry replaces failed preparation on the same row`() {
+        val failed = message("retry", 1000).copy(status = MessageStatus.FAILED, mediaTransferState = "failed")
+        val accepted = failed.copy(status = MessageStatus.QUEUED, mediaTransferState = "queued")
+        assertEquals(listOf(accepted), listOf(failed).reconciledMediaMessage(accepted))
+    }
 }

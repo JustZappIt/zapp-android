@@ -62,6 +62,7 @@ import co.electriccoin.zcash.ui.screen.chat.room.ChatRoomInputState
 import co.electriccoin.zcash.ui.screen.chat.view.ConfirmDialog
 import co.electriccoin.zcash.ui.screen.chat.view.InputRow
 import co.electriccoin.zcash.ui.screen.chat.view.MediaAttachmentSheet
+import co.electriccoin.zcash.ui.screen.chat.view.bubbles.MediaBubble
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -342,13 +343,21 @@ private fun SupportMessageBubble(message: SupportUiMessage) {
                         RectangleShape,
                     ).padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
-            BasicText(
-                text = message.content,
-                style =
-                    ZappTheme.typography.body.copy(
-                        color = if (isFromLocalUser) c.onAccent else c.text,
-                    ),
-            )
+            if (message.media != null) {
+                MediaBubble(
+                    message = message.media,
+                    isFromMe = isFromLocalUser,
+                    onRetryMedia = { message.onRetryMedia?.invoke() },
+                )
+            } else {
+                BasicText(
+                    text = message.content,
+                    style =
+                        ZappTheme.typography.body.copy(
+                            color = if (isFromLocalUser) c.onAccent else c.text,
+                        ),
+                )
+            }
         }
     }
 }

@@ -29,3 +29,26 @@ fun List<ChatMessage>.mergedWithHistory(history: List<ChatMessage>): List<ChatMe
     (this + history)
         .distinctBy { it.id }
         .sortedChronologically()
+
+/** Replaces a media placeholder or persisted twin while retaining receipt evidence. */
+fun List<ChatMessage>.reconciledMediaMessage(message: ChatMessage): List<ChatMessage> {
+    val previous = firstOrNull { it.id == message.id }
+    val status =
+        when (previous?.status) {
+            MessageStatus.READ, MessageStatus.DELIVERED, MessageStatus.SENT -> {
+                message.status?.let { previous.status.advanceTo(it) } ?: previous.status
+            }
+
+            else -> {
+                message.status
+            }
+        }
+    return (filterNot { it.id == message.id } + message.copy(status = status)).sortedChronologically()
+}
+
+/** Upload and download evidence for the same content hash are independent. */
+val ChatMessage.mediaTransferKey: String
+    get() = "${if (isFromMe) "upload" else "download"}:$mediaId"
+
+val ChatMessage.canRetryMedia: Boolean
+    get() = mediaTransferState in setOf("failed", "queued_socket", "queued", "waiting_peer")

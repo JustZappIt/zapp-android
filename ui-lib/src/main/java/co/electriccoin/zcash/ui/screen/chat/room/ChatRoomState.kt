@@ -23,6 +23,7 @@ data class ChatRoomState(
     val onBack: () -> Unit,
     val networkChip: ChatRoomNetworkChipState,
     val messages: List<ChatMessage>,
+    val onRetryMedia: (ChatMessage) -> Unit = {},
     /** First message below the transient unread divider for this room entry. */
     val firstUnreadMessageId: String?,
     /** mediaId → transfer progress (0..1) for in-flight media uploads/downloads. */

@@ -445,4 +445,11 @@
     <string name="chat_push_service_channel_name">Background message delivery</string>
     <string name="chat_push_service_title">Zapp</string>
     <string name="chat_push_service_body">Background delivery is on</string>
+    <string name="chat_media_preparing">Preparing image…</string>
+    <string name="chat_media_queued">Queued · tap to retry</string>
+    <string name="chat_media_sending">Sending image…</string>
+    <string name="chat_media_awaiting_verification">Sent to connection · receipt unconfirmed</string>
+    <string name="chat_media_failed_retry">Image transfer failed · tap to retry</string>
+    <string name="chat_media_downloading">Downloading image…</string>
+    <string name="chat_media_waiting_peer">Waiting for a peer with this image · tap to retry</string>
 </resources>
