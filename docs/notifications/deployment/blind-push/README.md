@@ -14,10 +14,12 @@ Pinned components:
 The gateway and blind peer are separate systemd processes. The blind-peer
 wrapper also serves HyperDHT's `blind-relay` Protomux protocol and the bootstrap
 invite mailbox on the same Noise connections, so two firewalled peers can
-exchange invites and core keys. The Firebase service account stays on the VPS and
-outside git. The existing ntfy/Caddy deployment stays installed during rollout.
+exchange invites and core keys, and runs the media retention pass that forgets
+mirrored images a week after they stop arriving. The Firebase service account
+stays on the VPS and outside git. The existing ntfy/Caddy deployment stays
+installed during rollout.
 
-`vendor/` holds the relay and mailbox modules, copied verbatim from
+`vendor/` holds the relay, mailbox and retention modules, copied verbatim from
 zappMessaging so the VPS can install this directory with `npm ci` alone. They are
 generated, not authored: change the originals in zappMessaging and run
 `node scripts/vendor-blind-push-server.js`. CI fails the PR when they drift from
@@ -147,6 +149,61 @@ Caddy. Add it there before treating this endpoint as production infrastructure.
 A determined attacker holding many keypairs can still keep a *known* identity's
 mailbox at its quota; the guarantee is that the mailbox stays drainable and the
 DHT mailbox stays available, not that flooding is impossible.
+
+## Image delivery through the relay
+
+Phones append image bytes, encrypted with the conversation key, to a media
+Hypercore per conversation that the relay mirrors exactly like the message
+core, so a recipient who comes online after the sender has gone still gets the
+image. Two things follow for the relay.
+
+Images will dominate storage. Message cores register at priority 1 and media
+cores at 0, so when `maxBytes` is reached the relay's own GC drops the least
+recently active image cores first and message history last. Size `maxBytes`
+from measured send volume with headroom (roughly 1 MiB × images per day × 7
+days), and check free space on the storage volume before raising it:
+
+```bash
+df -h /var/lib/zapp-blind-peer
+```
+
+The retention pass clears a media core whole once its newest block is older
+than `mediaRetentionMaxAgeMs`. It keeps the relay's record for the core, so a
+phone that re-registers it on reconnect makes the relay pull only blocks
+appended since, never the cleared ones. The pass runs on incoming traffic, at
+most once per `mediaRetentionMinIntervalMs`, and once at startup; an idle relay
+sweeps nothing until something arrives.
+
+Message history is kept out of the sweep. The relay records a priority only
+for cores it has never seen, so every record on the relay before this
+launcher — all message history — sits at priority 0, the same as images. On
+its first start the launcher therefore promotes every existing record to the
+message priority, once, and writes `media-retention.json` into the storage
+directory to record that it happened; from then on message cores are promoted
+as their owners register them. The first start after the upgrade logs:
+
+```
+media retention protected N existing core(s)
+media retention pass cleared 0 core(s), 0 byte(s)
+```
+
+Confirm both lines appear in the journal and that `N` is the number of cores
+the relay held; later starts log only the pass line. Do not delete the marker
+file: a start without it promotes whatever is on the relay at that moment,
+images included. Both settings are optional in `blind-peer.json`; the defaults
+are what ships.
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| `mediaRetentionMaxAgeMs` | `604800000` (7 days) | Clear a media core this long after its last new block |
+| `mediaRetentionMinIntervalMs` | `3600000` (1 hour) | Least time between two passes |
+
+Rolling this out is a normal launcher update: install the regenerated
+`vendor/` and `blind-peer-server.js`, set `maxBytes` in `blind-peer.json`, and
+`sudo systemctl restart zapp-blind-peer`. Keep the storage directory; it holds
+the relay identity key. Upgrade the relay before shipping clients that send
+images: a media core registered before the marker exists is promoted with the
+history and never expires.
 
 ## Rollback
 
