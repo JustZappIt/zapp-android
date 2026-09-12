@@ -6,6 +6,9 @@ and this application adheres to [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Changed:
+- [ONBOARDING] The welcome screen now uses the Zapp vector logo and leads with “Your money and messages,” matching iOS across all supported translations.
+
 ### Added:
 - We added Move to Ironwood, a guided migration that moves your Orchard funds into the new Ironwood shielded pool.
 - We added two ways to migrate: a private option that splits your balance into smaller transfers sent automatically in the background over time, or an immediate single transfer.

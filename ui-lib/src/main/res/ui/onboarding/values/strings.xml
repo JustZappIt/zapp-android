@@ -29,7 +29,7 @@
     <!-- Welcome gate (shown before onboarding starts) -->
     <string name="welcome_logo_glyph" translatable="false">Z</string>
     <string name="welcome_wordmark" translatable="false">Zapp</string>
-    <string name="welcome_hero_line1">Your messages\nand money.</string>
+    <string name="welcome_hero_line1">Your money\nand messages.</string>
     <string name="welcome_hero_line2">Encrypted.</string>
     <string name="welcome_body">End-to-end encrypted messaging with a shielded Zcash wallet built in.</string>
     <string name="welcome_get_started_button">Get started</string>

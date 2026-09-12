@@ -25,7 +25,7 @@
     <string name="wallet_empty_restore_sub">Gunakan frasa pemulihan Anda yang sudah ada</string>
 
     <!-- Welcome gate (shown before onboarding starts) -->
-    <string name="welcome_hero_line1">Pesan\ndan uang Anda.</string>
+    <string name="welcome_hero_line1">Uang\ndan pesan Anda.</string>
     <string name="welcome_hero_line2">Terenkripsi.</string>
     <string name="welcome_body">Pesan terenkripsi ujung-ke-ujung dengan dompet Zcash terlindungi yang terintegrasi.</string>
     <string name="welcome_get_started_button">Mulai</string>
