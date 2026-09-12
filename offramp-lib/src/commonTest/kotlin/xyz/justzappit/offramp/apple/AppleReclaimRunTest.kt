@@ -3,6 +3,7 @@
 
 package xyz.justzappit.offramp.apple
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
@@ -15,10 +16,58 @@ import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.reputation.SocialPlatform
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /** The guard that keeps one verification live at a time, walked through each of its exits. */
 class AppleReclaimRunTest {
+    @Test
+    fun `driver cancellation is propagated without a failure status`() =
+        runTest {
+            val lock = Mutex()
+            assertFailsWith<CancellationException> {
+                singleRunFlow(lock, LINKEDIN, INR) { _, _ -> throw CancellationException("canceled") }.toList()
+            }
+            assertTrue(!lock.isLocked)
+        }
+
+    @Test
+    fun `a driver exception becomes a network status and frees the run lock`() =
+        runTest {
+            val lock = Mutex()
+            val statuses =
+                singleRunFlow(lock, LINKEDIN, INR) { _, _ ->
+                    emit(AppleReclaimStatus.Verifying)
+                    error("account resolution failed")
+                }.toList()
+            assertEquals(
+                listOf(AppleReclaimStatus.Verifying, AppleReclaimStatus.Failed("Network")),
+                statuses,
+            )
+            val next = singleRunFlow(lock, LINKEDIN, INR) { _, _ -> emit(AppleReclaimStatus.Preparing) }.toList()
+            assertEquals(listOf(AppleReclaimStatus.Preparing), next)
+        }
+
+    @Test
+    fun `cancelling collection emits no network failure`() =
+        runTest {
+            val lock = Mutex()
+            val started = CompletableDeferred<Unit>()
+            val statuses = mutableListOf<AppleReclaimStatus>()
+            val job =
+                launch {
+                    singleRunFlow(lock, LINKEDIN, INR) { _, _ ->
+                        emit(AppleReclaimStatus.Verifying)
+                        started.complete(Unit)
+                        CompletableDeferred<Unit>().await()
+                    }.toList(statuses)
+                }
+            started.await()
+            job.cancelAndJoin()
+            assertEquals(listOf<AppleReclaimStatus>(AppleReclaimStatus.Verifying), statuses)
+            assertTrue(!lock.isLocked)
+        }
+
     @Test
     fun `a second run while one is live is refused rather than started`() =
         runTest {
