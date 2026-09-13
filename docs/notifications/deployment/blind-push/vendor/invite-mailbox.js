@@ -1,7 +1,7 @@
 // GENERATED FILE — DO NOT EDIT.
 //
 // Vendored verbatim from zappMessaging server/invite-mailbox.js
-// Source commit: a8b88ed4f6cc22382a4c79167340031aa12c42b1 (pinned in .zapp-deps)
+// Source commit: 79a397901802a57e4dc081b27b5b9d2d0aa6273b (pinned in .zapp-deps)
 //
 // Edit the original in zappMessaging, then regenerate:
 //   node scripts/vendor-blind-push-server.js

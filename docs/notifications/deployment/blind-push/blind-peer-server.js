@@ -10,6 +10,7 @@ const Id = require('hypercore-id-encoding')
 // lives with the client and is copied here rather than reimplemented.
 const { attachBlindRelay } = require('./vendor/blind-relay')
 const { attachInviteMailbox } = require('./vendor/invite-mailbox')
+const { attachMediaRetention } = require('./vendor/media-retention')
 
 const configPath = path.resolve(process.argv[2] || '/etc/zapp-blind-push/blind-peer.json')
 const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
@@ -54,10 +55,12 @@ blindPeer.on('flush-error', () => process.stderr.write('blind-peer flush failed\
 let closing = false
 let connectionRelay = null
 let inviteMailbox = null
+let mediaRetention = null
 
 async function close () {
   if (closing) return
   closing = true
+  if (mediaRetention) await mediaRetention.close()
   if (inviteMailbox) await inviteMailbox.close()
   if (connectionRelay) await connectionRelay.close()
   await blindPeer.close()
@@ -91,6 +94,16 @@ async function main () {
     positiveInteger(config.inviteMailboxHttpPort, 49739),
     config.inviteMailboxHttpHost || '127.0.0.1'
   )
+  // Image cores are forgotten a week after their last new block. Message
+  // history is kept out of the sweep: every record that exists when this first
+  // runs on a relay is promoted once, and message-core registrations are
+  // promoted as they arrive. Attached before listen() so no client can
+  // register ahead of that promotion.
+  mediaRetention = await attachMediaRetention(blindPeer, {
+    maxAgeMs: positiveInteger(config.mediaRetentionMaxAgeMs, 7 * 24 * 60 * 60 * 1000),
+    minIntervalMs: positiveInteger(config.mediaRetentionMinIntervalMs, 60 * 60 * 1000),
+    log: (message) => process.stdout.write(message + '\n')
+  })
 
   await blindPeer.listen()
   process.stdout.write('blind-peer ready: ' + Id.normalize(blindPeer.publicKey) + '\n')

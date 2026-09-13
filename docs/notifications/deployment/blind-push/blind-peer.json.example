@@ -13,5 +13,7 @@
   "maxInvitesPerSender": 8,
   "maxInvitesTotal": 10000,
   "maxInviteBytesPerRecipient": 262144,
-  "maxInviteRequestsPerMinute": 600
+  "maxInviteRequestsPerMinute": 600,
+  "mediaRetentionMaxAgeMs": 604800000,
+  "mediaRetentionMinIntervalMs": 3600000
 }

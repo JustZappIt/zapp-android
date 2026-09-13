@@ -24,7 +24,7 @@ const path = require('path')
 const REPO_ROOT = path.resolve(__dirname, '..')
 const DEPLOYMENT_DIR = path.join(REPO_ROOT, 'docs/notifications/deployment/blind-push')
 const VENDOR_DIR = path.join(DEPLOYMENT_DIR, 'vendor')
-const MODULES = ['blind-relay.js', 'invite-mailbox.js']
+const MODULES = ['blind-relay.js', 'invite-mailbox.js', 'media-retention.js']
 
 // Local checkouts keep zappMessaging beside this repo; CI checks it out into the
 // workspace. Same two candidates settings.gradle.kts resolves.
