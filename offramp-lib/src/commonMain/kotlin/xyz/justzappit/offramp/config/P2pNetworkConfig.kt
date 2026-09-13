@@ -84,7 +84,7 @@ object P2pNetworks {
 
     /**
      * `ZappCheckoutIntegrator` on Base Sepolia (payment-integrators `feat/integrator-plasmapay`),
-     * $75 per tx, 5 orders a day. Not yet deployed on mainnet.
+     * $20 per tx, 5 orders a day; whitelisted on the devnet Diamond. Not yet deployed on mainnet.
      */
-    const val SEPOLIA_LIVENESS_INTEGRATOR = "0x2F2D9E2EF9b7f19b8028e6e4A0516C9605A0A09F"
+    const val SEPOLIA_LIVENESS_INTEGRATOR = "0x689D0507EAAD58ba317F9CbE3eDd1b0822132934"
 }

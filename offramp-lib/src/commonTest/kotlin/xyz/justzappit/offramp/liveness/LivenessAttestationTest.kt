@@ -52,7 +52,7 @@ class LivenessAttestationTest {
             "name": "ZappCheckoutIntegrator",
             "version": "1",
             "chainId": 84532,
-            "verifyingContract": "0x2F2D9E2EF9b7f19b8028e6e4A0516C9605A0A09F"
+            "verifyingContract": "0x689D0507EAAD58ba317F9CbE3eDd1b0822132934"
           },
           "message": {
             "wallet": "$WALLET",
