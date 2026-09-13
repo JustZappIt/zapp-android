@@ -27,7 +27,7 @@
     <string name="wallet_empty_restore_sub">Use sua frase de recuperação existente</string>
 
     <!-- Welcome gate (shown before onboarding starts) -->
-    <string name="welcome_hero_line1">Suas mensagens\ne seu dinheiro.</string>
+    <string name="welcome_hero_line1">Seu dinheiro\ne suas mensagens.</string>
     <string name="welcome_hero_line2">Criptografados.</string>
     <string name="welcome_body">Mensagens criptografadas de ponta a ponta com uma carteira Zcash blindada integrada.</string>
     <string name="welcome_get_started_button">Começar</string>
