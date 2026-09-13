@@ -17,6 +17,8 @@ data class P2pNetworkConfig(
     val baseExplorerUrl: String,
     val entryPointAddress: Address = Address.parse(P2pNetworks.ENTRYPOINT_V06),
     val accountFactoryAddress: Address = Address.parse(P2pNetworks.ACCOUNT_FACTORY_V06),
+    /** Zapp's liveness-gated onramp integrator, or null where none is deployed. */
+    val livenessIntegratorAddress: Address? = null,
 ) {
     init {
         require(name.isNotBlank()) { "name must not be blank" }
@@ -41,6 +43,7 @@ object P2pNetworks {
             reputationManagerAddress = Address.parse(SEPOLIA_REPUTATION_MANAGER),
             subgraphUrl = "https://api.studio.thegraph.com/query/1745491/event-indexer/version/latest",
             baseExplorerUrl = "https://sepolia.basescan.org",
+            livenessIntegratorAddress = Address.parse(SEPOLIA_LIVENESS_INTEGRATOR),
         )
 
     fun mainnet(rpcUrl: String, subgraphUrl: String): P2pNetworkConfig =
@@ -78,4 +81,10 @@ object P2pNetworks {
      * the mainnet path works.
      */
     const val SEPOLIA_REPUTATION_MANAGER = "0xEF2E957deF0EA7dAf2D6579f0D3963a5D7A6Bd77"
+
+    /**
+     * `ZappCheckoutIntegrator` on Base Sepolia (payment-integrators `feat/integrator-plasmapay`),
+     * $75 per tx, 5 orders a day. Not yet deployed on mainnet.
+     */
+    const val SEPOLIA_LIVENESS_INTEGRATOR = "0x2F2D9E2EF9b7f19b8028e6e4A0516C9605A0A09F"
 }

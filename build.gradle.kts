@@ -115,6 +115,9 @@ tasks {
             "P2P_SCREENING_KEY" to "",
             "RECLAIM_APP_ID" to "",
             "RECLAIM_APP_SECRET" to "",
+            "LIVENESS_API_URL" to "",
+            "LIVENESS_API_KEY" to "",
+            "LIVENESS_TENANT" to "zapp",
 
             "ZCASH_FLEXA_KEY" to "",
             "ZCASH_CMC_KEY" to "",

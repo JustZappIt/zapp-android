@@ -11,6 +11,11 @@ import xyz.justzappit.offramp.reputation.SocialPlatform
 internal data class IncreaseReputationState(
     val isLoading: Boolean,
     val platforms: List<VerifiableRow>,
+    /**
+     * Null on a network with no liveness integrator. Shown even when the service is not
+     * configured, like the rows above.
+     */
+    val liveness: LivenessRow?,
     /** Non-null once a row is tapped: the run takes over the body, in place, with no new route. */
     val run: VerificationRun?,
     val error: StringResource?,
@@ -41,9 +46,20 @@ internal data class VerifiableRow(
     val onClick: () -> Unit,
 )
 
+/**
+ * The selfie check: no account, no reputation points. It unlocks a per-order limit on Zapp's own
+ * onramp integrator, which is why its reward is dollars rather than RP.
+ */
+internal data class LivenessRow(
+    val reward: StringResource,
+    val isVerified: Boolean,
+    val onClick: () -> Unit,
+)
+
 internal data class VerificationRun(
-    val platform: SocialPlatform,
-    val name: String,
+    /** Null for the selfie check. */
+    val platform: SocialPlatform?,
+    val name: StringResource,
     val stage: VerificationStage,
     val steps: List<ZappStep>,
     val message: StringResource,
