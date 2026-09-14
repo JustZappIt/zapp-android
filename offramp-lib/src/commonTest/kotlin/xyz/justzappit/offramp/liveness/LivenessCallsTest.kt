@@ -7,6 +7,7 @@ import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.evm.util.toHex
+import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -31,10 +32,25 @@ class LivenessCallsTest {
     }
 
     @Test
+    fun `buy calldata matches cast, pubkey as a dynamic tail`() {
+        val calldata =
+            LivenessCalls.buyUsdcCalldata(
+                amount = Usdc6.ofMicros(5_073_456L),
+                currency = CurrencyCode.Inr,
+                circleId = bigIntegerValueOf(7L),
+                pubKey = "04deadbeef",
+                preferredPaymentChannelConfigId = bigIntegerValueOf(0L),
+                fiatAmountLimit = Usdc6.ofMicros(507_345_600L),
+            )
+        assertEquals(BUY_CALLDATA, calldata.hex())
+    }
+
+    @Test
     fun `read calldata matches cast for every integrator view`() {
         assertEquals("0x0db065f4$WALLET_WORD", LivenessCalls.verifiedCalldata(WALLET).hex())
         assertEquals("0xa55c8357$WALLET_WORD", LivenessCalls.effectiveLimitCalldata(WALLET).hex())
         assertEquals("0x4cec43c1", LivenessCalls.tierCapCalldata().hex())
+        assertEquals("0xd4d6d538$WALLET_WORD", LivenessCalls.remainingDailyCountCalldata(WALLET).hex())
     }
 
     @Test
@@ -42,6 +58,7 @@ class LivenessCallsTest {
         assertTrue(LivenessCalls.decodeBool(word(1).hexToBytes()))
         assertFalse(LivenessCalls.decodeBool(word(0).hexToBytes()))
         assertEquals(Usdc6.ofMicros(75_000_000L), LivenessCalls.decodeUsdc6(word(75_000_000L).hexToBytes()))
+        assertEquals(bigIntegerValueOf(5L), LivenessCalls.decodeUint(word(5L).hexToBytes()))
     }
 
     @Test
@@ -49,6 +66,7 @@ class LivenessCallsTest {
         // A short read must fail loudly: a silent 0 shows a verified user as unverified.
         assertFailsWith<IllegalArgumentException> { LivenessCalls.decodeBool(ByteArray(0)) }
         assertFailsWith<IllegalArgumentException> { LivenessCalls.decodeUsdc6(ByteArray(31)) }
+        assertFailsWith<IllegalArgumentException> { LivenessCalls.decodeUint(ByteArray(0)) }
     }
 
     private fun ByteArray.hex(): String = "0x" + toHex()
@@ -70,5 +88,20 @@ class LivenessCallsTest {
                 "0000000000000000000000000000000000000000000000000000000000000080" +
                 "0000000000000000000000000000000000000000000000000000000000000041" +
                 "ab".repeat(64) + "1b" + "00".repeat(31)
+
+        /**
+         * `cast calldata "buyUsdc(uint256,bytes32,uint256,string,uint256,uint256)" 5073456 <INR> 7
+         * 04deadbeef 0 507345600`, with `<INR>` the NUL-padded `bytes32`.
+         */
+        const val BUY_CALLDATA =
+            "0x88662523" +
+                "00000000000000000000000000000000000000000000000000000000004d6a30" +
+                "494e520000000000000000000000000000000000000000000000000000000000" +
+                "0000000000000000000000000000000000000000000000000000000000000007" +
+                "00000000000000000000000000000000000000000000000000000000000000c0" +
+                "0000000000000000000000000000000000000000000000000000000000000000" +
+                "000000000000000000000000000000000000000000000000000000001e3d7ac0" +
+                "000000000000000000000000000000000000000000000000000000000000000a" +
+                "3034646561646265656600000000000000000000000000000000000000000000"
     }
 }

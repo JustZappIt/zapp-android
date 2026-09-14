@@ -61,6 +61,7 @@ import xyz.justzappit.offramp.liveness.LivenessWidgetClient
 import xyz.justzappit.offramp.onramp.DirectOnrampDriver
 import xyz.justzappit.offramp.onramp.FakeOnrampDriver
 import xyz.justzappit.offramp.onramp.OnrampDriver
+import xyz.justzappit.offramp.onramp.OnrampRouteReader
 import xyz.justzappit.offramp.onramp.OnrampScreeningClient
 import xyz.justzappit.offramp.onramp.OnrampScreeningConfig
 import xyz.justzappit.offramp.orchestrator.AaOfframpDriver
@@ -200,6 +201,7 @@ val repositoryModule =
             )
         }
         single { LivenessReader(rpc = get(), network = get()) }
+        single { OnrampRouteReader(rpc = get(), network = get()) }
         single { LivenessReturnInbox() }
         // Same shape as Reclaim: the widget session is opened from the device and the attestation
         // goes straight to the integrator. The verifier is our own host, but it shares the offramp
@@ -255,10 +257,14 @@ val repositoryModule =
                                     onLinkFailed = { reason ->
                                         Twig.warn { "Screening record never linked to its order: $reason" }
                                     },
+                                    onScreeningUnavailable = { reason ->
+                                        Twig.warn { "Screening record never filed for its order: $reason" }
+                                    },
                                 )
                             },
                     relayIdentityStore = get(),
                     orderRecipientUpiCache = get(),
+                    routeReader = get(),
                     nowMillis = System::currentTimeMillis,
                     onUnrecognisedRevert = { revert ->
                         Twig.warn { "BUY reverted with no mapping — reporting it as upstream: $revert" }

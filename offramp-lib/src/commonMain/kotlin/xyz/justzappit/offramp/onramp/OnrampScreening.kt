@@ -43,9 +43,32 @@ import kotlin.io.encoding.Base64
 data class OnrampScreeningConfig(
     val apiUrl: String,
     val encryptionKeyHex: String,
+    /**
+     * What a B2B record says it was filed from. The reference widget sends its embedding
+     * hostname; the service uses it to scope a B2B rejection to one product rather than to every
+     * wallet in the ecosystem.
+     */
+    val b2bDomain: String = DEFAULT_B2B_DOMAIN,
 ) {
     val isConfigured: Boolean
         get() = apiUrl.isNotBlank() && encryptionKeyHex.isNotBlank()
+
+    companion object {
+        const val DEFAULT_B2B_DOMAIN = "justzappit.xyz"
+    }
+}
+
+/**
+ * Which of the service's two intake endpoints a record is filed on. They differ in path, in the
+ * AAD the payload is bound under, and in the envelope: the consumer one names its `type`, the
+ * B2B one — for orders placed through an integrator — is typed by its path alone.
+ */
+enum class OnrampScreeningKind(
+    val path: String,
+    val aadPrefix: String,
+) {
+    CONSUMER("/activity-logs", "buy_order"),
+    B2B("/activity-logs/b2b-buy-order", "b2b_buy_order"),
 }
 
 /**
@@ -117,33 +140,40 @@ class OnrampScreeningClient(
      * here is otherwise indistinguishable from success.
      */
     private val onLinkFailed: (String) -> Unit = {},
+    /**
+     * Where a refused intake goes. Fail-open like the link: the order still places — but a
+     * record that was never filed is the same never-accepted order, and a 4xx here is otherwise
+     * indistinguishable from a service that simply was not reachable.
+     */
+    private val onScreeningUnavailable: (String) -> Unit = {},
 ) {
     @Suppress("ReturnCount")
     suspend fun screenBuyOrder(
         signer: OnrampScreeningSigner,
         order: OnrampScreeningOrder,
         country: String?,
+        kind: OnrampScreeningKind = OnrampScreeningKind.CONSUMER,
     ): OnrampScreeningOutcome {
         require(config.isConfigured) { "screening is not configured" }
         // The encrypted payload, AAD, and outer envelope share this exact millisecond timestamp.
         val bodyMillis = nowMillis()
         val userAddress = signer.subject.lowercaseHex
-        val payload = payloadJson(order, country, bodyMillis)
+        val payload = payloadJson(order, country, bodyMillis, kind)
         val encrypted =
             encrypt(
                 plaintext = payload,
-                aad = "$SCREENING_TYPE|$userAddress|$bodyMillis",
+                aad = "${kind.aadPrefix}|$userAddress|$bodyMillis",
             )
 
         val response =
-            httpClient.post("${config.apiUrl.trimEnd('/')}$PATH_ACTIVITY_LOGS") {
+            httpClient.post("${config.apiUrl.trimEnd('/')}${kind.path}") {
                 contentType(ContentType.Application.Json)
                 signedHeaders(signer, ACTION_ACTIVITY_LOG).forEach { (name, value) -> header(name, value) }
                 setBody(
                     Json.encodeToString(
                         JsonObject.serializer(),
                         buildJsonObject {
-                            put("type", SCREENING_TYPE)
+                            if (kind == OnrampScreeningKind.CONSUMER) put("type", kind.aadPrefix)
                             put("user_address", userAddress)
                             put("timestamp", bodyMillis)
                             put("encrypted_payload", encrypted)
@@ -151,7 +181,10 @@ class OnrampScreeningClient(
                     ),
                 )
             }
-        if (!response.status.isSuccess()) return OnrampScreeningOutcome.Unavailable
+        if (!response.status.isSuccess()) {
+            onScreeningUnavailable("${kind.path} answered " + response.status)
+            return OnrampScreeningOutcome.Unavailable
+        }
 
         val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
         // ☠ Only an explicit `approved: false` rejects. A 200 whose body simply lacks the field —
@@ -223,7 +256,9 @@ class OnrampScreeningClient(
         order: OnrampScreeningOrder,
         country: String?,
         timestampMillis: Long,
+        kind: OnrampScreeningKind = OnrampScreeningKind.CONSUMER,
     ): String {
+        val device = deviceJson()
         val body =
             buildJsonObject {
                 putJsonObject("user_details") {
@@ -247,7 +282,14 @@ class OnrampScreeningClient(
                     put("order_timestamp", timestampMillis)
                     put("order_source", ORDER_SOURCE)
                 }
-                put("device_details", deviceJson())
+                // The two endpoints read the device record under different key styles.
+                when (kind) {
+                    OnrampScreeningKind.CONSUMER -> put("device_details", device)
+                    OnrampScreeningKind.B2B -> {
+                        put("device_details", device.snakeCaseKeys())
+                        put("domain", config.b2bDomain)
+                    }
+                }
             }
         return Json.encodeToString(JsonObject.serializer(), body)
     }
@@ -277,6 +319,10 @@ class OnrampScreeningClient(
         val signals = deviceSignals.collect().copy(seonSession = screeningSession.session())
         return SCREENING_JSON.encodeToJsonElement(OnrampDeviceSignals.serializer(), signals).jsonObject
     }
+
+    /** `userAgent` → `user_agent`, values untouched. Top level only; the record is flat. */
+    private fun JsonObject.snakeCaseKeys(): JsonObject =
+        JsonObject(mapKeys { (key, _) -> key.replace(CAMEL_HUMP) { "_" + it.value.lowercase() } })
 
     /**
      * Amounts cross the wire as JSON numbers in whole units, which is what the service's schema
@@ -312,12 +358,11 @@ class OnrampScreeningClient(
     }
 
     private companion object {
-        const val SCREENING_TYPE = "buy_order"
         const val ORDER_SOURCE = "zapp-android"
         const val ACTION_ACTIVITY_LOG = "activity-log"
         const val ACTION_LINK_ORDER = "link-order"
-        const val PATH_ACTIVITY_LOGS = "/activity-logs"
         const val PATH_LINK_ORDER = "/activity-logs/link-order"
+        val CAMEL_HUMP = Regex("[A-Z]")
         const val MILLIS_PER_SECOND = 1_000L
         const val AES_256_KEY_HEX_LEN = 64
         const val V_OFFSET = 27

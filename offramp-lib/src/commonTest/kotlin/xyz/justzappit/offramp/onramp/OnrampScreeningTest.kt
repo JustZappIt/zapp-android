@@ -3,14 +3,20 @@
 
 package xyz.justzappit.offramp.onramp
 
+import dev.whyoleg.cryptography.CryptographyProvider
+import dev.whyoleg.cryptography.algorithms.AES
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -23,6 +29,7 @@ import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.io.encoding.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
@@ -47,20 +54,26 @@ class OnrampScreeningTest {
             nowMillis = { nowMillis },
         )
 
-    /** A client whose screening endpoint answers with exactly [body]. */
+    /** A client whose screening endpoint answers with exactly [body], recording what it was sent. */
     private fun clientAnswering(
         body: String,
         status: HttpStatusCode = HttpStatusCode.OK,
         onLinkFailed: (String) -> Unit = {},
+        onScreeningUnavailable: (String) -> Unit = {},
+        record: (HttpRequestData) -> Unit = {},
     ) = OnrampScreeningClient(
         httpClient =
             HttpClient(
-                MockEngine { respond(body, status, headersOf(HttpHeaders.ContentType, "application/json")) },
+                MockEngine { request ->
+                    record(request)
+                    respond(body, status, headersOf(HttpHeaders.ContentType, "application/json"))
+                },
             ),
         config = OnrampScreeningConfig(apiUrl = "https://screening.invalid/api/v1", encryptionKeyHex = KEY_HEX),
         deviceSignals = { SIGNALS },
         nowMillis = { 1_756_450_000_123L },
         onLinkFailed = onLinkFailed,
+        onScreeningUnavailable = onScreeningUnavailable,
     )
 
     @Test
@@ -193,6 +206,78 @@ class OnrampScreeningTest {
         }
 
     @Test
+    fun `a consumer record names its type in the envelope and goes to the consumer intake`() =
+        runTest {
+            var sent: HttpRequestData? = null
+            clientAnswering("""{"approved":true,"activity_log_id":"a-1"}""", record = { sent = it })
+                .screenBuyOrder(signer, ORDER, country = "IN")
+
+            val request = checkNotNull(sent)
+            assertEquals("/api/v1/activity-logs", request.url.encodedPath)
+            assertEquals("buy_order", request.envelope().getValue("type").jsonPrimitive.content)
+        }
+
+    @Test
+    fun `a b2b record is typed by its path, bound under its own aad, and keyed the way that intake reads`() =
+        runTest {
+            // ☠ Three silent ways for an integrator order to go unaccepted: the wrong path files a
+            // consumer record for an order the consumer engine will score as a new account; the
+            // wrong AAD decrypts to nothing; camelCase device keys are simply unread.
+            var sent: HttpRequestData? = null
+            val outcome =
+                clientAnswering("""{"approved":true,"activity_log_id":7}""", record = { sent = it })
+                    .screenBuyOrder(signer, ORDER, country = "IN", kind = OnrampScreeningKind.B2B)
+
+            assertEquals("7", assertIs<OnrampScreeningOutcome.Approved>(outcome).activityLogId.jsonPrimitive.content)
+            val request = checkNotNull(sent)
+            assertEquals("/api/v1/activity-logs/b2b-buy-order", request.url.encodedPath)
+            val envelope = request.envelope()
+            assertFalse(envelope.containsKey("type"), "the B2B envelope carries no type: $envelope")
+            assertEquals(SMART_ACCOUNT.lowercaseHex, envelope.getValue("user_address").jsonPrimitive.content)
+
+            val payload = decrypt(envelope, aadPrefix = "b2b_buy_order")
+            assertEquals(OnrampScreeningConfig.DEFAULT_B2B_DOMAIN, payload.getValue("domain").jsonPrimitive.content)
+            val device = payload.getValue("device_details").jsonObject
+            assertEquals(SIGNALS.userAgent, device.getValue("user_agent").jsonPrimitive.content)
+            assertEquals("-330", device.getValue("timezone_offset").jsonPrimitive.content)
+            assertEquals(JsonNull, device.getValue("seon_session"))
+            assertFalse(device.containsKey("userAgent"), "camelCase keys must not survive: ${device.keys}")
+            // The transaction block is the consumer one, unchanged.
+            assertEquals(
+                "539.26",
+                payload
+                    .getValue("transaction_details")
+                    .jsonObject
+                    .getValue("fiat_amount")
+                    .jsonPrimitive
+                    .content,
+            )
+            // Same signed action on both intakes, so the headers are the consumer headers.
+            assertEquals(
+                client(1_756_450_000_123L).signedHeaders(signer, "activity-log")["X-Signature"],
+                request.headers["X-Signature"],
+            )
+        }
+
+    @Test
+    fun `a refused intake is reported, since a record never filed is an order never accepted`() =
+        runTest {
+            var reported: String? = null
+            val outcome =
+                clientAnswering(
+                    body = """{"error":"key not enabled for b2b"}""",
+                    status = HttpStatusCode.Forbidden,
+                    onScreeningUnavailable = { reported = it },
+                ).screenBuyOrder(signer, ORDER, country = "IN", kind = OnrampScreeningKind.B2B)
+
+            // Still fail-open: the order places.
+            assertEquals(OnrampScreeningOutcome.Unavailable, outcome)
+            val report = reported.orEmpty()
+            assertTrue(report.contains("403"), "the status code has to survive into the log, got: $report")
+            assertTrue(report.contains("b2b-buy-order"), "and which intake refused it: $report")
+        }
+
+    @Test
     fun `a rejected link reports the status it was refused with`() =
         runTest {
             // ☠ The reason this is a test at all: the callback took a string, and a string is where
@@ -222,6 +307,23 @@ class OnrampScreeningTest {
 
             assertNull(reported)
         }
+
+    private fun HttpRequestData.envelope(): JsonObject =
+        Json.parseToJsonElement((body as OutgoingContent.ByteArrayContent).bytes().decodeToString()).jsonObject
+
+    /** Opens the payload exactly as the service does: same key, and the AAD rebuilt from the envelope. */
+    private fun decrypt(envelope: JsonObject, aadPrefix: String): JsonObject {
+        val subject = envelope.getValue("user_address").jsonPrimitive.content
+        val timestamp = envelope.getValue("timestamp").jsonPrimitive.content
+        val ciphertext = Base64.decode(envelope.getValue("encrypted_payload").jsonPrimitive.content)
+        val key =
+            CryptographyProvider.Default
+                .get(AES.GCM)
+                .keyDecoder()
+                .decodeFromByteArrayBlocking(AES.Key.Format.RAW, KEY_HEX.hexToBytes())
+        val plaintext = key.cipher().decryptBlocking(ciphertext, "$aadPrefix|$subject|$timestamp".encodeToByteArray())
+        return Json.parseToJsonElement(plaintext.decodeToString()).jsonObject
+    }
 
     private companion object {
         const val SIGNING_KEY_HEX = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"

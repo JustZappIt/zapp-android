@@ -9,6 +9,8 @@
     <string name="reputation_limit_caption">The most you can spend on a single purchase.</string>
     <string name="reputation_limit_caption_at_ceiling">The most you can spend on a single purchase. You\'re at the highest limit there is.</string>
     <string name="reputation_limit_locked_caption">Verify one account you already own and buying unlocks. Cashing out is never limited by reputation.</string>
+    <string name="reputation_limit_locked_caption_selfie">Take a short selfie check, or verify an account you already own, and buying unlocks. Cashing out is never limited by reputation.</string>
+    <string name="reputation_limit_caption_checkout">The most you can spend on a single purchase, through Zapp\'s own checkout. Verifying an account you already own raises it.</string>
 
     <string name="reputation_points_row">Reputation points</string>
 
