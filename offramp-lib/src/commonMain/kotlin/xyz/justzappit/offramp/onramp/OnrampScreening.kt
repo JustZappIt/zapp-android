@@ -284,7 +284,10 @@ class OnrampScreeningClient(
                 }
                 // The two endpoints read the device record under different key styles.
                 when (kind) {
-                    OnrampScreeningKind.CONSUMER -> put("device_details", device)
+                    OnrampScreeningKind.CONSUMER -> {
+                        put("device_details", device)
+                    }
+
                     OnrampScreeningKind.B2B -> {
                         put("device_details", device.snakeCaseKeys())
                         put("domain", config.b2bDomain)

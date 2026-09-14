@@ -191,11 +191,17 @@ class DirectOnrampDriver(
     /** The route, or the refusal the amount screen shows inline in place of a failed placement. */
     private fun OnrampRouteDecision.routeOrThrow(): OnrampRoute =
         when (this) {
-            is OnrampRouteDecision.Route -> route
-            OnrampRouteDecision.DailyExhausted ->
+            is OnrampRouteDecision.Route -> {
+                route
+            }
+
+            OnrampRouteDecision.DailyExhausted -> {
                 throw OnrampException(OnrampFailureCode.DAILY_LIMIT_EXCEEDED, 0, "no integrator orders left today")
-            OnrampRouteDecision.OverLimit ->
+            }
+
+            OnrampRouteDecision.OverLimit -> {
                 throw OnrampException(OnrampFailureCode.CAP_EXCEEDED, 0, "amount is above both per-order limits")
+            }
         }
 
     override fun start(quote: OnrampQuote): Flow<OnrampStatus> =
@@ -357,7 +363,7 @@ class DirectOnrampDriver(
         relay: RelayIdentity,
     ): Pair<Address, ByteArray> =
         when (quote.route) {
-            OnrampRoute.DIRECT ->
+            OnrampRoute.DIRECT -> {
                 network.diamondAddress to
                     DiamondCalls.placeOrderCalldata(
                         PlaceOrderArgs(
@@ -370,8 +376,9 @@ class DirectOnrampDriver(
                             fiatAmountLimit = fiatAmountLimit,
                         ),
                     )
+            }
 
-            OnrampRoute.INTEGRATOR ->
+            OnrampRoute.INTEGRATOR -> {
                 checkNotNull(network.livenessIntegratorAddress) { "integrator route on a network without one" } to
                     LivenessCalls.buyUsdcCalldata(
                         amount = quote.netUsdc,
@@ -381,6 +388,7 @@ class DirectOnrampDriver(
                         preferredPaymentChannelConfigId = bigIntegerZero,
                         fiatAmountLimit = fiatAmountLimit,
                     )
+            }
         }
 
     private suspend fun selectCircle(

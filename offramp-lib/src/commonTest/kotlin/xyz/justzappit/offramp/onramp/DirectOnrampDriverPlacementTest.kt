@@ -105,7 +105,10 @@ class DirectOnrampDriverPlacementTest {
                 val result =
                     when (body.getValue("method").jsonPrimitive.content) {
                         // A deployed account, so the UserOp carries no initCode.
-                        "eth_getCode" -> DEPLOYED_CODE
+                        "eth_getCode" -> {
+                            DEPLOYED_CODE
+                        }
+
                         "eth_call" -> {
                             val calldata =
                                 body
@@ -126,7 +129,9 @@ class DirectOnrampDriverPlacementTest {
                             }
                         }
 
-                        else -> error("Unexpected RPC method on the placement path: $body")
+                        else -> {
+                            error("Unexpected RPC method on the placement path: $body")
+                        }
                     }
                 respond(
                     content = """{"jsonrpc":"2.0","id":1,"result":"0x${result.toHex()}"}""",
@@ -174,13 +179,15 @@ class DirectOnrampDriverPlacementTest {
             MockEngine { request ->
                 val body = request.body.jsonObject()
                 when (body.getValue("method").jsonPrimitive.content) {
-                    "pimlico_getUserOperationGasPrice" ->
+                    "pimlico_getUserOperationGasPrice" -> {
                         respond(
-                            content = """{"jsonrpc":"2.0","id":1,"result":{"standard":""" +
-                                """{"maxFeePerGas":"0x1","maxPriorityFeePerGas":"0x1"}}}""",
+                            content =
+                                """{"jsonrpc":"2.0","id":1,"result":{"standard":""" +
+                                    """{"maxFeePerGas":"0x1","maxPriorityFeePerGas":"0x1"}}}""",
                             status = HttpStatusCode.OK,
                             headers = JSON_HEADERS,
                         )
+                    }
 
                     "pm_getPaymasterStubData" -> {
                         submittedCallData =
@@ -194,7 +201,9 @@ class DirectOnrampDriverPlacementTest {
                         error("captured the UserOp; nothing past this point is under test")
                     }
 
-                    else -> error("rejected screening must stop before submission: $body")
+                    else -> {
+                        error("rejected screening must stop before submission: $body")
+                    }
                 }
             },
         ) { install(ContentNegotiation) { json() } }

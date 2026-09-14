@@ -214,7 +214,13 @@ class OnrampScreeningTest {
 
             val request = checkNotNull(sent)
             assertEquals("/api/v1/activity-logs", request.url.encodedPath)
-            assertEquals("buy_order", request.envelope().getValue("type").jsonPrimitive.content)
+            assertEquals(
+                "buy_order",
+                request
+                    .envelope()
+                    .getValue("type")
+                    .jsonPrimitive.content
+            )
         }
 
     @Test

@@ -174,10 +174,21 @@ internal class ReputationVM(
                         stringRes(R.string.reputation_limit_locked_caption_selfie)
                     }
 
-                    !limit.canBuy -> stringRes(R.string.reputation_limit_locked_caption)
-                    limit.viaCheckout -> stringRes(R.string.reputation_limit_caption_checkout)
-                    summary.isAtCeiling -> stringRes(R.string.reputation_limit_caption_at_ceiling)
-                    else -> stringRes(R.string.reputation_limit_caption)
+                    !limit.canBuy -> {
+                        stringRes(R.string.reputation_limit_locked_caption)
+                    }
+
+                    limit.viaCheckout -> {
+                        stringRes(R.string.reputation_limit_caption_checkout)
+                    }
+
+                    summary.isAtCeiling -> {
+                        stringRes(R.string.reputation_limit_caption_at_ceiling)
+                    }
+
+                    else -> {
+                        stringRes(R.string.reputation_limit_caption)
+                    }
                 },
             isLocked = !limit.canBuy,
             // Listed in awards order, so the most valuable account is always first.

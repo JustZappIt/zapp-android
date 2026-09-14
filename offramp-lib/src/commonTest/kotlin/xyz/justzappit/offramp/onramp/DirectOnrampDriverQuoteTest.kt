@@ -77,7 +77,13 @@ class DirectOnrampDriverQuoteTest {
         HttpClient(
             MockEngine { request ->
                 val body = Json.parseToJsonElement(request.bodyText()).jsonObject
-                val calldata = body.getValue("params").jsonArray[0].jsonObject.getValue("data").jsonPrimitive.content
+                val calldata =
+                    body
+                        .getValue("params")
+                        .jsonArray[0]
+                        .jsonObject
+                        .getValue("data")
+                        .jsonPrimitive.content
                 val result =
                     when (calldata.substring(0, SELECTOR_HEX_LEN)) {
                         getAddressSelector -> SMART_ACCOUNT.bytes.padLeftToWord()

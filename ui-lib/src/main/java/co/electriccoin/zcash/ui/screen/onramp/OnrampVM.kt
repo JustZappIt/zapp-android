@@ -516,8 +516,10 @@ internal class OnrampVM(
         if (current.isSendingBaseBalanceToZec) return
         when {
             current.mode == OnrampMode.CONFIRMATION -> returnToAmountEntry(current)
+
             // A finished order: Back offers another purchase before it offers Home.
             current.isSettled -> onRetry()
+
             else -> navigationRouter.back()
         }
     }

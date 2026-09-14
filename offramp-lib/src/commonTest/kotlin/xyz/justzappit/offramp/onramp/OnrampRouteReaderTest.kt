@@ -56,8 +56,16 @@ class OnrampRouteReaderTest {
                         .getValue("params")
                         .jsonArray[0]
                         .jsonObject
-                val to = call.getValue("to").jsonPrimitive.content.lowercase()
-                val selector = call.getValue("data").jsonPrimitive.content.substring(0, SELECTOR_HEX_LEN)
+                val to =
+                    call
+                        .getValue("to")
+                        .jsonPrimitive.content
+                        .lowercase()
+                val selector =
+                    call
+                        .getValue("data")
+                        .jsonPrimitive.content
+                        .substring(0, SELECTOR_HEX_LEN)
                 calls += to to selector
                 val result =
                     when (selector) {

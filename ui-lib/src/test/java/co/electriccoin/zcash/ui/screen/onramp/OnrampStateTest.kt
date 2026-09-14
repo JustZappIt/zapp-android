@@ -6,10 +6,10 @@ package co.electriccoin.zcash.ui.screen.onramp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.stringRes
+import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.onramp.OnrampFailureCode
 import xyz.justzappit.offramp.onramp.OnrampPhase
 import xyz.justzappit.offramp.onramp.OnrampStatus
-import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.test.Test
