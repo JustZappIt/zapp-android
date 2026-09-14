@@ -117,7 +117,7 @@ tasks {
             "RECLAIM_APP_SECRET" to "",
             "LIVENESS_API_URL" to "",
             "LIVENESS_API_KEY" to "",
-            "LIVENESS_TENANT" to "zapp",
+            "LIVENESS_TENANT" to "zapp-liveness",
 
             "ZCASH_FLEXA_KEY" to "",
             "ZCASH_CMC_KEY" to "",
