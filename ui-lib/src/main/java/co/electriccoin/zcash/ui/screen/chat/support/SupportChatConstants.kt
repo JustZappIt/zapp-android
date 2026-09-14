@@ -42,7 +42,7 @@ enum class SupportCategory(
 }
 
 object SupportChatConstants {
-    const val SUPPORT_PUBLIC_KEY = "20dae657c99f8504b4ce052a39b2a6bf3b54023cb56ee2245d9904e4ee0f0c48"
+    const val SUPPORT_PUBLIC_KEY = "81569106f5847498229b00103bd300ac2f4c93c8234e7e2c27c8de5a9b5574bf"
 
     /**
      * Prefix set on every support-ticket conversation's displayName. Sent over the wire as
