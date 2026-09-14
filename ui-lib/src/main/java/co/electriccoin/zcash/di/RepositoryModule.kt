@@ -44,6 +44,8 @@ import co.electriccoin.zcash.ui.common.repository.WalletSnapshotRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepository
 import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepositoryImpl
 import co.electriccoin.zcash.ui.screen.chat.linkpreview.LinkPreviewRepository
+import co.electriccoin.zcash.ui.screen.reputation.increase.LivenessReturnInbox
+import co.electriccoin.zcash.ui.screen.reputation.increase.LivenessReturnLink
 import co.electriccoin.zcash.ui.screen.reputation.increase.ReclaimReturnLink
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.qualifier.named
@@ -52,6 +54,10 @@ import org.koin.dsl.module
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
 import xyz.justzappit.offramp.config.P2pNetworkConfig
+import xyz.justzappit.offramp.liveness.LivenessConfig
+import xyz.justzappit.offramp.liveness.LivenessReader
+import xyz.justzappit.offramp.liveness.LivenessVerificationDriver
+import xyz.justzappit.offramp.liveness.LivenessWidgetClient
 import xyz.justzappit.offramp.onramp.DirectOnrampDriver
 import xyz.justzappit.offramp.onramp.FakeOnrampDriver
 import xyz.justzappit.offramp.onramp.OnrampDriver
@@ -183,6 +189,36 @@ val repositoryModule =
                 credentials = get(),
                 onUnrecognisedRevert = { selector ->
                     Twig.warn { "Reclaim socialVerify reverted with an unmapped selector: $selector" }
+                },
+            )
+        }
+        single {
+            LivenessConfig(
+                apiUrl = BuildConfig.LIVENESS_API_URL,
+                apiKey = BuildConfig.LIVENESS_API_KEY,
+                tenant = BuildConfig.LIVENESS_TENANT,
+            )
+        }
+        single { LivenessReader(rpc = get(), network = get()) }
+        single { LivenessReturnInbox() }
+        // Same shape as Reclaim: the widget session is opened from the device and the attestation
+        // goes straight to the integrator. The verifier is our own host, but it shares the offramp
+        // client for the same logging and retry behaviour.
+        single {
+            LivenessVerificationDriver(
+                widget =
+                    LivenessWidgetClient(
+                        httpClient = get(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)),
+                        config = get(),
+                        redirectUri = LivenessReturnLink.URL,
+                    ),
+                reader = get(),
+                submitters = get(),
+                rpc = get(),
+                network = get(),
+                config = get(),
+                onUnrecognisedRevert = { selector ->
+                    Twig.warn { "submitLivenessAttestation reverted with an unmapped selector: $selector" }
                 },
             )
         }
