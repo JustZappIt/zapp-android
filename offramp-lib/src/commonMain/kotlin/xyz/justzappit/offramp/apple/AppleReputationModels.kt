@@ -30,6 +30,12 @@ data class AppleReputationSummary(
     val isLimitFromCheckout: Boolean,
     /** False on a network with no integrator, where nothing about the selfie check is mentioned. */
     val isSelfieAvailable: Boolean,
+    /**
+     * The standing [shownLimitMicros] was computed from, so the screen that lists the selfie row
+     * reads it once, here, rather than again beside the summary. Null where no integrator is
+     * deployed, and after a failed confirming read on a Reclaim `Done`.
+     */
+    val liveness: AppleLivenessStanding?,
     val platforms: List<AppleReputationPlatform>,
 )
 

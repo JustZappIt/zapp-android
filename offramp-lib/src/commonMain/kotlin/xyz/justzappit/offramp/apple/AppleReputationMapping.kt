@@ -50,6 +50,7 @@ internal fun ReputationSummary.toApple(
         shownLimitMicros = shown.micros.toString(),
         isLimitFromCheckout = viaCheckout,
         isSelfieAvailable = isSelfieAvailable,
+        liveness = standing?.toApple(),
         // Declaration order, which is descending by award: LinkedIn leads every list.
         platforms =
             SocialPlatform.entries.map { platform ->

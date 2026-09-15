@@ -61,6 +61,10 @@ class AppleReputationMappingTest {
         assertEquals("0", apple.buyLimitMicros)
         assertTrue(apple.isLimitFromCheckout)
         assertTrue(apple.isSelfieAvailable)
+        assertEquals(
+            AppleLivenessStanding(isVerified = true, limitMicros = "20000000", tierCapMicros = "20000000"),
+            apple.liveness,
+        )
     }
 
     @Test
@@ -88,6 +92,7 @@ class AppleReputationMappingTest {
         assertEquals(apple.buyLimitMicros, apple.shownLimitMicros)
         assertFalse(apple.isLimitFromCheckout)
         assertFalse(apple.isSelfieAvailable)
+        assertNull(apple.liveness)
         assertTrue(apple.canBuy)
     }
 
