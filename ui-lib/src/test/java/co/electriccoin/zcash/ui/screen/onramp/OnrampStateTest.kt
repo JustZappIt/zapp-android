@@ -8,6 +8,7 @@ import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.stringRes
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.onramp.OnrampFailureCode
+import xyz.justzappit.offramp.onramp.OnrampPaymentInstruction
 import xyz.justzappit.offramp.onramp.OnrampPhase
 import xyz.justzappit.offramp.onramp.OnrampStatus
 import xyz.justzappit.offramp.p2p.CurrencyCode
@@ -52,16 +53,35 @@ class OnrampStateTest {
         assertFalse(state(progress = completed(), mode = OnrampMode.DELIVERY_NEEDS_ATTENTION).isSettled)
     }
 
+    @Test
+    fun `a payment the app refuses to let the user make is still a live order, so back keeps it`() {
+        // The dock offers Start over on both, but that is a labelled button; Back is a reflex, and
+        // the order behind it is still accepted on chain with the merchant's USDC escrowed.
+        val closedWindow =
+            state(progress = awaitingPayment(), mode = OnrampMode.PAYMENT, paymentSecondsRemaining = 0L)
+        val distrustedAmount =
+            state(progress = awaitingPayment(), mode = OnrampMode.PAYMENT, isPaymentAmountUntrusted = true)
+
+        assertFalse(closedWindow.isPayable)
+        assertFalse(distrustedAmount.isPayable)
+        assertFalse(closedWindow.isSettled)
+        assertFalse(distrustedAmount.isSettled)
+    }
+
     private fun state(
         progress: OnrampStatus,
         onRetry: () -> Unit = {},
         mode: OnrampMode = OnrampMode.PROGRESS,
+        paymentSecondsRemaining: Long? = null,
+        isPaymentAmountUntrusted: Boolean = false,
     ) = OnrampState(
         mode = mode,
         currency = CurrencyCode.Inr,
         paymentRail = stringRes("UPI"),
         amountInput = NumberTextFieldState(onValueChange = {}),
         progress = progress,
+        paymentSecondsRemaining = paymentSecondsRemaining,
+        isPaymentAmountUntrusted = isPaymentAmountUntrusted,
         onBack = {},
         onRetry = onRetry,
         onContinue = {},
@@ -86,6 +106,15 @@ class OnrampStateTest {
             phase = OnrampPhase.AWAITING_SETTLEMENT,
             id = "onramp-id",
             orderId = "order-id",
+        )
+
+    private fun awaitingPayment() =
+        OnrampStatus.AwaitingPayment(
+            id = "onramp-id",
+            orderId = "order-id",
+            instruction = OnrampPaymentInstruction.Qr(payload = "upi://pay"),
+            fiatAmount = Usdc6.ofMicros(100_000_000L),
+            expiresAtMillis = null,
         )
 
     private fun completed() =

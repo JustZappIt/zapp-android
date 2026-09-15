@@ -98,13 +98,16 @@ internal data class OnrampState(
      * Nothing on screen is live any more — the dock offers Done or Start over. Back from here
      * returns to amount entry rather than leaving Buy ZEC, so another purchase is one step away
      * and Home is the step after; a live order keeps leaving the screen, checkpoint intact.
+     *
+     * A payment screen the app will not let the user pay — window closed, amount distrusted — is
+     * not settled: the order is still accepted on chain with the merchant's USDC behind it, so a
+     * reflexive Back keeps its checkpoint and only the labelled Start over gives it up.
      */
     val isSettled: Boolean
         get() =
             when (mode) {
                 OnrampMode.COMPLETION, OnrampMode.REFUNDED_TO_BASE -> true
                 OnrampMode.PROGRESS -> isOrderTerminal
-                OnrampMode.PAYMENT -> !isPayable
                 else -> false
             }
 
