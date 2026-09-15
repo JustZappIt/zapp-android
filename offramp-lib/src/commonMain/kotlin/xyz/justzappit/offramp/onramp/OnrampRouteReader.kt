@@ -43,10 +43,17 @@ class OnrampRouteReader(
                 integrator?.let { at ->
                     async { LivenessCalls.decodeUint(rpc.ethCall(at, LivenessCalls.remainingDailyCountCalldata(user))) }
                 }
+            // `effectiveLimit` does not know the switch: a paused integrator still quotes a limit
+            // it will refuse to honour, and the refusal belongs on the amount screen.
+            val paused =
+                integrator?.let { at ->
+                    async { LivenessCalls.decodeBool(rpc.ethCall(at, LivenessCalls.pausedCalldata())) }
+                }
             OnrampRouteLimits(
                 direct = direct.await(),
                 integrator = limit?.await() ?: Usdc6.ZERO,
                 integratorOrdersRemaining = remaining?.await() ?: bigIntegerZero,
+                integratorPaused = paused?.await() ?: false,
             )
         }
 }

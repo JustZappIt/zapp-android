@@ -188,15 +188,26 @@ class DirectOnrampDriver(
             )
         }
 
-    /** The route, or the refusal the amount screen shows inline in place of a failed placement. */
+    /**
+     * The route, or the refusal the amount screen shows inline in place of a failed placement.
+     * A used-up daily count is worded as the per-order cap while the Diamond still carries a
+     * smaller amount: "try a smaller amount or come back later" is then exactly right, where
+     * "try again tomorrow" would send away a wallet that can buy now.
+     */
     private fun OnrampRouteDecision.routeOrThrow(): OnrampRoute =
         when (this) {
             is OnrampRouteDecision.Route -> {
                 route
             }
 
-            OnrampRouteDecision.DailyExhausted -> {
-                throw OnrampException(OnrampFailureCode.DAILY_LIMIT_EXCEEDED, 0, "no integrator orders left today")
+            is OnrampRouteDecision.DailyExhausted -> {
+                val code =
+                    if (smallerAmountCarried) OnrampFailureCode.CAP_EXCEEDED else OnrampFailureCode.DAILY_LIMIT_EXCEEDED
+                throw OnrampException(code, 0, "no integrator orders left today")
+            }
+
+            OnrampRouteDecision.IntegratorPaused -> {
+                throw OnrampException(OnrampFailureCode.ROUTE_DISABLED, 0, "the integrator is paused")
             }
 
             OnrampRouteDecision.OverLimit -> {

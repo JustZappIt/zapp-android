@@ -67,6 +67,9 @@ object LivenessCalls {
     fun remainingDailyCountCalldata(user: Address): ByteArray =
         AbiEncoder.encodeFunctionCall("getRemainingDailyCount(address)", listOf(AbiAddress(user)))
 
+    /** The owner's switch: `buyUsdc` reverts `ContractPaused` while it is on. */
+    fun pausedCalldata(): ByteArray = AbiEncoder.encodeFunctionCall("paused()", emptyList())
+
     fun decodeBool(returnData: ByteArray): Boolean =
         AbiDecoder(returnData).also { it.requireWords(1) }.uint(0).signum() != 0
 

@@ -34,11 +34,29 @@ class OnrampRouteLimitsTest {
     @Test
     fun `an exhausted daily count refuses only what the diamond cannot carry`() {
         assertEquals(
-            OnrampRouteDecision.DailyExhausted,
+            OnrampRouteDecision.DailyExhausted(smallerAmountCarried = false),
             limits(direct = 0, integrator = 20, remaining = 0).decide(usd(15)),
+        )
+        // With a Diamond limit of its own, a smaller amount still goes through today — and the
+        // refusal has to say so rather than "tomorrow".
+        assertEquals(
+            OnrampRouteDecision.DailyExhausted(smallerAmountCarried = true),
+            limits(direct = 10, integrator = 20, remaining = 0).decide(usd(15)),
         )
         // The direct route has no daily count of its own to run out of.
         assertEquals(direct, limits(direct = 50, integrator = 20, remaining = 0).decide(usd(15)))
+    }
+
+    @Test
+    fun `a paused integrator refuses what only it would carry, ahead of its daily count`() {
+        val paused = limits(direct = 0, integrator = 20, remaining = 5, paused = true)
+
+        assertEquals(OnrampRouteDecision.IntegratorPaused, paused.decide(usd(15)))
+        // Its limit still shows: the wallet holds it, the switch is what is off.
+        assertEquals(usd(20), paused.max)
+        // The pause is the integrator's alone.
+        assertEquals(direct, limits(direct = 50, integrator = 20, remaining = 5, paused = true).decide(usd(15)))
+        assertEquals(OnrampRouteDecision.OverLimit, paused.decide(usd(25)))
     }
 
     @Test
@@ -64,11 +82,12 @@ class OnrampRouteLimitsTest {
 
     private fun usd(whole: Long): Usdc6 = Usdc6.ofMicros(whole * MICROS_PER_USDC)
 
-    private fun limits(direct: Long, integrator: Long, remaining: Long) =
+    private fun limits(direct: Long, integrator: Long, remaining: Long, paused: Boolean = false) =
         OnrampRouteLimits(
             direct = usd(direct),
             integrator = usd(integrator),
             integratorOrdersRemaining = if (remaining == 0L) bigIntegerZero else bigIntegerValueOf(remaining),
+            integratorPaused = paused,
         )
 
     private companion object {

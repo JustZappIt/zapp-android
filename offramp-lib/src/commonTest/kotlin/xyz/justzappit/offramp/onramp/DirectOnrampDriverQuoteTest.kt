@@ -62,6 +62,7 @@ class DirectOnrampDriverQuoteTest {
     private var directMicros = 0L
     private var integratorMicros = 20_000_000L
     private var ordersRemaining = 5L
+    private var integratorPaused = false
 
     private val getAddressSelector = ThirdwebSmartAccount.getAddressCalldata(owner.address).selector()
     private val priceSelector = DiamondCalls.getPriceConfigCalldata(CurrencyCode.Inr).selector()
@@ -72,6 +73,7 @@ class DirectOnrampDriverQuoteTest {
     private val userTxLimitSelector = ReputationCalls.userTxLimitCalldata(SMART_ACCOUNT, CurrencyCode.Inr).selector()
     private val effectiveLimitSelector = LivenessCalls.effectiveLimitCalldata(SMART_ACCOUNT).selector()
     private val remainingSelector = LivenessCalls.remainingDailyCountCalldata(SMART_ACCOUNT).selector()
+    private val pausedSelector = LivenessCalls.pausedCalldata().selector()
 
     private val rpcHttp =
         HttpClient(
@@ -95,6 +97,7 @@ class DirectOnrampDriverQuoteTest {
                         userTxLimitSelector -> word(directMicros) + word(0L)
                         effectiveLimitSelector -> word(integratorMicros)
                         remainingSelector -> word(ordersRemaining)
+                        pausedSelector -> word(if (integratorPaused) 1L else 0L)
                         else -> error("Unexpected eth_call on the quote path: $calldata")
                     }
                 respond(
@@ -149,6 +152,31 @@ class DirectOnrampDriverQuoteTest {
             val e = assertFailsWith<OnrampException> { driver().quote(inr(1_500), CurrencyCode.Inr) }
 
             assertEquals(OnrampFailureCode.DAILY_LIMIT_EXCEEDED, e.code)
+        }
+
+    @Test
+    fun `out of orders but with a diamond limit of its own, the refusal says a smaller amount works`() =
+        runTest {
+            // "Try again tomorrow" would send away a wallet that can buy $10 right now.
+            ordersRemaining = 0
+            directMicros = 10_000_000L
+
+            val e = assertFailsWith<OnrampException> { driver().quote(inr(1_500), CurrencyCode.Inr) }
+
+            assertEquals(OnrampFailureCode.CAP_EXCEEDED, e.code)
+            assertEquals(OnrampRoute.DIRECT, driver().quote(inr(1_000), CurrencyCode.Inr).route)
+        }
+
+    @Test
+    fun `a paused integrator is refused on the amount screen, not after a screening and a UserOp`() =
+        runTest {
+            integratorPaused = true
+
+            val e = assertFailsWith<OnrampException> { driver().quote(inr(1_500), CurrencyCode.Inr) }
+
+            assertEquals(OnrampFailureCode.ROUTE_DISABLED, e.code)
+            // The limit the wallet holds is still the ceiling shown; the switch is what is off.
+            assertEquals(inr(2_000), driver().limits(CurrencyCode.Inr).maxFiat)
         }
 
     @Test

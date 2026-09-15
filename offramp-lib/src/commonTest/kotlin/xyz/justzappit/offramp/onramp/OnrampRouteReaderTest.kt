@@ -31,6 +31,8 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
  * One read, both contracts — and on a network with no integrator, one contract and nothing else.
@@ -45,6 +47,8 @@ class OnrampRouteReaderTest {
     private val userTxLimitSelector = ReputationCalls.userTxLimitCalldata(WALLET, CurrencyCode.Inr).selector()
     private val effectiveLimitSelector = LivenessCalls.effectiveLimitCalldata(WALLET).selector()
     private val remainingSelector = LivenessCalls.remainingDailyCountCalldata(WALLET).selector()
+    private val pausedSelector = LivenessCalls.pausedCalldata().selector()
+    private var paused = false
 
     private val rpcHttp =
         HttpClient(
@@ -72,6 +76,7 @@ class OnrampRouteReaderTest {
                         userTxLimitSelector -> word(DIRECT_MICROS) + word(0)
                         effectiveLimitSelector -> if (failIntegratorReads) null else word(INTEGRATOR_MICROS)
                         remainingSelector -> if (failIntegratorReads) null else word(REMAINING)
+                        pausedSelector -> if (failIntegratorReads) null else word(if (paused) 1 else 0)
                         else -> error("Unexpected eth_call: $selector")
                     }
                 val body =
@@ -92,19 +97,23 @@ class OnrampRouteReaderTest {
     }
 
     @Test
-    fun `with an integrator, both limits and the daily count come back from one pass`() =
+    fun `with an integrator, both limits, the daily count and the switch come back from one pass`() =
         runTest {
+            paused = true
+
             val limits = OnrampRouteReader(rpc, P2pNetworks.SEPOLIA).read(WALLET, CurrencyCode.Inr)
 
             assertEquals(Usdc6.ofMicros(DIRECT_MICROS), limits.direct)
             assertEquals(Usdc6.ofMicros(INTEGRATOR_MICROS), limits.integrator)
             assertEquals(bigIntegerValueOf(REMAINING), limits.integratorOrdersRemaining)
-            assertEquals(3, calls.size)
+            assertTrue(limits.integratorPaused)
+            assertEquals(4, calls.size)
             assertEquals(
                 setOf(
                     P2pNetworks.SEPOLIA.diamondAddress.lowercaseHex to userTxLimitSelector,
                     P2pNetworks.SEPOLIA_LIVENESS_INTEGRATOR.lowercase() to effectiveLimitSelector,
                     P2pNetworks.SEPOLIA_LIVENESS_INTEGRATOR.lowercase() to remainingSelector,
+                    P2pNetworks.SEPOLIA_LIVENESS_INTEGRATOR.lowercase() to pausedSelector,
                 ),
                 calls.toSet(),
             )
@@ -120,6 +129,7 @@ class OnrampRouteReaderTest {
             assertEquals(Usdc6.ofMicros(DIRECT_MICROS), limits.direct)
             assertEquals(Usdc6.ZERO, limits.integrator)
             assertEquals(bigIntegerZero, limits.integratorOrdersRemaining)
+            assertFalse(limits.integratorPaused)
             assertEquals(listOf(mainnet.diamondAddress.lowercaseHex to userTxLimitSelector), calls)
         }
 

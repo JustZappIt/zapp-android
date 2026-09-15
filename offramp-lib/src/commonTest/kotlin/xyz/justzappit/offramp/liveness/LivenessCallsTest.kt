@@ -51,6 +51,7 @@ class LivenessCallsTest {
         assertEquals("0xa55c8357$WALLET_WORD", LivenessCalls.effectiveLimitCalldata(WALLET).hex())
         assertEquals("0x4cec43c1", LivenessCalls.tierCapCalldata().hex())
         assertEquals("0xd4d6d538$WALLET_WORD", LivenessCalls.remainingDailyCountCalldata(WALLET).hex())
+        assertEquals("0x5c975abb", LivenessCalls.pausedCalldata().hex())
     }
 
     @Test
