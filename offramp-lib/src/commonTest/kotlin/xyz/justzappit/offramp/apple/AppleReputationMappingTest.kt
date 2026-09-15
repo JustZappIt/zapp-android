@@ -4,6 +4,7 @@
 package xyz.justzappit.offramp.apple
 
 import xyz.justzappit.evm.math.bigIntegerValueOf
+import xyz.justzappit.offramp.liveness.LivenessStanding
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.reclaim.ReclaimFailure
@@ -44,7 +45,50 @@ class AppleReputationMappingTest {
         assertFalse(apple.canBuy)
         assertFalse(apple.isAtCeiling)
         assertEquals("0", apple.buyLimitMicros)
+        assertEquals("0", apple.shownLimitMicros)
+        assertFalse(apple.isLimitFromCheckout)
+        assertFalse(apple.isSelfieAvailable)
         assertEquals(CurrencyCode.Inr.code, apple.currencyCode)
+    }
+
+    @Test
+    fun `a selfie wallet with no reputation can buy, up to the integrator's limit`() {
+        // 0 RP on the Diamond, $20 on the integrator: the route policy sends this buy through
+        // Zapp's checkout, so that is the limit shown and the reason the gate opens.
+        val apple = summary(points = 0, buy = 0).toApple(verified(20_000_000L), isSelfieAvailable = true)
+        assertTrue(apple.canBuy)
+        assertEquals("20000000", apple.shownLimitMicros)
+        assertEquals("0", apple.buyLimitMicros)
+        assertTrue(apple.isLimitFromCheckout)
+        assertTrue(apple.isSelfieAvailable)
+    }
+
+    @Test
+    fun `reputation first, the selfie only when it is the higher limit`() {
+        val diamondHigher =
+            summary(points = 100, buy = 100_000_000).toApple(verified(20_000_000L), isSelfieAvailable = true)
+        assertEquals("100000000", diamondHigher.shownLimitMicros)
+        assertFalse(diamondHigher.isLimitFromCheckout)
+
+        // A tie is the Diamond's: the direct route is tried first.
+        val tie = summary(points = 20, buy = 20_000_000).toApple(verified(20_000_000L), isSelfieAvailable = true)
+        assertEquals("20000000", tie.shownLimitMicros)
+        assertFalse(tie.isLimitFromCheckout)
+
+        val unverified =
+            summary(points = 0, buy = 0)
+                .toApple(LivenessStanding(false, Usdc6.ZERO, Usdc6.ofMicros(20_000_000L)), isSelfieAvailable = true)
+        assertFalse(unverified.canBuy)
+        assertTrue(unverified.isSelfieAvailable)
+    }
+
+    @Test
+    fun `mainnet crosses exactly as before, with no selfie mentioned`() {
+        val apple = summary(points = 100, buy = 100_000_000).toApple(standing = null, isSelfieAvailable = false)
+        assertEquals(apple.buyLimitMicros, apple.shownLimitMicros)
+        assertFalse(apple.isLimitFromCheckout)
+        assertFalse(apple.isSelfieAvailable)
+        assertTrue(apple.canBuy)
     }
 
     @Test
@@ -131,7 +175,15 @@ class AppleReputationMappingTest {
         val done =
             ReclaimStatus.Done(summary(points = 100, buy = 100_000_000)).toApple() as AppleReclaimStatus.Done
         assertEquals("100000000", done.summary.buyLimitMicros)
+        assertEquals("100000000", done.summary.shownLimitMicros)
         assertTrue(done.summary.canBuy)
+
+        val withSelfie =
+            ReclaimStatus
+                .Done(summary(points = 10, buy = 10_000_000))
+                .toApple(verified(20_000_000L), isSelfieAvailable = true) as AppleReclaimStatus.Done
+        assertEquals("20000000", withSelfie.summary.shownLimitMicros)
+        assertTrue(withSelfie.summary.isLimitFromCheckout)
     }
 
     @Test
@@ -156,6 +208,9 @@ class AppleReputationMappingTest {
         maxBuyLimit = Usdc6.ofMicros(maxBuy),
         rpPerUsdc = RpPerUsdcLimit(bigIntegerValueOf(1), bigIntegerValueOf(1)),
     )
+
+    private fun verified(limitMicros: Long) =
+        LivenessStanding(isVerified = true, limit = Usdc6.ofMicros(limitMicros), tierCap = Usdc6.ofMicros(limitMicros))
 
     private companion object {
         // Measured on Base mainnet 2026-08-29; read on chain in production, fixed here.
