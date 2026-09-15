@@ -20,6 +20,11 @@ data class AppleOnrampQuote(
     val netUsdcMicros: String,
     val buyPriceMicros: String,
     val expiresAtMillis: Long,
+    /**
+     * `OnrampRoute.name`: where this order will be placed, decided with the price lock. Display
+     * only on the Swift side; it travels back unchanged with the quote.
+     */
+    val route: String,
 )
 
 data class AppleOnrampField(
@@ -33,6 +38,11 @@ data class AppleOnrampStatus(
     val id: String? = null,
     val orderId: String? = null,
     val failureCode: String? = null,
+    /**
+     * The service's own sentence for a refusal, when it gave one. Display only, as on Android:
+     * [failureCode] is what anything branches on.
+     */
+    val failureDetail: String? = null,
     val instructionKind: String? = null,
     val instructionAddress: String? = null,
     val instructionPayload: String? = null,

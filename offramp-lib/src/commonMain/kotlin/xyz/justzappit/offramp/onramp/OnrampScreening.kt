@@ -50,12 +50,15 @@ data class OnrampScreeningConfig(
      * wallet in the ecosystem.
      */
     val b2bDomain: String = DEFAULT_B2B_DOMAIN,
+    /** Which app filed the record. The service reads it per product, so each platform names itself. */
+    val orderSource: String = DEFAULT_ORDER_SOURCE,
 ) {
     val isConfigured: Boolean
         get() = apiUrl.isNotBlank() && encryptionKeyHex.isNotBlank()
 
     companion object {
         const val DEFAULT_B2B_DOMAIN = "justzappit.xyz"
+        const val DEFAULT_ORDER_SOURCE = "zapp-android"
     }
 }
 
@@ -273,7 +276,7 @@ class OnrampScreeningClient(
 
     /**
      * `{action}:{signingAddress}:{subjectAddress}:{timestamp}` over EIP-191, with the timestamp in
-     * **seconds** — the variable-length form [OnrampRequestSigner] uses, not the fixed-length
+     * **seconds** — the variable-length form (the header carries the message's byte length), not the fixed-length
      * `:\n32` form the Reclaim init and UserOp hashes use. The two recover different addresses.
      */
     internal fun signedHeaders(signer: OnrampScreeningSigner, action: String): Map<String, String> {
@@ -316,7 +319,7 @@ class OnrampScreeningClient(
                     put("payment_method", order.paymentMethod)
                     put("estimated_processing_time", order.estimatedProcessingTime)
                     put("order_timestamp", timestampMillis)
-                    put("order_source", ORDER_SOURCE)
+                    put("order_source", config.orderSource)
                 }
                 // The two endpoints read the device record under different key styles.
                 when (kind) {
@@ -397,7 +400,6 @@ class OnrampScreeningClient(
     }
 
     private companion object {
-        const val ORDER_SOURCE = "zapp-android"
         const val ACTION_ACTIVITY_LOG = "activity-log"
         const val ACTION_LINK_ORDER = "link-order"
         const val PATH_LINK_ORDER = "/activity-logs/link-order"
