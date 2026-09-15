@@ -40,10 +40,6 @@ class AppleLivenessClient private constructor(
     /** False on a network with no integrator, where the row must not render at all. */
     val isAvailable: Boolean get() = reader.isAvailable
 
-    /** Null where [isAvailable] is false. One failed read fails, never a zeroed standing. */
-    @Throws(Exception::class)
-    suspend fun standing(): AppleLivenessStanding? = reader.read(smartAccounts.resolve().address)?.toApple()
-
     /**
      * Opens a widget session and waits for its redirect. [nonce] is Swift's, random per run, so
      * a redirect from any other session — ours or not — fails the state check.

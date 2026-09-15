@@ -3,16 +3,23 @@
 
 package xyz.justzappit.offramp.apple
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.sync.Mutex
+import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
+import xyz.justzappit.offramp.liveness.LivenessReader
+import xyz.justzappit.offramp.liveness.LivenessStanding
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.reclaim.ReclaimAppCredentials
 import xyz.justzappit.offramp.reclaim.ReclaimLaunchSignal
 import xyz.justzappit.offramp.reclaim.ReclaimPoller
 import xyz.justzappit.offramp.reclaim.ReclaimSessionMinter
+import xyz.justzappit.offramp.reclaim.ReclaimStatus
 import xyz.justzappit.offramp.reclaim.ReclaimVerificationDriver
 import xyz.justzappit.offramp.reputation.ReputationReader
 import kotlin.time.Clock
@@ -29,6 +36,7 @@ import kotlin.time.Clock
 class AppleReputationClient private constructor(
     private val smartAccounts: SmartOfframpAccountProvider,
     private val reader: ReputationReader,
+    private val livenessReader: LivenessReader,
     private val driver: ReclaimVerificationDriver,
 ) {
     private val runLock = Mutex()
@@ -40,16 +48,27 @@ class AppleReputationClient private constructor(
      */
     private val activeSignal = MutableStateFlow<ReclaimLaunchSignal?>(null)
 
+    /**
+     * Both standings in one pass, as Android's `ReputationVM.load` reads them: one failed read
+     * fails the whole thing, never a summary beside a silently zeroed selfie limit.
+     */
     @Throws(Exception::class)
-    suspend fun summary(currencyCode: String): AppleReputationSummary =
-        reader.read(smartAccounts.resolve().address, CurrencyCode.fromCode(currencyCode)).toApple()
+    suspend fun summary(currencyCode: String): AppleReputationSummary {
+        val address = smartAccounts.resolve().address
+        val currency = CurrencyCode.fromCode(currencyCode)
+        return coroutineScope {
+            val reputation = async { reader.read(address, currency) }
+            val standing = async { livenessReader.read(address) }
+            reputation.await().toApple(standing.await(), livenessReader.isAvailable)
+        }
+    }
 
     fun verify(platformId: String, currencyCode: String): Flow<AppleReclaimStatus> =
         singleRunFlow(runLock, platformId, currencyCode) { platform, currency ->
             val signal = ReclaimLaunchSignal()
             activeSignal.value = signal
             try {
-                driver.verify(platform, currency, signal).collect { emit(it.toApple()) }
+                driver.verify(platform, currency, signal).collect { emit(it.toAppleWithStanding()) }
             } finally {
                 // Only ever clears this run's own signal, never one a later run has published.
                 activeSignal.compareAndSet(signal, null)
@@ -61,7 +80,30 @@ class AppleReputationClient private constructor(
         singleRunFlow(runLock, platformId, currencyCode) { platform, currency ->
             // Nothing to hold open: the user has already been and come back.
             activeSignal.value = null
-            driver.resume(platform, currency, sessionId).collect { emit(it.toApple()) }
+            driver.resume(platform, currency, sessionId).collect { emit(it.toAppleWithStanding()) }
+        }
+
+    /**
+     * `Done` carries the summary the chain reported back; the selfie standing is read beside it so
+     * the screen the run lands on shows the same higher limit [summary] would. Only the confirming
+     * read can fail here, and the write has landed, so a failed one crosses as no standing.
+     */
+    private suspend fun ReclaimStatus.toAppleWithStanding(): AppleReclaimStatus =
+        if (this is ReclaimStatus.Done) {
+            toApple(standingOrNull(smartAccounts.resolve().address), livenessReader.isAvailable)
+        } else {
+            toApple()
+        }
+
+    private suspend fun standingOrNull(address: Address): LivenessStanding? =
+        try {
+            livenessReader.read(address)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught", "SwallowedException") ignored: Exception,
+        ) {
+            null
         }
 
     /**
@@ -96,6 +138,7 @@ class AppleReputationClient private constructor(
             return AppleReputationClient(
                 smartAccounts = account.smartAccounts,
                 reader = reader,
+                livenessReader = LivenessReader(rpc = account.rpc, network = account.network),
                 driver =
                     ReclaimVerificationDriver(
                         minter =
