@@ -76,6 +76,16 @@ class OnrampScreeningTest {
         onScreeningUnavailable = onScreeningUnavailable,
     )
 
+    /** A client whose screening endpoint cannot be reached at all. */
+    private fun clientFailing(onScreeningUnavailable: (String) -> Unit) =
+        OnrampScreeningClient(
+            httpClient = HttpClient(MockEngine { throw IllegalStateException("connection refused") }),
+            config = OnrampScreeningConfig(apiUrl = "https://screening.invalid/api/v1", encryptionKeyHex = KEY_HEX),
+            deviceSignals = { SIGNALS },
+            nowMillis = { 1_756_450_000_123L },
+            onScreeningUnavailable = onScreeningUnavailable,
+        )
+
     @Test
     fun `the signed headers carry seconds, and bind both addresses`() {
         val headers = client(1_756_450_000_123L).signedHeaders(signer, "activity-log")
@@ -166,11 +176,61 @@ class OnrampScreeningTest {
             // ☠ The whole corridor rides on this. Rejected is the one outcome that stops a
             // placement, so defaulting an absent field to "not approved" would turn any envelope
             // change on the service into every Android buy failing, worded as a refusal.
+            var reported: String? = null
             val outcome =
-                clientAnswering("""{"status":"ok","data":{"activity_log_id":"a-1"}}""")
-                    .screenBuyOrder(signer, ORDER, country = "IN")
+                clientAnswering(
+                    """{"status":"ok","data":{"activity_log_id":"a-1"}}""",
+                    onScreeningUnavailable = { reported = it },
+                ).screenBuyOrder(signer, ORDER, country = "IN")
 
             assertEquals(OnrampScreeningOutcome.Unavailable, outcome)
+            // Unavailable is invisible from the screen, so the drift has to reach the log.
+            assertTrue(reported.orEmpty().contains("without an approval"), "got: $reported")
+        }
+
+    @Test
+    fun `on the b2b intake an id alone clears, as its reference client reads it`() =
+        runTest {
+            // The widget types `approved` as optional there and links on the id whenever the
+            // field is not `false`; reading it the consumer way would leave the order unlinked.
+            var reported: String? = null
+            val outcome =
+                clientAnswering("""{"activity_log_id":9}""", onScreeningUnavailable = { reported = it })
+                    .screenBuyOrder(signer, ORDER, country = "IN", kind = OnrampScreeningKind.B2B)
+
+            assertEquals("9", assertIs<OnrampScreeningOutcome.Approved>(outcome).activityLogId.jsonPrimitive.content)
+            assertNull(reported)
+            // An explicit refusal still wins, and a null id is no id.
+            assertIs<OnrampScreeningOutcome.Rejected>(
+                clientAnswering("""{"approved":false,"activity_log_id":9,"message":"cluster"}""")
+                    .screenBuyOrder(signer, ORDER, country = "IN", kind = OnrampScreeningKind.B2B),
+            )
+            assertEquals(
+                OnrampScreeningOutcome.Unavailable,
+                clientAnswering("""{"activity_log_id":null}""")
+                    .screenBuyOrder(signer, ORDER, country = "IN", kind = OnrampScreeningKind.B2B),
+            )
+        }
+
+    @Test
+    fun `a body that cannot be read and a service that cannot be reached are both reported, not thrown`() =
+        runTest {
+            val reports = mutableListOf<String>()
+
+            assertEquals(
+                OnrampScreeningOutcome.Unavailable,
+                clientAnswering("<html>bad gateway</html>", onScreeningUnavailable = reports::add)
+                    .screenBuyOrder(signer, ORDER, country = "IN"),
+            )
+            assertEquals(
+                OnrampScreeningOutcome.Unavailable,
+                clientFailing(onScreeningUnavailable = reports::add)
+                    .screenBuyOrder(signer, ORDER, country = "IN", kind = OnrampScreeningKind.B2B),
+            )
+
+            assertEquals(2, reports.size, "$reports")
+            assertTrue(reports[0].startsWith("/activity-logs failed:"), reports[0])
+            assertTrue(reports[1].startsWith("/activity-logs/b2b-buy-order failed:"), reports[1])
         }
 
     @Test
@@ -188,11 +248,23 @@ class OnrampScreeningTest {
     @Test
     fun `an approval with no activity log id is unavailable, since there is nothing to link`() =
         runTest {
+            var reported: String? = null
             val outcome =
-                clientAnswering("""{"approved":true}""")
+                clientAnswering("""{"approved":true}""", onScreeningUnavailable = { reported = it })
                     .screenBuyOrder(signer, ORDER, country = "IN")
 
             assertEquals(OnrampScreeningOutcome.Unavailable, outcome)
+            assertTrue(reported.orEmpty().contains("without an activity_log_id"), "got: $reported")
+        }
+
+    @Test
+    fun `a refusal with a null message shows nothing rather than the word null`() =
+        runTest {
+            val outcome =
+                clientAnswering("""{"approved":false,"message":null,"reason":"user_restricted"}""")
+                    .screenBuyOrder(signer, ORDER, country = "IN")
+
+            assertEquals("", assertIs<OnrampScreeningOutcome.Rejected>(outcome).message)
         }
 
     @Test

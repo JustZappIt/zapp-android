@@ -14,6 +14,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -128,6 +129,7 @@ sealed interface OnrampScreeningOutcome {
  * the placer is the user's own smart account, so the app has to file it and the user has to sign
  * it, or it matches nothing.
  */
+@Suppress("TooManyFunctions")
 class OnrampScreeningClient(
     private val httpClient: HttpClient,
     private val config: OnrampScreeningConfig,
@@ -141,13 +143,13 @@ class OnrampScreeningClient(
      */
     private val onLinkFailed: (String) -> Unit = {},
     /**
-     * Where a refused intake goes. Fail-open like the link: the order still places — but a
-     * record that was never filed is the same never-accepted order, and a 4xx here is otherwise
-     * indistinguishable from a service that simply was not reachable.
+     * Where every intake that filed nothing goes — a refusal, a body that could not be read, a
+     * service that could not be reached. Fail-open like the link: the order still places — but a
+     * record that was never filed is the same never-accepted order, and from the screen each of
+     * these is indistinguishable from an approval.
      */
     private val onScreeningUnavailable: (String) -> Unit = {},
 ) {
-    @Suppress("ReturnCount")
     suspend fun screenBuyOrder(
         signer: OnrampScreeningSigner,
         order: OnrampScreeningOrder,
@@ -155,6 +157,25 @@ class OnrampScreeningClient(
         kind: OnrampScreeningKind = OnrampScreeningKind.CONSUMER,
     ): OnrampScreeningOutcome {
         require(config.isConfigured) { "screening is not configured" }
+        return try {
+            file(signer, order, country, kind)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            // Fail-open, and never silently: a service we cannot reach or read must not stop an
+            // order, but the record it never filed is the order that is never accepted.
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            unavailable("${kind.path} failed: ${e::class.simpleName}")
+        }
+    }
+
+    private suspend fun file(
+        signer: OnrampScreeningSigner,
+        order: OnrampScreeningOrder,
+        country: String?,
+        kind: OnrampScreeningKind,
+    ): OnrampScreeningOutcome {
         // The encrypted payload, AAD, and outer envelope share this exact millisecond timestamp.
         val bodyMillis = nowMillis()
         val userAddress = signer.subject.lowercaseHex
@@ -181,26 +202,41 @@ class OnrampScreeningClient(
                     ),
                 )
             }
-        if (!response.status.isSuccess()) {
-            onScreeningUnavailable("${kind.path} answered " + response.status)
-            return OnrampScreeningOutcome.Unavailable
-        }
+        if (!response.status.isSuccess()) return unavailable("${kind.path} answered " + response.status)
+        return outcomeOf(Json.parseToJsonElement(response.bodyAsText()).jsonObject, kind)
+    }
 
-        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
-        // ☠ Only an explicit `approved: false` rejects. A 200 whose body simply lacks the field —
-        // an envelope change, a proxy answering for the service — is "answered badly", not a
-        // rejection, and gets the same Unavailable treatment as a missing `activity_log_id` two
-        // lines down and a body that does not parse at all. Defaulting the absent field to `false`
-        // would stop every order on the corridor the first time the schema drifted, worded to the
-        // user as though they had been turned down.
-        val approved =
-            body["approved"]?.jsonPrimitive?.content?.toBooleanStrictOrNull()
-                ?: return OnrampScreeningOutcome.Unavailable
-        if (!approved) {
-            return OnrampScreeningOutcome.Rejected(body["message"]?.jsonPrimitive?.content.orEmpty())
+    /**
+     * ☠ Only an explicit `approved: false` rejects. A 200 whose body simply lacks the field —
+     * an envelope change, a proxy answering for the service — is "answered badly", not a
+     * rejection, and gets the same Unavailable treatment as a missing `activity_log_id` and a
+     * body that does not parse at all. Defaulting the absent field to `false` would stop every
+     * order on the corridor the first time the schema drifted, worded to the user as though they
+     * had been turned down.
+     *
+     * The B2B intake is the one exception, and in the other direction: its reference client
+     * types `approved` as optional and takes an `activity_log_id` beside a non-false `approved`
+     * as cleared, so an id alone clears here too — otherwise a field the service is entitled to
+     * drop would leave every integrator order placed but never linked.
+     */
+    private fun outcomeOf(body: JsonObject, kind: OnrampScreeningKind): OnrampScreeningOutcome {
+        val approved = body["approved"]?.jsonPrimitive?.content?.toBooleanStrictOrNull()
+        if (approved == false) {
+            val message = body["message"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.content
+            return OnrampScreeningOutcome.Rejected(message.orEmpty())
         }
-        val logId = body["activity_log_id"] ?: return OnrampScreeningOutcome.Unavailable
-        return OnrampScreeningOutcome.Approved(logId)
+        val logId = body["activity_log_id"]?.takeUnless { it is JsonNull }
+        val cleared = approved == true || (kind == OnrampScreeningKind.B2B && logId != null)
+        return when {
+            !cleared -> unavailable("${kind.path} answered 200 without an approval")
+            logId == null -> unavailable("${kind.path} approved without an activity_log_id")
+            else -> OnrampScreeningOutcome.Approved(logId)
+        }
+    }
+
+    private fun unavailable(reason: String): OnrampScreeningOutcome {
+        onScreeningUnavailable(reason)
+        return OnrampScreeningOutcome.Unavailable
     }
 
     /**
