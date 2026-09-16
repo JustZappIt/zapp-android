@@ -3,6 +3,7 @@
 package co.electriccoin.zcash.preference
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import androidx.test.core.app.ApplicationProvider
@@ -103,6 +104,12 @@ class EncryptedPreferenceProviderTest {
         runBlocking {
             val context = ApplicationProvider.getApplicationContext<Context>()
 
+            // A second store under the same master key stands in for the SDK's own encrypted store.
+            newEncryptedSharedPreferences(context, SIBLING_FILENAME)
+                .edit()
+                .putString(StringDefaultPreferenceFixture.KEY.key, "secret")
+                .commit()
+
             // Simulate D2D transfer state: prefs file contains a keyset that was encrypted
             // with a Keystore key from the source device (which doesn't exist on this device).
             // We reproduce this by writing garbage to the known keyset keys in raw SharedPreferences.
@@ -121,6 +128,14 @@ class EncryptedPreferenceProviderTest {
 
             // Prefs are empty: user will re-enter seed phrase to recover wallet
             assertFalse(restoredProvider.hasKey(StringDefaultPreferenceFixture.KEY))
+            assertFalse(sharedPrefsBakFile(context, RECOVERY_FILENAME).exists())
+
+            // A data-level failure keeps the shared master key, so the other store still decrypts
+            assertEquals(
+                "secret",
+                newEncryptedSharedPreferences(context, SIBLING_FILENAME)
+                    .getString(StringDefaultPreferenceFixture.KEY.key, null)
+            )
         }
 
     @Test
@@ -133,19 +148,8 @@ class EncryptedPreferenceProviderTest {
             // master key, and that hardware-bound key does not exist on the target device.
             // We reproduce this by writing through EncryptedSharedPreferences directly (bypassing
             // the factory cache) and then deleting the master key from the Keystore.
-            val masterKey =
-                MasterKey
-                    .Builder(context)
-                    .apply { setKeyScheme(MasterKey.KeyScheme.AES256_GCM) }
-                    .build()
-            EncryptedSharedPreferences
-                .create(
-                    context,
-                    D2D_FILENAME,
-                    masterKey,
-                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-                ).edit()
+            newEncryptedSharedPreferences(context, D2D_FILENAME)
+                .edit()
                 .putString(StringDefaultPreferenceFixture.KEY.key, "secret")
                 .commit()
 
@@ -159,12 +163,19 @@ class EncryptedPreferenceProviderTest {
 
             // Prefs are empty: user will re-enter seed phrase to recover wallet
             assertFalse(restoredProvider.hasKey(StringDefaultPreferenceFixture.KEY))
+            assertFalse(sharedPrefsBakFile(context, D2D_FILENAME).exists())
+
+            // The recreated store is usable under the key minted for it
+            val expectedValue = StringDefaultPreferenceFixture.DEFAULT_VALUE + "restored"
+            restoredProvider.putString(StringDefaultPreferenceFixture.KEY, expectedValue)
+            assertEquals(expectedValue, StringDefaultPreferenceFixture.new().getValue(restoredProvider))
         }
 
     companion object {
         private const val FILENAME = "encrypted_preference_test"
         private const val RECOVERY_FILENAME = "encrypted_preference_recovery_test"
         private const val D2D_FILENAME = "encrypted_preference_d2d_test"
+        private const val SIBLING_FILENAME = "encrypted_preference_sibling_test"
 
         // Internal keyset key names used by EncryptedSharedPreferences to store Tink keysets
         private const val KEY_KEYSET = "__androidx_security_crypto_encrypted_prefs_key_keyset__"
@@ -175,5 +186,28 @@ class EncryptedPreferenceProviderTest {
                 ApplicationProvider.getApplicationContext(),
                 FILENAME
             )
+
+        private fun newEncryptedSharedPreferences(
+            context: Context,
+            filename: String
+        ): SharedPreferences {
+            val masterKey =
+                MasterKey
+                    .Builder(context)
+                    .apply { setKeyScheme(MasterKey.KeyScheme.AES256_GCM) }
+                    .build()
+            return EncryptedSharedPreferences.create(
+                context,
+                filename,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        }
+
+        private fun sharedPrefsBakFile(
+            context: Context,
+            filename: String
+        ) = encryptedPreferencesBackupFile(sharedPreferencesDirectory(context), filename)
     }
 }
