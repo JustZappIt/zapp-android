@@ -269,17 +269,15 @@ class VoteCoinholderPollingVM(
         }.let { contentFlow ->
             combine(
                 contentFlow,
-                screenRefreshPending,
-                configRefreshPending,
+                pollListLceSource.loading,
                 configErrorSheet,
                 unverifiedPollWarningSheet
-            ) { content, _, _, configSheet, unverifiedSheet ->
-                val noRoundsSheet =
-                    if (content.activeRounds?.isEmpty() == true && content.pastRounds?.isEmpty() == true) {
-                        buildNoRoundsSheet()
-                    } else {
-                        null
-                    }
+            ) { content, isLoading, configSheet, unverifiedSheet ->
+                // The rounds reach the repository before the endorsement list that decides which of
+                // them are visible on the default config, so an in-flight refresh briefly reads as
+                // "no polls". Only an idle, empty list is genuinely empty.
+                val isEmpty = content.activeRounds?.isEmpty() == true && content.pastRounds?.isEmpty() == true
+                val noRoundsSheet = if (isEmpty && !isLoading) buildNoRoundsSheet() else null
                 content.copy(
                     configErrorSheet = configSheet,
                     unverifiedPollWarningSheet = unverifiedSheet,
