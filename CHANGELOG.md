@@ -20,6 +20,7 @@ and this application adheres to [Semantic Versioning](https://semver.org/spec/v2
 - UPI offramp via p2p.me: convert USDC to INR with on-chain price reads, rich progress UI, and subgraph-with-on-chain-fallback order tracking.
 
 ### Fixed:
+- Coinholder Polling no longer fails with "Couldn't load polls" when the vote chain carries a round with more than 15 questions. Rounds with up to 50 questions and proposal ids up to 50 are accepted, matching the vote chain's circuit update for the 37-question Retroactive Grants round (zcash_voting 4.0.0-rc.1).
 - We fixed an issue where a Keystone hardware wallet signature could be accepted even though its firmware couldn't produce a transaction the app can broadcast. Keystone signing now requires firmware 3.0.1 or later; older or version-less firmware is blocked before broadcast, and the prompt reports the firmware version exactly as your device displays it.
 - We fixed a case where interrupting a p2p.me payment or cash-out between sending a transaction and reading its result could leave your USDC escrowed with no way to resume. Payments, cash-outs, refunds and top-ups now draw on one shared Base balance, record the exact submission they sent, and resume from it instead of starting a second one.
 
