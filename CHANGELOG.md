@@ -7,6 +7,7 @@ and this application adheres to [Semantic Versioning](https://semver.org/spec/v2
 ## [Unreleased]
 
 ### Changed:
+- [SUPPORT] Zapp Support conversations now address a new support account.
 - [ONBOARDING] The welcome screen now uses the Zapp vector logo and leads with “Your money and messages,” matching iOS across all supported translations.
 
 ### Added:
