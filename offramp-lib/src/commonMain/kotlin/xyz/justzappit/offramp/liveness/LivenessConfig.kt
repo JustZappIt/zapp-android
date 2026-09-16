@@ -16,7 +16,9 @@ data class LivenessConfig(
     val apiUrl: String,
     val apiKey: String,
     val tenant: String,
+    /** The build's kill switch: false hides the check and refuses to start one, credentials or not. */
+    val enabled: Boolean = true,
 ) {
     val isConfigured: Boolean
-        get() = apiUrl.isNotBlank() && apiKey.isNotBlank() && tenant.isNotBlank()
+        get() = enabled && apiUrl.isNotBlank() && apiKey.isNotBlank() && tenant.isNotBlank()
 }

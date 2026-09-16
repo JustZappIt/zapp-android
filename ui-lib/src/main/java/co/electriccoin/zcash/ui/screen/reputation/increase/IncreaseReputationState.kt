@@ -12,8 +12,8 @@ internal data class IncreaseReputationState(
     val isLoading: Boolean,
     val platforms: List<VerifiableRow>,
     /**
-     * Null on a network with no liveness integrator. Shown even when the service is not
-     * configured, like the rows above.
+     * Null on a network with no liveness integrator, or in a build with the check switched off.
+     * Shown even when the service is not configured, like the rows above.
      */
     val liveness: LivenessRow?,
     /** Non-null once a row is tapped: the run takes over the body, in place, with no new route. */

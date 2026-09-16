@@ -197,6 +197,7 @@ val repositoryModule =
                 apiUrl = BuildConfig.LIVENESS_API_URL,
                 apiKey = BuildConfig.LIVENESS_API_KEY,
                 tenant = BuildConfig.LIVENESS_TENANT,
+                enabled = BuildConfig.LIVENESS_ENABLED,
             )
         }
         single { LivenessReader(rpc = get(), network = get()) }
