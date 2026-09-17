@@ -50,13 +50,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.wallet.ZecFiatRate
+import co.electriccoin.zcash.ui.design.component.zapp.ZappBubbleShape
+import co.electriccoin.zcash.ui.design.component.zapp.zappBubble
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.screen.chat.linkpreview.LinkPreviewMetadata
 import co.electriccoin.zcash.ui.screen.chat.linkpreview.LinkPreviewRepository
 import co.electriccoin.zcash.ui.screen.chat.linkpreview.detectWebUrls
 import co.electriccoin.zcash.ui.screen.chat.linkpreview.firstWebUrl
 import co.electriccoin.zcash.ui.screen.chat.model.ChatMessage
-import co.electriccoin.zcash.ui.screen.chat.model.MimeTypes
 import co.electriccoin.zcash.ui.screen.chat.view.bubbles.FileBubble
 import co.electriccoin.zcash.ui.screen.chat.view.bubbles.LinkPreviewBubble
 import co.electriccoin.zcash.ui.screen.chat.view.bubbles.LocationBubble
@@ -64,8 +65,6 @@ import co.electriccoin.zcash.ui.screen.chat.view.bubbles.MediaBubble
 import co.electriccoin.zcash.ui.screen.chat.view.bubbles.PaymentRequestBubble
 import co.electriccoin.zcash.ui.screen.chat.view.bubbles.TransactionBubble
 import co.electriccoin.zcash.ui.screen.chat.view.bubbles.WalletAddressBubble
-import org.json.JSONException
-import org.json.JSONObject
 import kotlin.math.roundToInt
 
 @Composable
@@ -86,7 +85,8 @@ internal fun MessageBubble(
 ) {
     val c = ZappTheme.colors
     val isFromMe = message.isFromMe
-    val contentType = remember(message.contentType, message.content) { resolveContentType(message) }
+    val kind = remember(message.contentType, message.content, message.mediaId) { bubbleKind(message) }
+    val isText = kind == BubbleKind.TEXT
     val haptic = LocalHapticFeedback.current
 
     var offsetX by remember { mutableFloatStateOf(0f) }
@@ -117,21 +117,18 @@ internal fun MessageBubble(
                 BasicText(
                     text = message.senderName,
                     style = ZappTheme.typography.chip.copy(color = c.accent),
-                    modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
+                    modifier =
+                        Modifier.padding(
+                            start = 4.dp + if (isText) ZappBubbleShape.TAIL_DEPTH else 0.dp,
+                            bottom = 2.dp,
+                        ),
                 )
             }
 
             val hasReply = message.replyToId != null
-            // When quoting, size the group to its widest row so the quoted block and the message
-            // share one width.
             Column(
                 horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
-                modifier =
-                    if (hasReply) {
-                        Modifier.widthIn(max = MAX_BUBBLE_WIDTH.dp).width(IntrinsicSize.Max)
-                    } else {
-                        Modifier
-                    },
+                modifier = bubbleGroupModifier(isText = isText, hasReply = hasReply, isFromMe = isFromMe),
             ) {
                 if (hasReply) {
                     Box(
@@ -152,7 +149,7 @@ internal fun MessageBubble(
                 MessageContent(
                     message = message,
                     isFromMe = isFromMe,
-                    contentType = contentType,
+                    kind = kind,
                     hasReply = hasReply,
                     contentModifier = contentModifier,
                     onImageClick = onImageClick,
@@ -169,6 +166,29 @@ internal fun MessageBubble(
             }
         }
     }
+}
+
+/**
+ * Sizes the quote-and-body group. When quoting, the group takes its widest row so the quoted block
+ * and the message share one width. A text bubble draws the two as one tailed shape; the media,
+ * file, payment, address and transaction bubbles keep their sharp boxes for now.
+ */
+@Composable
+private fun bubbleGroupModifier(isText: Boolean, hasReply: Boolean, isFromMe: Boolean): Modifier {
+    val c = ZappTheme.colors
+    return Modifier
+        .then(if (hasReply || isText) Modifier.widthIn(max = MAX_BUBBLE_WIDTH.dp) else Modifier)
+        .then(if (hasReply) Modifier.width(IntrinsicSize.Max) else Modifier)
+        .then(
+            if (isText) {
+                Modifier.zappBubble(
+                    tail = if (isFromMe) ZappBubbleShape.Tail.TRAILING else ZappBubbleShape.Tail.LEADING,
+                    fill = if (isFromMe) c.accent else c.surfaceAlt,
+                )
+            } else {
+                Modifier
+            },
+        )
 }
 
 @Composable
@@ -216,7 +236,7 @@ private fun Modifier.swipeToReply(
 private fun MessageContent(
     message: ChatMessage,
     isFromMe: Boolean,
-    contentType: String,
+    kind: BubbleKind,
     hasReply: Boolean,
     contentModifier: Modifier,
     onImageClick: ((ChatMessage) -> Unit)?,
@@ -230,8 +250,8 @@ private fun MessageContent(
     mediaTransferProgress: Float?,
     linkPreviewRepository: LinkPreviewRepository,
 ) {
-    when {
-        contentType == CONTENT_TYPE_PAYMENT_REQUEST -> {
+    when (kind) {
+        BubbleKind.PAYMENT_REQUEST -> {
             val requestId = paymentRequestId(message)
             PaymentRequestBubble(
                 message = message,
@@ -243,7 +263,7 @@ private fun MessageContent(
             )
         }
 
-        contentType == CONTENT_TYPE_WALLET_ADDRESS -> {
+        BubbleKind.WALLET_ADDRESS -> {
             WalletAddressBubble(
                 message = message,
                 isFromMe = isFromMe,
@@ -251,7 +271,7 @@ private fun MessageContent(
             )
         }
 
-        contentType == CONTENT_TYPE_ZEC_TRANSACTION -> {
+        BubbleKind.TRANSACTION -> {
             TransactionBubble(
                 message = message,
                 isFromMe = isFromMe,
@@ -259,11 +279,11 @@ private fun MessageContent(
             )
         }
 
-        contentType == CONTENT_TYPE_LOCATION -> {
+        BubbleKind.LOCATION -> {
             LocationBubble(message = message, isFromMe = isFromMe)
         }
 
-        contentType.startsWith(IMAGE_MIME_PREFIX) -> {
+        BubbleKind.IMAGE -> {
             MediaBubble(
                 message = message,
                 isFromMe = isFromMe,
@@ -272,7 +292,7 @@ private fun MessageContent(
             )
         }
 
-        contentType.startsWith(VIDEO_MIME_PREFIX) -> {
+        BubbleKind.VIDEO -> {
             MediaBubble(
                 message = message,
                 isFromMe = isFromMe,
@@ -280,7 +300,7 @@ private fun MessageContent(
             )
         }
 
-        message.mediaId != null -> {
+        BubbleKind.FILE -> {
             FileBubble(
                 message = message,
                 isFromMe = isFromMe,
@@ -288,7 +308,7 @@ private fun MessageContent(
             )
         }
 
-        else -> {
+        BubbleKind.TEXT -> {
             TextMessageBubble(
                 message = message,
                 isFromMe = isFromMe,
@@ -299,37 +319,6 @@ private fun MessageContent(
             )
         }
     }
-}
-
-/** The `id` a payment-request message carries, used to match it against a paying confirmation. */
-internal fun paymentRequestId(message: ChatMessage): String? =
-    try {
-        JSONObject(message.content).optString("id", "").takeIf { it.isNotEmpty() }
-    } catch (_: JSONException) {
-        null
-    }
-
-/** The set of request ids settled by `zec-transaction` confirmations in [messages]. */
-internal fun paidRequestIds(messages: List<ChatMessage>): Set<String> =
-    messages
-        .asSequence()
-        .filter { resolveContentType(it) == CONTENT_TYPE_ZEC_TRANSACTION }
-        .mapNotNull { msg ->
-            try {
-                JSONObject(msg.content).optString("requestId", "").takeIf { it.isNotEmpty() }
-            } catch (_: JSONException) {
-                null
-            }
-        }.toSet()
-
-private fun resolveContentType(message: ChatMessage): String {
-    val declared = message.contentType
-    if (!declared.isNullOrEmpty() && declared != CONTENT_TYPE_TEXT_PLAIN) return declared
-    return try {
-        JSONObject(message.content).optString("contentType", "").takeIf { it.isNotEmpty() }
-    } catch (_: JSONException) {
-        null
-    } ?: CONTENT_TYPE_TEXT_PLAIN
 }
 
 @Composable
@@ -385,13 +374,7 @@ private fun TextMessageBubble(
                 runCatching { haptic.performHapticFeedback(HapticFeedbackType.LongPress) }
             },
         )
-    Column(
-        modifier =
-            copyModifier
-                .widthIn(max = MAX_BUBBLE_WIDTH.dp)
-                .background(if (isFromMe) c.accent else c.surfaceAlt, RectangleShape)
-                .padding(12.dp),
-    ) {
+    Column(modifier = copyModifier.padding(12.dp)) {
         Row(
             verticalAlignment = Alignment.Bottom,
             modifier = if (fillWidth) Modifier.fillMaxWidth() else Modifier,
@@ -481,13 +464,6 @@ private fun QuotedReplyBlock(senderName: String?, content: String?) {
     }
 }
 
-private const val CONTENT_TYPE_TEXT_PLAIN = "text/plain"
-private const val CONTENT_TYPE_PAYMENT_REQUEST = MimeTypes.PAYMENT_REQUEST
-private const val CONTENT_TYPE_WALLET_ADDRESS = MimeTypes.WALLET_ADDRESS
-private const val CONTENT_TYPE_ZEC_TRANSACTION = MimeTypes.ZEC_TRANSACTION
-private const val CONTENT_TYPE_LOCATION = MimeTypes.LOCATION
-private const val IMAGE_MIME_PREFIX = MimeTypes.IMAGE_PREFIX
-private const val VIDEO_MIME_PREFIX = MimeTypes.VIDEO_PREFIX
 private const val OUTGOING_META_ALPHA = 0.7f
 private const val OUTGOING_STATUS_ALPHA = 0.55f
 private const val MAX_BUBBLE_WIDTH = 280

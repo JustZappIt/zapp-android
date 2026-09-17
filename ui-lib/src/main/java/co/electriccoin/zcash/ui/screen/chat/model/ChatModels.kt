@@ -157,7 +157,11 @@ data class ChatMessage(
     val status: MessageStatus? = null,
     val replyToId: String? = null,
     val replyToSenderName: String? = null,
-    val replyToContent: String? = null
+    val replyToContent: String? = null,
+    // The list row this message occupies. An optimistic send keeps its row when the worklet's id
+    // replaces the local one, so the reconcile is an in-place update rather than a delete and an
+    // insert at the same position.
+    val rowId: String = id,
 ) {
     fun advanceStatus(next: MessageStatus): ChatMessage = copy(status = status?.advanceTo(next) ?: next)
 

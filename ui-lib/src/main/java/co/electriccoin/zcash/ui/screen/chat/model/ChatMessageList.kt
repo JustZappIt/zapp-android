@@ -29,3 +29,27 @@ fun List<ChatMessage>.mergedWithHistory(history: List<ChatMessage>): List<ChatMe
     (this + history)
         .distinctBy { it.id }
         .sortedChronologically()
+
+/**
+ * Replaces the optimistic row [optimisticId] with [persisted], the worklet's copy of the same
+ * message. The row keeps its identity so the list updates it in place, and the worklet's
+ * timestamp replaces the local one. A row the worklet already surfaced under the persisted id
+ * folds in, carrying any status it advanced to in the meantime.
+ */
+fun List<ChatMessage>.reconciled(optimisticId: String, persisted: ChatMessage): List<ChatMessage> {
+    val surfaced = firstOrNull { it.id == persisted.id }
+    val status = persisted.status
+    val reconciled =
+        persisted.copy(
+            status = surfaced?.status?.let { status?.advanceTo(it) ?: it } ?: status,
+            rowId = optimisticId,
+        )
+    if (none { it.id == optimisticId }) return plusMessage(reconciled)
+    return mapNotNull { message ->
+        when (message.id) {
+            optimisticId -> reconciled
+            persisted.id -> null
+            else -> message
+        }
+    }.sortedChronologically()
+}

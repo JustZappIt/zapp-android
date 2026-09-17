@@ -79,4 +79,52 @@ class ChatMessageListTest {
         assertEquals(listOf("a", "b"), result.map { it.id })
         assertEquals(1_000, result.first().timestamp)
     }
+
+    // A send inserts an optimistic row and the worklet answers with its own id. The row must not
+    // re-mount over that swap: the list keys rows on rowId, so it has to survive the reconcile.
+
+    @Test
+    fun `reconciled swaps the id in place and keeps the row`() {
+        val list = listOf(message("a", 1_000), message("local:1", 3_000))
+
+        val result = list.reconciled("local:1", message("srv-1", 2_500).copy(status = MessageStatus.SENT))
+
+        assertEquals(listOf("a", "srv-1"), result.map { it.id })
+        assertEquals(listOf("a", "local:1"), result.map { it.rowId })
+        assertEquals(2_500, result.last().timestamp)
+        assertEquals(MessageStatus.SENT, result.last().status)
+    }
+
+    @Test
+    fun `reconciled re-sorts by the worklet timestamp`() {
+        val list = listOf(message("local:1", 3_000), message("b", 4_000))
+
+        val result = list.reconciled("local:1", message("srv-1", 5_000))
+
+        assertEquals(listOf("b", "srv-1"), result.map { it.id })
+    }
+
+    @Test
+    fun `reconciled folds an already surfaced persisted row into the optimistic one`() {
+        val list =
+            listOf(
+                message("local:1", 3_000).copy(status = MessageStatus.SENDING),
+                message("srv-1", 2_500).copy(status = MessageStatus.DELIVERED),
+            )
+
+        val result = list.reconciled("local:1", message("srv-1", 2_500).copy(status = MessageStatus.SENT))
+
+        assertEquals(listOf("srv-1"), result.map { it.id })
+        assertEquals("local:1", result.single().rowId)
+        assertEquals(MessageStatus.DELIVERED, result.single().status)
+    }
+
+    @Test
+    fun `reconciled adds the persisted row when the optimistic one is gone`() {
+        val list = listOf(message("a", 1_000))
+
+        val result = list.reconciled("local:1", message("srv-1", 2_000))
+
+        assertEquals(listOf("a", "srv-1"), result.map { it.id })
+    }
 }

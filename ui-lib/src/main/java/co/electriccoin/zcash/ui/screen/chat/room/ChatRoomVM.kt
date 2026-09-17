@@ -64,10 +64,10 @@ import co.electriccoin.zcash.ui.screen.chat.model.buildPaymentRequestJson
 import co.electriccoin.zcash.ui.screen.chat.model.byPublicKey
 import co.electriccoin.zcash.ui.screen.chat.model.mergedWithHistory
 import co.electriccoin.zcash.ui.screen.chat.model.plusMessage
+import co.electriccoin.zcash.ui.screen.chat.model.reconciled
 import co.electriccoin.zcash.ui.screen.chat.model.resolveDisplayName
 import co.electriccoin.zcash.ui.screen.chat.model.resolveSenderName
 import co.electriccoin.zcash.ui.screen.chat.model.resolveSenderNames
-import co.electriccoin.zcash.ui.screen.chat.model.sortedChronologically
 import co.electriccoin.zcash.ui.screen.chat.repository.ChatContactsRepository
 import co.electriccoin.zcash.ui.screen.chat.repository.ChatConversationsRepository
 import co.electriccoin.zcash.ui.screen.chat.view.BlockUserDialogState
@@ -1308,19 +1308,7 @@ class ChatRoomVM(
                 earlyMessageStatuses.remove(persistedMessage.id)
                     ?: persistedMessage.status
                     ?: MessageStatus.QUEUED
-            messages.update { list ->
-                val reconciledMessage = persistedMessage.copy(status = deliveryStatus)
-                if (list.any { it.id == optimisticId }) {
-                    list
-                        .map { message ->
-                            if (message.id == optimisticId) reconciledMessage else message
-                        }
-                        // The worklet's timestamp replaces the optimistic local one
-                        .sortedChronologically()
-                } else {
-                    list.plusMessage(reconciledMessage)
-                }
-            }
+            messages.update { it.reconciled(optimisticId, persistedMessage.copy(status = deliveryStatus)) }
             chatConversationsRepository.recordOutgoingMessage(persistedMessage)
         }.onFailure {
             messages.update { list ->

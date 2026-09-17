@@ -60,7 +60,7 @@ internal fun ChatRoomView(
     val latestMessage = state.messages.lastOrNull()
     val shouldFollowLatest = !listState.canScrollForward
 
-    LaunchedEffect(state.isLoading, latestMessage?.id, listItems.size) {
+    LaunchedEffect(state.isLoading, latestMessage?.rowId, listItems.size) {
         latestMessage ?: return@LaunchedEffect
         if (state.isLoading) return@LaunchedEffect
         if (!positionedInitialMessages) {
@@ -122,12 +122,12 @@ internal fun ChatRoomView(
                     key = { index, item ->
                         when (item) {
                             // Index-suffixed: a duplicate dayKey must not crash the list with
-                            // "Key already used". Messages keep stable id-based keys.
+                            // "Key already used". Messages keep stable row-based keys.
                             is ChatListItem.DateSeparator -> "sep_${item.dayKey}_$index"
 
                             ChatListItem.UnreadSeparator -> "unread"
 
-                            is ChatListItem.Message -> "msg_${item.message.id}"
+                            is ChatListItem.Message -> "msg_${item.message.rowId}"
                         }
                     },
                 ) { _, item ->
