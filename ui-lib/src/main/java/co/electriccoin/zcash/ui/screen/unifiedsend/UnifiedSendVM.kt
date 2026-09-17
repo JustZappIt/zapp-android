@@ -65,8 +65,10 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
@@ -370,7 +372,15 @@ internal class UnifiedSendVM(
                 clearTokenAmount()
             }.launchIn(viewModelScope)
 
-        preselectSwapAsset.observe().launchIn(viewModelScope)
+        if (args.isPay) {
+            preselectSwapAsset.observe().launchIn(viewModelScope)
+        } else {
+            swapRepository.assets
+                .mapNotNull { it.zecAsset }
+                .take(1)
+                .onEach { if (swapRepository.selectedAsset.value == null) swapRepository.select(it) }
+                .launchIn(viewModelScope)
+        }
 
         swapRepository.requestRefreshAssets()
     }
@@ -489,7 +499,9 @@ internal class UnifiedSendVM(
     }
 
     fun onAssetPickerClick() =
-        navigationRouter.forward(SwapAssetPickerArgs(swapContact.value?.blockchain?.chainTicker))
+        navigationRouter.forward(
+            SwapAssetPickerArgs(chainTicker = swapContact.value?.blockchain?.chainTicker, includeZec = true)
+        )
 
     fun onAddressBookClick(isSwap: Boolean) =
         viewModelScope.launch {

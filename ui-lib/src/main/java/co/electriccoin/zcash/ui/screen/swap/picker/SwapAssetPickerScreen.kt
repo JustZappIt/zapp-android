@@ -16,5 +16,7 @@ fun SwapAssetPickerScreen(args: SwapAssetPickerArgs) {
 
 @Serializable
 data class SwapAssetPickerArgs(
-    val chainTicker: String?
+    val chainTicker: String?,
+    // The repository keeps ZEC out of the swap list; the Send screen asks for it back as the way out of swap mode
+    val includeZec: Boolean = false,
 )

@@ -38,4 +38,6 @@ data class UnifiedSendArgs(
     val recipientAddress: String? = null,
     val recipientAddressType: String? = null,
     val isScanZip321Enabled: Boolean = true,
+    // Pay reopens on the last swap asset like upstream's Pay screen; everything else opens on ZEC
+    val isPay: Boolean = false,
 )

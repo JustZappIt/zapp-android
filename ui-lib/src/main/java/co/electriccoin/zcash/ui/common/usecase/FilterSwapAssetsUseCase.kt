@@ -3,6 +3,7 @@ package co.electriccoin.zcash.ui.common.usecase
 import android.content.Context
 import co.electriccoin.zcash.ui.common.model.SimpleSwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapAsset
+import co.electriccoin.zcash.ui.common.model.ZecSwapAsset
 import co.electriccoin.zcash.ui.common.model.isSame
 import co.electriccoin.zcash.ui.common.repository.SwapAssetsData
 import co.electriccoin.zcash.ui.design.util.getString
@@ -15,14 +16,19 @@ class FilterSwapAssetsUseCase(
         latestUsedAssets: Set<SimpleSwapAsset>?,
         text: String,
         onlyChainTicker: String?,
+        includeZec: Boolean = false,
     ): SwapAssetsData {
         if (assets.data == null) return assets
 
+        // ZEC stays listed even under a chain restriction: it is the wallet's own asset, so picking it is how
+        // the user leaves swap mode, and the selection clears the contact that imposed the restriction.
+        val candidates = if (includeZec) listOfNotNull(assets.zecAsset) + assets.data else assets.data
+
         val result =
             if (text.isEmpty()) {
-                assets.data
+                candidates
                     .filter {
-                        if (onlyChainTicker == null) {
+                        if (onlyChainTicker == null || it is ZecSwapAsset) {
                             true
                         } else {
                             it.chainTicker.equals(onlyChainTicker, ignoreCase = true)
@@ -31,9 +37,9 @@ class FilterSwapAssetsUseCase(
                     .reorderByLatestAssets(latestUsedAssets)
             } else {
                 val sorted =
-                    assets.data
+                    candidates
                         .filter {
-                            if (onlyChainTicker == null) {
+                            if (onlyChainTicker == null || it is ZecSwapAsset) {
                                 true
                             } else {
                                 it.chainTicker.equals(onlyChainTicker, ignoreCase = true)
@@ -54,7 +60,7 @@ class FilterSwapAssetsUseCase(
                 }.toList()
             }
 
-        return assets.copy(data = result)
+        return assets.copy(data = if (includeZec) result.sortedByDescending { it is ZecSwapAsset } else result)
     }
 
     private fun List<SwapAsset>.reorderByTrending(): List<SwapAsset> {
