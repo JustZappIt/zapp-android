@@ -14,7 +14,7 @@ class NavigateToNearPayUseCase(
 ) {
     operator fun invoke() {
         swapRepository.requestRefreshAssets()
-        navigationRouter.forward(UnifiedSendArgs())
+        navigationRouter.forward(UnifiedSendArgs(isPay = true))
         // try {
         //     if (ephemeralAddressRepository.get() == null) {
         //         ephemeralAddressRepository.create()

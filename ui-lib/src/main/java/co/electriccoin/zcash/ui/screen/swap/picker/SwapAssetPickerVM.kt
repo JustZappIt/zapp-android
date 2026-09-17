@@ -6,6 +6,7 @@ import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.model.SwapAsset
+import co.electriccoin.zcash.ui.common.model.ZecSwapAsset
 import co.electriccoin.zcash.ui.common.repository.MetadataRepository
 import co.electriccoin.zcash.ui.common.repository.SwapAssetsData
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
@@ -48,7 +49,8 @@ class SwapAssetPickerVM(
                 assets = assets,
                 latestUsedAssets = latestUsedAssets,
                 text = text,
-                onlyChainTicker = args.chainTicker
+                onlyChainTicker = args.chainTicker,
+                includeZec = args.includeZec
             )
         }
 
@@ -70,7 +72,7 @@ class SwapAssetPickerVM(
                             assets.data.map {
                                 ListItemState(
                                     bigIcon = it.tokenIcon,
-                                    smallIcon = it.chainIcon,
+                                    smallIcon = if (it is ZecSwapAsset) null else it.chainIcon,
                                     title = stringRes(it.tokenTicker),
                                     subtitle = it.chainName,
                                     onClick = { onSwapAssetClick(it) },

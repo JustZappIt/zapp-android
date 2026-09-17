@@ -39,6 +39,7 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.imageRes
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.swap.info.CrossPayInfoArgs
+import co.electriccoin.zcash.ui.screen.swap.picker.SwapAssetPickerArgs
 import co.electriccoin.zcash.ui.screen.swap.slippage.SwapSlippageArgs
 import io.ktor.client.network.sockets.SocketTimeoutException
 import io.mockk.coEvery
@@ -433,16 +434,55 @@ class UnifiedSendVMTest {
             assertEquals(CrossPayInfoArgs, navigationRouter.forwarded.single())
         }
 
+    // region opening asset
+
+    // Every completed Pay writes its token to the last-used history; Send must not reopen on it.
+
+    @Test
+    fun `Send opens on ZEC regardless of what was last paid with`() =
+        swapForm(selected = null) {
+            runCurrent()
+
+            assertIs<ZecSwapAsset>(selectedAsset.value)
+            assertNull(state().slippage)
+            assertNotNull(state().memo)
+            verify(exactly = 0) { preselectSwapAsset.observe() }
+        }
+
+    @Test
+    fun `Pay leaves the opening asset to the swap preselect`() =
+        swapForm(selected = null, args = UnifiedSendArgs(isPay = true)) {
+            runCurrent()
+
+            assertNull(selectedAsset.value)
+            verify(exactly = 1) { preselectSwapAsset.observe() }
+        }
+
+    @Test
+    fun `the asset picker is asked to list ZEC so swap mode can be left`() =
+        swapForm {
+            vm.onAssetPickerClick()
+
+            assertEquals(
+                SwapAssetPickerArgs(chainTicker = null, includeZec = true),
+                navigationRouter.forwarded.single()
+            )
+        }
+
+    // endregion
+
     // region harness
 
     private fun swapForm(
         asset: SwapAsset = btc(),
+        selected: SwapAsset? = asset,
+        args: UnifiedSendArgs = UnifiedSendArgs(),
         spendable: Zatoshi = Zatoshi(1_000_000_000),
         zecPrice: BigDecimal? = BigDecimal("50"),
         assetsError: Exception? = null,
         block: suspend Harness.() -> Unit
     ) = runTest {
-        val harness = Harness(this, asset, spendable, zecPrice, assetsError)
+        val harness = Harness(this, asset, selected, args, spendable, zecPrice, assetsError)
         val collection = backgroundScope.launch { harness.vm.state.collect() }
         runCurrent()
         harness.block()
@@ -452,12 +492,15 @@ class UnifiedSendVMTest {
     private class Harness(
         private val scope: TestScope,
         asset: SwapAsset,
+        selected: SwapAsset?,
+        args: UnifiedSendArgs,
         spendable: Zatoshi,
         zecPrice: BigDecimal?,
         assetsError: Exception?,
     ) {
-        val selectedAsset = MutableStateFlow<SwapAsset?>(asset)
+        val selectedAsset = MutableStateFlow(selected)
         val requestSwapQuote = mockk<RequestSwapQuoteUseCase>(relaxed = true)
+        val preselectSwapAsset = mockk<PreselectSwapAssetUseCase> { every { observe() } returns emptyFlow<Unit>() }
         val navigationRouter = RecordingNavigationRouter()
 
         private val assetsData =
@@ -474,6 +517,8 @@ class UnifiedSendVMTest {
             mockk<SwapRepository>(relaxed = true) {
                 every { assets } returns assetsData
                 every { slippage } returns slippageFlow
+                every { this@mockk.selectedAsset } returns this@Harness.selectedAsset
+                every { select(any()) } answers { this@Harness.selectedAsset.value = firstArg() }
             }
 
         // Event buses the form listens to but these tests never publish on. Real instances, since
@@ -484,7 +529,7 @@ class UnifiedSendVMTest {
 
         val vm =
             UnifiedSendVM(
-                args = UnifiedSendArgs(),
+                args = args,
                 mapper = UnifiedSendVMMapper(),
                 getSelectedSwapAsset =
                     mockk<GetSelectedSwapAssetUseCase> { every { observe() } returns selectedAsset },
@@ -499,8 +544,7 @@ class UnifiedSendVMTest {
                                 }
                             )
                     },
-                preselectSwapAsset =
-                    mockk<PreselectSwapAssetUseCase> { every { observe() } returns emptyFlow<Unit>() },
+                preselectSwapAsset = preselectSwapAsset,
                 swapRepository = swapRepository,
                 cancelSwap = mockk(relaxed = true),
                 requestSwapQuote = requestSwapQuote,
