@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.bip39.Mnemonics
 import cash.z.ecc.android.sdk.model.SeedPhrase
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
-import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.usecase.ValidateSeedUseCase
@@ -14,6 +13,7 @@ import co.electriccoin.zcash.ui.design.component.IconButtonState
 import co.electriccoin.zcash.ui.design.component.SeedTextFieldState
 import co.electriccoin.zcash.ui.design.component.SeedWordInnerTextFieldState
 import co.electriccoin.zcash.ui.design.component.SeedWordTextFieldState
+import co.electriccoin.zcash.ui.design.component.TextSelection
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.restore.height.RestoreBDHeight
 import co.electriccoin.zcash.ui.screen.restore.info.SeedInfo
@@ -164,13 +164,11 @@ class RestoreSeedVM(
         index: Int,
         state: SeedWordInnerTextFieldState
     ) {
-        if (BuildConfig.DEBUG) {
-            val seed = validateSeed(state.value.trim().split(" "))
-            if (seed != null) {
-                prefillSeed(seed)
-            } else {
-                updateSeedWord(index, state)
-            }
+        // A single field only ever holds one word, so several words arriving at once is a paste
+        // of (part of) a phrase: spread it across the grid instead of cramming it into one box.
+        val pasted = splitPastedSeedWords(state.value)
+        if (pasted.size > 1) {
+            distributeSeedWords(index, pasted)
         } else {
             updateSeedWord(index, state)
         }
@@ -187,14 +185,20 @@ class RestoreSeedVM(
         }
     }
 
-    private fun prefillSeed(seed: SeedPhrase) {
-        seedWords.update {
-            val newSeedWords = it.toMutableList()
-            seed.split.forEachIndexed { index, word ->
-                val oldState = newSeedWords[index]
-                newSeedWords[index] = oldState.copy(innerState = oldState.innerState.copy(value = word))
+    private fun distributeSeedWords(
+        index: Int,
+        words: List<String>
+    ) {
+        seedWords.update { fields ->
+            val values = fields.map { it.innerState.value }
+            val newValues = placePastedSeedWords(values, index, words)
+            fields.mapIndexed { i, field ->
+                if (newValues[i] == field.innerState.value) {
+                    field
+                } else {
+                    field.copy(innerState = SeedWordInnerTextFieldState(newValues[i], TextSelection.End))
+                }
             }
-            newSeedWords.toList()
         }
     }
 }
