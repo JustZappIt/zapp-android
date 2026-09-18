@@ -158,6 +158,9 @@ data class ChatMessage(
     val replyToId: String? = null,
     val replyToSenderName: String? = null,
     val replyToContent: String? = null,
+    // MIME type of the quoted message. Null from clients that predate the field, which the
+    // quote block reads as a text quote.
+    val replyToContentType: String? = null,
     // The list row this message occupies. An optimistic send keeps its row when the worklet's id
     // replaces the local one, so the reconcile is an in-place update rather than a delete and an
     // insert at the same position.
@@ -177,6 +180,7 @@ data class ChatMessage(
             replyToId: String?,
             replyToSenderName: String?,
             replyToContent: String?,
+            replyToContentType: String?,
         ) =
             ChatMessage(
                 id = id,
@@ -187,6 +191,7 @@ data class ChatMessage(
                 replyToId = replyToId,
                 replyToSenderName = replyToSenderName,
                 replyToContent = replyToContent,
+                replyToContentType = replyToContentType,
             )
 
         fun from(zmMsg: ZMMessage) =
@@ -210,6 +215,7 @@ data class ChatMessage(
                 replyToId = zmMsg.replyToId,
                 replyToSenderName = zmMsg.replyToSenderName,
                 replyToContent = zmMsg.replyToContent,
+                replyToContentType = zmMsg.replyToContentType,
             )
     }
 }

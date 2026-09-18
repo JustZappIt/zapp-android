@@ -55,6 +55,8 @@ internal fun ChatRoomView(
             buildChatListItems(state.messages, state.firstUnreadMessageId)
         }
     val paidIds = remember(state.messages) { paidRequestIds(state.messages) }
+    // A reply's quote looks up the message it points at for its thumbnail.
+    val messagesById = remember(state.messages) { state.messages.associateBy { it.id } }
     var viewerMessage by remember { mutableStateOf<ChatMessage?>(null) }
     var positionedInitialMessages by remember { mutableStateOf(false) }
     val latestMessage = state.messages.lastOrNull()
@@ -70,6 +72,19 @@ internal fun ChatRoomView(
         } else if (latestMessage.isFromMe || shouldFollowLatest) {
             listState.animateScrollToItem(listItems.lastIndex)
         }
+    }
+
+    // A tapped quote lands its original a third of the way down the viewport, so it reads as
+    // "here it is" rather than being pinned to the top edge.
+    LaunchedEffect(state.scrollToMessage) {
+        val request = state.scrollToMessage ?: return@LaunchedEffect
+        val index =
+            listItems.indexOfFirst { it is ChatListItem.Message && it.message.id == request.messageId }
+        if (index >= 0) {
+            val offset = -listState.layoutInfo.viewportSize.height / QUOTE_SCROLL_VIEWPORT_DIVISOR
+            listState.animateScrollToItem(index, scrollOffset = offset)
+        }
+        state.onScrollToMessageHandled()
     }
 
     Scaffold(
@@ -148,6 +163,9 @@ internal fun ChatRoomView(
                                 message = item.message,
                                 onReplyToMessage = onReplyToMessage,
                                 onImageClick = { viewerMessage = it },
+                                quotedMessage = item.message.replyToId?.let(messagesById::get),
+                                isHighlighted = item.message.id == state.highlightedMessageId,
+                                onQuoteClick = state.onQuoteClick,
                                 modifier = Modifier.animateItem(),
                                 localPublicKey = state.localPublicKey,
                                 fiatRate = state.fiatRate,
@@ -261,6 +279,8 @@ private fun buildChatListItems(
     }
     return items
 }
+
+private const val QUOTE_SCROLL_VIEWPORT_DIVISOR = 3
 
 private fun Long.toDayKey(): Long {
     val cal = Calendar.getInstance()
