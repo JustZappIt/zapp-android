@@ -54,6 +54,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappSettingsGroup
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStepList
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSuccessHeader
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
+import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.screen.reputation.REPUTATION_BOTTOM_BAR_GAP
 import co.electriccoin.zcash.ui.screen.reputation.REPUTATION_HORIZONTAL_PADDING
@@ -143,6 +144,14 @@ private fun ListContent(state: IncreaseReputationState) {
                 }
             }
         }
+        state.liveness?.let { row ->
+            ZappSettingsGroup(
+                title = stringResource(R.string.increase_reputation_liveness_group),
+                footer = stringResource(R.string.increase_reputation_liveness_footer),
+            ) {
+                LivenessRow(row)
+            }
+        }
     }
 }
 
@@ -155,23 +164,7 @@ private fun PlatformRow(row: VerifiableRow) {
         titleColor = if (row.isVerified) c.textMuted else c.text,
         trailing = {
             if (row.isVerified) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(ROW_TRAILING_GAP),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = c.success,
-                        modifier = Modifier.size(CHECK_SIZE),
-                    )
-                    // Says the state, not just the reward: a bare "50 RP" beside a tick reads as
-                    // an offer rather than as points already banked.
-                    BasicText(
-                        text = stringResource(R.string.increase_reputation_verified_reward, row.reward.getValue()),
-                        style = ZappTheme.typography.rowSubtitle.copy(color = c.success),
-                    )
-                }
+                VerifiedTrailing(row.reward)
             } else {
                 // Two lines, right-aligned: what the account is worth in points, and what that is
                 // worth in dollars of limit. The second is the one people actually decide on.
@@ -196,6 +189,49 @@ private fun PlatformRow(row: VerifiableRow) {
 }
 
 @Composable
+private fun LivenessRow(row: LivenessRow) {
+    val c = ZappTheme.colors
+    ZappRow(
+        title = stringResource(R.string.increase_reputation_liveness_row),
+        subtitle = stringResource(R.string.increase_reputation_liveness_subtitle),
+        titleColor = if (row.isVerified) c.textMuted else c.text,
+        trailing = {
+            if (row.isVerified) {
+                VerifiedTrailing(row.reward)
+            } else {
+                BasicText(
+                    text = row.reward.getValue(),
+                    style = ZappTheme.typography.rowSubtitle.copy(color = c.accentText),
+                )
+            }
+        },
+        onClick = row.onClick.takeIf { !row.isVerified },
+    )
+}
+
+@Composable
+private fun VerifiedTrailing(reward: StringResource) {
+    val c = ZappTheme.colors
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(ROW_TRAILING_GAP),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Default.Check,
+            contentDescription = null,
+            tint = c.success,
+            modifier = Modifier.size(CHECK_SIZE),
+        )
+        // Says the state, not just the reward: a bare "50 RP" beside a tick reads as an offer
+        // rather than as points already banked.
+        BasicText(
+            text = stringResource(R.string.increase_reputation_verified_reward, reward.getValue()),
+            style = ZappTheme.typography.rowSubtitle.copy(color = c.success),
+        )
+    }
+}
+
+@Composable
 private fun RunContent(run: VerificationRun, state: IncreaseReputationState) {
     Column(verticalArrangement = Arrangement.spacedBy(REPUTATION_SECTION_GAP)) {
         if (run.stage == VerificationStage.DONE) {
@@ -216,7 +252,15 @@ private fun RunContent(run: VerificationRun, state: IncreaseReputationState) {
             )
             ZappStepList(steps = run.steps)
             if (run.stage == VerificationStage.VERIFYING) {
-                ReputationNotice(stringResource(R.string.increase_reputation_waiting_help))
+                ReputationNotice(
+                    stringResource(
+                        if (run.platform == null) {
+                            R.string.increase_reputation_liveness_waiting_help
+                        } else {
+                            R.string.increase_reputation_waiting_help
+                        },
+                    ),
+                )
             }
         }
         run.error?.let {
@@ -280,6 +324,9 @@ private fun BottomDock(state: IncreaseReputationState, uriHandler: UriHandler) {
  *
  * The user is not resumed into this session afterwards; nothing carries it across an install.
  * They come back to this screen, which is still holding the live session, and tap again.
+ *
+ * The selfie widget takes the same path with a single https link and no fallbacks: it needs a
+ * browser, which is also where the camera is.
  */
 private fun openVerifier(uriHandler: UriHandler, run: VerificationRun) {
     val candidates = listOfNotNull(run.launchUrl, run.installIntentUrl, run.storeUrl)

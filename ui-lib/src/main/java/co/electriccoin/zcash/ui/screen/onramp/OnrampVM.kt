@@ -514,10 +514,13 @@ internal class OnrampVM(
     private fun onBack() {
         val current = mutableState.value
         if (current.isSendingBaseBalanceToZec) return
-        if (current.mode == OnrampMode.CONFIRMATION) {
-            returnToAmountEntry(current)
-        } else {
-            navigationRouter.back()
+        when {
+            current.mode == OnrampMode.CONFIRMATION -> returnToAmountEntry(current)
+
+            // A finished order: Back offers another purchase before it offers Home.
+            current.isSettled -> onRetry()
+
+            else -> navigationRouter.back()
         }
     }
 

@@ -26,6 +26,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import xyz.justzappit.evm.abi.AbiAddress
 import xyz.justzappit.evm.abi.AbiEncoder
 import xyz.justzappit.evm.abi.AbiUint
 import xyz.justzappit.evm.hd.EvmKey
@@ -44,6 +45,7 @@ import xyz.justzappit.offramp.account.Erc4337SubmitterProvider
 import xyz.justzappit.offramp.account.OfframpAccountProvider
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
 import xyz.justzappit.offramp.config.P2pNetworks
+import xyz.justzappit.offramp.liveness.LivenessCalls
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.DiamondCalls
 import xyz.justzappit.offramp.p2p.InMemoryOrderRecipientUpiCache
@@ -51,6 +53,7 @@ import xyz.justzappit.offramp.p2p.InMemoryRelayIdentityStore
 import xyz.justzappit.offramp.p2p.OrderReadSource
 import xyz.justzappit.offramp.p2p.OrderSnapshot
 import xyz.justzappit.offramp.p2p.OrderType
+import xyz.justzappit.offramp.p2p.PlaceOrderArgs
 import xyz.justzappit.offramp.p2p.RelayIdentities
 import xyz.justzappit.offramp.p2p.SubgraphClient
 import xyz.justzappit.offramp.p2p.Usdc6
@@ -59,14 +62,22 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class DirectOnrampDriverPlacementTest {
     private val owner = EvmKeyDerivation.derive(MNEMONIC, accountIndex = 0)
     private val network = P2pNetworks.SEPOLIA
     private val routingCalls = mutableListOf<ByteArray>()
     private var screeningEnvelope: JsonObject? = null
+    private var screeningPath: String? = null
+    private var screeningApproves = false
+
+    /** The `callData` of the first UserOp the bundler sees, at which point the mock stops the run. */
+    private var submittedCallData: String? = null
 
     private val getAddressSelector = ThirdwebSmartAccount.getAddressCalldata(owner.address).selector()
     private val getPriceSelector = DiamondCalls.getPriceConfigCalldata(CurrencyCode.Inr).selector()
@@ -82,27 +93,45 @@ class DirectOnrampDriverPlacementTest {
                 fiatAmount = QUOTE.fiatAmount,
                 orderType = OrderType.BUY,
             ).selector()
+    private val getNonceSelector =
+        AbiEncoder
+            .encodeFunctionCall("getNonce(address,uint192)", listOf(AbiAddress(SMART_ACCOUNT), AbiUint(bigIntegerZero)))
+            .selector()
 
     private val rpcHttp =
         HttpClient(
             MockEngine { request ->
                 val body = request.body.jsonObject()
-                val calldata =
-                    body
-                        .getValue("params")
-                        .jsonArray[0]
-                        .jsonObject
-                        .getValue("data")
-                        .jsonPrimitive
-                        .content
-                        .hexToBytes()
                 val result =
-                    when (calldata.selector()) {
-                        getAddressSelector -> SMART_ACCOUNT.bytes.padLeftToWord()
-                        getPriceSelector -> priceConfigResult()
-                        getProcessingTimeSelector -> processingTimeResult()
-                        getAssignableSelector -> recordRoutingCall(calldata)
-                        else -> error("Unexpected placement eth_call: 0x${calldata.toHex()}")
+                    when (body.getValue("method").jsonPrimitive.content) {
+                        // A deployed account, so the UserOp carries no initCode.
+                        "eth_getCode" -> {
+                            DEPLOYED_CODE
+                        }
+
+                        "eth_call" -> {
+                            val calldata =
+                                body
+                                    .getValue("params")
+                                    .jsonArray[0]
+                                    .jsonObject
+                                    .getValue("data")
+                                    .jsonPrimitive
+                                    .content
+                                    .hexToBytes()
+                            when (calldata.selector()) {
+                                getAddressSelector -> SMART_ACCOUNT.bytes.padLeftToWord()
+                                getPriceSelector -> priceConfigResult()
+                                getProcessingTimeSelector -> processingTimeResult()
+                                getAssignableSelector -> recordRoutingCall(calldata)
+                                getNonceSelector -> ByteArray(WORD_BYTES)
+                                else -> error("Unexpected placement eth_call: 0x${calldata.toHex()}")
+                            }
+                        }
+
+                        else -> {
+                            error("Unexpected RPC method on the placement path: $body")
+                        }
                     }
                 respond(
                     content = """{"jsonrpc":"2.0","id":1,"result":"0x${result.toHex()}"}""",
@@ -127,15 +156,57 @@ class DirectOnrampDriverPlacementTest {
         HttpClient(
             MockEngine { request ->
                 screeningEnvelope = request.body.jsonObject()
+                screeningPath = request.url.encodedPath
                 respond(
-                    content = """{"approved":false,"message":"test stop"}""",
+                    content =
+                        if (screeningApproves) {
+                            """{"approved":true,"activity_log_id":"a-1"}"""
+                        } else {
+                            """{"approved":false,"message":"test stop"}"""
+                        },
                     status = HttpStatusCode.OK,
                     headers = JSON_HEADERS,
                 )
             },
         )
 
-    private val bundlerHttp = HttpClient(MockEngine { error("rejected screening must stop before submission") })
+    /**
+     * Answers the gas-price read, then captures the UserOp the paymaster stub is asked for — the
+     * first call that carries `callData` — and stops the run there. Nothing is ever submitted.
+     */
+    private val bundlerHttp =
+        HttpClient(
+            MockEngine { request ->
+                val body = request.body.jsonObject()
+                when (body.getValue("method").jsonPrimitive.content) {
+                    "pimlico_getUserOperationGasPrice" -> {
+                        respond(
+                            content =
+                                """{"jsonrpc":"2.0","id":1,"result":{"standard":""" +
+                                    """{"maxFeePerGas":"0x1","maxPriorityFeePerGas":"0x1"}}}""",
+                            status = HttpStatusCode.OK,
+                            headers = JSON_HEADERS,
+                        )
+                    }
+
+                    "pm_getPaymasterStubData" -> {
+                        submittedCallData =
+                            body
+                                .getValue("params")
+                                .jsonArray[0]
+                                .jsonObject
+                                .getValue("callData")
+                                .jsonPrimitive
+                                .content
+                        error("captured the UserOp; nothing past this point is under test")
+                    }
+
+                    else -> {
+                        error("rejected screening must stop before submission: $body")
+                    }
+                }
+            },
+        ) { install(ContentNegotiation) { json() } }
 
     @AfterTest
     fun closeClients() {
@@ -167,6 +238,67 @@ class DirectOnrampDriverPlacementTest {
             assertEquals("1-3 minutes", transaction.getValue("estimated_processing_time").jsonPrimitive.content)
             assertEquals("India", user.getValue("country").jsonPrimitive.content)
         }
+
+    @Test
+    fun `an integrator order is screened on the b2b intake and placed on the integrator`() =
+        runTest {
+            // ☠ Two things change with the route, and only two. The consumer intake would score
+            // this wallet as a new account and refuse it; the Diamond would revert it for having
+            // no reputation. Everything else — circle, fiat cap, receipt — is the direct path's.
+            screeningApproves = true
+
+            val statuses = driver().start(QUOTE.copy(route = OnrampRoute.INTEGRATOR)).toList()
+
+            assertEquals("/screening/activity-logs/b2b-buy-order", screeningPath)
+            val envelope = checkNotNull(screeningEnvelope)
+            assertFalse(envelope.containsKey("type"))
+            // Decrypts under the B2B AAD: the wrong one would throw here.
+            val payload = decryptScreeningPayload(envelope, aadPrefix = "b2b_buy_order")
+            val transaction = payload.getValue("transaction_details").jsonObject
+            assertEquals("539.26", transaction.getValue("fiat_amount").jsonPrimitive.content)
+            assertEquals(OnrampScreeningConfig.DEFAULT_B2B_DOMAIN, payload.getValue("domain").jsonPrimitive.content)
+
+            // The UserOp wraps `execute(to, value, data)`: `to` is the integrator, `data` is buyUsdc.
+            val callData = assertNotNull(submittedCallData, "the run must reach the bundler")
+            val executeArgs = callData.removePrefix("0x").drop(SELECTOR_HEX)
+            assertEquals(
+                P2pNetworks.SEPOLIA_LIVENESS_INTEGRATOR.lowercase().removePrefix("0x"),
+                executeArgs.take(WORD_HEX).takeLast(ADDRESS_HEX),
+            )
+            val inner = executeArgs.drop(WORD_HEX * EXECUTE_HEAD_WORDS)
+            assertTrue(inner.startsWith("88662523"), "buyUsdc must be the inner call, got ${inner.take(SELECTOR_HEX)}")
+            assertContentEquals(expectedRoutingCall(QUOTE.fiatAmount), routingCalls.first())
+            // The mock stops the run at the bundler; what matters is that it got there.
+            assertEquals(OnrampFailureCode.UPSTREAM_FAILED, assertIs<OnrampStatus.Failed>(statuses.last()).code)
+        }
+
+    @Test
+    fun `a direct order stays on the consumer intake and the diamond`() =
+        runTest {
+            screeningApproves = true
+
+            driver().start(QUOTE).toList()
+
+            assertEquals("/screening/activity-logs", screeningPath)
+            assertEquals("buy_order", checkNotNull(screeningEnvelope).getValue("type").jsonPrimitive.content)
+            val executeArgs = assertNotNull(submittedCallData).removePrefix("0x").drop(SELECTOR_HEX)
+            assertEquals(
+                network.diamondAddress.lowercaseHex.removePrefix("0x"),
+                executeArgs.take(WORD_HEX).takeLast(ADDRESS_HEX),
+            )
+            val placeOrderSelector = DiamondCalls.placeOrderCalldata(anyPlaceOrder()).selector()
+            assertTrue(executeArgs.drop(WORD_HEX * EXECUTE_HEAD_WORDS).startsWith(placeOrderSelector))
+        }
+
+    private fun anyPlaceOrder() =
+        PlaceOrderArgs(
+            relayPubKeyEthCrypto = "",
+            usdcAmount = QUOTE.netUsdc,
+            recipientAddress = SMART_ACCOUNT,
+            orderType = OrderType.BUY,
+            currency = CurrencyCode.Inr,
+            circleId = CIRCLE_ID,
+        )
 
     private fun driver(): DirectOnrampDriver {
         val accountProvider = FixedAccountProvider(owner)
@@ -220,7 +352,7 @@ class DirectOnrampDriverPlacementTest {
             orderType = OrderType.BUY,
         )
 
-    private fun decryptScreeningPayload(envelope: JsonObject): JsonObject {
+    private fun decryptScreeningPayload(envelope: JsonObject, aadPrefix: String = "buy_order"): JsonObject {
         val subject = envelope.getValue("user_address").jsonPrimitive.content
         val timestamp = envelope.getValue("timestamp").jsonPrimitive.content
         val ciphertext = Base64.decode(envelope.getValue("encrypted_payload").jsonPrimitive.content)
@@ -229,7 +361,7 @@ class DirectOnrampDriverPlacementTest {
                 .get(AES.GCM)
                 .keyDecoder()
                 .decodeFromByteArrayBlocking(AES.Key.Format.RAW, SCREENING_KEY_HEX.hexToBytes())
-        val plaintext = key.cipher().decryptBlocking(ciphertext, "buy_order|$subject|$timestamp".encodeToByteArray())
+        val plaintext = key.cipher().decryptBlocking(ciphertext, "$aadPrefix|$subject|$timestamp".encodeToByteArray())
         return Json.parseToJsonElement(plaintext.decodeToString()).jsonObject
     }
 
@@ -304,6 +436,16 @@ class DirectOnrampDriverPlacementTest {
             "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
         const val NOW_MILLIS = 1_756_450_000_123L
         const val SELECTOR_BYTES = 4
+        const val SELECTOR_HEX = 8
+        const val WORD_BYTES = 32
+        const val WORD_HEX = 64
+        const val ADDRESS_HEX = 40
+
+        /** `execute(address,uint256,bytes)`: to, value, the bytes' offset word, then its length word. */
+        const val EXECUTE_HEAD_WORDS = 4
+
+        /** Any non-empty code: the account is deployed. */
+        val DEPLOYED_CODE: ByteArray = byteArrayOf(0x60.toByte(), 0x80.toByte())
 
         val CIRCLE_ID: BigInteger = bigIntegerValueOf(7)
         val ASSIGN_UP_TO: BigInteger = bigIntegerValueOf(3)

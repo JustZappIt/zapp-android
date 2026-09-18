@@ -245,6 +245,30 @@ androidComponents {
             )
         )
         variant.buildConfigFields?.put(
+            "LIVENESS_API_URL",
+            BuildConfigField(
+                type = "String",
+                value = "\"${project.property("LIVENESS_API_URL")?.toString().orEmpty()}\"",
+                comment = "Liveness verifier base URL; without it the selfie check reports itself unavailable"
+            )
+        )
+        variant.buildConfigFields?.put(
+            "LIVENESS_API_KEY",
+            BuildConfigField(
+                type = "String",
+                value = "\"${project.property("LIVENESS_API_KEY")?.toString().orEmpty()}\"",
+                comment = "Liveness verifier tenant key; ships in the APK by design, see LivenessConfig"
+            )
+        )
+        variant.buildConfigFields?.put(
+            "LIVENESS_TENANT",
+            BuildConfigField(
+                type = "String",
+                value = "\"${project.property("LIVENESS_TENANT")?.toString().orEmpty()}\"",
+                comment = "Liveness verifier tenant the key belongs to"
+            )
+        )
+        variant.buildConfigFields?.put(
             "P2P_RPC_URL_BASE_SEPOLIA",
             BuildConfigField(
                 type = "String",
