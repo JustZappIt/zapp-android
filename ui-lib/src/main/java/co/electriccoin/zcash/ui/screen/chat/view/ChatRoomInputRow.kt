@@ -53,6 +53,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.LocalKeyboardManager
@@ -60,6 +61,7 @@ import co.electriccoin.zcash.ui.design.animation.ZappMotion
 import co.electriccoin.zcash.ui.design.animation.pressScale
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.getValue
+import co.electriccoin.zcash.ui.screen.chat.model.ChatMessage
 import co.electriccoin.zcash.ui.screen.chat.room.ChatRoomInputState
 import kotlinx.coroutines.launch
 
@@ -108,6 +110,8 @@ internal fun InputRow(state: ChatRoomInputState) {
             ReplyPreviewStrip(
                 senderName = reply.senderName,
                 content = reply.content,
+                contentType = reply.contentType,
+                original = reply.original,
                 onDismiss = reply.onDismiss,
             )
         }
@@ -237,9 +241,13 @@ internal fun InputRow(state: ChatRoomInputState) {
 private fun ReplyPreviewStrip(
     senderName: String,
     content: String,
+    contentType: String,
+    original: ChatMessage,
     onDismiss: () -> Unit,
 ) {
     val c = ZappTheme.colors
+    val kind = replyQuoteKind(contentType)
+    val icon = replyQuoteIcon(kind)
 
     Box(
         modifier =
@@ -275,10 +283,29 @@ private fun ReplyPreviewStrip(
                 style = ZappTheme.typography.chip.copy(color = c.accent),
                 maxLines = 1,
             )
-            BasicText(
-                text = content,
-                style = ZappTheme.typography.caption.copy(color = c.textMuted),
-                maxLines = 1,
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = c.textMuted,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+                BasicText(
+                    text = replyQuoteLine(kind, content),
+                    style = ZappTheme.typography.caption.copy(color = c.textMuted),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (kind.showsThumbnail) {
+            ReplyQuoteThumbnail(
+                message = original,
+                size = 32.dp,
+                modifier = Modifier.padding(end = 8.dp),
             )
         }
         Box(

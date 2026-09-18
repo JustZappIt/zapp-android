@@ -45,7 +45,7 @@ internal fun bubbleKind(message: ChatMessage): BubbleKind {
     }
 }
 
-private fun resolveContentType(message: ChatMessage): String {
+internal fun resolveContentType(message: ChatMessage): String {
     val declared = message.contentType
     return when {
         !declared.isNullOrEmpty() && declared != CONTENT_TYPE_TEXT_PLAIN -> {

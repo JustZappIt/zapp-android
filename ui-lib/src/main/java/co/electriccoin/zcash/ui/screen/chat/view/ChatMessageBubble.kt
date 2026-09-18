@@ -3,7 +3,9 @@
 
 package co.electriccoin.zcash.ui.screen.chat.view
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -45,6 +48,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -73,6 +77,12 @@ internal fun MessageBubble(
     modifier: Modifier = Modifier,
     onReplyToMessage: ((ChatMessage) -> Unit)? = null,
     onImageClick: ((ChatMessage) -> Unit)? = null,
+    /** The message this one quotes, when the room has it; supplies the quote's thumbnail. */
+    quotedMessage: ChatMessage? = null,
+    /** Briefly true after a quote pointing at this message was tapped. */
+    isHighlighted: Boolean = false,
+    /** Tapping the quote block, with the quoted message's id. */
+    onQuoteClick: ((String) -> Unit)? = null,
     localPublicKey: String? = null,
     fiatRate: ZecFiatRate? = null,
     paidRequestIds: Set<String> = emptySet(),
@@ -90,9 +100,17 @@ internal fun MessageBubble(
     val haptic = LocalHapticFeedback.current
 
     var offsetX by remember { mutableFloatStateOf(0f) }
+    val highlight by
+        animateColorAsState(
+            targetValue = if (isHighlighted) c.accent.copy(alpha = HIGHLIGHT_ALPHA) else Color.Transparent,
+            label = "quoteHighlight",
+        )
 
     Box(
-        modifier = modifier.fillMaxWidth(),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .background(highlight, RectangleShape),
         contentAlignment = if (isFromMe) Alignment.CenterEnd else Alignment.CenterStart,
     ) {
         SwipeReplyIndicator(offset = offsetX, isFromMe = isFromMe)
@@ -130,17 +148,26 @@ internal fun MessageBubble(
                 horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
                 modifier = bubbleGroupModifier(isText = isText, hasReply = hasReply, isFromMe = isFromMe),
             ) {
-                if (hasReply) {
+                val quotedId = message.replyToId
+                if (quotedId != null) {
                     Box(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
                                 .background(c.surfaceInput, RectangleShape)
-                                .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp),
+                                .then(
+                                    if (onQuoteClick != null) {
+                                        Modifier.clickable { onQuoteClick(quotedId) }
+                                    } else {
+                                        Modifier
+                                    }
+                                ).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp),
                     ) {
                         QuotedReplyBlock(
                             senderName = message.replyToSenderName,
                             content = message.replyToContent,
+                            contentType = message.replyToContentType,
+                            quotedMessage = quotedMessage,
                         )
                     }
                 }
@@ -438,10 +465,25 @@ private fun Modifier.longPressToCopy(
     }
 }
 
+/**
+ * The quote above a reply's body. A quoted photo, file, payment request, transaction, address
+ * or location is named by its kind, with a thumbnail when the room still has the picture; a
+ * quote from a client that predates `replyToContentType` reads as text, as before.
+ */
 @Composable
-private fun QuotedReplyBlock(senderName: String?, content: String?) {
+private fun QuotedReplyBlock(
+    senderName: String?,
+    content: String?,
+    contentType: String?,
+    quotedMessage: ChatMessage?,
+) {
     val c = ZappTheme.colors
-    Row(modifier = Modifier.fillMaxWidth()) {
+    val kind = replyQuoteKind(contentType)
+    val icon = replyQuoteIcon(kind)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Box(
             modifier =
                 Modifier
@@ -449,21 +491,48 @@ private fun QuotedReplyBlock(senderName: String?, content: String?) {
                     .height(36.dp)
                     .background(c.accent),
         )
-        Column(modifier = Modifier.padding(start = 8.dp)) {
+        Column(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp),
+        ) {
             BasicText(
                 text = senderName ?: stringResource(R.string.chat_room_reply_unknown_sender),
                 style = ZappTheme.typography.chip.copy(color = c.accent),
                 maxLines = 1,
             )
-            BasicText(
-                text = content ?: "",
-                style = ZappTheme.typography.caption.copy(color = c.textMuted),
-                maxLines = 1,
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = c.textMuted,
+                        modifier = Modifier.size(QUOTE_ICON_SIZE.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+                BasicText(
+                    text = replyQuoteLine(kind, content),
+                    style = ZappTheme.typography.caption.copy(color = c.textMuted),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (kind.showsThumbnail && quotedMessage != null) {
+            ReplyQuoteThumbnail(
+                message = quotedMessage,
+                size = QUOTE_THUMBNAIL_SIZE.dp,
+                modifier = Modifier.padding(start = 8.dp),
             )
         }
     }
 }
 
+private const val HIGHLIGHT_ALPHA = 0.18f
+private const val QUOTE_ICON_SIZE = 14
+private const val QUOTE_THUMBNAIL_SIZE = 36
 private const val OUTGOING_META_ALPHA = 0.7f
 private const val OUTGOING_STATUS_ALPHA = 0.55f
 private const val MAX_BUBBLE_WIDTH = 280

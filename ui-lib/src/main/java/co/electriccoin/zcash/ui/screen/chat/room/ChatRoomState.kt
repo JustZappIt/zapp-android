@@ -25,6 +25,13 @@ data class ChatRoomState(
     val messages: List<ChatMessage>,
     /** First message below the transient unread divider for this room entry. */
     val firstUnreadMessageId: String?,
+    /** The message a tapped quote pointed at, flashed briefly once the list has scrolled to it. */
+    val highlightedMessageId: String?,
+    /** A pending scroll to a quoted message. The view clears it via [onScrollToMessageHandled]. */
+    val scrollToMessage: ChatRoomScrollRequest?,
+    /** Tapping a reply's quote block; the argument is the quoted message's id. */
+    val onQuoteClick: (String) -> Unit,
+    val onScrollToMessageHandled: () -> Unit,
     /** mediaId → transfer progress (0..1) for in-flight media uploads/downloads. */
     val mediaTransferProgress: Map<String, Float>,
     val localPublicKey: String?,
@@ -99,8 +106,22 @@ data class ChatRoomInputState(
 
 data class ChatRoomReplyPreviewState(
     val senderName: String,
+    /** The summary line that will ship as `replyToContent`. */
     val content: String,
+    /** The quoted message's resolved MIME type, which will ship as `replyToContentType`. */
+    val contentType: String,
+    /** The quoted message itself, for the thumbnail a quoted photo shows. */
+    val original: ChatMessage,
     val onDismiss: () -> Unit,
+)
+
+/**
+ * A one-shot scroll request. [nonce] makes two taps on the same quote distinct, so the second
+ * still scrolls after the user has moved away.
+ */
+data class ChatRoomScrollRequest(
+    val messageId: String,
+    val nonce: Long,
 )
 
 data class ChatRoomAttachmentSheetState(
