@@ -56,6 +56,9 @@ import co.electriccoin.zcash.ui.screen.gift.GiftClaimArgs
 import co.electriccoin.zcash.ui.screen.gift.model.GIFT_LINK_HOST
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkIntake
 import co.electriccoin.zcash.ui.screen.gift.model.PendingGiftLinkStore
+import co.electriccoin.zcash.ui.screen.reputation.increase.IncreaseReputationArgs
+import co.electriccoin.zcash.ui.screen.reputation.increase.LivenessReturnInbox
+import co.electriccoin.zcash.ui.screen.reputation.increase.LivenessReturnLink
 import co.electriccoin.zcash.ui.screen.reputation.increase.ReclaimReturnLink
 import co.electriccoin.zcash.ui.screen.scan.thirdparty.ThirdPartyScan
 import co.electriccoin.zcash.ui.screen.splash.ZappSplashAnimation
@@ -69,6 +72,8 @@ import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
 import org.koin.androidx.viewmodel.ext.android.viewModel
+import xyz.justzappit.offramp.liveness.LivenessConfig
+import xyz.justzappit.offramp.liveness.LivenessReturn
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -95,6 +100,8 @@ class MainActivity : FragmentActivity() {
     private val chatNotificationTiming: ChatNotificationTiming by inject()
 
     private val pendingGiftLinks: PendingGiftLinkStore by inject()
+    private val livenessReturns: LivenessReturnInbox by inject()
+    private val livenessConfig: LivenessConfig by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -138,6 +145,8 @@ class MainActivity : FragmentActivity() {
 
             isReclaimReturnUri(intent, data) -> openReclaimReturn(intent, data, resumeReclaim)
 
+            isLivenessReturnUri(intent, data) -> openLivenessReturn(intent, data, resumeReclaim)
+
             isGiftUri(intent, data) -> openGiftClaim(intent, data)
 
             else -> navigationRouter.forward(ThirdPartyScan)
@@ -164,6 +173,37 @@ class MainActivity : FragmentActivity() {
                 platformName = data.getQueryParameter(ReclaimReturnLink.PLATFORM_QUERY),
                 currencyCode = data.getQueryParameter(ReclaimReturnLink.CURRENCY_QUERY),
             )?.let { navigationRouter.forward(it) }
+    }
+
+    private fun isLivenessReturnUri(intent: Intent, data: Uri): Boolean =
+        intent.action == Intent.ACTION_VIEW &&
+            LivenessReturnLink.SCHEME.equals(data.scheme, ignoreCase = true) &&
+            LivenessReturnLink.HOST.equals(data.host, ignoreCase = true)
+
+    /**
+     * The code on this link is the only copy of the result. A live run picks it out of the inbox;
+     * a cold process gets the route rebuilt from `state` and the new run drains the inbox itself.
+     * A return with no usable state on a cold start has no route to rebuild and is dropped — the
+     * user starts again. A build with the check switched off drops every return: nothing in it
+     * could have opened the session.
+     */
+    private fun openLivenessReturn(
+        intent: Intent,
+        data: Uri,
+        coldStart: Boolean,
+    ) {
+        intent.data = null
+        if (!livenessConfig.enabled) return
+        val ret =
+            LivenessReturnLink.parse(
+                code = data.getQueryParameter(LivenessReturn.CODE_QUERY),
+                error = data.getQueryParameter(LivenessReturn.ERROR_QUERY),
+                state = data.getQueryParameter(LivenessReturn.STATE_QUERY),
+            ) ?: return
+        livenessReturns.put(ret)
+        if (coldStart) {
+            ret.currency?.let { navigationRouter.forward(IncreaseReputationArgs(currency = it)) }
+        }
     }
 
     private fun openGiftClaim(intent: Intent, data: Uri) {

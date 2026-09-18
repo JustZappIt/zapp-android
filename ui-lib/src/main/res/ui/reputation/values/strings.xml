@@ -69,6 +69,27 @@
     <string name="increase_reputation_error_gas">We can\'t cover the network fee right now. Try again in a little while.</string>
     <string name="increase_reputation_error_network">We couldn\'t reach the network. Try again in a moment.</string>
 
+    <string name="increase_reputation_liveness_group">NO ACCOUNT NEEDED</string>
+    <string name="increase_reputation_liveness_row">Selfie check</string>
+    <string name="increase_reputation_liveness_subtitle">A short face check in your browser</string>
+    <string name="increase_reputation_liveness_reward">$%1$s limit</string>
+    <string name="increase_reputation_liveness_footer">Unlocks buying up to this amount per order through Zapp\'s own onramp. One person, one wallet: the same face can\'t verify a second wallet.</string>
+
+    <string name="increase_reputation_liveness_step_open">Open the check</string>
+    <string name="increase_reputation_liveness_step_selfie">Take a selfie</string>
+
+    <string name="increase_reputation_liveness_ready">Your browser will open for a short selfie check. Come back to Zapp when it says you\'re done.</string>
+    <string name="increase_reputation_liveness_waiting">Waiting for the selfie check…</string>
+    <string name="increase_reputation_liveness_waiting_help">Keep Zapp open. If you closed the check before finishing, cancel here and start again.</string>
+    <string name="increase_reputation_liveness_done">Selfie check passed</string>
+    <string name="increase_reputation_liveness_open">Open the check</string>
+
+    <string name="increase_reputation_liveness_error_unavailable">The selfie check isn\'t available in this version of Zapp.</string>
+    <string name="increase_reputation_liveness_error_not_live">The check couldn\'t confirm a live face. Try again in better light, with your face filling the frame.</string>
+    <string name="increase_reputation_liveness_error_already_claimed">This face has already verified another wallet. Each person can verify one wallet.</string>
+    <string name="increase_reputation_liveness_error_expired">That check expired. Start it again to get a fresh one.</string>
+    <string name="increase_reputation_liveness_error_rejected">Zapp\'s onramp couldn\'t accept that check. If this keeps happening, the problem is on our side, not yours.</string>
+
     <string name="increase_reputation_info_title">How verifying works</string>
     <string name="increase_reputation_info_step_pick">Pick an account you already have.</string>
     <string name="increase_reputation_info_step_open">Zapp opens Reclaim, a separate app that does the checking. Install it if you haven\'t — it\'s free.</string>
