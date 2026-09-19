@@ -213,6 +213,19 @@ androidComponents {
             )
         )
         variant.buildConfigFields?.put(
+            "IS_GROUP_LINKS_ENABLED",
+            BuildConfigField(
+                type = "boolean",
+                value =
+                    (
+                        project.property("ZAPP_GROUP_LINKS_ENABLED").toString().toBoolean() ||
+                            variant.buildType == "debug" ||
+                            variant.productFlavors.any { it.second == DistributionDimension.INTERNAL.value }
+                    ).toString(),
+                comment = "Whether group invite links are handled and offered"
+            )
+        )
+        variant.buildConfigFields?.put(
             "P2P_SCREENING_API_URL",
             BuildConfigField(
                 type = "String",
