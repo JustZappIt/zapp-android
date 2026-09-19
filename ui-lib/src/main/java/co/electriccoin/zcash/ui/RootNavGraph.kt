@@ -14,6 +14,7 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
+import androidx.navigation.toRoute
 import co.electriccoin.zcash.ui.common.compose.LocalActivity
 import co.electriccoin.zcash.ui.common.migration.MigrationAppHooks
 import co.electriccoin.zcash.ui.common.provider.ApplicationStateProvider
@@ -33,6 +34,8 @@ import co.electriccoin.zcash.ui.design.util.LocalNavController
 import co.electriccoin.zcash.ui.screen.flexa.FlexaViewModel
 import co.electriccoin.zcash.ui.screen.gift.GiftClaimArgs
 import co.electriccoin.zcash.ui.screen.gift.model.PendingGiftLinkStore
+import co.electriccoin.zcash.ui.screen.grouplink.GroupInviteCoordinator
+import co.electriccoin.zcash.ui.screen.grouplink.GroupInvitePreviewArgs
 import co.electriccoin.zcash.ui.screen.warning.viewmodel.StorageCheckViewModel
 import kotlinx.serialization.Serializable
 import org.koin.androidx.compose.koinViewModel
@@ -53,6 +56,7 @@ fun RootNavGraph(
     val pendingGiftLinks = koinInject<PendingGiftLinkStore>()
     val provingParams = koinInject<ProvingParamsProvider>()
     val pendingGiftClaimCoordinator = koinInject<PendingGiftClaimCoordinator>()
+    val groupInvites = koinInject<GroupInviteCoordinator>()
     val navController = LocalNavController.current
     val activity = LocalActivity.current
     val navigator: Navigator =
@@ -88,6 +92,13 @@ fun RootNavGraph(
         applicationStateProvider = applicationStateProvider,
         navController = navController,
         coordinator = pendingGiftClaimCoordinator,
+        navigationRouter = navigationRouter,
+    )
+
+    OpenGroupInvitesWhenReady(
+        secretState = secretState,
+        navController = navController,
+        coordinator = groupInvites,
         navigationRouter = navigationRouter,
     )
 
@@ -165,6 +176,31 @@ private fun ResumeGiftClaimsOnForeground(
         if (secretState != SecretState.READY) return@LaunchedEffect
         applicationStateProvider.observeOnForeground().collect {
             resumePendingGiftClaim(navController, coordinator, navigationRouter)
+        }
+    }
+}
+
+/**
+ * Opens a held group invite once there is a wallet, finished onboarding and a chat identity, which
+ * covers a link tapped before install, during onboarding, or before a restart. The lock screen, if
+ * any, sits above this, so the preview is what the person sees on unlocking.
+ */
+@Composable
+private fun OpenGroupInvitesWhenReady(
+    secretState: SecretState,
+    navController: NavHostController,
+    coordinator: GroupInviteCoordinator,
+    navigationRouter: NavigationRouter,
+) {
+    LaunchedEffect(coordinator, secretState) {
+        if (secretState != SecretState.READY) return@LaunchedEffect
+        coordinator.invitesToOpen().collect { token ->
+            // The back stack restored after process death may already show this one.
+            val current = navController.currentBackStackEntry
+            val alreadyOpen =
+                current?.destination?.hasRoute<GroupInvitePreviewArgs>() == true &&
+                    current.toRoute<GroupInvitePreviewArgs>().token == token
+            if (!alreadyOpen) navigationRouter.forward(GroupInvitePreviewArgs(token))
         }
     }
 }

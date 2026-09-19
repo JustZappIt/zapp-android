@@ -36,7 +36,8 @@ class GroupInviteLinksTest {
     @Test
     fun `canonical refuses what is not a link or is too long to be an honest one`() {
         assertNull(GroupInviteLinks.canonical("https://gift.justzappit.xyz/c/v1#abc"))
-        assertNull(GroupInviteLinks.canonical("https://join.justzappit.xyz/g/v1#" + "A".repeat(GroupInviteLinks.MAX_LENGTH)))
+        val oversized = "https://join.justzappit.xyz/g/v1#" + "A".repeat(GroupInviteLinks.MAX_LENGTH)
+        assertNull(GroupInviteLinks.canonical(oversized))
     }
 
     @Test

@@ -82,6 +82,8 @@ import co.electriccoin.zcash.ui.screen.gift.GiftCardListScreen
 import co.electriccoin.zcash.ui.screen.gift.GiftCardScreen
 import co.electriccoin.zcash.ui.screen.gift.GiftClaimArgs
 import co.electriccoin.zcash.ui.screen.gift.GiftClaimScreen
+import co.electriccoin.zcash.ui.screen.grouplink.GroupInvitePreviewArgs
+import co.electriccoin.zcash.ui.screen.grouplink.GroupInvitePreviewScreen
 import co.electriccoin.zcash.ui.screen.heightinfo.HeightInfoArgs
 import co.electriccoin.zcash.ui.screen.heightinfo.HeightInfoScreen
 import co.electriccoin.zcash.ui.screen.home.AndroidHome
@@ -297,6 +299,7 @@ fun NavGraphBuilder.walletNavGraph(
         composable<GiftCardArgs> { GiftCardScreen() }
         composable<GiftCardListArgs> { GiftCardListScreen() }
         composable<GiftClaimArgs> { GiftClaimScreen(it.toRoute()) }
+        composable<GroupInvitePreviewArgs> { GroupInvitePreviewScreen(it.toRoute()) }
         composable<ChooseServerArgs> { ChooseServerScreen() }
         composable<P2pTransactionsArgs> { P2pTransactionsScreen() }
         composable<P2pPaymentMethodArgs> { P2pPaymentMethodScreen() }

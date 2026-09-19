@@ -3,16 +3,8 @@
 
 package co.electriccoin.zcash.ui.screen.grouplink.model
 
-import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
-import co.electriccoin.zcash.preference.api.PreferenceProvider
-import co.electriccoin.zcash.preference.model.entry.PreferenceKey
-import co.electriccoin.zcash.ui.common.provider.EncryptedJsonStore
 import co.electriccoin.zcash.ui.screen.grouplink.model.GroupInviteLinksTest.Companion.LINK
 import co.electriccoin.zcash.ui.screen.grouplink.model.GroupInviteLinksTest.Companion.PAYLOAD
-import io.mockk.coEvery
-import io.mockk.mockk
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -28,15 +20,7 @@ class PendingGroupInviteStoreTest {
     private var clock = START
 
     /** A fresh store over the same preferences is what the app sees after process death. */
-    private fun store() =
-        PendingGroupInviteStore(
-            EncryptedJsonStore(
-                mockk<EncryptedPreferenceProvider>().also { coEvery { it.invoke() } returns preferences },
-                PendingGroupInviteStore.PREF_KEY,
-                PendingGroupInvites.serializer(),
-                strict = true,
-            ),
-        ) { clock }
+    private fun store() = pendingInviteStore(preferences) { clock }
 
     private fun link(n: Int) = "https://join.justzappit.xyz/g/v1#${PAYLOAD.dropLast(1)}$n"
 
@@ -64,7 +48,8 @@ class PendingGroupInviteStoreTest {
     fun `stores the canonical form, without the query`() =
         runTest {
             val store = store()
-            val token = assertIs<GroupInviteIntake.Accepted>(store.put("https://join.justzappit.xyz/g/v1?utm=1#$PAYLOAD")).token
+            val tracked = "https://join.justzappit.xyz/g/v1?utm=1#$PAYLOAD"
+            val token = assertIs<GroupInviteIntake.Accepted>(store.put(tracked)).token
             assertEquals(LINK, store.link(token))
             assertFalse(preferences.raw(PendingGroupInviteStore.PREF_KEY)!!.contains("utm"))
         }
@@ -157,43 +142,7 @@ class PendingGroupInviteStoreTest {
             assertNotEquals(listOf(token), store.observeTokens().first())
         }
 
-    private class InMemoryPreferenceProvider : PreferenceProvider {
-        private val values = mutableMapOf<String, MutableStateFlow<String?>>()
-
-        private fun flowFor(key: PreferenceKey) = values.getOrPut(key.key) { MutableStateFlow(null) }
-
-        fun raw(key: String): String? = values[key]?.value
-
-        fun put(key: String, value: String) {
-            flowFor(PreferenceKey(key)).value = value
-        }
-
-        override suspend fun hasKey(key: PreferenceKey): Boolean = flowFor(key).value != null
-
-        override suspend fun putString(key: PreferenceKey, value: String?) {
-            flowFor(key).value = value
-        }
-
-        override suspend fun getString(key: PreferenceKey): String? = flowFor(key).value
-
-        override fun observe(key: PreferenceKey): Flow<String?> = flowFor(key)
-
-        override suspend fun remove(key: PreferenceKey) {
-            flowFor(key).value = null
-        }
-
-        override suspend fun putStringSet(key: PreferenceKey, value: Set<String>?) = error("Unused")
-
-        override suspend fun putLong(key: PreferenceKey, value: Long?) = error("Unused")
-
-        override suspend fun getLong(key: PreferenceKey): Long = error("Unused")
-
-        override suspend fun getStringSet(key: PreferenceKey): Set<String> = error("Unused")
-
-        override suspend fun clearPreferences(): Boolean = error("Unused")
-    }
-
     private companion object {
-        const val START = 1_789_800_000_000L
+        const val START = TEST_NOW
     }
 }

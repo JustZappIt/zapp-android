@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Joining through an invite link -->
+    <string name="group_invite_header">Group invite</string>
+    <string name="group_invite_title_named">Join %1$s?</string>
+    <string name="group_invite_title">Join this group?</string>
+    <string name="group_invite_body">Members will see your name and when you are online. You can leave at any time.</string>
+    <string name="group_invite_join">Join group</string>
+    <string name="group_invite_not_now">Not now</string>
+    <string name="group_invite_send_failed">Your request did not go out. Check your connection and try again.</string>
+    <string name="group_invite_waiting_title">Waiting to join</string>
+    <string name="group_invite_waiting_body">You will join when the group owner opens Zapp.</string>
+    <string name="group_invite_waiting_owner">Your request is with the group owner.</string>
+    <string name="group_invite_cancel">Cancel request</string>
+    <string name="group_invite_joined_named">You joined %1$s</string>
+    <string name="group_invite_joined">You joined the group</string>
+    <string name="group_invite_already_member">You are already in this group</string>
+    <string name="group_invite_open_group">Open group</string>
+    <string name="group_invite_inactive">This invite link is no longer active.</string>
+    <string name="group_invite_expired">This invite has expired. Ask for a new link.</string>
+    <string name="group_invite_full">This group is full.</string>
+    <string name="group_invite_unreadable">This link could not be read. Ask for a new one.</string>
+    <string name="group_invite_update">Update Zapp to use this link.</string>
+    <string name="group_invite_declined">The group owner did not accept your request.</string>
+    <string name="group_invite_coming_soon">Group invite links are coming soon.</string>
+</resources>

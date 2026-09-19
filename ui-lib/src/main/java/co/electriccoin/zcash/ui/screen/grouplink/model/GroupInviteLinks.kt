@@ -19,14 +19,15 @@ object GroupInviteLinks {
     /** An honest link is under 200 characters. The bound keeps a hostile one out of storage. */
     const val MAX_LENGTH = 1024
 
-    private val HTTPS = Regex("""^https://([^/?#]+)(/[^?#]*)?(\?[^#]*)?(#.*)?$""", RegexOption.IGNORE_CASE)
+    private val HTTPS =
+        Regex("""^https://(?<host>[^/?#]+)(?<path>/[^?#]*)?(?:\?[^#]*)?(?<fragment>#.*)?$""", RegexOption.IGNORE_CASE)
     private val HANDOFF = Regex("""^xyz\.justzappit\.zapp://g/""", RegexOption.IGNORE_CASE)
 
     /** Routing only: does [raw] claim to be a group link? Says nothing about whether it reads. */
     fun isGroupLink(raw: String): Boolean {
         val https = HTTPS.find(raw)
         return if (https != null) {
-            https.groupValues[1].equals(HOST, ignoreCase = true) && https.groupValues[2].startsWith("/g/")
+            https.part("host").equals(HOST, ignoreCase = true) && https.part("path").startsWith("/g/")
         } else {
             HANDOFF.containsMatchIn(raw)
         }
@@ -42,7 +43,7 @@ object GroupInviteLinks {
         val https = HTTPS.find(raw)
         val link =
             if (https != null) {
-                "https://$HOST" + https.groupValues[2] + https.groupValues[4]
+                "https://$HOST" + https.part("path") + https.part("fragment")
             } else {
                 raw.substringBefore('?')
             }
@@ -57,4 +58,6 @@ object GroupInviteLinks {
         text
             .split(Regex("""\s+"""))
             .firstNotNullOfOrNull { word -> canonical(word.trim('<', '>', '(', ')', '"', '\'', '.', ',')) }
+
+    private fun MatchResult.part(name: String): String = groups[name]?.value.orEmpty()
 }
