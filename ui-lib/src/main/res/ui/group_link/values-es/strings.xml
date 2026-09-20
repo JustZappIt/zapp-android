@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Joining through an invite link -->
+    <string name="group_invite_header">Invitación a un grupo</string>
+    <string name="group_invite_title_named">¿Unirte a %1$s?</string>
+    <string name="group_invite_title">¿Unirte a este grupo?</string>
+    <string name="group_invite_body">Los miembros verán tu nombre y cuándo estás en línea. Puedes salir cuando quieras.</string>
+    <string name="group_invite_join">Unirme al grupo</string>
+    <string name="group_invite_not_now">Ahora no</string>
+    <string name="group_invite_send_failed">Tu solicitud no se envió. Revisa tu conexión e inténtalo de nuevo.</string>
+    <string name="group_invite_waiting_title">Esperando para unirte</string>
+    <string name="group_invite_waiting_body">Te unirás cuando el dueño del grupo abra Zapp.</string>
+    <string name="group_invite_waiting_owner">Tu solicitud está con el dueño del grupo.</string>
+    <string name="group_invite_cancel">Cancelar solicitud</string>
+    <string name="group_invite_joined_named">Te uniste a %1$s</string>
+    <string name="group_invite_joined">Te uniste al grupo</string>
+    <string name="group_invite_already_member">Ya estás en este grupo</string>
+    <string name="group_invite_open_group">Abrir grupo</string>
+    <string name="group_invite_inactive">Este enlace de invitación ya no está activo.</string>
+    <string name="group_invite_expired">Esta invitación ha caducado. Pide un enlace nuevo.</string>
+    <string name="group_invite_full">Este grupo está lleno.</string>
+    <string name="group_invite_unreadable">No se pudo leer este enlace. Pide uno nuevo.</string>
+    <string name="group_invite_update">Actualiza Zapp para usar este enlace.</string>
+    <string name="group_invite_declined">El dueño del grupo no aceptó tu solicitud.</string>
+    <string name="group_invite_coming_soon">Los enlaces de invitación a grupos llegarán pronto.</string>
+
+    <!-- The owner's invite link -->
+    <string name="group_link_header">Enlace de invitación</string>
+    <string name="group_link_warning">Cualquiera con este enlace puede unirse. Compártelo solo con personas de confianza.</string>
+    <string name="group_link_history_note">Quienes se unan podrán leer los mensajes anteriores de este grupo.</string>
+    <string name="group_link_copy">Copiar enlace</string>
+    <string name="group_link_share">Compartir enlace</string>
+    <string name="group_link_qr_content_description">Código QR del enlace de invitación</string>
+    <string name="group_link_reset">Restablecer enlace</string>
+    <string name="group_link_reset_title">¿Restablecer este enlace?</string>
+    <string name="group_link_reset_body">El enlace anterior dejará de funcionar. Quien lo tenga necesitará el nuevo.</string>
+    <string name="group_link_reset_confirm">Restablecer</string>
+    <string name="group_link_cancel">Cancelar</string>
+    <string name="group_link_turn_off">Desactivar enlace</string>
+    <string name="group_link_turn_on">Activar enlace</string>
+    <string name="group_link_off_note">El enlace de invitación está desactivado.</string>
+    <string name="group_link_expiry_label">El enlace caduca</string>
+    <string name="group_link_expiry_never">Nunca</string>
+    <string name="group_link_expiry_1_day">En 1 día</string>
+    <string name="group_link_expiry_days_fmt">En %1$s días</string>
+    <string name="group_link_expired">Caducado</string>
+    <string name="group_link_limit_label">Personas que pueden unirse con este enlace</string>
+    <string name="group_link_limit_none">Sin límite</string>
+    <string name="group_link_limit_joins_fmt">%1$s personas</string>
+    <string name="group_link_name_toggle">Mostrar el nombre del grupo en el enlace</string>
+    <string name="group_link_approval_toggle">Aprobar nuevos miembros</string>
+    <string name="group_link_approval_help">Cuando está activado, quienes usen el enlace esperan hasta que les des acceso.</string>
+    <string name="group_link_paused">Muchas personas se unieron en la última hora, así que las nuevas solicitudes esperan tu aprobación.</string>
+    <string name="group_link_owner_only">Solo el dueño del grupo puede compartir un enlace de invitación.</string>
+    <string name="group_link_action_failed">No funcionó. Revisa tu conexión e inténtalo de nuevo.</string>
+    <string name="group_link_retry">Intentar de nuevo</string>
+    <string name="group_link_requests_label">Solicitudes para unirse</string>
+    <string name="group_link_request_subtitle">Pidió unirse con el enlace de invitación</string>
+    <string name="group_link_request_contact_fmt">En tus contactos como %1$s</string>
+    <string name="group_link_request_removed_before">Expulsado antes</string>
+    <string name="group_link_request_approve">Aprobar</string>
+    <string name="group_link_request_decline">Rechazar</string>
+    <!-- Removing a member -->
+    <string name="group_member_remove">Expulsar del grupo</string>
+    <string name="group_member_remove_title_fmt">¿Expulsar a %1$s?</string>
+    <string name="group_member_remove_body">Dejará de recibir los mensajes nuevos de este grupo. Conserva los mensajes que ya tiene.</string>
+    <string name="group_member_remove_reset_link">Restablecer también el enlace de invitación</string>
+    <string name="group_member_remove_older_note">Algunos miembros usan una versión anterior de Zapp. Verán los mensajes nuevos aquí cuando actualicen.</string>
+    <string name="group_member_remove_confirm">Expulsar</string>
+    <string name="group_member_removed_fmt">Expulsaste a %1$s</string>
+    <string name="group_member_removed_self">Te expulsaron de este grupo.</string>
+</resources>

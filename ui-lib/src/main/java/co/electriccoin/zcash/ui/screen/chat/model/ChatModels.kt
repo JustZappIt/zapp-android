@@ -81,6 +81,8 @@ data class ChatConversation(
     val lastMessageTimestamp: Long? = null,
     val participantIds: List<String> = emptyList(),
     val isOwner: Boolean = false,
+    /** When the group's owner removed this device. The history stays, nothing new can be sent. */
+    val removedAt: Long? = null,
     val unreadCount: Int = 0
 ) {
     companion object {
@@ -97,6 +99,7 @@ data class ChatConversation(
                 lastMessageTimestamp = zmConv.lastMessageTimestamp,
                 participantIds = zmConv.participantIds,
                 isOwner = zmConv.isOwner ?: false,
+                removedAt = zmConv.removedAt,
                 unreadCount = zmConv.unreadCount ?: 0
             )
     }

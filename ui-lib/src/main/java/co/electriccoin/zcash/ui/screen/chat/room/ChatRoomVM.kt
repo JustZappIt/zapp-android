@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.sdk.ext.convertZecToZatoshi
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.preference.StandardPreferenceProvider
+import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.provider.ChatSendContextProvider
@@ -71,6 +72,8 @@ import co.electriccoin.zcash.ui.screen.chat.model.resolveSenderNames
 import co.electriccoin.zcash.ui.screen.chat.repository.ChatContactsRepository
 import co.electriccoin.zcash.ui.screen.chat.repository.ChatConversationsRepository
 import co.electriccoin.zcash.ui.screen.chat.view.BlockUserDialogState
+import co.electriccoin.zcash.ui.screen.grouplink.GroupLinkArgs
+import co.electriccoin.zcash.ui.screen.grouplink.GroupLinkRepository
 import co.electriccoin.zcash.ui.screen.transactiondetail.TransactionDetailArgs
 import co.electriccoin.zcash.ui.screen.unifiedsend.UnifiedSendArgs
 import kotlinx.coroutines.Dispatchers
@@ -94,6 +97,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import xyz.justzappit.zappmessaging.models.ZMGroupLinkState
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.UUID
@@ -105,6 +109,7 @@ class ChatRoomVM(
     private val chatBootstrap: ChatBootstrap,
     private val chatContactsRepository: ChatContactsRepository,
     private val chatConversationsRepository: ChatConversationsRepository,
+    private val groupLinks: GroupLinkRepository,
     private val transactionRepository: TransactionRepository,
     private val getZashiAccount: GetZashiAccountUseCase,
     private val chatSendContext: ChatSendContextProvider,
@@ -368,6 +373,17 @@ class ChatRoomVM(
         val renameDraft: String? = null,
         val showAddMember: Boolean = false,
         val contacts: List<ChatContact> = emptyList(),
+        val removing: RemoveMemberDraft? = null,
+    )
+
+    private data class RemoveMemberDraft(
+        val publicKey: String,
+        val name: String,
+        /** Someone who came in through the link can walk back in with it, so it resets by default. */
+        val resetLink: Boolean = true,
+        val canResetLink: Boolean = false,
+        val olderMemberCount: Int = 0,
+        val isBusy: Boolean = false,
     )
 
     private data class DialogSnapshot(
@@ -453,11 +469,12 @@ class ChatRoomVM(
                 // Unflagged so the confirmation chip shows what was copied instead of redacting it.
                 copyToClipboard(message.content, isSensitive = false)
             },
+            removedNotice = stringRes(R.string.group_member_removed_self).takeIf { conversation?.removedAt != null },
             input =
                 ChatRoomInputState(
                     value = messageInput,
                     placeholder = stringRes(R.string.chat_room_input_placeholder),
-                    canSend = messageInput.isNotBlank() && !isLoading,
+                    canSend = messageInput.isNotBlank() && !isLoading && conversation?.removedAt == null,
                     attachContentDescription = stringRes(R.string.chat_room_attach_content_description),
                     sendContentDescription = stringRes(R.string.chat_room_send_content_description),
                     onChange = ::onInputChange,
@@ -512,18 +529,7 @@ class ChatRoomVM(
                     null
                 },
             editContactSheet = editContact,
-            groupInfoSheet =
-                if (group.showInfo && conversation?.type == ConversationType.GROUP) {
-                    ChatRoomGroupInfoSheetState(
-                        groupName = conversation.displayName,
-                        members = groupMembers(conversation, group.contacts),
-                        onRename = ::onGroupRenameClick,
-                        onAddMember = ::onAddMemberClick,
-                        onDismiss = ::dismissGroupInfo,
-                    )
-                } else {
-                    null
-                },
+            groupInfoSheet = groupInfoSheet(group, conversation),
             groupRenameDialog =
                 group.renameDraft?.let { draft ->
                     ChatRoomGroupRenameDialogState(
@@ -543,9 +549,41 @@ class ChatRoomVM(
                 } else {
                     null
                 },
+            removeMemberDialog = group.removing?.let(::removeMemberDialog),
             blockDialog = blockDialog,
         )
     }
+
+    private fun groupInfoSheet(
+        group: GroupUiState,
+        conversation: ChatConversation?,
+    ): ChatRoomGroupInfoSheetState? {
+        if (!group.showInfo || conversation?.type != ConversationType.GROUP) return null
+        val isOwner = conversation.isOwner
+        return ChatRoomGroupInfoSheetState(
+            groupName = conversation.displayName,
+            members = groupMembers(conversation, group.contacts),
+            onAddMember = if (isOwner) ::onAddMemberClick else null,
+            onInviteLink = if (isOwner && BuildConfig.IS_GROUP_LINKS_ENABLED) ::onInviteLinkClick else null,
+            onRename = ::onGroupRenameClick,
+            onDismiss = ::dismissGroupInfo,
+        )
+    }
+
+    private fun removeMemberDialog(draft: RemoveMemberDraft) =
+        ChatRoomRemoveMemberDialogState(
+            name = draft.name,
+            olderMembersNote =
+                stringRes(R.string.group_member_remove_older_note).takeIf { draft.olderMemberCount > 0 },
+            resetLink =
+                ChatRoomRemoveMemberResetOption(
+                    isChecked = draft.resetLink,
+                    onToggle = ::onRemoveMemberResetToggle,
+                ).takeIf { draft.canResetLink },
+            isBusy = draft.isBusy,
+            onConfirm = ::onRemoveMemberConfirm,
+            onDismiss = ::dismissRemoveMember,
+        )
 
     private fun chipText(connection: ConnectionSnapshot): StringResource =
         when (connection.status) {
@@ -886,9 +924,11 @@ class ChatRoomVM(
         return conversation.participantIds
             .filter { it != localKey }
             .map { key ->
+                val name = byKey[key]?.name?.takeIf { it.isNotBlank() } ?: shortKey(key)
                 ChatRoomGroupMember(
                     publicKey = key,
-                    displayName = byKey[key]?.name?.takeIf { it.isNotBlank() } ?: shortKey(key),
+                    displayName = name,
+                    onRemove = if (conversation.isOwner) ({ onRemoveMemberClick(key, name) }) else null,
                 )
             }
     }
@@ -948,6 +988,59 @@ class ChatRoomVM(
     private fun onAddMemberClick() {
         groupUi.update { it.copy(showInfo = false, showAddMember = true) }
         viewModelScope.launch { loadGroupContacts() }
+    }
+
+    private fun onInviteLinkClick() {
+        groupUi.update { it.copy(showInfo = false) }
+        navigationRouter.forward(GroupLinkArgs(conversationId = conversationId))
+    }
+
+    /**
+     * The older member count and the link state are read when the dialog opens, so the dialog says
+     * what this group will actually do rather than what removal does in general.
+     */
+    private fun onRemoveMemberClick(
+        publicKey: String,
+        name: String,
+    ) {
+        groupUi.update { it.copy(showInfo = false, removing = RemoveMemberDraft(publicKey, name)) }
+        viewModelScope.launch {
+            val older = groupLinks.olderMemberCount(conversationId).getOrDefault(0)
+            val hasLink = groupLinks.get(conversationId).getOrNull()?.state == ZMGroupLinkState.ACTIVE
+            groupUi.update { ui ->
+                ui.copy(removing = ui.removing?.copy(olderMemberCount = older, canResetLink = hasLink))
+            }
+        }
+    }
+
+    private fun onRemoveMemberResetToggle() {
+        groupUi.update { ui ->
+            ui.copy(removing = ui.removing?.let { it.copy(resetLink = !it.resetLink) })
+        }
+    }
+
+    private fun dismissRemoveMember() {
+        groupUi.update { it.copy(removing = null) }
+    }
+
+    private fun onRemoveMemberConfirm() {
+        val draft = groupUi.value.removing ?: return
+        if (draft.isBusy) return
+        groupUi.update { it.copy(removing = draft.copy(isBusy = true)) }
+        viewModelScope.launch {
+            groupLinks
+                .removeMember(conversationId, draft.publicKey, draft.resetLink && draft.canResetLink)
+                .onSuccess {
+                    groupUi.update { it.copy(removing = null) }
+                    chatConversationsRepository.refresh()
+                    _effects.tryEmit(
+                        ChatRoomEffect.ShowToast(stringRes(R.string.group_member_removed_fmt, draft.name))
+                    )
+                }.onFailure {
+                    groupUi.update { it.copy(removing = draft.copy(isBusy = false)) }
+                    _effects.tryEmit(ChatRoomEffect.ShowToast(stringRes(R.string.group_link_action_failed)))
+                }
+        }
     }
 
     private fun dismissAddMember() {

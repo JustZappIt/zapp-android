@@ -13,6 +13,7 @@ import xyz.justzappit.zappmessaging.ZappMessagingSDK
 
 val zappMessagingModule =
     module {
+        includes(groupLinkModule)
         singleOf(::ZappMessagingSDK)
         singleOf(::ChatContactsRepositoryImpl) bind ChatContactsRepository::class
         singleOf(::ChatConversationsRepositoryImpl) bind ChatConversationsRepository::class

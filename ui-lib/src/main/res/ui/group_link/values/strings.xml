@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Joining through an invite link -->
+    <string name="group_invite_header">Group invite</string>
+    <string name="group_invite_title_named">Join %1$s?</string>
+    <string name="group_invite_title">Join this group?</string>
+    <string name="group_invite_body">Members will see your name and when you are online. You can leave at any time.</string>
+    <string name="group_invite_join">Join group</string>
+    <string name="group_invite_not_now">Not now</string>
+    <string name="group_invite_send_failed">Your request did not go out. Check your connection and try again.</string>
+    <string name="group_invite_waiting_title">Waiting to join</string>
+    <string name="group_invite_waiting_body">You will join when the group owner opens Zapp.</string>
+    <string name="group_invite_waiting_owner">Your request is with the group owner.</string>
+    <string name="group_invite_cancel">Cancel request</string>
+    <string name="group_invite_joined_named">You joined %1$s</string>
+    <string name="group_invite_joined">You joined the group</string>
+    <string name="group_invite_already_member">You are already in this group</string>
+    <string name="group_invite_open_group">Open group</string>
+    <string name="group_invite_inactive">This invite link is no longer active.</string>
+    <string name="group_invite_expired">This invite has expired. Ask for a new link.</string>
+    <string name="group_invite_full">This group is full.</string>
+    <string name="group_invite_unreadable">This link could not be read. Ask for a new one.</string>
+    <string name="group_invite_update">Update Zapp to use this link.</string>
+    <string name="group_invite_declined">The group owner did not accept your request.</string>
+    <string name="group_invite_coming_soon">Group invite links are coming soon.</string>
+
+    <!-- The owner's invite link -->
+    <string name="group_link_header">Invite link</string>
+    <string name="group_link_warning">Anyone with this link can join. Share it only with people you trust.</string>
+    <string name="group_link_history_note">People who join can read earlier messages in this group.</string>
+    <string name="group_link_copy">Copy link</string>
+    <string name="group_link_share">Share link</string>
+    <string name="group_link_qr_content_description">QR code for the invite link</string>
+    <string name="group_link_reset">Reset link</string>
+    <string name="group_link_reset_title">Reset this link?</string>
+    <string name="group_link_reset_body">The old link will stop working. Anyone who has it will need the new one.</string>
+    <string name="group_link_reset_confirm">Reset</string>
+    <string name="group_link_cancel">Cancel</string>
+    <string name="group_link_turn_off">Turn off link</string>
+    <string name="group_link_turn_on">Turn on link</string>
+    <string name="group_link_off_note">The invite link is off.</string>
+    <string name="group_link_expiry_label">Link expires</string>
+    <string name="group_link_expiry_never">Never</string>
+    <string name="group_link_expiry_1_day">In 1 day</string>
+    <string name="group_link_expiry_days_fmt">In %1$s days</string>
+    <string name="group_link_expired">Expired</string>
+    <string name="group_link_limit_label">People who can join with this link</string>
+    <string name="group_link_limit_none">No limit</string>
+    <string name="group_link_limit_joins_fmt">%1$s people</string>
+    <string name="group_link_name_toggle">Show group name in the link</string>
+    <string name="group_link_approval_toggle">Approve new members</string>
+    <string name="group_link_approval_help">When this is on, people who use the link wait until you let them in.</string>
+    <string name="group_link_paused">Many people joined in the last hour, so new requests now wait for your approval.</string>
+    <string name="group_link_owner_only">Only the group owner can share an invite link.</string>
+    <string name="group_link_action_failed">That did not work. Check your connection and try again.</string>
+    <string name="group_link_retry">Try again</string>
+    <string name="group_link_requests_label">Join requests</string>
+    <string name="group_link_request_subtitle">Asked to join with the invite link</string>
+    <string name="group_link_request_contact_fmt">In your contacts as %1$s</string>
+    <string name="group_link_request_removed_before">Removed before</string>
+    <string name="group_link_request_approve">Approve</string>
+    <string name="group_link_request_decline">Decline</string>
+    <!-- Removing a member -->
+    <string name="group_member_remove">Remove from group</string>
+    <string name="group_member_remove_title_fmt">Remove %1$s?</string>
+    <string name="group_member_remove_body">They will stop getting new messages from this group. They keep the messages they already have.</string>
+    <string name="group_member_remove_reset_link">Reset the invite link too</string>
+    <string name="group_member_remove_older_note">Some members use an older version of Zapp. They will see new messages here after they update.</string>
+    <string name="group_member_remove_confirm">Remove</string>
+    <string name="group_member_removed_fmt">You removed %1$s</string>
+    <string name="group_member_removed_self">You were removed from this group.</string>
+</resources>

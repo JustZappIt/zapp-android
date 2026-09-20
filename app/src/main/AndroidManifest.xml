@@ -69,6 +69,31 @@
                     android:pathPrefix="/c/"
                     android:scheme="https" />
             </intent-filter>
+            <!--
+              Group invite links, and the handoff the landing page opens when the link was tapped
+              in a browser that did not hand it to the app. Each is its own filter for the same
+              reason as the gift one. The secret is the fragment of the first and the last path
+              segment of the second; neither is ever logged.
+              The host serves the same assetlinks.json as the gift host, which matters on Android
+              11 and older, where verification is all or nothing across an app's hosts.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="join.justzappit.xyz"
+                    android:pathPrefix="/g/"
+                    android:scheme="https" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="g"
+                    android:scheme="xyz.justzappit.zapp" />
+            </intent-filter>
         </activity-alias>
 
         <!-- Enable profiling by benchmark -->

@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.preference.StandardPreferenceProvider
+import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.usecase.GetChatConnectionDetailsUseCase
@@ -27,6 +28,7 @@ import co.electriccoin.zcash.ui.screen.chat.model.resolveDisplayName
 import co.electriccoin.zcash.ui.screen.chat.repository.ChatContactsRepository
 import co.electriccoin.zcash.ui.screen.chat.repository.ChatConversationsRepository
 import co.electriccoin.zcash.ui.screen.chat.support.SupportChatConstants
+import co.electriccoin.zcash.ui.screen.grouplink.GroupJoinRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +39,8 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import xyz.justzappit.zappmessaging.models.ZMGroupJoinStatus
+import xyz.justzappit.zappmessaging.models.ZMGroupJoinUpdate
 
 @Suppress("TooManyFunctions")
 class ChatListVM(
@@ -45,6 +49,7 @@ class ChatListVM(
     private val getChatConnectionDetails: GetChatConnectionDetailsUseCase,
     private val observeChatPeerStatus: ObserveChatPeerStatusUseCase,
     private val standardPreferenceProvider: StandardPreferenceProvider,
+    private val groupJoins: GroupJoinRepository,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     private val connectionStatus = MutableStateFlow(ChatListConnectionStatus.CONNECTING)
@@ -54,6 +59,7 @@ class ChatListVM(
     private val showNetworkSheet = MutableStateFlow(false)
     private val showTosDialog = MutableStateFlow(false)
     private val leaveTarget = MutableStateFlow<ChatConversation?>(null)
+    private val waitingJoins = MutableStateFlow<List<ZMGroupJoinUpdate>>(emptyList())
 
     // conversationId → online peer ids, aggregated from per-peer status events. Tracking the
     // peer set (not a flat conversation set) keeps multi-peer groups correct: the row is "online"
@@ -75,6 +81,31 @@ class ChatListVM(
         observeConnection()
         observePeerStatus()
         viewModelScope.launch { checkTosAccepted() }
+        if (BuildConfig.IS_GROUP_LINKS_ENABLED) observeWaitingJoins()
+    }
+
+    /**
+     * Requests this device has out. They live in the SDK, not in the back stack, so the list is the
+     * one place someone can see that a tapped link is still waiting, and take it back.
+     */
+    private fun observeWaitingJoins() {
+        viewModelScope.launch { refreshWaitingJoins() }
+        viewModelScope.launch { groupJoins.joinUpdates.collect { refreshWaitingJoins() } }
+    }
+
+    private suspend fun refreshWaitingJoins() {
+        waitingJoins.value =
+            groupJoins
+                .joinStatus()
+                .getOrDefault(emptyList())
+                .filter { it.status.isWaiting }
+    }
+
+    private fun onCancelWaitingJoin(linkId: String) {
+        viewModelScope.launch {
+            groupJoins.cancel(linkId)
+            refreshWaitingJoins()
+        }
     }
 
     // The list being on screen means no room is, so assert it rather than trusting every room
@@ -82,6 +113,24 @@ class ChatListVM(
     fun onScreenVisible() {
         chatConversationsRepository.setActiveConversation(null)
     }
+
+    private fun toWaitingJoinState(update: ZMGroupJoinUpdate) =
+        ChatListWaitingJoinState(
+            linkId = update.linkId,
+            title =
+                update.nameHint?.takeIf { it.isNotBlank() }?.let { stringRes(it) }
+                    ?: stringRes(R.string.group_invite_waiting_title),
+            subtitle =
+                stringRes(
+                    if (update.status == ZMGroupJoinStatus.PENDING_APPROVAL) {
+                        R.string.group_invite_waiting_owner
+                    } else {
+                        R.string.group_invite_waiting_body
+                    },
+                ),
+            cancelLabel = stringRes(R.string.group_invite_cancel),
+            onCancel = { onCancelWaitingJoin(update.linkId) },
+        )
 
     private fun buildSupportRow(supportConvs: List<ChatConversation>): ChatListSupportRowState {
         val latestSupportMsg =
@@ -109,8 +158,9 @@ class ChatListVM(
                 chatContactsRepository.blockedKeys,
                 chatConversationsRepository.localPublicKey,
                 chatContactsRepository.contacts,
-            ) { conversations, blockedKeys, localPublicKey, contacts ->
-                ChatSnapshot(conversations, blockedKeys, localPublicKey, contacts)
+                waitingJoins,
+            ) { conversations, blockedKeys, localPublicKey, contacts, waiting ->
+                ChatSnapshot(conversations, blockedKeys, localPublicKey, contacts, waiting)
             },
             combine(connectionStatus, peerCount, dhtHealth) { cs, pc, dh -> Triple(cs, pc, dh) },
             combine(showTosDialog, showNetworkSheet, leaveTarget) { tos, sheet, leave ->
@@ -128,6 +178,7 @@ class ChatListVM(
                 blockedKeys = chat.blockedKeys,
                 localPublicKey = chat.localPublicKey,
                 contacts = chat.contacts,
+                waiting = chat.waitingJoins,
                 connectionStatus = cs,
                 peerCount = pc,
                 dhtHealth = dh,
@@ -146,6 +197,7 @@ class ChatListVM(
                     blockedKeys = emptySet(),
                     localPublicKey = null,
                     contacts = emptyList(),
+                    waiting = emptyList(),
                     connectionStatus = ChatListConnectionStatus.CONNECTING,
                     peerCount = 0,
                     dhtHealth = ChatListDhtHealth.HEALTHY,
@@ -162,6 +214,7 @@ class ChatListVM(
         blockedKeys: Set<String>,
         localPublicKey: String?,
         contacts: List<ChatContact>,
+        waiting: List<ZMGroupJoinUpdate>,
         connectionStatus: ChatListConnectionStatus,
         peerCount: Int,
         dhtHealth: ChatListDhtHealth,
@@ -206,6 +259,7 @@ class ChatListVM(
             title = stringRes(R.string.chat_list_title),
             isLoading = conversations == null,
             items = visibleConversations.map { toItemState(it, contactsByPublicKey, onlineConversationIds) },
+            waitingJoins = waiting.map(::toWaitingJoinState),
             emptyTitle = stringRes(R.string.chat_list_empty_title),
             emptySubtitle = stringRes(R.string.chat_list_empty_subtitle),
             newConversationContentDescription =
@@ -273,6 +327,7 @@ class ChatListVM(
         val blockedKeys: Set<String>,
         val localPublicKey: String?,
         val contacts: List<ChatContact>,
+        val waitingJoins: List<ZMGroupJoinUpdate>,
     )
 
     private fun lastMessageText(value: String?): StringResource =

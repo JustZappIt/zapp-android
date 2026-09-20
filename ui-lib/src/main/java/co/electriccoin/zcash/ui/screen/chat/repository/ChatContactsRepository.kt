@@ -15,11 +15,13 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import xyz.justzappit.zappmessaging.ZappMessagingSDK
 
@@ -95,6 +97,28 @@ class ChatContactsRepositoryImpl(
             .first()
             .mapNotNull { it.toChatContact() }
             .firstOrNull { it.publicKey == key }
+    }
+
+    init {
+        pushBlockedKeysToSdk()
+    }
+
+    /**
+     * Blocking is the app's own policy, kept in the address book, but the SDK admits people to
+     * groups through invite links without asking the app each time, so it needs the set too. It is
+     * pushed on every change and again whenever an identity appears, because the worklet starts
+     * each run without it.
+     */
+    private fun pushBlockedKeysToSdk() {
+        scope.launch {
+            combine(sdk.identity, blockedKeys) { identity, keys -> identity to keys }
+                .collect { (identity, keys) ->
+                    if (identity == null) return@collect
+                    runChatCallResult("ChatContactsRepository: blocked keys not sent") {
+                        sdk.setBlockedKeys(keys.toList())
+                    }
+                }
+        }
     }
 
     override fun isBlocked(publicKey: String): Boolean = blockedKeys.value.contains(normalizeKey(publicKey))

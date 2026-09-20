@@ -1,7 +1,7 @@
 // GENERATED FILE — DO NOT EDIT.
 //
 // Vendored verbatim from zappMessaging server/media-retention.js
-// Source commit: 79a397901802a57e4dc081b27b5b9d2d0aa6273b (pinned in .zapp-deps)
+// Source commit: 22870476f01f042697a1fe41aacf4a661f62f0c0 (pinned in .zapp-deps)
 //
 // Edit the original in zappMessaging, then regenerate:
 //   node scripts/vendor-blind-push-server.js
