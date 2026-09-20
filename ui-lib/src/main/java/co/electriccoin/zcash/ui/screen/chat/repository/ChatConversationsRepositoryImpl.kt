@@ -235,7 +235,50 @@ class ChatConversationsRepositoryImpl(
         refreshJob = scope.launch { refresh() }
     }
 
+    /** Everything invite links and removal add: a waiting request, a removal, a rekey, a join. */
+    private fun observeGroupLinkEvents() {
+        scope.launch {
+            sdk.groupJoinRequestReceived.collect { request ->
+                // Zapp's notifications carry no name and no content, by policy, so this one only
+                // says that something arrived. The owner finds the request under Invite link.
+                val watching = request.conversationId == activeConversationId.value && isInForeground.value
+                if (notificationsEnabled.value == true && !watching) {
+                    chatNotifier.post(
+                        conversationId = request.conversationId,
+                        conversationName = null,
+                        senderName = null,
+                        content = "",
+                    )
+                }
+            }
+        }
+        scope.launch {
+            // Removal also gives the group a new secret, so the record is read again rather than patched.
+            sdk.removedFromGroup.collect { refresh() }
+        }
+        scope.launch {
+            sdk.groupRekeyed.collect { refresh() }
+        }
+        scope.launch {
+            sdk.groupLinkMemberJoined.collect { refresh() }
+        }
+        scope.launch {
+            sdk.memberRemoved.collect { (conversationId, removedKey) ->
+                _conversations.update { list ->
+                    list?.map { conv ->
+                        if (conv.id == conversationId) {
+                            conv.copy(participantIds = conv.participantIds.filter { it != removedKey })
+                        } else {
+                            conv
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private fun observeConversationEvents() {
+        observeGroupLinkEvents()
         scope.launch {
             sdk.messageReceived.collect { (conversationId, msg) ->
                 if (chatContactsRepository.isBlocked(msg.senderId)) return@collect
@@ -278,29 +321,6 @@ class ChatConversationsRepositoryImpl(
         scope.launch {
             sdk.groupRenamed.collect { (conversationId, newName) ->
                 renameConversation(conversationId, newName)
-            }
-        }
-        scope.launch {
-            // Removal also gives the group a new secret, so the record is read again rather than patched.
-            sdk.removedFromGroup.collect { refresh() }
-        }
-        scope.launch {
-            sdk.groupRekeyed.collect { refresh() }
-        }
-        scope.launch {
-            sdk.groupLinkMemberJoined.collect { refresh() }
-        }
-        scope.launch {
-            sdk.memberRemoved.collect { (conversationId, removedKey) ->
-                _conversations.update { list ->
-                    list?.map { conv ->
-                        if (conv.id == conversationId) {
-                            conv.copy(participantIds = conv.participantIds.filter { it != removedKey })
-                        } else {
-                            conv
-                        }
-                    }
-                }
             }
         }
         scope.launch {
