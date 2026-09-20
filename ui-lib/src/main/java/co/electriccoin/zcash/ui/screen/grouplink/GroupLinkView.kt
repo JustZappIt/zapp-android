@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
@@ -46,12 +47,15 @@ import co.electriccoin.zcash.ui.design.component.ZashiQr
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
+import co.electriccoin.zcash.ui.design.component.zapp.ZappCompactButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationBottomSheet
 import co.electriccoin.zcash.ui.design.component.zapp.ZappCopyIconButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappGroupHeader
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRow
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRowDivider
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSelectionRow
+import co.electriccoin.zcash.ui.design.component.zapp.ZappStatusChip
 import co.electriccoin.zcash.ui.design.component.zapp.ZappToggle
 import co.electriccoin.zcash.ui.design.component.zapp.ZappValueCard
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
@@ -109,6 +113,10 @@ internal fun GroupLinkView(
                 )
             }
 
+            if (state.requests.isNotEmpty()) {
+                Requests(requests = state.requests)
+            }
+
             if (state.rows.isNotEmpty() || state.toggles.isNotEmpty()) {
                 Settings(state = state)
             }
@@ -157,6 +165,53 @@ private fun LinkQrCode(card: GroupLinkCardState) {
             )
         },
     )
+}
+
+@Composable
+private fun Requests(requests: List<GroupLinkRequestState>) {
+    val c = ZappTheme.colors
+    ZappGroupHeader(text = stringResource(R.string.group_link_requests_label))
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(c.surface, RectangleShape)
+                .border(BorderStroke(1.dp, c.border), RectangleShape),
+    ) {
+        requests.forEachIndexed { index, request ->
+            RequestRow(request = request)
+            if (index != requests.lastIndex) ZappRowDivider(inset = true)
+        }
+    }
+}
+
+@Composable
+private fun RequestRow(request: GroupLinkRequestState) {
+    val c = ZappTheme.colors
+    val t = ZappTheme.typography
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        BasicText(text = request.name, style = t.rowTitle.copy(color = c.text))
+        BasicText(text = request.subtitle.getValue(), style = t.rowSubtitle.copy(color = c.textMuted))
+        request.contactHint?.let {
+            BasicText(text = it.getValue(), style = t.caption.copy(color = c.textMuted))
+        }
+        request.tag?.let { ZappStatusChip(text = it.getValue()) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ZappCompactButton(
+                text = stringResource(R.string.group_link_request_approve),
+                enabled = request.isEnabled,
+                onClick = request.onApprove,
+            )
+            ZappCompactButton(
+                text = stringResource(R.string.group_link_request_decline),
+                enabled = request.isEnabled,
+                onClick = request.onDecline,
+            )
+        }
+    }
 }
 
 @Composable
@@ -257,6 +312,19 @@ private fun GroupLinkPreview() =
                         listOf(
                             GroupLinkActionState(stringRes(R.string.group_link_copy), ZappButtonVariant.Primary) {},
                             GroupLinkActionState(stringRes(R.string.group_link_share), ZappButtonVariant.Secondary) {},
+                        ),
+                    requests =
+                        listOf(
+                            GroupLinkRequestState(
+                                key = "aa",
+                                name = "Sam",
+                                subtitle = stringRes(R.string.group_link_request_subtitle),
+                                contactHint = null,
+                                tag = null,
+                                isEnabled = true,
+                                onApprove = {},
+                                onDecline = {},
+                            ),
                         ),
                     rows =
                         listOf(

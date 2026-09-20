@@ -8,8 +8,10 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShareGroupLinkUseCase
 import co.electriccoin.zcash.ui.design.util.StringResource
+import co.electriccoin.zcash.ui.screen.chat.model.ChatContact
 import co.electriccoin.zcash.ui.screen.chat.model.ChatConversation
 import co.electriccoin.zcash.ui.screen.chat.model.ConversationType
+import co.electriccoin.zcash.ui.screen.chat.repository.ChatContactsRepository
 import co.electriccoin.zcash.ui.screen.chat.repository.ChatConversationsRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -51,6 +53,11 @@ class GroupLinkVMTest {
         mockk<ChatConversationsRepository>(relaxed = true) {
             every { conversation(CONVERSATION_ID) } returns this@GroupLinkVMTest.conversation
         }
+    private val savedContacts = MutableStateFlow(emptyList<ChatContact>())
+    private val contacts =
+        mockk<ChatContactsRepository>(relaxed = true) {
+            every { contacts } returns savedContacts
+        }
     private val copyToClipboard = mockk<CopyToClipboardUseCase>(relaxed = true)
     private val share = mockk<ShareGroupLinkUseCase>(relaxed = true)
     private val router = mockk<NavigationRouter>(relaxed = true)
@@ -62,6 +69,7 @@ class GroupLinkVMTest {
                 args = GroupLinkArgs(CONVERSATION_ID),
                 groupLinks = groupLinks,
                 conversations = conversations,
+                contacts = contacts,
                 copyToClipboard = copyToClipboard,
                 shareGroupLink = share,
                 navigationRouter = router,
@@ -348,6 +356,100 @@ class GroupLinkVMTest {
             assertNull(vm.state.value.card)
         }
 
+    @Test
+    fun `waiting requests carry the owner's own name for someone already saved`() =
+        runTest {
+            groupLinks.pending = listOf(request(previouslyRemoved = true))
+            savedContacts.value = listOf(ChatContact(publicKey = JOINER_KEY, name = "Sam from work"))
+            val vm = open()
+
+            val waiting =
+                vm.state.value.requests
+                    .single()
+            assertEquals("Sam", waiting.name, "the name shown is the one the joiner chose")
+            assertEquals(R.string.group_link_request_subtitle, waiting.subtitle.res())
+            assertEquals(R.string.group_link_request_contact_fmt, waiting.contactHint.res())
+            assertEquals(listOf("Sam from work"), (waiting.contactHint as StringResource.ByResource).args)
+            assertEquals(R.string.group_link_request_removed_before, waiting.tag.res())
+        }
+
+    @Test
+    fun `approving admits the joiner and the request leaves the list`() =
+        runTest {
+            groupLinks.pending = listOf(request())
+            val vm = open()
+
+            vm.state.value.requests
+                .single()
+                .onApprove()
+            advanceUntilIdle()
+            assertEquals(listOf(JOINER_KEY), groupLinks.approved)
+            assertTrue(
+                vm.state.value.requests
+                    .isEmpty()
+            )
+            assertNull(vm.state.value.error)
+        }
+
+    @Test
+    fun `approving into a full group says so and still clears the request`() =
+        runTest {
+            groupLinks.pending = listOf(request())
+            groupLinks.admits = false
+            val vm = open()
+
+            vm.state.value.requests
+                .single()
+                .onApprove()
+            advanceUntilIdle()
+            assertEquals(
+                R.string.group_invite_full,
+                vm.state.value.error
+                    .res()
+            )
+            assertTrue(
+                vm.state.value.requests
+                    .isEmpty()
+            )
+        }
+
+    @Test
+    fun `declining answers the joiner and the request leaves the list`() =
+        runTest {
+            groupLinks.pending = listOf(request())
+            val vm = open()
+
+            vm.state.value.requests
+                .single()
+                .onDecline()
+            advanceUntilIdle()
+            assertEquals(listOf(JOINER_KEY), groupLinks.declined)
+            assertTrue(
+                vm.state.value.requests
+                    .isEmpty()
+            )
+        }
+
+    @Test
+    fun `a request that arrives while the screen is open joins the list`() =
+        runTest {
+            val vm = open()
+            assertTrue(
+                vm.state.value.requests
+                    .isEmpty()
+            )
+
+            groupLinks.pending = listOf(request())
+            groupLinks.joinRequests.emit(request())
+            advanceUntilIdle()
+            assertEquals(
+                JOINER_KEY,
+                vm.state.value.requests
+                    .single()
+                    .key
+            )
+        }
+
     private fun StringResource?.res() = (this as? StringResource.ByResource)?.resource
 
     private class FakeGroupLinkRepository : GroupLinkRepository {
@@ -356,7 +458,11 @@ class GroupLinkVMTest {
         var enables = 0
         var disables = 0
         var resets = 0
+        var admits = true
+        var pending = emptyList<ZMGroupJoinApprovalRequest>()
         val updates = mutableListOf<ZMGroupLinkOptions>()
+        val approved = mutableListOf<String>()
+        val declined = mutableListOf<String>()
 
         override val joinRequests = MutableSharedFlow<ZMGroupJoinApprovalRequest>()
 
@@ -405,17 +511,25 @@ class GroupLinkVMTest {
                 info = info.copy(state = ZMGroupLinkState.OFF)
             }
 
-        override suspend fun requests(conversationId: String) = Result.success(emptyList<ZMGroupJoinApprovalRequest>())
+        override suspend fun requests(conversationId: String) = Result.success(pending)
 
         override suspend fun approve(
             conversationId: String,
             joinerKey: String,
-        ) = Result.success(true)
+        ): Result<Boolean> {
+            approved += joinerKey
+            pending = pending.filterNot { it.joinerKey == joinerKey }
+            return Result.success(admits)
+        }
 
         override suspend fun decline(
             conversationId: String,
             joinerKey: String,
-        ) = Result.success(Unit)
+        ): Result<Unit> {
+            declined += joinerKey
+            pending = pending.filterNot { it.joinerKey == joinerKey }
+            return Result.success(Unit)
+        }
 
         override suspend fun removeMember(
             conversationId: String,
@@ -434,6 +548,15 @@ class GroupLinkVMTest {
         const val SEVEN_DAYS_MS = 7L * 86_400_000L
         const val WEEK_OPTION = 2
         const val HUNDRED = 100
+        const val JOINER_KEY = "beef"
+
+        fun request(previouslyRemoved: Boolean = false) =
+            ZMGroupJoinApprovalRequest(
+                conversationId = CONVERSATION_ID,
+                joinerKey = JOINER_KEY,
+                joinerName = "Sam",
+                previouslyRemoved = previouslyRemoved,
+            )
 
         fun groupConversation(isOwner: Boolean) =
             ChatConversation(

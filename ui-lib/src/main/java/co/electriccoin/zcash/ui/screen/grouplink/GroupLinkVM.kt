@@ -17,15 +17,19 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.chat.model.ChatConversation
+import co.electriccoin.zcash.ui.screen.chat.repository.ChatContactsRepository
 import co.electriccoin.zcash.ui.screen.chat.repository.ChatConversationsRepository
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import xyz.justzappit.zappmessaging.models.ZMGroupJoinApprovalRequest
 import xyz.justzappit.zappmessaging.models.ZMGroupLinkApproval
 import xyz.justzappit.zappmessaging.models.ZMGroupLinkInfo
 import xyz.justzappit.zappmessaging.models.ZMGroupLinkOptions
@@ -43,6 +47,7 @@ class GroupLinkVM(
     private val args: GroupLinkArgs,
     private val groupLinks: GroupLinkRepository,
     private val conversations: ChatConversationsRepository,
+    private val contacts: ChatContactsRepository,
     private val copyToClipboard: CopyToClipboardUseCase,
     private val shareGroupLink: ShareGroupLinkUseCase,
     private val navigationRouter: NavigationRouter,
@@ -50,7 +55,16 @@ class GroupLinkVM(
 ) : ViewModel() {
     private val info = MutableStateFlow<ZMGroupLinkInfo?>(null)
     private val ui = MutableStateFlow(GroupLinkUi())
+    private val requests = MutableStateFlow<List<ZMGroupJoinApprovalRequest>>(emptyList())
     private val copyFeedback = CopyFeedback(viewModelScope)
+
+    /** A request carries the name the joiner chose; the address book carries the owner's own. */
+    private val waiting: Flow<List<PendingRequest>> =
+        combine(requests, contacts.contacts) { pending, saved ->
+            pending.map { request ->
+                PendingRequest(request, saved.firstOrNull { it.publicKey == request.joinerKey }?.name)
+            }
+        }
 
     val state: StateFlow<GroupLinkState> =
         combine(
@@ -58,16 +72,22 @@ class GroupLinkVM(
             ui,
             copyFeedback.copiedValue,
             conversations.conversation(args.conversationId),
-        ) { link, ui, copied, conversation ->
-            createState(link, ui, copied, conversation)
+            waiting,
+        ) { link, ui, copied, conversation, pending ->
+            createState(link, ui, copied, conversation, pending)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-            initialValue = createState(null, GroupLinkUi(), null, null),
+            initialValue = createState(null, GroupLinkUi(), null, null, emptyList()),
         )
 
     init {
         load()
+        viewModelScope.launch {
+            groupLinks.joinRequests
+                .filter { it.conversationId == args.conversationId }
+                .collect { loadRequests() }
+        }
     }
 
     private fun load() {
@@ -78,12 +98,19 @@ class GroupLinkVM(
                 .onSuccess { info.value = it }
                 .onFailure { ui.update { current -> current.copy(failed = true) } }
         }
+        loadRequests()
+    }
+
+    private fun loadRequests() {
+        viewModelScope.launch {
+            groupLinks.requests(args.conversationId).onSuccess { requests.value = it }
+        }
     }
 
     /** One control, one call. A second tap while a call is in flight is ignored. */
     private fun run(block: suspend () -> Result<ZMGroupLinkInfo>) {
         if (ui.value.isBusy) return
-        ui.update { it.copy(isBusy = true, failed = false, picker = null, isConfirmingReset = false) }
+        ui.update { it.copy(isBusy = true, failed = false, isFull = false, picker = null, isConfirmingReset = false) }
         viewModelScope.launch {
             block()
                 .onSuccess {
@@ -133,6 +160,35 @@ class GroupLinkVM(
     private fun onApprovalToggle(approval: ZMGroupLinkApproval) =
         run { groupLinks.update(args.conversationId, ZMGroupLinkOptions(approval = approval)) }
 
+    /**
+     * Approving runs the group's own checks again, so it can come back with the group full. Either
+     * way the request is gone from the owner's device, so the list and the record are read again.
+     */
+    private fun onApproveClick(key: String) {
+        answer(call = { groupLinks.approve(args.conversationId, key) }, fullMessage = true)
+    }
+
+    private fun onDeclineClick(key: String) {
+        answer(call = { groupLinks.decline(args.conversationId, key).map { true } }, fullMessage = false)
+    }
+
+    private fun answer(
+        call: suspend () -> Result<Boolean>,
+        fullMessage: Boolean,
+    ) {
+        if (ui.value.isBusy) return
+        ui.update { it.copy(isBusy = true, failed = false, isFull = false) }
+        viewModelScope.launch {
+            call()
+                .onSuccess { admitted ->
+                    ui.update { current ->
+                        current.copy(isBusy = false, isFull = fullMessage && !admitted)
+                    }
+                }.onFailure { ui.update { current -> current.copy(isBusy = false, failed = true) } }
+            load()
+        }
+    }
+
     private fun onCopyClick(link: String) {
         copyToClipboard(link, isSensitive = true)
         copyFeedback.mark(link)
@@ -155,6 +211,7 @@ class GroupLinkVM(
         ui: GroupLinkUi,
         copied: String?,
         conversation: ChatConversation?,
+        pending: List<PendingRequest>,
     ): GroupLinkState {
         // Only the creator can admit anyone, so for everyone else the screen says so and stops.
         if (conversation != null && !conversation.isOwner) {
@@ -166,6 +223,7 @@ class GroupLinkVM(
                 notice = stringRes(R.string.group_link_owner_only),
                 error = null,
                 actions = emptyList(),
+                requests = emptyList(),
                 rows = emptyList(),
                 toggles = emptyList(),
                 picker = null,
@@ -184,13 +242,38 @@ class GroupLinkVM(
             warning = stringRes(R.string.group_link_warning).takeIf { link != null },
             historyNote = stringRes(R.string.group_link_history_note).takeIf { link != null },
             notice = notice(link),
-            error = stringRes(R.string.group_link_action_failed).takeIf { ui.failed },
+            error = error(ui),
             actions = actions(link, ui),
+            requests = pending.map { request(it, !ui.isBusy) },
             rows = if (isActive) rows(link) else emptyList(),
             toggles = if (isActive) toggles(link) else emptyList(),
             picker = ui.picker?.let { picker(it, link) },
             confirmation = if (ui.isConfirmingReset) resetConfirmation() else null,
             onBack = ::onBack,
+        )
+    }
+
+    private fun error(ui: GroupLinkUi): StringResource? =
+        when {
+            ui.failed -> stringRes(R.string.group_link_action_failed)
+            ui.isFull -> stringRes(R.string.group_invite_full)
+            else -> null
+        }
+
+    private fun request(
+        pending: PendingRequest,
+        isEnabled: Boolean,
+    ): GroupLinkRequestState {
+        val key = pending.request.joinerKey
+        return GroupLinkRequestState(
+            key = key,
+            name = pending.request.joinerName,
+            subtitle = stringRes(R.string.group_link_request_subtitle),
+            contactHint = pending.contactName?.let { stringRes(R.string.group_link_request_contact_fmt, it) },
+            tag = stringRes(R.string.group_link_request_removed_before).takeIf { pending.request.previouslyRemoved },
+            isEnabled = isEnabled,
+            onApprove = { onApproveClick(key) },
+            onDecline = { onDeclineClick(key) },
         )
     }
 
@@ -331,9 +414,15 @@ class GroupLinkVM(
         copyFeedback.cancel()
     }
 
+    private data class PendingRequest(
+        val request: ZMGroupJoinApprovalRequest,
+        val contactName: String?,
+    )
+
     private data class GroupLinkUi(
         val isBusy: Boolean = false,
         val failed: Boolean = false,
+        val isFull: Boolean = false,
         val picker: GroupLinkPickerKind? = null,
         val isConfirmingReset: Boolean = false,
     )

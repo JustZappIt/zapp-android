@@ -54,4 +54,10 @@
     <string name="group_link_owner_only">Only the group owner can share an invite link.</string>
     <string name="group_link_action_failed">That did not work. Check your connection and try again.</string>
     <string name="group_link_retry">Try again</string>
+    <string name="group_link_requests_label">Join requests</string>
+    <string name="group_link_request_subtitle">Asked to join with the invite link</string>
+    <string name="group_link_request_contact_fmt">In your contacts as %1$s</string>
+    <string name="group_link_request_removed_before">Removed before</string>
+    <string name="group_link_request_approve">Approve</string>
+    <string name="group_link_request_decline">Decline</string>
 </resources>

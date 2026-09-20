@@ -55,6 +55,7 @@ val groupLinkModule =
                 args = args,
                 groupLinks = get(),
                 conversations = get(),
+                contacts = get(),
                 copyToClipboard = get(),
                 shareGroupLink = get(),
                 navigationRouter = get(),

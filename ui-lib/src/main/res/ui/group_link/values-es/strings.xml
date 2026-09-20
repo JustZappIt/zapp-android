@@ -54,4 +54,10 @@
     <string name="group_link_owner_only">Solo el dueño del grupo puede compartir un enlace de invitación.</string>
     <string name="group_link_action_failed">No funcionó. Revisa tu conexión e inténtalo de nuevo.</string>
     <string name="group_link_retry">Intentar de nuevo</string>
+    <string name="group_link_requests_label">Solicitudes para unirse</string>
+    <string name="group_link_request_subtitle">Pidió unirse con el enlace de invitación</string>
+    <string name="group_link_request_contact_fmt">En tus contactos como %1$s</string>
+    <string name="group_link_request_removed_before">Expulsado antes</string>
+    <string name="group_link_request_approve">Aprobar</string>
+    <string name="group_link_request_decline">Rechazar</string>
 </resources>

@@ -25,6 +25,8 @@ data class GroupLinkState(
     val notice: StringResource?,
     val error: StringResource?,
     val actions: List<GroupLinkActionState>,
+    /** People waiting for the owner to let them in, newest last. Empty unless approval is on. */
+    val requests: List<GroupLinkRequestState>,
     val rows: List<GroupLinkRowState>,
     val toggles: List<GroupLinkToggleState>,
     val picker: GroupLinkPickerState?,
@@ -43,6 +45,19 @@ data class GroupLinkActionState(
     val variant: ZappButtonVariant,
     val isEnabled: Boolean = true,
     val onClick: () -> Unit,
+)
+
+data class GroupLinkRequestState(
+    val key: String,
+    /** The name the person chose for themselves. Nothing has verified it. */
+    val name: String,
+    val subtitle: StringResource,
+    /** The owner's own name for them, when they are already a contact. */
+    val contactHint: StringResource?,
+    val tag: StringResource?,
+    val isEnabled: Boolean,
+    val onApprove: () -> Unit,
+    val onDecline: () -> Unit,
 )
 
 data class GroupLinkRowState(

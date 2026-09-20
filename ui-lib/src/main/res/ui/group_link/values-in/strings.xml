@@ -54,4 +54,10 @@
     <string name="group_link_owner_only">Hanya pemilik grup yang bisa membagikan tautan undangan.</string>
     <string name="group_link_action_failed">Tidak berhasil. Periksa koneksi Anda lalu coba lagi.</string>
     <string name="group_link_retry">Coba lagi</string>
+    <string name="group_link_requests_label">Permintaan bergabung</string>
+    <string name="group_link_request_subtitle">Meminta bergabung lewat tautan undangan</string>
+    <string name="group_link_request_contact_fmt">Ada di kontak Anda sebagai %1$s</string>
+    <string name="group_link_request_removed_before">Pernah dikeluarkan</string>
+    <string name="group_link_request_approve">Setujui</string>
+    <string name="group_link_request_decline">Tolak</string>
 </resources>
