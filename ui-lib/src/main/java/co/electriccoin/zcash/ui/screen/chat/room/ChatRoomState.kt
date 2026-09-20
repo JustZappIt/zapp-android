@@ -30,6 +30,8 @@ data class ChatRoomState(
     val localPublicKey: String?,
     val fiatRate: ZecFiatRate?,
     val isLoading: Boolean,
+    /** Set once the owner removed this device. The history stays; nothing new can be sent. */
+    val removedNotice: StringResource?,
     val input: ChatRoomInputState,
     val onPayRequest: (ChatMessage) -> Unit,
     val onViewTransaction: (txId: String) -> Unit,

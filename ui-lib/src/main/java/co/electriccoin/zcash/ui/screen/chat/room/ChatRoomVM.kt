@@ -469,11 +469,12 @@ class ChatRoomVM(
                 // Unflagged so the confirmation chip shows what was copied instead of redacting it.
                 copyToClipboard(message.content, isSensitive = false)
             },
+            removedNotice = stringRes(R.string.group_member_removed_self).takeIf { conversation?.removedAt != null },
             input =
                 ChatRoomInputState(
                     value = messageInput,
                     placeholder = stringRes(R.string.chat_room_input_placeholder),
-                    canSend = messageInput.isNotBlank() && !isLoading,
+                    canSend = messageInput.isNotBlank() && !isLoading && conversation?.removedAt == null,
                     attachContentDescription = stringRes(R.string.chat_room_attach_content_description),
                     sendContentDescription = stringRes(R.string.chat_room_send_content_description),
                     onChange = ::onInputChange,

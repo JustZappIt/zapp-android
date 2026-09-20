@@ -68,4 +68,5 @@
     <string name="group_member_remove_older_note">Some members use an older version of Zapp. They will see new messages here after they update.</string>
     <string name="group_member_remove_confirm">Remove</string>
     <string name="group_member_removed_fmt">You removed %1$s</string>
+    <string name="group_member_removed_self">You were removed from this group.</string>
 </resources>

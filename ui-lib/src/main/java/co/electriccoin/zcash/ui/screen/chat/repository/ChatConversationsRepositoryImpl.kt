@@ -281,6 +281,29 @@ class ChatConversationsRepositoryImpl(
             }
         }
         scope.launch {
+            // Removal also gives the group a new secret, so the record is read again rather than patched.
+            sdk.removedFromGroup.collect { refresh() }
+        }
+        scope.launch {
+            sdk.groupRekeyed.collect { refresh() }
+        }
+        scope.launch {
+            sdk.groupLinkMemberJoined.collect { refresh() }
+        }
+        scope.launch {
+            sdk.memberRemoved.collect { (conversationId, removedKey) ->
+                _conversations.update { list ->
+                    list?.map { conv ->
+                        if (conv.id == conversationId) {
+                            conv.copy(participantIds = conv.participantIds.filter { it != removedKey })
+                        } else {
+                            conv
+                        }
+                    }
+                }
+            }
+        }
+        scope.launch {
             sdk.memberLeft.collect { (conversationId, peerKey) ->
                 _conversations.update { list ->
                     list?.map { conv ->

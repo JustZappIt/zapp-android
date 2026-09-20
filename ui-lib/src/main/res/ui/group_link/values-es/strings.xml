@@ -68,4 +68,5 @@
     <string name="group_member_remove_older_note">Algunos miembros usan una versión anterior de Zapp. Verán los mensajes nuevos aquí cuando actualicen.</string>
     <string name="group_member_remove_confirm">Expulsar</string>
     <string name="group_member_removed_fmt">Expulsaste a %1$s</string>
+    <string name="group_member_removed_self">Te expulsaron de este grupo.</string>
 </resources>
