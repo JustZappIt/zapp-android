@@ -60,4 +60,12 @@
     <string name="group_link_request_removed_before">Expulsado antes</string>
     <string name="group_link_request_approve">Aprobar</string>
     <string name="group_link_request_decline">Rechazar</string>
+    <!-- Removing a member -->
+    <string name="group_member_remove">Expulsar del grupo</string>
+    <string name="group_member_remove_title_fmt">¿Expulsar a %1$s?</string>
+    <string name="group_member_remove_body">Dejará de recibir los mensajes nuevos de este grupo. Conserva los mensajes que ya tiene.</string>
+    <string name="group_member_remove_reset_link">Restablecer también el enlace de invitación</string>
+    <string name="group_member_remove_older_note">Algunos miembros usan una versión anterior de Zapp. Verán los mensajes nuevos aquí cuando actualicen.</string>
+    <string name="group_member_remove_confirm">Expulsar</string>
+    <string name="group_member_removed_fmt">Expulsaste a %1$s</string>
 </resources>

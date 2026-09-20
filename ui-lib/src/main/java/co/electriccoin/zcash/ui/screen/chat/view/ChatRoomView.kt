@@ -208,6 +208,8 @@ internal fun ChatRoomView(
 
     state.addMemberSheet?.let { AddMemberSheet(state = it) }
 
+    state.removeMemberDialog?.let { RemoveMemberDialog(state = it) }
+
     state.mediaSheet?.let {
         MediaAttachmentSheet(
             onChooseMedia = it.onChooseMedia,

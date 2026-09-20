@@ -60,4 +60,12 @@
     <string name="group_link_request_removed_before">Pernah dikeluarkan</string>
     <string name="group_link_request_approve">Setujui</string>
     <string name="group_link_request_decline">Tolak</string>
+    <!-- Removing a member -->
+    <string name="group_member_remove">Keluarkan dari grup</string>
+    <string name="group_member_remove_title_fmt">Keluarkan %1$s?</string>
+    <string name="group_member_remove_body">Dia tidak akan menerima pesan baru dari grup ini. Pesan yang sudah ada tetap miliknya.</string>
+    <string name="group_member_remove_reset_link">Atur ulang juga tautan undangan</string>
+    <string name="group_member_remove_older_note">Sebagian anggota memakai Zapp versi lama. Mereka akan melihat pesan baru di sini setelah memperbarui.</string>
+    <string name="group_member_remove_confirm">Keluarkan</string>
+    <string name="group_member_removed_fmt">Anda mengeluarkan %1$s</string>
 </resources>

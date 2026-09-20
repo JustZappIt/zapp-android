@@ -60,4 +60,12 @@
     <string name="group_link_request_removed_before">Removed before</string>
     <string name="group_link_request_approve">Approve</string>
     <string name="group_link_request_decline">Decline</string>
+    <!-- Removing a member -->
+    <string name="group_member_remove">Remove from group</string>
+    <string name="group_member_remove_title_fmt">Remove %1$s?</string>
+    <string name="group_member_remove_body">They will stop getting new messages from this group. They keep the messages they already have.</string>
+    <string name="group_member_remove_reset_link">Reset the invite link too</string>
+    <string name="group_member_remove_older_note">Some members use an older version of Zapp. They will see new messages here after they update.</string>
+    <string name="group_member_remove_confirm">Remove</string>
+    <string name="group_member_removed_fmt">You removed %1$s</string>
 </resources>

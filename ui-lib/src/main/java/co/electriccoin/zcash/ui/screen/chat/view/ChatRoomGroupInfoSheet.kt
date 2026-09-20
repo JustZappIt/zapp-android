@@ -20,8 +20,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -46,9 +50,12 @@ import co.electriccoin.zcash.ui.design.component.ZashiModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.zapp.ZappInputField
 import co.electriccoin.zcash.ui.design.component.zapp.initialsOf
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
+import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.screen.chat.room.ChatRoomAddMemberSheetState
 import co.electriccoin.zcash.ui.screen.chat.room.ChatRoomGroupInfoSheetState
+import co.electriccoin.zcash.ui.screen.chat.room.ChatRoomGroupMember
 import co.electriccoin.zcash.ui.screen.chat.room.ChatRoomGroupRenameDialogState
+import co.electriccoin.zcash.ui.screen.chat.room.ChatRoomRemoveMemberDialogState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,11 +90,20 @@ internal fun GroupInfoSheet(state: ChatRoomGroupInfoSheetState) {
                 label = stringResource(R.string.chat_group_info_rename),
                 onClick = state.onRename,
             )
-            GroupActionRow(
-                icon = Icons.Default.PersonAdd,
-                label = stringResource(R.string.chat_group_info_add_member),
-                onClick = state.onAddMember,
-            )
+            state.onAddMember?.let { onAddMember ->
+                GroupActionRow(
+                    icon = Icons.Default.PersonAdd,
+                    label = stringResource(R.string.chat_group_info_add_member),
+                    onClick = onAddMember,
+                )
+            }
+            state.onInviteLink?.let { onInviteLink ->
+                GroupActionRow(
+                    icon = Icons.Default.Link,
+                    label = stringResource(R.string.group_link_header),
+                    onClick = onInviteLink,
+                )
+            }
 
             Spacer(Modifier.height(12.dp))
             BasicText(
@@ -97,7 +113,7 @@ internal fun GroupInfoSheet(state: ChatRoomGroupInfoSheetState) {
             Spacer(Modifier.height(8.dp))
             LazyColumn(modifier = Modifier.heightIn(max = 280.dp)) {
                 items(items = state.members, key = { it.publicKey }) { member ->
-                    MemberRow(name = member.displayName)
+                    MemberRow(member = member)
                 }
             }
         }
@@ -223,8 +239,9 @@ private fun GroupActionRow(
 }
 
 @Composable
-private fun MemberRow(name: String) {
+private fun MemberRow(member: ChatRoomGroupMember) {
     val c = ZappTheme.colors
+    val removeLabel = stringResource(R.string.group_member_remove)
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -235,13 +252,113 @@ private fun MemberRow(name: String) {
             contentAlignment = Alignment.Center,
         ) {
             BasicText(
-                text = initialsOf(name),
+                text = initialsOf(member.displayName),
                 style = ZappTheme.typography.chip.copy(color = c.onAccent),
             )
         }
         BasicText(
-            text = name,
+            text = member.displayName,
             style = ZappTheme.typography.rowTitle.copy(color = c.text),
+            modifier = Modifier.weight(1f),
+        )
+        member.onRemove?.let { onRemove ->
+            Icon(
+                Icons.Default.PersonRemove,
+                contentDescription = removeLabel,
+                tint = c.textMuted,
+                modifier =
+                    Modifier
+                        .size(36.dp)
+                        .clickable(onClick = onRemove)
+                        .semantics { this.role = Role.Button }
+                        .padding(6.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Removing someone is not undoable and is not only a membership change, so the dialog says what it
+ * costs the person, and what this group cannot promise yet when older builds are still in it.
+ */
+@Composable
+internal fun RemoveMemberDialog(state: ChatRoomRemoveMemberDialogState) {
+    val c = ZappTheme.colors
+    AlertDialog(
+        onDismissRequest = state.onDismiss,
+        containerColor = c.surface,
+        titleContentColor = c.text,
+        textContentColor = c.textMuted,
+        shape = RectangleShape,
+        title = {
+            BasicText(
+                text = stringResource(R.string.group_member_remove_title_fmt, state.name),
+                style = ZappTheme.typography.sectionTitle.copy(color = c.text, fontWeight = FontWeight.Black),
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                BasicText(
+                    text = stringResource(R.string.group_member_remove_body),
+                    style = ZappTheme.typography.body.copy(color = c.textMuted),
+                )
+                state.olderMembersNote?.let {
+                    BasicText(
+                        text = it.getValue(),
+                        style = ZappTheme.typography.caption.copy(color = c.textMuted),
+                    )
+                }
+                state.resetLink?.let { option ->
+                    ResetLinkOption(isChecked = option.isChecked, onToggle = option.onToggle)
+                }
+            }
+        },
+        confirmButton = {
+            DialogTextButton(
+                label = stringResource(R.string.group_member_remove_confirm),
+                color = if (state.isBusy) c.textSubtle else c.danger,
+                enabled = !state.isBusy,
+                onClick = state.onConfirm,
+            )
+        },
+        dismissButton = {
+            DialogTextButton(
+                label = stringResource(R.string.group_link_cancel),
+                color = c.textMuted,
+                onClick = state.onDismiss,
+            )
+        },
+    )
+}
+
+@Composable
+private fun ResetLinkOption(
+    isChecked: Boolean,
+    onToggle: () -> Unit,
+) {
+    val c = ZappTheme.colors
+    val label = stringResource(R.string.group_member_remove_reset_link)
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle)
+                .semantics(mergeDescendants = true) {
+                    this.role = Role.Checkbox
+                    contentDescription = label
+                }.padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            if (isChecked) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+            contentDescription = null,
+            tint = if (isChecked) c.accent else c.textMuted,
+            modifier = Modifier.size(20.dp),
+        )
+        BasicText(
+            text = label,
+            style = ZappTheme.typography.rowSubtitle.copy(color = c.text),
         )
     }
 }

@@ -43,20 +43,44 @@ data class ChatRoomState(
     val groupInfoSheet: ChatRoomGroupInfoSheetState?,
     val groupRenameDialog: ChatRoomGroupRenameDialogState?,
     val addMemberSheet: ChatRoomAddMemberSheetState?,
+    val removeMemberDialog: ChatRoomRemoveMemberDialogState?,
     val blockDialog: BlockUserDialogState?,
 )
 
 data class ChatRoomGroupInfoSheetState(
     val groupName: String,
     val members: List<ChatRoomGroupMember>,
+    /** Only the creator's changes are accepted by the other members, so only the owner is offered them. */
+    val onAddMember: (() -> Unit)?,
+    val onInviteLink: (() -> Unit)?,
     val onRename: () -> Unit,
-    val onAddMember: () -> Unit,
     val onDismiss: () -> Unit,
 )
 
 data class ChatRoomGroupMember(
     val publicKey: String,
     val displayName: String,
+    val onRemove: (() -> Unit)? = null,
+)
+
+/**
+ * Removal is two things at once: the member is dropped, and the group takes a new secret so that
+ * what is said next cannot be read with the old one. The dialog says what the person keeps, warns
+ * when some members are on a build that will not honour it yet, and offers to reset the invite link
+ * so the same link cannot bring them straight back.
+ */
+data class ChatRoomRemoveMemberDialogState(
+    val name: String,
+    val olderMembersNote: StringResource?,
+    val resetLink: ChatRoomRemoveMemberResetOption?,
+    val isBusy: Boolean,
+    val onConfirm: () -> Unit,
+    val onDismiss: () -> Unit,
+)
+
+data class ChatRoomRemoveMemberResetOption(
+    val isChecked: Boolean,
+    val onToggle: () -> Unit,
 )
 
 data class ChatRoomGroupRenameDialogState(
