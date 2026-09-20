@@ -23,4 +23,35 @@
     <string name="group_invite_update">Actualiza Zapp para usar este enlace.</string>
     <string name="group_invite_declined">El dueño del grupo no aceptó tu solicitud.</string>
     <string name="group_invite_coming_soon">Los enlaces de invitación a grupos llegarán pronto.</string>
+
+    <!-- The owner's invite link -->
+    <string name="group_link_header">Enlace de invitación</string>
+    <string name="group_link_warning">Cualquiera con este enlace puede unirse. Compártelo solo con personas de confianza.</string>
+    <string name="group_link_history_note">Quienes se unan podrán leer los mensajes anteriores de este grupo.</string>
+    <string name="group_link_copy">Copiar enlace</string>
+    <string name="group_link_share">Compartir enlace</string>
+    <string name="group_link_qr_content_description">Código QR del enlace de invitación</string>
+    <string name="group_link_reset">Restablecer enlace</string>
+    <string name="group_link_reset_title">¿Restablecer este enlace?</string>
+    <string name="group_link_reset_body">El enlace anterior dejará de funcionar. Quien lo tenga necesitará el nuevo.</string>
+    <string name="group_link_reset_confirm">Restablecer</string>
+    <string name="group_link_cancel">Cancelar</string>
+    <string name="group_link_turn_off">Desactivar enlace</string>
+    <string name="group_link_turn_on">Activar enlace</string>
+    <string name="group_link_off_note">El enlace de invitación está desactivado.</string>
+    <string name="group_link_expiry_label">El enlace caduca</string>
+    <string name="group_link_expiry_never">Nunca</string>
+    <string name="group_link_expiry_1_day">En 1 día</string>
+    <string name="group_link_expiry_days_fmt">En %1$s días</string>
+    <string name="group_link_expired">Caducado</string>
+    <string name="group_link_limit_label">Personas que pueden unirse con este enlace</string>
+    <string name="group_link_limit_none">Sin límite</string>
+    <string name="group_link_limit_joins_fmt">%1$s personas</string>
+    <string name="group_link_name_toggle">Mostrar el nombre del grupo en el enlace</string>
+    <string name="group_link_approval_toggle">Aprobar nuevos miembros</string>
+    <string name="group_link_approval_help">Cuando está activado, quienes usen el enlace esperan hasta que les des acceso.</string>
+    <string name="group_link_paused">Muchas personas se unieron en la última hora, así que las nuevas solicitudes esperan tu aprobación.</string>
+    <string name="group_link_owner_only">Solo el dueño del grupo puede compartir un enlace de invitación.</string>
+    <string name="group_link_action_failed">No funcionó. Revisa tu conexión e inténtalo de nuevo.</string>
+    <string name="group_link_retry">Intentar de nuevo</string>
 </resources>

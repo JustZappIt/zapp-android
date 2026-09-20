@@ -1,0 +1,350 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
+
+package co.electriccoin.zcash.ui.screen.grouplink
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
+import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.CopyFeedback
+import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
+import co.electriccoin.zcash.ui.common.usecase.ShareGroupLinkUseCase
+import co.electriccoin.zcash.ui.design.component.ButtonState
+import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
+import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationState
+import co.electriccoin.zcash.ui.design.util.StringResource
+import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.chat.model.ChatConversation
+import co.electriccoin.zcash.ui.screen.chat.repository.ChatConversationsRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.WhileSubscribed
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import xyz.justzappit.zappmessaging.models.ZMGroupLinkApproval
+import xyz.justzappit.zappmessaging.models.ZMGroupLinkInfo
+import xyz.justzappit.zappmessaging.models.ZMGroupLinkOptions
+import xyz.justzappit.zappmessaging.models.ZMGroupLinkState
+
+/**
+ * The owner's controls for one group's invite link.
+ *
+ * Every control is one SDK call that answers with the whole link record, so the screen never has to
+ * guess what changed. A call that fails leaves the last known record on screen and says so, because
+ * a control that silently does nothing is how an owner ends up believing a link is off.
+ */
+@Suppress("TooManyFunctions")
+class GroupLinkVM(
+    private val args: GroupLinkArgs,
+    private val groupLinks: GroupLinkRepository,
+    private val conversations: ChatConversationsRepository,
+    private val copyToClipboard: CopyToClipboardUseCase,
+    private val shareGroupLink: ShareGroupLinkUseCase,
+    private val navigationRouter: NavigationRouter,
+    private val now: () -> Long = System::currentTimeMillis,
+) : ViewModel() {
+    private val info = MutableStateFlow<ZMGroupLinkInfo?>(null)
+    private val ui = MutableStateFlow(GroupLinkUi())
+    private val copyFeedback = CopyFeedback(viewModelScope)
+
+    val state: StateFlow<GroupLinkState> =
+        combine(
+            info,
+            ui,
+            copyFeedback.copiedValue,
+            conversations.conversation(args.conversationId),
+        ) { link, ui, copied, conversation ->
+            createState(link, ui, copied, conversation)
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
+            initialValue = createState(null, GroupLinkUi(), null, null),
+        )
+
+    init {
+        load()
+    }
+
+    private fun load() {
+        ui.update { it.copy(failed = false) }
+        viewModelScope.launch {
+            groupLinks
+                .get(args.conversationId)
+                .onSuccess { info.value = it }
+                .onFailure { ui.update { current -> current.copy(failed = true) } }
+        }
+    }
+
+    /** One control, one call. A second tap while a call is in flight is ignored. */
+    private fun run(block: suspend () -> Result<ZMGroupLinkInfo>) {
+        if (ui.value.isBusy) return
+        ui.update { it.copy(isBusy = true, failed = false, picker = null, isConfirmingReset = false) }
+        viewModelScope.launch {
+            block()
+                .onSuccess {
+                    info.value = it
+                    ui.update { current -> current.copy(isBusy = false) }
+                }.onFailure {
+                    ui.update { current -> current.copy(isBusy = false, failed = true) }
+                }
+        }
+    }
+
+    private fun onTurnOnClick() = run { groupLinks.enable(args.conversationId, ZMGroupLinkOptions()) }
+
+    private fun onTurnOffClick() = run { groupLinks.disable(args.conversationId) }
+
+    private fun onResetClick() = ui.update { it.copy(isConfirmingReset = true) }
+
+    private fun onResetConfirmed() = run { groupLinks.reset(args.conversationId) }
+
+    private fun onExpiryPicked(days: Long?) =
+        run {
+            groupLinks.update(
+                args.conversationId,
+                if (days == null) {
+                    ZMGroupLinkOptions(clearExpiry = true)
+                } else {
+                    ZMGroupLinkOptions(expiresAt = now() + days * DAY_MS)
+                },
+            )
+        }
+
+    private fun onLimitPicked(maxJoins: Int?) =
+        run {
+            groupLinks.update(
+                args.conversationId,
+                if (maxJoins == null) {
+                    ZMGroupLinkOptions(clearMaxJoins = true)
+                } else {
+                    ZMGroupLinkOptions(maxJoins = maxJoins)
+                },
+            )
+        }
+
+    private fun onNameToggle(includeName: Boolean) =
+        run { groupLinks.update(args.conversationId, ZMGroupLinkOptions(includeName = includeName)) }
+
+    private fun onApprovalToggle(approval: ZMGroupLinkApproval) =
+        run { groupLinks.update(args.conversationId, ZMGroupLinkOptions(approval = approval)) }
+
+    private fun onCopyClick(link: String) {
+        copyToClipboard(link, isSensitive = true)
+        copyFeedback.mark(link)
+    }
+
+    private fun onShareClick(link: String) {
+        if (!shareGroupLink(link)) ui.update { it.copy(failed = true) }
+    }
+
+    private fun onPickerOpen(kind: GroupLinkPickerKind) = ui.update { it.copy(picker = kind) }
+
+    private fun dismissPicker() = ui.update { it.copy(picker = null) }
+
+    private fun dismissConfirmation() = ui.update { it.copy(isConfirmingReset = false) }
+
+    private fun onBack() = navigationRouter.back()
+
+    private fun createState(
+        link: ZMGroupLinkInfo?,
+        ui: GroupLinkUi,
+        copied: String?,
+        conversation: ChatConversation?,
+    ): GroupLinkState {
+        // Only the creator can admit anyone, so for everyone else the screen says so and stops.
+        if (conversation != null && !conversation.isOwner) {
+            return GroupLinkState(
+                isLoading = false,
+                card = null,
+                warning = null,
+                historyNote = null,
+                notice = stringRes(R.string.group_link_owner_only),
+                error = null,
+                actions = emptyList(),
+                rows = emptyList(),
+                toggles = emptyList(),
+                picker = null,
+                confirmation = null,
+                onBack = ::onBack,
+            )
+        }
+
+        val isActive = link?.state == ZMGroupLinkState.ACTIVE
+        return GroupLinkState(
+            isLoading = link == null && !ui.failed,
+            card =
+                link?.link?.takeIf { isActive }?.let { value ->
+                    GroupLinkCardState(link = value, isCopied = copied == value, onCopyClick = { onCopyClick(value) })
+                },
+            warning = stringRes(R.string.group_link_warning).takeIf { link != null },
+            historyNote = stringRes(R.string.group_link_history_note).takeIf { link != null },
+            notice = notice(link),
+            error = stringRes(R.string.group_link_action_failed).takeIf { ui.failed },
+            actions = actions(link, ui),
+            rows = if (isActive) rows(link) else emptyList(),
+            toggles = if (isActive) toggles(link) else emptyList(),
+            picker = ui.picker?.let { picker(it, link) },
+            confirmation = if (ui.isConfirmingReset) resetConfirmation() else null,
+            onBack = ::onBack,
+        )
+    }
+
+    private fun notice(link: ZMGroupLinkInfo?): StringResource? =
+        when {
+            link?.state == ZMGroupLinkState.OFF -> stringRes(R.string.group_link_off_note)
+            link?.approvalReason == RATE_REASON -> stringRes(R.string.group_link_paused)
+            else -> null
+        }
+
+    private fun actions(
+        link: ZMGroupLinkInfo?,
+        ui: GroupLinkUi,
+    ): List<GroupLinkActionState> {
+        if (link == null) {
+            return if (ui.failed) {
+                listOf(action(R.string.group_link_retry, ZappButtonVariant.Primary, !ui.isBusy, ::load))
+            } else {
+                emptyList()
+            }
+        }
+        val enabled = !ui.isBusy
+        val value = link.link
+        return if (link.state == ZMGroupLinkState.ACTIVE && value != null) {
+            listOf(
+                action(R.string.group_link_copy, ZappButtonVariant.Primary, enabled) { onCopyClick(value) },
+                action(R.string.group_link_share, ZappButtonVariant.Secondary, enabled) { onShareClick(value) },
+                action(R.string.group_link_reset, ZappButtonVariant.Ghost, enabled, ::onResetClick),
+                action(R.string.group_link_turn_off, ZappButtonVariant.Ghost, enabled, ::onTurnOffClick),
+            )
+        } else {
+            listOf(action(R.string.group_link_turn_on, ZappButtonVariant.Primary, enabled, ::onTurnOnClick))
+        }
+    }
+
+    private fun action(
+        text: Int,
+        variant: ZappButtonVariant,
+        isEnabled: Boolean,
+        onClick: () -> Unit,
+    ) = GroupLinkActionState(text = stringRes(text), variant = variant, isEnabled = isEnabled, onClick = onClick)
+
+    private fun rows(link: ZMGroupLinkInfo?): List<GroupLinkRowState> =
+        listOf(
+            GroupLinkRowState(
+                title = stringRes(R.string.group_link_expiry_label),
+                value = expiryValue(link?.expiresAt),
+                onClick = { onPickerOpen(GroupLinkPickerKind.EXPIRY) },
+            ),
+            GroupLinkRowState(
+                title = stringRes(R.string.group_link_limit_label),
+                value = GroupLinkCopy.limit(link?.maxJoins),
+                onClick = { onPickerOpen(GroupLinkPickerKind.LIMIT) },
+            ),
+        )
+
+    private fun toggles(link: ZMGroupLinkInfo?): List<GroupLinkToggleState> {
+        val includeName = link?.includeName != false
+        val approves = link?.approval == ZMGroupLinkApproval.OWNER
+        return listOf(
+            GroupLinkToggleState(
+                title = stringRes(R.string.group_link_name_toggle),
+                subtitle = null,
+                isChecked = includeName,
+                onClick = { onNameToggle(!includeName) },
+            ),
+            GroupLinkToggleState(
+                title = stringRes(R.string.group_link_approval_toggle),
+                subtitle = stringRes(R.string.group_link_approval_help),
+                isChecked = approves,
+                onClick = {
+                    onApprovalToggle(if (approves) ZMGroupLinkApproval.AUTO else ZMGroupLinkApproval.OWNER)
+                },
+            ),
+        )
+    }
+
+    private fun picker(
+        kind: GroupLinkPickerKind,
+        link: ZMGroupLinkInfo?,
+    ): GroupLinkPickerState =
+        when (kind) {
+            GroupLinkPickerKind.EXPIRY -> {
+                val chosen = remainingDays(link?.expiresAt)
+                GroupLinkPickerState(
+                    title = stringRes(R.string.group_link_expiry_label),
+                    options =
+                        EXPIRY_CHOICES.map { days ->
+                            GroupLinkPickerOption(GroupLinkCopy.expiry(days), days == chosen) { onExpiryPicked(days) }
+                        },
+                    onDismiss = ::dismissPicker,
+                )
+            }
+
+            GroupLinkPickerKind.LIMIT -> {
+                GroupLinkPickerState(
+                    title = stringRes(R.string.group_link_limit_label),
+                    options =
+                        LIMIT_CHOICES.map { max ->
+                            val label = GroupLinkCopy.limit(max)
+                            GroupLinkPickerOption(label, max == link?.maxJoins) { onLimitPicked(max) }
+                        },
+                    onDismiss = ::dismissPicker,
+                )
+            }
+        }
+
+    private fun resetConfirmation() =
+        ZappConfirmationState(
+            title = stringRes(R.string.group_link_reset_title),
+            message = stringRes(R.string.group_link_reset_body),
+            primaryButton = ButtonState(stringRes(R.string.group_link_reset_confirm), onClick = ::onResetConfirmed),
+            secondaryButton = ButtonState(stringRes(R.string.group_link_cancel), onClick = ::dismissConfirmation),
+            isDestructive = true,
+            onBack = ::dismissConfirmation,
+        )
+
+    private fun expiryValue(expiresAt: Long?): StringResource {
+        val days = remainingDays(expiresAt)
+        return if (days == EXPIRED) stringRes(R.string.group_link_expired) else GroupLinkCopy.expiry(days)
+    }
+
+    /**
+     * What is left of the link's life, in days, rounded up to the window the owner picked. A link
+     * expires relative to the moment it was set, so the row reads as a choice rather than as a date
+     * nobody typed. Null means it never expires, zero means it already has.
+     */
+    @Suppress("ReturnCount")
+    private fun remainingDays(expiresAt: Long?): Long? {
+        val remaining = expiresAt?.minus(now()) ?: return null
+        if (remaining <= 0) return EXPIRED
+        return EXPIRY_CHOICES.filterNotNull().firstOrNull { remaining <= it * DAY_MS }
+            ?: ((remaining + DAY_MS - 1) / DAY_MS)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        copyFeedback.cancel()
+    }
+
+    private data class GroupLinkUi(
+        val isBusy: Boolean = false,
+        val failed: Boolean = false,
+        val picker: GroupLinkPickerKind? = null,
+        val isConfirmingReset: Boolean = false,
+    )
+
+    private enum class GroupLinkPickerKind { EXPIRY, LIMIT }
+
+    private companion object {
+        const val DAY_MS = 86_400_000L
+        const val EXPIRED = 0L
+        const val RATE_REASON = "rate"
+        val EXPIRY_CHOICES = listOf<Long?>(null, 1L, 7L, 30L)
+        val LIMIT_CHOICES = listOf<Int?>(null, 10, 25, 50, 100)
+    }
+}

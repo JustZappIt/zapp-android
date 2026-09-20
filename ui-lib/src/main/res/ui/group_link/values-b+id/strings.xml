@@ -23,4 +23,35 @@
     <string name="group_invite_update">Perbarui Zapp untuk memakai tautan ini.</string>
     <string name="group_invite_declined">Pemilik grup tidak menerima permintaan Anda.</string>
     <string name="group_invite_coming_soon">Tautan undangan grup segera hadir.</string>
+
+    <!-- The owner's invite link -->
+    <string name="group_link_header">Tautan undangan</string>
+    <string name="group_link_warning">Siapa pun yang punya tautan ini bisa bergabung. Bagikan hanya kepada orang yang Anda percaya.</string>
+    <string name="group_link_history_note">Orang yang bergabung bisa membaca pesan sebelumnya di grup ini.</string>
+    <string name="group_link_copy">Salin tautan</string>
+    <string name="group_link_share">Bagikan tautan</string>
+    <string name="group_link_qr_content_description">Kode QR untuk tautan undangan</string>
+    <string name="group_link_reset">Atur ulang tautan</string>
+    <string name="group_link_reset_title">Atur ulang tautan ini?</string>
+    <string name="group_link_reset_body">Tautan lama akan berhenti bekerja. Siapa pun yang memilikinya perlu tautan baru.</string>
+    <string name="group_link_reset_confirm">Atur ulang</string>
+    <string name="group_link_cancel">Batal</string>
+    <string name="group_link_turn_off">Matikan tautan</string>
+    <string name="group_link_turn_on">Nyalakan tautan</string>
+    <string name="group_link_off_note">Tautan undangan sedang mati.</string>
+    <string name="group_link_expiry_label">Tautan berakhir</string>
+    <string name="group_link_expiry_never">Tidak pernah</string>
+    <string name="group_link_expiry_1_day">Dalam 1 hari</string>
+    <string name="group_link_expiry_days_fmt">Dalam %1$s hari</string>
+    <string name="group_link_expired">Sudah berakhir</string>
+    <string name="group_link_limit_label">Orang yang bisa bergabung lewat tautan ini</string>
+    <string name="group_link_limit_none">Tanpa batas</string>
+    <string name="group_link_limit_joins_fmt">%1$s orang</string>
+    <string name="group_link_name_toggle">Tampilkan nama grup di tautan</string>
+    <string name="group_link_approval_toggle">Setujui anggota baru</string>
+    <string name="group_link_approval_help">Saat ini menyala, orang yang memakai tautan menunggu sampai Anda mengizinkan.</string>
+    <string name="group_link_paused">Banyak orang bergabung dalam satu jam terakhir, jadi permintaan baru kini menunggu persetujuan Anda.</string>
+    <string name="group_link_owner_only">Hanya pemilik grup yang bisa membagikan tautan undangan.</string>
+    <string name="group_link_action_failed">Tidak berhasil. Periksa koneksi Anda lalu coba lagi.</string>
+    <string name="group_link_retry">Coba lagi</string>
 </resources>

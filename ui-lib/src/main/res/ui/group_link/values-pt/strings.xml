@@ -23,4 +23,35 @@
     <string name="group_invite_update">Atualize o Zapp para usar este link.</string>
     <string name="group_invite_declined">O dono do grupo não aceitou seu pedido.</string>
     <string name="group_invite_coming_soon">Links de convite para grupos chegam em breve.</string>
+
+    <!-- The owner's invite link -->
+    <string name="group_link_header">Link de convite</string>
+    <string name="group_link_warning">Qualquer pessoa com este link pode entrar. Compartilhe apenas com quem você confia.</string>
+    <string name="group_link_history_note">Quem entrar poderá ler as mensagens anteriores deste grupo.</string>
+    <string name="group_link_copy">Copiar link</string>
+    <string name="group_link_share">Compartilhar link</string>
+    <string name="group_link_qr_content_description">Código QR do link de convite</string>
+    <string name="group_link_reset">Redefinir link</string>
+    <string name="group_link_reset_title">Redefinir este link?</string>
+    <string name="group_link_reset_body">O link antigo vai parar de funcionar. Quem tiver o antigo vai precisar do novo.</string>
+    <string name="group_link_reset_confirm">Redefinir</string>
+    <string name="group_link_cancel">Cancelar</string>
+    <string name="group_link_turn_off">Desativar link</string>
+    <string name="group_link_turn_on">Ativar link</string>
+    <string name="group_link_off_note">O link de convite está desativado.</string>
+    <string name="group_link_expiry_label">O link expira</string>
+    <string name="group_link_expiry_never">Nunca</string>
+    <string name="group_link_expiry_1_day">Em 1 dia</string>
+    <string name="group_link_expiry_days_fmt">Em %1$s dias</string>
+    <string name="group_link_expired">Expirado</string>
+    <string name="group_link_limit_label">Pessoas que podem entrar com este link</string>
+    <string name="group_link_limit_none">Sem limite</string>
+    <string name="group_link_limit_joins_fmt">%1$s pessoas</string>
+    <string name="group_link_name_toggle">Mostrar o nome do grupo no link</string>
+    <string name="group_link_approval_toggle">Aprovar novos membros</string>
+    <string name="group_link_approval_help">Quando isto está ativado, quem usa o link espera até você deixar entrar.</string>
+    <string name="group_link_paused">Muitas pessoas entraram na última hora, então os novos pedidos agora esperam sua aprovação.</string>
+    <string name="group_link_owner_only">Só o dono do grupo pode compartilhar um link de convite.</string>
+    <string name="group_link_action_failed">Não deu certo. Confira sua conexão e tente de novo.</string>
+    <string name="group_link_retry">Tentar de novo</string>
 </resources>

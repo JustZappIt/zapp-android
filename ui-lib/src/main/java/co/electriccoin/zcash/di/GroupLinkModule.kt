@@ -12,8 +12,10 @@ import co.electriccoin.zcash.ui.screen.grouplink.GroupInvitePreviewArgs
 import co.electriccoin.zcash.ui.screen.grouplink.GroupInvitePreviewVM
 import co.electriccoin.zcash.ui.screen.grouplink.GroupJoinRepository
 import co.electriccoin.zcash.ui.screen.grouplink.GroupJoinRepositoryImpl
+import co.electriccoin.zcash.ui.screen.grouplink.GroupLinkArgs
 import co.electriccoin.zcash.ui.screen.grouplink.GroupLinkRepository
 import co.electriccoin.zcash.ui.screen.grouplink.GroupLinkRepositoryImpl
+import co.electriccoin.zcash.ui.screen.grouplink.GroupLinkVM
 import co.electriccoin.zcash.ui.screen.grouplink.model.PendingGroupInviteStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -45,6 +47,16 @@ val groupLinkModule =
                 args = args,
                 store = get(),
                 groupLinks = get(),
+                navigationRouter = get(),
+            )
+        }
+        viewModel { (args: GroupLinkArgs) ->
+            GroupLinkVM(
+                args = args,
+                groupLinks = get(),
+                conversations = get(),
+                copyToClipboard = get(),
+                shareGroupLink = get(),
                 navigationRouter = get(),
             )
         }
