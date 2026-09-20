@@ -69,4 +69,5 @@
     <string name="group_member_remove_confirm">Remove</string>
     <string name="group_member_removed_fmt">You removed %1$s</string>
     <string name="group_member_removed_self">You were removed from this group.</string>
+    <string name="group_invite_paste_entry">Have an invite link? Tap it again or paste it here.</string>
 </resources>

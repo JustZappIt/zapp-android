@@ -27,6 +27,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -36,7 +38,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBackButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappCompactButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappFab
+import co.electriccoin.zcash.ui.design.component.zapp.ZappRow
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRowDivider
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
@@ -44,8 +48,10 @@ import co.electriccoin.zcash.ui.design.theme.colors.ZappNavBar
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.chat.list.ChatListItemState
+import co.electriccoin.zcash.ui.screen.chat.list.ChatListPasteInviteState
 import co.electriccoin.zcash.ui.screen.chat.list.ChatListState
 import co.electriccoin.zcash.ui.screen.chat.list.ChatListSupportRowState
+import co.electriccoin.zcash.ui.screen.chat.list.ChatListWaitingJoinState
 
 @Composable
 internal fun ChatListView(
@@ -87,6 +93,20 @@ internal fun ChatListView(
                         item(key = "support_row") {
                             SupportContactRow(state = state.supportRow)
                             ZappRowDivider(inset = true)
+                        }
+
+                        state.pasteInvite?.let { paste ->
+                            item(key = "paste_invite") {
+                                PasteInviteRow(state = paste)
+                                ZappRowDivider(inset = true)
+                            }
+                        }
+
+                        items(items = state.waitingJoins, key = { "waiting_${it.linkId}" }) { waiting ->
+                            Column(modifier = Modifier.animateItem()) {
+                                WaitingJoinRow(state = waiting)
+                                ZappRowDivider(inset = true)
+                            }
                         }
 
                         items(items = state.items, key = { it.id }) { item ->
@@ -153,6 +173,35 @@ internal fun ChatListView(
     }
 
     state.tosDialog?.let { ChatTermsDialog(onAccept = it.onAccept, onDecline = it.onDecline) }
+}
+
+@Composable
+private fun WaitingJoinRow(state: ChatListWaitingJoinState) {
+    val c = ZappTheme.colors
+    ZappRow(
+        title = state.title.getValue(),
+        subtitle = state.subtitle.getValue(),
+        icon = Icons.Default.HourglassEmpty,
+        iconTint = c.textMuted,
+        trailing = {
+            ZappCompactButton(
+                text = state.cancelLabel.getValue(),
+                onClick = state.onCancel,
+            )
+        },
+    )
+}
+
+@Composable
+private fun PasteInviteRow(state: ChatListPasteInviteState) {
+    val c = ZappTheme.colors
+    ZappRow(
+        title = state.text.getValue(),
+        icon = Icons.Default.Link,
+        iconTint = c.accent,
+        trailing = null,
+        onClick = state.onClick,
+    )
 }
 
 @Composable

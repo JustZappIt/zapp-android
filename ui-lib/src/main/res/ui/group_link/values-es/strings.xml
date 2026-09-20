@@ -69,4 +69,5 @@
     <string name="group_member_remove_confirm">Expulsar</string>
     <string name="group_member_removed_fmt">Expulsaste a %1$s</string>
     <string name="group_member_removed_self">Te expulsaron de este grupo.</string>
+    <string name="group_invite_paste_entry">¿Tienes un enlace de invitación? Tócalo otra vez o pégalo aquí.</string>
 </resources>
