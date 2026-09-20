@@ -12,8 +12,6 @@ data class ChatListState(
     val items: List<ChatListItemState>,
     /** Invite links this device is waiting on, above the conversations. */
     val waitingJoins: List<ChatListWaitingJoinState>,
-    /** Offered with no conversations yet, for a link that arrived somewhere Zapp cannot see. */
-    val pasteInvite: ChatListPasteInviteState?,
     val emptyTitle: StringResource,
     val emptySubtitle: StringResource,
     val newConversationContentDescription: StringResource,
@@ -46,11 +44,6 @@ data class ChatListWaitingJoinState(
     val subtitle: StringResource,
     val cancelLabel: StringResource,
     val onCancel: () -> Unit,
-)
-
-data class ChatListPasteInviteState(
-    val text: StringResource,
-    val onClick: () -> Unit,
 )
 
 data class ChatListNetworkChipState(

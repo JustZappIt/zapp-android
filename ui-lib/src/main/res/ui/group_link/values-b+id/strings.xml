@@ -69,5 +69,4 @@
     <string name="group_member_remove_confirm">Keluarkan</string>
     <string name="group_member_removed_fmt">Anda mengeluarkan %1$s</string>
     <string name="group_member_removed_self">Anda dikeluarkan dari grup ini.</string>
-    <string name="group_invite_paste_entry">Punya tautan undangan? Ketuk lagi atau tempel di sini.</string>
 </resources>

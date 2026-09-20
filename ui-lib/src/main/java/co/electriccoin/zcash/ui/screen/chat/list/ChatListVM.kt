@@ -11,7 +11,6 @@ import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.usecase.GetChatConnectionDetailsUseCase
-import co.electriccoin.zcash.ui.common.usecase.GetClipboardTextUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveChatPeerStatusUseCase
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -29,11 +28,7 @@ import co.electriccoin.zcash.ui.screen.chat.model.resolveDisplayName
 import co.electriccoin.zcash.ui.screen.chat.repository.ChatContactsRepository
 import co.electriccoin.zcash.ui.screen.chat.repository.ChatConversationsRepository
 import co.electriccoin.zcash.ui.screen.chat.support.SupportChatConstants
-import co.electriccoin.zcash.ui.screen.grouplink.GroupInvitePreviewArgs
 import co.electriccoin.zcash.ui.screen.grouplink.GroupJoinRepository
-import co.electriccoin.zcash.ui.screen.grouplink.model.GroupInviteIntake
-import co.electriccoin.zcash.ui.screen.grouplink.model.GroupInviteLinks
-import co.electriccoin.zcash.ui.screen.grouplink.model.PendingGroupInviteStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -55,8 +50,6 @@ class ChatListVM(
     private val observeChatPeerStatus: ObserveChatPeerStatusUseCase,
     private val standardPreferenceProvider: StandardPreferenceProvider,
     private val groupJoins: GroupJoinRepository,
-    private val pendingInvites: PendingGroupInviteStore,
-    private val getClipboardText: GetClipboardTextUseCase,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     private val connectionStatus = MutableStateFlow(ChatListConnectionStatus.CONNECTING)
@@ -112,19 +105,6 @@ class ChatListVM(
         viewModelScope.launch {
             groupJoins.cancel(linkId)
             refreshWaitingJoins()
-        }
-    }
-
-    /**
-     * A link that arrived somewhere Zapp cannot see. Reading the clipboard is announced by Android,
-     * so it happens only on this tap, and a clipboard with no link in it lands on the screen that
-     * says the link could not be read rather than on nothing at all.
-     */
-    private fun onPasteInviteClick() {
-        viewModelScope.launch {
-            val link = getClipboardText()?.let { GroupInviteLinks.fromPastedText(it) }
-            val token = link?.let { (pendingInvites.put(it) as? GroupInviteIntake.Accepted)?.token }
-            navigationRouter.forward(GroupInvitePreviewArgs(token = token))
         }
     }
 
@@ -280,15 +260,6 @@ class ChatListVM(
             isLoading = conversations == null,
             items = visibleConversations.map { toItemState(it, contactsByPublicKey, onlineConversationIds) },
             waitingJoins = waiting.map(::toWaitingJoinState),
-            pasteInvite =
-                if (BuildConfig.IS_GROUP_LINKS_ENABLED && visibleConversations.isEmpty() && waiting.isEmpty()) {
-                    ChatListPasteInviteState(
-                        text = stringRes(R.string.group_invite_paste_entry),
-                        onClick = ::onPasteInviteClick,
-                    )
-                } else {
-                    null
-                },
             emptyTitle = stringRes(R.string.chat_list_empty_title),
             emptySubtitle = stringRes(R.string.chat_list_empty_subtitle),
             newConversationContentDescription =

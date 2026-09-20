@@ -28,7 +28,6 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.HourglassEmpty
-import androidx.compose.material.icons.filled.Link
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -48,7 +47,6 @@ import co.electriccoin.zcash.ui.design.theme.colors.ZappNavBar
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.chat.list.ChatListItemState
-import co.electriccoin.zcash.ui.screen.chat.list.ChatListPasteInviteState
 import co.electriccoin.zcash.ui.screen.chat.list.ChatListState
 import co.electriccoin.zcash.ui.screen.chat.list.ChatListSupportRowState
 import co.electriccoin.zcash.ui.screen.chat.list.ChatListWaitingJoinState
@@ -93,13 +91,6 @@ internal fun ChatListView(
                         item(key = "support_row") {
                             SupportContactRow(state = state.supportRow)
                             ZappRowDivider(inset = true)
-                        }
-
-                        state.pasteInvite?.let { paste ->
-                            item(key = "paste_invite") {
-                                PasteInviteRow(state = paste)
-                                ZappRowDivider(inset = true)
-                            }
                         }
 
                         items(items = state.waitingJoins, key = { "waiting_${it.linkId}" }) { waiting ->
@@ -189,18 +180,6 @@ private fun WaitingJoinRow(state: ChatListWaitingJoinState) {
                 onClick = state.onCancel,
             )
         },
-    )
-}
-
-@Composable
-private fun PasteInviteRow(state: ChatListPasteInviteState) {
-    val c = ZappTheme.colors
-    ZappRow(
-        title = state.text.getValue(),
-        icon = Icons.Default.Link,
-        iconTint = c.accent,
-        trailing = null,
-        onClick = state.onClick,
     )
 }
 

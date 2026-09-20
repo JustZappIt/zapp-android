@@ -49,7 +49,6 @@ import co.electriccoin.zcash.ui.common.usecase.GetBalancePoolsUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetChatConnectionDetailsUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetChatContactsUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetChatMessagesUseCase
-import co.electriccoin.zcash.ui.common.usecase.GetClipboardTextUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetConfigurationUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetExchangeRateUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetFilteredActivitiesUseCase
@@ -220,7 +219,6 @@ val useCaseModule =
         factoryOf(::ObserveContactByAddressUseCase)
         singleOf(::ObserveABContactPickedUseCase)
         factoryOf(::CopyToClipboardUseCase)
-        factoryOf(::GetClipboardTextUseCase)
         factoryOf(::ShareImageUseCase)
         factoryOf(::ShareViewingKeyUseCase)
         factoryOf(::CreateGiftCardUseCase)
