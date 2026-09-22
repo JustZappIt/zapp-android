@@ -17,6 +17,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -83,6 +84,7 @@ internal class IncreaseReputationVM(
     private var launchSignal: ReclaimLaunchSignal? = null
     private var ready: ReclaimStatus.Ready? = null
     private var returnSignal: LivenessReturnSignal? = null
+    private var returnGraceJob: Job? = null
     private var widgetUrl: String? = null
     private var widgetOpened = false
     private var lastActiveStage = VerificationStage.READY
@@ -327,6 +329,7 @@ internal class IncreaseReputationVM(
         if (runJob?.isActive == true) return
         val signal = LivenessReturnSignal()
         returnSignal = signal
+        returnGraceJob?.cancel()
         widgetUrl = null
         widgetOpened = false
         collectLivenessRun(livenessDriver.verify(currency, nonce(), signal))
@@ -336,9 +339,38 @@ internal class IncreaseReputationVM(
     private fun resumeLivenessRun(ret: LivenessReturn) {
         if (runJob?.isActive == true) return
         returnSignal = null
+        returnGraceJob?.cancel()
         widgetUrl = null
         widgetOpened = true
         collectLivenessRun(livenessDriver.resume(ret))
+    }
+
+    /**
+     * The widget hands its result back only by redirecting the browser to Zapp, and only while
+     * the browser is in front: a user who switches back to Zapp by hand leaves the redirect
+     * blocked behind them, and the one-time handoff it carried cannot be replayed. A redirect
+     * that is on its way lands before this screen resumes, so a run still waiting a moment later
+     * has nothing coming. Say so, instead of a selfie step that spins for good; a late redirect
+     * still finishes the run it finds.
+     */
+    fun onScreenVisible() {
+        if (!isAwaitingWidgetReturn()) return
+        returnGraceJob?.cancel()
+        returnGraceJob =
+            viewModelScope.launch {
+                delay(RETURN_GRACE_MILLIS)
+                if (isAwaitingWidgetReturn()) {
+                    emitLivenessRun(
+                        VerificationStage.FAILED,
+                        error = stringRes(R.string.increase_reputation_liveness_error_no_return),
+                    )
+                }
+            }
+    }
+
+    private fun isAwaitingWidgetReturn(): Boolean {
+        val run = mutableState.value.run ?: return false
+        return run.platform == null && run.stage == VerificationStage.VERIFYING
     }
 
     private fun onLivenessReturn() {
@@ -396,7 +428,7 @@ internal class IncreaseReputationVM(
                 if (status.reason == LivenessFailure.Cancelled) {
                     clearRun()
                 } else {
-                    emitLivenessRun(VerificationStage.FAILED, failure = status.reason)
+                    emitLivenessRun(VerificationStage.FAILED, error = livenessFailureMessage(status.reason))
                 }
             }
         }
@@ -405,7 +437,7 @@ internal class IncreaseReputationVM(
     private fun emitLivenessRun(
         stage: VerificationStage,
         standing: LivenessStanding? = null,
-        failure: LivenessFailure? = null,
+        error: StringResource? = null,
     ) {
         if (stage in ACTIVE_STAGES) lastActiveStage = stage
         publish(
@@ -415,7 +447,7 @@ internal class IncreaseReputationVM(
                 stage = stage,
                 steps = verificationSteps(stage, lastActiveStage, LIVENESS_STEP_LABELS),
                 message = livenessMessage(stage),
-                error = failure?.let(::livenessFailureMessage),
+                error = error,
                 launchUrl = widgetUrl,
                 installIntentUrl = null,
                 storeUrl = null,
@@ -533,6 +565,7 @@ internal class IncreaseReputationVM(
         runJob = null
         launchSignal = null
         returnSignal = null
+        returnGraceJob?.cancel()
         widgetUrl = null
         mutableState.update { it.copy(run = null, primaryAction = null, secondaryAction = null) }
     }
@@ -556,6 +589,9 @@ internal class IncreaseReputationVM(
 
     private companion object {
         const val NONCE_BYTES = 16
+
+        /** Long enough for a redirect that beat the app to the foreground to be collected. */
+        const val RETURN_GRACE_MILLIS = 3_000L
 
         val ACTIVE_STAGES =
             setOf(VerificationStage.READY, VerificationStage.VERIFYING, VerificationStage.SUBMITTING)

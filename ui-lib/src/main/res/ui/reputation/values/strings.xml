@@ -80,9 +80,9 @@
     <string name="increase_reputation_liveness_step_open">Open the check</string>
     <string name="increase_reputation_liveness_step_selfie">Take a selfie</string>
 
-    <string name="increase_reputation_liveness_ready">Your browser will open for a short selfie check. Come back to Zapp when it says you\'re done.</string>
+    <string name="increase_reputation_liveness_ready">Your browser will open for a short selfie check. When it passes, the browser brings you back to Zapp on its own.</string>
     <string name="increase_reputation_liveness_waiting">Waiting for the selfie check…</string>
-    <string name="increase_reputation_liveness_waiting_help">Keep Zapp open. If you closed the check before finishing, cancel here and start again.</string>
+    <string name="increase_reputation_liveness_waiting_help">Stay in the browser until it brings you back. If you closed the check before finishing, cancel here and start again.</string>
     <string name="increase_reputation_liveness_done">Selfie check passed</string>
     <string name="increase_reputation_liveness_open">Open the check</string>
 
@@ -90,6 +90,7 @@
     <string name="increase_reputation_liveness_error_not_live">The check couldn\'t confirm a live face. Try again in better light, with your face filling the frame.</string>
     <string name="increase_reputation_liveness_error_already_claimed">This face has already verified another wallet. Each person can verify one wallet.</string>
     <string name="increase_reputation_liveness_error_expired">That check expired. Start it again to get a fresh one.</string>
+    <string name="increase_reputation_liveness_error_no_return">The browser didn\'t bring the result back to Zapp. Start the check again, and stay in the browser until it returns you here.</string>
     <string name="increase_reputation_liveness_error_rejected">Zapp\'s onramp couldn\'t accept that check. If this keeps happening, the problem is on our side, not yours.</string>
 
     <string name="increase_reputation_info_title">How verifying works</string>
