@@ -671,9 +671,11 @@ class ChatRoomVM(
     }
 
     private suspend fun loadConversation() {
-        // The repository owns the conversation cache; ensure it is populated, then [conversation]
+        // The repository owns the conversation cache; ensure it holds this room, then [conversation]
         // (derived from it) emits this room's conversation and tracks member/rename/delete edits.
-        if (chatConversationsRepository.conversations.value.isNullOrEmpty()) {
+        // A room opened straight after its conversation was created is not cached yet.
+        val cached = chatConversationsRepository.conversations.value
+        if (cached == null || cached.none { it.id == conversationId }) {
             chatConversationsRepository.refresh()
         }
     }
