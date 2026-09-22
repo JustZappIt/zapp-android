@@ -78,6 +78,7 @@ internal class OnrampVM(
     private var countdownJob: Job? = null
     private var expiryRecheckedFor: String? = null
     private var confirmPaidJob: Job? = null
+    private var cancelJob: Job? = null
     private var baseRefundJob: Job? = null
     private val isZecDestinationEnabled =
         BuildConfig.P2P_ONRAMP_AUTO_ZEC_ENABLED &&
@@ -387,16 +388,20 @@ internal class OnrampVM(
         navigateToReputation(currency)
     }
 
+    /**
+     * The merchant wait is the one state that offers this button, so it has to work while that
+     * wait is still polling; the driver already re-reads the chain if a merchant accepted in the
+     * meantime. Only a second tap on a cancel already in flight is dropped.
+     */
     private fun onCancel() {
-        if (driverJob?.isActive == true && mutableState.value.progress is OnrampStatus.AwaitingMerchant) {
-            return
-        }
+        if (cancelJob?.isActive == true) return
         driverJob?.cancel()
         driverJob =
             viewModelScope.launch {
                 val stored = readCheckpoint() ?: return@launch
                 driver.cancel(stored).collect(::handleStatus)
             }
+        cancelJob = driverJob
     }
 
     private fun onCopyAccountAddress() {
