@@ -29,8 +29,9 @@ import co.electriccoin.zcash.ui.design.animation.ZappMotion
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 
 /**
- * Terminal-success CTA. The check is drawn once as the button arrives, echoing the larger success
- * mark without replaying its celebration or adding a decorative gloss over a primary action.
+ * Terminal-success CTA, in the primary button's own colours. The check is drawn once as the button
+ * arrives, echoing the larger success mark without replaying its celebration or adding a
+ * decorative gloss over a primary action.
  */
 @Composable
 fun ZappDoneButton(
@@ -39,8 +40,8 @@ fun ZappDoneButton(
     onClick: () -> Unit,
 ) {
     val c = ZappTheme.colors
-    val completion = c.completion
-    val onCompletion = c.onCompletion
+    val bg = c.accent
+    val fg = c.onAccent
     val checkTrim = remember { Animatable(0f) }
     val interactionSource = remember { MutableInteractionSource() }
     LaunchedEffect(Unit) {
@@ -50,10 +51,10 @@ fun ZappDoneButton(
         modifier =
             modifier
                 .defaultMinSize(minHeight = MIN_HEIGHT.dp)
-                .background(completion)
+                .background(bg)
                 .clickable(
                     interactionSource = interactionSource,
-                    indication = ripple(color = onCompletion),
+                    indication = ripple(color = fg),
                     onClick = onClick,
                 ).semantics(mergeDescendants = true) {
                     contentDescription = text
@@ -70,11 +71,11 @@ fun ZappDoneButton(
                     topLeft = Offset.Zero,
                     side = size.minDimension,
                     progress = checkTrim.value,
-                    color = onCompletion,
+                    color = fg,
                     strokeWidth = size.minDimension * CHECK_STROKE_FRAC,
                 )
             }
-            BasicText(text = text, style = ZappTheme.typography.button.copy(color = onCompletion))
+            BasicText(text = text, style = ZappTheme.typography.button.copy(color = fg))
         }
     }
 }

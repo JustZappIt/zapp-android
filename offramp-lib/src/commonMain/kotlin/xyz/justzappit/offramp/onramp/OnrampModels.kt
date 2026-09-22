@@ -93,6 +93,11 @@ data class OnrampQuote(
     val netUsdc: Usdc6,
     val buyPrice: Usdc6,
     val expiresAtMillis: Long,
+    /**
+     * Where this order will be placed, fixed with the price lock and re-decided on every
+     * re-quote — so it is never older than the price it travels with.
+     */
+    val route: OnrampRoute = OnrampRoute.DIRECT,
 )
 
 /**
