@@ -269,6 +269,14 @@ androidComponents {
             )
         )
         variant.buildConfigFields?.put(
+            "LIVENESS_ENABLED",
+            BuildConfigField(
+                type = "boolean",
+                value = project.property("LIVENESS_ENABLED").toString().toBoolean().toString(),
+                comment = "Whether the selfie check is offered; false hides it without removing it"
+            )
+        )
+        variant.buildConfigFields?.put(
             "P2P_RPC_URL_BASE_SEPOLIA",
             BuildConfigField(
                 type = "String",

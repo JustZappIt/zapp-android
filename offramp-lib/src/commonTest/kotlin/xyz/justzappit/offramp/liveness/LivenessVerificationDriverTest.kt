@@ -147,6 +147,17 @@ class LivenessVerificationDriverTest {
         }
 
     @Test
+    fun `a switched-off build fails before touching the network, credentials or not`() =
+        runTest {
+            val off = driver(config = LivenessConfig(API_URL, API_KEY, TENANT, enabled = false))
+
+            val statuses = off.verify(CurrencyCode.Inr, NONCE, LivenessReturnSignal()).toList()
+
+            assertEquals(listOf(LivenessStatus.Failed(LivenessFailure.NotConfigured)), statuses)
+            assertNull(sessionRequest)
+        }
+
+    @Test
     fun `the session is opened for the smart account and the corridor rides in state`() =
         runTest {
             val signal = LivenessReturnSignal().also { it.deliver(cancelled()) }

@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.justzappit.evm.util.toHex
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
+import xyz.justzappit.offramp.liveness.LivenessConfig
 import xyz.justzappit.offramp.liveness.LivenessFailure
 import xyz.justzappit.offramp.liveness.LivenessReader
 import xyz.justzappit.offramp.liveness.LivenessReturn
@@ -64,6 +65,7 @@ internal class IncreaseReputationVM(
     private val accountProvider: SmartOfframpAccountProvider,
     private val reputationReader: ReputationReader,
     private val verificationDriver: ReclaimVerificationDriver,
+    private val livenessConfig: LivenessConfig,
     private val livenessReader: LivenessReader,
     private val livenessDriver: LivenessVerificationDriver,
     private val livenessReturns: LivenessReturnInbox,
@@ -107,10 +109,12 @@ internal class IncreaseReputationVM(
         // The widget's redirect lands here whether or not a run is waiting: a live run takes it
         // through its signal, a cold-started screen resumes from it, and one that arrives after
         // the user cancelled still finishes the check they went on to complete.
-        livenessReturns.returns
-            .filterNotNull()
-            .onEach { onLivenessReturn() }
-            .launchIn(viewModelScope)
+        if (livenessConfig.enabled) {
+            livenessReturns.returns
+                .filterNotNull()
+                .onEach { onLivenessReturn() }
+                .launchIn(viewModelScope)
+        }
     }
 
     private fun load() {
@@ -123,7 +127,7 @@ internal class IncreaseReputationVM(
                     val (read, standing) =
                         coroutineScope {
                             val reputation = async { reputationReader.read(address, currency) }
-                            val liveness = async { livenessReader.read(address) }
+                            val liveness = async { if (livenessConfig.enabled) livenessReader.read(address) else null }
                             reputation.await() to liveness.await()
                         }
                     summary = read

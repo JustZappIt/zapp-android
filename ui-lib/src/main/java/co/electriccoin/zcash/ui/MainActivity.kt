@@ -72,6 +72,7 @@ import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
 import org.koin.androidx.viewmodel.ext.android.viewModel
+import xyz.justzappit.offramp.liveness.LivenessConfig
 import xyz.justzappit.offramp.liveness.LivenessReturn
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -100,6 +101,7 @@ class MainActivity : FragmentActivity() {
 
     private val pendingGiftLinks: PendingGiftLinkStore by inject()
     private val livenessReturns: LivenessReturnInbox by inject()
+    private val livenessConfig: LivenessConfig by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -182,7 +184,8 @@ class MainActivity : FragmentActivity() {
      * The code on this link is the only copy of the result. A live run picks it out of the inbox;
      * a cold process gets the route rebuilt from `state` and the new run drains the inbox itself.
      * A return with no usable state on a cold start has no route to rebuild and is dropped — the
-     * user starts again.
+     * user starts again. A build with the check switched off drops every return: nothing in it
+     * could have opened the session.
      */
     private fun openLivenessReturn(
         intent: Intent,
@@ -190,6 +193,7 @@ class MainActivity : FragmentActivity() {
         coldStart: Boolean,
     ) {
         intent.data = null
+        if (!livenessConfig.enabled) return
         val ret =
             LivenessReturnLink.parse(
                 code = data.getQueryParameter(LivenessReturn.CODE_QUERY),
@@ -197,8 +201,9 @@ class MainActivity : FragmentActivity() {
                 state = data.getQueryParameter(LivenessReturn.STATE_QUERY),
             ) ?: return
         livenessReturns.put(ret)
-        if (!coldStart) return
-        ret.currency?.let { navigationRouter.forward(IncreaseReputationArgs(currency = it)) }
+        if (coldStart) {
+            ret.currency?.let { navigationRouter.forward(IncreaseReputationArgs(currency = it)) }
+        }
     }
 
     private fun openGiftClaim(intent: Intent, data: Uri) {
