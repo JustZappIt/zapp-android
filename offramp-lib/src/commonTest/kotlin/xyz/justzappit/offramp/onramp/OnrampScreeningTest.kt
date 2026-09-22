@@ -46,13 +46,16 @@ class OnrampScreeningTest {
     private val signer =
         OnrampScreeningSigner(signingKey = signingKey, subject = SMART_ACCOUNT)
 
-    private fun client(nowMillis: Long) =
-        OnrampScreeningClient(
-            httpClient = HttpClient(),
-            config = OnrampScreeningConfig(apiUrl = "https://screening.invalid/api/v1", encryptionKeyHex = KEY_HEX),
-            deviceSignals = { SIGNALS },
-            nowMillis = { nowMillis },
-        )
+    private fun client(
+        nowMillis: Long,
+        config: OnrampScreeningConfig =
+            OnrampScreeningConfig(apiUrl = "https://screening.invalid/api/v1", encryptionKeyHex = KEY_HEX),
+    ) = OnrampScreeningClient(
+        httpClient = HttpClient(),
+        config = config,
+        deviceSignals = { SIGNALS },
+        nowMillis = { nowMillis },
+    )
 
     /** A client whose screening endpoint answers with exactly [body], recording what it was sent. */
     private fun clientAnswering(
@@ -138,6 +141,33 @@ class OnrampScreeningTest {
             // The body timestamp is milliseconds.
             assertEquals("1756450000000", tx.getValue("order_timestamp").jsonPrimitive.content)
         }
+
+    @Test
+    fun `the record names the app that filed it, on both intakes`() =
+        runTest {
+            // Android by default; the Apple facade names itself. The service reads the field per
+            // product, so an iOS order filed as Android would be scoped to the wrong one.
+            val ios =
+                OnrampScreeningConfig(
+                    apiUrl = "https://screening.invalid",
+                    encryptionKeyHex = KEY_HEX,
+                    orderSource = "zapp-ios",
+                )
+            OnrampScreeningKind.entries.forEach { kind ->
+                assertEquals("zapp-android", client(1L).payloadJson(ORDER, "IN", 1L, kind).orderSource())
+                assertEquals("zapp-ios", client(1L, ios).payloadJson(ORDER, "IN", 1L, kind).orderSource())
+            }
+        }
+
+    private fun String.orderSource(): String =
+        Json
+            .parseToJsonElement(this)
+            .jsonObject
+            .getValue("transaction_details")
+            .jsonObject
+            .getValue("order_source")
+            .jsonPrimitive
+            .content
 
     @Test
     fun `the record says plainly that this device has no SEON session`() =

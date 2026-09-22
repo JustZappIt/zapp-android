@@ -158,26 +158,6 @@ enum class OnrampPaymentFieldKind {
     PAYMENT_ALIAS,
 }
 
-/**
- * The service's view of one order. [id] is the service UUID and the only handle the app persists;
- * [orderId] is the on-chain id, null until placement lands, and is for display and support only.
- */
-data class OnrampOrder(
-    val id: String,
-    val orderId: String?,
-    val phase: OnrampPhase,
-    val currency: CurrencyCode,
-    val fiatAmount: Usdc6?,
-    val netUsdc: Usdc6?,
-    val recipientAddress: Address?,
-    val paymentInstruction: OnrampPaymentInstruction?,
-    val placeTx: String?,
-    val paidTx: String?,
-    val expiresAtMillis: Long?,
-    val failureCode: OnrampFailureCode?,
-    val createdAtMillis: Long?,
-)
-
 /** P2P resume handle and optional ZEC delivery recovery state. Payment material is never stored. */
 @Serializable
 data class OnrampCheckpoint(
