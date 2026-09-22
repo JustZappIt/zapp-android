@@ -3,11 +3,16 @@
 
 package xyz.justzappit.offramp.apple
 
+import xyz.justzappit.offramp.liveness.LivenessStanding
+import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.reclaim.ReclaimStatus
 import xyz.justzappit.offramp.reputation.ReputationSummary
 import xyz.justzappit.offramp.reputation.SocialPlatform
 
-internal fun ReclaimStatus.toApple(): AppleReclaimStatus =
+internal fun ReclaimStatus.toApple(
+    standing: LivenessStanding? = null,
+    isSelfieAvailable: Boolean = false,
+): AppleReclaimStatus =
     when (this) {
         ReclaimStatus.Preparing -> AppleReclaimStatus.Preparing
 
@@ -19,20 +24,33 @@ internal fun ReclaimStatus.toApple(): AppleReclaimStatus =
 
         ReclaimStatus.Submitting -> AppleReclaimStatus.Submitting
 
-        is ReclaimStatus.Done -> AppleReclaimStatus.Done(summary.toApple())
+        is ReclaimStatus.Done -> AppleReclaimStatus.Done(summary.toApple(standing, isSelfieAvailable))
 
         is ReclaimStatus.Failed -> AppleReclaimStatus.Failed(reason.name)
     }
 
-internal fun ReputationSummary.toApple() =
-    AppleReputationSummary(
+/** [standing] is the integrator's answer for the same wallet, or null where none is deployed. */
+internal fun ReputationSummary.toApple(
+    standing: LivenessStanding? = null,
+    isSelfieAvailable: Boolean = false,
+): AppleReputationSummary {
+    // Reputation first, the selfie as fallback — the route's own policy, so the number shown is
+    // the number a buy is sized by. A tie is the Diamond's.
+    val checkout = standing?.limit ?: Usdc6.ZERO
+    val viaCheckout = checkout > buyLimit
+    val shown = if (viaCheckout) checkout else buyLimit
+    return AppleReputationSummary(
         currencyCode = currency.code,
         points = points.toString(),
         isBlacklisted = isBlacklisted,
-        canBuy = canBuy,
+        canBuy = shown.micros.signum() > 0,
         isAtCeiling = isAtCeiling,
         buyLimitMicros = buyLimit.micros.toString(),
         maxBuyLimitMicros = maxBuyLimit.micros.toString(),
+        shownLimitMicros = shown.micros.toString(),
+        isLimitFromCheckout = viaCheckout,
+        isSelfieAvailable = isSelfieAvailable,
+        liveness = standing?.toApple(),
         // Declaration order, which is descending by award: LinkedIn leads every list.
         platforms =
             SocialPlatform.entries.map { platform ->
@@ -46,3 +64,4 @@ internal fun ReputationSummary.toApple() =
                 )
             },
     )
+}
