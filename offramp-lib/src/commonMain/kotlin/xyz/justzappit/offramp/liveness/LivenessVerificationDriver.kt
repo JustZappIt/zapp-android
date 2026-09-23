@@ -163,8 +163,8 @@ class LivenessVerificationDriver(
             emit(LivenessStatus.Failed(LivenessFailure.Rejected))
             return
         }
-        if (!submit(account, integrator, LivenessCalls.submitAttestationCalldata(attestation))) return
-        val standing = readStanding(account.address) ?: return
+        val block = submit(account, integrator, LivenessCalls.submitAttestationCalldata(attestation)) ?: return
+        val standing = readStanding(account.address, block) ?: return
         emit(LivenessStatus.Done(standing))
     }
 
@@ -189,23 +189,27 @@ class LivenessVerificationDriver(
         return attestation
     }
 
-    /** Simulate, send, wait for the receipt. False once the failure has been emitted. */
+    /**
+     * Simulate, send, wait for the receipt. The block the receipt names, or null once the failure
+     * has been emitted.
+     */
     private suspend fun FlowCollector<LivenessStatus>.submit(
         account: SubmittingAccount,
         integrator: Address,
         calldata: ByteArray,
-    ): Boolean {
+    ): String? {
         simulationFailure(integrator, account.address, calldata)?.let {
             emit(LivenessStatus.Failed(it))
-            return false
+            return null
         }
         return try {
             val txHash = account.submitter.sendTransaction(to = integrator, value = Wei.ZERO, data = calldata)
-            if (account.submitter.awaitReceipt(txHash).success) {
-                true
+            val receipt = account.submitter.awaitReceipt(txHash)
+            if (receipt.success) {
+                receipt.blockNumber
             } else {
                 emit(LivenessStatus.Failed(LivenessFailure.Rejected))
-                false
+                null
             }
         } catch (e: CancellationException) {
             throw e
@@ -215,14 +219,18 @@ class LivenessVerificationDriver(
             @Suppress("TooGenericExceptionCaught") e: Exception,
         ) {
             emit(LivenessStatus.Failed(classify(e)))
-            false
+            null
         }
     }
 
-    private suspend fun FlowCollector<LivenessStatus>.readStanding(wallet: Address): LivenessStanding? {
+    /** Read at the attestation's own block: a node behind it would report the wallet unverified. */
+    private suspend fun FlowCollector<LivenessStatus>.readStanding(
+        wallet: Address,
+        blockNumber: String,
+    ): LivenessStanding? {
         val standing =
             try {
-                reader.read(wallet)
+                reader.readAt(wallet, blockNumber)
             } catch (e: CancellationException) {
                 throw e
             } catch (ignored: Exception) {
