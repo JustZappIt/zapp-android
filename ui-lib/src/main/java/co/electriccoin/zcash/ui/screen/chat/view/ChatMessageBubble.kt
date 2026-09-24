@@ -3,7 +3,10 @@
 
 package co.electriccoin.zcash.ui.screen.chat.view
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -50,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.wallet.ZecFiatRate
+import co.electriccoin.zcash.ui.design.animation.ZappMotion
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBubbleShape
 import co.electriccoin.zcash.ui.design.component.zapp.zappBubble
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
@@ -57,7 +62,14 @@ import co.electriccoin.zcash.ui.screen.chat.linkpreview.LinkPreviewMetadata
 import co.electriccoin.zcash.ui.screen.chat.linkpreview.LinkPreviewRepository
 import co.electriccoin.zcash.ui.screen.chat.linkpreview.detectWebUrls
 import co.electriccoin.zcash.ui.screen.chat.linkpreview.firstWebUrl
+import co.electriccoin.zcash.ui.screen.chat.model.BubbleKind
 import co.electriccoin.zcash.ui.screen.chat.model.ChatMessage
+import co.electriccoin.zcash.ui.screen.chat.model.bubbleKind
+import co.electriccoin.zcash.ui.screen.chat.model.paymentRequestId
+import co.electriccoin.zcash.ui.screen.chat.model.replyQuoteKind
+import co.electriccoin.zcash.ui.screen.chat.model.replyWireContent
+import co.electriccoin.zcash.ui.screen.chat.model.replyWireContentType
+import co.electriccoin.zcash.ui.screen.chat.model.showsThumbnail
 import co.electriccoin.zcash.ui.screen.chat.view.bubbles.FileBubble
 import co.electriccoin.zcash.ui.screen.chat.view.bubbles.LinkPreviewBubble
 import co.electriccoin.zcash.ui.screen.chat.view.bubbles.LocationBubble
@@ -73,6 +85,9 @@ internal fun MessageBubble(
     modifier: Modifier = Modifier,
     onReplyToMessage: ((ChatMessage) -> Unit)? = null,
     onImageClick: ((ChatMessage) -> Unit)? = null,
+    quotedMessage: ChatMessage? = null,
+    isHighlighted: Boolean = false,
+    onQuoteClick: ((messageId: String) -> Unit)? = null,
     localPublicKey: String? = null,
     fiatRate: ZecFiatRate? = null,
     paidRequestIds: Set<String> = emptySet(),
@@ -90,9 +105,18 @@ internal fun MessageBubble(
     val haptic = LocalHapticFeedback.current
 
     var offsetX by remember { mutableFloatStateOf(0f) }
+    val highlight by
+        animateColorAsState(
+            targetValue = if (isHighlighted) c.accentSoft else Color.Transparent,
+            animationSpec = tween(ZappMotion.CONTENT_MS, easing = ZappMotion.easing),
+            label = "quoteHighlight",
+        )
 
     Box(
-        modifier = modifier.fillMaxWidth(),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .background(highlight, RectangleShape),
         contentAlignment = if (isFromMe) Alignment.CenterEnd else Alignment.CenterStart,
     ) {
         SwipeReplyIndicator(offset = offsetX, isFromMe = isFromMe)
@@ -130,18 +154,22 @@ internal fun MessageBubble(
                 horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start,
                 modifier = bubbleGroupModifier(isText = isText, hasReply = hasReply, isFromMe = isFromMe),
             ) {
-                if (hasReply) {
+                val quotedId = message.replyToId
+                if (quotedId != null) {
                     Box(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
                                 .background(c.surfaceInput, RectangleShape)
-                                .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp),
+                                .then(
+                                    if (onQuoteClick != null) {
+                                        Modifier.clickable { onQuoteClick(quotedId) }
+                                    } else {
+                                        Modifier
+                                    }
+                                ).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp),
                     ) {
-                        QuotedReplyBlock(
-                            senderName = message.replyToSenderName,
-                            content = message.replyToContent,
-                        )
+                        QuotedReplyBlock(message = message, quotedMessage = quotedMessage)
                     }
                 }
 
@@ -439,9 +467,22 @@ private fun Modifier.longPressToCopy(
 }
 
 @Composable
-private fun QuotedReplyBlock(senderName: String?, content: String?) {
+private fun QuotedReplyBlock(
+    message: ChatMessage,
+    quotedMessage: ChatMessage?,
+) {
     val c = ZappTheme.colors
-    Row(modifier = Modifier.fillMaxWidth()) {
+    // The room's own copy of the original outranks what the reply says about it.
+    val (content, contentType) =
+        remember(message, quotedMessage) {
+            quotedMessage?.let { replyWireContent(it) to replyWireContentType(it) }
+                ?: (message.replyToContent to message.replyToContentType)
+        }
+    val kind = replyQuoteKind(contentType)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Box(
             modifier =
                 Modifier
@@ -449,17 +490,21 @@ private fun QuotedReplyBlock(senderName: String?, content: String?) {
                     .height(36.dp)
                     .background(c.accent),
         )
-        Column(modifier = Modifier.padding(start = 8.dp)) {
+        Column(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp),
+        ) {
             BasicText(
-                text = senderName ?: stringResource(R.string.chat_room_reply_unknown_sender),
+                text = message.replyToSenderName ?: stringResource(R.string.chat_room_reply_unknown_sender),
                 style = ZappTheme.typography.chip.copy(color = c.accent),
                 maxLines = 1,
             )
-            BasicText(
-                text = content ?: "",
-                style = ZappTheme.typography.caption.copy(color = c.textMuted),
-                maxLines = 1,
-            )
+            ReplyQuoteSummary(kind = kind, content = content)
+        }
+        if (kind.showsThumbnail && quotedMessage != null) {
+            ReplyQuoteThumbnail(message = quotedMessage, modifier = Modifier.padding(start = 8.dp).size(36.dp))
         }
     }
 }

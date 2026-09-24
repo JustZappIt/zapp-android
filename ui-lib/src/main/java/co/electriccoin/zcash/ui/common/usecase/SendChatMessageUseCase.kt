@@ -14,6 +14,7 @@ class SendChatMessageUseCase(
         replyToId: String? = null,
         replyToSenderName: String? = null,
         replyToContent: String? = null,
+        replyToContentType: String? = null,
     ): Result<ZMMessage> =
         runChatCallResult("SendChatMessageUseCase: sendMessage failed") {
             sdk.sendMessage(
@@ -23,6 +24,7 @@ class SendChatMessageUseCase(
                 replyToId = replyToId,
                 replyToSenderName = replyToSenderName,
                 replyToContent = replyToContent,
+                replyToContentType = replyToContentType,
             )
         }
 }

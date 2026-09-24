@@ -26,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,7 +37,10 @@ import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.screen.chat.linkpreview.LinkPreviewRepository
 import co.electriccoin.zcash.ui.screen.chat.model.ChatMessage
+import co.electriccoin.zcash.ui.screen.chat.model.paidRequestIds
 import co.electriccoin.zcash.ui.screen.chat.room.ChatRoomState
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import java.util.Calendar
@@ -55,6 +59,7 @@ internal fun ChatRoomView(
             buildChatListItems(state.messages, state.firstUnreadMessageId)
         }
     val paidIds = remember(state.messages) { paidRequestIds(state.messages) }
+    val messagesById = remember(state.messages) { state.messages.associateBy { it.id } }
     var viewerMessage by remember { mutableStateOf<ChatMessage?>(null) }
     var positionedInitialMessages by remember { mutableStateOf(false) }
     val latestMessage = state.messages.lastOrNull()
@@ -69,6 +74,28 @@ internal fun ChatRoomView(
             positionedInitialMessages = true
         } else if (latestMessage.isFromMe || shouldFollowLatest) {
             listState.animateScrollToItem(listItems.lastIndex)
+        }
+    }
+
+    val quoteJumpScope = rememberCoroutineScope()
+    var quoteJump by remember { mutableStateOf<Job?>(null) }
+    var highlightedMessageId by remember { mutableStateOf<String?>(null) }
+    // A tapped quote lands its original a third of the way down the viewport, then flashes it.
+    val onQuoteClick: (String) -> Unit = { messageId ->
+        val index = listItems.indexOfFirst { it is ChatListItem.Message && it.message.id == messageId }
+        if (index < 0) {
+            state.onQuotedMessageUnavailable()
+        } else {
+            quoteJump?.cancel()
+            quoteJump =
+                quoteJumpScope.launch {
+                    highlightedMessageId = null
+                    val offset = -listState.layoutInfo.viewportSize.height / QUOTE_SCROLL_VIEWPORT_DIVISOR
+                    listState.animateScrollToItem(index, scrollOffset = offset)
+                    highlightedMessageId = messageId
+                    delay(QUOTE_HIGHLIGHT_MILLIS)
+                    highlightedMessageId = null
+                }
         }
     }
 
@@ -148,6 +175,9 @@ internal fun ChatRoomView(
                                 message = item.message,
                                 onReplyToMessage = onReplyToMessage,
                                 onImageClick = { viewerMessage = it },
+                                quotedMessage = item.message.replyToId?.let(messagesById::get),
+                                isHighlighted = item.message.id == highlightedMessageId,
+                                onQuoteClick = onQuoteClick,
                                 modifier = Modifier.animateItem(),
                                 localPublicKey = state.localPublicKey,
                                 fiatRate = state.fiatRate,
@@ -261,6 +291,9 @@ private fun buildChatListItems(
     }
     return items
 }
+
+private const val QUOTE_SCROLL_VIEWPORT_DIVISOR = 3
+private const val QUOTE_HIGHLIGHT_MILLIS = 1_500L
 
 private fun Long.toDayKey(): Long {
     val cal = Calendar.getInstance()

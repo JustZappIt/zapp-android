@@ -60,6 +60,11 @@ import co.electriccoin.zcash.ui.design.animation.ZappMotion
 import co.electriccoin.zcash.ui.design.animation.pressScale
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.getValue
+import co.electriccoin.zcash.ui.screen.chat.model.ChatMessage
+import co.electriccoin.zcash.ui.screen.chat.model.replyQuoteKind
+import co.electriccoin.zcash.ui.screen.chat.model.replyWireContent
+import co.electriccoin.zcash.ui.screen.chat.model.replyWireContentType
+import co.electriccoin.zcash.ui.screen.chat.model.showsThumbnail
 import co.electriccoin.zcash.ui.screen.chat.room.ChatRoomInputState
 import kotlinx.coroutines.launch
 
@@ -107,7 +112,7 @@ internal fun InputRow(state: ChatRoomInputState) {
         state.replyPreview?.let { reply ->
             ReplyPreviewStrip(
                 senderName = reply.senderName,
-                content = reply.content,
+                original = reply.original,
                 onDismiss = reply.onDismiss,
             )
         }
@@ -236,10 +241,12 @@ internal fun InputRow(state: ChatRoomInputState) {
 @Composable
 private fun ReplyPreviewStrip(
     senderName: String,
-    content: String,
+    original: ChatMessage,
     onDismiss: () -> Unit,
 ) {
     val c = ZappTheme.colors
+    val content = remember(original) { replyWireContent(original) }
+    val kind = remember(original) { replyQuoteKind(replyWireContentType(original)) }
 
     Box(
         modifier =
@@ -275,10 +282,12 @@ private fun ReplyPreviewStrip(
                 style = ZappTheme.typography.chip.copy(color = c.accent),
                 maxLines = 1,
             )
-            BasicText(
-                text = content,
-                style = ZappTheme.typography.caption.copy(color = c.textMuted),
-                maxLines = 1,
+            ReplyQuoteSummary(kind = kind, content = content)
+        }
+        if (kind.showsThumbnail) {
+            ReplyQuoteThumbnail(
+                message = original,
+                modifier = Modifier.padding(end = 8.dp).size(32.dp),
             )
         }
         Box(

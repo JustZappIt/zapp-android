@@ -87,6 +87,7 @@
     <string name="chat_room_reply_to_fmt">Respondendo a %1$s</string>
     <string name="chat_room_reply_dismiss">Descartar resposta</string>
     <string name="chat_room_reply_unknown_sender">Desconhecido</string>
+    <string name="chat_room_toast_original_message_unavailable">Mensagem original não disponível</string>
 
     <!-- Chat room — delivery indicator content descriptions -->
     <string name="chat_room_delivery_sent">Enviada</string>

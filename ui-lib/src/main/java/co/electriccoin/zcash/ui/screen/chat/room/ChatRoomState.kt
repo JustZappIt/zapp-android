@@ -25,6 +25,8 @@ data class ChatRoomState(
     val messages: List<ChatMessage>,
     /** First message below the transient unread divider for this room entry. */
     val firstUnreadMessageId: String?,
+    /** A tapped quote whose original isn't among the loaded messages. */
+    val onQuotedMessageUnavailable: () -> Unit,
     /** mediaId → transfer progress (0..1) for in-flight media uploads/downloads. */
     val mediaTransferProgress: Map<String, Float>,
     val localPublicKey: String?,
@@ -99,7 +101,7 @@ data class ChatRoomInputState(
 
 data class ChatRoomReplyPreviewState(
     val senderName: String,
-    val content: String,
+    val original: ChatMessage,
     val onDismiss: () -> Unit,
 )
 
