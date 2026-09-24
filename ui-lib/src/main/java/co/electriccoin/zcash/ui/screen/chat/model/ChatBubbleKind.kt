@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
 
-package co.electriccoin.zcash.ui.screen.chat.view
+package co.electriccoin.zcash.ui.screen.chat.model
 
-import co.electriccoin.zcash.ui.screen.chat.model.ChatMessage
-import co.electriccoin.zcash.ui.screen.chat.model.MimeTypes
 import org.json.JSONException
 import org.json.JSONObject
 
@@ -67,7 +65,7 @@ internal fun resolveContentType(message: ChatMessage): String {
     }
 }
 
-private const val CONTENT_TYPE_TEXT_PLAIN = "text/plain"
+private const val CONTENT_TYPE_TEXT_PLAIN = MimeTypes.TEXT_PLAIN
 private const val CONTENT_TYPE_PAYMENT_REQUEST = MimeTypes.PAYMENT_REQUEST
 private const val CONTENT_TYPE_WALLET_ADDRESS = MimeTypes.WALLET_ADDRESS
 private const val CONTENT_TYPE_ZEC_TRANSACTION = MimeTypes.ZEC_TRANSACTION

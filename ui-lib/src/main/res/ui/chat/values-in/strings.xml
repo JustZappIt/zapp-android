@@ -87,14 +87,6 @@
     <string name="chat_room_reply_to_fmt">Membalas %1$s</string>
     <string name="chat_room_reply_dismiss">Tutup balasan</string>
     <string name="chat_room_reply_unknown_sender">Tidak dikenal</string>
-    <string name="chat_room_reply_kind_photo">Foto</string>
-    <string name="chat_room_reply_kind_gif">GIF</string>
-    <string name="chat_room_reply_kind_video">Video</string>
-    <string name="chat_room_reply_kind_file">File</string>
-    <string name="chat_room_reply_kind_payment_request">Permintaan pembayaran</string>
-    <string name="chat_room_reply_kind_transaction">Transaksi</string>
-    <string name="chat_room_reply_kind_wallet_address">Alamat dompet</string>
-    <string name="chat_room_reply_kind_location">Lokasi</string>
     <string name="chat_room_toast_original_message_unavailable">Pesan asli tidak tersedia</string>
 
     <!-- Chat room — delivery indicator content descriptions -->

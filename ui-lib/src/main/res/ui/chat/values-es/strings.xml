@@ -88,14 +88,6 @@
     <string name="chat_room_reply_to_fmt">Respondiendo a %1$s</string>
     <string name="chat_room_reply_dismiss">Descartar respuesta</string>
     <string name="chat_room_reply_unknown_sender">Desconocido</string>
-    <string name="chat_room_reply_kind_photo">Foto</string>
-    <string name="chat_room_reply_kind_gif">GIF</string>
-    <string name="chat_room_reply_kind_video">Video</string>
-    <string name="chat_room_reply_kind_file">Archivo</string>
-    <string name="chat_room_reply_kind_payment_request">Solicitud de pago</string>
-    <string name="chat_room_reply_kind_transaction">Transacción</string>
-    <string name="chat_room_reply_kind_wallet_address">Dirección de la cartera</string>
-    <string name="chat_room_reply_kind_location">Ubicación</string>
     <string name="chat_room_toast_original_message_unavailable">El mensaje original no está disponible</string>
 
     <!-- Chat room — delivery indicator content descriptions -->

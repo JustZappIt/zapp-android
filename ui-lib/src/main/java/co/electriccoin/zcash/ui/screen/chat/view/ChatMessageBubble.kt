@@ -4,6 +4,7 @@
 package co.electriccoin.zcash.ui.screen.chat.view
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -48,12 +49,12 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.wallet.ZecFiatRate
+import co.electriccoin.zcash.ui.design.animation.ZappMotion
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBubbleShape
 import co.electriccoin.zcash.ui.design.component.zapp.zappBubble
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
@@ -61,7 +62,14 @@ import co.electriccoin.zcash.ui.screen.chat.linkpreview.LinkPreviewMetadata
 import co.electriccoin.zcash.ui.screen.chat.linkpreview.LinkPreviewRepository
 import co.electriccoin.zcash.ui.screen.chat.linkpreview.detectWebUrls
 import co.electriccoin.zcash.ui.screen.chat.linkpreview.firstWebUrl
+import co.electriccoin.zcash.ui.screen.chat.model.BubbleKind
 import co.electriccoin.zcash.ui.screen.chat.model.ChatMessage
+import co.electriccoin.zcash.ui.screen.chat.model.bubbleKind
+import co.electriccoin.zcash.ui.screen.chat.model.paymentRequestId
+import co.electriccoin.zcash.ui.screen.chat.model.replyQuoteKind
+import co.electriccoin.zcash.ui.screen.chat.model.replyWireContent
+import co.electriccoin.zcash.ui.screen.chat.model.replyWireContentType
+import co.electriccoin.zcash.ui.screen.chat.model.showsThumbnail
 import co.electriccoin.zcash.ui.screen.chat.view.bubbles.FileBubble
 import co.electriccoin.zcash.ui.screen.chat.view.bubbles.LinkPreviewBubble
 import co.electriccoin.zcash.ui.screen.chat.view.bubbles.LocationBubble
@@ -77,12 +85,9 @@ internal fun MessageBubble(
     modifier: Modifier = Modifier,
     onReplyToMessage: ((ChatMessage) -> Unit)? = null,
     onImageClick: ((ChatMessage) -> Unit)? = null,
-    /** The message this one quotes, when the room has it; supplies the quote's thumbnail. */
     quotedMessage: ChatMessage? = null,
-    /** Briefly true after a quote pointing at this message was tapped. */
     isHighlighted: Boolean = false,
-    /** Tapping the quote block, with the quoted message's id. */
-    onQuoteClick: ((String) -> Unit)? = null,
+    onQuoteClick: ((messageId: String) -> Unit)? = null,
     localPublicKey: String? = null,
     fiatRate: ZecFiatRate? = null,
     paidRequestIds: Set<String> = emptySet(),
@@ -102,7 +107,8 @@ internal fun MessageBubble(
     var offsetX by remember { mutableFloatStateOf(0f) }
     val highlight by
         animateColorAsState(
-            targetValue = if (isHighlighted) c.accent.copy(alpha = HIGHLIGHT_ALPHA) else Color.Transparent,
+            targetValue = if (isHighlighted) c.accentSoft else Color.Transparent,
+            animationSpec = tween(ZappMotion.CONTENT_MS, easing = ZappMotion.easing),
             label = "quoteHighlight",
         )
 
@@ -163,12 +169,7 @@ internal fun MessageBubble(
                                     }
                                 ).padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp),
                     ) {
-                        QuotedReplyBlock(
-                            senderName = message.replyToSenderName,
-                            content = message.replyToContent,
-                            contentType = message.replyToContentType,
-                            quotedMessage = quotedMessage,
-                        )
+                        QuotedReplyBlock(message = message, quotedMessage = quotedMessage)
                     }
                 }
 
@@ -465,21 +466,19 @@ private fun Modifier.longPressToCopy(
     }
 }
 
-/**
- * The quote above a reply's body. A quoted photo, file, payment request, transaction, address
- * or location is named by its kind, with a thumbnail when the room still has the picture; a
- * quote from a client that predates `replyToContentType` reads as text, as before.
- */
 @Composable
 private fun QuotedReplyBlock(
-    senderName: String?,
-    content: String?,
-    contentType: String?,
+    message: ChatMessage,
     quotedMessage: ChatMessage?,
 ) {
     val c = ZappTheme.colors
+    // The room's own copy of the original outranks what the reply says about it.
+    val (content, contentType) =
+        remember(message, quotedMessage) {
+            quotedMessage?.let { replyWireContent(it) to replyWireContentType(it) }
+                ?: (message.replyToContent to message.replyToContentType)
+        }
     val kind = replyQuoteKind(contentType)
-    val icon = replyQuoteIcon(kind)
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -498,41 +497,18 @@ private fun QuotedReplyBlock(
                     .padding(start = 8.dp),
         ) {
             BasicText(
-                text = senderName ?: stringResource(R.string.chat_room_reply_unknown_sender),
+                text = message.replyToSenderName ?: stringResource(R.string.chat_room_reply_unknown_sender),
                 style = ZappTheme.typography.chip.copy(color = c.accent),
                 maxLines = 1,
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (icon != null) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = c.textMuted,
-                        modifier = Modifier.size(QUOTE_ICON_SIZE.dp),
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                }
-                BasicText(
-                    text = replyQuoteLine(kind, content),
-                    style = ZappTheme.typography.caption.copy(color = c.textMuted),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+            ReplyQuoteSummary(kind = kind, content = content)
         }
         if (kind.showsThumbnail && quotedMessage != null) {
-            ReplyQuoteThumbnail(
-                message = quotedMessage,
-                size = QUOTE_THUMBNAIL_SIZE.dp,
-                modifier = Modifier.padding(start = 8.dp),
-            )
+            ReplyQuoteThumbnail(message = quotedMessage, modifier = Modifier.padding(start = 8.dp).size(36.dp))
         }
     }
 }
 
-private const val HIGHLIGHT_ALPHA = 0.18f
-private const val QUOTE_ICON_SIZE = 14
-private const val QUOTE_THUMBNAIL_SIZE = 36
 private const val OUTGOING_META_ALPHA = 0.7f
 private const val OUTGOING_STATUS_ALPHA = 0.55f
 private const val MAX_BUBBLE_WIDTH = 280

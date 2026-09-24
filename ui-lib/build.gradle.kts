@@ -379,6 +379,8 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
     testImplementation(libs.ktor.mock)
+    // The Android org.json on the unit-test classpath is a stub; chat reply summaries parse real JSON.
+    testImplementation("org.json:json:20260719")
 
     androidTestImplementation(projects.testLib)
     androidTestImplementation(libs.bundles.androidx.test)

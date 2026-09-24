@@ -65,20 +65,19 @@ import co.electriccoin.zcash.ui.screen.chat.model.byPublicKey
 import co.electriccoin.zcash.ui.screen.chat.model.mergedWithHistory
 import co.electriccoin.zcash.ui.screen.chat.model.plusMessage
 import co.electriccoin.zcash.ui.screen.chat.model.reconciled
+import co.electriccoin.zcash.ui.screen.chat.model.replyWireContent
+import co.electriccoin.zcash.ui.screen.chat.model.replyWireContentType
 import co.electriccoin.zcash.ui.screen.chat.model.resolveDisplayName
 import co.electriccoin.zcash.ui.screen.chat.model.resolveSenderName
 import co.electriccoin.zcash.ui.screen.chat.model.resolveSenderNames
 import co.electriccoin.zcash.ui.screen.chat.repository.ChatContactsRepository
 import co.electriccoin.zcash.ui.screen.chat.repository.ChatConversationsRepository
 import co.electriccoin.zcash.ui.screen.chat.view.BlockUserDialogState
-import co.electriccoin.zcash.ui.screen.chat.view.replyWireContent
-import co.electriccoin.zcash.ui.screen.chat.view.replyWireContentType
 import co.electriccoin.zcash.ui.screen.transactiondetail.TransactionDetailArgs
 import co.electriccoin.zcash.ui.screen.unifiedsend.UnifiedSendArgs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -183,11 +182,6 @@ class ChatRoomVM(
 
     private val messageInput = MutableStateFlow("")
     private val replyingTo = MutableStateFlow<ChatMessage?>(null)
-
-    // A tapped quote scrolls to and briefly flashes the message it points at.
-    private val quoteScroll = MutableStateFlow<ChatRoomScrollRequest?>(null)
-    private val highlightedMessageId = MutableStateFlow<String?>(null)
-    private var highlightJob: Job? = null
     private val showAttachmentSheet = MutableStateFlow(false)
     private val showMediaSheet = MutableStateFlow(false)
     private val splitSheetParams = MutableStateFlow<SplitSheetParams?>(null)
@@ -280,14 +274,8 @@ class ChatRoomVM(
                     isPeerReachable = po == true,
                 )
             },
-            combine(
-                messageInput,
-                replyingTo,
-                showAttachmentSheet,
-                showMediaSheet,
-                combine(quoteScroll, highlightedMessageId) { scroll, highlighted -> scroll to highlighted },
-            ) { input, reply, attach, media, (scroll, highlighted) ->
-                InputSnapshot(input, reply, attach, media, scroll, highlighted)
+            combine(messageInput, replyingTo, showAttachmentSheet, showMediaSheet) { input, reply, attach, media ->
+                InputSnapshot(input, reply, attach, media)
             },
             combine(
                 showNetworkSheet,
@@ -320,8 +308,6 @@ class ChatRoomVM(
                 replyingTo = inputSnap.reply,
                 showAttachmentSheet = inputSnap.showAttach,
                 showMediaSheet = inputSnap.showMedia,
-                quoteScroll = inputSnap.quoteScroll,
-                highlightedMessageId = inputSnap.highlightedMessageId,
                 showNetworkSheet = sheetSnap.showNetwork,
                 connectionDetails = sheetSnap.connectionDetails,
                 localPublicKey = sheetSnap.localPublicKey,
@@ -354,8 +340,6 @@ class ChatRoomVM(
                     replyingTo = null,
                     showAttachmentSheet = false,
                     showMediaSheet = false,
-                    quoteScroll = null,
-                    highlightedMessageId = null,
                     showNetworkSheet = false,
                     connectionDetails = null,
                     localPublicKey = null,
@@ -407,8 +391,6 @@ class ChatRoomVM(
         val reply: ChatMessage?,
         val showAttach: Boolean,
         val showMedia: Boolean,
-        val quoteScroll: ChatRoomScrollRequest?,
-        val highlightedMessageId: String?,
     )
 
     private data class SheetSnapshot(
@@ -431,8 +413,6 @@ class ChatRoomVM(
         replyingTo: ChatMessage?,
         showAttachmentSheet: Boolean,
         showMediaSheet: Boolean,
-        quoteScroll: ChatRoomScrollRequest?,
-        highlightedMessageId: String?,
         showNetworkSheet: Boolean,
         connectionDetails: ConnectionDetailsUi?,
         localPublicKey: String?,
@@ -464,10 +444,7 @@ class ChatRoomVM(
                 ),
             messages = resolvedMessages,
             firstUnreadMessageId = firstUnreadMessageId,
-            highlightedMessageId = highlightedMessageId,
-            scrollToMessage = quoteScroll,
-            onQuoteClick = ::onQuoteClick,
-            onScrollToMessageHandled = ::onScrollToMessageHandled,
+            onQuotedMessageUnavailable = ::onQuotedMessageUnavailable,
             mediaTransferProgress = mediaTransferProgress,
             localPublicKey = localPublicKey,
             fiatRate = fiatRate,
@@ -494,8 +471,6 @@ class ChatRoomVM(
                         resolvedReply?.let { msg ->
                             ChatRoomReplyPreviewState(
                                 senderName = replySenderName(msg),
-                                content = replyWireContent(msg),
-                                contentType = replyWireContentType(msg),
                                 original = msg,
                                 onDismiss = ::dismissReply,
                             )
@@ -1031,29 +1006,9 @@ class ChatRoomVM(
         replyingTo.value = null
     }
 
-    /**
-     * A quote points at a persisted id. The room only holds its most recent page, so the
-     * original can be older than what is loaded, or one this device never received.
-     */
-    private fun onQuoteClick(quotedMessageId: String) {
-        if (messages.value.none { it.id == quotedMessageId }) {
-            _effects.tryEmit(
-                ChatRoomEffect.ShowToast(stringRes(R.string.chat_room_toast_original_message_unavailable))
-            )
-            return
-        }
-        quoteScroll.value = ChatRoomScrollRequest(messageId = quotedMessageId, nonce = System.nanoTime())
-        highlightedMessageId.value = quotedMessageId
-        highlightJob?.cancel()
-        highlightJob =
-            viewModelScope.launch {
-                delay(QUOTE_HIGHLIGHT_MILLIS)
-                highlightedMessageId.value = null
-            }
-    }
-
-    private fun onScrollToMessageHandled() {
-        quoteScroll.value = null
+    // The room holds only its most recent page, so the original can be older or never received.
+    private fun onQuotedMessageUnavailable() {
+        _effects.tryEmit(ChatRoomEffect.ShowToast(stringRes(R.string.chat_room_toast_original_message_unavailable)))
     }
 
     private fun replySenderName(message: ChatMessage): String =
@@ -1532,7 +1487,6 @@ class ChatRoomVM(
         const val STATUS_READ = "read"
         const val PEER_STATUS_ONLINE = "online"
         const val FILE_FALLBACK_NAME = "File"
-        private const val QUOTE_HIGHLIGHT_MILLIS = 1_500L
         const val SHORT_KEY_THRESHOLD = 12
         const val SHORT_KEY_PREFIX = 6
         const val SHORT_KEY_SUFFIX = 4
