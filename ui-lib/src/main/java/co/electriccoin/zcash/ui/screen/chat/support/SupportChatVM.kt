@@ -201,7 +201,7 @@ class SupportChatVM(
                 val conv =
                     sdk.createConversation(
                         type = SdkConversationType.GROUP,
-                        participants = listOf(SupportChatConstants.SUPPORT_PUBLIC_KEY),
+                        participants = SupportChatConstants.SUPPORT_PUBLIC_KEYS,
                         displayName = "${SupportChatConstants.DISPLAY_NAME_PREFIX}${category.protocolKey}",
                     )
                 conversationId.value = conv.id

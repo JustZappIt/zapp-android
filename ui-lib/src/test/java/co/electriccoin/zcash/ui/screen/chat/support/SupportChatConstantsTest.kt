@@ -2,11 +2,13 @@ package co.electriccoin.zcash.ui.screen.chat.support
 
 import co.electriccoin.zcash.ui.screen.chat.model.ConversationType
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SupportChatConstantsTest {
-    private val agentKey = SupportChatConstants.SUPPORT_PUBLIC_KEY
+    private val agentKey = SupportChatConstants.SUPPORT_PUBLIC_KEYS[0]
+    private val secondAgentKey = SupportChatConstants.SUPPORT_PUBLIC_KEYS[1]
     private val userKey = "a".repeat(64)
 
     @Test
@@ -89,6 +91,49 @@ class SupportChatConstantsTest {
                 displayName = "chinmay",
                 participantIds = listOf(userKey),
                 localPublicKey = agentKey,
+            )
+        )
+    }
+
+    @Test
+    fun `every support key is treated as an agent`() {
+        assertEquals(
+            listOf(
+                "81569106f5847498229b00103bd300ac2f4c93c8234e7e2c27c8de5a9b5574bf",
+                "74516b96f025af181d45722421ad1692cb79de6a81b3ea269c2528313471a79b",
+            ),
+            SupportChatConstants.SUPPORT_PUBLIC_KEYS,
+        )
+        assertTrue(
+            SupportChatConstants.isSupportConversation(
+                type = ConversationType.GROUP,
+                displayName = "Support: Problem",
+                participantIds = listOf(agentKey, secondAgentKey),
+                localPublicKey = userKey,
+            )
+        )
+        assertTrue(
+            SupportChatConstants.isSupportConversation(
+                type = ConversationType.GROUP,
+                displayName = "Support: Problem",
+                participantIds = listOf(secondAgentKey),
+                localPublicKey = userKey,
+            )
+        )
+        assertTrue(
+            SupportChatConstants.isSupportConversation(
+                type = ConversationType.GROUP,
+                displayName = "Support: Problem",
+                participantIds = listOf(userKey, agentKey),
+                localPublicKey = secondAgentKey,
+            )
+        )
+        assertFalse(
+            SupportChatConstants.isSupportConversation(
+                type = ConversationType.DIRECT,
+                displayName = "Zapp Support",
+                participantIds = listOf(secondAgentKey),
+                localPublicKey = userKey,
             )
         )
     }

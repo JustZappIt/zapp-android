@@ -43,7 +43,17 @@ enum class SupportCategory(
 }
 
 object SupportChatConstants {
-    const val SUPPORT_PUBLIC_KEY = "81569106f5847498229b00103bd300ac2f4c93c8234e7e2c27c8de5a9b5574bf"
+    /**
+     * Every Zapp support agent's public key. A new ticket invites all of them, so each is
+     * notified and any of them can reply as Zapp Support. iOS `supportPublicKeys` must match.
+     */
+    val SUPPORT_PUBLIC_KEYS =
+        listOf(
+            "81569106f5847498229b00103bd300ac2f4c93c8234e7e2c27c8de5a9b5574bf",
+            "74516b96f025af181d45722421ad1692cb79de6a81b3ea269c2528313471a79b",
+        )
+
+    fun isSupportPublicKey(key: String?): Boolean = key in SUPPORT_PUBLIC_KEYS
 
     /**
      * Prefix set on every support-ticket conversation's displayName. Sent over the wire as
@@ -85,14 +95,14 @@ object SupportChatConstants {
     /**
      * Returns true when the conversation should be treated as a support ticket on this device.
      *
-     * The two sides need different signals: the user's device must require the support agent's
-     * key in [participantIds] (`displayName` alone is spoofable), while the support agent's
+     * The two sides need different signals: the user's device must require a support agent's
+     * key in [participantIds] (`displayName` alone is spoofable), while a support agent's
      * device falls back to the displayName prefix because its own key is excluded from the
      * SDK's participant list.
      *
      * On both sides a ticket is only ever the GROUP the topic picker creates, carrying the
-     * `Support: ` prefix. The support key alone is not enough: a direct chat with the support
-     * key, or an ordinary group it was added to, is a normal conversation and belongs in the
+     * `Support: ` prefix. A support key alone is not enough: a direct chat with a support
+     * key, or an ordinary group one was added to, is a normal conversation and belongs in the
      * regular chat list, not the Zapp Support section.
      */
     fun isSupportConversation(
@@ -102,7 +112,7 @@ object SupportChatConstants {
         localPublicKey: String?,
     ): Boolean {
         if (type != ConversationType.GROUP || !displayName.startsWith(DISPLAY_NAME_PREFIX)) return false
-        val viewerIsSupportAgent = localPublicKey == SUPPORT_PUBLIC_KEY
-        return viewerIsSupportAgent || participantIds.contains(SUPPORT_PUBLIC_KEY)
+        val viewerIsSupportAgent = isSupportPublicKey(localPublicKey)
+        return viewerIsSupportAgent || participantIds.any(::isSupportPublicKey)
     }
 }
