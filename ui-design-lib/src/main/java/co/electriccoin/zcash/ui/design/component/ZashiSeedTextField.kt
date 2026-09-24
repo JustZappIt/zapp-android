@@ -205,9 +205,26 @@ class SeedTextFieldHandle(
 
     internal fun updateState(new: SeedTextFieldState) {
         if (state != new) {
+            val previousTexts = state.values.map { it.innerState.value }
             state = new
-            internalState = internalState.copy(texts = new.values.map { it.innerState.value })
+            val texts = new.values.map { it.innerState.value }
+            internalState = internalState.copy(texts = texts)
+            focusAfterPaste(previousTexts, texts)
         }
+    }
+
+    // Typing changes one field at a time, so several changing together is a spread paste.
+    private fun focusAfterPaste(
+        previousTexts: List<String>,
+        texts: List<String>
+    ) {
+        val changed = texts.indices.filter { texts[it] != previousTexts.getOrNull(it) }
+        if (changed.size <= 1) return
+        val next =
+            texts.indices.firstOrNull { it > changed.last() && texts[it].isBlank() }
+                ?: texts.indices.firstOrNull { texts[it].isBlank() }
+                ?: -1
+        setSelectedIndex(next)
     }
 
     @Suppress("MagicNumber")

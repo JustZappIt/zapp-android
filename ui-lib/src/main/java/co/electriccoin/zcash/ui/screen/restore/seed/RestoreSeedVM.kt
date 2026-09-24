@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.bip39.Mnemonics
 import cash.z.ecc.android.sdk.model.SeedPhrase
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
-import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.usecase.ValidateSeedUseCase
@@ -164,15 +163,11 @@ class RestoreSeedVM(
         index: Int,
         state: SeedWordInnerTextFieldState
     ) {
-        if (BuildConfig.DEBUG) {
-            val seed = validateSeed(state.value.trim().split(" "))
-            if (seed != null) {
-                prefillSeed(seed)
-            } else {
-                updateSeedWord(index, state)
-            }
-        } else {
+        val pasted = pastedSeedWords(seedWords.value[index].innerState, state)
+        if (pasted.isEmpty()) {
             updateSeedWord(index, state)
+        } else {
+            seedWords.update { it.withPastedWords(index, pasted) }
         }
     }
 
@@ -183,17 +178,6 @@ class RestoreSeedVM(
         seedWords.update {
             val newSeedWords = it.toMutableList()
             newSeedWords[index] = newSeedWords[index].copy(innerState = newState.copy(value = newState.value.trim()))
-            newSeedWords.toList()
-        }
-    }
-
-    private fun prefillSeed(seed: SeedPhrase) {
-        seedWords.update {
-            val newSeedWords = it.toMutableList()
-            seed.split.forEachIndexed { index, word ->
-                val oldState = newSeedWords[index]
-                newSeedWords[index] = oldState.copy(innerState = oldState.innerState.copy(value = word))
-            }
             newSeedWords.toList()
         }
     }
