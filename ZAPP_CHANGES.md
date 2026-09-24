@@ -192,9 +192,8 @@ committed defaults are blank or safe; anything developer-specific belongs in `lo
 - **Coinholder governance voting now ships.** The standing decision not to carry it rested on
   cherry-picking being worse than absence; the feature has since been taken whole (`feature-voting`,
   upstream's 133 files and 124 tests, plus a fork-designed UI reached from the "You" tab), so that
-  reasoning no longer applies. It needs SDK 3.1.0-SNAPSHOT, whose only real caveat is that
-  `-SNAPSHOT` is mutable and a later republish will drop the Slipstream sync engine. See
-  `docs/voting.md`.
+  reasoning no longer applies. It runs on SDK 3.2.1-SNAPSHOT; rounds with more than 15 questions
+  need 3.3.0, which is AGPL-3.0-only. See `docs/voting.md`.
 
 - **Flexa is retained but inert.** `screen/flexa/`, `FlexaRepository`, `GetFlexaStatusUseCase` and
   the `IntegrationsVM` entry are kept byte-compatible with upstream so that merges in that area

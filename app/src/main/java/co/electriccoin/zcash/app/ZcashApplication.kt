@@ -25,7 +25,6 @@ import co.electriccoin.zcash.spackle.StrictModeCompat
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.provider.CrashReportingStorageProvider
 import co.electriccoin.zcash.ui.common.provider.MigrationNotifier
-import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.common.push.ChatPushBackend
 import co.electriccoin.zcash.ui.common.repository.ApplicationStateRepository
 import co.electriccoin.zcash.ui.common.repository.FlexaRepository
@@ -33,10 +32,7 @@ import co.electriccoin.zcash.ui.common.repository.HomeMessageCacheRepository
 import co.electriccoin.zcash.ui.common.repository.WalletRepository
 import co.electriccoin.zcash.ui.common.repository.WalletSnapshotRepository
 import co.electriccoin.zcash.ui.screen.chat.common.ChatBootstrap
-import co.electriccoin.zcash.ui.screen.error.ErrorArgs
-import co.electriccoin.zcash.ui.screen.error.NavigateToErrorUseCase
 import co.electriccoin.zcash.voting.di.featureVotingModule
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.koin.android.ext.android.inject
@@ -55,8 +51,6 @@ class ZcashApplication : CoroutineApplication() {
         parametersOf(ProcessLifecycleOwner.get().lifecycle)
     }
     private val walletRepository: WalletRepository by inject()
-    private val synchronizerProvider: SynchronizerProvider by inject()
-    private val navigateToError: NavigateToErrorUseCase by inject()
     private val chatPushBackend: ChatPushBackend by inject()
     private val chatBootstrap: ChatBootstrap by inject()
     private val migrationNotifier: MigrationNotifier by inject()
@@ -105,7 +99,6 @@ class ZcashApplication : CoroutineApplication() {
         applicationStateRepository.init()
         chatBootstrap.start()
         walletRepository.init()
-        observeSynchronizerError()
     }
 
     /**
@@ -183,18 +176,6 @@ class ZcashApplication : CoroutineApplication() {
         this is InitializeException.SeedNotRelevant ||
             cause?.isSeedNotRelevant() == true ||
             suppressed.any { it.isSeedNotRelevant() }
-
-    private fun observeSynchronizerError() {
-        applicationScope.launch {
-            synchronizerProvider.synchronizer
-                .map { it?.initializationError }
-                .collect {
-                    if (it == Synchronizer.InitializationError.TOR_NOT_AVAILABLE) {
-                        navigateToError(ErrorArgs.SynchronizerTorInitError)
-                    }
-                }
-        }
-    }
 
     private fun configureLogging() {
         Twig.initialize(applicationContext)

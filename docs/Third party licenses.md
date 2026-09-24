@@ -17,7 +17,7 @@ combined work under AGPL-3.0-only.
 
 Slipstream is the sync engine. It is not a direct Gradle dependency: it is statically linked into
 `libzcashwalletsdk.so`, the native library shipped inside the Zcash Android SDK artifact
-`cash.z.ecc.android:zcash-android-backend`, which this application bundles and calls over JNI.
+`com.zodl.android:zcash-android-backend`, which this application bundles and calls over JNI.
 Slipstream is the reason the combined work is AGPL-3.0-only.
 
 Slipstream is licensed under version 3 **only**. It offers no "or any later version" option, so
@@ -31,9 +31,9 @@ and is not endorsed by or affiliated with Znewco, Inc.
 
 | | |
 | --- | --- |
-| License | MIT |
-| Source | https://github.com/zcash/zcash-android-wallet-sdk |
-| Artifacts | `cash.z.ecc.android:zcash-android-sdk`, `cash.z.ecc.android:zcash-android-backend` |
+| License | MIT (3.2.1; from 3.3.0 the SDK is AGPL-3.0-only) |
+| Source | https://github.com/zodl-inc/zodl-android-wallet-sdk |
+| Artifacts | `com.zodl.android:zcash-android-sdk`, `com.zodl.android:zcash-android-backend` |
 
 The SDK's own Kotlin and Rust source is MIT licensed. Note that the prebuilt
 `zcash-android-backend` artifact this project resolves from Maven ships a native library that
