@@ -13,28 +13,17 @@ zappMessaging=bc5090a89965f1704af368f1867333e753361e13
 # Update both this SHA and the workflow ref when upgrading bare-kit.
 bare-kit=15a3569f3d704de7151761051c8d9cc2e299414f
 
-# zcash-android-wallet-sdk is resolved from Maven snapshots, not includeBuild: upstream
-# zodl ships SDK_INCLUDED_BUILD_PATH blank, but it does not leave the SDK floating: on
-# maint/v3.10.x it sets SDK_COMMIT_PIN and builds the SDK from that exact commit. We record the
-# same pin (see SDK_COMMIT_PIN in gradle.properties) but do not wire it into CI: CI resolves the
-# published snapshot, as it always has. The SHA below is that pin — provenance and the intended
-# input for a release build, not something CI verifies.
+# The Zcash SDK is resolved from Maven snapshots (com.zodl.android, ZCASH_SDK_VERSION in
+# gradle.properties), not includeBuild. The SHA below is the release commit that snapshot was
+# published from: provenance, not something CI verifies.
 #
-# ON v3.1.0, for coinholder polling: the first SDK line with the public VotingSdk facade and a
-# native library built with cfg(zcash_voting) (63 voting JNI symbols; 3.0.1 exports none).
+# v3.2.1 is the last MIT release. From v3.3.0 the SDK is AGPL-3.0-only and its
+# LICENSE-EXCEPTIONS.md grants no Google Play permission to anyone but Znewco, so moving past
+# 3.2.1 is a licensing decision, not a routine bump.
 #
-# Slipstream is NOT lost by this bump. At 3.1.0 the AGPL engine was split out of the
-# MIT-published zcash-android-sdk into its own zcash-android-sdk-slipstream artifact, which still
-# arrives transitively via sdk-incubator and is what the wallet runs (verified on-device).
-# WalletCoordinator's isSlipstreamEnabled parameter is gone only because the engine stopped being
-# opt-in per wallet.
+# Slipstream: 3.2.1's sdk-incubator still depends on zcash-android-sdk-slipstream at runtime
+# (63 slipstream paths in the tagged tree, IS_SLIPSTREAM_ENABLED=true). -SNAPSHOT is mutable,
+# so re-check both whenever this moves. See docs/voting.md.
 #
-# The pin is what keeps that true. -SNAPSHOT is mutable: SDK commit 6b4d6339 ("MOB-1757: Remove
-# the Slipstream sync engine and its AGPL dependency") deletes it outright and adds a cargo-deny
-# licence gate, so a republish of 3.1.0-SNAPSHOT could have dropped Slipstream with no code change
-# and no build failure. 6b4d6339 is NOT an ancestor of the pin below (verified: 62 slipstream
-# paths still present in that tree), so pinning freezes Slipstream in place instead of leaving it
-# to the next publish. Re-check that ancestry whenever this pin moves. See docs/voting.md.
-#
-# GitHub: https://github.com/zcash/zcash-android-wallet-sdk
-zcashAndroidWalletSdk=0ef67b411f0a51aae00346fef18286505e1bcfd1
+# GitHub: https://github.com/zodl-inc/zodl-android-wallet-sdk (tag v3.2.1)
+zcashAndroidWalletSdk=2a496cc7c1513d6ab01e209163c0f7edd65408ab

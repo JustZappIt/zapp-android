@@ -156,7 +156,7 @@ the path in `local.properties` (**not** `gradle.properties`, whose committed
 default must keep matching upstream). Run these from this repo's root:
 
 ```bash
-git clone https://github.com/zcash/zcash-android-wallet-sdk.git ../zcash-android-wallet-sdk
+git clone https://github.com/zodl-inc/zodl-android-wallet-sdk.git ../zcash-android-wallet-sdk
 git -C ../zcash-android-wallet-sdk checkout \
   "$(grep '^zcashAndroidWalletSdk=' .zapp-deps | cut -d= -f2)"
 echo 'SDK_INCLUDED_BUILD_PATH=../zcash-android-wallet-sdk' >> local.properties

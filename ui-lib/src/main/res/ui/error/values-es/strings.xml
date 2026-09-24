@@ -14,8 +14,4 @@
     <string name="error_keystone_account_title">No Se Puede Añadir la Cuenta Keystone</string>
     <string name="error_keystone_account_message">La cuenta Keystone escaneada no se puede usar con esta aplicación. Asegúrate de que tu dispositivo Keystone esté configurado en la misma red que esta aplicación y vuelve a escanear el código QR.</string>
     
-    <string name="error_tor_title">¿Desactivar Tor?</string>
-    <string name="error_tor_message">Se detectaron problemas de conexión con Tor. Para mejorar el rendimiento, intenta desactivar Tor. Esto detendrá las actualizaciones del tipo de cambio. Puedes volver a activarlo más tarde en Configuración avanzada.</string>
-    <string name="error_tor_negative">Desactivar</string>
-    <string name="error_tor_positive">No desactivar</string>
 </resources>

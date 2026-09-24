@@ -294,7 +294,7 @@ are the versions in play.
 | Location | `com.google.android.gms:play-services-location` | 21.3.0 |
 | QR scan (`store`) | `com.google.mlkit:barcode-scanning` | 17.3.0 |
 | QR render | `com.google.zxing:core` | 3.5.4 |
-| Zcash | `cash.z.ecc.android:zcash-android-sdk` | 3.0.1-SNAPSHOT (Ironwood / NU6.3, the Slipstream sync engine, and the Orchard migration SDK). MIT, but its native library statically links **AGPL-3.0-only** [ZODL Slipstream](https://github.com/zodl-inc/slipstream). See [License](#license). |
+| Zcash | `com.zodl.android:zcash-android-sdk` | 3.2.1-SNAPSHOT (Ironwood / NU6.3, the Slipstream sync engine, and the Orchard migration SDK). MIT, but its native library statically links **AGPL-3.0-only** [ZODL Slipstream](https://github.com/zodl-inc/slipstream). See [License](#license). |
 | Zcash | `cash.z.ecc.android:kotlin-bip39` | 1.0.9 |
 | Crypto | `com.google.crypto.tink:tink-android` | 1.20.0 |
 | Keystone | `com.github.KeystoneHQ:keystone-sdk-android` | 0.8.3 |

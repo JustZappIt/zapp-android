@@ -26,20 +26,20 @@ What the SDK bump is genuinely for: 3.0.1 carries the voting Kotlin classes but 
 built without `cfg(zcash_voting)`, exporting **zero** voting JNI symbols, so every native call would
 fail at runtime. 3.1.0 exports 63 and adds the public `VotingSdk` facade.
 
-### One real risk, and it is about pinning
+### SDK line and its two limits
 
-`ZCASH_SDK_VERSION=3.1.0-SNAPSHOT` is a *mutable* coordinate. SDK commit `6b4d6339`
-("MOB-1757: Remove the Slipstream sync engine and its AGPL dependency") removes the engine outright
-and adds a cargo-deny licence gate to keep it out; it merged on 2026-08-21, **after** the snapshot
-the fork currently resolves (`3.1.0-20260820.161424-1`, built 16:14 UTC on 2026-08-20). When
-`3.1.0-SNAPSHOT` is next republished from a commit that includes it, Slipstream will vanish from
-under this branch silently, with no code change and no build failure — the first symptom would be a
-behaviour change in sync.
+The SDK now comes from zodl's own fork, `com.zodl.android` at `3.2.1-SNAPSHOT`, the same line
+upstream consumes. Slipstream is still there: 3.2.1's `sdk-incubator` depends on
+`zcash-android-sdk-slipstream` at runtime, and the commit that removed Slipstream from
+`zcash/zcash-android-wallet-sdk` (`6b4d6339`) is not part of zodl's history. `-SNAPSHOT` stays
+mutable, so re-check that dependency whenever the version moves.
 
-Zapp is itself AGPL-3.0-only, so upstream's MIT/AGPL conflict does not bind the fork. But keeping
-Slipstream past that point means either pinning the exact timestamped snapshot or maintaining a fork
-of the SDK's native build against an upstream licence gate. **Decide this before merging**, and
-consider pinning `3.1.0-20260820.161424-1` explicitly in the meantime.
+- **Rounds with more than 15 questions can be listed but not voted in.** The vote chain's circuit
+  moved to proposal ids 1-50 in `zcash_voting` 4.0.0-rc.2, which first ships in SDK 3.3.0. A client
+  on the older circuit is rejected with `ConstraintSystemFailure`.
+- **SDK 3.3.0 is AGPL-3.0-only**, and its `LICENSE-EXCEPTIONS.md` grants no permission to anyone but
+  Znewco to distribute it through Google Play. 3.2.1 is the last MIT release, so taking 3.3.0 is a
+  licensing decision before it is an engineering one.
 
 ### Why the poll list is empty right now
 
