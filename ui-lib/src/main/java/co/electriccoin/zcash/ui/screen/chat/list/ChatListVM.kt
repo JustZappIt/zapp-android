@@ -81,16 +81,9 @@ class ChatListVM(
         observeConnection()
         observePeerStatus()
         viewModelScope.launch { checkTosAccepted() }
-        if (BuildConfig.IS_GROUP_LINKS_ENABLED) observeWaitingJoins()
-    }
-
-    /**
-     * Requests this device has out. They live in the SDK, not in the back stack, so the list is the
-     * one place someone can see that a tapped link is still waiting, and take it back.
-     */
-    private fun observeWaitingJoins() {
-        viewModelScope.launch { refreshWaitingJoins() }
-        viewModelScope.launch { groupJoins.joinUpdates.collect { refreshWaitingJoins() } }
+        if (BuildConfig.IS_GROUP_LINKS_ENABLED) {
+            viewModelScope.launch { groupJoins.joinUpdates.collect { refreshWaitingJoins() } }
+        }
     }
 
     private suspend fun refreshWaitingJoins() {
@@ -112,6 +105,8 @@ class ChatListVM(
     // teardown path to have fired: a stale claim silently swallows unread bumps and leaks receipts.
     fun onScreenVisible() {
         chatConversationsRepository.setActiveConversation(null)
+        // The SDK reports nothing when a request first goes out, only when the owner answers it.
+        if (BuildConfig.IS_GROUP_LINKS_ENABLED) viewModelScope.launch { refreshWaitingJoins() }
     }
 
     private fun toWaitingJoinState(update: ZMGroupJoinUpdate) =

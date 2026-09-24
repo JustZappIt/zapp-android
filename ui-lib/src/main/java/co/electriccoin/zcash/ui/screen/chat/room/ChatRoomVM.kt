@@ -383,6 +383,7 @@ class ChatRoomVM(
         val resetLink: Boolean = true,
         val canResetLink: Boolean = false,
         val olderMemberCount: Int = 0,
+        val isLoaded: Boolean = false,
         val isBusy: Boolean = false,
     )
 
@@ -580,7 +581,8 @@ class ChatRoomVM(
                     isChecked = draft.resetLink,
                     onToggle = ::onRemoveMemberResetToggle,
                 ).takeIf { draft.canResetLink },
-            isBusy = draft.isBusy,
+            // Held until the dialog knows whether the link can be reset, so the default is not lost.
+            isBusy = draft.isBusy || !draft.isLoaded,
             onConfirm = ::onRemoveMemberConfirm,
             onDismiss = ::dismissRemoveMember,
         )
@@ -928,7 +930,12 @@ class ChatRoomVM(
                 ChatRoomGroupMember(
                     publicKey = key,
                     displayName = name,
-                    onRemove = if (conversation.isOwner) ({ onRemoveMemberClick(key, name) }) else null,
+                    onRemove =
+                        if (conversation.isOwner && BuildConfig.IS_GROUP_LINKS_ENABLED) {
+                            { onRemoveMemberClick(key, name) }
+                        } else {
+                            null
+                        },
                 )
             }
     }
@@ -1008,7 +1015,9 @@ class ChatRoomVM(
             val older = groupLinks.olderMemberCount(conversationId).getOrDefault(0)
             val hasLink = groupLinks.get(conversationId).getOrNull()?.state == ZMGroupLinkState.ACTIVE
             groupUi.update { ui ->
-                ui.copy(removing = ui.removing?.copy(olderMemberCount = older, canResetLink = hasLink))
+                ui.copy(
+                    removing = ui.removing?.copy(olderMemberCount = older, canResetLink = hasLink, isLoaded = true),
+                )
             }
         }
     }
@@ -1025,7 +1034,7 @@ class ChatRoomVM(
 
     private fun onRemoveMemberConfirm() {
         val draft = groupUi.value.removing ?: return
-        if (draft.isBusy) return
+        if (draft.isBusy || !draft.isLoaded) return
         groupUi.update { it.copy(removing = draft.copy(isBusy = true)) }
         viewModelScope.launch {
             groupLinks

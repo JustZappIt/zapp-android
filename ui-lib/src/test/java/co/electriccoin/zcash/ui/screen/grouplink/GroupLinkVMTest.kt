@@ -117,6 +117,7 @@ class GroupLinkVMTest {
             groupLinks.info = ZMGroupLinkInfo(CONVERSATION_ID, ZMGroupLinkState.NONE)
             val vm = open()
             assertNull(vm.state.value.card, "there is nothing to copy yet")
+            assertNull(vm.state.value.warning, "no link, so nobody can join with it")
             assertEquals(
                 listOf(R.string.group_link_turn_on),
                 vm.state.value.actions
@@ -145,6 +146,7 @@ class GroupLinkVMTest {
             advanceUntilIdle()
             assertEquals(1, groupLinks.disables)
             assertNull(vm.state.value.card)
+            assertNull(vm.state.value.warning)
             assertEquals(
                 R.string.group_link_off_note,
                 vm.state.value.notice
@@ -200,6 +202,23 @@ class GroupLinkVMTest {
                     .first { it.title.res() == R.string.group_link_expiry_label }
             assertEquals(R.string.group_link_expiry_days_fmt, row.value.res())
             assertEquals(listOf("7"), (row.value as StringResource.ByResource).args)
+        }
+
+    @Test
+    fun `the expiry row shows the days actually left and the picker the window chosen`() =
+        runTest {
+            groupLinks.info = groupLinks.info.copy(expiresAt = NOW + 2 * DAY_MS)
+            val vm = open()
+            val row =
+                vm.state.value.rows
+                    .first { it.title.res() == R.string.group_link_expiry_label }
+            assertEquals(R.string.group_link_expiry_days_fmt, row.value.res())
+            assertEquals(listOf("2"), (row.value as StringResource.ByResource).args)
+
+            row.onClick()
+            runCurrent()
+            val picker = assertNotNull(vm.state.value.picker)
+            assertEquals(listOf(WEEK_OPTION), picker.options.indices.filter { picker.options[it].isSelected })
         }
 
     @Test
@@ -431,6 +450,54 @@ class GroupLinkVMTest {
         }
 
     @Test
+    fun `an approve that fails says so and the request stays`() =
+        runTest {
+            groupLinks.pending = listOf(request())
+            groupLinks.failAnswers = true
+            val vm = open()
+
+            vm.state.value.requests
+                .single()
+                .onApprove()
+            advanceUntilIdle()
+            assertEquals(
+                R.string.group_link_action_failed,
+                vm.state.value.error
+                    .res()
+            )
+            assertEquals(
+                JOINER_KEY,
+                vm.state.value.requests
+                    .single()
+                    .key
+            )
+        }
+
+    @Test
+    fun `a decline that fails says so and the request stays`() =
+        runTest {
+            groupLinks.pending = listOf(request())
+            groupLinks.failAnswers = true
+            val vm = open()
+
+            vm.state.value.requests
+                .single()
+                .onDecline()
+            advanceUntilIdle()
+            assertEquals(
+                R.string.group_link_action_failed,
+                vm.state.value.error
+                    .res()
+            )
+            assertEquals(
+                JOINER_KEY,
+                vm.state.value.requests
+                    .single()
+                    .key
+            )
+        }
+
+    @Test
     fun `a request that arrives while the screen is open joins the list`() =
         runTest {
             val vm = open()
@@ -459,6 +526,7 @@ class GroupLinkVMTest {
         var disables = 0
         var resets = 0
         var admits = true
+        var failAnswers = false
         var pending = emptyList<ZMGroupJoinApprovalRequest>()
         val updates = mutableListOf<ZMGroupLinkOptions>()
         val approved = mutableListOf<String>()
@@ -517,6 +585,7 @@ class GroupLinkVMTest {
             conversationId: String,
             joinerKey: String,
         ): Result<Boolean> {
+            if (failAnswers) return Result.failure(IllegalStateException("offline"))
             approved += joinerKey
             pending = pending.filterNot { it.joinerKey == joinerKey }
             return Result.success(admits)
@@ -526,6 +595,7 @@ class GroupLinkVMTest {
             conversationId: String,
             joinerKey: String,
         ): Result<Unit> {
+            if (failAnswers) return Result.failure(IllegalStateException("offline"))
             declined += joinerKey
             pending = pending.filterNot { it.joinerKey == joinerKey }
             return Result.success(Unit)
@@ -545,7 +615,8 @@ class GroupLinkVMTest {
         const val LINK = "https://join.justzappit.xyz/g/v1/AQE"
         const val LINK_ID = "c0ffee"
         const val NOW = 1_800_000_000_000L
-        const val SEVEN_DAYS_MS = 7L * 86_400_000L
+        const val DAY_MS = 86_400_000L
+        const val SEVEN_DAYS_MS = 7L * DAY_MS
         const val WEEK_OPTION = 2
         const val HUNDRED = 100
         const val JOINER_KEY = "beef"

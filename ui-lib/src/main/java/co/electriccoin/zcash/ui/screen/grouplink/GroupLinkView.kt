@@ -41,6 +41,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.compose.SecureScreen
+import co.electriccoin.zcash.ui.common.compose.shouldSecureScreen
 import co.electriccoin.zcash.ui.design.component.QrState
 import co.electriccoin.zcash.ui.design.component.ZashiModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.ZashiQr
@@ -71,6 +73,10 @@ internal fun GroupLinkView(
 ) {
     val c = ZappTheme.colors
     val t = ZappTheme.typography
+
+    if (state.card != null && shouldSecureScreen) {
+        SecureScreen()
+    }
 
     Column(
         modifier =

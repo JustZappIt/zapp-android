@@ -92,6 +92,10 @@ class GroupLinkVM(
 
     private fun load() {
         ui.update { it.copy(failed = false) }
+        refresh()
+    }
+
+    private fun refresh() {
         viewModelScope.launch {
             groupLinks
                 .get(args.conversationId)
@@ -185,7 +189,7 @@ class GroupLinkVM(
                         current.copy(isBusy = false, isFull = fullMessage && !admitted)
                     }
                 }.onFailure { ui.update { current -> current.copy(isBusy = false, failed = true) } }
-            load()
+            refresh()
         }
     }
 
@@ -239,7 +243,7 @@ class GroupLinkVM(
                 link?.link?.takeIf { isActive }?.let { value ->
                     GroupLinkCardState(link = value, isCopied = copied == value, onCopyClick = { onCopyClick(value) })
                 },
-            warning = stringRes(R.string.group_link_warning).takeIf { link != null },
+            warning = stringRes(R.string.group_link_warning).takeIf { isActive },
             historyNote = stringRes(R.string.group_link_history_note).takeIf { link != null },
             notice = notice(link),
             error = error(ui),
@@ -357,7 +361,7 @@ class GroupLinkVM(
     ): GroupLinkPickerState =
         when (kind) {
             GroupLinkPickerKind.EXPIRY -> {
-                val chosen = remainingDays(link?.expiresAt)
+                val chosen = pickedExpiry(link?.expiresAt)
                 GroupLinkPickerState(
                     title = stringRes(R.string.group_link_expiry_label),
                     options =
@@ -392,21 +396,18 @@ class GroupLinkVM(
         )
 
     private fun expiryValue(expiresAt: Long?): StringResource {
-        val days = remainingDays(expiresAt)
-        return if (days == EXPIRED) stringRes(R.string.group_link_expired) else GroupLinkCopy.expiry(days)
+        val remaining = expiresAt?.minus(now()) ?: return GroupLinkCopy.expiry(null)
+        return if (remaining <= 0) {
+            stringRes(R.string.group_link_expired)
+        } else {
+            GroupLinkCopy.expiry((remaining + DAY_MS - 1) / DAY_MS)
+        }
     }
 
-    /**
-     * What is left of the link's life, in days, rounded up to the window the owner picked. A link
-     * expires relative to the moment it was set, so the row reads as a choice rather than as a date
-     * nobody typed. Null means it never expires, zero means it already has.
-     */
-    @Suppress("ReturnCount")
-    private fun remainingDays(expiresAt: Long?): Long? {
+    // The row shows the days actually left; only the picker's tick snaps to the preset.
+    private fun pickedExpiry(expiresAt: Long?): Long? {
         val remaining = expiresAt?.minus(now()) ?: return null
-        if (remaining <= 0) return EXPIRED
-        return EXPIRY_CHOICES.filterNotNull().firstOrNull { remaining <= it * DAY_MS }
-            ?: ((remaining + DAY_MS - 1) / DAY_MS)
+        return EXPIRY_CHOICES.filterNotNull().firstOrNull { remaining in 1..it * DAY_MS } ?: NO_PRESET
     }
 
     override fun onCleared() {
@@ -431,7 +432,7 @@ class GroupLinkVM(
 
     private companion object {
         const val DAY_MS = 86_400_000L
-        const val EXPIRED = 0L
+        const val NO_PRESET = -1L
         const val RATE_REASON = "rate"
         val EXPIRY_CHOICES = listOf<Long?>(null, 1L, 7L, 30L)
         val LIMIT_CHOICES = listOf<Int?>(null, 10, 25, 50, 100)
