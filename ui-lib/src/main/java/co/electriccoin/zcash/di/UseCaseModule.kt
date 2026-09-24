@@ -126,6 +126,7 @@ import co.electriccoin.zcash.ui.common.usecase.ObserveFastestServersUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObservePeerCommittedUsdcUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObservePeerOrderUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveProposalUseCase
+import co.electriccoin.zcash.ui.common.usecase.ObserveSeedMismatchUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveTransactionSubmitStateUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveZashiAccountUseCase
@@ -143,6 +144,7 @@ import co.electriccoin.zcash.ui.common.usecase.PrefillSendUseCase
 import co.electriccoin.zcash.ui.common.usecase.PreselectSwapAssetUseCase
 import co.electriccoin.zcash.ui.common.usecase.ProcessSwapTransactionUseCase
 import co.electriccoin.zcash.ui.common.usecase.ReconcilePeerCheckpointsUseCase
+import co.electriccoin.zcash.ui.common.usecase.RecoverFromSeedMismatchUseCase
 import co.electriccoin.zcash.ui.common.usecase.RefreshFastestServersUseCase
 import co.electriccoin.zcash.ui.common.usecase.RemindWalletBackupLaterUseCase
 import co.electriccoin.zcash.ui.common.usecase.RenameChatGroupUseCase
@@ -370,6 +372,8 @@ val useCaseModule =
         factoryOf(::EnsureNoUnsharedGiftFundsUseCase)
         factoryOf(::CheckGiftCardClaimedUseCase)
         factoryOf(::PreselectSwapAssetUseCase)
+        singleOf(::RecoverFromSeedMismatchUseCase)
+        factoryOf(::ObserveSeedMismatchUseCase)
         factoryOf(::GetSwapStatusUseCase)
         factoryOf(::ExecuteDebugDBQueryUseCase)
         factoryOf(::SwapSupportMapper)
