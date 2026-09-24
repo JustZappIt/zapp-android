@@ -24,12 +24,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/**
- * One tapped invite, from reading the link to the answer.
- *
- * The rules live in [GroupInviteMachine]. This class only runs its effects: reading the stored
- * link, calling the SDK, deleting the link when a step says so, and navigating.
- */
 class GroupInvitePreviewVM(
     private val args: GroupInvitePreviewArgs,
     private val store: PendingGroupInviteStore,
@@ -63,8 +57,7 @@ class GroupInvitePreviewVM(
 
             else -> {
                 val link = store.link(token) ?: return send(GroupInviteEvent.Missing)
-                // Reading is local, so a failure means the messaging service is not up yet, not
-                // that the link is bad. Keep the link: it opens again on the next launch.
+                // Reading is local: a failure means the worklet is not up yet, not that the link is bad.
                 val inspection =
                     groupLinks.inspect(link).getOrNull()
                         ?: delay(INSPECT_RETRY_MS).let { groupLinks.inspect(link).getOrNull() }
@@ -75,7 +68,6 @@ class GroupInvitePreviewVM(
         }
     }
 
-    /** A request an earlier tap already made, which the SDK knows about and this screen does not. */
     private suspend fun refreshFromSdk(linkId: String?) {
         if (linkId == null) return
         groupLinks
@@ -110,7 +102,6 @@ class GroupInvitePreviewVM(
         navigationRouter.replace(ChatRoomArgs(conversationId = conversationId))
     }
 
-    /** Leaving a preview unanswered is a "not now". Leaving a waiting request keeps it waiting. */
     private fun onBack() {
         when (phase.value) {
             GroupInvitePhase.Reading, is GroupInvitePhase.Preview -> send(GroupInviteEvent.NotNowTapped)

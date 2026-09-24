@@ -111,7 +111,7 @@ class PendingGroupInviteStoreTest {
             assertNull(store.link(a))
             assertEquals(link(2), store.link(b))
 
-            store.clear()
+            store.remove(b)
             assertNull(preferences.raw(PendingGroupInviteStore.PREF_KEY))
         }
 

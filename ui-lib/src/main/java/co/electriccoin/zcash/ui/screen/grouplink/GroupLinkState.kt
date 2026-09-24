@@ -9,23 +9,14 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 
-/**
- * The owner's view of one group's invite link.
- *
- * A null [card] means there is nothing to copy or share yet, either because the link is off or
- * because the group never had one. The link itself lives only here and in the clipboard, share and
- * QR actions: it is a bearer secret, so it never reaches navigation state or a log.
- */
 data class GroupLinkState(
     val isLoading: Boolean,
     val card: GroupLinkCardState?,
     val warning: StringResource?,
     val historyNote: StringResource?,
-    /** The link is off, approval switched itself on, or this person does not own the group. */
     val notice: StringResource?,
     val error: StringResource?,
     val actions: List<GroupLinkActionState>,
-    /** People waiting for the owner to let them in, newest last. Empty unless approval is on. */
     val requests: List<GroupLinkRequestState>,
     val rows: List<GroupLinkRowState>,
     val toggles: List<GroupLinkToggleState>,
@@ -49,10 +40,9 @@ data class GroupLinkActionState(
 
 data class GroupLinkRequestState(
     val key: String,
-    /** The name the person chose for themselves. Nothing has verified it. */
+    /** Chosen by the joiner. Nothing has verified it. */
     val name: String,
     val subtitle: StringResource,
-    /** The owner's own name for them, when they are already a contact. */
     val contactHint: StringResource?,
     val tag: StringResource?,
     val isEnabled: Boolean,
@@ -85,9 +75,7 @@ data class GroupLinkPickerOption(
     val onClick: () -> Unit,
 )
 
-/** The labels the link's own settings carry. Kept free of Android so it can be tested. */
 internal object GroupLinkCopy {
-    /** [days] is the window the owner chose, not a date, because the link expires relative to now. */
     fun expiry(days: Long?): StringResource =
         when (days) {
             null -> stringRes(R.string.group_link_expiry_never)

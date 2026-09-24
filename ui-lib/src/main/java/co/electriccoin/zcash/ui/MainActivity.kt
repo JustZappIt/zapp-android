@@ -195,10 +195,7 @@ class MainActivity : FragmentActivity() {
     private fun isGroupInviteUri(intent: Intent): Boolean =
         intent.action == Intent.ACTION_VIEW && intent.dataString?.let(GroupInviteLinks::isGroupLink) == true
 
-    /**
-     * Holds a group invite until there is someone to join as; RootNavGraph opens it from there.
-     * Consumed once, like a gift link, and never logged: the fragment is a bearer secret.
-     */
+    // RootNavGraph opens the held invite once there is someone to join as. The fragment is a bearer secret.
     private fun openGroupInvite(intent: Intent) {
         val raw = intent.dataString ?: return
         intent.data = null

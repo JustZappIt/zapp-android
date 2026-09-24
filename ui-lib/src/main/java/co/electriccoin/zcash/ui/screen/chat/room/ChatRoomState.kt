@@ -30,7 +30,6 @@ data class ChatRoomState(
     val localPublicKey: String?,
     val fiatRate: ZecFiatRate?,
     val isLoading: Boolean,
-    /** Set once the owner removed this device. The history stays; nothing new can be sent. */
     val removedNotice: StringResource?,
     val input: ChatRoomInputState,
     val onPayRequest: (ChatMessage) -> Unit,
@@ -52,7 +51,7 @@ data class ChatRoomState(
 data class ChatRoomGroupInfoSheetState(
     val groupName: String,
     val members: List<ChatRoomGroupMember>,
-    /** Only the creator's changes are accepted by the other members, so only the owner is offered them. */
+    /** Owner only: members accept membership changes from the creator alone. */
     val onAddMember: (() -> Unit)?,
     val onInviteLink: (() -> Unit)?,
     val onRename: () -> Unit,
@@ -65,12 +64,6 @@ data class ChatRoomGroupMember(
     val onRemove: (() -> Unit)? = null,
 )
 
-/**
- * Removal is two things at once: the member is dropped, and the group takes a new secret so that
- * what is said next cannot be read with the old one. The dialog says what the person keeps, warns
- * when some members are on a build that will not honour it yet, and offers to reset the invite link
- * so the same link cannot bring them straight back.
- */
 data class ChatRoomRemoveMemberDialogState(
     val name: String,
     val olderMembersNote: StringResource?,

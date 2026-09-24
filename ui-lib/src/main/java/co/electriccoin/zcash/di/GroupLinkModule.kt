@@ -28,7 +28,6 @@ import org.koin.dsl.bind
 import org.koin.dsl.module
 import xyz.justzappit.zappmessaging.ZappMessagingSDK
 
-/** Group invite links and member removal. Included by [zappMessagingModule]. */
 val groupLinkModule =
     module {
         single { PendingGroupInviteStore(get<EncryptedPreferenceProvider>()) }

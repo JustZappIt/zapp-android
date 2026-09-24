@@ -103,12 +103,7 @@ class ChatContactsRepositoryImpl(
         pushBlockedKeysToSdk()
     }
 
-    /**
-     * Blocking is the app's own policy, kept in the address book, but the SDK admits people to
-     * groups through invite links without asking the app each time, so it needs the set too. It is
-     * pushed on every change and again whenever an identity appears, because the worklet starts
-     * each run without it.
-     */
+    // The SDK admits link joins without asking the app, so it keeps its own copy of the blocked set.
     private fun pushBlockedKeysToSdk() {
         scope.launch {
             combine(sdk.identity, blockedKeys) { identity, keys -> identity to keys }

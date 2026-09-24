@@ -10,7 +10,6 @@ data class ChatListState(
     val title: StringResource,
     val isLoading: Boolean,
     val items: List<ChatListItemState>,
-    /** Invite links this device is waiting on, above the conversations. */
     val waitingJoins: List<ChatListWaitingJoinState>,
     val emptyTitle: StringResource,
     val emptySubtitle: StringResource,

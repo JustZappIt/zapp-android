@@ -235,12 +235,10 @@ class ChatConversationsRepositoryImpl(
         refreshJob = scope.launch { refresh() }
     }
 
-    /** Everything invite links and removal add: a waiting request, a removal, a rekey, a join. */
     private fun observeGroupLinkEvents() {
         scope.launch {
             sdk.groupJoinRequestReceived.collect { request ->
-                // Zapp's notifications carry no name and no content, by policy, so this one only
-                // says that something arrived. The owner finds the request under Invite link.
+                // No name or content, like every Zapp notification.
                 val watching = request.conversationId == activeConversationId.value && isInForeground.value
                 if (notificationsEnabled.value == true && !watching) {
                     chatNotifier.post(
@@ -253,7 +251,7 @@ class ChatConversationsRepositoryImpl(
             }
         }
         scope.launch {
-            // Removal also gives the group a new secret, so the record is read again rather than patched.
+            // Removal also rekeys the group, so the record is read again rather than patched.
             sdk.removedFromGroup.collect { refresh() }
         }
         scope.launch {

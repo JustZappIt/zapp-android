@@ -6,17 +6,10 @@ package co.electriccoin.zcash.ui.common.usecase
 import android.content.Context
 import android.content.Intent
 
-/**
- * Hands a group invite link to the system share sheet.
- *
- * The link travels alone, with no title and no covering text, because anything added would say
- * something about the group to whatever app the owner picks. Nothing is recorded: unlike a gift
- * card, a link that is shared twice costs nothing, so there is no reason to watch where it went.
- */
+// The link travels alone: any title or text would tell the receiving app something about the group.
 class ShareGroupLinkUseCase(
     private val context: Context,
 ) {
-    /** True means the sheet went up, nothing more. */
     operator fun invoke(link: String): Boolean =
         runCatching {
             val share =

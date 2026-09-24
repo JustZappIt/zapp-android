@@ -180,11 +180,6 @@ private fun ResumeGiftClaimsOnForeground(
     }
 }
 
-/**
- * Opens a held group invite once there is a wallet, finished onboarding and a chat identity, which
- * covers a link tapped before install, during onboarding, or before a restart. The lock screen, if
- * any, sits above this, so the preview is what the person sees on unlocking.
- */
 @Composable
 private fun OpenGroupInvitesWhenReady(
     secretState: SecretState,

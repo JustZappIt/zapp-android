@@ -35,13 +35,6 @@ import xyz.justzappit.zappmessaging.models.ZMGroupLinkInfo
 import xyz.justzappit.zappmessaging.models.ZMGroupLinkOptions
 import xyz.justzappit.zappmessaging.models.ZMGroupLinkState
 
-/**
- * The owner's controls for one group's invite link.
- *
- * Every control is one SDK call that answers with the whole link record, so the screen never has to
- * guess what changed. A call that fails leaves the last known record on screen and says so, because
- * a control that silently does nothing is how an owner ends up believing a link is off.
- */
 @Suppress("TooManyFunctions")
 class GroupLinkVM(
     private val args: GroupLinkArgs,
@@ -58,7 +51,6 @@ class GroupLinkVM(
     private val requests = MutableStateFlow<List<ZMGroupJoinApprovalRequest>>(emptyList())
     private val copyFeedback = CopyFeedback(viewModelScope)
 
-    /** A request carries the name the joiner chose; the address book carries the owner's own. */
     private val waiting: Flow<List<PendingRequest>> =
         combine(requests, contacts.contacts) { pending, saved ->
             pending.map { request ->
@@ -111,7 +103,6 @@ class GroupLinkVM(
         }
     }
 
-    /** One control, one call. A second tap while a call is in flight is ignored. */
     private fun run(block: suspend () -> Result<ZMGroupLinkInfo>) {
         if (ui.value.isBusy) return
         ui.update { it.copy(isBusy = true, failed = false, isFull = false, picker = null, isConfirmingReset = false) }
@@ -164,10 +155,7 @@ class GroupLinkVM(
     private fun onApprovalToggle(approval: ZMGroupLinkApproval) =
         run { groupLinks.update(args.conversationId, ZMGroupLinkOptions(approval = approval)) }
 
-    /**
-     * Approving runs the group's own checks again, so it can come back with the group full. Either
-     * way the request is gone from the owner's device, so the list and the record are read again.
-     */
+    // Approving runs the group's checks again, so it can come back full; the SDK clears the request either way.
     private fun onApproveClick(key: String) {
         answer(call = { groupLinks.approve(args.conversationId, key) }, fullMessage = true)
     }
@@ -217,7 +205,7 @@ class GroupLinkVM(
         conversation: ChatConversation?,
         pending: List<PendingRequest>,
     ): GroupLinkState {
-        // Only the creator can admit anyone, so for everyone else the screen says so and stops.
+        // Only the creator can admit anyone.
         if (conversation != null && !conversation.isOwner) {
             return GroupLinkState(
                 isLoading = false,

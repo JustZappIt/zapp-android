@@ -10,29 +10,17 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 
-/**
- * Decides when a tapped invite may open.
- *
- * A link can land at any point: before a wallet exists, halfway through onboarding, before the chat
- * identity is made, or behind the app lock. It waits in [store] until there is someone to join as,
- * then opens once. The lock needs no handling here: it covers the screen, so the preview is simply
- * what the person sees after unlocking.
- */
+// The app lock needs no handling here: it covers the screen, so the preview is what shows on unlock.
 class GroupInviteCoordinator(
     private val store: PendingGroupInviteStore,
-    /** True once the welcome gate and onboarding are both behind the person. */
     private val onboardingDone: Flow<Boolean>,
-    /** True while a chat identity exists to join as. */
     private val identityReady: Flow<Boolean>,
     private val isEnabled: Boolean,
 ) {
-    /**
-     * Takes a tapped link. Returns a screen to open right away, or null when the link is held and
-     * will open by itself once the app is ready.
-     */
+    /** Null when the link is held and opens by itself once the app is ready. */
     suspend fun intake(raw: String): GroupInvitePreviewArgs? =
         when {
-            // Nothing is stored: the person hears it is coming soon, and the secret goes nowhere.
+            // Nothing is stored, so the secret goes nowhere.
             !isEnabled -> {
                 GroupInvitePreviewArgs(comingSoon = true)
             }
@@ -45,10 +33,7 @@ class GroupInviteCoordinator(
             }
         }
 
-    /**
-     * The token to open next, each time it changes, once there is someone to join as. The wallet
-     * itself is the caller's condition: this runs only while one is ready.
-     */
+    // Only collected while a wallet exists; the caller owns that condition.
     fun invitesToOpen(): Flow<String> =
         combine(onboardingDone, identityReady, store.observeTokens()) { done, ready, tokens ->
             if (isEnabled && done && ready) tokens.firstOrNull() else null

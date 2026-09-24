@@ -16,12 +16,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
-/** One tapped invite, held until the person joins, says not now, or it lapses. */
 @Serializable
 data class PendingGroupInvite(
-    /** Opaque, and the only thing that travels in navigation. */
     val token: String,
-    /** The canonical link. A bearer secret. */
     val link: String,
     val receivedAt: Long,
 ) {
@@ -44,23 +41,15 @@ data class PendingGroupInvites(
 }
 
 sealed interface GroupInviteIntake {
-    /** Held. [token] opens the preview for it. A repeat of a held link gets the same token. */
+    /** A repeat of a held link gets the same token. */
     data class Accepted(
         val token: String,
     ) : GroupInviteIntake
 
-    /** Not a link this build can hold. There is nothing to open, only something to explain. */
     data object Refused : GroupInviteIntake
 }
 
-/**
- * Holds tapped invites between the tap and the preview's answer, across process death.
- *
- * A link can arrive before there is anyone to join as: no wallet yet, onboarding half done, or the
- * chat identity still being made. So unlike the gift store this one is persisted, in encrypted
- * preferences, which are cleared with the wallet. Only the `Received` state lives here. Once the
- * person asks to join, the SDK holds the request and this entry is removed with the secret in it.
- */
+/** Persisted, unlike the gift store: a link can arrive before there is anyone to join as. */
 class PendingGroupInviteStore internal constructor(
     private val store: EncryptedJsonStore<PendingGroupInvites>,
     private val now: () -> Long,
@@ -72,11 +61,9 @@ class PendingGroupInviteStore internal constructor(
 
     private val mutex = Mutex()
 
-    // This store is the only writer of its key, so counting its own writes is enough to observe it,
-    // and unlike observing the preference it survives a record that fails to decode.
+    // The only writer of its key, so counting writes observes it, even past a record that fails to decode.
     private val changes = MutableStateFlow(0)
 
-    /** Registers [raw]. Never logs it, at any level. */
     suspend fun put(raw: String): GroupInviteIntake {
         val link = GroupInviteLinks.canonical(raw) ?: return GroupInviteIntake.Refused
         return mutex.withLock {
@@ -88,11 +75,7 @@ class PendingGroupInviteStore internal constructor(
         }
     }
 
-    /** The link [token] stands for, while it is still held. */
     suspend fun link(token: String): String? = mutex.withLock { live().firstOrNull { it.token == token }?.link }
-
-    /** The newest held invite, for the preview to open once the app is ready for it. */
-    suspend fun newest(): String? = mutex.withLock { live().firstOrNull()?.token }
 
     suspend fun remove(token: String) {
         mutex.withLock {
@@ -101,24 +84,17 @@ class PendingGroupInviteStore internal constructor(
         }
     }
 
-    suspend fun clear() {
-        mutex.withLock { write(emptyList()) }
-    }
-
-    /** Tokens held right now, newest first. Emits again whenever a link arrives or leaves. */
     fun observeTokens(): Flow<List<String>> =
         changes
             .map { mutex.withLock { live().map { it.token } } }
             .distinctUntilChanged()
 
-    /** What is held and not yet lapsed. Drops a record it cannot fully read rather than act on it. */
     private suspend fun live(): List<PendingGroupInvite> {
         val stored =
             try {
                 store.get()
             } catch (_: StoreCorruptedException) {
-                // Written by a build that knows more than this one, or damaged. Either way the
-                // person can tap their link again; guessing at it is worse.
+                // Written by a newer build, or damaged. The person can tap their link again.
                 write(emptyList())
                 null
             }

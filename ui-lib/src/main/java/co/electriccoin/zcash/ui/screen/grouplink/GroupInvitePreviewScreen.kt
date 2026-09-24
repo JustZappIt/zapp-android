@@ -19,13 +19,7 @@ internal fun GroupInvitePreviewScreen(args: GroupInvitePreviewArgs) {
     GroupInvitePreviewView(state = state)
 }
 
-/**
- * Carries a `PendingGroupInviteStore` token, never the link: a typed route is serialised into the
- * back stack and into saved instance state, and the link is a bearer secret.
- *
- * A null [token] opens the screen for a link the store refused, so the tap lands somewhere that
- * says why. [comingSoon] opens it for any link while the feature is off.
- */
+/** Carries a store token, never the link: routes are saved into the back stack and saved state. */
 @Serializable
 data class GroupInvitePreviewArgs(
     val token: String? = null,

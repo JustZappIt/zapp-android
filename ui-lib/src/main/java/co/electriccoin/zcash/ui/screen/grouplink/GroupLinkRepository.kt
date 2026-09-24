@@ -14,11 +14,8 @@ import xyz.justzappit.zappmessaging.models.ZMGroupLinkInspection
 import xyz.justzappit.zappmessaging.models.ZMGroupLinkOptions
 import xyz.justzappit.zappmessaging.models.ZMRemoveMemberResult
 
-// Every group link and removal call the app makes. Failures come back as Result and are logged by
-// message only. No argument or result is ever logged: links are bearer secrets, and keys and names
-// identify people.
+// Never log an argument or a result: links are bearer secrets, and keys and names identify people.
 
-/** The joiner's side: reading a link, asking to join, and following the request. */
 interface GroupJoinRepository {
     val joinUpdates: Flow<ZMGroupJoinUpdate>
 
@@ -31,7 +28,6 @@ interface GroupJoinRepository {
     suspend fun cancel(linkId: String): Result<Boolean>
 }
 
-/** The owner's side: the link, the requests it brings, and removing members. */
 interface GroupLinkRepository {
     val joinRequests: Flow<ZMGroupJoinApprovalRequest>
 

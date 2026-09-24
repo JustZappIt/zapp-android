@@ -11,6 +11,7 @@ import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 
 /** Preferences in memory. A new store over the same instance is what the app sees after process death. */
 internal class InMemoryPreferenceProvider : PreferenceProvider {
@@ -73,5 +74,7 @@ internal fun pendingInviteStore(
     ),
     now,
 )
+
+internal suspend fun PendingGroupInviteStore.newest(): String? = observeTokens().first().firstOrNull()
 
 internal const val TEST_NOW = 1_789_800_000_000L

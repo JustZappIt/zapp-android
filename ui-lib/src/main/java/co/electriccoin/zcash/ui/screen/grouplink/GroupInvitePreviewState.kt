@@ -11,17 +11,14 @@ import co.electriccoin.zcash.ui.screen.grouplink.model.GroupInviteFailure
 import co.electriccoin.zcash.ui.screen.grouplink.model.GroupInvitePhase
 
 data class GroupInvitePreviewState(
-    /** Null while the link is being read. */
     val title: StringResource?,
     val body: StringResource? = null,
-    /** A problem with the last action, shown under the body. */
     val note: StringResource? = null,
     val primary: ButtonState? = null,
     val secondary: ButtonState? = null,
     val onBack: () -> Unit,
 )
 
-/** Everything the screen can say, one phase at a time. Kept free of Android so it can be tested. */
 internal object GroupInvitePreviewCopy {
     fun title(phase: GroupInvitePhase): StringResource? =
         when (phase) {

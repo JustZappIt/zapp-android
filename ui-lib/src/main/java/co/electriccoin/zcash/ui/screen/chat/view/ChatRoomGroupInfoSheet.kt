@@ -277,10 +277,6 @@ private fun MemberRow(member: ChatRoomGroupMember) {
     }
 }
 
-/**
- * Removing someone is not undoable and is not only a membership change, so the dialog says what it
- * costs the person, and what this group cannot promise yet when older builds are still in it.
- */
 @Composable
 internal fun RemoveMemberDialog(state: ChatRoomRemoveMemberDialogState) {
     val c = ZappTheme.colors

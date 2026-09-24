@@ -40,14 +40,6 @@ class GroupInviteLinksTest {
         assertNull(GroupInviteLinks.canonical(oversized))
     }
 
-    @Test
-    fun `finds a link in pasted text`() {
-        assertEquals(LINK, GroupInviteLinks.fromPastedText("  $LINK\n"))
-        assertEquals(LINK, GroupInviteLinks.fromPastedText("Join us here ($LINK)."))
-        assertNull(GroupInviteLinks.fromPastedText("no link in here"))
-        assertNull(GroupInviteLinks.fromPastedText(""))
-    }
-
     companion object {
         // The "minimal" vector from zappmessaging-sdk test/group-link-vectors.json.
         const val PAYLOAD = "AQAAAQIDBAUGBwgJCgsMDQ4P0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzcR765S"

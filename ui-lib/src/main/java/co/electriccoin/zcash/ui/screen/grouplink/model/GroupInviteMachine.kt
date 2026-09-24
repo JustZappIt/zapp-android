@@ -10,7 +10,6 @@ import xyz.justzappit.zappmessaging.models.ZMGroupJoinUpdate
 import xyz.justzappit.zappmessaging.models.ZMGroupLinkInspectStatus
 import xyz.justzappit.zappmessaging.models.ZMGroupLinkInspection
 
-/** Why an invite ended without a group. Each has exactly one line of copy. */
 enum class GroupInviteFailure {
     UNREADABLE,
     EXPIRED,
@@ -21,20 +20,13 @@ enum class GroupInviteFailure {
     COMING_SOON,
 }
 
-/**
- * Where one tapped invite stands on this device (design section 4.2).
- *
- * Nothing here is stored. The pending store holds the link until the request is made, and the SDK
- * holds the request after that, so after process death every phase is derived again from those two.
- */
+/** Never stored: after process death it is derived again from the pending store and the SDK. */
 sealed interface GroupInvitePhase {
-    /** The link is being read, which contacts nobody. */
     data object Reading : GroupInvitePhase
 
     data class Preview(
         val nameHint: String?,
         val linkId: String?,
-        /** The last attempt to ask did not leave the device. */
         val sendFailed: Boolean = false,
     ) : GroupInvitePhase
 
@@ -46,7 +38,6 @@ sealed interface GroupInvitePhase {
     data class Waiting(
         val nameHint: String?,
         val linkId: String,
-        /** The owner has the request and approves each one by hand. */
         val withOwner: Boolean,
     ) : GroupInvitePhase
 
@@ -60,7 +51,6 @@ sealed interface GroupInvitePhase {
         val reason: GroupInviteFailure,
     ) : GroupInvitePhase
 
-    /** Closed by the person. Nothing left to show. */
     data object Dismissed : GroupInvitePhase
 }
 
@@ -69,13 +59,10 @@ sealed interface GroupInviteEvent {
         val inspection: ZMGroupLinkInspection,
     ) : GroupInviteEvent
 
-    /** The screen was opened for a link the store refused. */
     data object Refused : GroupInviteEvent
 
-    /** The screen was opened with the flag off. */
     data object FlagOff : GroupInviteEvent
 
-    /** The token no longer stands for anything: handled already, or lapsed. */
     data object Missing : GroupInviteEvent
 
     data object JoinTapped : GroupInviteEvent
@@ -95,10 +82,6 @@ sealed interface GroupInviteEvent {
     data object CancelTapped : GroupInviteEvent
 }
 
-/**
- * One step. [dropLink] deletes the stored link, and with it the secret: the SDK holds what is
- * needed from here, or nothing is needed at all.
- */
 data class GroupInviteStep(
     val phase: GroupInvitePhase,
     val dropLink: Boolean = false,
@@ -305,7 +288,6 @@ object GroupInviteMachine {
             }
         }
 
-    /** What an answer from the owner, or from the SDK's own timer, means here. */
     private fun applyUpdate(
         nameHint: String?,
         update: ZMGroupJoinUpdate,

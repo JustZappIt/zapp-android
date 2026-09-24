@@ -379,7 +379,6 @@ class ChatRoomVM(
     private data class RemoveMemberDraft(
         val publicKey: String,
         val name: String,
-        /** Someone who came in through the link can walk back in with it, so it resets by default. */
         val resetLink: Boolean = true,
         val canResetLink: Boolean = false,
         val olderMemberCount: Int = 0,
@@ -1002,10 +1001,6 @@ class ChatRoomVM(
         navigationRouter.forward(GroupLinkArgs(conversationId = conversationId))
     }
 
-    /**
-     * The older member count and the link state are read when the dialog opens, so the dialog says
-     * what this group will actually do rather than what removal does in general.
-     */
     private fun onRemoveMemberClick(
         publicKey: String,
         name: String,

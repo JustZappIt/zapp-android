@@ -10,6 +10,7 @@ import co.electriccoin.zcash.ui.screen.chat.ChatRoomArgs
 import co.electriccoin.zcash.ui.screen.grouplink.model.GroupInviteIntake
 import co.electriccoin.zcash.ui.screen.grouplink.model.GroupInviteLinksTest.Companion.LINK
 import co.electriccoin.zcash.ui.screen.grouplink.model.InMemoryPreferenceProvider
+import co.electriccoin.zcash.ui.screen.grouplink.model.newest
 import co.electriccoin.zcash.ui.screen.grouplink.model.pendingInviteStore
 import io.mockk.mockk
 import io.mockk.verify

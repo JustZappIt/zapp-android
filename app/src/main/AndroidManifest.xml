@@ -70,12 +70,8 @@
                     android:scheme="https" />
             </intent-filter>
             <!--
-              Group invite links, and the handoff the landing page opens when the link was tapped
-              in a browser that did not hand it to the app. Each is its own filter for the same
-              reason as the gift one. The secret is the fragment of the first and the last path
-              segment of the second; neither is ever logged.
-              The host serves the same assetlinks.json as the gift host, which matters on Android
-              11 and older, where verification is all or nothing across an app's hosts.
+              Group invite links, and the landing page's handoff. The host must serve the gift host's
+              assetlinks.json: on Android 11 and older one failing host unverifies every host.
             -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
