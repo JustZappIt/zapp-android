@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.screen.chat.support
 
 import androidx.annotation.StringRes
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.screen.chat.model.ConversationType
 
 /**
  * User-visible categories shown on the topic-picker screen.
@@ -88,17 +89,20 @@ object SupportChatConstants {
      * key in [participantIds] (`displayName` alone is spoofable), while the support agent's
      * device falls back to the displayName prefix because its own key is excluded from the
      * SDK's participant list.
+     *
+     * On both sides a ticket is only ever the GROUP the topic picker creates, carrying the
+     * `Support: ` prefix. The support key alone is not enough: a direct chat with the support
+     * key, or an ordinary group it was added to, is a normal conversation and belongs in the
+     * regular chat list, not the Zapp Support section.
      */
     fun isSupportConversation(
+        type: ConversationType,
         displayName: String,
         participantIds: List<String>,
         localPublicKey: String?,
     ): Boolean {
+        if (type != ConversationType.GROUP || !displayName.startsWith(DISPLAY_NAME_PREFIX)) return false
         val viewerIsSupportAgent = localPublicKey == SUPPORT_PUBLIC_KEY
-        return if (viewerIsSupportAgent) {
-            displayName.startsWith(DISPLAY_NAME_PREFIX)
-        } else {
-            participantIds.contains(SUPPORT_PUBLIC_KEY)
-        }
+        return viewerIsSupportAgent || participantIds.contains(SUPPORT_PUBLIC_KEY)
     }
 }
