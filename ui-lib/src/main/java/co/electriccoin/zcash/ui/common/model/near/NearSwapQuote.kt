@@ -123,7 +123,8 @@ data class NearSwapQuote(
 
     override val timestamp: Instant = response.timestamp
 
-    override val deadline: Instant = response.quote.deadline
+    override val deadline: Instant =
+        requireNotNull(response.quote.deadline) { "1Click returned an executable quote with no deadline" }
 
     override val estimatedDurationSeconds: Int? = response.quote.timeEstimate
 
