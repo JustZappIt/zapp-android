@@ -16,11 +16,10 @@ import co.electriccoin.zcash.ui.common.usecase.ValidateSeedUseCase
 import co.electriccoin.zcash.ui.design.component.SeedTextFieldState
 import co.electriccoin.zcash.ui.design.component.SeedWordInnerTextFieldState
 import co.electriccoin.zcash.ui.design.component.SeedWordTextFieldState
-import co.electriccoin.zcash.ui.design.component.TextSelection
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.screen.restore.seed.placePastedSeedWords
-import co.electriccoin.zcash.ui.screen.restore.seed.splitPastedSeedWords
+import co.electriccoin.zcash.ui.screen.restore.seed.pastedSeedWords
+import co.electriccoin.zcash.ui.screen.restore.seed.withPastedWords
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -117,30 +116,15 @@ class ZappRestoreFlowVM(
             .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList())
 
     private fun onSeedWordChange(index: Int, newState: SeedWordInnerTextFieldState) {
-        // A single field only ever holds one word, so several words arriving at once is a paste
-        // of (part of) a phrase: spread it across the grid instead of cramming it into one box.
-        val pasted = splitPastedSeedWords(newState.value)
-        if (pasted.size > 1) {
-            distributeSeedWords(index, pasted)
-            return
-        }
-        seedWords.update { list ->
-            list.toMutableList().also {
-                it[index] = it[index].copy(innerState = newState.copy(value = newState.value.trim()))
-            }
-        }
-    }
-
-    private fun distributeSeedWords(index: Int, words: List<String>) {
-        seedWords.update { fields ->
-            val newValues = placePastedSeedWords(fields.map { it.innerState.value }, index, words)
-            fields.mapIndexed { i, field ->
-                if (newValues[i] == field.innerState.value) {
-                    field
-                } else {
-                    field.copy(innerState = SeedWordInnerTextFieldState(newValues[i], TextSelection.End))
+        val pasted = pastedSeedWords(seedWords.value[index].innerState, newState)
+        if (pasted.isEmpty()) {
+            seedWords.update { list ->
+                list.toMutableList().also {
+                    it[index] = it[index].copy(innerState = newState.copy(value = newState.value.trim()))
                 }
             }
+        } else {
+            seedWords.update { it.withPastedWords(index, pasted) }
         }
     }
 

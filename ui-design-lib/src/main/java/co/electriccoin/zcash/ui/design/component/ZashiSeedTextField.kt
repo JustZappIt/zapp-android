@@ -205,27 +205,25 @@ class SeedTextFieldHandle(
 
     internal fun updateState(new: SeedTextFieldState) {
         if (state != new) {
+            val previousTexts = state.values.map { it.innerState.value }
             state = new
-            val previousTexts = internalState.texts
             val texts = new.values.map { it.innerState.value }
             internalState = internalState.copy(texts = texts)
-            selectAfterPastedBlock(previousTexts, texts)
+            focusAfterPaste(previousTexts, texts)
         }
     }
 
-    /**
-     * Typing only ever changes one field at a time, so several fields changing together is a
-     * pasted phrase being spread over the grid. Move focus to the first empty field after the
-     * pasted block, or drop focus when the grid is full so the keyboard gets out of the way.
-     */
-    private fun selectAfterPastedBlock(
+    // Typing changes one field at a time, so several changing together is a spread paste.
+    private fun focusAfterPaste(
         previousTexts: List<String>,
         texts: List<String>
     ) {
         val changed = texts.indices.filter { texts[it] != previousTexts.getOrNull(it) }
         if (changed.size <= 1) return
-        val lastChanged = changed.max()
-        val next = texts.indices.firstOrNull { it > lastChanged && texts[it].isBlank() } ?: -1
+        val next =
+            texts.indices.firstOrNull { it > changed.last() && texts[it].isBlank() }
+                ?: texts.indices.firstOrNull { texts[it].isBlank() }
+                ?: -1
         setSelectedIndex(next)
     }
 

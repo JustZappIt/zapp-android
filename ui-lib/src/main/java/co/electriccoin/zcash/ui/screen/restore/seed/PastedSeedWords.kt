@@ -1,32 +1,50 @@
 package co.electriccoin.zcash.ui.screen.restore.seed
 
-import java.util.Locale
+import co.electriccoin.zcash.ui.design.component.SeedWordInnerTextFieldState
+import co.electriccoin.zcash.ui.design.component.SeedWordTextFieldState
+import co.electriccoin.zcash.ui.design.component.TextSelection
 
-/**
- * Break pasted text into candidate seed words: whitespace, commas and semicolons all separate
- * words, and tokens with no letters (the "1." or "12)" of a numbered backup) are dropped. BIP-39
- * words are lowercase, so the case of the paste is not preserved.
- */
+// Anything but a letter separates words, so a numbered backup's "1." or "2)" drops out.
+private val NON_LETTERS = Regex("\\P{L}+")
+
 internal fun splitPastedSeedWords(text: String): List<String> =
-    text
-        .split(PASTED_SEED_SEPARATOR)
-        .map { it.trim().lowercase(Locale.ROOT) }
-        .filter { token -> token.any { it.isLetter() } }
+    text.split(NON_LETTERS).filter { it.isNotEmpty() }.map { it.lowercase() }
 
 /**
- * Lay [words] over [current], starting at [index]; a paste that holds a whole phrase always starts
- * at the first field so pasting it into any box fills the grid. Words that would spill past the
- * last field are dropped.
+ * The words a field change pasted, or none when it was typing. Only the text inserted at the old
+ * cursor or selection counts, so a paste never absorbs what the field held.
  */
-internal fun placePastedSeedWords(
-    current: List<String>,
+internal fun pastedSeedWords(
+    old: SeedWordInnerTextFieldState,
+    new: SeedWordInnerTextFieldState
+): List<String> = splitPastedSeedWords(insertedText(old, new.value)).takeIf { it.size > 1 }.orEmpty()
+
+/** A whole phrase always starts at the first field; anything past the last field is dropped. */
+internal fun List<SeedWordTextFieldState>.withPastedWords(
     index: Int,
     words: List<String>
-): List<String> {
-    val start = if (words.size >= current.size) 0 else index.coerceIn(0, current.lastIndex)
-    val result = current.toMutableList()
-    words.take(current.size - start).forEachIndexed { offset, word -> result[start + offset] = word }
-    return result.toList()
+): List<SeedWordTextFieldState> {
+    val start = if (words.size >= size) 0 else index
+    return mapIndexed { i, field ->
+        words.getOrNull(i - start)?.let {
+            field.copy(innerState = SeedWordInnerTextFieldState(it, TextSelection.End))
+        } ?: field
+    }
 }
 
-private val PASTED_SEED_SEPARATOR = Regex("[\\s,;]+")
+private fun insertedText(
+    old: SeedWordInnerTextFieldState,
+    new: String
+): String {
+    val length = old.value.length
+    val (start, end) =
+        when (val selection = old.selection) {
+            TextSelection.Start -> 0 to 0
+            TextSelection.End -> length to length
+            is TextSelection.ByTextRange -> selection.range.min to selection.range.max
+        }
+    val before = old.value.take(start.coerceAtMost(length))
+    val after = old.value.drop(end.coerceAtMost(length))
+    val kept = new.length >= before.length + after.length && new.startsWith(before) && new.endsWith(after)
+    return if (kept) new.substring(before.length, new.length - after.length) else new
+}
