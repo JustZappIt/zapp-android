@@ -52,8 +52,9 @@ data class QuoteDetails(
     @SerialName("minAmountOut")
     @Serializable(with = BigDecimalSerializer::class)
     val minAmountOut: BigDecimal,
+    // Absent on a dry quote, same as depositAddress: nothing is reserved, so nothing expires.
     @SerialName("deadline")
-    val deadline: Instant,
+    val deadline: Instant? = null,
     // 1-Click's estimated time-to-settle in seconds. Optional: absent on older responses, in which
     // case the UI falls back to a static "a few minutes" estimate.
     @SerialName("timeEstimate")
