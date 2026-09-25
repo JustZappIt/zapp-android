@@ -6,7 +6,6 @@ package co.electriccoin.zcash.ui.screen.reputation.increase
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.serialization.Serializable
 import org.koin.androidx.compose.koinViewModel
@@ -17,10 +16,6 @@ import xyz.justzappit.offramp.p2p.CurrencyCode
 fun IncreaseReputationScreen(args: IncreaseReputationArgs) {
     val vm = koinViewModel<IncreaseReputationVM> { parametersOf(args) }
     val state by vm.state.collectAsStateWithLifecycle()
-    LifecycleResumeEffect(vm) {
-        vm.onScreenVisible()
-        onPauseOrDispose {}
-    }
     IncreaseReputationView(state)
     BackHandler { state.onBack() }
 }

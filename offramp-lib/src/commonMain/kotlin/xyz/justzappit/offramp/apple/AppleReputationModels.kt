@@ -8,12 +8,6 @@ package xyz.justzappit.offramp.apple
  * platforms as a list rather than the maps and enum keys the shared model uses.
  *
  * Every figure here is the chain's own. Nothing on the Swift side may derive a limit from [points].
- *
- * Two per-order limits meet here: the Diamond's, set by reputation, and Zapp's integrator's, set
- * by the selfie check. A buy is routed by whichever carries the amount, so [shownLimitMicros] is
- * the higher of the two and [canBuy] is whether it is positive — the same two reads
- * `OnrampRouteReader` makes, so the gate and the amount screen cannot disagree. Blacklist
- * precedence stays on the Swift side, where it already was.
  */
 data class AppleReputationSummary(
     val currencyCode: String,
@@ -21,21 +15,8 @@ data class AppleReputationSummary(
     val isBlacklisted: Boolean,
     val canBuy: Boolean,
     val isAtCeiling: Boolean,
-    /** The Diamond's own per-order limit, from reputation alone. */
     val buyLimitMicros: String,
     val maxBuyLimitMicros: String,
-    /** The higher of the Diamond's limit and the integrator's; what the screen shows. */
-    val shownLimitMicros: String,
-    /** True when the integrator's limit is the one shown, so the caption can name it. */
-    val isLimitFromCheckout: Boolean,
-    /** False on a network with no integrator, where nothing about the selfie check is mentioned. */
-    val isSelfieAvailable: Boolean,
-    /**
-     * The standing [shownLimitMicros] was computed from, so the screen that lists the selfie row
-     * reads it once, here, rather than again beside the summary. Null where no integrator is
-     * deployed, and after a failed confirming read on a Reclaim `Done`.
-     */
-    val liveness: AppleLivenessStanding?,
     val platforms: List<AppleReputationPlatform>,
 )
 

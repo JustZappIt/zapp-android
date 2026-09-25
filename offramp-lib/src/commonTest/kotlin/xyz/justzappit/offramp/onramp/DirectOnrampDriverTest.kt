@@ -76,21 +76,10 @@ class DirectOnrampDriverTest {
     /** A Diamond revert selector to answer the next eth_call with, as the chain would. */
     private var nextRevert: String? = null
 
-    /** A whole revert quoted in the error's `message`, as a bundler reports a failed simulation. */
-    private var nextQuotedRevert: String? = null
-
     private val rpcEngine =
         MockEngine { request ->
             if (rpcIsDown) {
                 respond("""{"error":"upstream is having a day"}""", HttpStatusCode.BadGateway, jsonHeaders)
-            } else if (nextQuotedRevert != null) {
-                // Pimlico's shape: no `data`, the hex inside the sentence, and a code that is not 3.
-                respond(
-                    """{"jsonrpc":"2.0","id":1,"error":{"code":-32521,""" +
-                        """"message":"UserOperation reverted during simulation with reason: $nextQuotedRevert"}}""",
-                    HttpStatusCode.OK,
-                    jsonHeaders,
-                )
             } else if (nextRevert != null) {
                 // A revert is an HTTP 200 carrying a JSON-RPC error, not an HTTP failure.
                 respond(
@@ -269,52 +258,6 @@ class DirectOnrampDriverTest {
 
             assertEquals(OnrampFailureCode.USER_BLACKLISTED, failed.code)
         }
-
-    @Test
-    fun `the integrator's own refusals are named`() =
-        runTest {
-            val expected =
-                mapOf(
-                    NOT_VERIFIED to OnrampFailureCode.CAP_EXCEEDED,
-                    VERIFICATION_LIMIT_EXCEEDED to OnrampFailureCode.CAP_EXCEEDED,
-                    DAILY_COUNT_LIMIT_EXCEEDED to OnrampFailureCode.DAILY_LIMIT_EXCEEDED,
-                    USER_IS_BLOCKED to OnrampFailureCode.USER_BLACKLISTED,
-                    CONTRACT_PAUSED to OnrampFailureCode.ROUTE_DISABLED,
-                    B2B_INTEGRATOR_INACTIVE to OnrampFailureCode.ROUTE_DISABLED,
-                )
-            for ((selector, code) in expected) {
-                nextRevert = selector
-
-                val failed = assertIs<OnrampStatus.Failed>(driver().resume(checkpoint()).toList().single())
-
-                assertEquals(code, failed.code, "selector $selector")
-            }
-        }
-
-    @Test
-    fun `a diamond refusal wrapped by the integrator's proxy is still named`() =
-        runTest {
-            // ☠ The bundler quotes the whole revert as one hex string, so the Diamond's selector
-            // inside `CallFailed(bytes)` never gets a `0x` of its own. Without unwrapping it, every
-            // Diamond-side refusal on the integrator route reads as a generic upstream failure.
-            nextQuotedRevert = callFailedWrapping(NOT_ENOUGH_ELIGIBLE_MERCHANTS)
-
-            val failed = assertIs<OnrampStatus.Failed>(driver().resume(checkpoint()).toList().single())
-
-            assertEquals(OnrampFailureCode.NO_MERCHANT, failed.code)
-        }
-
-    @Test
-    fun `the inner selector is read only from a well-formed wrapper`() {
-        val wrapped = callFailedWrapping(NOT_ENOUGH_ELIGIBLE_MERCHANTS)
-        assertEquals("0x5d04ff4c", innerRevertSelector("reverted: $wrapped"))
-        // Case is normalised, so an upper-case quote still matches the lower-case table.
-        assertEquals("0x5d04ff4c", innerRevertSelector(wrapped.uppercase()))
-        assertNull(innerRevertSelector("0x5d04ff4c"), "no wrapper, nothing to unwrap")
-        assertNull(innerRevertSelector("0xa5fa8d2b" + "00".repeat(WORD_BYTES)), "truncated before the inner data")
-        assertNull(innerRevertSelector("0xa5fa8d2b" + "00".repeat(WORD_BYTES * 2) + "zz04ff4c"), "not hex")
-        assertNull(innerRevertSelector(""))
-    }
 
     @Test
     fun `a selector this build has never seen still reaches the user as a status`() =
@@ -573,24 +516,6 @@ class DirectOnrampDriverTest {
 
         /** p2p.me's `UserIsBlacklisted`. */
         const val USER_IS_BLACKLISTED = "0xebb6f34b"
-
-        /** p2p.me's `NotEnoughEligibleMerchants`. */
-        const val NOT_ENOUGH_ELIGIBLE_MERCHANTS = "0x5d04ff4c"
-
-        // `ZappCheckoutIntegrator`'s own errors, `cast sig` over its source.
-        const val NOT_VERIFIED = "0xa95362b5"
-        const val VERIFICATION_LIMIT_EXCEEDED = "0xd7b73119"
-        const val DAILY_COUNT_LIMIT_EXCEEDED = "0x595184aa"
-        const val USER_IS_BLOCKED = "0xc000e8e5"
-        const val CONTRACT_PAUSED = "0xab35696f"
-        const val B2B_INTEGRATOR_INACTIVE = "0xee5603c8"
-
-        /** `UserProxy.CallFailed(bytes)` around [selector]: offset word 0x20, length word 4, data padded to a word. */
-        fun callFailedWrapping(selector: String): String =
-            "0xa5fa8d2b" +
-                "20".padStart(WORD_BYTES * 2, '0') +
-                "4".padStart(WORD_BYTES * 2, '0') +
-                selector.removePrefix("0x").padEnd(WORD_BYTES * 2, '0')
 
         const val ENCODED_ZERO = "0x" + "0000000000000000000000000000000000000000000000000000000000000000"
         const val ENCODED_ONE = "0x" + "0000000000000000000000000000000000000000000000000000000000000001"

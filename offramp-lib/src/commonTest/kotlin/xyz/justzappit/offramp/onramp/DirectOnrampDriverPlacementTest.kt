@@ -45,7 +45,6 @@ import xyz.justzappit.offramp.account.Erc4337SubmitterProvider
 import xyz.justzappit.offramp.account.OfframpAccountProvider
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
 import xyz.justzappit.offramp.config.P2pNetworks
-import xyz.justzappit.offramp.liveness.LivenessCalls
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.DiamondCalls
 import xyz.justzappit.offramp.p2p.InMemoryOrderRecipientUpiCache
@@ -62,7 +61,6 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
@@ -240,39 +238,6 @@ class DirectOnrampDriverPlacementTest {
         }
 
     @Test
-    fun `an integrator order is screened on the b2b intake and placed on the integrator`() =
-        runTest {
-            // ☠ Two things change with the route, and only two. The consumer intake would score
-            // this wallet as a new account and refuse it; the Diamond would revert it for having
-            // no reputation. Everything else — circle, fiat cap, receipt — is the direct path's.
-            screeningApproves = true
-
-            val statuses = driver().start(QUOTE.copy(route = OnrampRoute.INTEGRATOR)).toList()
-
-            assertEquals("/screening/activity-logs/b2b-buy-order", screeningPath)
-            val envelope = checkNotNull(screeningEnvelope)
-            assertFalse(envelope.containsKey("type"))
-            // Decrypts under the B2B AAD: the wrong one would throw here.
-            val payload = decryptScreeningPayload(envelope, aadPrefix = "b2b_buy_order")
-            val transaction = payload.getValue("transaction_details").jsonObject
-            assertEquals("539.26", transaction.getValue("fiat_amount").jsonPrimitive.content)
-            assertEquals(OnrampScreeningConfig.DEFAULT_B2B_DOMAIN, payload.getValue("domain").jsonPrimitive.content)
-
-            // The UserOp wraps `execute(to, value, data)`: `to` is the integrator, `data` is buyUsdc.
-            val callData = assertNotNull(submittedCallData, "the run must reach the bundler")
-            val executeArgs = callData.removePrefix("0x").drop(SELECTOR_HEX)
-            assertEquals(
-                P2pNetworks.SEPOLIA_LIVENESS_INTEGRATOR.lowercase().removePrefix("0x"),
-                executeArgs.take(WORD_HEX).takeLast(ADDRESS_HEX),
-            )
-            val inner = executeArgs.drop(WORD_HEX * EXECUTE_HEAD_WORDS)
-            assertTrue(inner.startsWith("88662523"), "buyUsdc must be the inner call, got ${inner.take(SELECTOR_HEX)}")
-            assertContentEquals(expectedRoutingCall(QUOTE.fiatAmount), routingCalls.first())
-            // The mock stops the run at the bundler; what matters is that it got there.
-            assertEquals(OnrampFailureCode.UPSTREAM_FAILED, assertIs<OnrampStatus.Failed>(statuses.last()).code)
-        }
-
-    @Test
     fun `a direct order stays on the consumer intake and the diamond`() =
         runTest {
             screeningApproves = true
@@ -352,7 +317,7 @@ class DirectOnrampDriverPlacementTest {
             orderType = OrderType.BUY,
         )
 
-    private fun decryptScreeningPayload(envelope: JsonObject, aadPrefix: String = "buy_order"): JsonObject {
+    private fun decryptScreeningPayload(envelope: JsonObject): JsonObject {
         val subject = envelope.getValue("user_address").jsonPrimitive.content
         val timestamp = envelope.getValue("timestamp").jsonPrimitive.content
         val ciphertext = Base64.decode(envelope.getValue("encrypted_payload").jsonPrimitive.content)
@@ -361,7 +326,7 @@ class DirectOnrampDriverPlacementTest {
                 .get(AES.GCM)
                 .keyDecoder()
                 .decodeFromByteArrayBlocking(AES.Key.Format.RAW, SCREENING_KEY_HEX.hexToBytes())
-        val plaintext = key.cipher().decryptBlocking(ciphertext, "$aadPrefix|$subject|$timestamp".encodeToByteArray())
+        val plaintext = key.cipher().decryptBlocking(ciphertext, "buy_order|$subject|$timestamp".encodeToByteArray())
         return Json.parseToJsonElement(plaintext.decodeToString()).jsonObject
     }
 
