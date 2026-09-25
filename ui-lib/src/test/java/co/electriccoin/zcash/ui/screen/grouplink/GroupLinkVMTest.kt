@@ -517,6 +517,26 @@ class GroupLinkVMTest {
             )
         }
 
+    @Test
+    fun `a request taken back while the screen is open leaves the list`() =
+        runTest {
+            groupLinks.pending = listOf(request())
+            val vm = open()
+            assertEquals(1, vm.state.value.requests.size)
+
+            groupLinks.pending = emptyList()
+            groupLinks.withdrawnRequests.emit("another-group")
+            advanceUntilIdle()
+            assertEquals(1, vm.state.value.requests.size, "only this group's list reloads")
+
+            groupLinks.withdrawnRequests.emit(CONVERSATION_ID)
+            advanceUntilIdle()
+            assertTrue(
+                vm.state.value.requests
+                    .isEmpty()
+            )
+        }
+
     private fun StringResource?.res() = (this as? StringResource.ByResource)?.resource
 
     private class FakeGroupLinkRepository : GroupLinkRepository {
@@ -533,6 +553,8 @@ class GroupLinkVMTest {
         val declined = mutableListOf<String>()
 
         override val joinRequests = MutableSharedFlow<ZMGroupJoinApprovalRequest>()
+
+        override val withdrawnRequests = MutableSharedFlow<String>()
 
         private fun answer(change: () -> Unit): Result<ZMGroupLinkInfo> {
             if (failNext) {

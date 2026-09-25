@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.screen.grouplink
 
 import co.electriccoin.zcash.ui.screen.chat.common.runChatCallResult
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import xyz.justzappit.zappmessaging.ZappMessagingSDK
 import xyz.justzappit.zappmessaging.models.ZMGroupJoinApprovalRequest
 import xyz.justzappit.zappmessaging.models.ZMGroupJoinResult
@@ -30,6 +31,9 @@ interface GroupJoinRepository {
 
 interface GroupLinkRepository {
     val joinRequests: Flow<ZMGroupJoinApprovalRequest>
+
+    /** Conversation ids where a request waiting for approval was taken back. */
+    val withdrawnRequests: Flow<String>
 
     suspend fun get(conversationId: String): Result<ZMGroupLinkInfo>
 
@@ -86,6 +90,9 @@ class GroupLinkRepositoryImpl(
     private val sdk: ZappMessagingSDK,
 ) : GroupLinkRepository {
     override val joinRequests: Flow<ZMGroupJoinApprovalRequest> = sdk.groupJoinRequestReceived
+
+    override val withdrawnRequests: Flow<String> =
+        sdk.groupJoinRequestWithdrawn.map { (conversationId, _) -> conversationId }
 
     override suspend fun get(conversationId: String) = call("get failed") { sdk.getGroupLink(conversationId) }
 

@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -76,8 +78,8 @@ class GroupLinkVM(
     init {
         load()
         viewModelScope.launch {
-            groupLinks.joinRequests
-                .filter { it.conversationId == args.conversationId }
+            merge(groupLinks.joinRequests.map { it.conversationId }, groupLinks.withdrawnRequests)
+                .filter { it == args.conversationId }
                 .collect { loadRequests() }
         }
     }
