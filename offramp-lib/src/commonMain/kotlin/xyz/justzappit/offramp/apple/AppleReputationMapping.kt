@@ -4,6 +4,7 @@
 package xyz.justzappit.offramp.apple
 
 import xyz.justzappit.offramp.reclaim.ReclaimStatus
+import xyz.justzappit.offramp.reputation.IdentityCheck
 import xyz.justzappit.offramp.reputation.ReputationSummary
 import xyz.justzappit.offramp.reputation.SocialPlatform
 
@@ -33,6 +34,17 @@ internal fun ReputationSummary.toApple() =
         isAtCeiling = isAtCeiling,
         buyLimitMicros = buyLimit.micros.toString(),
         maxBuyLimitMicros = maxBuyLimit.micros.toString(),
+        identityChecks =
+            IdentityCheck.entries.filter { it.isOfferedIn(currency) }.map { check ->
+                AppleReputationPlatform(
+                    check.name,
+                    check.name,
+                    award(check).toString(),
+                    check in identityVerified,
+                    false,
+                    limitGainFor(check)?.micros?.toString()
+                )
+            },
         // Declaration order, which is descending by award: LinkedIn leads every list.
         platforms =
             SocialPlatform.entries.map { platform ->

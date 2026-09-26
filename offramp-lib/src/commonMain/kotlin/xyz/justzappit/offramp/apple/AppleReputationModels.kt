@@ -18,6 +18,7 @@ data class AppleReputationSummary(
     val buyLimitMicros: String,
     val maxBuyLimitMicros: String,
     val platforms: List<AppleReputationPlatform>,
+    val identityChecks: List<AppleReputationPlatform> = emptyList(),
 )
 
 data class AppleReputationPlatform(
