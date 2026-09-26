@@ -82,8 +82,15 @@ interface AtomicSwapZcash {
     ): String
 
     /**
+     * The id of a payment to [address] the wallet created, mined or still pending, or null if there
+     * is none or it expired unmined: how a [pay] cut short is found again.
+     */
+    suspend fun findPayment(address: String): String?
+
+    /**
      * Takes a refunded deposit home: watches the deposit account from [birthday], sweeps its balance
-     * with the maker's revealed [makerSecret] added to the user's, and returns the sweep's id.
+     * with the maker's revealed [makerSecret] added to the user's, and returns the sweep's id. A sweep
+     * that already went out before an interruption is returned instead of a second one.
      */
     suspend fun sweepRefund(
         index: Int,

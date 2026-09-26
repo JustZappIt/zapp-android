@@ -56,18 +56,15 @@ class AtomicSwapDriver(
 
     /**
      * Checks the swap as the contract records it and pays the deposit to the account its shares make.
-     * Nothing is paid unless every check passes, and never twice.
+     * Nothing is paid unless every check passes, and never twice: a deposit cut short is looked up in
+     * the wallet's history before paying again.
      */
     suspend fun deposit(record: AtomicSwapRecord): AtomicSwapRecord {
         if (record.depositTxId != null) return record
-        check(!record.depositAttempted) {
-            "a deposit was started and may have gone out: check the wallet before paying again"
-        }
         val swap = chain.caughtUp(record.swapId) { true }
-        verify(record, swap)
         val address = keys.depositAddress(record.index, swap.makerShare)
-        store.save(record.copy(depositAttempted = true))
-        val txId = zcash.pay(address, record.quote.depositZat)
+        val sent = if (record.depositAttempted) zcash.findPayment(address) else null
+        val txId = sent ?: payDeposit(record, swap, address)
         return record.copy(depositAttempted = true, depositTxId = txId).also { store.save(it) }
     }
 
@@ -118,6 +115,16 @@ class AtomicSwapDriver(
             }
         }
 
+    private suspend fun payDeposit(
+        record: AtomicSwapRecord,
+        swap: OnChainSwap,
+        address: String,
+    ): String {
+        verify(record, swap)
+        store.save(record.copy(depositAttempted = true))
+        return zcash.pay(address, record.quote.depositZat)
+    }
+
     private suspend fun verify(
         record: AtomicSwapRecord,
         swap: OnChainSwap
@@ -145,7 +152,7 @@ class AtomicSwapDriver(
         swap: OnChainSwap
     ): AtomicSwapStep {
         val outcome =
-            if (record.depositAttempted) {
+            if (deposited(record, swap)) {
                 val txId = zcash.sweepRefund(record.index, swap.makerShare, swap.secret, record.zcashHeight)
                 "refunded: the deposit came home in $txId"
             } else {
@@ -153,6 +160,14 @@ class AtomicSwapDriver(
             }
         return finish(record, outcome)
     }
+
+    /** A deposit recorded as paid, or one cut short that the wallet's history shows went out. */
+    private suspend fun deposited(
+        record: AtomicSwapRecord,
+        swap: OnChainSwap
+    ): Boolean =
+        record.depositTxId != null ||
+            (record.depositAttempted && zcash.findPayment(keys.depositAddress(record.index, swap.makerShare)) != null)
 
     private suspend fun finish(
         record: AtomicSwapRecord,

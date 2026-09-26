@@ -9,6 +9,7 @@ import cash.z.ecc.android.sdk.model.AccountImportSetup
 import cash.z.ecc.android.sdk.model.AccountPurpose
 import cash.z.ecc.android.sdk.model.BlockHeight
 import cash.z.ecc.android.sdk.model.Pczt
+import cash.z.ecc.android.sdk.model.TransactionState
 import cash.z.ecc.android.sdk.model.TransactionSubmitResult
 import cash.z.ecc.android.sdk.model.UnifiedFullViewingKey
 import cash.z.ecc.android.sdk.model.Zatoshi
@@ -75,6 +76,17 @@ class AtomicSwapZcashImpl(
         }
     }
 
+    override suspend fun findPayment(address: String): String? {
+        val synchronizer = synchronizerProvider.getSynchronizer()
+        return synchronizer
+            .getTransactions(accountDataSource.getZashiAccount().sdkAccount.accountUuid)
+            .first()
+            .filter { it.isSentTransaction && it.transactionState != TransactionState.Expired }
+            .firstOrNull { sent -> synchronizer.getRecipients(sent).toList().any { it.addressValue == address } }
+            ?.txId
+            ?.txIdString()
+    }
+
     override suspend fun sweepRefund(
         index: Int,
         makerShare: ByteArray,
@@ -86,10 +98,22 @@ class AtomicSwapZcashImpl(
         val account =
             synchronizer.getAccounts().firstOrNull { it.keySource == ATOMIC_SWAP_KEYSOURCE && it.ufvk == ufvk }
                 ?: importDeposit(synchronizer, ufvk, birthday)
-        val txId = sweep(synchronizer, account, index, makerShare, makerSecret)
+        val txId = earlierSweep(synchronizer, account) ?: sweep(synchronizer, account, index, makerShare, makerSecret)
         check(synchronizer.deleteAccount(account.accountUuid)) { "the SDK kept the deposit account" }
         return txId
     }
+
+    /** A sweep sent before an interruption: the deposit account never sends anything else. */
+    private suspend fun earlierSweep(
+        synchronizer: Synchronizer,
+        account: Account
+    ): String? =
+        synchronizer
+            .getTransactions(account.accountUuid)
+            .first()
+            .firstOrNull { it.isSentTransaction && it.transactionState != TransactionState.Expired }
+            ?.txId
+            ?.txIdString()
 
     private suspend fun importDeposit(
         synchronizer: Synchronizer,

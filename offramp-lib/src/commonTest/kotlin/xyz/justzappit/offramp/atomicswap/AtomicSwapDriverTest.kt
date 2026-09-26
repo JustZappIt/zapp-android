@@ -41,12 +41,56 @@ class AtomicSwapDriverTest {
         }
 
     @Test
-    fun anInterruptedDepositIsNeverPaidAgain() =
+    fun anInterruptedDepositThatWentOutIsRecordedNotPaidAgain() =
         runTest {
             val h = Harness()
             val record = h.driver.open(units = 1).copy(depositAttempted = true)
-            assertFailsWith<IllegalStateException> { h.driver.deposit(record) }
+            h.zcash.sent["utest1deposit"] = "0xearlier"
+
+            val resumed = h.driver.deposit(record)
+
+            assertEquals("0xearlier", resumed.depositTxId)
             assertTrue(h.zcash.payments.isEmpty())
+            assertEquals("0xearlier", h.store.record?.depositTxId)
+        }
+
+    @Test
+    fun anInterruptedDepositThatNeverWentOutIsPaidOnce() =
+        runTest {
+            val h = Harness()
+            val record = h.driver.open(units = 1).copy(depositAttempted = true)
+
+            val resumed = h.driver.deposit(record)
+
+            assertEquals("0xdeposit", resumed.depositTxId)
+            assertEquals(listOf("utest1deposit" to DEPOSIT_ZAT), h.zcash.payments)
+        }
+
+    @Test
+    fun aRefundAfterADepositThatNeverWentOutSweepsNothing() =
+        runTest {
+            val h = Harness()
+            val record = h.driver.open(units = 1).copy(depositAttempted = true)
+            h.chain.stage = SwapStage.REFUNDED
+
+            val step = h.driver.advance(record)
+
+            assertEquals(AtomicSwapStep.Finished("refunded before anything was deposited"), step)
+            assertTrue(h.zcash.sweeps.isEmpty())
+        }
+
+    @Test
+    fun aRefundAfterAnInterruptedDepositThatWentOutSweepsIt() =
+        runTest {
+            val h = Harness()
+            val record = h.driver.open(units = 1).copy(depositAttempted = true)
+            h.zcash.sent["utest1deposit"] = "0xearlier"
+            h.chain.stage = SwapStage.REFUNDED
+
+            val step = h.driver.advance(record)
+
+            assertEquals(AtomicSwapStep.Finished("refunded: the deposit came home in 0xsweep"), step)
+            assertEquals(1, h.zcash.sweeps.size)
         }
 
     @Test
@@ -250,6 +294,9 @@ class AtomicSwapDriverTest {
         val payments = mutableListOf<Pair<String, Long>>()
         val sweeps = mutableListOf<Triple<Int, List<Byte>, Long>>()
 
+        /** Payments already in the wallet's history, by address. */
+        val sent = mutableMapOf<String, String>()
+
         override suspend fun chainHeight() = 4_200_000L
 
         override suspend fun pay(
@@ -259,6 +306,8 @@ class AtomicSwapDriverTest {
             payments += address to zatoshi
             return "0xdeposit"
         }
+
+        override suspend fun findPayment(address: String) = sent[address]
 
         override suspend fun sweepRefund(
             index: Int,
