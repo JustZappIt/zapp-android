@@ -56,6 +56,9 @@ import co.electriccoin.zcash.ui.screen.gift.GiftClaimArgs
 import co.electriccoin.zcash.ui.screen.gift.model.GIFT_LINK_HOST
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkIntake
 import co.electriccoin.zcash.ui.screen.gift.model.PendingGiftLinkStore
+import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnInbox
+import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnLink
+import co.electriccoin.zcash.ui.screen.reputation.increase.IncreaseReputationArgs
 import co.electriccoin.zcash.ui.screen.reputation.increase.ReclaimReturnLink
 import co.electriccoin.zcash.ui.screen.scan.thirdparty.ThirdPartyScan
 import co.electriccoin.zcash.ui.screen.splash.ZappSplashAnimation
@@ -69,6 +72,7 @@ import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
 import org.koin.androidx.viewmodel.ext.android.viewModel
+import xyz.justzappit.offramp.identity.IdentityReturn
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -95,6 +99,7 @@ class MainActivity : FragmentActivity() {
     private val chatNotificationTiming: ChatNotificationTiming by inject()
 
     private val pendingGiftLinks: PendingGiftLinkStore by inject()
+    private val identityReturns: IdentityReturnInbox by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -138,6 +143,8 @@ class MainActivity : FragmentActivity() {
 
             isReclaimReturnUri(intent, data) -> openReclaimReturn(intent, data, resumeReclaim)
 
+            isIdentityReturnUri(intent, data) -> openIdentityReturn(intent, data, resumeReclaim)
+
             isGiftUri(intent, data) -> openGiftClaim(intent, data)
 
             else -> navigationRouter.forward(ThirdPartyScan)
@@ -164,6 +171,37 @@ class MainActivity : FragmentActivity() {
                 platformName = data.getQueryParameter(ReclaimReturnLink.PLATFORM_QUERY),
                 currencyCode = data.getQueryParameter(ReclaimReturnLink.CURRENCY_QUERY),
             )?.let { navigationRouter.forward(it) }
+    }
+
+    private fun isIdentityReturnUri(intent: Intent, data: Uri): Boolean =
+        intent.action == Intent.ACTION_VIEW &&
+            IdentityReturnLink.SCHEME.equals(data.scheme, ignoreCase = true) &&
+            IdentityReturnLink.checkForHost(data.host) != null
+
+    /**
+     * The code on this link is the only copy of the result. A live run picks it out of the inbox;
+     * a cold process gets the route rebuilt from `state` and the new screen drains the inbox. A
+     * return with no usable state on a cold start has no route to rebuild and is dropped, and the
+     * user starts again.
+     */
+    private fun openIdentityReturn(
+        intent: Intent,
+        data: Uri,
+        coldStart: Boolean,
+    ) {
+        intent.data = null
+        val check = IdentityReturnLink.checkForHost(data.host) ?: return
+        val ret =
+            IdentityReturnLink.parse(
+                check = check,
+                code = data.getQueryParameter(IdentityReturn.CODE_QUERY),
+                error = data.getQueryParameter(IdentityReturn.ERROR_QUERY),
+                state = data.getQueryParameter(IdentityReturn.STATE_QUERY),
+            ) ?: return
+        identityReturns.put(ret)
+        if (coldStart) {
+            ret.currency?.let { navigationRouter.forward(IncreaseReputationArgs(currency = it)) }
+        }
     }
 
     private fun openGiftClaim(intent: Intent, data: Uri) {
