@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import xyz.justzappit.offramp.identity.IdentityReturn
 import xyz.justzappit.offramp.identity.IdentityReturnSignal
@@ -62,7 +63,7 @@ sealed class AppleIdentityStatus {
 }
 
 /** A single shared driver owns validation and recovery for live and cold-start returns. */
-class AppleIdentityClient private constructor(
+class AppleIdentityClient internal constructor(
     private val driver: IdentityVerificationDriver
 ) {
     private val runLock = Mutex()
@@ -105,6 +106,12 @@ class AppleIdentityClient private constructor(
         if (!active.compareAndSet(waiting, null)) return false
         waiting.signal.deliver(IdentityReturn(check, code, error, state))
         return true
+    }
+
+    /** Swift iterator cancellation can finish before Kotlin's non-cancellable persistence handoff. */
+    @Throws(Exception::class)
+    suspend fun awaitIdle() {
+        runLock.withLock { }
     }
 
     @Throws(Exception::class)

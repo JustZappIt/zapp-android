@@ -14,11 +14,13 @@ import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -36,6 +38,8 @@ import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.evm.types.Wei
 import xyz.justzappit.offramp.account.SubmittingAccount
+import xyz.justzappit.offramp.apple.AppleIdentityClient
+import xyz.justzappit.offramp.apple.AppleIdentityStatus
 import xyz.justzappit.offramp.config.P2pNetworkConfig
 import xyz.justzappit.offramp.config.P2pNetworks
 import xyz.justzappit.offramp.p2p.CurrencyCode
@@ -57,6 +61,9 @@ class IdentityRecoveryTest {
     private var sessions = 0
     private var redemptions = 0
     private var failReads = false
+    private var holdRedemption = false
+    private val redemptionStarted = CompletableDeferred<Unit>()
+    private val releaseRedemption = CompletableDeferred<Unit>()
     private val readBlocks = mutableListOf<String>()
     private val widgetHttp =
         HttpClient(
@@ -70,6 +77,8 @@ class IdentityRecoveryTest {
 
                     "/v1/widget/attestation" -> {
                         redemptions++
+                        redemptionStarted.complete(Unit)
+                        if (holdRedemption) releaseRedemption.await()
                         assertEquals(1, redemptions, "a one-time code must never be redeemed twice")
                         respond(
                             """{"nullifier":"0x${"11".repeat(32)}","limit":0,"expiry":"$EXPIRY",""" +
@@ -290,6 +299,85 @@ class IdentityRecoveryTest {
             assertNull(store.get(key())?.transactionHash)
             store.failTransactionWrites = false
             assertIs<IdentityStatus.Done>(retry())
+            assertEquals(1, redemptions)
+            assertEquals(1, submitter.sends)
+        }
+
+    @Test
+    fun `Apple facade rejects concurrent runs and mismatched callbacks without consuming the signal`() =
+        runTest {
+            val client = AppleIdentityClient(driver())
+            val ready = CompletableDeferred<Unit>()
+            val statuses = mutableListOf<AppleIdentityStatus>()
+            val job =
+                launch {
+                    client.verify(IdentityCheck.Liveness, "BRL", "nonce").collect {
+                        statuses += it
+                        if (it is AppleIdentityStatus.Ready) ready.complete(Unit)
+                    }
+                }
+            ready.await()
+            assertEquals(AppleIdentityStatus.Failed("Busy"), client.verify(IdentityCheck.Passport, "BRL", "other").toList().last())
+            assertEquals(false, client.deliverReturn(IdentityCheck.Passport, "bad", null, STATE))
+            assertEquals(false, client.deliverReturn(IdentityCheck.Liveness, "bad", null, "wrong.BRL"))
+            assertTrue(client.deliverReturn(IdentityCheck.Liveness, "one-time-code", null, STATE))
+            assertEquals(false, client.deliverReturn(IdentityCheck.Liveness, "one-time-code", null, STATE))
+            job.join()
+            client.awaitIdle()
+            assertIs<AppleIdentityStatus.Done>(statuses.last())
+            assertEquals(1, redemptions)
+            assertEquals(1, submitter.sends)
+        }
+
+    @Test
+    fun `Apple cancellation joins and invalidates only waiting authorization`() =
+        runTest {
+            val client = AppleIdentityClient(driver())
+            val ready = CompletableDeferred<Unit>()
+            val job =
+                launch {
+                    client.verify(IdentityCheck.Liveness, "BRL", "nonce").collect {
+                        if (it is AppleIdentityStatus.Ready) ready.complete(Unit)
+                    }
+                }
+            ready.await()
+            job.cancelAndJoin()
+            client.awaitIdle()
+            client.cancelWaiting(IdentityCheck.Liveness, "BRL")
+            assertEquals(
+                AppleIdentityStatus.Failed("Rejected"),
+                client.resume(IdentityCheck.Liveness, "one-time-code", null, STATE).toList().last()
+            )
+            assertEquals(0, redemptions)
+            assertEquals(0, submitter.sends)
+        }
+
+    @Test
+    fun `Apple native join waits for cancelled redemption to persist and retry reuses it`() =
+        runTest {
+            holdRedemption = true
+            val client = AppleIdentityClient(driver())
+            val ready = CompletableDeferred<Unit>()
+            val job =
+                launch {
+                    client.verify(IdentityCheck.Liveness, "BRL", "nonce").collect {
+                        if (it is AppleIdentityStatus.Ready) ready.complete(Unit)
+                    }
+                }
+            ready.await()
+            assertTrue(client.deliverReturn(IdentityCheck.Liveness, "one-time-code", null, STATE))
+            redemptionStarted.await()
+            job.cancel()
+            val joined = async { client.awaitIdle() }
+            runCurrent()
+            assertEquals(false, joined.isCompleted)
+            releaseRedemption.complete(Unit)
+            job.join()
+            joined.await()
+            client.cancelWaiting(IdentityCheck.Liveness, "BRL")
+            assertNotNull(store.get(key())?.attestation)
+            assertEquals(0, submitter.sends)
+            assertIs<AppleIdentityStatus.Done>(client.verify(IdentityCheck.Liveness, "BRL", "new-nonce").toList().last())
             assertEquals(1, redemptions)
             assertEquals(1, submitter.sends)
         }
