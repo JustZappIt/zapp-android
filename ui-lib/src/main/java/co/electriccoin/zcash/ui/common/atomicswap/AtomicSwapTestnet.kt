@@ -18,6 +18,9 @@ object AtomicSwapTestnet {
     // 0.1 of the test token, whose relayer asks 0.02.
     private const val MAX_RELAYER_FEE = 100_000L
 
+    // The testnet maker counts a deposit after 3 confirmations, about 4 minutes; its t0 comes 13.
+    private const val MIN_SECONDS_TO_T0 = 9 * 60L
+
     val config =
         AtomicSwapConfig(
             makerUrl = "http://127.0.0.1:8787",
@@ -27,5 +30,6 @@ object AtomicSwapTestnet {
             token = Address.parse("0x5764D0044bef5AA839E0dDafE2073421101B9Ed8"),
             railgunProxy = Address.parse("0xeCFCf3b4eC647c4Ca6D49108b311b7a7C9543fea"),
             maxRelayerFee = bigIntegerValueOf(MAX_RELAYER_FEE),
+            minSecondsToT0 = MIN_SECONDS_TO_T0,
         )
 }
