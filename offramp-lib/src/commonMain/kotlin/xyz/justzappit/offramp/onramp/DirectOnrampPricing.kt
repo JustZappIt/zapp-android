@@ -73,9 +73,8 @@ object DirectOnrampPricing {
     /**
      * The corridor's bounds for this wallet, in fiat.
      *
-     * The ceiling is the higher of the Diamond's own `userTxLimit(user, currency).buy` and the
-     * integrator's `effectiveLimit(user)` — each the effective number on its route, and the reason
-     * a wallet with neither must never reach an amount field at all. Zapp's own
+     * The ceiling is the Diamond's own `userTxLimit(user, currency).buy` — the effective number,
+     * and the reason a cold wallet must never reach an amount field at all. Zapp's own
      * [P2pOrderLimits.MAX_ORDER] caps it further; that limit is ours, not the protocol's.
      *
      * The floor is one dollar of USDC on top of the fixed fee: below that the fee is most of the

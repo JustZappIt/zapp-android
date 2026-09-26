@@ -14,15 +14,11 @@ import co.electriccoin.zcash.ui.screen.onramp.OnrampArgs
 import co.electriccoin.zcash.ui.screen.reputation.increase.IncreaseReputationArgs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
-import xyz.justzappit.offramp.liveness.LivenessReader
-import xyz.justzappit.offramp.liveness.LivenessStanding
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.reputation.ReputationReader
 import xyz.justzappit.offramp.reputation.ReputationSummary
@@ -33,15 +29,13 @@ import xyz.justzappit.offramp.reputation.SocialPlatform
  *
  * Nothing here is cached: a completed buy credits reputation, so a value stored from the last
  * visit is stale in exactly the moment the user is most likely to look. Nothing here is computed
- * either — the limits come from the Diamond and from Zapp's integrator, the only places the
- * effective numbers exist; the screen shows the higher, since that is the one a buy is routed by.
+ * either — the limits come from the Diamond, which is the only place the effective number exists.
  */
 internal class ReputationVM(
     args: ReputationArgs,
     private val navigationRouter: NavigationRouter,
     private val accountProvider: SmartOfframpAccountProvider,
     private val reputationReader: ReputationReader,
-    private val livenessReader: LivenessReader,
 ) : ViewModel() {
     private val currency = args.currency
     private var loadJob: Job? = null
@@ -75,14 +69,9 @@ internal class ReputationVM(
         }
         loadJob =
             viewModelScope.launch {
-                val (summary, standing) =
+                val summary =
                     try {
-                        val address = accountProvider.resolve().address
-                        coroutineScope {
-                            val reputation = async { reputationReader.read(address, currency) }
-                            val liveness = async { livenessReader.read(address) }
-                            reputation.await() to liveness.await()
-                        }
+                        reputationReader.read(accountProvider.resolve().address, currency)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (
@@ -96,7 +85,7 @@ internal class ReputationVM(
                         if (!hadContent) mutableState.update(::unreadableState)
                         return@launch
                     }
-                mutableState.update { readyState(it, summary, standing) }
+                mutableState.update { readyState(it, summary) }
             }
     }
 
@@ -108,12 +97,7 @@ internal class ReputationVM(
             primaryAction = ButtonState(text = stringRes(R.string.reputation_retry), onClick = ::load),
         )
 
-    private fun readyState(
-        current: ReputationState,
-        summary: ReputationSummary,
-        standing: LivenessStanding?,
-    ): ReputationState {
-        // The exchange's block outranks the integrator: its orders land on the same Diamond.
+    private fun readyState(current: ReputationState, summary: ReputationSummary): ReputationState {
         if (summary.isBlacklisted) {
             return current.copy(
                 content = ReputationContent.Blacklisted,
@@ -121,13 +105,11 @@ internal class ReputationVM(
                 primaryAction = null,
             )
         }
-        val limit = ShownLimit.of(summary, standing)
         return current.copy(
-            content = content(summary, limit),
-            // Verifying an account raises the Diamond's limit, which a selfie wallet has yet to touch.
-            isRaiseLimitVisible = limit.canBuy && !summary.isAtCeiling,
+            content = content(summary),
+            isRaiseLimitVisible = summary.canBuy && !summary.isAtCeiling,
             primaryAction =
-                if (limit.canBuy) {
+                if (summary.canBuy) {
                     ButtonState(text = stringRes(R.string.reputation_buy), onClick = ::onBuy)
                 } else {
                     ButtonState(text = stringRes(R.string.reputation_verify_to_buy), onClick = ::onRaiseLimit)
@@ -135,62 +117,27 @@ internal class ReputationVM(
         )
     }
 
-    /** The higher of the two per-order limits, and whether it is the integrator's. */
-    private class ShownLimit(
-        val amount: Usdc6,
-        val viaCheckout: Boolean,
-    ) {
-        val canBuy: Boolean get() = amount.micros.signum() > 0
-
-        companion object {
-            fun of(summary: ReputationSummary, standing: LivenessStanding?): ShownLimit {
-                val checkout = standing?.limit ?: Usdc6.ZERO
-                return if (checkout > summary.buyLimit) {
-                    ShownLimit(checkout, viaCheckout = true)
-                } else {
-                    ShownLimit(summary.buyLimit, viaCheckout = false)
-                }
-            }
-        }
-    }
-
     /**
      * The cash-out limit is deliberately absent. This screen is only ever reached on the way to a
      * buy, reputation does not gate cashing out at all, and a second limit beside the one that is
      * blocking them invites the reading that both are. The info sheet says so in words instead.
      */
-    private fun content(summary: ReputationSummary, limit: ShownLimit) =
+    private fun content(summary: ReputationSummary) =
         ReputationContent.Ready(
             points = summary.points.toString(),
             buyLimit =
-                if (limit.canBuy) {
-                    stringRes(R.string.reputation_amount_usd, limit.amount.usd())
+                if (summary.canBuy) {
+                    stringRes(R.string.reputation_amount_usd, summary.buyLimit.usd())
                 } else {
                     stringRes(R.string.reputation_limit_locked)
                 },
             buyLimitCaption =
                 when {
-                    !limit.canBuy && livenessReader.isAvailable -> {
-                        stringRes(R.string.reputation_limit_locked_caption_selfie)
-                    }
-
-                    !limit.canBuy -> {
-                        stringRes(R.string.reputation_limit_locked_caption)
-                    }
-
-                    limit.viaCheckout -> {
-                        stringRes(R.string.reputation_limit_caption_checkout)
-                    }
-
-                    summary.isAtCeiling -> {
-                        stringRes(R.string.reputation_limit_caption_at_ceiling)
-                    }
-
-                    else -> {
-                        stringRes(R.string.reputation_limit_caption)
-                    }
+                    !summary.canBuy -> stringRes(R.string.reputation_limit_locked_caption)
+                    summary.isAtCeiling -> stringRes(R.string.reputation_limit_caption_at_ceiling)
+                    else -> stringRes(R.string.reputation_limit_caption)
                 },
-            isLocked = !limit.canBuy,
+            isLocked = !summary.canBuy,
             // Listed in awards order, so the most valuable account is always first.
             verified = SocialPlatform.entries.filter { it in summary.verified }.map { summary.row(it) },
         )

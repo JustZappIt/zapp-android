@@ -32,8 +32,6 @@ import xyz.justzappit.offramp.onramp.OnrampIntentAmount
 import xyz.justzappit.offramp.onramp.OnrampPaymentInstruction
 import xyz.justzappit.offramp.onramp.OnrampPhase
 import xyz.justzappit.offramp.onramp.OnrampQuote
-import xyz.justzappit.offramp.onramp.OnrampRoute
-import xyz.justzappit.offramp.onramp.OnrampRouteReader
 import xyz.justzappit.offramp.onramp.OnrampScreeningClient
 import xyz.justzappit.offramp.onramp.OnrampScreeningConfig
 import xyz.justzappit.offramp.onramp.OnrampScreeningSessionProvider
@@ -68,9 +66,8 @@ import kotlin.time.Clock
 /**
  * Swift-friendly facade over the direct on-ramp driver and the durable ZEC delivery driver.
  *
- * The BUY is placed from the user's own smart account, exactly as on Android — straight on the
- * Diamond or through Zapp's integrator, whichever route carries the amount — so it is sized by
- * this wallet's reputation and selfie standing, never by an operator's.
+ * The BUY is placed from the user's own smart account straight on the Diamond, exactly as on
+ * Android, so it is sized by this wallet's reputation, never by an operator's.
  */
 @Suppress("TooManyFunctions") // The facade mirrors the complete order and delivery protocol surfaces for Swift.
 class AppleOnrampClient private constructor(
@@ -356,7 +353,6 @@ class AppleOnrampClient private constructor(
                         screening = screening,
                         relayIdentityStore = AppleRelayIdentityStore(relayStorage),
                         orderRecipientUpiCache = AppleOrderRecipientCache(relayStorage),
-                        routeReader = OnrampRouteReader(account.rpc, network),
                         nowMillis = nowMillis,
                         onUnrecognisedRevert = onUnrecognisedRevert,
                     ),
@@ -588,7 +584,6 @@ internal fun OnrampQuote.toApple() =
         netUsdcMicros = netUsdc.micros.toString(),
         buyPriceMicros = buyPrice.micros.toString(),
         expiresAtMillis = expiresAtMillis,
-        route = route.name,
     )
 
 internal fun AppleOnrampQuote.toShared() =
@@ -601,8 +596,6 @@ internal fun AppleOnrampQuote.toShared() =
         netUsdc = usdcFromMicros(netUsdcMicros),
         buyPrice = usdcFromMicros(buyPriceMicros),
         expiresAtMillis = expiresAtMillis,
-        // Swift hands back what it was given; a route this build cannot name is a caller bug.
-        route = requireNotNull(OnrampRoute.entries.firstOrNull { it.name == route }) { "unknown onramp route: $route" },
     )
 
 private fun ValidatedZecSwapQuote.toApple() =

@@ -16,7 +16,6 @@ import xyz.justzappit.evm.abi.AbiDecoder
 import xyz.justzappit.evm.abi.AbiEncoder
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.math.bigIntegerValueOf
-import xyz.justzappit.evm.math.bigIntegerZero
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
@@ -26,7 +25,6 @@ import xyz.justzappit.offramp.account.Erc4337SubmitterProvider
 import xyz.justzappit.offramp.account.OfframpAccountProvider
 import xyz.justzappit.offramp.account.SubmittingAccount
 import xyz.justzappit.offramp.config.P2pNetworkConfig
-import xyz.justzappit.offramp.liveness.LivenessCalls
 import xyz.justzappit.offramp.p2p.CircleRouter
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.DiamondCalls
@@ -42,25 +40,23 @@ import xyz.justzappit.offramp.p2p.PaymentAddressDecryptor
 import xyz.justzappit.offramp.p2p.PlaceOrderArgs
 import xyz.justzappit.offramp.p2p.PriceConfig
 import xyz.justzappit.offramp.p2p.PriceConfigDecoder
-import xyz.justzappit.offramp.p2p.RelayIdentity
 import xyz.justzappit.offramp.p2p.RelayIdentityStore
 import xyz.justzappit.offramp.p2p.SubgraphClient
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.p2p.getAdditionalOrderDetails
 import xyz.justzappit.offramp.p2p.getOrCreate
+import xyz.justzappit.offramp.reputation.ReputationCalls
 
 /**
  * Places a BUY from the user's own ERC-4337 smart account, with no operator service anywhere on
- * the path — straight on the Diamond, or through Zapp's integrator when that is the route that
- * carries the amount ([OnrampRoute]).
+ * the path.
  *
  * This is the same [OnrampDriver] contract the custodial route implements, so the screens, the
  * checkpoint and the ZEC delivery coordinator are untouched and the two routes swap from DI. What
  * changes is who carries the responsibilities the service used to:
  *
- * - **The order is placed by the user**, so the Diamond gates it on *their* reputation, or the
- *   integrator on their selfie check. A wallet with neither cannot place a BUY of any size, which
- *   is why the amount screen is never reached at a $0 limit.
+ * - **The order is placed by the user**, so the Diamond gates it on *their* reputation. A cold
+ *   wallet cannot place a BUY of any size, which is why the amount screen is never reached at 0 RP.
  * - **The device-screening record is filed by the app and signed by the user.** On the operator
  *   route the service filed it, signed as itself, which is what made it match the address the chain
  *   showed as the placer. Without a matching record an order routes and prices normally and is
@@ -86,7 +82,6 @@ class DirectOnrampDriver(
     private val relayIdentityStore: RelayIdentityStore,
     private val orderRecipientUpiCache: OrderRecipientUpiCache,
     private val router: CircleRouter = CircleRouter(),
-    private val routeReader: OnrampRouteReader = OnrampRouteReader(rpc, network),
     private val nowMillis: () -> Long = { 0L },
     private val acceptPollMillis: Long = ACCEPT_POLL_MILLIS,
     private val settlePollMillis: Long = SETTLE_POLL_MILLIS,
@@ -110,10 +105,10 @@ class DirectOnrampDriver(
             coroutineScope {
                 val price = async { readPriceConfig(currency) }
                 val fee = async { readUsdc(DiamondCalls.getSmallOrderFixedFeeBuyCalldata(currency)) }
-                val limits = async { routeReader.read(account.address, currency) }
+                val buyLimit = async { readBuyLimit(account.address, currency) }
                 val open = async { isCorridorOpen(currency) }
                 DirectOnrampPricing.limitsFor(
-                    buyLimit = limits.await().max,
+                    buyLimit = buyLimit.await(),
                     price = price.await(),
                     fixedFeeBuy = fee.await(),
                     enabled = open.await(),
@@ -157,17 +152,12 @@ class DirectOnrampDriver(
      * Priced from the Diamond's own buy rate, not from a service. The lock is local and short: a
      * price tick between quoting and placing reverts `SlippageExceeded`, and re-quoting is the
      * only handling for that, so an expired quote is refused before it costs gas.
-     *
-     * The route is decided here too, against limits read alongside the price: an amount neither
-     * limit carries is refused on the amount screen rather than as a failed placement.
      */
     override suspend fun quote(fiatAmount: Usdc6, currency: CurrencyCode): OnrampQuote =
         coroutineScope {
-            val account = submitters.resolve()
             val price = async { readPriceConfig(currency) }
             val threshold = async { readUsdc(DiamondCalls.getSmallOrderThresholdCalldata(currency)) }
             val fee = async { readUsdc(DiamondCalls.getSmallOrderFixedFeeBuyCalldata(currency)) }
-            val limits = async { routeReader.read(account.address, currency) }
             val quote =
                 DirectOnrampPricing.quote(
                     fiatAmount = fiatAmount,
@@ -184,35 +174,7 @@ class DirectOnrampDriver(
                 netUsdc = quote.netUsdc,
                 buyPrice = quote.buyPrice,
                 expiresAtMillis = nowMillis() + QUOTE_TTL_MILLIS,
-                route = limits.await().decide(quote.netUsdc).routeOrThrow(),
             )
-        }
-
-    /**
-     * The route, or the refusal the amount screen shows inline in place of a failed placement.
-     * A used-up daily count is worded as the per-order cap while the Diamond still carries a
-     * smaller amount: "try a smaller amount or come back later" is then exactly right, where
-     * "try again tomorrow" would send away a wallet that can buy now.
-     */
-    private fun OnrampRouteDecision.routeOrThrow(): OnrampRoute =
-        when (this) {
-            is OnrampRouteDecision.Route -> {
-                route
-            }
-
-            is OnrampRouteDecision.DailyExhausted -> {
-                val code =
-                    if (smallerAmountCarried) OnrampFailureCode.CAP_EXCEEDED else OnrampFailureCode.DAILY_LIMIT_EXCEEDED
-                throw OnrampException(code, 0, "no integrator orders left today")
-            }
-
-            OnrampRouteDecision.IntegratorPaused -> {
-                throw OnrampException(OnrampFailureCode.ROUTE_DISABLED, 0, "the integrator is paused")
-            }
-
-            OnrampRouteDecision.OverLimit -> {
-                throw OnrampException(OnrampFailureCode.CAP_EXCEEDED, 0, "amount is above both per-order limits")
-            }
         }
 
     override fun start(quote: OnrampQuote): Flow<OnrampStatus> =
@@ -342,13 +304,28 @@ class DirectOnrampDriver(
             "circle $circleId lost its assignable merchant before placement"
         }
 
-        val (to, data) = placementCall(quote, account, circleId, fiatAmountLimit, relayIdentityStore.getOrCreate())
-        val placeHash = account.submitter.sendTransaction(to = to, data = data)
+        val relay = relayIdentityStore.getOrCreate()
+        val placeHash =
+            account.submitter.sendTransaction(
+                to = network.diamondAddress,
+                data =
+                    DiamondCalls.placeOrderCalldata(
+                        PlaceOrderArgs(
+                            relayPubKeyEthCrypto = relay.publicKeyHex,
+                            usdcAmount = quote.netUsdc,
+                            recipientAddress = account.address,
+                            orderType = OrderType.BUY,
+                            currency = quote.currency,
+                            circleId = circleId,
+                            fiatAmountLimit = fiatAmountLimit,
+                        ),
+                    ),
+            )
         // The handle is recorded before the receipt: a process killed here still has a live order,
         // and the hash is the only way back to its id.
         emit(OnrampStatus.Placing(id = placeHash.hex))
         val receipt = account.submitter.awaitReceipt(placeHash)
-        require(receipt.success) { "${quote.route} placement reverted" }
+        require(receipt.success) { "placeOrder reverted" }
 
         val orderId =
             OrderEvents.parseOrderIdFromReceipt(receipt, network.diamondAddress, account.address)
@@ -360,47 +337,6 @@ class DirectOnrampDriver(
         }
         return orderId
     }
-
-    /**
-     * Where the placement goes and what it carries — the one thing the route changes. Either way
-     * the Diamond records the buyer as the order's `user` and recipient, so the receipt is parsed,
-     * the payment made and the cancel sent exactly as for the other.
-     */
-    private fun placementCall(
-        quote: OnrampQuote,
-        account: SubmittingAccount,
-        circleId: BigInteger,
-        fiatAmountLimit: Usdc6,
-        relay: RelayIdentity,
-    ): Pair<Address, ByteArray> =
-        when (quote.route) {
-            OnrampRoute.DIRECT -> {
-                network.diamondAddress to
-                    DiamondCalls.placeOrderCalldata(
-                        PlaceOrderArgs(
-                            relayPubKeyEthCrypto = relay.publicKeyHex,
-                            usdcAmount = quote.netUsdc,
-                            recipientAddress = account.address,
-                            orderType = OrderType.BUY,
-                            currency = quote.currency,
-                            circleId = circleId,
-                            fiatAmountLimit = fiatAmountLimit,
-                        ),
-                    )
-            }
-
-            OnrampRoute.INTEGRATOR -> {
-                checkNotNull(network.livenessIntegratorAddress) { "integrator route on a network without one" } to
-                    LivenessCalls.buyUsdcCalldata(
-                        amount = quote.netUsdc,
-                        currency = quote.currency,
-                        circleId = circleId,
-                        pubKey = relay.publicKeyHex,
-                        preferredPaymentChannelConfigId = bigIntegerZero,
-                        fiatAmountLimit = fiatAmountLimit,
-                    )
-            }
-        }
 
     private suspend fun selectCircle(
         quote: OnrampQuote,
@@ -473,12 +409,6 @@ class DirectOnrampDriver(
                             estimatedProcessingTime = readProcessingTimeOrNull(),
                         ),
                     country = quote.currency.directOnrampMetadata.country,
-                    // An integrator's orders are filed on the service's B2B intake, not the consumer one.
-                    kind =
-                        when (quote.route) {
-                            OnrampRoute.DIRECT -> OnrampScreeningKind.CONSUMER
-                            OnrampRoute.INTEGRATOR -> OnrampScreeningKind.B2B
-                        },
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -731,6 +661,15 @@ class DirectOnrampDriver(
     private suspend fun readUsdc(calldata: ByteArray): Usdc6 =
         Usdc6(AbiDecoder(rpc.ethCall(to = network.diamondAddress, data = calldata)).also { it.requireWords(1) }.uint(0))
 
+    private suspend fun readBuyLimit(user: Address, currency: CurrencyCode): Usdc6 {
+        val ret =
+            rpc.ethCall(
+                to = network.diamondAddress,
+                data = ReputationCalls.userTxLimitCalldata(user, currency),
+            )
+        return ReputationCalls.decodeUserTxLimits(ret).buy
+    }
+
     private suspend fun isCorridorOpen(currency: CurrencyCode): Boolean =
         readExchangeStatus() && readCurrencySupported(currency)
 
@@ -883,18 +822,15 @@ class DirectOnrampDriver(
         }
 
     /**
-     * The contract's revert, named. Matched as text rather than as a decoded selector because a
+     * The Diamond's revert, named. Matched as text rather than as a decoded selector because a
      * sponsored operation's revert reaches us through the bundler as a message, not as structured
-     * error data. On the integrator route the Diamond's own selector arrives wrapped, and is
-     * unwrapped by [innerRevertSelector] when the plain lookup misses.
+     * error data.
      */
     private fun classify(e: Exception): OnrampFailureCode {
         val message = e.message.orEmpty()
-        val known =
-            REVERTS.entries.firstOrNull { it.key in message }?.value
-                ?: innerRevertSelector(message)?.let(REVERTS::get)
-        if (known == null) onUnrecognisedRevert(message.take(REVERT_LOG_CHARS))
-        return known ?: OnrampFailureCode.UPSTREAM_FAILED
+        REVERTS.entries.firstOrNull { it.key in message }?.let { return it.value }
+        onUnrecognisedRevert(message.take(REVERT_LOG_CHARS))
+        return OnrampFailureCode.UPSTREAM_FAILED
     }
 
     private companion object {
@@ -923,10 +859,9 @@ class DirectOnrampDriver(
         /**
          * The Diamond's `Errors.sol` selectors, transcribed from p2p.me's own client
          * (`user-app-client/src/lib/errors.ts`) rather than guessed, and narrowed to the ones a
-         * BUY can actually hit; then `ZappCheckoutIntegrator`'s own, from its source. Anything
-         * absent falls to [OnrampFailureCode.UPSTREAM_FAILED], which is honest — "something on
-         * their side" — but says nothing the user can act on, so a revert worth a sentence
-         * belongs here.
+         * BUY can actually hit. Anything absent falls to [OnrampFailureCode.UPSTREAM_FAILED],
+         * which is honest — "something on their side" — but says nothing the user can act on, so
+         * a revert worth a sentence belongs here.
          */
         val REVERTS: Map<String, OnrampFailureCode> =
             mapOf(
@@ -968,14 +903,6 @@ class DirectOnrampDriver(
                 "0x1e3b9629" to OnrampFailureCode.WRONG_PHASE, // OrderNotPaid
                 "0xf8bfad32" to OnrampFailureCode.WRONG_PHASE, // NotPaidBuyOrder
                 "0x58db8ed6" to OnrampFailureCode.ORDER_NOT_FOUND, // OrderNotPlaced
-                // The integrator's own gate, ahead of the Diamond's. `InvalidAmount` is shared
-                // with the Diamond and already listed above.
-                "0xa95362b5" to OnrampFailureCode.CAP_EXCEEDED, // NotVerified
-                "0xd7b73119" to OnrampFailureCode.CAP_EXCEEDED, // VerificationLimitExceeded
-                "0x595184aa" to OnrampFailureCode.DAILY_LIMIT_EXCEEDED, // DailyCountLimitExceeded
-                "0xc000e8e5" to OnrampFailureCode.USER_BLACKLISTED, // UserIsBlocked
-                "0xab35696f" to OnrampFailureCode.ROUTE_DISABLED, // ContractPaused
-                "0xee5603c8" to OnrampFailureCode.ROUTE_DISABLED, // B2BIntegratorInactive
             )
     }
 }
@@ -988,31 +915,4 @@ class DirectOnrampDriver(
 internal fun corridorFromBytes32(currencyHex: String): CurrencyCode? =
     CurrencyCode.fromCodeOrNull(currencyHex.hexToBytes().decodeToString().trimEnd(NUL_CHAR))
 
-/**
- * The Diamond's selector from inside the integrator proxy's `CallFailed(bytes)` wrapper, or null
- * when [message] carries no wrapper. The bundler quotes the whole revert as one hex string, so the
- * inner selector never gets a `0x` of its own and the plain [DirectOnrampDriver.REVERTS] lookup
- * cannot see it; without this every Diamond-side refusal on the integrator route — no merchant,
- * slippage, a blacklist — would be reported as a generic upstream failure.
- *
- * After the marker: a 32-byte offset word, a 32-byte length word, then the wrapped revert data.
- */
-internal fun innerRevertSelector(message: String): String? {
-    val marker = message.indexOf(CALL_FAILED_SELECTOR, ignoreCase = true)
-    if (marker < 0) return null
-    val inner = message.drop(marker + CALL_FAILED_SELECTOR.length + WRAPPER_HEAD_HEX_CHARS).take(SELECTOR_HEX_CHARS)
-    return inner
-        .takeIf { it.length == SELECTOR_HEX_CHARS && it.all(Char::isHexDigit) }
-        ?.let { "0x" + it.lowercase() }
-}
-
-private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
-
 private const val NUL_CHAR = '\u0000'
-
-/** `CallFailed(bytes)` on the integrator's `UserProxy`, without the `0x` it lacks inside a blob. */
-private const val CALL_FAILED_SELECTOR = "a5fa8d2b"
-
-/** The offset word and the length word of the wrapped `bytes`, as hex. */
-private const val WRAPPER_HEAD_HEX_CHARS = 128
-private const val SELECTOR_HEX_CHARS = 8
