@@ -178,6 +178,7 @@ dependencyResolutionManagement {
             val androidxUiAutomatorVersion = extra["ANDROIDX_UI_AUTOMATOR_VERSION"].toString()
             val androidxWorkManagerVersion = extra["ANDROIDX_WORK_MANAGER_VERSION"].toString()
             val androidxBrowserVersion = extra["ANDROIDX_BROWSER_VERSION"].toString()
+            val androidxWebkitVersion = extra["ANDROIDX_WEBKIT_VERSION"].toString()
             val coreLibraryDesugaringVersion = extra["CORE_LIBRARY_DESUGARING_VERSION"].toString()
             val flankVersion = extra["FLANK_VERSION"].toString()
             val jacocoVersion = extra["JACOCO_VERSION"].toString()
@@ -245,6 +246,7 @@ dependencyResolutionManagement {
             library("androidx-viewmodel-compose", "androidx.lifecycle:lifecycle-viewmodel-compose:$androidxLifecycleVersion")
             library("androidx-workmanager", "androidx.work:work-runtime-ktx:$androidxWorkManagerVersion")
             library("androidx-browser", "androidx.browser:browser:$androidxBrowserVersion")
+            library("androidx-webkit", "androidx.webkit:webkit:$androidxWebkitVersion")
             library("desugaring", "com.android.tools:desugar_jdk_libs:$coreLibraryDesugaringVersion")
             library("firebase-bom", "com.google.firebase:firebase-bom:${extra["FIREBASE_BOM_VERSION_MATCHER"]}")
             library("firebase-installations", "com.google.firebase", "firebase-installations").withoutVersion()
@@ -400,6 +402,9 @@ include("ui-screenshot-test")
 // UPI offramp: EVM primitives + p2p.me protocol (pure-JVM KMP, unit-testable on host)
 include("evm-lib")
 include("offramp-lib")
+
+// Railgun wallet: Railgun's wallet SDK in a hidden WebView
+include("railgun-lib")
 
 fun externalProjectDir(localSiblingPath: String, workspacePath: String): File =
     listOf(localSiblingPath, workspacePath)

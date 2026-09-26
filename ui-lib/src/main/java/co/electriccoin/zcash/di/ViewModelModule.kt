@@ -12,6 +12,7 @@ import co.electriccoin.zcash.ui.screen.advancedsettings.AdvancedSettingsVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.DebugVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceVM
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.railgun.DebugRailgunVM
 import co.electriccoin.zcash.ui.screen.balances.BalanceWidgetVM
 import co.electriccoin.zcash.ui.screen.balances.breakdown.BalanceBreakdownVM
 import co.electriccoin.zcash.ui.screen.balances.spendable.SpendableBalanceVM
@@ -250,6 +251,7 @@ val viewModelModule =
         viewModelOf(::DebugVM)
         viewModelOf(::DebugDBVM)
         viewModelOf(::DebugOrchardBalanceVM)
+        viewModelOf(::DebugRailgunVM)
         viewModelOf(::TEXUnsupportedVM)
         viewModelOf(::InsufficientFundsVM)
         viewModelOf(::TopUpVM)

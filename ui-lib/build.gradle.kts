@@ -365,6 +365,7 @@ dependencies {
     api(projects.sdkExtLib)
     api(projects.uiDesignLib)
     implementation(projects.offrampLib)
+    implementation(projects.railgunLib)
     api(libs.androidx.fragment)
     api(libs.androidx.fragment.compose)
     api(libs.androidx.activity)

@@ -73,6 +73,10 @@ crashes in the biometric gate on emulators. `adb shell pm clear <package>` recov
 - All P2P logic lives in `zappMessaging/core/` (JS). After any JS change there, run
   `npm run build:android` in `../zappMessaging` (regenerates the committed
   `android/src/main/assets/worklet.bundle`). Never rebuild the bundle for Kotlin-only changes.
+- The Railgun wallet runs Railgun's wallet SDK in a hidden WebView. Its JS lives in
+  `railgun-lib/web`. After changing that JS or its lockfile, run `npm ci && npm run build` there,
+  which regenerates the committed `railgun-lib/src/main/assets/railgun/`, then `npm run check`,
+  which syncs Sepolia in headless Chrome over the app's message protocol.
 - New typed chat messages = new `contentType` + JSON payload on the Kotlin side only
   (`ui-lib/.../screen/chat/model/ChatModels.kt`); no JS/worklet change needed. Only new IPC
   message types in `ipc-handler.js` need mirroring in the Kotlin AND Swift SDK wrappers.
@@ -89,6 +93,8 @@ crashes in the biometric gate on emulators. `adb shell pm clear <package>` recov
   `RepositoryModule`, `ProviderModule`, `MapperModule`. Not a new module file).
 - `ui-design-lib`: design system; new Zapp components go in `component/zapp/`, one per file.
 - `evm-lib`, `offramp-lib`: pure-JVM KMP (host-testable); keep Android deps out.
+- `railgun-lib`: the hidden WebView host and `RailgunWallet` API. The page gets one message port
+  and loads only its own assets.
 - `:zappmessaging`, `:bare-kit`: external sibling Gradle projects.
 
 ## Style essentials (fork-specific, enforced in review)

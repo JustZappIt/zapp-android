@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -103,6 +104,8 @@ internal fun SettingsTabContent(
     onPortfolioChartClick: () -> Unit,
     onViewingKeyExportClick: () -> Unit,
     onHardwareWalletClick: () -> Unit,
+    // Null outside debug builds, which hides the row.
+    onRailgunWalletClick: (() -> Unit)?,
     // Null while the coinholder-polling kill switch is off, which hides the group entirely.
     onVotingClick: (() -> Unit)?,
     walletViewModel: WalletViewModel = koinViewModel(),
@@ -313,6 +316,17 @@ internal fun SettingsTabContent(
                             iconBackground = c.accentSoft,
                             onClick = onChooseServerClick,
                         )
+                        onRailgunWalletClick?.let { onClick ->
+                            ZappRowDivider(inset = true)
+                            ZappRow(
+                                title = stringResource(R.string.settings_railgun_wallet_title),
+                                subtitle = stringResource(R.string.settings_railgun_wallet_subtitle),
+                                icon = Icons.Default.Shield,
+                                iconTint = c.accentText,
+                                iconBackground = c.accentSoft,
+                                onClick = onClick,
+                            )
+                        }
                     }
                 }
 

@@ -28,6 +28,8 @@ import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBScreen
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceScreen
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.railgun.DebugRailgunArgs
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.railgun.DebugRailgunScreen
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.text.DebugTextArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.text.DebugTextScreen
 import co.electriccoin.zcash.ui.screen.balances.breakdown.BalanceBreakdownArgs
@@ -425,6 +427,7 @@ fun NavGraphBuilder.walletNavGraph(
         composable<DebugArgs> { DebugScreen() }
         composable<DebugDBArgs> { DebugDBScreen() }
         composable<DebugOrchardBalanceArgs> { DebugOrchardBalanceScreen() }
+        composable<DebugRailgunArgs> { DebugRailgunScreen() }
         dialogComposable<DebugTextArgs> { DebugTextScreen(it.toRoute()) }
         composable<ResyncConfirmArgs> { ResyncConfirmScreen() }
         composable<ResyncDateArgs> { ResyncDateScreen(it.toRoute()) }

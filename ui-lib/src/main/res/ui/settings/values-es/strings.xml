@@ -47,6 +47,8 @@
     <string name="settings_local_currency_title">Moneda local</string>
     <string name="settings_local_currency_subtitle">%1$s - %2$s</string>
     <string name="settings_server_subtitle">Elige un servidor lightwalletd</string>
+    <string name="settings_railgun_wallet_title">Billetera Railgun</string>
+    <string name="settings_railgun_wallet_subtitle">USD privado en Ethereum Sepolia (versiones de depuración)</string>
     <string name="settings_p2p_payment_method_title">Método de pago P2P</string>
     <string name="settings_p2p_payment_method_selected_subtitle">%1$s - %2$s</string>
     <string name="settings_p2p_payment_method_save">Guardar selección</string>

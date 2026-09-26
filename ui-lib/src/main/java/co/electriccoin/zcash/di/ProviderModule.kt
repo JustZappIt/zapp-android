@@ -76,6 +76,8 @@ import co.electriccoin.zcash.ui.common.provider.PreferredP2pPaymentMethodProvide
 import co.electriccoin.zcash.ui.common.provider.PreferredP2pPaymentMethodProviderImpl
 import co.electriccoin.zcash.ui.common.provider.ProvingParamsProvider
 import co.electriccoin.zcash.ui.common.provider.ProvingParamsProviderImpl
+import co.electriccoin.zcash.ui.common.provider.RailgunKeyProvider
+import co.electriccoin.zcash.ui.common.provider.RailgunKeyProviderImpl
 import co.electriccoin.zcash.ui.common.provider.RealOfframpBridgeWallet
 import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
 import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProviderImpl
@@ -164,6 +166,7 @@ import xyz.justzappit.offramp.peer.PeerIndexerClient
 import xyz.justzappit.offramp.peer.PeerNetworkConfig
 import xyz.justzappit.offramp.peer.PeerOracleRate
 import xyz.justzappit.offramp.peer.UnavailablePeerCashOutOrchestrator
+import xyz.justzappit.railgun.RailgunWallet
 import java.util.Locale
 
 const val OFFRAMP_HTTP_CLIENT_QUALIFIER = "offramp_http"
@@ -491,4 +494,6 @@ val providerModule =
         singleOf(::HasSeenHowToVoteKeystoneStorageProviderImpl) bind
             HasSeenHowToVoteKeystoneStorageProvider::class
         factoryOf(::IsBackgroundExecutionAvailableProvider)
+        single { RailgunWallet(context = get(), debug = BuildConfig.DEBUG) }
+        singleOf(::RailgunKeyProviderImpl) bind RailgunKeyProvider::class
     }

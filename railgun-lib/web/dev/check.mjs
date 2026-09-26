@@ -1,0 +1,233 @@
+// Drives the built bundle in headless Chrome through the same MessagePort protocol as the app.
+//   npm run check                 syncs a fresh wallet on Sepolia, then reopens it from IndexedDB
+//   npm run check -- --transact   shields, sends privately and withdraws, with the wallet and gas
+//                                 account that RAILGUN_DEV_MNEMONIC and RAILGUN_DEV_GAS_KEY in
+//                                 local.properties name; Chrome keeps dev/.profile between runs
+//   npm run check -- --shield-to <0zk> <eth>   shields from that gas account into another wallet
+// Mnemonics and keys are never printed.
+import { createServer } from 'node:http';
+import { createHash, randomBytes } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import { JsonRpcProvider, Mnemonic, formatEther, parseEther } from 'ethers';
+import puppeteer from 'puppeteer-core';
+
+const require = createRequire(import.meta.url);
+const ASSETS = path.resolve('../src/main/assets/railgun');
+const PROFILE = path.resolve('dev/.profile');
+const LOCAL_PROPERTIES = path.resolve('../../local.properties');
+const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const RPC_URL = process.env.RAILGUN_CHECK_RPC ?? 'https://ethereum-sepolia-rpc.publicnode.com';
+const POI_NODE = 'https://ppoi.fdi.network/';
+const WETH = '0xfff9976782d46cc05630d1f6ebab18b2324d6b14';
+const SHIELD_AMOUNT = parseEther('0.02');
+const SEND_AMOUNT = parseEther('0.001');
+const SPENDABLE_POLL_MS = 30_000;
+const SPENDABLE_TIMEOUT_MS = 30 * 60_000;
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm' };
+
+/** The address Railgun's engine derives in Node, to compare with the browser's. */
+async function expectedAddress(mnemonic) {
+  const dist = path.dirname(require.resolve('@railgun-community/engine'));
+  const load = (module) => require(path.join(dist, module));
+  const { deriveNodes, WalletNode } = load('key-derivation/wallet-node');
+  const { encodeAddress } = load('key-derivation/bech32');
+  const { initPoseidonPromise } = load('utils/poseidon');
+  const { initCurve25519Promise } = load('utils/scalar-multiply');
+  await Promise.all([initPoseidonPromise, initCurve25519Promise]);
+  const nodes = deriveNodes(mnemonic, 0);
+  const viewing = await nodes.viewing.getViewingKeyPair();
+  const nullifyingKey = await nodes.viewing.getNullifyingKey();
+  const masterPublicKey = WalletNode.getMasterPublicKey(nodes.spending.getSpendingKeyPair().pubkey, nullifyingKey);
+  return encodeAddress({ masterPublicKey, viewingPublicKey: viewing.pubkey });
+}
+
+async function localProperties() {
+  const text = await readFile(LOCAL_PROPERTIES, 'utf8');
+  return Object.fromEntries(
+    text
+      .split('\n')
+      .map((line) => line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/))
+      .filter(Boolean)
+      .map(([, key, value]) => [key, value]),
+  );
+}
+
+function serve() {
+  const server = createServer(async (req, res) => {
+    const file = path.join(ASSETS, path.normalize(new URL(req.url, 'http://x').pathname));
+    try {
+      const body = await readFile(file);
+      res.writeHead(200, { 'content-type': TYPES[path.extname(file)] ?? 'application/octet-stream' });
+      res.end(body);
+    } catch {
+      res.writeHead(404).end();
+    }
+  });
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
+}
+
+/** Loads the page, hands it a port, and returns `call(method, params)` over it. */
+async function connect(page, url, onEvent) {
+  await page.goto(url);
+  await page.evaluate(() => {
+    const { port1, port2 } = new MessageChannel();
+    const pending = new Map();
+    let next = 0;
+    port1.onmessage = ({ data }) => {
+      const message = JSON.parse(data);
+      if (message.event !== undefined) return window.hostEvent(data);
+      const { resolve, reject } = pending.get(message.id);
+      pending.delete(message.id);
+      message.error === undefined ? resolve(message.result) : reject(new Error(message.error));
+    };
+    window.call = (method, params) =>
+      new Promise((resolve, reject) => {
+        const id = next++;
+        pending.set(id, { resolve, reject });
+        port1.postMessage(JSON.stringify({ id, method, params }));
+      });
+    window.postMessage('zapp-railgun-init', '*', [port2]);
+  });
+  return async (method, params) => {
+    const started = performance.now();
+    const result = await page.evaluate((m, p) => window.call(m, p), method, params);
+    onEvent('timing', `${method} took ${((performance.now() - started) / 1000).toFixed(1)} s`);
+    return result;
+  };
+}
+
+function eventPrinter() {
+  let last = '';
+  return (event, data) => {
+    let line;
+    if (event === 'scan') line = `scan ${data.tree} ${data.status} ${Math.floor(data.progress * 10) * 10}%`;
+    else if (event === 'proof') line = `proof ${Math.floor(data.progress / 10) * 10}% ${data.status}`;
+    else if (event === 'log') line = process.env.RAILGUN_CHECK_VERBOSE ? `log ${data}` : undefined;
+    else line = `${event}${data === null ? '' : ` ${typeof data === 'string' ? data : JSON.stringify(data)}`}`;
+    if (line !== undefined && line !== last) console.log(`  ${line}`);
+    last = line ?? last;
+  };
+}
+
+async function syncCheck(page, url, onEvent) {
+  const mnemonic = process.env.RAILGUN_CHECK_MNEMONIC ?? Mnemonic.fromEntropy(randomBytes(32)).phrase;
+  const fromBlock = process.env.RAILGUN_CHECK_FROM_BLOCK
+    ? Number(process.env.RAILGUN_CHECK_FROM_BLOCK)
+    : await new JsonRpcProvider(RPC_URL).getBlockNumber();
+  const encryptionKey = randomBytes(32).toString('hex');
+  const expected = await expectedAddress(mnemonic);
+  for (const pass of ['first open', 'reopen from IndexedDB']) {
+    console.log(`${pass}:`);
+    const call = await connect(page, url, onEvent);
+    await call('start', { network: 'sepolia', rpcUrls: [RPC_URL], poiNodeUrls: [POI_NODE], debug: true });
+    const { address } = await call('openWallet', { encryptionKey, mnemonic, creationBlock: fromBlock });
+    if (address !== expected) throw new Error(`the browser opened ${address}, Node derives ${expected}`);
+    console.log(`  address matches Node's derivation: ${address.slice(0, 16)}…`);
+    const balances = await call('refresh', {});
+    console.log(`  balances ${JSON.stringify(balances)}`);
+  }
+}
+
+const weth = (bucket) => BigInt(bucket?.find(({ token }) => token === WETH)?.amount ?? 0);
+const etherscan = (hash) => `https://sepolia.etherscan.io/tx/${hash}`;
+const summary = (balances) =>
+  Object.entries(balances)
+    .filter(([, tokens]) => weth(tokens) > 0n)
+    .map(([bucket, tokens]) => `${bucket} ${formatEther(weth(tokens))}`)
+    .join(', ') || 'none';
+
+async function waitForSpendable(call, amount) {
+  const deadline = Date.now() + SPENDABLE_TIMEOUT_MS;
+  for (;;) {
+    const balances = await call('refresh', {});
+    console.log(`  WETH: ${summary(balances)}`);
+    if (weth(balances.Spendable) >= amount) return balances;
+    if (Date.now() > deadline) throw new Error('nothing became spendable in time');
+    await new Promise((resolve) => setTimeout(resolve, SPENDABLE_POLL_MS));
+  }
+}
+
+/** Opens the dev wallet and gas account that local.properties names. */
+async function openDevWallet(page, url, onEvent) {
+  const { RAILGUN_DEV_MNEMONIC: mnemonic, RAILGUN_DEV_GAS_KEY: privateKey } = await localProperties();
+  if (!mnemonic || !privateKey) throw new Error(`set RAILGUN_DEV_MNEMONIC and RAILGUN_DEV_GAS_KEY in ${LOCAL_PROPERTIES}`);
+  // Stable across runs, so the wallet stored in dev/.profile opens again.
+  const encryptionKey = createHash('sha256').update(`railgun-check:${mnemonic}`).digest('hex');
+
+  const call = await connect(page, url, onEvent);
+  await call('start', { network: 'sepolia', rpcUrls: [RPC_URL], poiNodeUrls: [POI_NODE], debug: true });
+  const { address } = await call('openWallet', { encryptionKey, mnemonic });
+  const gas = await call('setGasAccount', { privateKey });
+  console.log(`  wallet ${address.slice(0, 16)}…, gas account ${gas.address} holds ${formatEther(gas.balance)} ETH`);
+  return { call, address, gas };
+}
+
+async function shieldTo(page, url, onEvent, to, eth) {
+  const { call } = await openDevWallet(page, url, onEvent);
+  const { txHash } = await call('shield', { amount: parseEther(eth).toString(), to });
+  console.log(`  shielded ${eth} ETH to ${to.slice(0, 16)}…: ${etherscan(txHash)}`);
+}
+
+async function transactCheck(page, url, onEvent) {
+  const { call, address, gas } = await openDevWallet(page, url, onEvent);
+
+  let balances = await call('refresh', {});
+  console.log(`  WETH: ${summary(balances)}`);
+  if (weth(balances.Spendable) < 2n * SEND_AMOUNT && weth(balances.ShieldPending) === 0n) {
+    const { txHash } = await call('shield', { amount: SHIELD_AMOUNT.toString() });
+    console.log(`  shielded ${formatEther(SHIELD_AMOUNT)} ETH: ${etherscan(txHash)}`);
+  }
+  await waitForSpendable(call, 2n * SEND_AMOUNT);
+
+  const sent = await call('transfer', { to: address, token: WETH, amount: SEND_AMOUNT.toString() });
+  console.log(`  sent ${formatEther(SEND_AMOUNT)} WETH privately to itself, proof ${sent.proofMs} ms: ${etherscan(sent.txHash)}`);
+  await waitForSpendable(call, SEND_AMOUNT);
+
+  const withdrawn = await call('unshield', { to: gas.address, token: WETH, amount: SEND_AMOUNT.toString() });
+  console.log(`  withdrew ${formatEther(SEND_AMOUNT)} WETH to the gas account, proof ${withdrawn.proofMs} ms: ${etherscan(withdrawn.txHash)}`);
+  balances = await call('refresh', {});
+  console.log(`  WETH: ${summary(balances)}`);
+}
+
+async function main() {
+  const shieldToIndex = process.argv.indexOf('--shield-to');
+  const transact = process.argv.includes('--transact') || shieldToIndex >= 0;
+  const server = await serve();
+  const url = `http://127.0.0.1:${server.address().port}/index.html`;
+  const browser = await puppeteer.launch({
+    executablePath: CHROME,
+    headless: true,
+    protocolTimeout: 0,
+    ...(transact ? { userDataDir: PROFILE } : {}),
+  });
+  try {
+    const page = await browser.newPage();
+    const onEvent = eventPrinter();
+    page.on('pageerror', (error) => console.log(`  page error: ${error.message}`));
+    page.on('console', (message) => message.type() === 'error' && console.log(`  console: ${message.text()}`));
+    await page.exposeFunction('hostEvent', (json) => {
+      const { event, data } = JSON.parse(json);
+      onEvent(event, data);
+    });
+    if (shieldToIndex >= 0) {
+      const [to, eth] = process.argv.slice(shieldToIndex + 1);
+      if (!to || !eth) throw new Error('usage: npm run check -- --shield-to <0zk> <eth>');
+      await shieldTo(page, url, onEvent, to, eth);
+    } else {
+      await (transact ? transactCheck(page, url, onEvent) : syncCheck(page, url, onEvent));
+    }
+  } finally {
+    await browser.close();
+    server.close();
+  }
+}
+
+main().then(
+  () => process.exit(0),
+  (error) => {
+    console.error(error);
+    process.exit(1);
+  },
+);
