@@ -4,6 +4,7 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepository
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepositoryImpl
+import co.electriccoin.zcash.ui.common.provider.IdentityVerificationStorageProvider
 import co.electriccoin.zcash.ui.common.provider.OrderRecipientUpiStorageProvider
 import co.electriccoin.zcash.ui.common.provider.RelayIdentityStorageProvider
 import co.electriccoin.zcash.ui.common.provider.TwigOfframpLogger
@@ -52,11 +53,13 @@ import org.koin.core.qualifier.named
 import org.koin.dsl.bind
 import org.koin.dsl.module
 import xyz.justzappit.evm.rpc.BaseRpcClient
+import xyz.justzappit.offramp.account.Erc4337SubmitterProvider
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
 import xyz.justzappit.offramp.config.P2pNetworkConfig
 import xyz.justzappit.offramp.config.P2pNetworks
 import xyz.justzappit.offramp.identity.IdentityServices
 import xyz.justzappit.offramp.identity.IdentityVerificationDriver
+import xyz.justzappit.offramp.identity.IdentityVerificationStore
 import xyz.justzappit.offramp.identity.IdentityWidgetClient
 import xyz.justzappit.offramp.onramp.DirectOnrampDriver
 import xyz.justzappit.offramp.onramp.FakeOnrampDriver
@@ -193,6 +196,7 @@ val repositoryModule =
             )
         }
         single { IdentityReturnInbox() }
+        single<IdentityVerificationStore> { IdentityVerificationStorageProvider(get()) }
         // Same shape as Reclaim: the widget session is opened from the device through p2p.me's
         // public proxy, and the attestation goes straight to the ReputationManager. p2p.me's
         // tenants sign for mainnet only.
@@ -204,7 +208,9 @@ val repositoryModule =
                     if (network.name == P2pNetworks.MAINNET_NAME) IdentityServices.MAINNET else IdentityServices.NONE,
                 returnUrl = IdentityReturnLink::url,
                 reputationReader = get(),
-                submitters = get(),
+                resolveAccount = get<Erc4337SubmitterProvider>()::resolve,
+                store = get(),
+                nowSeconds = { System.currentTimeMillis() / 1_000L },
                 rpc = get(),
                 network = network,
                 onUnrecognisedRevert = { selector ->

@@ -14,7 +14,9 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -123,6 +125,9 @@ internal class IncreaseReputationVM(
                             platforms = rows(read),
                             identityChecks = identityRows(read),
                         )
+                    }
+                    if (runJob?.isActive != true) {
+                        identityDriver.recoverableCheck(currency)?.let(::startIdentityRun)
                     }
                 } catch (e: CancellationException) {
                     throw e
@@ -318,7 +323,7 @@ internal class IncreaseReputationVM(
         collectIdentityRun(check, identityDriver.verify(check, currency, nonce(), signal))
     }
 
-    /** Finishes a check whose redirect outlived the run that started it: a cold start, or a cancel. */
+    /** The driver validates persisted authorization before resuming a redirect without a live run. */
     private fun resumeIdentityRun(ret: IdentityReturn) {
         if (runJob?.isActive == true) return
         returnSignal = null
@@ -523,7 +528,10 @@ internal class IncreaseReputationVM(
             }
 
             VerificationStage.FAILED -> {
-                ButtonState(stringRes(R.string.reputation_retry), onClick = ::onDismissRun)
+                ButtonState(
+                    stringRes(R.string.reputation_retry),
+                    onClick = if (run.isIdentityCheck) ::onRetryIdentityRun else ::onDismissRun,
+                )
             }
         }
     }
@@ -550,18 +558,42 @@ internal class IncreaseReputationVM(
         identityCheck?.let { emitIdentityRun(it, VerificationStage.VERIFYING) }
     }
 
-    /**
-     * Cancelling leaves the Reclaim session, or the widget session, to expire on its own. It is
-     * never surfaced later as an error — the user chose to stop.
-     */
-    private fun onCancelRun() {
-        runJob?.cancel()
-        onDismissRun()
+    private fun onRetryIdentityRun() {
+        val check = identityCheck ?: return
+        val previous = runJob
+        previous?.cancel()
+        runJob =
+            viewModelScope.launch(start = CoroutineStart.LAZY) {
+                previous?.join()
+                runJob = null
+                startIdentityRun(check)
+            }
+        runJob?.start()
     }
 
+    private fun onCancelRun() = onDismissRun()
+
+    /** Cancel browser authorization, but retain a redeemed result or a transaction awaiting a receipt. */
     private fun onDismissRun() {
-        runJob?.cancel()
-        clearRun()
+        val previous = runJob
+        val check = identityCheck
+        previous?.cancel()
+        runJob =
+            viewModelScope.launch(start = CoroutineStart.LAZY) {
+                try {
+                    previous?.cancelAndJoin()
+                    check?.let { identityDriver.cancelWaiting(it, currency) }
+                    clearRun()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (
+                    @Suppress("TooGenericExceptionCaught") e: Exception
+                ) {
+                    Twig.warn(e) { "Could not cancel pending identity check" }
+                    check?.let { onIdentityStatus(it, IdentityStatus.Failed(IdentityFailure.Network)) }
+                }
+            }
+        runJob?.start()
     }
 
     private fun clearRun() {

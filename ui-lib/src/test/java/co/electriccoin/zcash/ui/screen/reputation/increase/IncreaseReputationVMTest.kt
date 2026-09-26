@@ -7,8 +7,10 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.util.stringRes
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -29,6 +31,7 @@ import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.account.OfframpSmartAccount
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
+import xyz.justzappit.offramp.identity.IdentityFailure
 import xyz.justzappit.offramp.identity.IdentityStatus
 import xyz.justzappit.offramp.identity.IdentityVerificationDriver
 import xyz.justzappit.offramp.p2p.CurrencyCode
@@ -107,13 +110,45 @@ class IncreaseReputationVMTest {
             runCurrent()
 
             assertNull(vm.state.value.run)
+            coVerify(exactly = 1) { identityDriver.cancelWaiting(IdentityCheck.Passport, CurrencyCode.Inr) }
+        }
+
+    @Test
+    fun `retry restarts the identity driver instead of merely dismissing the failure`() =
+        runTest {
+            afterVerifying = {
+                delay(REDIRECT_MILLIS)
+                IdentityStatus.Failed(IdentityFailure.Network)
+            }
+            val vm = viewModelAwayInTheWidget()
+            advanceTimeBy(REDIRECT_MILLIS + 1)
+            runCurrent()
+            assertEquals(VerificationStage.FAILED, stageOf(vm))
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            assertNotNull(vm.state.value.primaryAction).onClick()
+            runCurrent()
+            assertEquals(VerificationStage.READY, stageOf(vm))
+            vm.state.value.identityChecks
+                .single()
+                .onClick()
+            verify(exactly = 2) { identityDriver.verify(IdentityCheck.Passport, CurrencyCode.Inr, any(), any()) }
+        }
+
+    @Test
+    fun `screen load resumes a saved identity result without tapping its row`() =
+        runTest {
+            val vm = viewModelAwayInTheWidget(recoverOnLoad = true)
+            assertEquals(VerificationStage.VERIFYING, stageOf(vm))
+            verify(exactly = 1) { identityDriver.verify(IdentityCheck.Passport, CurrencyCode.Inr, any(), any()) }
         }
 
     /** A screen whose passport row has been tapped and whose widget the user has opened. */
-    private fun TestScope.viewModelAwayInTheWidget(): IncreaseReputationVM {
+    private fun TestScope.viewModelAwayInTheWidget(recoverOnLoad: Boolean = false): IncreaseReputationVM {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         coEvery { accountProvider.resolve() } returns OfframpSmartAccount(mockk<EvmKey>(), Address.parse(WALLET))
         coEvery { reputationReader.read(any(), any()) } returns summary()
+        coEvery { identityDriver.recoverableCheck(any()) } returns if (recoverOnLoad) IdentityCheck.Passport else null
+        coEvery { identityDriver.cancelWaiting(any(), any()) } returns Unit
         every { identityDriver.isOffered(any(), any()) } answers { firstArg<IdentityCheck>() == IdentityCheck.Passport }
         every { identityDriver.verify(IdentityCheck.Passport, any(), any(), any()) } returns
             flow {
@@ -137,9 +172,11 @@ class IncreaseReputationVMTest {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
         runCurrent()
 
-        vm.state.value.identityChecks
-            .single()
-            .onClick()
+        if (!recoverOnLoad) {
+            vm.state.value.identityChecks
+                .single()
+                .onClick()
+        }
         runCurrent()
         assertEquals(VerificationStage.READY, stageOf(vm))
         // The view opens the browser, then tells the screen it did.

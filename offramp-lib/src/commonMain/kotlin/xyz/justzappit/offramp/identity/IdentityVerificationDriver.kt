@@ -5,19 +5,19 @@ package xyz.justzappit.offramp.identity
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.rpc.BaseRpcClient
-import xyz.justzappit.evm.rpc.RpcException
-import xyz.justzappit.evm.types.Address
-import xyz.justzappit.evm.types.Wei
-import xyz.justzappit.offramp.account.Erc4337SubmitterProvider
 import xyz.justzappit.offramp.account.SubmittingAccount
 import xyz.justzappit.offramp.config.P2pNetworkConfig
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.reputation.IdentityCheck
-import xyz.justzappit.offramp.reputation.ReputationCalls
 import xyz.justzappit.offramp.reputation.ReputationReader
 import xyz.justzappit.offramp.reputation.ReputationSummary
 import xyz.justzappit.offramp.reputation.passportCountry
@@ -91,13 +91,37 @@ class IdentityVerificationDriver(
     private val services: IdentityServices,
     private val returnUrl: (IdentityCheck) -> String,
     private val reputationReader: ReputationReader,
-    private val submitters: Erc4337SubmitterProvider,
-    private val rpc: BaseRpcClient,
+    private val resolveAccount: suspend () -> SubmittingAccount,
+    private val store: IdentityVerificationStore,
+    private val nowSeconds: () -> Long,
+    rpc: BaseRpcClient,
     private val network: P2pNetworkConfig,
-    private val onUnrecognisedRevert: (String) -> Unit = {},
+    onUnrecognisedRevert: (String) -> Unit = {},
 ) {
+    private val mutex = Mutex()
+    private val submission = IdentityAttestationSubmitter(rpc, network, reputationReader, store, onUnrecognisedRevert)
+
     fun isOffered(check: IdentityCheck, currency: CurrencyCode): Boolean =
         services.of(check) != null && check.isOfferedIn(currency)
+
+    /** A persisted result is resumed on screen load, including a receipt whose confirming read failed. */
+    suspend fun recoverableCheck(currency: CurrencyCode): IdentityCheck? =
+        mutex.withLock {
+            val account = resolveAccount()
+            IdentityCheck.entries.firstOrNull { check ->
+                isOffered(check, currency) &&
+                    store.get(key(account, check))?.let { it.currency == currency && it.canRecover } == true
+            }
+        }
+
+    /** Explicit cancellation invalidates a browser session, but never throws away a redeemed result. */
+    suspend fun cancelWaiting(check: IdentityCheck, currency: CurrencyCode) {
+        mutex.withLock {
+            val key = key(resolveAccount(), check)
+            val pending = store.get(key)
+            if (pending?.currency == currency && !pending.canRecover) store.set(key, null)
+        }
+    }
 
     fun verify(
         check: IdentityCheck,
@@ -106,90 +130,162 @@ class IdentityVerificationDriver(
         returnSignal: IdentityReturnSignal,
     ): Flow<IdentityStatus> =
         flow {
-            val service = services.of(check)
-            if (service == null || !check.isOfferedIn(currency)) {
-                emit(IdentityStatus.Failed(IdentityFailure.Unavailable))
-                return@flow
-            }
-            emit(IdentityStatus.Preparing)
-
-            val account = submitters.resolve()
-            val state = IdentityReturn.state(nonce, currency)
-            val country = if (check == IdentityCheck.Passport) currency.passportCountry else null
-            val widgetUrl =
-                try {
-                    widget.createSession(service, account.address, returnUrl(check), state, country)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: IdentityException) {
-                    emit(IdentityStatus.Failed(e.failure(whenRefused = IdentityFailure.Unavailable)))
-                    return@flow
-                } catch (ignored: Exception) {
-                    emit(IdentityStatus.Failed(IdentityFailure.Network))
-                    return@flow
+            mutex.withLock {
+                val service = services.of(check)
+                if (service == null || !check.isOfferedIn(currency)) {
+                    emit(IdentityStatus.Failed(IdentityFailure.Unavailable))
+                    return@withLock
                 }
-            emit(IdentityStatus.Ready(widgetUrl))
-            emit(IdentityStatus.Verifying)
-
-            val ret = returnSignal.await()
-            // The widget echoes state beside a code; an error return may carry none.
-            if (ret.check != check || (ret.code != null && ret.state != state)) {
-                emit(IdentityStatus.Failed(IdentityFailure.Rejected))
-                return@flow
+                emit(IdentityStatus.Preparing)
+                val account = resolveAccount()
+                val key = key(account, check)
+                val previous = store.get(key)
+                if (previous?.canRecover == true) {
+                    // The signed result is wallet-wide; finish it even if the selected corridor changed.
+                    complete(service, check, key, previous, currency, account)
+                    return@withLock
+                }
+                val pending =
+                    PendingIdentityVerification(
+                        state = IdentityReturn.state(nonce, currency),
+                        currency = currency,
+                        expiresAtSeconds = nowSeconds() + SESSION_TTL_SECONDS,
+                    )
+                // Persist before the browser can receive a link. Failure to persist means no session opens.
+                store.set(key, pending)
+                val country = if (check == IdentityCheck.Passport) currency.passportCountry else null
+                val widgetUrl =
+                    try {
+                        widget.createSession(service, account.address, returnUrl(check), pending.state, country)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: IdentityException) {
+                        emit(IdentityStatus.Failed(e.failure(whenRefused = IdentityFailure.Unavailable)))
+                        return@withLock
+                    } catch (ignored: Exception) {
+                        emit(IdentityStatus.Failed(IdentityFailure.Network))
+                        return@withLock
+                    }
+                emit(IdentityStatus.Ready(widgetUrl))
+                emit(IdentityStatus.Verifying)
+                acceptReturn(service, check, key, returnSignal.await(), currency, account)
             }
-            complete(service, ret, currency, account)
         }
 
-    /** Finishes a check whose redirect arrived after the run that started it was gone. */
+    /** Cold starts use exactly the same session validation as live runs. */
     fun resume(ret: IdentityReturn, currency: CurrencyCode): Flow<IdentityStatus> =
         flow {
-            val service = services.of(ret.check)
-            if (service == null) {
-                emit(IdentityStatus.Failed(IdentityFailure.Unavailable))
-                return@flow
+            mutex.withLock {
+                val service = services.of(ret.check)
+                if (service == null || !ret.check.isOfferedIn(currency)) {
+                    emit(IdentityStatus.Failed(IdentityFailure.Unavailable))
+                    return@withLock
+                }
+                val account = resolveAccount()
+                acceptReturn(service, ret.check, key(account, ret.check), ret, currency, account)
             }
-            emit(IdentityStatus.Verifying)
-            complete(service, ret, currency, submitters.resolve())
         }
 
-    @Suppress("ReturnCount")
-    private suspend fun FlowCollector<IdentityStatus>.complete(
+    private suspend fun FlowCollector<IdentityStatus>.acceptReturn(
         service: IdentityService,
+        check: IdentityCheck,
+        key: String,
         ret: IdentityReturn,
         currency: CurrencyCode,
         account: SubmittingAccount,
     ) {
-        val code = ret.code
-        if (code.isNullOrBlank()) {
+        val pending = store.get(key)
+        val sessionMatches =
+            pending != null && ret.check == check && ret.state == pending.state && pending.currency == currency
+        val codeMatches = pending?.code == null || pending.code == ret.code
+        if (!sessionMatches || nowSeconds() >= pending.expiresAtSeconds || !codeMatches) {
+            emit(IdentityStatus.Failed(IdentityFailure.Rejected))
+            return
+        }
+        if (ret.code.isNullOrBlank()) {
+            if (!pending.canRecover) store.set(key, null)
             emit(IdentityStatus.Failed(widgetFailure(ret.error)))
             return
         }
-        emit(IdentityStatus.Submitting)
+        val accepted = pending.copy(code = ret.code)
+        store.set(key, accepted)
+        complete(service, check, key, accepted, currency, account)
+    }
 
-        val attestation = redeem(service, code) ?: return
-        val calldata = ReputationCalls.submitIdentityAttestationCalldata(ret.check, attestation)
-        val block = submit(account, calldata) ?: return
+    @Suppress("ReturnCount")
+    private suspend fun FlowCollector<IdentityStatus>.complete(
+        service: IdentityService,
+        check: IdentityCheck,
+        key: String,
+        initial: PendingIdentityVerification,
+        currency: CurrencyCode,
+        account: SubmittingAccount,
+    ) {
+        emit(IdentityStatus.Submitting)
+        var pending = initial
+        if (pending.receiptBlock == null && pending.transactionHash == null) {
+            if (pending.attestation == null) {
+                if (nowSeconds() >= pending.expiresAtSeconds) {
+                    store.set(key, null)
+                    emit(IdentityStatus.Failed(IdentityFailure.Expired))
+                    return
+                }
+                pending = redeem(service, key, pending) ?: return
+            }
+            val attestation = requireNotNull(pending.attestation).decode()
+            if (attestation.expiry <= BigInteger(nowSeconds().toString())) {
+                store.set(key, null)
+                emit(IdentityStatus.Failed(IdentityFailure.Expired))
+                return
+            }
+        }
+        val block =
+            pending.receiptBlock ?: when (val result = submission.submit(account, check, key, pending, currency)) {
+                is IdentitySubmission.Confirmed -> {
+                    result.block
+                }
+
+                is IdentitySubmission.Verified -> {
+                    emit(IdentityStatus.Done(result.summary))
+                    return
+                }
+
+                is IdentitySubmission.Failed -> {
+                    emit(IdentityStatus.Failed(result.reason))
+                    return
+                }
+            }
         val summary =
             try {
                 reputationReader.readAt(account.address, currency, block)
             } catch (e: CancellationException) {
                 throw e
             } catch (ignored: Exception) {
-                // The write landed; only the confirming read failed, and the screen re-reads on load.
+                // Keep the receipt: retry only the read, never the attestation or transaction.
                 emit(IdentityStatus.Failed(IdentityFailure.Network))
                 return
             }
+        store.set(key, null)
         emit(IdentityStatus.Done(summary))
     }
+
+    private fun key(account: SubmittingAccount, check: IdentityCheck): String =
+        "${network.chainId.value}_${network.reputationManagerAddress.lowercaseHex}_" +
+            "${account.address.lowercaseHex}_${check.name}"
 
     /** The attestation for a one-time code, or null once the failure has been emitted. */
     private suspend fun FlowCollector<IdentityStatus>.redeem(
         service: IdentityService,
-        code: String,
-    ): IdentityAttestation? {
+        key: String,
+        pending: PendingIdentityVerification,
+    ): PendingIdentityVerification? {
         val failure =
             try {
-                return widget.redeem(service, code)
+                // Once redemption starts, leaving the screen must not cancel the response-to-disk handoff.
+                return withContext(NonCancellable) {
+                    val attestation = widget.redeem(service, requireNotNull(pending.code))
+                    pending.copy(attestation = StoredIdentityAttestation.from(attestation)).also { store.set(key, it) }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: IdentityException) {
@@ -198,39 +294,9 @@ class IdentityVerificationDriver(
             } catch (ignored: Exception) {
                 IdentityFailure.Network
             }
+        if (failure == IdentityFailure.Expired) store.set(key, null)
         emit(IdentityStatus.Failed(failure))
         return null
-    }
-
-    /** Simulate, send, wait for the receipt. The block it names, or null once the failure has been emitted. */
-    private suspend fun FlowCollector<IdentityStatus>.submit(
-        account: SubmittingAccount,
-        calldata: ByteArray,
-    ): String? {
-        val to = network.reputationManagerAddress
-        simulationFailure(to, account.address, calldata)?.let {
-            emit(IdentityStatus.Failed(it))
-            return null
-        }
-        return try {
-            val txHash = account.submitter.sendTransaction(to = to, value = Wei.ZERO, data = calldata)
-            val receipt = account.submitter.awaitReceipt(txHash)
-            if (receipt.success) {
-                receipt.blockNumber
-            } else {
-                emit(IdentityStatus.Failed(IdentityFailure.Rejected))
-                null
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (
-            // Anything between here and the receipt has to become a sentence for the user, so the
-            // catch is broad on purpose and [classify] does the narrowing.
-            @Suppress("TooGenericExceptionCaught") e: Exception,
-        ) {
-            emit(IdentityStatus.Failed(classify(e)))
-            null
-        }
     }
 
     private fun widgetFailure(error: String?): IdentityFailure =
@@ -241,63 +307,13 @@ class IdentityVerificationDriver(
             else -> IdentityFailure.NotPassed
         }
 
-    private suspend fun simulationFailure(
-        to: Address,
-        from: Address,
-        calldata: ByteArray,
-    ): IdentityFailure? =
-        try {
-            rpc.ethCall(to = to, data = calldata, from = from)
-            null
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: RpcException) {
-            // A simulation that cannot run is not proof the send would fail; let the send decide.
-            (e as? RpcException.ExecutionReverted)?.let(::classifyRevert)
-        }
-
-    @Suppress("ReturnCount")
-    private fun classify(e: Exception): IdentityFailure {
-        if (e is RpcException.ExecutionReverted) return classifyRevert(e)
-        val message = e.message.orEmpty()
-        REVERTS.entries.firstOrNull { it.key in message }?.let { return it.value }
-        if (SPONSORSHIP_MARKERS.any { message.contains(it, ignoreCase = true) }) {
-            return IdentityFailure.SponsorshipUnavailable
-        }
-        return IdentityFailure.Network
-    }
-
-    private fun classifyRevert(e: RpcException.ExecutionReverted): IdentityFailure {
-        val selector = e.selector?.hex
-        return selector?.let(REVERTS::get) ?: run {
-            onUnrecognisedRevert(selector ?: e.solidityErrorString ?: "revert with no data")
-            IdentityFailure.Rejected
-        }
-    }
-
     private companion object {
+        // Bound browser authorization even if a stale link survives the provider's own session TTL.
+        const val SESSION_TTL_SECONDS = 30 * 60L
+
         const val WIDGET_CANCELLED = "cancelled"
         const val WIDGET_DUPLICATE = "duplicate_person"
         const val WIDGET_EXPIRED = "expired"
-
-        /** The ReputationManager's errors for both checks, by selector; the bundler quotes them as text. */
-        val REVERTS: Map<String, IdentityFailure> =
-            mapOf(
-                "0x66790623" to IdentityFailure.Unavailable, // LivenessSignerNotSet
-                "0x54710b53" to IdentityFailure.Expired, // LivenessAttestationExpired
-                "0xfa82e304" to IdentityFailure.Rejected, // LivenessNullifierZero
-                "0x61746f27" to IdentityFailure.AlreadyClaimed, // LivenessNullifierAlreadySpent
-                "0x95182781" to IdentityFailure.AlreadyVerified, // LivenessAlreadyVerified
-                "0x9cfb0729" to IdentityFailure.Rejected, // LivenessInvalidSignature
-                "0x2477577f" to IdentityFailure.Unavailable, // KycSignerNotSet
-                "0xeb1a0215" to IdentityFailure.Expired, // KycAttestationExpired
-                "0x311fde50" to IdentityFailure.Rejected, // KycNullifierZero
-                "0xbdbb1a03" to IdentityFailure.AlreadyClaimed, // KycNullifierAlreadySpent
-                "0x10afbce2" to IdentityFailure.AlreadyVerified, // KycAlreadyVerified
-                "0x80686e11" to IdentityFailure.Rejected, // KycInvalidSignature
-            )
-
-        val SPONSORSHIP_MARKERS = listOf("paymaster", "sponsor", "AA31", "AA33", "prefund")
     }
 }
 

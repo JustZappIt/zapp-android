@@ -69,6 +69,7 @@ class IdentityVerificationDriverTest {
     private var sessionRequest: JsonObject? = null
     private var sessionHost: String? = null
     private var redeemed = false
+    private val store = MemoryIdentityVerificationStore()
 
     private val rpcEngine =
         MockEngine { request ->
@@ -222,11 +223,11 @@ class IdentityVerificationDriverTest {
         }
 
     @Test
-    fun `an error return is taken at its word`() =
+    fun `an error return with matching state is accepted`() =
         runTest {
             val outcomes =
                 listOf("cancelled", "duplicate_person", "expired", "liveness_failed").map { error ->
-                    val ret = IdentityReturn(IdentityCheck.Liveness, code = null, error = error, state = null)
+                    val ret = IdentityReturn(IdentityCheck.Liveness, code = null, error = error, state = "$NONCE.BRL")
                     val signal = IdentityReturnSignal().also { it.deliver(ret) }
                     assertIs<IdentityStatus.Failed>(
                         driver().verify(IdentityCheck.Liveness, CurrencyCode.Brl, NONCE, signal).toList().last(),
@@ -272,24 +273,27 @@ class IdentityVerificationDriverTest {
     @Test
     fun `each check submits its own function to the reputation manager, simulated first`() =
         runTest {
+            seedPending(IdentityCheck.Liveness)
+            seedPending(IdentityCheck.Passport)
             nextRevert = LIVENESS_NULLIFIER_ALREADY_SPENT
             val liveness = driver().resume(success(IdentityCheck.Liveness), CurrencyCode.Brl).toList()
 
             assertEquals(IdentityCheck.Liveness, simulated)
             assertTrue(simulatedTo!!.contains(network.reputationManagerAddress.lowercaseHex, ignoreCase = true))
-            assertEquals(listOf(IdentityStatus.Verifying, IdentityStatus.Submitting), liveness.dropLast(1))
+            assertEquals(listOf(IdentityStatus.Submitting), liveness.dropLast(1))
             assertEquals(IdentityStatus.Failed(IdentityFailure.AlreadyClaimed), liveness.last())
 
-            nextRevert = KYC_ALREADY_VERIFIED
+            nextRevert = KYC_ALREADY_CLAIMED
             val passport = driver().resume(success(IdentityCheck.Passport), CurrencyCode.Brl).toList()
 
             assertEquals(IdentityCheck.Passport, simulated)
-            assertEquals(IdentityStatus.Failed(IdentityFailure.AlreadyVerified), passport.last())
+            assertEquals(IdentityStatus.Failed(IdentityFailure.AlreadyClaimed), passport.last())
         }
 
     @Test
     fun `an unmapped revert is reported and read as a rejection`() =
         runTest {
+            seedPending(IdentityCheck.Liveness)
             nextRevert = "0xdeadbeef"
             val reported = mutableListOf<String>()
 
@@ -306,6 +310,7 @@ class IdentityVerificationDriverTest {
     @Test
     fun `a code the service no longer has is an expired check`() =
         runTest {
+            seedPending(IdentityCheck.Liveness)
             attestationStatus = HttpStatusCode.BadRequest
 
             val failed = driver().resume(success(IdentityCheck.Liveness), CurrencyCode.Brl).toList().last()
@@ -347,10 +352,20 @@ class IdentityVerificationDriverTest {
                 }
             },
             reputationReader = ReputationReader(rpc, network),
-            submitters = submitters,
+            resolveAccount = submitters::resolve,
+            store = store,
+            nowSeconds = { 1_750_000_000L },
             rpc = rpc,
             network = network,
             onUnrecognisedRevert = onUnrecognisedRevert,
+        )
+    }
+
+    private suspend fun seedPending(check: IdentityCheck) {
+        store.set(
+            "${network.chainId.value}_${network.reputationManagerAddress.lowercaseHex}_" +
+                "${smartAccount.lowercaseHex}_${check.name}",
+            PendingIdentityVerification("$NONCE.BRL", CurrencyCode.Brl, 1_750_001_800L),
         )
     }
 
@@ -362,7 +377,8 @@ class IdentityVerificationDriverTest {
             signature = ByteArray(IdentityAttestation.SIGNATURE_BYTES) { 0xab.toByte() },
         )
 
-    private fun cancelled(check: IdentityCheck) = IdentityReturn(check, code = null, error = "cancelled", state = null)
+    private fun cancelled(check: IdentityCheck) =
+        IdentityReturn(check, code = null, error = "cancelled", state = "$NONCE.BRL")
 
     private fun success(check: IdentityCheck) = IdentityReturn(check, code = CODE, error = null, state = "$NONCE.BRL")
 
@@ -390,7 +406,7 @@ class IdentityVerificationDriverTest {
         const val SELECTOR_BYTES = 4
 
         const val LIVENESS_NULLIFIER_ALREADY_SPENT = "0x61746f27"
-        const val KYC_ALREADY_VERIFIED = "0x10afbce2"
+        const val KYC_ALREADY_CLAIMED = "0xbdbb1a03"
 
         const val LIVENESS_HOST = "liveness.example"
         const val PASSPORT_HOST = "passport.example"
