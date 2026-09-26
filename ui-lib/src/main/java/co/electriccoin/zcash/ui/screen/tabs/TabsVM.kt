@@ -111,7 +111,7 @@ class TabsVM(
 
     fun onRailgunWalletClick() = navigationRouter.forward(DebugRailgunArgs)
 
-    fun onSwapRefundSpikeClick() = navigationRouter.forward(DebugAtomicSwapArgs)
+    fun onAtomicSwapClick() = navigationRouter.forward(DebugAtomicSwapArgs)
 
     fun onRestoreWalletClick() = navigationRouter.forward(RestoreSeedArgs)
 

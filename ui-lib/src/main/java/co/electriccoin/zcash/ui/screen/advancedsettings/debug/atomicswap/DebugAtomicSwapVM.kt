@@ -7,6 +7,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRunState
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRunner
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,37 +17,52 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 class DebugAtomicSwapVM(
-    private val spike: AtomicSwapRefundSpike,
+    private val runner: AtomicSwapRunner,
     private val copyToClipboardUseCase: CopyToClipboardUseCase,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     val state: StateFlow<DebugAtomicSwapState> =
-        spike.state
+        runner.state
             .map(::createState)
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-                initialValue = createState(spike.state.value),
+                initialValue = createState(runner.state.value),
             )
 
-    private fun createState(spike: AtomicSwapSpikeState) =
-        DebugAtomicSwapState(
+    private fun createState(run: AtomicSwapRunState): DebugAtomicSwapState {
+        val record = run.record
+        return DebugAtomicSwapState(
             status =
                 listOfNotNull(
-                    spike.busy?.let { "running: $it" },
-                    spike.birthday?.let { "birthday: $it" },
-                    "deposit account imported: ${if (spike.imported) "yes" else "no"}",
-                    spike.depositBalance?.let { "deposit: $it" },
-                ),
-            depositAddress = spike.depositAddress,
-            onCopyAddress = { spike.depositAddress?.let { copyToClipboardUseCase(it, isSensitive = false) } },
-            activity = spike.activity,
-            error = spike.error,
-            isBusy = spike.busy != null,
-            onPrepare = this.spike::prepare,
-            onImport = this.spike::import,
-            onSweep = this.spike::sweep,
-            onDelete = this.spike::delete,
+                    run.busy?.let { "running: $it" },
+                    run.waiting?.let { "waiting: $it" },
+                    run.railgunAddress?.let { "payouts go to ${it.take(ADDRESS_PREFIX)}…" },
+                    record?.let { "swap #${it.index}: ${it.swapId.take(ID_PREFIX)}…" },
+                    record?.let { "quote: ${it.quote.depositZat} zat for ${it.quote.amount} token base units" },
+                    record?.let {
+                        when {
+                            it.depositTxId != null -> "deposit: ${it.depositTxId?.take(ID_PREFIX)}…"
+                            it.depositAttempted -> "deposit: started, no transaction id"
+                            else -> "deposit: not yet"
+                        }
+                    },
+                    record?.outcome?.let { "outcome: $it" },
+                ).ifEmpty { listOf("no swap yet") },
+            activity = run.activity,
+            error = run.error,
+            isBusy = run.busy != null,
+            onOpen = { runner.open(units = 1) },
+            onDeposit = runner::deposit,
+            onAdvance = runner::advance,
+            onAbandon = runner::abandon,
+            onCopySwapId = { record?.let { copyToClipboardUseCase(it.swapId, isSensitive = false) } },
             onBack = navigationRouter::back,
         )
+    }
+
+    private companion object {
+        const val ADDRESS_PREFIX = 24
+        const val ID_PREFIX = 18
+    }
 }

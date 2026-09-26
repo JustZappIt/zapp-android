@@ -2,6 +2,7 @@ package co.electriccoin.zcash.di
 
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.BuildConfig
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRunner
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepository
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepositoryImpl
 import co.electriccoin.zcash.ui.common.provider.IdentityVerificationStorageProvider
@@ -46,7 +47,6 @@ import co.electriccoin.zcash.ui.common.repository.WalletSnapshotRepository
 import co.electriccoin.zcash.ui.common.repository.WalletSnapshotRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepository
 import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepositoryImpl
-import co.electriccoin.zcash.ui.screen.advancedsettings.debug.atomicswap.AtomicSwapRefundSpike
 import co.electriccoin.zcash.ui.screen.chat.linkpreview.LinkPreviewRepository
 import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnInbox
 import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnLink
@@ -105,7 +105,7 @@ val repositoryModule =
         singleOf(::EphemeralAddressRepositoryImpl) bind EphemeralAddressRepository::class
         singleOf(::MockOrchardBalanceRepositoryImpl) bind MockOrchardBalanceRepository::class
         singleOf(::RailgunWalletRepositoryImpl) bind RailgunWalletRepository::class
-        singleOf(::AtomicSwapRefundSpike)
+        singleOf(::AtomicSwapRunner)
         singleOf(::LinkPreviewRepository)
         singleOf(::HistoricalPriceRepositoryImpl) bind HistoricalPriceRepository::class
         single<BaseBalanceRepository> {

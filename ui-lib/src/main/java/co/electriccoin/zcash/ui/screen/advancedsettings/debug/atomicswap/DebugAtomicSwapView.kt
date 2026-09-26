@@ -53,16 +53,13 @@ internal fun DebugAtomicSwapView(state: DebugAtomicSwapState) {
                     .padding(start = PADDING.dp, end = PADDING.dp, bottom = BACK_DOCK_CLEARANCE.dp),
             verticalArrangement = Arrangement.spacedBy(GAP.dp),
         ) {
-            ZappScreenHeader(title = "Swap refund (spike)")
+            ZappScreenHeader(title = "Atomic swap (spike)")
             Section("Status", state.status)
-            state.depositAddress?.let { address ->
-                Section("Deposit address (send testnet ZEC here)", listOf(address), mono = true)
-                ZappButton(text = "Copy address", variant = ZappButtonVariant.Secondary, onClick = state.onCopyAddress)
-            }
-            Step("1. Prepare: address and birthday", state.isBusy, state.onPrepare)
-            Step("2. Import the deposit account", state.isBusy, state.onImport)
-            Step("3. Sweep it home", state.isBusy, state.onSweep)
-            Step("4. Delete the deposit account", state.isBusy, state.onDelete)
+            ZappButton(text = "Copy swap id", variant = ZappButtonVariant.Secondary, onClick = state.onCopySwapId)
+            Step("1. Open a 1-unit swap", state.isBusy, state.onOpen)
+            Step("2. Verify and deposit", state.isBusy, state.onDeposit)
+            Step("3. Advance until finished", state.isBusy, state.onAdvance)
+            Step("Abandon (only if it never opened)", state.isBusy, state.onAbandon)
             if (state.activity.isNotEmpty()) Section("Activity", state.activity, mono = true)
             state.error?.let { error ->
                 BasicText(text = error, style = ZappTheme.typography.body.copy(color = c.danger))
@@ -122,16 +119,15 @@ private fun DebugAtomicSwapPreview() =
         DebugAtomicSwapView(
             state =
                 DebugAtomicSwapState(
-                    status = listOf("birthday: 4134500", "deposit account imported: yes", "deposit: available 0.01"),
-                    depositAddress = "utest1exuj2qh9gcll0zjygvk7c48e5ra40wwtvdgd2u0ygwn2g3kanp47utpgh25m4pqwcj…",
-                    onCopyAddress = {},
-                    activity = listOf("prepare: deposit address ready; birthday 4134500"),
+                    status = listOf("swap #0: 0x5c5a255afeaeacc7…", "quote: 202021 zat for 1000000 token base units"),
+                    activity = listOf("open: swap #0 accepted for 202021 zat"),
                     error = null,
                     isBusy = false,
-                    onPrepare = {},
-                    onImport = {},
-                    onSweep = {},
-                    onDelete = {},
+                    onOpen = {},
+                    onDeposit = {},
+                    onAdvance = {},
+                    onAbandon = {},
+                    onCopySwapId = {},
                     onBack = {},
                 ),
         )

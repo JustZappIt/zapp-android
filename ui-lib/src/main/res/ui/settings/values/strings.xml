@@ -49,8 +49,8 @@
     <string name="settings_server_subtitle">Choose a lightwalletd server</string>
     <string name="settings_railgun_wallet_title">Railgun wallet</string>
     <string name="settings_railgun_wallet_subtitle">Private USD on Ethereum Sepolia (debug builds)</string>
-    <string name="settings_swap_refund_spike_title">Swap refund (spike)</string>
-    <string name="settings_swap_refund_spike_subtitle">Takes a testnet deposit back from a swap account (debug builds)</string>
+    <string name="settings_atomic_swap_title">Atomic swap (spike)</string>
+    <string name="settings_atomic_swap_subtitle">Sell testnet ZEC into your Railgun wallet (debug builds)</string>
     <string name="settings_p2p_payment_method_title">P2P payment method</string>
     <string name="settings_p2p_payment_method_selected_subtitle">%1$s - %2$s</string>
     <string name="settings_p2p_payment_method_save">Save selection</string>

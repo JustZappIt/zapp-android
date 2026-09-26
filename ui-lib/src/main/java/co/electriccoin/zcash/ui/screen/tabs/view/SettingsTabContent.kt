@@ -107,7 +107,7 @@ internal fun SettingsTabContent(
     onHardwareWalletClick: () -> Unit,
     // Null outside debug builds, which hides these rows.
     onRailgunWalletClick: (() -> Unit)?,
-    onSwapRefundSpikeClick: (() -> Unit)?,
+    onAtomicSwapClick: (() -> Unit)?,
     // Null while the coinholder-polling kill switch is off, which hides the group entirely.
     onVotingClick: (() -> Unit)?,
     walletViewModel: WalletViewModel = koinViewModel(),
@@ -329,11 +329,11 @@ internal fun SettingsTabContent(
                                 onClick = onClick,
                             )
                         }
-                        onSwapRefundSpikeClick?.let { onClick ->
+                        onAtomicSwapClick?.let { onClick ->
                             ZappRowDivider(inset = true)
                             ZappRow(
-                                title = stringResource(R.string.settings_swap_refund_spike_title),
-                                subtitle = stringResource(R.string.settings_swap_refund_spike_subtitle),
+                                title = stringResource(R.string.settings_atomic_swap_title),
+                                subtitle = stringResource(R.string.settings_atomic_swap_subtitle),
                                 icon = Icons.Default.SwapHoriz,
                                 iconTint = c.accentText,
                                 iconBackground = c.accentSoft,

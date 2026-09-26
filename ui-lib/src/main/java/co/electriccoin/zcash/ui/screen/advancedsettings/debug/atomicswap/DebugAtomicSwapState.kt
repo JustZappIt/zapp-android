@@ -5,14 +5,13 @@ package co.electriccoin.zcash.ui.screen.advancedsettings.debug.atomicswap
 
 data class DebugAtomicSwapState(
     val status: List<String>,
-    val depositAddress: String?,
-    val onCopyAddress: () -> Unit,
     val activity: List<String>,
     val error: String?,
     val isBusy: Boolean,
-    val onPrepare: () -> Unit,
-    val onImport: () -> Unit,
-    val onSweep: () -> Unit,
-    val onDelete: () -> Unit,
+    val onOpen: () -> Unit,
+    val onDeposit: () -> Unit,
+    val onAdvance: () -> Unit,
+    val onAbandon: () -> Unit,
+    val onCopySwapId: () -> Unit,
     val onBack: () -> Unit,
 )

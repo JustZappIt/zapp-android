@@ -1,0 +1,31 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
+
+package co.electriccoin.zcash.ui.common.atomicswap
+
+import xyz.justzappit.evm.math.bigIntegerValueOf
+import xyz.justzappit.evm.types.Address
+import xyz.justzappit.offramp.atomicswap.AtomicSwapConfig
+
+/**
+ * The phone-testing deployment on Ethereum Sepolia (zecSwap's docs/local/android.md, section 7): a
+ * maker and a relayer on the developer's machine, reached over `adb reverse tcp:8787 tcp:8787` and
+ * `adb reverse tcp:8788 tcp:8788`. Redeploying changes the contract and token.
+ */
+object AtomicSwapTestnet {
+    const val ETHEREUM_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com"
+
+    // 0.1 of the test token, whose relayer asks 0.02.
+    private const val MAX_RELAYER_FEE = 100_000L
+
+    val config =
+        AtomicSwapConfig(
+            makerUrl = "http://127.0.0.1:8787",
+            relayerUrl = "http://127.0.0.1:8788",
+            chainId = 11_155_111,
+            contract = Address.parse("0x32CE55D00E6184c385E44e6b20b76d3a8407E809"),
+            token = Address.parse("0x5764D0044bef5AA839E0dDafE2073421101B9Ed8"),
+            railgunProxy = Address.parse("0xeCFCf3b4eC647c4Ca6D49108b311b7a7C9543fea"),
+            maxRelayerFee = bigIntegerValueOf(MAX_RELAYER_FEE),
+        )
+}

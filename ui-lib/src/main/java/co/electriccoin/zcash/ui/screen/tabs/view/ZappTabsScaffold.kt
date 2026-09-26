@@ -177,7 +177,7 @@ private fun ZappTabsScaffoldContent() {
                         onViewingKeyExportClick = tabsVM::onViewingKeyExportClick,
                         onHardwareWalletClick = tabsVM::onHardwareWalletClick,
                         onRailgunWalletClick = if (BuildConfig.DEBUG) tabsVM::onRailgunWalletClick else null,
-                        onSwapRefundSpikeClick = if (BuildConfig.DEBUG) tabsVM::onSwapRefundSpikeClick else null,
+                        onAtomicSwapClick = if (BuildConfig.DEBUG) tabsVM::onAtomicSwapClick else null,
                         onVotingClick =
                             if (navigateToVoting.isEnabled) {
                                 { scope.launch { navigateToVoting() } }
