@@ -103,6 +103,7 @@ class AccountDataSourceImpl(
                 synchronizer
                     ?.accountsFlow
                     ?.filterNotNull()
+                    ?.map { accounts -> accounts.filterNot { it.keySource == ATOMIC_SWAP_KEYSOURCE } }
                     ?.flatMapLatest { allSdkAccounts ->
                         allSdkAccounts
                             .map { sdkAccount ->
@@ -363,6 +364,12 @@ private val ADDRESS_REQUEST_TIMEOUT = 15.seconds
 
 private const val RETRY_DELAY = 3L
 private const val KEYSTONE_KEYSOURCE = "keystone"
+
+/**
+ * An atomic swap's deposit account, imported only to take a refunded deposit back. It is never the
+ * user's wallet, so it stays out of every account the app lists or selects.
+ */
+internal const val ATOMIC_SWAP_KEYSOURCE = "atomicswap"
 
 class AccountDeletionException(
     message: String,
