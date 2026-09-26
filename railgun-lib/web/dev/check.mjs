@@ -98,9 +98,13 @@ async function connect(page, url, onEvent) {
   };
 }
 
+/** Prints events once each; `notesScans` counts the notes scans that started, which report 3% first. */
 function eventPrinter() {
   let last = '';
-  return (event, data) => {
+  const print = (event, data) => {
+    if (event === 'scan' && data.tree === 'utxo' && data.status === 'Updated' && data.progress <= 0.03) {
+      print.notesScans += 1;
+    }
     let line;
     if (event === 'scan') line = `scan ${data.tree} ${data.status} ${Math.floor(data.progress * 10) * 10}%`;
     else if (event === 'proof') line = `proof ${Math.floor(data.progress / 10) * 10}% ${data.status}`;
@@ -109,6 +113,8 @@ function eventPrinter() {
     if (line !== undefined && line !== last) console.log(`  ${line}`);
     last = line ?? last;
   };
+  print.notesScans = 0;
+  return print;
 }
 
 async function syncCheck(page, url, onEvent) {
@@ -127,6 +133,12 @@ async function syncCheck(page, url, onEvent) {
     console.log(`  address matches Node's derivation: ${address.slice(0, 16)}…`);
     const balances = await call('refresh', {});
     console.log(`  balances ${JSON.stringify(balances)}`);
+    // The engine skips a scan while another runs; each sync must still get one of its own.
+    const before = onEvent.notesScans;
+    await Promise.all([call('refresh', {}), call('refresh', {})]);
+    const scans = onEvent.notesScans - before;
+    if (scans < 2) throw new Error(`two syncs at once started ${scans} notes scan(s)`);
+    console.log('  two syncs at once each started a notes scan');
   }
 }
 

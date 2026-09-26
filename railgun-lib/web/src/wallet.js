@@ -1,5 +1,5 @@
 import { RailgunWallet } from '@railgun-community/engine';
-import { NETWORK_CONFIG, NetworkName, TXIDVersion } from '@railgun-community/shared-models';
+import { MerkletreeScanStatus, NETWORK_CONFIG, NetworkName, TXIDVersion } from '@railgun-community/shared-models';
 import {
   createRailgunWallet,
   generatePOIsForWallet,
@@ -23,9 +23,15 @@ export const TXID_VERSION = TXIDVersion.V2_PoseidonMerkle;
 const NETWORKS = { sepolia: NetworkName.EthereumSepolia, mainnet: NetworkName.Ethereum };
 const WALLET_SOURCE = 'zapp';
 const POLLING_INTERVAL_MS = 15_000;
+const NOTES_SCAN_ATTEMPTS = 20;
+const NOTES_SCAN_RETRY_MS = 3_000;
+// A notes scan reports 3% as it starts (1% first on a full rescan); one the engine skipped reports nothing.
+const NOTES_SCAN_START = 0.03;
 
 let network;
 let wallet;
+let notesScan;
+let notesScans = Promise.resolve();
 
 const chain = () => NETWORK_CONFIG[network].chain;
 
@@ -44,7 +50,13 @@ export async function start({ network: name, rpcUrls, poiNodeUrls, debug = false
   if (debug) setLoggers((message) => emit('log', String(message)), (error) => emit('log', String(error?.stack ?? error)));
   await startRailgunEngine(WALLET_SOURCE, new LevelJS(`railgun-${name}`), debug, artifactStore, false, false, poiNodeUrls);
   getProver().setSnarkJSGroth16(groth16);
-  setOnUTXOMerkletreeScanCallback(({ scanStatus, progress }) => emit('scan', { tree: 'utxo', status: scanStatus, progress }));
+  setOnUTXOMerkletreeScanCallback(({ scanStatus, progress }) => {
+    if (notesScan !== undefined) {
+      if (scanStatus === MerkletreeScanStatus.Updated && progress <= NOTES_SCAN_START) notesScan.started = true;
+      if (scanStatus === MerkletreeScanStatus.Incomplete) notesScan.incomplete = true;
+    }
+    emit('scan', { tree: 'utxo', status: scanStatus, progress });
+  });
   setOnTXIDMerkletreeScanCallback(({ scanStatus, progress }) => emit('scan', { tree: 'txid', status: scanStatus, progress }));
   network = networkName;
   const providers = rpcUrls.map((url, index) => ({ provider: url, priority: index + 1, weight: 2 }));
@@ -75,10 +87,37 @@ export async function openWallet({ encryptionKey, mnemonic, creationBlock }) {
  */
 export async function refresh() {
   const { walletId } = session();
-  await refreshBalances(chain(), [walletId]);
+  await scanNotes(walletId);
   await refreshReceivePOIsForWallet(TXID_VERSION, network, walletId);
   await generatePOIsForWallet(network, walletId);
   return balances();
+}
+
+/** One notes scan at a time, so each can tell whether the engine ran it. */
+function scanNotes(walletId) {
+  const scan = notesScans.then(() => scanNotesNow(walletId));
+  notesScans = scan.catch(() => {});
+  return scan;
+}
+
+/**
+ * The engine skips a notes scan without a word while another one runs or before the network has
+ * loaded, which leaves the balances stale; so try until one starts, and fail on one that breaks off.
+ */
+async function scanNotesNow(walletId) {
+  for (let attempt = 0; attempt < NOTES_SCAN_ATTEMPTS; attempt += 1) {
+    const scan = { started: false, incomplete: false };
+    notesScan = scan;
+    try {
+      await refreshBalances(chain(), [walletId]);
+    } finally {
+      notesScan = undefined;
+    }
+    if (scan.incomplete) throw new Error('the notes scan broke off, so the balances may be stale');
+    if (scan.started) return;
+    await new Promise((resolve) => setTimeout(resolve, NOTES_SCAN_RETRY_MS));
+  }
+  throw new Error('no notes scan started for a minute: one may be stuck, restart the app');
 }
 
 /** Balances by screening status: `Spendable`, `ShieldPending`, `ShieldBlocked`, … */

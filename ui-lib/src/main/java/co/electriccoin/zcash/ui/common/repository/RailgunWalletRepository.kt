@@ -158,7 +158,8 @@ class RailgunWalletRepositoryImpl(
 
     private suspend fun sync() {
         open()
-        mutableState.update { it.copy(phase = RailgunWalletState.Phase.SYNCING) }
+        // The scan lines describe this sync only, not whatever scan finished last.
+        mutableState.update { it.copy(phase = RailgunWalletState.Phase.SYNCING, utxoScan = null, txidScan = null) }
         val balances = timed("sync") { railgunWallet.refresh() }
         val gasAccount = railgunWallet.gasAccount()
         mutableState.update {
