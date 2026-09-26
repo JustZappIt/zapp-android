@@ -418,6 +418,10 @@ project(":zappmessaging").projectDir = externalProjectDir("../zappMessaging/andr
 include(":bare-kit")
 project(":bare-kit").projectDir = externalProjectDir("../bare-kit/android", "bare-kit/android")
 
+// Atomic swaps of shielded ZEC: libzecswap and its Kotlin wrapper, from the zecSwap repo
+include(":zecswap")
+project(":zecswap").projectDir = externalProjectDir("../zecSwap/android", "zecSwap/android")
+
 val zcashSdkIncludedBuildPath = extra["SDK_INCLUDED_BUILD_PATH"].toString()
 
 if (zcashSdkIncludedBuildPath.isNotEmpty() && file(zcashSdkIncludedBuildPath).exists()) {

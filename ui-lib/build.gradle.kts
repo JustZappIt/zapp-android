@@ -366,6 +366,7 @@ dependencies {
     api(projects.uiDesignLib)
     implementation(projects.offrampLib)
     implementation(projects.railgunLib)
+    implementation(project(":zecswap"))
     api(libs.androidx.fragment)
     api(libs.androidx.fragment.compose)
     api(libs.androidx.activity)

@@ -10,6 +10,7 @@ import co.electriccoin.zcash.ui.screen.addressbook.AddressBookVM
 import co.electriccoin.zcash.ui.screen.addressbook.SelectABRecipientVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.AdvancedSettingsVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.DebugVM
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.atomicswap.DebugAtomicSwapVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.railgun.DebugRailgunVM
@@ -252,6 +253,7 @@ val viewModelModule =
         viewModelOf(::DebugDBVM)
         viewModelOf(::DebugOrchardBalanceVM)
         viewModelOf(::DebugRailgunVM)
+        viewModelOf(::DebugAtomicSwapVM)
         viewModelOf(::TEXUnsupportedVM)
         viewModelOf(::InsufficientFundsVM)
         viewModelOf(::TopUpVM)

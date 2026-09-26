@@ -24,6 +24,8 @@ import co.electriccoin.zcash.ui.screen.advancedsettings.AdvancedSettingsArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.AdvancedSettingsScreen
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.DebugArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.DebugScreen
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.atomicswap.DebugAtomicSwapArgs
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.atomicswap.DebugAtomicSwapScreen
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBScreen
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceArgs
@@ -428,6 +430,7 @@ fun NavGraphBuilder.walletNavGraph(
         composable<DebugDBArgs> { DebugDBScreen() }
         composable<DebugOrchardBalanceArgs> { DebugOrchardBalanceScreen() }
         composable<DebugRailgunArgs> { DebugRailgunScreen() }
+        composable<DebugAtomicSwapArgs> { DebugAtomicSwapScreen() }
         dialogComposable<DebugTextArgs> { DebugTextScreen(it.toRoute()) }
         composable<ResyncConfirmArgs> { ResyncConfirmScreen() }
         composable<ResyncDateArgs> { ResyncDateScreen(it.toRoute()) }

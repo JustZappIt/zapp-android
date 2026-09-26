@@ -15,6 +15,7 @@ import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetPeerActiveOrdersUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToSelectFiatCurrencyUseCase
 import co.electriccoin.zcash.ui.screen.accountlist.AccountListArgs
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.atomicswap.DebugAtomicSwapArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.railgun.DebugRailgunArgs
 import co.electriccoin.zcash.ui.screen.chat.ChatContactsArgs
 import co.electriccoin.zcash.ui.screen.chat.ChatProfileArgs
@@ -109,6 +110,8 @@ class TabsVM(
     fun onHardwareWalletClick() = navigationRouter.forward(AccountListArgs)
 
     fun onRailgunWalletClick() = navigationRouter.forward(DebugRailgunArgs)
+
+    fun onSwapRefundSpikeClick() = navigationRouter.forward(DebugAtomicSwapArgs)
 
     fun onRestoreWalletClick() = navigationRouter.forward(RestoreSeedArgs)
 
