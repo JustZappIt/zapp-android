@@ -197,8 +197,10 @@ class IdentityVerificationDriver(
         val pending = store.get(key)
         val sessionMatches =
             pending != null && ret.check == check && ret.state == pending.state && pending.currency == currency
-        val codeMatches = pending?.code == null || pending.code == ret.code
-        if (!sessionMatches || nowSeconds() >= pending.expiresAtSeconds || !codeMatches) {
+        // A consumed callback is never a retry command. Preserve its recovery record, but require
+        // verify/recoverableCheck for recovery so replaying a URL cannot initiate a fresh send.
+        val unconsumed = pending?.code == null
+        if (!sessionMatches || nowSeconds() >= pending.expiresAtSeconds || !unconsumed) {
             emit(IdentityStatus.Failed(IdentityFailure.Rejected))
             return
         }

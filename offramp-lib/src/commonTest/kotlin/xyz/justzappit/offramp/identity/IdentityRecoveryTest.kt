@@ -382,6 +382,24 @@ class IdentityRecoveryTest {
             assertEquals(1, submitter.sends)
         }
 
+    @Test
+    fun `consumed callbacks cannot retry submission even after cancellation`() =
+        runTest {
+            openSession()
+            submitter.failPreparation = true
+            assertIs<IdentityStatus.Failed>(driver().resume(success(), CurrencyCode.Brl).toList().last())
+            assertNotNull(store.get(key())?.attestation)
+            driver().cancelWaiting(IdentityCheck.Liveness, CurrencyCode.Brl)
+            submitter.failPreparation = false
+            assertRejected(driver().resume(success(), CurrencyCode.Brl).toList())
+            assertEquals(0, submitter.sends)
+            assertEquals(1, redemptions)
+            assertNotNull(store.get(key())?.attestation)
+            assertIs<IdentityStatus.Done>(retry())
+            assertEquals(1, redemptions)
+            assertEquals(1, submitter.sends)
+        }
+
     private suspend fun TestScope.openSession() {
         val ready = CompletableDeferred<Unit>()
         val job =
