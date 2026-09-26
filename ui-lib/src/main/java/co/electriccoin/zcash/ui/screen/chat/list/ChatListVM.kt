@@ -180,6 +180,7 @@ class ChatListVM(
             conversations
                 ?.filter { conv ->
                     SupportChatConstants.isSupportConversation(
+                        type = conv.type,
                         displayName = conv.displayName,
                         participantIds = conv.participantIds,
                         localPublicKey = localPublicKey,
@@ -190,6 +191,7 @@ class ChatListVM(
             conversations
                 ?.filter { conv ->
                     !SupportChatConstants.isSupportConversation(
+                        type = conv.type,
                         displayName = conv.displayName,
                         participantIds = conv.participantIds,
                         localPublicKey = localPublicKey,
