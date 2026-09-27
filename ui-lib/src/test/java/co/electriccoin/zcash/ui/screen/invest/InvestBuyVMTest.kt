@@ -20,6 +20,7 @@ import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyArgs
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyState
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyVM
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestReviewState
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
 import io.mockk.every
 import io.mockk.mockk
@@ -105,6 +106,28 @@ class InvestBuyVMTest {
         }
 
     @Test
+    fun `in the user's currency, amounts are typed and shown locally and 1Click is asked in USD`() =
+        runTest {
+            val fixture = fixture(currency = EUR_CURRENCY)
+            fixture.repo.onEstimate = { _, _ -> PRICED }
+
+            val state = fixture.vm.state.value
+            assertEquals("€", state.currencySymbol)
+            assertEquals(listOf("€37", "€92", "€230"), state.presets.take(3).map { (it.label as StringResource.ByString).value })
+
+            fixture.type("100")
+            advanceUntilIdle()
+
+            // €100 ÷ 0.92, to the cent and never above what was typed
+            assertEquals(listOf(BigDecimal("108.69")), fixture.repo.estimateCalls)
+            assertEquals(
+                stringRes(R.string.invest_buy_you_get_value, "€91.09", "0.4410 NVDA"),
+                fixture.vm.state.value.ledger
+                    ?.youGet,
+            )
+        }
+
+    @Test
     fun `no price, returned or thrown, swaps the ledger for the no-price card and Try again quotes once more`() =
         runTest {
             listOf<suspend () -> BuyEstimate>(
@@ -141,7 +164,7 @@ class InvestBuyVMTest {
 
             val state = fixture.vm.state.value
             assertTrue(fixture.repo.estimateCalls.isEmpty())
-            assertEquals(stringRes(R.string.invest_buy_below_minimum, "$40.00"), state.notice)
+            assertEquals(stringRes(R.string.invest_buy_below_minimum, "$40"), state.notice)
             assertFalse(state.isNoticeDanger)
             assertFalse(state.primaryButton.isEnabled)
         }
@@ -314,7 +337,7 @@ class InvestBuyVMTest {
         }
     }
 
-    private fun TestScope.fixture(): Fixture {
+    private fun TestScope.fixture(currency: InvestCurrencyProvider = USD_CURRENCY): Fixture {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val repo = FakeInvestRepository()
         val router = mockk<NavigationRouter>(relaxed = true)
@@ -341,6 +364,7 @@ class InvestBuyVMTest {
                 investRepository = repo,
                 accountDataSource = accounts,
                 swapRepository = swap,
+                currencyProvider = currency,
                 keystoneProposalRepository = keystone,
                 navigationRouter = router,
                 clock = virtualClock(),

@@ -108,7 +108,7 @@ class InvestProgressVMTest {
             val repo = FakeInvestRepository()
             val updates = MutableSharedFlow<BuyProgress>()
             repo.onObserve = { updates }
-            val vm = InvestProgressVM(ARGS, repo, mockk(relaxed = true))
+            val vm = InvestProgressVM(ARGS, repo, USD_CURRENCY, mockk(relaxed = true))
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
             advanceUntilIdle()
 
@@ -132,7 +132,7 @@ class InvestProgressVMTest {
             Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val repo = FakeInvestRepository()
             repo.onObserve = { flowOf(BuyProgress.NeedsAttention(DEPOSIT, "c8f4806d")) }
-            val vm = InvestProgressVM(ARGS, repo, mockk(relaxed = true))
+            val vm = InvestProgressVM(ARGS, repo, USD_CURRENCY, mockk(relaxed = true))
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
             advanceUntilIdle()
 
@@ -147,7 +147,7 @@ class InvestProgressVMTest {
             val repo = FakeInvestRepository()
             repo.onObserve = { flow { throw InvestApiException.Unreachable(IOException()) } }
             val router = mockk<NavigationRouter>(relaxed = true)
-            val vm = InvestProgressVM(ARGS, repo, router)
+            val vm = InvestProgressVM(ARGS, repo, USD_CURRENCY, router)
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
             advanceUntilIdle()
 
@@ -176,7 +176,7 @@ class InvestProgressVMTest {
             val repo = FakeInvestRepository()
             repo.onObserve = { flowOf(BuyProgress.NeedsAttention(DEPOSIT, "c8f4806d")) }
             val router = mockk<NavigationRouter>(relaxed = true)
-            val vm = InvestProgressVM(ARGS, repo, router)
+            val vm = InvestProgressVM(ARGS, repo, USD_CURRENCY, router)
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
             advanceUntilIdle()
 
@@ -194,7 +194,7 @@ class InvestProgressVMTest {
             Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val repo = FakeInvestRepository()
             repo.onObserve = { flowOf(BuyProgress.Buying(DEPOSIT)) }
-            val vm = InvestProgressVM(ARGS, repo, mockk(relaxed = true))
+            val vm = InvestProgressVM(ARGS, repo, USD_CURRENCY, mockk(relaxed = true))
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
             advanceUntilIdle()
 

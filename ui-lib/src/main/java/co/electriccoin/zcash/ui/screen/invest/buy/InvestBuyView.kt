@@ -59,7 +59,7 @@ internal fun InvestBuyView(state: InvestBuyState) {
         )
         Spacer(Modifier.height(INVEST_GAP_SM.dp))
         ZappOfframpHeroAmountField(
-            symbol = stringResource(R.string.invest_buy_currency_symbol),
+            symbol = state.currencySymbol,
             state = state.amountInput,
             isError = state.isAmountError,
             balance =
@@ -189,6 +189,7 @@ private fun previewState(
     noPrice: InvestNoPriceState?,
 ) = InvestBuyState(
     title = stringRes("Buy NVIDIA"),
+    currencySymbol = "$",
     amountInput = NumberTextFieldState(NumberTextFieldInnerState.fromAmount(BigDecimal("100"))) {},
     balanceText = stringRes("0.7806 ZEC · $1,204.87"),
     presets =

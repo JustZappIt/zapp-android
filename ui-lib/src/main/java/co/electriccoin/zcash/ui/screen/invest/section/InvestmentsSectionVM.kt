@@ -13,6 +13,8 @@ import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepositor
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.NavigateToInvestUseCase
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
 import co.electriccoin.zcash.ui.screen.invest.common.toInvestMessage
@@ -40,6 +42,7 @@ internal class InvestmentsSectionVM(
     private val investRepository: InvestRepository,
     settingsRepository: InvestSettingsRepository,
     accountDataSource: AccountDataSource,
+    currencyProvider: InvestCurrencyProvider,
     private val navigateToInvest: NavigateToInvestUseCase,
     private val isInvestEnabled: Boolean,
 ) : ViewModel() {
@@ -54,6 +57,10 @@ internal class InvestmentsSectionVM(
     }
 
     private val refresh = MutableStateFlow<Refresh>(Refresh.Idle)
+
+    // Money shows in the user's currency, like the PAY balance; USD without an exchange rate.
+    private val currency =
+        currencyProvider.observe().stateIn(viewModelScope, SharingStarted.Eagerly, InvestCurrency.USD)
 
     private val isOwnAccount =
         accountDataSource.selectedAccount
@@ -83,7 +90,8 @@ internal class InvestmentsSectionVM(
                 investRepository.holdings,
                 refresh,
                 isOwnAccount.distinctUntilChanged(),
-            ) { settings, holdings, status, isOwnAccount ->
+                currency,
+            ) { settings, holdings, status, isOwnAccount, _ ->
                 if (isOwnAccount) buildState(settings, holdings, status) else InvestPayState.HIDDEN
             }.stateIn(
                 scope = viewModelScope,
@@ -143,12 +151,12 @@ internal class InvestmentsSectionVM(
                     monogram = InvestFormat.monogram(holding.asset.ticker),
                     name = holding.asset.name,
                     ticker = holding.asset.ticker,
-                    value = holding.usdValue?.let { stringRes(InvestFormat.usd(it)) },
+                    value = holding.usdValue?.let { stringRes(currency.value.format(it)) },
                     units = stringRes(InvestFormat.units(holding.units, holding.asset.ticker)),
                     onClick = ::onInvestClick,
                 )
             },
-        total = holdings.totalUsd?.let { stringRes(InvestFormat.usd(it)) },
+        total = holdings.totalUsd?.let { stringRes(currency.value.format(it)) },
         updatedAtEpochMillis = holdings.updatedAt.toEpochMilliseconds(),
         isStale = isStale,
         onHeaderClick = ::onInvestClick,

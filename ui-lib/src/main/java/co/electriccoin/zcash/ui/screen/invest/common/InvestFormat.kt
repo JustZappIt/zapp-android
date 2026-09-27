@@ -20,10 +20,6 @@ import java.util.Locale
 internal object InvestFormat {
     private val symbols = DecimalFormatSymbols(Locale.US)
 
-    /** "$1,204.87". Prices and values are in USD: that is what 1Click quotes them in. */
-    fun usd(amount: BigDecimal): String =
-        "$" + DecimalFormat("#,##0.00", symbols).format(amount.setScale(2, RoundingMode.HALF_UP))
-
     /** "0.4410 NVDA": four places, rounded down so the app never shows more than is held. */
     fun units(
         units: BigDecimal,

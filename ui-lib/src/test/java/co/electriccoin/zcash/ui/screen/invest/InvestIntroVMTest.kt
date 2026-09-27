@@ -5,10 +5,12 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettings
 import co.electriccoin.zcash.ui.common.provider.WalletBackupFlagStorageProvider
+import co.electriccoin.zcash.ui.common.provider.WalletBackupReturnRoute
 import co.electriccoin.zcash.ui.common.usecase.IsTorEnabledUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupDetail
 import co.electriccoin.zcash.ui.screen.invest.home.InvestHomeArgs
+import co.electriccoin.zcash.ui.screen.invest.intro.InvestIntroArgs
 import co.electriccoin.zcash.ui.screen.invest.intro.InvestIntroState
 import co.electriccoin.zcash.ui.screen.invest.intro.InvestIntroVM
 import io.mockk.every
@@ -49,7 +51,14 @@ class InvestIntroVMTest {
             advanceUntilIdle()
 
             verify { fixture.router.forward(WalletBackupDetail(isOpenedFromSeedBackupInfo = false)) }
+            assertEquals(InvestIntroArgs::class, returnRoute.route)
             assertEquals(0, fixture.repo.refreshHoldingsCalls)
+
+            // The backup flow saves the phrase and comes back here: setup carries on by itself.
+            backedUpFlag.value = true
+            advanceUntilIdle()
+            assertEquals(1, fixture.repo.refreshHoldingsCalls)
+            verify { fixture.router.replace(InvestHomeArgs) }
         }
 
     @Test
@@ -103,17 +112,21 @@ class InvestIntroVMTest {
         }
     }
 
+    private val returnRoute = WalletBackupReturnRoute()
+    private val backedUpFlag = MutableStateFlow(false)
+
     private fun TestScope.fixture(backedUp: Boolean): Fixture {
+        backedUpFlag.value = backedUp
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val repo = FakeInvestRepository()
         val settings = FakeInvestSettingsRepository(InvestSettings(countryCode = "ID"))
         val router = mockk<NavigationRouter>(relaxed = true)
         val backup =
             mockk<WalletBackupFlagStorageProvider>().also {
-                every { it.observe() } returns MutableStateFlow(backedUp)
+                every { it.observe() } returns backedUpFlag
             }
         val tor = mockk<IsTorEnabledUseCase>().also { every { it.observe() } returns MutableStateFlow(true) }
-        val vm = InvestIntroVM(repo, settings, backup, tor, router)
+        val vm = InvestIntroVM(repo, settings, backup, returnRoute, tor, router)
         return Fixture(vm, repo, settings, router, this)
     }
 }

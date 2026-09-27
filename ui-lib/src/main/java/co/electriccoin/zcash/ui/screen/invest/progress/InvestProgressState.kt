@@ -17,6 +17,8 @@ internal data class InvestProgressState(
     val onCheckAgain: () -> Unit,
     /** "Back to Pay". */
     val primaryButton: ButtonState,
+    /** "Contact support", with the reference in the draft, once a buy needs attention. */
+    val contactSupportButton: ButtonState?,
     /** "Remove from list", once a buy needs attention and its reference is on screen. */
     val removeButton: ButtonState?,
     val onBack: () -> Unit,

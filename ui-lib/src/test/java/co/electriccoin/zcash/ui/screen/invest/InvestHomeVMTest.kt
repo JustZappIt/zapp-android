@@ -153,7 +153,8 @@ class InvestHomeVMTest {
         val repo = FakeInvestRepository()
         val router = mockk<NavigationRouter>(relaxed = true)
         val tor = mockk<IsTorEnabledUseCase>().also { every { it.observe() } returns MutableStateFlow(torOn) }
-        val vm = InvestHomeVM(repo, tor, router, virtualClock(kotlin.time.Instant.fromEpochMilliseconds(nowMillis)))
+        val clock = virtualClock(kotlin.time.Instant.fromEpochMilliseconds(nowMillis))
+        val vm = InvestHomeVM(repo, tor, USD_CURRENCY, router, clock)
         return Fixture(vm, repo, router, this)
     }
 

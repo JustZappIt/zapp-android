@@ -23,6 +23,8 @@ import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
 import co.electriccoin.zcash.ui.screen.invest.common.toInvestMessage
@@ -58,6 +60,7 @@ internal class InvestBuyVM(
     private val investRepository: InvestRepository,
     accountDataSource: AccountDataSource,
     swapRepository: SwapRepository,
+    currencyProvider: InvestCurrencyProvider,
     private val keystoneProposalRepository: KeystoneProposalRepository,
     private val navigationRouter: NavigationRouter,
     private val clock: Clock,
@@ -93,53 +96,73 @@ internal class InvestBuyVM(
                     ?.usdPrice
             )
 
+    // Amounts are typed and shown in the user's currency; 1Click is asked in USD.
+    private val currency =
+        currencyProvider.observe().stateIn(viewModelScope, SharingStarted.Eagerly, InvestCurrency.USD)
+
     init {
         // collectLatest cancels the previous block, so the leading delay is the debounce: one quote per pause.
         viewModelScope.launch {
             amount
                 .map { it.amount }
                 .distinctUntilChanged()
-                .collectLatest { usd ->
-                    if (usd == null || usd.signum() <= 0) {
+                .collectLatest { local ->
+                    if (local == null || local.signum() <= 0) {
                         quote.update { BuyQuote.Idle }
                         return@collectLatest
                     }
-                    quote.update { if (usd >= InvestRepository.MINIMUM_USD) BuyQuote.Loading else BuyQuote.Idle }
+                    val isEnough = usdOf(local) >= InvestRepository.MINIMUM_USD
+                    quote.update { if (isEnough) BuyQuote.Loading else BuyQuote.Idle }
                     delay(AMOUNT_SETTLE_DELAY_MS)
-                    requestEstimate(usd)
+                    requestEstimate(local)
                 }
         }
     }
 
     val state: StateFlow<InvestBuyState> =
-        combine(amount, quote, isRetrying, isPreparing, combine(spendableZec, zecUsd, ::Pair)) {
+        combine(amount, quote, isRetrying, isPreparing, combine(spendableZec, zecUsd, currency, ::Triple)) {
             amt,
             current,
             retrying,
             preparing,
-            (spendable, price),
+            (spendable, price, money),
             ->
-            buildState(amt, current, retrying, preparing, spendable, price)
+            buildState(amt, current, retrying, preparing, Wallet(spendable, price), money)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
             initialValue =
-                buildState(amount.value, quote.value, false, false, spendableZec.value, zecUsd.value),
+                buildState(
+                    amount.value,
+                    quote.value,
+                    retrying = false,
+                    preparing = false,
+                    wallet = Wallet(spendableZec.value, zecUsd.value),
+                    money = currency.value,
+                ),
         )
+
+    private data class Wallet(
+        val spendable: Zatoshi,
+        val zecUsd: BigDecimal?,
+    )
 
     val reviewState: StateFlow<InvestReviewState?> =
         review
             .map { it?.let(::buildReview) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT), null)
 
-    private suspend fun requestEstimate(usd: BigDecimal) {
+    private fun usdOf(local: BigDecimal): BigDecimal = currency.value.toUsd(local)
+
+    private suspend fun requestEstimate(local: BigDecimal) {
+        val usd = usdOf(local)
         if (usd < InvestRepository.MINIMUM_USD) {
             quote.update { BuyQuote.Ready(BuyEstimate.BelowMinimum(InvestRepository.MINIMUM_USD)) }
             return
         }
         val result = investCatching { investRepository.estimateBuy(asset, usd) }
         // A figure for an amount the user has already changed is worth nothing.
-        if (amount.value.amount != usd) return
+        if (amount.value.amount != local) return
         quote.update {
             result.fold(
                 onSuccess = { BuyQuote.Ready(it) },
@@ -160,17 +183,18 @@ internal class InvestBuyVM(
         current: BuyQuote,
         retrying: Boolean,
         preparing: Boolean,
-        spendable: Zatoshi,
-        price: BigDecimal?,
+        wallet: Wallet,
+        money: InvestCurrency,
     ): InvestBuyState {
         val estimate = (current as? BuyQuote.Ready)?.estimate
-        val (notice, isDanger) = InvestBuyPresenter.notice(current)
+        val (notice, isDanger) = InvestBuyPresenter.notice(current, money)
         return InvestBuyState(
             title = stringRes(R.string.invest_buy_title, asset.name),
+            currencySymbol = money.symbol,
             amountInput = NumberTextFieldState(innerState = amt, onValueChange = ::onAmountChange),
-            balanceText = balanceText(spendable, price),
-            presets = presets(maxUsd(spendable, price)),
-            ledger = InvestBuyPresenter.ledger(current, asset, amt.amount),
+            balanceText = balanceText(wallet, money),
+            presets = presets(maxUsd(wallet.spendable, wallet.zecUsd), money),
+            ledger = InvestBuyPresenter.ledger(current, asset, amt.amount?.let(money::toUsd), money),
             noPrice =
                 if (estimate is BuyEstimate.NoPrice) {
                     InvestNoPriceState(
@@ -197,26 +221,29 @@ internal class InvestBuyVM(
     }
 
     private fun balanceText(
-        spendable: Zatoshi,
-        price: BigDecimal?,
+        wallet: Wallet,
+        money: InvestCurrency,
     ): StringResource {
-        val zec = spendable.convertZatoshiToZec()
+        val zec = wallet.spendable.convertZatoshiToZec()
         val zecText = InvestFormat.zec(zec)
-        return if (price == null) {
+        return if (wallet.zecUsd == null) {
             stringRes(zecText)
         } else {
-            stringRes(R.string.invest_buy_balance_value, zecText, InvestFormat.usd(zec.multiply(price)))
+            stringRes(R.string.invest_buy_balance_value, zecText, money.format(zec.multiply(wallet.zecUsd)))
         }
     }
 
-    private fun presets(maxUsd: BigDecimal?): List<InvestPresetState> =
+    // $40, $100 and $250 in the user's currency, rounded up to a round figure so the smallest still clears $40.
+    private fun presets(
+        maxUsd: BigDecimal?,
+        money: InvestCurrency,
+    ): List<InvestPresetState> =
         PRESETS_USD.map { usd ->
-            InvestPresetState(stringRes(InvestFormat.usd(usd).removeSuffix(".00")), isEnabled = true) {
-                setAmount(usd)
-            }
+            val local = money.presetFromUsd(usd)
+            InvestPresetState(stringRes(money.formatPreset(local)), isEnabled = true) { setAmount(local) }
         } +
             InvestPresetState(stringRes(R.string.invest_buy_preset_max), isEnabled = maxUsd != null) {
-                maxUsd?.let(::setAmount)
+                maxUsd?.let { setAmount(money.fromUsd(it).setScale(2, RoundingMode.DOWN)) }
             }
 
     // Max leaves room for the network fee and the quote's own slippage, so it doesn't land on "not enough ZEC".
@@ -233,22 +260,22 @@ internal class InvestBuyVM(
             .takeIf { it.signum() > 0 }
     }
 
-    private fun setAmount(usd: BigDecimal) = amount.update { NumberTextFieldInnerState.fromAmount(usd) }
+    private fun setAmount(local: BigDecimal) = amount.update { NumberTextFieldInnerState.fromAmount(local) }
 
     private fun onAmountChange(next: NumberTextFieldInnerState) = amount.update { next }
 
     private fun onTryAgain() {
-        val usd = amount.value.amount ?: return
+        val local = amount.value.amount ?: return
         if (isRetrying.value) return
         isRetrying.update { true }
         viewModelScope.launch {
-            requestEstimate(usd)
+            requestEstimate(local)
             isRetrying.update { false }
         }
     }
 
     private fun onReview() {
-        val usd = amount.value.amount ?: return
+        val usd = amount.value.amount?.let(::usdOf) ?: return
         if (isPreparing.value) return
         isPreparing.update { true }
         viewModelScope.launch {
@@ -286,7 +313,7 @@ internal class InvestBuyVM(
         (prepared.expiresAt - clock.now()).inWholeSeconds.coerceAtLeast(0)
 
     private fun buildReview(current: Review): InvestReviewState {
-        val figures = InvestBuyPresenter.review(current.prepared, current.remainingSeconds)
+        val figures = InvestBuyPresenter.review(current.prepared, current.remainingSeconds, currency.value)
         val isExpired = current.remainingSeconds <= 0
         return InvestReviewState(
             youSend = figures.youSend,
@@ -343,7 +370,10 @@ internal class InvestBuyVM(
                         InvestProgressArgs(
                             depositAddress = depositAddress,
                             assetId = asset.assetId,
-                            usdAmount = amount.value.amount?.toPlainString(),
+                            usdAmount =
+                                amount.value.amount
+                                    ?.let(::usdOf)
+                                    ?.toPlainString(),
                         ),
                     )
                 }.onFailure { e ->
@@ -371,7 +401,7 @@ internal class InvestBuyVM(
     }
 
     // The amount the user asked for is what a refreshed quote is for; the field can't change under the sheet.
-    private fun PreparedBuy.usdAmountRequested(): BigDecimal = amount.value.amount ?: usdOut
+    private fun PreparedBuy.usdAmountRequested(): BigDecimal = amount.value.amount?.let(::usdOf) ?: usdOut
 
     companion object {
         /** How long the amount has to sit still before it is worth a (Tor) round trip. */

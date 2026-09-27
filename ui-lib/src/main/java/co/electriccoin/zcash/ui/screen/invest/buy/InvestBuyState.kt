@@ -8,7 +8,9 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 internal data class InvestBuyState(
     /** "Buy NVIDIA". */
     val title: StringResource,
-    /** The amount in USD, the currency 1Click quotes stocks in. */
+    /** The amount's currency sign: the user's own currency, or "$" without an exchange rate. */
+    val currencySymbol: String,
+    /** The amount in [currencySymbol]'s currency; the VM asks 1Click in USD. */
     val amountInput: NumberTextFieldState,
     /** "0.7806 ZEC · $1,204.87": the spendable shielded balance the buy is paid from. */
     val balanceText: StringResource,

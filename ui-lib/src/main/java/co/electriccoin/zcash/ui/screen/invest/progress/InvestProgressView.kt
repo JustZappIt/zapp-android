@@ -72,6 +72,14 @@ internal fun InvestProgressView(state: InvestProgressState) {
             state.attention?.let {
                 Spacer(Modifier.height(INVEST_GAP_LG.dp))
                 InvestNotice(body = it.getValue(), isDanger = true) {
+                    state.contactSupportButton?.let { contact ->
+                        ZappButton(
+                            text = contact.text.getValue(),
+                            variant = ZappButtonVariant.Primary,
+                            modifier = Modifier.weight(1f),
+                            onClick = contact.onClick,
+                        )
+                    }
                     state.removeButton?.let { remove ->
                         ZappButton(
                             text = remove.text.getValue(),
@@ -143,6 +151,7 @@ private fun PreviewBuying() {
                 checkError = null,
                 onCheckAgain = {},
                 primaryButton = ButtonState(stringRes("Back to Pay")),
+                contactSupportButton = null,
                 removeButton = null,
                 onBack = {},
             ),
@@ -170,6 +179,7 @@ private fun PreviewHeld() {
                 checkError = null,
                 onCheckAgain = {},
                 primaryButton = ButtonState(stringRes("Back to Pay")),
+                contactSupportButton = null,
                 removeButton = null,
                 onBack = {},
             ),

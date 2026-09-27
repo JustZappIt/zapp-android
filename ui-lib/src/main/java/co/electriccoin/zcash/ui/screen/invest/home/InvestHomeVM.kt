@@ -16,6 +16,8 @@ import co.electriccoin.zcash.ui.common.usecase.IsTorEnabledUseCase
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyArgs
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
 import co.electriccoin.zcash.ui.screen.invest.common.UsMarketHours
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
@@ -43,6 +45,7 @@ import kotlin.time.toJavaInstant
 internal class InvestHomeVM(
     private val investRepository: InvestRepository,
     isTorEnabled: IsTorEnabledUseCase,
+    currencyProvider: InvestCurrencyProvider,
     private val navigationRouter: NavigationRouter,
     private val clock: Clock,
 ) : ViewModel() {
@@ -53,6 +56,10 @@ internal class InvestHomeVM(
     )
 
     private val status = MutableStateFlow(Status())
+
+    // Money shows in the user's currency, like the PAY balance; USD without an exchange rate.
+    private val currency =
+        currencyProvider.observe().stateIn(viewModelScope, SharingStarted.Eagerly, InvestCurrency.USD)
 
     // The last price seen per asset this session, so a stock whose quote has dried up can still say what it was.
     private val lastPrices = mutableMapOf<String, BigDecimal>()
@@ -68,7 +75,7 @@ internal class InvestHomeVM(
             investRepository.holdings,
             investRepository.pendingBuys,
             isTorEnabled.observe(),
-            status,
+            combine(status, currency) { current, _ -> current },
         ) { market, holdings, pending, torOn, current ->
             buildState(market, holdings, pending, torOn, current)
         }.stateIn(
@@ -113,7 +120,7 @@ internal class InvestHomeVM(
         holdings: Holdings,
         isStale: Boolean,
     ) = InvestHomeSummary(
-        total = holdings.totalUsd?.let { stringRes(InvestFormat.usd(it)) },
+        total = holdings.totalUsd?.let { stringRes(currency.value.format(it)) },
         rows =
             holdings.items.map { holding ->
                 InvestHoldingRowState(
@@ -121,7 +128,7 @@ internal class InvestHomeVM(
                     monogram = InvestFormat.monogram(holding.asset.ticker),
                     name = holding.asset.name,
                     ticker = holding.asset.ticker,
-                    value = holding.usdValue?.let { stringRes(InvestFormat.usd(it)) },
+                    value = holding.usdValue?.let { stringRes(currency.value.format(it)) },
                     units = stringRes(InvestFormat.units(holding.units, holding.asset.ticker)),
                     onClick = { onStockClick(holding.asset) },
                 )
@@ -164,7 +171,7 @@ internal class InvestHomeVM(
             monogram = InvestFormat.monogram(asset.ticker),
             name = asset.name,
             ticker = asset.ticker,
-            price = (price ?: last)?.let { stringRes(InvestFormat.usd(it)) },
+            price = (price ?: last)?.let { stringRes(currency.value.format(it)) },
             caption =
                 when {
                     price != null -> stringRes(R.string.invest_home_per_share)

@@ -7,6 +7,7 @@ import co.electriccoin.zcash.ui.common.invest.model.PreparedBuy
 import co.electriccoin.zcash.ui.common.invest.model.TradingSchedule
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
 import co.electriccoin.zcash.ui.screen.invest.common.UsMarketHours
 import java.math.BigDecimal
@@ -33,7 +34,12 @@ internal sealed interface BuyQuote {
 
 /** Turns quotes into the words and figures I5 and I6 show; no state of its own. */
 internal object InvestBuyPresenter {
-    fun ledger(quote: BuyQuote, asset: InvestAsset, amountUsd: BigDecimal?): InvestBuyLedger? {
+    fun ledger(
+        quote: BuyQuote,
+        asset: InvestAsset,
+        amountUsd: BigDecimal?,
+        money: InvestCurrency,
+    ): InvestBuyLedger? {
         val estimate = (quote as? BuyQuote.Ready)?.estimate
         if (estimate is BuyEstimate.NoPrice) return null
         val priced = estimate as? BuyEstimate.Priced
@@ -43,11 +49,11 @@ internal object InvestBuyPresenter {
                 priced?.let {
                     stringRes(
                         R.string.invest_buy_you_get_value,
-                        InvestFormat.usd(it.usdOut),
+                        money.format(it.usdOut),
                         InvestFormat.units(it.unitsOut, asset.ticker),
                     )
                 },
-            fees = priced?.let { feesText(it.feesUsd, amountUsd) },
+            fees = priced?.let { feesText(it.feesUsd, amountUsd, money) },
             eta =
                 priced
                     ?.etaSeconds
@@ -56,7 +62,10 @@ internal object InvestBuyPresenter {
         )
     }
 
-    fun notice(quote: BuyQuote): Pair<StringResource?, Boolean> =
+    fun notice(
+        quote: BuyQuote,
+        money: InvestCurrency,
+    ): Pair<StringResource?, Boolean> =
         when (quote) {
             BuyQuote.Idle -> {
                 null to false
@@ -73,7 +82,8 @@ internal object InvestBuyPresenter {
             is BuyQuote.Ready -> {
                 when (val estimate = quote.estimate) {
                     is BuyEstimate.BelowMinimum -> {
-                        stringRes(R.string.invest_buy_below_minimum, InvestFormat.usd(estimate.minimumUsd)) to false
+                        val minimum = money.formatPreset(money.presetFromUsd(estimate.minimumUsd))
+                        stringRes(R.string.invest_buy_below_minimum, minimum) to false
                     }
 
                     is BuyEstimate.InsufficientZec -> {
@@ -101,6 +111,7 @@ internal object InvestBuyPresenter {
     fun review(
         prepared: PreparedBuy,
         remainingSeconds: Long,
+        money: InvestCurrency,
     ): ReviewFigures {
         val ticker = prepared.asset.ticker
         // The least the buy can deliver, valued at the quote's own price per unit.
@@ -118,16 +129,16 @@ internal object InvestBuyPresenter {
             atLeast =
                 stringRes(
                     R.string.invest_buy_you_get_value_exact,
-                    InvestFormat.usd(atLeastUsd),
+                    money.format(atLeastUsd),
                     InvestFormat.units(prepared.unitsOutMin, ticker),
                 ),
             expected =
                 stringRes(
                     R.string.invest_buy_you_get_value_exact,
-                    InvestFormat.usd(prepared.usdOut),
+                    money.format(prepared.usdOut),
                     InvestFormat.units(prepared.unitsOutExpected, ticker),
                 ),
-            fees = stringRes(InvestFormat.usd(prepared.feesUsd)),
+            fees = stringRes(money.format(prepared.feesUsd)),
             countdown =
                 if (remainingSeconds > 0) {
                     stringRes(countdownText(remainingSeconds))
@@ -144,15 +155,19 @@ internal object InvestBuyPresenter {
     fun countdownText(seconds: Long): String =
         "%d:%02d".format(seconds / SECONDS_PER_MINUTE, seconds % SECONDS_PER_MINUTE)
 
-    private fun feesText(feesUsd: BigDecimal, amountUsd: BigDecimal?): StringResource {
+    private fun feesText(
+        feesUsd: BigDecimal,
+        amountUsd: BigDecimal?,
+        money: InvestCurrency,
+    ): StringResource {
         val percent =
             amountUsd
                 ?.takeIf { it.signum() > 0 }
                 ?.let { feesUsd.multiply(HUNDRED).divide(it, MathContext.DECIMAL64) }
         return if (percent == null) {
-            stringRes(InvestFormat.usd(feesUsd))
+            stringRes(money.format(feesUsd))
         } else {
-            stringRes(R.string.invest_buy_fee_value, InvestFormat.usd(feesUsd), InvestFormat.percent(percent))
+            stringRes(R.string.invest_buy_fee_value, money.format(feesUsd), InvestFormat.percent(percent))
         }
     }
 

@@ -4,6 +4,8 @@ import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.screen.invest.NavigateToInvestUseCase
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyArgs
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyVM
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProviderImpl
 import co.electriccoin.zcash.ui.screen.invest.gate.AndroidResidenceHintProvider
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestGateVM
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestUnavailableVM
@@ -17,6 +19,7 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.module.dsl.viewModelOf
+import org.koin.dsl.bind
 import org.koin.dsl.module
 import kotlin.time.Clock
 
@@ -27,12 +30,14 @@ import kotlin.time.Clock
 val investViewModelModule =
     module {
         factoryOf(::NavigateToInvestUseCase)
+        factoryOf(::InvestCurrencyProviderImpl) bind InvestCurrencyProvider::class
         factory<ResidenceHintProvider> { AndroidResidenceHintProvider(androidContext()) }
         viewModel {
             InvestmentsSectionVM(
                 investRepository = get(),
                 settingsRepository = get(),
                 accountDataSource = get(),
+                currencyProvider = get(),
                 navigateToInvest = get(),
                 isInvestEnabled = BuildConfig.IS_INVEST_ENABLED,
             )
@@ -44,6 +49,7 @@ val investViewModelModule =
             InvestHomeVM(
                 investRepository = get(),
                 isTorEnabled = get(),
+                currencyProvider = get(),
                 navigationRouter = get(),
                 clock = Clock.System,
             )
@@ -54,6 +60,7 @@ val investViewModelModule =
                 investRepository = get(),
                 accountDataSource = get(),
                 swapRepository = get(),
+                currencyProvider = get(),
                 keystoneProposalRepository = get(),
                 navigationRouter = get(),
                 clock = Clock.System,

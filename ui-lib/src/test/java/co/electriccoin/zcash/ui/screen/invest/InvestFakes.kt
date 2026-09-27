@@ -10,11 +10,14 @@ import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettings
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepository
 import co.electriccoin.zcash.ui.common.model.SwapQuote
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestScope
 import java.math.BigDecimal
 import kotlin.time.Clock
@@ -123,6 +126,11 @@ internal fun preparedBuy(
     expiresAt = expiresAt,
     quote = mockk<SwapQuote>(relaxed = true),
 )
+
+internal val USD_CURRENCY = InvestCurrencyProvider { flowOf(InvestCurrency.USD) }
+
+// 1 USD = 0.92 EUR, for checking that money shows in the user's currency.
+internal val EUR_CURRENCY = InvestCurrencyProvider { flowOf(InvestCurrency("EUR", "€", BigDecimal("0.92"))) }
 
 // 2026-09-28 (a Monday) 15:00 UTC: 11:00 in New York, inside regular hours.
 internal const val START_MILLIS = 1_790_607_600_000L

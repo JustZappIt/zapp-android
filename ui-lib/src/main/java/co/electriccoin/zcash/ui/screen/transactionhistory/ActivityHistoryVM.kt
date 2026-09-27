@@ -43,6 +43,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.util.Objects
 
+@Suppress("TooManyFunctions")
 class ActivityHistoryVM(
     getFilteredActivities: GetFilteredActivitiesUseCase,
     getTransactionFilters: GetTransactionFiltersUseCase,

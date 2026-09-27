@@ -12,7 +12,9 @@ import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
+import co.electriccoin.zcash.ui.screen.invest.common.InvestSupport
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
 import co.electriccoin.zcash.ui.screen.invest.common.toInvestMessage
 import kotlinx.coroutines.Job
@@ -32,10 +34,15 @@ import kotlinx.coroutines.launch
 internal class InvestProgressVM(
     private val args: InvestProgressArgs,
     private val investRepository: InvestRepository,
+    currencyProvider: InvestCurrencyProvider,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     private val asset = args.assetId?.let(InvestAssets::find)
-    private val amountText = args.usdAmount?.toBigDecimalOrNull()?.let(InvestFormat::usd)
+    private val usdAmount = args.usdAmount?.toBigDecimalOrNull()
+
+    // Money shows in the user's currency, like the PAY balance; USD without an exchange rate.
+    private val currency =
+        currencyProvider.observe().stateIn(viewModelScope, SharingStarted.Eagerly, InvestCurrency.USD)
 
     private val progress = MutableStateFlow<BuyProgress?>(null)
     private val checkError = MutableStateFlow<StringResource?>(null)
@@ -46,7 +53,7 @@ internal class InvestProgressVM(
     }
 
     val state: StateFlow<InvestProgressState> =
-        combine(progress, checkError, ::buildState)
+        combine(progress, checkError, currency) { current, error, _ -> buildState(current, error) }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
@@ -82,7 +89,7 @@ internal class InvestProgressVM(
     ): InvestProgressState =
         InvestProgressState(
             title = BuyProgressToSteps.title(current, asset),
-            subtitle = BuyProgressToSteps.subtitle(current, asset, amountText),
+            subtitle = BuyProgressToSteps.subtitle(current, asset, usdAmount?.let(currency.value::format)),
             isSuccess = current is BuyProgress.Held,
             steps = BuyProgressToSteps.steps(current ?: BuyProgress.SendingZec(args.depositAddress), asset),
             attention =
@@ -92,6 +99,12 @@ internal class InvestProgressVM(
             checkError = error.takeIf { current?.isFinal != true || current is BuyProgress.NeedsAttention },
             onCheckAgain = ::observe,
             primaryButton = ButtonState(stringRes(R.string.invest_back_to_pay), onClick = ::onBackToPay),
+            contactSupportButton =
+                (current as? BuyProgress.NeedsAttention)?.let { attention ->
+                    ButtonState(stringRes(R.string.invest_contact_support)) {
+                        InvestSupport.contact(navigationRouter, InvestSupport.Kind.BUY, attention.reference)
+                    }
+                },
             removeButton =
                 if (current is BuyProgress.NeedsAttention) {
                     ButtonState(stringRes(R.string.invest_progress_remove), onClick = ::onRemove)

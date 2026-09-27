@@ -19,6 +19,8 @@ internal data class InvestReceiptState(
     val isSupportOpen: Boolean,
     val onToggleSupport: () -> Unit,
     val onCopyReference: () -> Unit,
+    /** "Contact support", with the reference in the draft, when the buy needs attention. */
+    val contactSupportButton: ButtonState?,
     /** "See progress" while the buy hasn't finished. */
     val progressButton: ButtonState?,
     val onBack: () -> Unit,

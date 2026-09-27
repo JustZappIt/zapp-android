@@ -125,7 +125,7 @@ class InvestReceiptVMTest {
         val metadata = mockk<MetadataRepository>().also { coEvery { it.getSwapMetadata(DEPOSIT) } returns record }
         val router = mockk<NavigationRouter>(relaxed = true)
         val copy = mockk<CopyToClipboardUseCase>(relaxed = true)
-        val vm = InvestReceiptVM(InvestReceiptArgs(DEPOSIT), repo, metadata, copy, router)
+        val vm = InvestReceiptVM(InvestReceiptArgs(DEPOSIT), repo, metadata, USD_CURRENCY, copy, router)
         return Fixture(vm, router, copy, this)
     }
 

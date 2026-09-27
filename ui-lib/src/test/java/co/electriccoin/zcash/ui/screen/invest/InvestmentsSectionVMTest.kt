@@ -189,6 +189,7 @@ class InvestmentsSectionVMTest {
                 investRepository = repo,
                 settingsRepository = settingsRepo,
                 accountDataSource = mockk<AccountDataSource>().also { every { it.selectedAccount } returns flowOf(mockk<WalletAccount>()) },
+                currencyProvider = USD_CURRENCY,
                 navigateToInvest = NavigateToInvestUseCase(settingsRepo, router),
                 isInvestEnabled = isEnabled,
             )

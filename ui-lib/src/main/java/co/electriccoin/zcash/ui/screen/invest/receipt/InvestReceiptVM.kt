@@ -19,7 +19,10 @@ import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDateTime
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
+import co.electriccoin.zcash.ui.screen.invest.common.InvestSupport
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,12 +46,17 @@ internal class InvestReceiptVM(
     private val args: InvestReceiptArgs,
     investRepository: InvestRepository,
     metadataRepository: MetadataRepository,
+    currencyProvider: InvestCurrencyProvider,
     private val copyToClipboard: CopyToClipboardUseCase,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     private enum class Outcome { PENDING, HELD, REFUNDED, ATTENTION, EXPIRED }
 
     private val isSupportOpen = MutableStateFlow(false)
+
+    // Money shows in the user's currency, like the PAY balance; USD without an exchange rate.
+    private val currency =
+        currencyProvider.observe().stateIn(viewModelScope, SharingStarted.Eagerly, InvestCurrency.USD)
 
     private val record =
         flow { emit(investCatching { metadataRepository.getSwapMetadata(args.depositAddress) }.getOrNull()) }
@@ -62,12 +70,17 @@ internal class InvestReceiptVM(
             .catch { Twig.warn(it) { "InvestReceiptVM: status unavailable, showing the record's" } }
 
     val state: StateFlow<InvestReceiptState> =
-        combine(record, progress, investRepository.market, isSupportOpen, ::buildState)
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-                initialValue = buildState(null, null, null, false),
-            )
+        combine(
+            record,
+            progress,
+            investRepository.market,
+            combine(isSupportOpen, currency) { open, _ -> open },
+            ::buildState,
+        ).stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
+            initialValue = buildState(null, null, null, false),
+        )
 
     private fun buildState(
         record: TransactionSwapMetadata?,
@@ -83,11 +96,12 @@ internal class InvestReceiptVM(
         val price = asset?.let { a -> market?.assets?.firstOrNull { it.asset.assetId == a.assetId }?.usdPrice }
         return InvestReceiptState(
             title = titleOf(outcome, asset),
-            value = if (units != null && price != null) stringRes(InvestFormat.usd(units.multiply(price))) else null,
+            value =
+                if (units != null && price != null) stringRes(currency.value.format(units.multiply(price))) else null,
             units = units?.let { u -> asset?.let { stringRes(InvestFormat.units(u, it.ticker)) } },
             status = statusOf(outcome),
             isStatusDanger = outcome == Outcome.ATTENTION,
-            fees = record?.totalFeesUsd?.takeIf { it.signum() > 0 }?.let { stringRes(InvestFormat.usd(it)) },
+            fees = record?.totalFeesUsd?.takeIf { it.signum() > 0 }?.let { stringRes(currency.value.format(it)) },
             date =
                 record?.lastUpdated?.let {
                     stringResByDateTime(zonedDateTime = it.atZone(ZoneId.systemDefault()), useFullFormat = true)
@@ -96,6 +110,15 @@ internal class InvestReceiptVM(
             isSupportOpen = supportOpen,
             onToggleSupport = { isSupportOpen.update { !it } },
             onCopyReference = { copyToClipboard(args.depositAddress, isSensitive = false) },
+            contactSupportButton =
+                if (outcome == Outcome.ATTENTION) {
+                    val reference = (progress as? BuyProgress.NeedsAttention)?.reference ?: args.depositAddress
+                    ButtonState(stringRes(R.string.invest_contact_support)) {
+                        InvestSupport.contact(navigationRouter, InvestSupport.Kind.BUY, reference)
+                    }
+                } else {
+                    null
+                },
             progressButton =
                 if (outcome == Outcome.PENDING) {
                     ButtonState(stringRes(R.string.invest_receipt_see_progress), onClick = ::onSeeProgress)
@@ -163,5 +186,4 @@ internal class InvestReceiptVM(
         )
 
     private fun onSeeProgress() = navigationRouter.forward(InvestProgressArgs(depositAddress = args.depositAddress))
-
 }

@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
+import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappCopyableAddress
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSummaryRow
@@ -65,6 +67,15 @@ internal fun InvestReceiptView(state: InvestReceiptState) {
             ZappSummaryRow(
                 stringResource(R.string.invest_review_held_in),
                 stringResource(R.string.invest_review_held_in_value),
+            )
+        }
+        state.contactSupportButton?.let { contact ->
+            Spacer(Modifier.height(INVEST_GAP_LG.dp))
+            ZappButton(
+                text = contact.text.getValue(),
+                variant = ZappButtonVariant.Secondary,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = contact.onClick,
             )
         }
         Spacer(Modifier.height(INVEST_GAP_LG.dp))
@@ -123,6 +134,7 @@ private fun PreviewReceipt() {
                 isSupportOpen = true,
                 onToggleSupport = {},
                 onCopyReference = {},
+                contactSupportButton = null,
                 progressButton = ButtonState(stringRes("See progress")),
                 onBack = {},
             ),

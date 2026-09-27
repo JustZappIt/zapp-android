@@ -139,4 +139,5 @@
     <string name="invest_receipt_reference">Referensi</string>
     <string name="invest_receipt_copy">Salin referensi</string>
     <string name="invest_receipt_see_progress">Lihat progres</string>
+    <string name="invest_contact_support">Hubungi dukungan</string>
 </resources>

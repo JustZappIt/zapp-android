@@ -139,4 +139,5 @@
     <string name="invest_receipt_reference">Referência</string>
     <string name="invest_receipt_copy">Copiar referência</string>
     <string name="invest_receipt_see_progress">Ver andamento</string>
+    <string name="invest_contact_support">Falar com o suporte</string>
 </resources>
