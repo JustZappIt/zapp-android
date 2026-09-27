@@ -82,6 +82,18 @@ object IntentTransferSigner {
         }
     }
 
+    /**
+     * The same check [sign] makes, without signing: lets the app show what a payload would authorise, and
+     * refuse to show one that fails, before asking the user to approve. [sign] checks again anyway.
+     */
+    fun verify(
+        payload: String,
+        accountId: String,
+        expected: ExpectedTransfer,
+        nowMillis: Long,
+        maxTtlMillis: Long = DEFAULT_MAX_TTL_MILLIS,
+    ): Rejection? = check(payload, accountId, expected, nowMillis, maxTtlMillis)
+
     internal fun check(
         payload: String,
         accountId: String,
