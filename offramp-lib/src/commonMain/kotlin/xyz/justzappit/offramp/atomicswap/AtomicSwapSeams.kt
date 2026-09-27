@@ -123,4 +123,10 @@ interface AtomicSwapChainReader {
 
     /** How long a claim or refund lock holds, in seconds. */
     suspend fun lockDuration(): Long
+
+    /** The transaction that paid swap [id] out, looked for around [near] (unix seconds), or null. */
+    suspend fun payoutTx(
+        id: ByteArray,
+        near: Long
+    ): String?
 }

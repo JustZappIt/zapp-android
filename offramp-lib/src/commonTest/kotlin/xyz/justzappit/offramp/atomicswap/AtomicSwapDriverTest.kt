@@ -513,6 +513,11 @@ class AtomicSwapDriverTest {
         override suspend fun railgunAccepts(token: Address) = railgunAccepts
 
         override suspend fun lockDuration() = LOCK_SECONDS.toLong()
+
+        override suspend fun payoutTx(
+            id: ByteArray,
+            near: Long
+        ): String? = null
     }
 
     private class FakeKeys : AtomicSwapKeys {

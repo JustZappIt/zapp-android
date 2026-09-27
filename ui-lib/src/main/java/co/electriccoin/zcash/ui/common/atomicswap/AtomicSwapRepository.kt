@@ -5,8 +5,10 @@ package co.electriccoin.zcash.ui.common.atomicswap
 
 import cash.z.ecc.android.sdk.exception.SdkException
 import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -18,10 +20,13 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import xyz.justzappit.evm.rpc.RpcException
 import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.offramp.atomicswap.AtomicSwapActivity
+import xyz.justzappit.offramp.atomicswap.AtomicSwapChainReader
 import xyz.justzappit.offramp.atomicswap.AtomicSwapDriver
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOffer
+import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
 import xyz.justzappit.offramp.atomicswap.AtomicSwapStep
 
@@ -81,11 +86,15 @@ interface AtomicSwapRepository {
     suspend fun isUnderWay(): Boolean
 
     suspend fun awaitSettled()
+
+    /** Looks up, on the chain, the payout of paid swaps kept without one. */
+    fun findMissingPayouts()
 }
 
 class AtomicSwapRepositoryImpl(
     deployments: AtomicSwapDeployments,
     private val driver: AtomicSwapDriver,
+    private val chain: AtomicSwapChainReader,
     private val store: AtomicSwapStoreImpl,
     private val keys: AtomicSwapKeysImpl,
     private val zcash: AtomicSwapZcashInfo,
@@ -97,6 +106,7 @@ class AtomicSwapRepositoryImpl(
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val driverLock = Mutex()
     private val loop = AtomicSwapLoop(driver, driverLock, store, zcash, scheduler, notifier, scope)
+    private var payoutLookup: Job? = null
 
     override val state: StateFlow<AtomicSwapState> =
         combine(
@@ -161,6 +171,30 @@ class AtomicSwapRepositoryImpl(
 
     override suspend fun awaitSettled() {
         store.observeActive.first { it?.finished != false }
+    }
+
+    override fun findMissingPayouts() {
+        if (deployment == null || payoutLookup?.isActive == true) return
+        payoutLookup =
+            scope.launch {
+                history
+                    .first()
+                    .filter { it.outcome == AtomicSwapOutcome.Paid && it.payoutTx == null }
+                    .forEach { findPayout(it) }
+            }
+    }
+
+    private suspend fun findPayout(record: AtomicSwapRecord) {
+        try {
+            val tx = chain.payoutTx(record.swapId.hexToBytes(), record.finishedAt ?: record.acceptedAt) ?: return
+            store.update(record.index) { it.copy(payoutTx = tx) }
+        } catch (e: RpcException) {
+            Twig.info { "Atomic swap: no payout found for ${record.index}, ${e.message}" }
+        } catch (e: IllegalStateException) {
+            Twig.info { "Atomic swap: no payout found for ${record.index}, ${e.message}" }
+        } catch (e: StoreCorruptedException) {
+            Twig.error(e) { "Atomic swap: the store is unreadable" }
+        }
     }
 
     private suspend fun depositFee(offer: AtomicSwapOffer): Long? =

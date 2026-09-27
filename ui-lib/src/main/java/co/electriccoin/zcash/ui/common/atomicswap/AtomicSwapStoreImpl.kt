@@ -49,6 +49,16 @@ class AtomicSwapStoreImpl(
             store.set(state.copy(active = record, history = history))
         }
 
+    /** Changes the kept swap [index] in place, leaving which one is active alone. */
+    suspend fun update(
+        index: Int,
+        change: (AtomicSwapRecord) -> AtomicSwapRecord
+    ) = lock.withLock {
+        val state = state()
+        val changed = { record: AtomicSwapRecord -> if (record.index == index) change(record) else record }
+        store.set(state.copy(active = state.active?.let(changed), history = state.history.map(changed)))
+    }
+
     private suspend fun state(): State = store.get() ?: State(nextIndex = legacyNextIndex())
 
     // The first store's records are dropped, but its counter carries over: an index is never reused.

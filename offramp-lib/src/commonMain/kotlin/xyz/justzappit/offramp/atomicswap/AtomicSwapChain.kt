@@ -41,9 +41,30 @@ class AtomicSwapChain(
             .toLong()
             .also { lockDuration = it }
 
+    // Public nodes cap a log query's range, so it looks only either side of the block [near] falls in.
+    override suspend fun payoutTx(
+        id: ByteArray,
+        near: Long
+    ): String? {
+        val head = rpc.ethGetBlockByNumber()
+        val latest = hexToBigInteger(head.number).toLong()
+        val around = latest - (hexToBigInteger(head.timestamp).toLong() - near) / SECONDS_PER_BLOCK
+        return rpc
+            .ethGetLogs(
+                address = contract,
+                topics = listOf(PAID_OUT_TOPIC, id.hex()),
+                fromBlock = (around - LOG_WINDOW_BLOCKS).coerceIn(0, latest),
+                toBlock = (around + LOG_WINDOW_BLOCKS).coerceIn(0, latest),
+            ).firstOrNull { !it.removed }
+            ?.transactionHash
+    }
+
     companion object {
         private const val SHARE_BYTES = 64
         private const val ADDRESS_WORD_PADDING = 12
+        private const val SECONDS_PER_BLOCK = 12
+        private const val LOG_WINDOW_BLOCKS = 5_000L
+        private val PAID_OUT_TOPIC = keccak256("PaidOut(bytes32,address,uint256)".encodeToByteArray()).hex()
 
         /** `keccak256(maker ‖ userX ‖ userY)`, the maker's address as a 32-byte word. */
         fun swapId(
