@@ -18,6 +18,7 @@ import co.electriccoin.zcash.ui.common.invest.repository.InvestSellRepositoryImp
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepositoryImpl
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSwapAssetSource
+import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeGuard
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.binds
@@ -34,6 +35,7 @@ val investModule =
         singleOf(::InvestSettingsRepositoryImpl) bind InvestSettingsRepository::class
         singleOf(::InvestBuyCheckpointStorageProviderImpl) bind InvestBuyCheckpointStorageProvider::class
         singleOf(::InvestSellCheckpointStorageProviderImpl) bind InvestSellCheckpointStorageProvider::class
+        single { InvestTradeGuard(buys = get(), sells = get()) }
         single {
             InvestSellRepositoryImpl(
                 api = get(),
@@ -44,7 +46,7 @@ val investModule =
                 swapAssets = get(),
                 biometricRepository = get(),
                 checkpoints = get(),
-                buyCheckpoints = get(),
+                trades = get(),
                 now = get<InvestServerClock>().let { clock -> { Instant.fromEpochMilliseconds(clock.nowMillis()) } },
             )
         } bind InvestSellRepository::class
@@ -58,7 +60,7 @@ val investModule =
                 swapAssetProvider = get(),
                 synchronizerProvider = get(),
                 checkpoints = get(),
-                sellCheckpoints = get(),
+                trades = get(),
                 now = get<InvestServerClock>().let { clock -> { Instant.fromEpochMilliseconds(clock.nowMillis()) } },
             )
         } binds arrayOf(InvestRepository::class, InvestSwapAssetSource::class)

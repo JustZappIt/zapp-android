@@ -22,6 +22,7 @@ import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStora
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepositoryImpl
+import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeGuard
 import co.electriccoin.zcash.ui.common.model.DynamicSwapAsset
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.SwapAsset
@@ -92,7 +93,15 @@ class InvestRepositoryImplTest {
                     coEvery { getSynchronizer() } returns mockk { coEvery { validateAddress(any()) } returns AddressType.Transparent }
                 },
             checkpoints = checkpoints,
-            sellCheckpoints = mockk<InvestSellCheckpointStorageProvider> { every { observe() } returns sellCheckpoints },
+            trades =
+                InvestTradeGuard(
+                    buys = checkpoints,
+                    sells =
+                        mockk<InvestSellCheckpointStorageProvider> {
+                            every { observe() } returns
+                                sellCheckpoints
+                        }
+                ),
             now = { now },
             pollIntervalMillis = 1,
         )

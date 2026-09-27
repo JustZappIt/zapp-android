@@ -121,6 +121,7 @@ class InvestSellChecksTest {
         assertTrue(InvestSellChecks.isDefiniteRefusal(429, null))
         assertTrue(InvestSellChecks.isDefiniteRefusal(400, "Invalid signature"))
         assertTrue(InvestSellChecks.isDefiniteRefusal(400, "Deadline has expired"))
+        assertTrue(InvestSellChecks.isDefiniteRefusal(400, "Intent refused: invalid signature"))
         assertFalse(InvestSellChecks.isDefiniteRefusal(400, "Nonce already used"))
         assertFalse(InvestSellChecks.isDefiniteRefusal(400, "Duplicate signature"))
         assertFalse(InvestSellChecks.isDefiniteRefusal(400, "Signature already used"))
