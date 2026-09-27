@@ -120,3 +120,13 @@ sealed interface BuyProgress {
 
     val isFinal: Boolean get() = this is Held || this is Refunded || this is Expired || this is NeedsAttention
 }
+
+/**
+ * A buy or sale not yet final, stuck ones included until dismissed. While one is pending, the stock can be
+ * neither bought nor sold.
+ */
+data class PendingTrade(
+    val depositAddress: String,
+    val assetId: String,
+    val isSale: Boolean,
+)

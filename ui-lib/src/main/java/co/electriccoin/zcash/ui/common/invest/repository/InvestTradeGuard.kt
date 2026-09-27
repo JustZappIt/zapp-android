@@ -1,7 +1,10 @@
 package co.electriccoin.zcash.ui.common.invest.repository
 
+import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProvider
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -16,6 +19,12 @@ internal class InvestTradeGuard(
     private val sells: InvestSellCheckpointStorageProvider,
 ) {
     private val mutex = Mutex()
+
+    val pendingTrades: Flow<List<PendingTrade>> =
+        combine(buys.observe(), sells.observe()) { buying, selling ->
+            buying.map { PendingTrade(it.depositAddress, it.assetId, isSale = false) } +
+                selling.map { PendingTrade(it.depositAddress, it.assetId, isSale = true) }
+        }
 
     suspend fun <T> withLock(block: suspend () -> T): T = mutex.withLock { block() }
 

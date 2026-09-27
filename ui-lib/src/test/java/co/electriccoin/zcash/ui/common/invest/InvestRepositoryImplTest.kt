@@ -12,6 +12,7 @@ import co.electriccoin.zcash.ui.common.invest.model.BuyProgress
 import co.electriccoin.zcash.ui.common.invest.model.GenerateIntentRequest
 import co.electriccoin.zcash.ui.common.invest.model.GenerateIntentResponse
 import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
+import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentRequest
 import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentResponse
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
@@ -243,6 +244,18 @@ class InvestRepositoryImplTest {
             assertFailsWith<IllegalStateException> { repository.executeBuy(prepared) }
             assertNull(wallet.checkpointsAtSend)
             assertTrue(checkpoints.items.value.isEmpty())
+        }
+
+    @Test
+    fun `pending trades list buys and sales by stock`() =
+        runTest {
+            repository.executeBuy(repository.prepareBuy(nvda, BigDecimal(100)))
+            sellCheckpoints.value = listOf(InvestBuyCheckpoint("sell-deposit", "nep141:other", 0))
+
+            assertEquals(
+                listOf(PendingTrade(DEPOSIT, nvda.assetId, isSale = false), PendingTrade("sell-deposit", "nep141:other", isSale = true)),
+                repository.pendingTrades.first(),
+            )
         }
 
     @Test

@@ -12,6 +12,7 @@ import co.electriccoin.zcash.ui.common.invest.model.InvestAsset
 import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.invest.model.InvestMarket
 import co.electriccoin.zcash.ui.common.invest.model.MarketAsset
+import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import co.electriccoin.zcash.ui.common.invest.model.PreparedBuy
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
@@ -102,6 +103,7 @@ internal class InvestRepositoryImpl(
     override val holdings: StateFlow<Holdings?> = _holdings.asStateFlow()
 
     override val pendingBuys: Flow<List<String>> = checkpoints.observe().map { list -> list.map { it.depositAddress } }
+    override val pendingTrades: Flow<List<PendingTrade>> = trades.pendingTrades
 
     override suspend fun refreshMarket() {
         loadCatalog()
