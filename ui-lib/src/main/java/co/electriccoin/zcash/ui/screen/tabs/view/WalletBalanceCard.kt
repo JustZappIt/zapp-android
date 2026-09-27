@@ -72,7 +72,7 @@ import co.electriccoin.zcash.ui.screen.balances.BalanceWidgetState
 import co.electriccoin.zcash.ui.screen.balances.ShieldBreakdownState
 import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartPeriod
 import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartState
-import co.electriccoin.zcash.ui.screen.privateusd.widget.PrivateUsdBalanceLine
+import co.electriccoin.zcash.ui.screen.privateusd.widget.PrivateUsdBalanceTag
 import co.electriccoin.zcash.ui.screen.privateusd.widget.PrivateUsdWidgetState
 import kotlinx.coroutines.delay
 import java.math.BigDecimal
@@ -109,7 +109,13 @@ internal fun BalanceCard(
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 18.dp),
     ) {
-        BalanceSectionLabel(onBalanceClick = balanceState.onBalanceClick)
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            BalanceSectionLabel(onBalanceClick = balanceState.onBalanceClick)
+            privateUsd?.let {
+                Spacer(Modifier.weight(1f))
+                PrivateUsdBalanceTag(state = it, modifier = Modifier.padding(top = 18.dp, bottom = 8.dp))
+            }
+        }
 
         BalanceAmount(
             balanceState = balanceState,
@@ -156,11 +162,6 @@ internal fun BalanceCard(
                     Unit
                 }
             }
-        }
-
-        privateUsd?.let {
-            Spacer(Modifier.height(20.dp))
-            PrivateUsdBalanceLine(state = it)
         }
 
         balanceState.breakdown?.let { breakdown ->

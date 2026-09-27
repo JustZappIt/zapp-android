@@ -7,6 +7,8 @@
 
     <!-- Home -->
     <string name="private_usd_home_arriving">+ %1$s arriving</string>
+    <string name="private_usd_arriving_short">+%1$s</string>
+    <string name="private_usd_breakdown_note">Held separately and privately, on Ethereum through Railgun.</string>
     <string name="private_usd_home_blocked">%1$s needs attention</string>
     <string name="private_usd_home_loading">Loading…</string>
     <string name="private_usd_home_content_description">Open private USD</string>

@@ -13,11 +13,11 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapState
 import co.electriccoin.zcash.ui.common.privateusd.ObservePrivateUsdAvailableUseCase
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
-import co.electriccoin.zcash.ui.common.privateusd.dollars
-import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdArgs
+import co.electriccoin.zcash.ui.screen.privateusd.arrivingTag
 import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
+import co.electriccoin.zcash.ui.screen.privateusd.headline
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
 import co.electriccoin.zcash.ui.screen.privateusd.stageDetail
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -56,15 +56,9 @@ class PrivateUsdWidgetVM(
     ): PrivateUsdWidgetState {
         val balances = balance.balances
         return PrivateUsdWidgetState(
-            balance = balances?.let { dollars(it.available + it.processing).asPrivacySensitive() },
-            arriving =
-                balances?.arriving?.takeIf { it.signum() > 0 }?.let {
-                    stringRes(R.string.private_usd_home_arriving, dollars(it).asPrivacySensitive())
-                },
-            blocked =
-                balances?.blocked?.takeIf { it.signum() > 0 }?.let {
-                    stringRes(R.string.private_usd_home_blocked, dollars(it).asPrivacySensitive())
-                },
+            balance = balances?.headline(),
+            arriving = balances?.arrivingTag(),
+            isBlocked = (balances?.blocked?.signum() ?: 0) > 0,
             conversion =
                 if (swap.isUnderWay) {
                     PrivateUsdConversionBannerState(

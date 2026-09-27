@@ -10,6 +10,8 @@ data class BalanceBreakdownState(
     val subtitle: StringResource,
     val total: BalanceBreakdownItemState,
     val pools: List<BalanceBreakdownItemState>,
+    /** Null in builds without private USD. */
+    val privateUsd: BalanceBreakdownPrivateUsdState? = null,
     val positive: ButtonState,
     override val onBack: () -> Unit,
 ) : ModalBottomSheetState
@@ -19,4 +21,12 @@ data class BalanceBreakdownItemState(
     val amount: Zatoshi,
     /** Fiat equivalent; `null` when currency conversion is disabled or unavailable. */
     val fiat: StringResource?,
+)
+
+data class BalanceBreakdownPrivateUsdState(
+    val amount: StringResource,
+    val detail: StringResource?,
+    /** Screening refused some of it. */
+    val isBlocked: Boolean,
+    val onClick: () -> Unit,
 )

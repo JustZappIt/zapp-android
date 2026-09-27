@@ -9,7 +9,8 @@ internal data class PrivateUsdWidgetState(
     /** Null until a first balance is known. */
     val balance: StringResource?,
     val arriving: StringResource?,
-    val blocked: StringResource?,
+    /** Screening refused some of it. */
+    val isBlocked: Boolean,
     val conversion: PrivateUsdConversionBannerState?,
     val onClick: () -> Unit,
     val onConvertClick: () -> Unit,

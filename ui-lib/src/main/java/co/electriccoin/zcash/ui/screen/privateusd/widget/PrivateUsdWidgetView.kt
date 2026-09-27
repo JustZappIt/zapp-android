@@ -3,10 +3,9 @@
 
 package co.electriccoin.zcash.ui.screen.privateusd.widget
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,15 +17,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappCompactButton
@@ -37,18 +33,18 @@ import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
 
-/** The private USD line under the ZEC balance: what's spendable, and what's on its way in. */
+/** Private USD beside the total balance's label: what's spendable, and what's on its way in. */
 @Composable
-internal fun PrivateUsdBalanceLine(
+internal fun PrivateUsdBalanceTag(
     state: PrivateUsdWidgetState,
     modifier: Modifier = Modifier,
 ) {
     val c = ZappTheme.colors
     val description = stringResource(R.string.private_usd_home_content_description)
-    Column(
+    val style = ZappTheme.typography.groupLabel
+    Row(
         modifier =
             modifier
-                .fillMaxWidth()
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -57,50 +53,29 @@ internal fun PrivateUsdBalanceLine(
                     role = Role.Button
                     contentDescription = description
                 },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.sm),
     ) {
-        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(c.border, RectangleShape))
-        Spacer(Modifier.height(ZappTheme.spacing.lg))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ZappSectionLabel(text = stringResource(R.string.private_usd_title))
-            Spacer(Modifier.width(ZappTheme.spacing.sm))
-            BasicText(text = "›", style = ZappTheme.typography.groupLabel.copy(color = c.textSubtle))
-            Spacer(Modifier.weight(1f))
-            BasicText(
-                text = state.balance?.getValue() ?: stringResource(R.string.private_usd_home_loading),
-                style =
-                    if (state.balance != null) {
-                        ZappTheme.typography.rowTitle.copy(color = c.text, fontWeight = FontWeight.SemiBold)
-                    } else {
-                        ZappTheme.typography.caption.copy(color = c.textSubtle)
-                    },
-            )
-        }
+        ZappSectionLabel(text = stringResource(R.string.private_usd_title))
+        BasicText(
+            text = state.balance?.getValue() ?: stringResource(R.string.private_usd_home_loading),
+            style =
+                style.copy(
+                    color =
+                        when {
+                            state.balance == null -> c.textSubtle
+                            state.isBlocked -> c.danger
+                            else -> c.text
+                        },
+                    fontWeight = FontWeight.Black,
+                ),
+            maxLines = 1,
+        )
         state.arriving?.let {
-            Spacer(Modifier.height(ZappTheme.spacing.xs))
-            SubLine(text = it.getValue(), isDanger = false)
+            BasicText(text = it.getValue(), style = style.copy(color = c.accentText), maxLines = 1)
         }
-        state.blocked?.let {
-            Spacer(Modifier.height(ZappTheme.spacing.xs))
-            SubLine(text = it.getValue(), isDanger = true)
-        }
+        BasicText(text = "›", style = style.copy(color = c.textSubtle))
     }
-}
-
-@Composable
-private fun SubLine(
-    text: String,
-    isDanger: Boolean,
-) {
-    val c = ZappTheme.colors
-    BasicText(
-        text = text,
-        style =
-            ZappTheme.typography.caption.copy(
-                color = if (isDanger) c.danger else c.accentText,
-                textAlign = TextAlign.End,
-            ),
-        modifier = Modifier.fillMaxWidth(),
-    )
 }
 
 /** A conversion under way, from the home screen back to its progress. */
@@ -138,12 +113,12 @@ internal fun PrivateUsdConversionBanner(
 private fun PrivateUsdWidgetPreview() =
     ZcashTheme {
         Column {
-            PrivateUsdBalanceLine(
+            PrivateUsdBalanceTag(
                 state =
                     PrivateUsdWidgetState(
                         balance = stringRes("$12.34"),
-                        arriving = stringRes("+ $0.98 arriving"),
-                        blocked = null,
+                        arriving = stringRes("+$0.98"),
+                        isBlocked = false,
                         conversion = null,
                         onClick = {},
                         onConvertClick = {},
