@@ -5,6 +5,8 @@ import co.electriccoin.zcash.ui.common.invest.provider.IntentsSaltProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestServerClock
 import co.electriccoin.zcash.ui.common.invest.provider.KtorInvestApiProvider
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepository
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepositoryImpl
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import org.koin.core.module.dsl.singleOf
@@ -18,6 +20,7 @@ val investModule =
         singleOf(::KtorInvestApiProvider) bind InvestApiProvider::class
         single { IntentsSaltProvider(httpClientProvider = get(), serverClock = get()) }
         singleOf(::PrivateAccountKeyProvider)
+        singleOf(::InvestSettingsRepositoryImpl) bind InvestSettingsRepository::class
         single {
             PrivateAccountSession(
                 api = get(),
