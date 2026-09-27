@@ -60,6 +60,7 @@ android {
                     "src/main/res/ui/gift",
                     "src/main/res/ui/home",
                     "src/main/res/ui/insufficient_funds",
+                    "src/main/res/ui/invest",
                     "src/main/res/ui/choose_server",
                     "src/main/res/ui/integrations",
                     "src/main/res/ui/ironwood",

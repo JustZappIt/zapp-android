@@ -116,7 +116,7 @@ import org.koin.dsl.module
 
 val viewModelModule =
     module {
-        includes(chatViewModelModule, offrampViewModelModule)
+        includes(chatViewModelModule, offrampViewModelModule, investViewModelModule)
 
         viewModelOf(::WalletViewModel)
         viewModelOf(::IronwoodAnnouncementVM)
