@@ -52,6 +52,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.toList
@@ -300,6 +301,19 @@ internal class InvestSellRepositoryImplTest : InvestSellRepositoryTestBase() {
             balanceRead.complete(Unit)
             sale.await()
             assertTrue(buyCheck.await())
+        }
+
+    @Test
+    fun `a balance read that hangs fails the sale before anything is sent`() =
+        runTest {
+            val prepared = repository.prepareSell(nvda, SellAmount.All)
+            coEvery { session.balances() } coAnswers { awaitCancellation() }
+
+            assertFailsWith<InvestApiException.Unreachable> { repository.executeSell(prepared) }
+
+            assertTrue(api.submitted.isEmpty())
+            assertTrue(checkpoints.items.value.isEmpty())
+            assertTrue(trades.withLock { true }) // released
         }
 
     @Test

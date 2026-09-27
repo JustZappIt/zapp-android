@@ -34,12 +34,15 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import xyz.justzappit.evm.intents.IntentTransferSigner
 import xyz.justzappit.evm.intents.IntentTransferSigner.ExpectedTransfer
 import java.math.BigDecimal
 import java.math.BigInteger
+import java.util.concurrent.TimeoutException
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 /**
@@ -69,7 +72,8 @@ internal class InvestSellRepositoryImpl(
     private val submitting = mutableSetOf<String>()
     private val submittingMutex = Mutex()
 
-    override val pendingSells: Flow<List<String>> = checkpoints.observe().map { list -> list.map { it.depositAddress } }
+    override val pendingSells: Flow<List<String>> =
+        trades.pendingTrades.map { list -> list.orEmpty().filter { it.isSale }.map { it.depositAddress } }
 
     // Each early return is one of the estimate's outcomes, in the order the screen explains them.
     @Suppress("ReturnCount")
@@ -201,7 +205,13 @@ internal class InvestSellRepositoryImpl(
      * and the check nor start before the checkpoint that would stop it.
      */
     private suspend fun recordSale(prepared: PreparedSell): InvestBuyCheckpoint {
+        // Waiting for the lock can outlast the price hold too.
+        check(now() < prepared.expiresAt) { PRICE_EXPIRED }
         check(!trades.hasTrade(prepared.asset.assetId)) { SALE_IN_FLIGHT }
+        // Bounded, as every buy waits on this lock: a read that hangs fails the sale before anything is sent.
+        val heldBefore =
+            withTimeoutOrNull(BALANCE_READ_TIMEOUT) { heldBaseUnits(prepared.asset.assetId) }
+                ?: throw InvestApiException.Unreachable(TimeoutException("Balance read timed out"))
         val checkpoint =
             InvestBuyCheckpoint(
                 depositAddress = prepared.depositAddress,
@@ -209,7 +219,7 @@ internal class InvestSellRepositoryImpl(
                 createdAtMillis = now().toEpochMilliseconds(),
                 intentDeadlineMillis = prepared.intentDeadline.toEpochMilliseconds(),
                 baseUnits = prepared.baseUnits,
-                heldBeforeBaseUnits = heldBaseUnits(prepared.asset.assetId).toString(),
+                heldBeforeBaseUnits = heldBefore.toString(),
             )
         checkpoints.add(checkpoint)
         return checkpoint
@@ -473,5 +483,6 @@ internal class InvestSellRepositoryImpl(
 
         // A signed intent past its deadline can't run; this covers clock differences before checking the balance.
         val NOT_SOLD_GRACE = 5.minutes
+        val BALANCE_READ_TIMEOUT = 30.seconds
     }
 }

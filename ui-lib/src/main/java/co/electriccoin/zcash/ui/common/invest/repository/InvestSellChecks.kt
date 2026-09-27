@@ -214,8 +214,8 @@ internal object InvestSellChecks {
     private val DEFINITE_REFUSALS = listOf("signature", "deadline")
 
     // What a replay of an accepted intent may say ("nonce already used", "duplicate signature"): not definite.
-    // Whole words, so "refused" or "nonexistent" don't read as a replay.
-    private val REPLAYED = Regex("\\b(nonce|already|duplicate|used|exists?)\\b")
+    // Word stems, so "duplicated" and "reused" read as a replay but "refused" and "nonexistent" don't.
+    private val REPLAYED = Regex("\\b(nonce|already|duplicat\\w*|(re)?used|exist\\w*)\\b")
 
     // "Quote error. INSUFFICIENT_AMOUNT" is what 1Click answered for an unsellable amount on 2026-09-25.
     private val TOO_SMALL = listOf("insufficient_amount", "too low")

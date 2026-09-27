@@ -12,6 +12,7 @@ import co.electriccoin.zcash.ui.common.invest.model.InvestAsset
 import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.invest.model.InvestMarket
 import co.electriccoin.zcash.ui.common.invest.model.MarketAsset
+import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import co.electriccoin.zcash.ui.common.invest.model.PreparedBuy
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
@@ -101,7 +102,9 @@ internal class InvestRepositoryImpl(
 
     override val holdings: StateFlow<Holdings?> = _holdings.asStateFlow()
 
-    override val pendingBuys: Flow<List<String>> = checkpoints.observe().map { list -> list.map { it.depositAddress } }
+    override val pendingTrades: Flow<List<PendingTrade>?> = trades.pendingTrades
+    override val pendingBuys: Flow<List<String>> =
+        pendingTrades.map { list -> list.orEmpty().filterNot { it.isSale }.map { it.depositAddress } }
 
     override suspend fun refreshMarket() {
         loadCatalog()
@@ -487,9 +490,4 @@ internal class InvestRepositoryImpl(
         val EXPIRY_GRACE = 30.minutes
         val DEPOSIT_DEADLINE = 2.hours
     }
-}
-
-/** Swap assets for the curated stocks, for code that resolves a buy's swap record (status, activity). */
-interface InvestSwapAssetSource {
-    suspend fun investSwapAssets(): List<SwapAsset>
 }
