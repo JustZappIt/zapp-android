@@ -5,7 +5,7 @@
 # The published SDK, whose history is squashed and so carries its own commit ids:
 # this repository pins the mirror, not the development repo it is published from.
 # GitHub: https://github.com/JustZappIt/zappmessaging-sdk
-zappMessaging=db82ad0b710b514ed6ccf1d5afdde165af8c3fb4
+zappMessaging=1d914e08721cc81cc617ba44f4965e5c2a475c24
 
 # bare-kit is a direct clone of holepunchto/bare-kit v2.0.0 with no Zapp modifications.
 # GitHub: https://github.com/holepunchto/bare-kit
