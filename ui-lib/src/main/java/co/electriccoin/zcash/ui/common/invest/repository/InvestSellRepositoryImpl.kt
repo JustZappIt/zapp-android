@@ -14,7 +14,6 @@ import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentRequest
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpoint
-import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
@@ -61,7 +60,7 @@ internal class InvestSellRepositoryImpl(
     private val swapAssets: InvestSwapAssetSource,
     private val biometricRepository: BiometricRepository,
     private val checkpoints: InvestSellCheckpointStorageProvider,
-    private val buyCheckpoints: InvestBuyCheckpointStorageProvider,
+    private val trades: InvestTradeGuard,
     private val now: () -> Instant = { Clock.System.now() },
     private val pollIntervalMillis: Long = DEFAULT_POLL_INTERVAL_MS,
 ) : InvestSellRepository {
@@ -184,28 +183,36 @@ internal class InvestSellRepositoryImpl(
                         ),
                 ),
             )
-            // The prompt can outlast the price hold; the signature must not. A buy may have started meanwhile.
+            // The prompt can outlast the price hold; the signature must not.
             check(now() < prepared.expiresAt) { PRICE_EXPIRED }
-            check(!hasSaleInFlight(prepared.asset)) { SALE_IN_FLIGHT }
             val signed = sign(prepared)
-            // Read before anything leaves, so a sale that never reports back can still be told from one that ran.
-            val heldBefore = heldBaseUnits(assetId)
-            // Persisted BEFORE the intent leaves: once submitted it may run, and a crash must resume polling it.
-            val checkpoint =
-                InvestBuyCheckpoint(
-                    depositAddress = depositAddress,
-                    assetId = assetId,
-                    createdAtMillis = now().toEpochMilliseconds(),
-                    intentDeadlineMillis = prepared.intentDeadline.toEpochMilliseconds(),
-                    baseUnits = prepared.baseUnits,
-                    heldBeforeBaseUnits = heldBefore.toString(),
-                )
-            checkpoints.add(checkpoint)
+            val checkpoint = trades.withLock { recordSale(prepared) }
             submit(checkpoint, signed)
         } finally {
             withContext(NonCancellable) { submittingMutex.withLock { submitting -= assetId } }
         }
         return depositAddress
+    }
+
+    /**
+     * Under the trade lock: no buy of the stock may be pending (one started during the prompt counts), then the
+     * balance before the sale, then the checkpoint, written BEFORE the intent leaves: once submitted it may
+     * run, and a crash must resume polling it. In this order, a buy can neither land between the balance read
+     * and the check nor start before the checkpoint that would stop it.
+     */
+    private suspend fun recordSale(prepared: PreparedSell): InvestBuyCheckpoint {
+        check(!trades.hasTrade(prepared.asset.assetId)) { SALE_IN_FLIGHT }
+        val checkpoint =
+            InvestBuyCheckpoint(
+                depositAddress = prepared.depositAddress,
+                assetId = prepared.asset.assetId,
+                createdAtMillis = now().toEpochMilliseconds(),
+                intentDeadlineMillis = prepared.intentDeadline.toEpochMilliseconds(),
+                baseUnits = prepared.baseUnits,
+                heldBeforeBaseUnits = heldBaseUnits(prepared.asset.assetId).toString(),
+            )
+        checkpoints.add(checkpoint)
+        return checkpoint
     }
 
     private suspend fun sign(prepared: PreparedSell): IntentTransferSigner.SignResult.Signed {
@@ -406,10 +413,7 @@ internal class InvestSellRepositoryImpl(
     private suspend fun checkpoint(depositAddress: String): InvestBuyCheckpoint? =
         checkpoints.observe().first().firstOrNull { it.depositAddress == depositAddress }
 
-    /** Any sale of [asset] not yet final, or a buy of it, whose shares would move the balance a sale checks. */
-    private suspend fun hasSaleInFlight(asset: InvestAsset): Boolean =
-        checkpoints.observe().first().any { it.assetId == asset.assetId } ||
-            buyCheckpoints.observe().first().any { it.assetId == asset.assetId }
+    private suspend fun hasSaleInFlight(asset: InvestAsset): Boolean = trades.hasTrade(asset.assetId)
 
     private suspend fun resolve(
         asset: InvestAsset,

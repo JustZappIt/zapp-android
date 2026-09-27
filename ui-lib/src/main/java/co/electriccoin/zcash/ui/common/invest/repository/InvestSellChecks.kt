@@ -164,7 +164,7 @@ internal object InvestSellChecks {
     ): Boolean {
         val text = message.orEmpty().lowercase()
         return status == HTTP_TOO_MANY_REQUESTS ||
-            (status == HTTP_BAD_REQUEST && DEFINITE_REFUSALS.any { it in text } && REPLAYED.none { it in text })
+            (status == HTTP_BAD_REQUEST && DEFINITE_REFUSALS.any { it in text } && !REPLAYED.containsMatchIn(text))
     }
 
     /** The quote for selling [baseUnits] of [asset] from the private account to [recipient]'s shielded address. */
@@ -214,7 +214,8 @@ internal object InvestSellChecks {
     private val DEFINITE_REFUSALS = listOf("signature", "deadline")
 
     // What a replay of an accepted intent may say ("nonce already used", "duplicate signature"): not definite.
-    private val REPLAYED = listOf("nonce", "already", "duplicate", "used", "exist")
+    // Whole words, so "refused" or "nonexistent" don't read as a replay.
+    private val REPLAYED = Regex("\\b(nonce|already|duplicate|used|exists?)\\b")
 
     // "Quote error. INSUFFICIENT_AMOUNT" is what 1Click answered for an unsellable amount on 2026-09-25.
     private val TOO_SMALL = listOf("insufficient_amount", "too low")

@@ -27,6 +27,7 @@ import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSellRepositoryImpl
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSwapAssetSource
+import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeGuard
 import co.electriccoin.zcash.ui.common.model.DynamicSwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapBlockchain
@@ -74,6 +75,11 @@ internal abstract class InvestSellRepositoryTestBase {
     protected val api = FakeApi()
     protected val checkpoints = FakeCheckpoints()
     protected val buyCheckpoints = MutableStateFlow<List<InvestBuyCheckpoint>>(emptyList())
+    protected val trades =
+        InvestTradeGuard(
+            buys = mockk<InvestBuyCheckpointStorageProvider> { every { observe() } returns buyCheckpoints },
+            sells = checkpoints
+        )
     protected val session = mockk<PrivateAccountSession>()
     protected val biometrics = mockk<BiometricRepository>(relaxed = true)
     protected val holdings = MutableStateFlow("440974000000000000")
@@ -106,7 +112,7 @@ internal abstract class InvestSellRepositoryTestBase {
                 },
             biometricRepository = biometrics,
             checkpoints = checkpoints,
-            buyCheckpoints = mockk<InvestBuyCheckpointStorageProvider> { every { observe() } returns buyCheckpoints },
+            trades = trades,
             now = { now },
             pollIntervalMillis = 1,
         )

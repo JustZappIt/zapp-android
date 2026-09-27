@@ -49,9 +49,13 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import xyz.justzappit.evm.intents.IntentTransferSigner
 import xyz.justzappit.offramp.account.SeedPhraseSource
@@ -59,6 +63,7 @@ import java.math.BigDecimal
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -272,6 +277,29 @@ internal class InvestSellRepositoryImplTest : InvestSellRepositoryTestBase() {
             assertFailsWith<IllegalStateException> { repository.prepareSell(nvda, SellAmount.All) }
             assertTrue(api.submitted.isEmpty())
             assertTrue(checkpoints.items.value.isEmpty())
+        }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `a buy can't start between the sale's balance read and its checkpoint`() =
+        runTest {
+            val prepared = repository.prepareSell(nvda, SellAmount.All)
+            val balanceRead = CompletableDeferred<Unit>()
+            coEvery { session.balances() } coAnswers {
+                balanceRead.await()
+                BalancesResponse(listOf(AccountBalance(tokenId = nvda.assetId, available = holdings.value, source = "private")))
+            }
+
+            val sale = async { repository.executeSell(prepared) }
+            runCurrent()
+            // What a buy does before writing its checkpoint: it has to wait for the sale's.
+            val buyCheck = async { trades.withLock { trades.hasSale(nvda.assetId) } }
+            runCurrent()
+            assertFalse(buyCheck.isCompleted)
+
+            balanceRead.complete(Unit)
+            sale.await()
+            assertTrue(buyCheck.await())
         }
 
     @Test
