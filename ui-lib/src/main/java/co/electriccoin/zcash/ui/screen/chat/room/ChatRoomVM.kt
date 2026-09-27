@@ -66,6 +66,8 @@ import co.electriccoin.zcash.ui.screen.chat.model.byPublicKey
 import co.electriccoin.zcash.ui.screen.chat.model.mergedWithHistory
 import co.electriccoin.zcash.ui.screen.chat.model.plusMessage
 import co.electriccoin.zcash.ui.screen.chat.model.reconciled
+import co.electriccoin.zcash.ui.screen.chat.model.replyWireContent
+import co.electriccoin.zcash.ui.screen.chat.model.replyWireContentType
 import co.electriccoin.zcash.ui.screen.chat.model.resolveDisplayName
 import co.electriccoin.zcash.ui.screen.chat.model.resolveSenderName
 import co.electriccoin.zcash.ui.screen.chat.model.resolveSenderNames
@@ -458,6 +460,7 @@ class ChatRoomVM(
                 ),
             messages = resolvedMessages,
             firstUnreadMessageId = firstUnreadMessageId,
+            onQuotedMessageUnavailable = ::onQuotedMessageUnavailable,
             mediaTransferProgress = mediaTransferProgress,
             localPublicKey = localPublicKey,
             fiatRate = fiatRate,
@@ -485,7 +488,7 @@ class ChatRoomVM(
                         resolvedReply?.let { msg ->
                             ChatRoomReplyPreviewState(
                                 senderName = replySenderName(msg),
-                                content = msg.content.take(REPLY_PREVIEW_MAX_LENGTH),
+                                original = msg,
                                 onDismiss = ::dismissReply,
                             )
                         },
@@ -710,9 +713,11 @@ class ChatRoomVM(
     }
 
     private suspend fun loadConversation() {
-        // The repository owns the conversation cache; ensure it is populated, then [conversation]
+        // The repository owns the conversation cache; ensure it holds this room, then [conversation]
         // (derived from it) emits this room's conversation and tracks member/rename/delete edits.
-        if (chatConversationsRepository.conversations.value.isNullOrEmpty()) {
+        // A room opened straight after its conversation was created is not cached yet.
+        val cached = chatConversationsRepository.conversations.value
+        if (cached == null || cached.none { it.id == conversationId }) {
             chatConversationsRepository.refresh()
         }
     }
@@ -1100,6 +1105,11 @@ class ChatRoomVM(
         replyingTo.value = null
     }
 
+    // The room holds only its most recent page, so the original can be older or never received.
+    private fun onQuotedMessageUnavailable() {
+        _effects.tryEmit(ChatRoomEffect.ShowToast(stringRes(R.string.chat_room_toast_original_message_unavailable)))
+    }
+
     private fun replySenderName(message: ChatMessage): String =
         if (message.isFromMe) {
             application.getString(R.string.chat_room_reply_sender_self)
@@ -1389,7 +1399,8 @@ class ChatRoomVM(
                 content = text,
                 replyToId = replyTo?.id,
                 replyToSenderName = replyTo?.let { replySenderName(it) },
-                replyToContent = replyTo?.content?.take(REPLY_PREVIEW_MAX_LENGTH),
+                replyToContent = replyTo?.let(::replyWireContent),
+                replyToContentType = replyTo?.let(::replyWireContentType),
             )
         addOutgoingMessage(optimisticMessage)
 
@@ -1399,6 +1410,7 @@ class ChatRoomVM(
             replyToId = optimisticMessage.replyToId,
             replyToSenderName = optimisticMessage.replyToSenderName,
             replyToContent = optimisticMessage.replyToContent,
+            replyToContentType = optimisticMessage.replyToContentType,
         ).onSuccess { zmMessage ->
             val persistedMessage = ChatMessage.from(zmMessage)
             val deliveryStatus =
@@ -1574,7 +1586,6 @@ class ChatRoomVM(
         const val STATUS_READ = "read"
         const val PEER_STATUS_ONLINE = "online"
         const val FILE_FALLBACK_NAME = "File"
-        const val REPLY_PREVIEW_MAX_LENGTH = 100
         const val SHORT_KEY_THRESHOLD = 12
         const val SHORT_KEY_PREFIX = 6
         const val SHORT_KEY_SUFFIX = 4

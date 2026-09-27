@@ -28,6 +28,13 @@ class QuoteResponseDtoTest {
     }
 
     @Test
+    fun dryQuoteParsesWithoutDeadline() {
+        val response = Json.decodeFromString<QuoteResponseDto>(DRY_QUOTE_JSON.without("deadline"))
+
+        assertNull(response.quote.deadline)
+    }
+
+    @Test
     fun executableQuoteParsesDepositAddress() {
         val response = Json.decodeFromString<QuoteResponseDto>(EXECUTABLE_QUOTE_JSON)
 
@@ -42,8 +49,9 @@ class QuoteResponseDtoTest {
     }
 
     /**
-     * Everything but `depositAddress` and `timeEstimate` stays mandatory. If 1Click ever drops one of
-     * these from a dry response it fails here, rather than as a preview that silently never loads.
+     * Everything but `depositAddress`, `deadline` and `timeEstimate` stays mandatory. If 1Click ever
+     * drops one of these from a dry response it fails here, rather than as a preview that silently
+     * never loads.
      */
     @Test
     fun dryQuoteStillRequiresTheRestOfTheQuote() {
@@ -55,8 +63,7 @@ class QuoteResponseDtoTest {
             "amountOut",
             "amountOutFormatted",
             "amountOutUsd",
-            "minAmountOut",
-            "deadline"
+            "minAmountOut"
         ).forEach { field ->
             assertFailsWith<SerializationException>("a dry quote without $field must not parse") {
                 Json.decodeFromString<QuoteResponseDto>(DRY_QUOTE_JSON.without(field))
@@ -64,9 +71,13 @@ class QuoteResponseDtoTest {
         }
     }
 
-    /** Drops a whole `"name": ...` line, un-dangling the comma when the dropped field closed its object. */
+    // Drops the last matching `"name": ...` line (quote.deadline, not quoteRequest.deadline), un-dangling
+    // the comma when the dropped field closed its object.
     private fun String.without(name: String): String {
-        val kept = lines().filterNot { it.trimStart().startsWith("\"$name\"") }
+        val allLines = lines()
+        val dropIndex = allLines.indexOfLast { it.trimStart().startsWith("\"$name\"") }
+        check(dropIndex >= 0) { "no \"$name\" line found" }
+        val kept = allLines.filterIndexed { index, _ -> index != dropIndex }
         return kept
             .mapIndexed { index, line ->
                 if (kept.getOrNull(index + 1)?.trimStart()?.startsWith("}") == true) {

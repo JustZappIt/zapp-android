@@ -1,7 +1,7 @@
 // GENERATED FILE — DO NOT EDIT.
 //
 // Vendored verbatim from zappMessaging server/blind-relay.js
-// Source commit: 20eef1c49bff6f2ad3c76002a09a78ae2888cc7b (pinned in .zapp-deps)
+// Source commit: db82ad0b710b514ed6ccf1d5afdde165af8c3fb4 (pinned in .zapp-deps)
 //
 // Edit the original in zappMessaging, then regenerate:
 //   node scripts/vendor-blind-push-server.js

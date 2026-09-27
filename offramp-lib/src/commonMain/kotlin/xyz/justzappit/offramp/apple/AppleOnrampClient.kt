@@ -16,8 +16,7 @@ import xyz.justzappit.evm.math.decimalToPlainString
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
 import xyz.justzappit.offramp.config.P2pNetworkConfig
-import xyz.justzappit.offramp.onramp.CustodialOnrampClient
-import xyz.justzappit.offramp.onramp.CustodialOnrampDriver
+import xyz.justzappit.offramp.onramp.DirectOnrampDriver
 import xyz.justzappit.offramp.onramp.Erc4337OnrampZecTransferGateway
 import xyz.justzappit.offramp.onramp.FakeOnrampZecDeliveryDriver
 import xyz.justzappit.offramp.onramp.FundsLocation
@@ -27,14 +26,15 @@ import xyz.justzappit.offramp.onramp.OnrampCheckpoint
 import xyz.justzappit.offramp.onramp.OnrampDestination
 import xyz.justzappit.offramp.onramp.OnrampDeviceSignals
 import xyz.justzappit.offramp.onramp.OnrampDeviceSignalsProvider
+import xyz.justzappit.offramp.onramp.OnrampDriver
 import xyz.justzappit.offramp.onramp.OnrampFailureCode
 import xyz.justzappit.offramp.onramp.OnrampIntentAmount
 import xyz.justzappit.offramp.onramp.OnrampPaymentInstruction
 import xyz.justzappit.offramp.onramp.OnrampPhase
 import xyz.justzappit.offramp.onramp.OnrampQuote
-import xyz.justzappit.offramp.onramp.OnrampRecipientProvider
-import xyz.justzappit.offramp.onramp.OnrampRequestSigner
-import xyz.justzappit.offramp.onramp.OnrampSignerProvider
+import xyz.justzappit.offramp.onramp.OnrampScreeningClient
+import xyz.justzappit.offramp.onramp.OnrampScreeningConfig
+import xyz.justzappit.offramp.onramp.OnrampScreeningSessionProvider
 import xyz.justzappit.offramp.onramp.OnrampStatus
 import xyz.justzappit.offramp.onramp.OnrampUsdcBalanceReader
 import xyz.justzappit.offramp.onramp.OnrampZecDeliveryCheckpoint
@@ -57,16 +57,23 @@ import xyz.justzappit.offramp.onramp.orderId
 import xyz.justzappit.offramp.onramp.phase
 import xyz.justzappit.offramp.onramp.restartedAfterRefund
 import xyz.justzappit.offramp.p2p.CurrencyCode
+import xyz.justzappit.offramp.p2p.OnChainOrderReader
+import xyz.justzappit.offramp.p2p.SubgraphClient
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.p2p.getUsdcBalance
 import kotlin.time.Clock
 
-/** Swift-friendly facade over the shared custodial on-ramp and durable ZEC delivery drivers. */
+/**
+ * Swift-friendly facade over the direct on-ramp driver and the durable ZEC delivery driver.
+ *
+ * The BUY is placed from the user's own smart account straight on the Diamond, exactly as on
+ * Android, so it is sized by this wallet's reputation, never by an operator's.
+ */
 @Suppress("TooManyFunctions") // The facade mirrors the complete order and delivery protocol surfaces for Swift.
 class AppleOnrampClient private constructor(
     private val network: P2pNetworkConfig,
     private val smartAccountProvider: SmartOfframpAccountProvider,
-    private val driver: CustodialOnrampDriver,
+    private val driver: OnrampDriver,
     private val deliveryDriver: OnrampZecDeliveryDriver,
     private val swapGateway: OnrampZecSwapGateway?,
     private val checkpoints: AppleOnrampCheckpointStore,
@@ -260,18 +267,30 @@ class AppleOnrampClient private constructor(
         }
 
     companion object {
+        /**
+         * Mirrors Android's `RepositoryModule` wiring of [DirectOnrampDriver] line for line, with the
+         * relay key and the payee cache read from the off-ramp's own encrypted file: one wallet
+         * holds one relay identity, and the P2P history reads both rails' payees from one book.
+         *
+         * An unconfigured screening service closes the corridor rather than placing unscreened
+         * orders — [DirectOnrampDriver.limits] says why. The three callbacks are the driver's
+         * logging hooks, surfaced so Swift can log what would otherwise vanish.
+         */
         @Throws(Exception::class)
         @Suppress("LongParameterList")
         suspend fun create(
             account: AppleBaseAccount,
-            onrampBaseUrl: String,
             storage: AppleOnrampStorage,
+            relayStorage: AppleOfframpStorage,
             deviceSignals: AppleOnrampDeviceSignals,
-            onrampAppId: String = OnrampRequestSigner.DEFAULT_APP_ID,
+            screeningApiUrl: String,
+            screeningKeyHex: String,
             swapGateway: AppleOnrampZecSwapGateway? = null,
             useFakeDeliveryDriver: Boolean = false,
+            onUnrecognisedRevert: (String) -> Unit = {},
+            onLinkFailed: (String) -> Unit = {},
+            onScreeningUnavailable: (String) -> Unit = {},
         ): AppleOnrampClient {
-            require(onrampBaseUrl.isNotBlank()) { "onrampBaseUrl must not be blank" }
             val network = account.network
             val checkpoints = AppleOnrampCheckpointStore(storage)
             val swap = swapGateway?.let(::AppleOnrampSwapGatewayAdapter)
@@ -301,27 +320,50 @@ class AppleOnrampClient private constructor(
                         NoRouteOnrampZecDeliveryDriver()
                     }
                 }
-            val client =
-                CustodialOnrampClient(
-                    httpClient = account.httpClient,
-                    baseUrl = onrampBaseUrl,
-                    signerProvider = OnrampSignerProvider { OnrampRequestSigner(account.owner, onrampAppId) },
-                    appId = onrampAppId,
-                )
+            val nowMillis = { Clock.System.now().toEpochMilliseconds() }
+            val screening =
+                OnrampScreeningConfig(
+                    apiUrl = screeningApiUrl,
+                    encryptionKeyHex = screeningKeyHex,
+                    orderSource = ORDER_SOURCE,
+                ).takeIf { it.isConfigured }
+                    ?.let { config ->
+                        OnrampScreeningClient(
+                            httpClient = account.httpClient,
+                            config = config,
+                            deviceSignals = OnrampDeviceSignalsProvider { deviceSignals.collect().toShared() },
+                            screeningSession = OnrampScreeningSessionProvider.ABSENT,
+                            nowMillis = nowMillis,
+                            onLinkFailed = onLinkFailed,
+                            onScreeningUnavailable = onScreeningUnavailable,
+                        )
+                    }
             return AppleOnrampClient(
                 network = network,
                 smartAccountProvider = account.smartAccounts,
                 driver =
-                    CustodialOnrampDriver(
-                        client = client,
-                        deviceSignals = OnrampDeviceSignalsProvider { deviceSignals.collect().toShared() },
-                        recipientProvider = OnrampRecipientProvider { account.smartAccounts.resolve().address },
+                    DirectOnrampDriver(
+                        rpc = account.rpc,
+                        network = network,
+                        submitters = account.submitters,
+                        accountProvider = account.accountProvider,
+                        subgraph = SubgraphClient(account.httpClient, network.subgraphUrl),
+                        // The chain, not the indexer; DirectOnrampDriver's own param says why.
+                        orderReader = OnChainOrderReader(account.rpc, network),
+                        screening = screening,
+                        relayIdentityStore = AppleRelayIdentityStore(relayStorage),
+                        orderRecipientUpiCache = AppleOrderRecipientCache(relayStorage),
+                        nowMillis = nowMillis,
+                        onUnrecognisedRevert = onUnrecognisedRevert,
                     ),
                 deliveryDriver = delivery,
                 swapGateway = swap,
                 checkpoints = checkpoints,
             )
         }
+
+        /** What the screening record says filed it; the service scopes its reading per product. */
+        private const val ORDER_SOURCE = "zapp-ios"
     }
 }
 
@@ -532,7 +574,7 @@ private fun AppleOnrampDeviceSignalsRecord.toShared() =
         seonSession = seonSession,
     )
 
-private fun OnrampQuote.toApple() =
+internal fun OnrampQuote.toApple() =
     AppleOnrampQuote(
         quoteId = quoteId,
         currencyCode = currency.code,
@@ -544,7 +586,7 @@ private fun OnrampQuote.toApple() =
         expiresAtMillis = expiresAtMillis,
     )
 
-private fun AppleOnrampQuote.toShared() =
+internal fun AppleOnrampQuote.toShared() =
     OnrampQuote(
         quoteId = quoteId,
         currency = CurrencyCode.fromCode(currencyCode),
@@ -567,7 +609,7 @@ private fun ValidatedZecSwapQuote.toApple() =
         costBasisPoints = costBasisPoints,
     )
 
-private fun OnrampStatus.toApple(): AppleOnrampStatus {
+internal fun OnrampStatus.toApple(): AppleOnrampStatus {
     val payment = this as? OnrampStatus.AwaitingPayment
     val completed = this as? OnrampStatus.Completed
     val instruction = payment?.instruction
@@ -589,6 +631,7 @@ private fun OnrampStatus.toApple(): AppleOnrampStatus {
         id = id,
         orderId = orderId,
         failureCode = (this as? OnrampStatus.Failed)?.code?.name,
+        failureDetail = (this as? OnrampStatus.Failed)?.detail,
         instructionKind = instruction?.kind,
         instructionAddress = instruction?.address,
         instructionPayload = instruction?.payload,

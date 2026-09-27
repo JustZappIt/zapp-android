@@ -219,6 +219,9 @@ val repositoryModule =
                                     onLinkFailed = { reason ->
                                         Twig.warn { "Screening record never linked to its order: $reason" }
                                     },
+                                    onScreeningUnavailable = { reason ->
+                                        Twig.warn { "Screening record never filed for its order: $reason" }
+                                    },
                                 )
                             },
                     relayIdentityStore = get(),

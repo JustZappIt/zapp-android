@@ -413,8 +413,8 @@ class DirectOnrampDriver(
             } catch (e: CancellationException) {
                 throw e
             } catch (ignored: Exception) {
-                // Fail-open, and only here: a screening service we cannot reach must not stop an
-                // order, but an explicit rejection must.
+                // Fail-open: the client already reports an intake it could not file; this covers
+                // the reads around it. An explicit rejection, and only that, stops the order.
                 return ScreeningResult.Unavailable
             }
         return when (outcome) {

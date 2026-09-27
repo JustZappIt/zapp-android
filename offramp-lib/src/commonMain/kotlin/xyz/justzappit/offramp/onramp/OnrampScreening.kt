@@ -14,6 +14,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -43,9 +44,15 @@ import kotlin.io.encoding.Base64
 data class OnrampScreeningConfig(
     val apiUrl: String,
     val encryptionKeyHex: String,
+    /** Which app filed the record. The service reads it per product, so each platform names itself. */
+    val orderSource: String = DEFAULT_ORDER_SOURCE,
 ) {
     val isConfigured: Boolean
         get() = apiUrl.isNotBlank() && encryptionKeyHex.isNotBlank()
+
+    companion object {
+        const val DEFAULT_ORDER_SOURCE = "zapp-android"
+    }
 }
 
 /**
@@ -105,6 +112,7 @@ sealed interface OnrampScreeningOutcome {
  * the placer is the user's own smart account, so the app has to file it and the user has to sign
  * it, or it matches nothing.
  */
+@Suppress("TooManyFunctions")
 class OnrampScreeningClient(
     private val httpClient: HttpClient,
     private val config: OnrampScreeningConfig,
@@ -117,14 +125,38 @@ class OnrampScreeningClient(
      * here is otherwise indistinguishable from success.
      */
     private val onLinkFailed: (String) -> Unit = {},
+    /**
+     * Where every intake that filed nothing goes — a refusal, a body that could not be read, a
+     * service that could not be reached. Fail-open like the link: the order still places — but a
+     * record that was never filed is the same never-accepted order, and from the screen each of
+     * these is indistinguishable from an approval.
+     */
+    private val onScreeningUnavailable: (String) -> Unit = {},
 ) {
-    @Suppress("ReturnCount")
     suspend fun screenBuyOrder(
         signer: OnrampScreeningSigner,
         order: OnrampScreeningOrder,
         country: String?,
     ): OnrampScreeningOutcome {
         require(config.isConfigured) { "screening is not configured" }
+        return try {
+            file(signer, order, country)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            // Fail-open, and never silently: a service we cannot reach or read must not stop an
+            // order, but the record it never filed is the order that is never accepted.
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            unavailable("$PATH_ACTIVITY_LOGS failed: ${e::class.simpleName}")
+        }
+    }
+
+    private suspend fun file(
+        signer: OnrampScreeningSigner,
+        order: OnrampScreeningOrder,
+        country: String?,
+    ): OnrampScreeningOutcome {
         // The encrypted payload, AAD, and outer envelope share this exact millisecond timestamp.
         val bodyMillis = nowMillis()
         val userAddress = signer.subject.lowercaseHex
@@ -151,23 +183,35 @@ class OnrampScreeningClient(
                     ),
                 )
             }
-        if (!response.status.isSuccess()) return OnrampScreeningOutcome.Unavailable
+        if (!response.status.isSuccess()) return unavailable("$PATH_ACTIVITY_LOGS answered " + response.status)
+        return outcomeOf(Json.parseToJsonElement(response.bodyAsText()).jsonObject)
+    }
 
-        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
-        // ☠ Only an explicit `approved: false` rejects. A 200 whose body simply lacks the field —
-        // an envelope change, a proxy answering for the service — is "answered badly", not a
-        // rejection, and gets the same Unavailable treatment as a missing `activity_log_id` two
-        // lines down and a body that does not parse at all. Defaulting the absent field to `false`
-        // would stop every order on the corridor the first time the schema drifted, worded to the
-        // user as though they had been turned down.
-        val approved =
-            body["approved"]?.jsonPrimitive?.content?.toBooleanStrictOrNull()
-                ?: return OnrampScreeningOutcome.Unavailable
-        if (!approved) {
-            return OnrampScreeningOutcome.Rejected(body["message"]?.jsonPrimitive?.content.orEmpty())
+    /**
+     * ☠ Only an explicit `approved: false` rejects. A 200 whose body simply lacks the field —
+     * an envelope change, a proxy answering for the service — is "answered badly", not a
+     * rejection, and gets the same Unavailable treatment as a missing `activity_log_id` and a
+     * body that does not parse at all. Defaulting the absent field to `false` would stop every
+     * order on the corridor the first time the schema drifted, worded to the user as though they
+     * had been turned down.
+     */
+    private fun outcomeOf(body: JsonObject): OnrampScreeningOutcome {
+        val approved = body["approved"]?.jsonPrimitive?.content?.toBooleanStrictOrNull()
+        if (approved == false) {
+            val message = body["message"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.content
+            return OnrampScreeningOutcome.Rejected(message.orEmpty())
         }
-        val logId = body["activity_log_id"] ?: return OnrampScreeningOutcome.Unavailable
-        return OnrampScreeningOutcome.Approved(logId)
+        val logId = body["activity_log_id"]?.takeUnless { it is JsonNull }
+        return when {
+            approved != true -> unavailable("$PATH_ACTIVITY_LOGS answered 200 without an approval")
+            logId == null -> unavailable("$PATH_ACTIVITY_LOGS approved without an activity_log_id")
+            else -> OnrampScreeningOutcome.Approved(logId)
+        }
+    }
+
+    private fun unavailable(reason: String): OnrampScreeningOutcome {
+        onScreeningUnavailable(reason)
+        return OnrampScreeningOutcome.Unavailable
     }
 
     /**
@@ -204,7 +248,7 @@ class OnrampScreeningClient(
 
     /**
      * `{action}:{signingAddress}:{subjectAddress}:{timestamp}` over EIP-191, with the timestamp in
-     * **seconds** — the variable-length form [OnrampRequestSigner] uses, not the fixed-length
+     * **seconds** — the variable-length form (the header carries the message's byte length), not the fixed-length
      * `:\n32` form the Reclaim init and UserOp hashes use. The two recover different addresses.
      */
     internal fun signedHeaders(signer: OnrampScreeningSigner, action: String): Map<String, String> {
@@ -245,7 +289,7 @@ class OnrampScreeningClient(
                     put("payment_method", order.paymentMethod)
                     put("estimated_processing_time", order.estimatedProcessingTime)
                     put("order_timestamp", timestampMillis)
-                    put("order_source", ORDER_SOURCE)
+                    put("order_source", config.orderSource)
                 }
                 put("device_details", deviceJson())
             }
@@ -313,7 +357,6 @@ class OnrampScreeningClient(
 
     private companion object {
         const val SCREENING_TYPE = "buy_order"
-        const val ORDER_SOURCE = "zapp-android"
         const val ACTION_ACTIVITY_LOG = "activity-log"
         const val ACTION_LINK_ORDER = "link-order"
         const val PATH_ACTIVITY_LOGS = "/activity-logs"

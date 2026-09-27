@@ -12,6 +12,8 @@ import java.math.BigDecimal
  * on-wire format — changing them breaks compatibility with peers running older clients.
  */
 object MimeTypes {
+    const val TEXT_PLAIN = "text/plain"
+    const val OCTET_STREAM = "application/octet-stream"
     const val IMAGE_PREFIX = "image/"
     const val VIDEO_PREFIX = "video/"
     const val IMAGE_JPEG = "image/jpeg"

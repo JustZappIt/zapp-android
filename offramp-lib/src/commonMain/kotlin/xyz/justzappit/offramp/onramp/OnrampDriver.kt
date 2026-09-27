@@ -10,20 +10,20 @@ import xyz.justzappit.offramp.p2p.Usdc6
 
 interface OnrampDriver {
     /**
-     * Bounds and kill switch for [currency]. The corridor travels with the request because the
-     * service serves them all and derives each one's caps from its own live buy price.
+     * Bounds and kill switch for [currency]. The corridor travels with the request because each
+     * one's caps are derived from its own live buy price.
      */
     suspend fun limits(currency: CurrencyCode): OnrampLimits
 
     /**
-     * The corridors the service will actually sell ZEC in.
+     * The corridors the exchange will actually sell ZEC in.
      *
      * Buying and paying are separate markets with separate merchants, so this is not the set a
      * Scan & Pay picker offers: Bolivia pays at any size but buys only 1 USDC, Peru pays at every
-     * size but stops buying at 20. Asking the service rather than mirroring its list here keeps a
+     * size but stops buying at 20. Asking the chain rather than mirroring its list here keeps a
      * corridor's arrival or withdrawal from needing an app release.
      *
-     * Empty when the service cannot be reached — "no idea", so callers fall back to the default
+     * Empty when the chain cannot be reached — "no idea", so callers fall back to the default
      * corridor rather than trusting a stale preference.
      */
     suspend fun buyCorridors(): Set<CurrencyCode>

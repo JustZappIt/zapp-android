@@ -33,6 +33,7 @@ import io.ktor.client.HttpClientConfig
 import io.ktor.client.engine.HttpClientEngineConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlin.time.Duration
 
 /**
  * Mocked Synchronizer that can be used instead of the production SdkSynchronizer e.g. for tests.
@@ -96,6 +97,9 @@ internal class MockSynchronizer : CloseableSynchronizer {
     override var onSetupErrorHandler: ((Throwable?) -> Boolean)?
         get() = error("Intentionally not implemented in ${MockSynchronizer::class.simpleName} implementation.")
         set(value) {}
+
+    override val setupError: StateFlow<Throwable?>
+        get() = error("Intentionally not implemented in ${MockSynchronizer::class.simpleName} implementation.")
 
     override val processorInfo: Flow<CompactBlockProcessor.ProcessorInfo>
         get() = error("Intentionally not implemented in ${MockSynchronizer::class.simpleName} implementation.")
@@ -272,14 +276,24 @@ internal class MockSynchronizer : CloseableSynchronizer {
         error("Intentionally not implemented in ${MockSynchronizer::class.simpleName} implementation.")
     }
 
-    override val initializationError: Synchronizer.InitializationError?
-        get() = error("Intentionally not implemented in ${MockSynchronizer::class.simpleName} implementation.")
-
     override var onProcessorErrorResolved: (() -> Unit)?
         get() = error("Intentionally not implemented in ${MockSynchronizer::class.simpleName} implementation.")
         set(value) {}
 
     override suspend fun getFastestServers(servers: List<LightWalletEndpoint>): Flow<FastestServersResult> {
+        error("Intentionally not implemented in ${MockSynchronizer::class.simpleName} implementation.")
+    }
+
+    override suspend fun evaluateServerSwitch(
+        current: LightWalletEndpoint,
+        candidates: List<LightWalletEndpoint>,
+        fetchThreshold: Duration,
+        blocksToFetch: Int
+    ): LightWalletEndpoint? {
+        error("Intentionally not implemented in ${MockSynchronizer::class.simpleName} implementation.")
+    }
+
+    override suspend fun confirmServerSwitch(endpoint: LightWalletEndpoint) {
         error("Intentionally not implemented in ${MockSynchronizer::class.simpleName} implementation.")
     }
 

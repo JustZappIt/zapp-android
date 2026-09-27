@@ -6,11 +6,14 @@ package xyz.justzappit.offramp.onramp
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -39,29 +42,48 @@ class OnrampScreeningTest {
     private val signer =
         OnrampScreeningSigner(signingKey = signingKey, subject = SMART_ACCOUNT)
 
-    private fun client(nowMillis: Long) =
-        OnrampScreeningClient(
-            httpClient = HttpClient(),
-            config = OnrampScreeningConfig(apiUrl = "https://screening.invalid/api/v1", encryptionKeyHex = KEY_HEX),
-            deviceSignals = { SIGNALS },
-            nowMillis = { nowMillis },
-        )
+    private fun client(
+        nowMillis: Long,
+        config: OnrampScreeningConfig =
+            OnrampScreeningConfig(apiUrl = "https://screening.invalid/api/v1", encryptionKeyHex = KEY_HEX),
+    ) = OnrampScreeningClient(
+        httpClient = HttpClient(),
+        config = config,
+        deviceSignals = { SIGNALS },
+        nowMillis = { nowMillis },
+    )
 
-    /** A client whose screening endpoint answers with exactly [body]. */
+    /** A client whose screening endpoint answers with exactly [body], recording what it was sent. */
     private fun clientAnswering(
         body: String,
         status: HttpStatusCode = HttpStatusCode.OK,
         onLinkFailed: (String) -> Unit = {},
+        onScreeningUnavailable: (String) -> Unit = {},
+        record: (HttpRequestData) -> Unit = {},
     ) = OnrampScreeningClient(
         httpClient =
             HttpClient(
-                MockEngine { respond(body, status, headersOf(HttpHeaders.ContentType, "application/json")) },
+                MockEngine { request ->
+                    record(request)
+                    respond(body, status, headersOf(HttpHeaders.ContentType, "application/json"))
+                },
             ),
         config = OnrampScreeningConfig(apiUrl = "https://screening.invalid/api/v1", encryptionKeyHex = KEY_HEX),
         deviceSignals = { SIGNALS },
         nowMillis = { 1_756_450_000_123L },
         onLinkFailed = onLinkFailed,
+        onScreeningUnavailable = onScreeningUnavailable,
     )
+
+    /** A client whose screening endpoint cannot be reached at all. */
+    private fun clientFailing(onScreeningUnavailable: (String) -> Unit) =
+        OnrampScreeningClient(
+            httpClient = HttpClient(MockEngine { throw IllegalStateException("connection refused") }),
+            config = OnrampScreeningConfig(apiUrl = "https://screening.invalid/api/v1", encryptionKeyHex = KEY_HEX),
+            deviceSignals = { SIGNALS },
+            nowMillis = { 1_756_450_000_123L },
+            onScreeningUnavailable = onScreeningUnavailable,
+        )
 
     @Test
     fun `the signed headers carry seconds, and bind both addresses`() {
@@ -117,6 +139,31 @@ class OnrampScreeningTest {
         }
 
     @Test
+    fun `the record names the app that filed it`() =
+        runTest {
+            // Android by default; the Apple facade names itself. The service reads the field per
+            // product, so an iOS order filed as Android would be scoped to the wrong one.
+            val ios =
+                OnrampScreeningConfig(
+                    apiUrl = "https://screening.invalid",
+                    encryptionKeyHex = KEY_HEX,
+                    orderSource = "zapp-ios",
+                )
+            assertEquals("zapp-android", client(1L).payloadJson(ORDER, "IN", 1L).orderSource())
+            assertEquals("zapp-ios", client(1L, ios).payloadJson(ORDER, "IN", 1L).orderSource())
+        }
+
+    private fun String.orderSource(): String =
+        Json
+            .parseToJsonElement(this)
+            .jsonObject
+            .getValue("transaction_details")
+            .jsonObject
+            .getValue("order_source")
+            .jsonPrimitive
+            .content
+
+    @Test
     fun `the record says plainly that this device has no SEON session`() =
         runTest {
             val payload = client(1L).payloadJson(ORDER, country = "IN", timestampMillis = 1L)
@@ -153,11 +200,37 @@ class OnrampScreeningTest {
             // ☠ The whole corridor rides on this. Rejected is the one outcome that stops a
             // placement, so defaulting an absent field to "not approved" would turn any envelope
             // change on the service into every Android buy failing, worded as a refusal.
+            var reported: String? = null
             val outcome =
-                clientAnswering("""{"status":"ok","data":{"activity_log_id":"a-1"}}""")
-                    .screenBuyOrder(signer, ORDER, country = "IN")
+                clientAnswering(
+                    """{"status":"ok","data":{"activity_log_id":"a-1"}}""",
+                    onScreeningUnavailable = { reported = it },
+                ).screenBuyOrder(signer, ORDER, country = "IN")
 
             assertEquals(OnrampScreeningOutcome.Unavailable, outcome)
+            // Unavailable is invisible from the screen, so the drift has to reach the log.
+            assertTrue(reported.orEmpty().contains("without an approval"), "got: $reported")
+        }
+
+    @Test
+    fun `a body that cannot be read and a service that cannot be reached are both reported, not thrown`() =
+        runTest {
+            val reports = mutableListOf<String>()
+
+            assertEquals(
+                OnrampScreeningOutcome.Unavailable,
+                clientAnswering("<html>bad gateway</html>", onScreeningUnavailable = reports::add)
+                    .screenBuyOrder(signer, ORDER, country = "IN"),
+            )
+            assertEquals(
+                OnrampScreeningOutcome.Unavailable,
+                clientFailing(onScreeningUnavailable = reports::add)
+                    .screenBuyOrder(signer, ORDER, country = "IN"),
+            )
+
+            assertEquals(2, reports.size, "$reports")
+            assertTrue(reports[0].startsWith("/activity-logs failed:"), reports[0])
+            assertTrue(reports[1].startsWith("/activity-logs failed:"), reports[1])
         }
 
     @Test
@@ -175,11 +248,23 @@ class OnrampScreeningTest {
     @Test
     fun `an approval with no activity log id is unavailable, since there is nothing to link`() =
         runTest {
+            var reported: String? = null
             val outcome =
-                clientAnswering("""{"approved":true}""")
+                clientAnswering("""{"approved":true}""", onScreeningUnavailable = { reported = it })
                     .screenBuyOrder(signer, ORDER, country = "IN")
 
             assertEquals(OnrampScreeningOutcome.Unavailable, outcome)
+            assertTrue(reported.orEmpty().contains("without an activity_log_id"), "got: $reported")
+        }
+
+    @Test
+    fun `a refusal with a null message shows nothing rather than the word null`() =
+        runTest {
+            val outcome =
+                clientAnswering("""{"approved":false,"message":null,"reason":"user_restricted"}""")
+                    .screenBuyOrder(signer, ORDER, country = "IN")
+
+            assertEquals("", assertIs<OnrampScreeningOutcome.Rejected>(outcome).message)
         }
 
     @Test
@@ -190,6 +275,42 @@ class OnrampScreeningTest {
                     .screenBuyOrder(signer, ORDER, country = "IN")
 
             assertEquals("a-1", assertIs<OnrampScreeningOutcome.Approved>(outcome).activityLogId.jsonPrimitive.content)
+        }
+
+    @Test
+    fun `a consumer record names its type in the envelope and goes to the consumer intake`() =
+        runTest {
+            var sent: HttpRequestData? = null
+            clientAnswering("""{"approved":true,"activity_log_id":"a-1"}""", record = { sent = it })
+                .screenBuyOrder(signer, ORDER, country = "IN")
+
+            val request = checkNotNull(sent)
+            assertEquals("/api/v1/activity-logs", request.url.encodedPath)
+            assertEquals(
+                "buy_order",
+                request
+                    .envelope()
+                    .getValue("type")
+                    .jsonPrimitive.content
+            )
+        }
+
+    @Test
+    fun `a refused intake is reported, since a record never filed is an order never accepted`() =
+        runTest {
+            var reported: String? = null
+            val outcome =
+                clientAnswering(
+                    body = """{"error":"key not enabled"}""",
+                    status = HttpStatusCode.Forbidden,
+                    onScreeningUnavailable = { reported = it },
+                ).screenBuyOrder(signer, ORDER, country = "IN")
+
+            // Still fail-open: the order places.
+            assertEquals(OnrampScreeningOutcome.Unavailable, outcome)
+            val report = reported.orEmpty()
+            assertTrue(report.contains("403"), "the status code has to survive into the log, got: $report")
+            assertTrue(report.contains("/activity-logs"), "and which intake refused it: $report")
         }
 
     @Test
@@ -222,6 +343,9 @@ class OnrampScreeningTest {
 
             assertNull(reported)
         }
+
+    private fun HttpRequestData.envelope(): JsonObject =
+        Json.parseToJsonElement((body as OutgoingContent.ByteArrayContent).bytes().decodeToString()).jsonObject
 
     private companion object {
         const val SIGNING_KEY_HEX = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"

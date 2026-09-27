@@ -35,7 +35,7 @@ class ReclaimSessionMinterTest {
 
     @Test
     fun `the init signature matches ethers signMessage over the 32-byte digest`() {
-        // ☠ The fixed-length ":\n32" variant. The variable-length form OnrampRequestSigner uses
+        // ☠ The fixed-length ":\n32" variant. The variable-length form OnrampScreeningClient uses
         // recovers a different address, and Reclaim answers with a generic init failure.
         assertEquals(ETHERS_SIGNATURE, minter.signInit(PROVIDER_ID, TIMESTAMP))
     }

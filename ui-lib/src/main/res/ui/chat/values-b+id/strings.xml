@@ -87,6 +87,7 @@
     <string name="chat_room_reply_to_fmt">Membalas %1$s</string>
     <string name="chat_room_reply_dismiss">Tutup balasan</string>
     <string name="chat_room_reply_unknown_sender">Tidak dikenal</string>
+    <string name="chat_room_toast_original_message_unavailable">Pesan asli tidak tersedia</string>
 
     <!-- Chat room — delivery indicator content descriptions -->
     <string name="chat_room_delivery_sent">Terkirim</string>

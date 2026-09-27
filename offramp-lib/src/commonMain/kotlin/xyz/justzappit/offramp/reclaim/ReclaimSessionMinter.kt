@@ -110,9 +110,8 @@ class ReclaimSessionMinter(
     /**
      * ☠ The **fixed-length** EIP-191 variant: header `\x19Ethereum Signed Message:\n32` over the
      * 32 raw digest bytes, the same form `Erc4337Submitter` uses for UserOp hashes.
-     * `OnrampRequestSigner` deliberately uses the variable-length form and warns that the two
-     * recover different addresses; here the wrong one yields a generic init failure that points at
-     * nothing.
+     * `OnrampScreeningClient` deliberately uses the variable-length form, and the two recover
+     * different addresses; here the wrong one yields a generic init failure that points at nothing.
      */
     internal fun signInit(providerId: String, timestamp: String): String {
         val canonical =

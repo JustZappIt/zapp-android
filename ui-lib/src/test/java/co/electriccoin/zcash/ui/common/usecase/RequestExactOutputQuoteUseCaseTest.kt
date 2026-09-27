@@ -301,6 +301,7 @@ private class ExactOutputSynchronizerProviderFake : SynchronizerProvider {
 
     override val error: StateFlow<SynchronizerError?> = MutableStateFlow(null)
     override val synchronizer: StateFlow<Synchronizer?> = MutableStateFlow(null)
+    override val isSeedMismatch: StateFlow<Boolean> = MutableStateFlow(false)
     override val walletBalances: Flow<Map<AccountUuid, AccountBalance>?> = emptyFlow()
 
     override suspend fun getSynchronizerOrNull(): Synchronizer? = null

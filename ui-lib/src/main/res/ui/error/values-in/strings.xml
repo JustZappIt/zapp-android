@@ -14,8 +14,4 @@
     <string name="error_keystone_account_title">Tidak Dapat Menambahkan Akun Keystone</string>
     <string name="error_keystone_account_message">Akun Keystone yang dipindai tidak dapat digunakan dengan aplikasi ini. Pastikan perangkat Keystone Anda diatur ke jaringan yang sama dengan aplikasi ini, lalu pindai kode QR lagi.</string>
 
-    <string name="error_tor_title">Nonaktifkan Tor?</string>
-    <string name="error_tor_message">Masalah koneksi Tor terdeteksi. Untuk meningkatkan performa, coba nonaktifkan Tor. Ini akan menghentikan pembaruan nilai tukar. Anda dapat mengaktifkannya kembali nanti di Pengaturan Lanjutan.</string>
-    <string name="error_tor_negative">Nonaktifkan</string>
-    <string name="error_tor_positive">Jangan nonaktifkan</string>
 </resources>

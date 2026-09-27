@@ -30,6 +30,8 @@ class AppleBaseAccount private constructor(
     internal val smartAccounts: SmartOfframpAccountProvider,
     internal val submitters: Erc4337SubmitterProvider,
     internal val owner: EvmKey,
+    /** The owner as the EOA that signs for the smart account — screening requests need one. */
+    internal val accountProvider: OfframpAccountProvider,
 ) {
     val networkName: String get() = network.name
 
@@ -89,6 +91,7 @@ class AppleBaseAccount private constructor(
                     smartAccounts = smartAccounts,
                     submitters = Erc4337SubmitterProvider(rpc, bundler, network, smartAccounts),
                     owner = key,
+                    accountProvider = accountProvider,
                 )
             } catch (
                 // Every construction failure must zero the owner key and close the HTTP client.

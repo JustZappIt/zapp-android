@@ -33,6 +33,11 @@ data class AppleOnrampStatus(
     val id: String? = null,
     val orderId: String? = null,
     val failureCode: String? = null,
+    /**
+     * The service's own sentence for a refusal, when it gave one. Display only, as on Android:
+     * [failureCode] is what anything branches on.
+     */
+    val failureDetail: String? = null,
     val instructionKind: String? = null,
     val instructionAddress: String? = null,
     val instructionPayload: String? = null,

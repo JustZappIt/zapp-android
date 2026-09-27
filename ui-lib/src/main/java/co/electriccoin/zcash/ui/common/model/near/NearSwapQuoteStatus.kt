@@ -64,7 +64,7 @@ data class NearSwapQuoteStatus(
         get() =
             if (
                 response.status == SwapStatus.PENDING_DEPOSIT &&
-                Instant.now() > (response.quoteResponse.quote.deadline - 5.minutes).toJavaInstant()
+                Instant.now() > (quote.deadline - 5.minutes).toJavaInstant()
             ) {
                 ModelSwapStatus.EXPIRED
             } else {

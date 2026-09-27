@@ -18,6 +18,8 @@ import co.electriccoin.zcash.ui.design.component.SeedWordInnerTextFieldState
 import co.electriccoin.zcash.ui.design.component.SeedWordTextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.restore.seed.pastedSeedWords
+import co.electriccoin.zcash.ui.screen.restore.seed.withPastedWords
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -114,10 +116,15 @@ class ZappRestoreFlowVM(
             .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = emptyList())
 
     private fun onSeedWordChange(index: Int, newState: SeedWordInnerTextFieldState) {
-        seedWords.update { list ->
-            list.toMutableList().also {
-                it[index] = it[index].copy(innerState = newState.copy(value = newState.value.trim()))
+        val pasted = pastedSeedWords(seedWords.value[index].innerState, newState)
+        if (pasted.isEmpty()) {
+            seedWords.update { list ->
+                list.toMutableList().also {
+                    it[index] = it[index].copy(innerState = newState.copy(value = newState.value.trim()))
+                }
             }
+        } else {
+            seedWords.update { it.withPastedWords(index, pasted) }
         }
     }
 

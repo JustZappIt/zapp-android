@@ -36,6 +36,13 @@ class NearSwapQuoteTest {
     }
 
     @Test
+    fun rejectsMissingDeadline() {
+        assertFailsWith<IllegalArgumentException> {
+            nearSwapQuote(quoteResponse().copy(quote = quoteResponse().quote.copy(deadline = null)))
+        }
+    }
+
+    @Test
     fun rejectsInconsistentAmountInAtOriginDecimals() {
         assertFailsWith<IllegalArgumentException> {
             // amountInFormatted=1 at 8 decimals expects 100_000_000; server says 999
