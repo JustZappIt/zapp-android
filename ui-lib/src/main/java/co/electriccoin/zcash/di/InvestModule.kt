@@ -18,6 +18,7 @@ import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.binds
 import org.koin.dsl.module
+import kotlin.time.Instant
 
 /** Invest's data layer. Its network calls follow the user's Tor setting. */
 val investModule =
@@ -34,10 +35,10 @@ val investModule =
                 session = get(),
                 keys = get(),
                 wallet = get(),
-                accountDataSource = get(),
                 swapAssetProvider = get(),
                 synchronizerProvider = get(),
                 checkpoints = get(),
+                now = get<InvestServerClock>().let { clock -> { Instant.fromEpochMilliseconds(clock.nowMillis()) } },
             )
         } binds arrayOf(InvestRepository::class, InvestSwapAssetSource::class)
         single {

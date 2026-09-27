@@ -44,5 +44,6 @@
     <string name="transaction_history_invest_buying">Comprando %1$s…</string>
     <string name="transaction_history_invest_refunded">Compra reembolsada</string>
     <string name="transaction_history_invest_needs_attention">A compra precisa de atenção</string>
+    <string name="transaction_history_invest_expired">Compra expirada</string>
     <string name="transaction_history_invest_failed">A compra falhou</string>
 </resources>

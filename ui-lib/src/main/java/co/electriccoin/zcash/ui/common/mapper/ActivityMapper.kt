@@ -311,8 +311,8 @@ class ActivityMapper {
         }
 
     /**
-     * An Invest buy is a ZEC send whose swap record points at a curated stock. EXPIRED is the app's own
-     * reading of a late deposit, not 1Click's, so it still reads as a buy in progress.
+     * An Invest buy is a ZEC send whose swap record points at a curated stock. EXPIRED is terminal for the
+     * swap record (polling stops there), so it gets its own title rather than reading as in progress.
      */
     private fun getInvestBuyTitle(
         transaction: SendTransaction,
@@ -324,6 +324,7 @@ class ActivityMapper {
             status == SUCCESS -> stringRes(R.string.transaction_history_invest_bought, asset.name)
             status == REFUNDED -> stringRes(R.string.transaction_history_invest_refunded)
             status == FAILED -> stringRes(R.string.transaction_history_invest_needs_attention)
+            status == EXPIRED -> stringRes(R.string.transaction_history_invest_expired)
             else -> stringRes(R.string.transaction_history_invest_buying, asset.name)
         }
 
