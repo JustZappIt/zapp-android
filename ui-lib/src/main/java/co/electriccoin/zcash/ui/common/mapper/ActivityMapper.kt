@@ -6,6 +6,7 @@ import cash.z.ecc.android.sdk.model.Zip318Kind
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.invest.model.InvestAsset
 import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
+import co.electriccoin.zcash.ui.common.repository.TransactionSwapMetadata
 import co.electriccoin.zcash.ui.common.model.SwapMode.EXACT_INPUT
 import co.electriccoin.zcash.ui.common.model.SwapMode.EXACT_OUTPUT
 import co.electriccoin.zcash.ui.common.model.SwapMode.FLEX_INPUT
@@ -50,7 +51,9 @@ class ActivityMapper {
         zecUsdPrice: BigDecimal?,
         onTransactionClick: (Transaction) -> Unit,
         onSwapClick: (depositAddress: String) -> Unit,
-        onDisplayed: (ActivityData) -> Unit
+        onDisplayed: (ActivityData) -> Unit,
+        /** An Invest buy (a swap into a curated stock) opens its Invest receipt rather than the swap detail. */
+        onInvestClick: (depositAddress: String) -> Unit,
     ): ActivityState =
         when (data) {
             is ActivityData.BySwap -> {
@@ -63,7 +66,13 @@ class ActivityMapper {
                     isShielded = false,
                     value = getSwapValue(data),
                     fiatValue = null,
-                    onClick = { onSwapClick(data.swap.depositAddress) },
+                    onClick = {
+                        if (data.swap.isInvestBuy()) {
+                            onInvestClick(data.swap.depositAddress)
+                        } else {
+                            onSwapClick(data.swap.depositAddress)
+                        }
+                    },
                     isUnread = false,
                     onDisplayed = { onDisplayed(data) }
                 )
@@ -79,12 +88,22 @@ class ActivityMapper {
                     isShielded = isTransactionShielded(data),
                     value = getTransactionValue(data),
                     fiatValue = getFiatValue(data.transaction, exchangeRate, zecUsdPrice),
-                    onClick = { onTransactionClick(data.transaction) },
+                    onClick = {
+                        val swap = data.metadata.swapMetadata
+                        if (swap != null && swap.isInvestBuy()) {
+                            onInvestClick(swap.depositAddress)
+                        } else {
+                            onTransactionClick(data.transaction)
+                        }
+                    },
                     isUnread = isTransactionUnread(data, restoreTimestamp),
                     onDisplayed = { onDisplayed(data) }
                 )
             }
         }
+
+    private fun TransactionSwapMetadata.isInvestBuy(): Boolean =
+        InvestAssets.findBySwapTickers(destination.tokenTicker, destination.chainTicker) != null
 
     private fun getSwapValue(data: ActivityData.BySwap): StyledStringResource =
         stringResByCurrencyNumber(data.swap.amountOutFormatted, CURRENCY_TICKER).withStyle(
