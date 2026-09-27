@@ -105,7 +105,7 @@ class ChatListVM(
     // teardown path to have fired: a stale claim silently swallows unread bumps and leaks receipts.
     fun onScreenVisible() {
         chatConversationsRepository.setActiveConversation(null)
-        // The SDK reports nothing when a request first goes out, only when the owner answers it.
+        // A request sent straight away gets no SDK update; only a queued one going out or an answer does.
         if (BuildConfig.IS_GROUP_LINKS_ENABLED) viewModelScope.launch { refreshWaitingJoins() }
     }
 
@@ -117,10 +117,10 @@ class ChatListVM(
                     ?: stringRes(R.string.group_invite_waiting_title),
             subtitle =
                 stringRes(
-                    if (update.status == ZMGroupJoinStatus.PENDING_APPROVAL) {
-                        R.string.group_invite_waiting_owner
-                    } else {
-                        R.string.group_invite_waiting_body
+                    when {
+                        update.status == ZMGroupJoinStatus.PENDING_APPROVAL -> R.string.group_invite_waiting_owner
+                        !update.sent -> R.string.group_invite_waiting_queued
+                        else -> R.string.group_invite_waiting_body
                     },
                 ),
             cancelLabel = stringRes(R.string.group_invite_cancel),

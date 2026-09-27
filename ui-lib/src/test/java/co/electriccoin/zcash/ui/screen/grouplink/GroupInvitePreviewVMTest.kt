@@ -59,6 +59,8 @@ class GroupInvitePreviewVMTest {
 
     private fun GroupInvitePreviewVM.title() = (state.value.title as? StringResource.ByResource)?.resource
 
+    private fun GroupInvitePreviewVM.body() = (state.value.body as? StringResource.ByResource)?.resource
+
     @Test
     fun `shows the preview with the name, having contacted nobody`() =
         runTest {
@@ -102,6 +104,22 @@ class GroupInvitePreviewVMTest {
             assertEquals(R.string.group_invite_title_named, vm.title())
             assertEquals(R.string.group_invite_send_failed, (vm.state.value.note as StringResource.ByResource).resource)
             assertNotNull(store.newest(), "nothing left the device, so the link stays")
+        }
+
+    @Test
+    fun `a request queued offline says so until it goes out`() =
+        runTest {
+            groupLinks.joinResult =
+                Result.success(ZMGroupJoinResult(ZMGroupJoinRequestStatus.REQUESTED, LINK_ID, sent = false))
+            val vm = open()
+            vm.state.value.primary!!
+                .onClick()
+            advanceUntilIdle()
+            assertEquals(R.string.group_invite_waiting_queued, vm.body())
+
+            groupLinks.updates.emit(ZMGroupJoinUpdate(LINK_ID, ZMGroupJoinStatus.WAITING, sent = true))
+            advanceUntilIdle()
+            assertEquals(R.string.group_invite_waiting_body, vm.body())
         }
 
     @Test

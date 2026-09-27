@@ -11,6 +11,7 @@
     <string name="group_invite_waiting_title">Menunggu untuk bergabung</string>
     <string name="group_invite_waiting_body">Anda akan bergabung saat pemilik grup membuka Zapp.</string>
     <string name="group_invite_waiting_owner">Permintaan Anda sedang menunggu pemilik grup.</string>
+    <string name="group_invite_waiting_queued">Permintaan Anda belum terkirim. Zapp akan mengirimnya saat Anda kembali online.</string>
     <string name="group_invite_cancel">Batalkan permintaan</string>
     <string name="group_invite_joined_named">Anda bergabung ke %1$s</string>
     <string name="group_invite_joined">Anda bergabung ke grup</string>
@@ -27,7 +28,7 @@
     <!-- The owner's invite link -->
     <string name="group_link_header">Tautan undangan</string>
     <string name="group_link_warning">Siapa pun yang punya tautan ini bisa bergabung. Bagikan hanya kepada orang yang Anda percaya.</string>
-    <string name="group_link_history_note">Orang yang bergabung bisa membaca pesan sebelumnya di grup ini.</string>
+    <string name="group_link_history_note">Orang yang bergabung mungkin bisa melihat sebagian pesan sebelumnya di grup ini.</string>
     <string name="group_link_copy">Salin tautan</string>
     <string name="group_link_share">Bagikan tautan</string>
     <string name="group_link_qr_content_description">Kode QR untuk tautan undangan</string>

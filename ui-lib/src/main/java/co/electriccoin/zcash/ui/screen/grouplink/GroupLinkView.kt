@@ -316,8 +316,7 @@ private fun GroupLinkPreview() =
                     error = null,
                     actions =
                         listOf(
-                            GroupLinkActionState(stringRes(R.string.group_link_copy), ZappButtonVariant.Primary) {},
-                            GroupLinkActionState(stringRes(R.string.group_link_share), ZappButtonVariant.Secondary) {},
+                            GroupLinkActionState(stringRes(R.string.group_link_share), ZappButtonVariant.Primary) {},
                         ),
                     requests =
                         listOf(

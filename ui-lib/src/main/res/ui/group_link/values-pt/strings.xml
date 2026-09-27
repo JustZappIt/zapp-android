@@ -11,6 +11,7 @@
     <string name="group_invite_waiting_title">Aguardando para entrar</string>
     <string name="group_invite_waiting_body">Você vai entrar quando o dono do grupo abrir o Zapp.</string>
     <string name="group_invite_waiting_owner">Seu pedido está com o dono do grupo.</string>
+    <string name="group_invite_waiting_queued">Seu pedido ainda não foi enviado. O Zapp vai enviá-lo quando você voltar a ter conexão.</string>
     <string name="group_invite_cancel">Cancelar pedido</string>
     <string name="group_invite_joined_named">Você entrou em %1$s</string>
     <string name="group_invite_joined">Você entrou no grupo</string>
@@ -27,7 +28,7 @@
     <!-- The owner's invite link -->
     <string name="group_link_header">Link de convite</string>
     <string name="group_link_warning">Qualquer pessoa com este link pode entrar. Compartilhe apenas com quem você confia.</string>
-    <string name="group_link_history_note">Quem entrar poderá ler as mensagens anteriores deste grupo.</string>
+    <string name="group_link_history_note">Quem entrar poderá ver algumas mensagens anteriores deste grupo.</string>
     <string name="group_link_copy">Copiar link</string>
     <string name="group_link_share">Compartilhar link</string>
     <string name="group_link_qr_content_description">Código QR do link de convite</string>

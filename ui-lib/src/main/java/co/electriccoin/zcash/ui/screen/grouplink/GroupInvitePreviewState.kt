@@ -9,6 +9,7 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.grouplink.model.GroupInviteFailure
 import co.electriccoin.zcash.ui.screen.grouplink.model.GroupInvitePhase
+import co.electriccoin.zcash.ui.screen.grouplink.model.GroupInviteWaitingStage
 
 data class GroupInvitePreviewState(
     val title: StringResource?,
@@ -58,14 +59,19 @@ internal object GroupInvitePreviewCopy {
             }
 
             is GroupInvitePhase.Waiting -> {
-                stringRes(
-                    if (phase.withOwner) R.string.group_invite_waiting_owner else R.string.group_invite_waiting_body,
-                )
+                stringRes(waitingBody(phase.stage))
             }
 
             else -> {
                 null
             }
+        }
+
+    fun waitingBody(stage: GroupInviteWaitingStage): Int =
+        when (stage) {
+            GroupInviteWaitingStage.QUEUED -> R.string.group_invite_waiting_queued
+            GroupInviteWaitingStage.SENT -> R.string.group_invite_waiting_body
+            GroupInviteWaitingStage.WITH_OWNER -> R.string.group_invite_waiting_owner
         }
 
     fun failure(reason: GroupInviteFailure): Int =

@@ -20,6 +20,18 @@ enum class GroupInviteFailure {
     COMING_SOON,
 }
 
+/** How far a waiting request got. */
+enum class GroupInviteWaitingStage {
+    /** Only on this device: the SDK sends it when the network is back. */
+    QUEUED,
+
+    /** In the link's mailbox, for the owner to pick up. */
+    SENT,
+
+    /** The owner has it and must approve it. */
+    WITH_OWNER,
+}
+
 /** Never stored: after process death it is derived again from the pending store and the SDK. */
 sealed interface GroupInvitePhase {
     data object Reading : GroupInvitePhase
@@ -38,7 +50,7 @@ sealed interface GroupInvitePhase {
     data class Waiting(
         val nameHint: String?,
         val linkId: String,
-        val withOwner: Boolean,
+        val stage: GroupInviteWaitingStage,
     ) : GroupInvitePhase
 
     data class Joined(
@@ -239,7 +251,7 @@ object GroupInviteMachine {
                     fail(GroupInviteFailure.UNREADABLE)
                 } else {
                     GroupInviteStep(
-                        GroupInvitePhase.Waiting(phase.nameHint, linkId, withOwner = false),
+                        GroupInvitePhase.Waiting(phase.nameHint, linkId, sentStage(result.sent)),
                         dropLink = true,
                     )
                 }
@@ -295,27 +307,47 @@ object GroupInviteMachine {
         val name = update.nameHint ?: nameHint
         val phase =
             when (update.status) {
-                ZMGroupJoinStatus.WAITING -> GroupInvitePhase.Waiting(name, update.linkId, withOwner = false)
+                ZMGroupJoinStatus.WAITING -> {
+                    GroupInvitePhase.Waiting(name, update.linkId, sentStage(update.sent))
+                }
 
-                ZMGroupJoinStatus.PENDING_APPROVAL -> GroupInvitePhase.Waiting(name, update.linkId, withOwner = true)
+                ZMGroupJoinStatus.PENDING_APPROVAL -> {
+                    GroupInvitePhase.Waiting(name, update.linkId, GroupInviteWaitingStage.WITH_OWNER)
+                }
 
-                ZMGroupJoinStatus.JOINED -> GroupInvitePhase.Joined(name, update.conversationId, alreadyMember = false)
+                ZMGroupJoinStatus.JOINED -> {
+                    GroupInvitePhase.Joined(name, update.conversationId, alreadyMember = false)
+                }
 
-                ZMGroupJoinStatus.INACTIVE -> GroupInvitePhase.Failed(GroupInviteFailure.INACTIVE)
+                ZMGroupJoinStatus.INACTIVE -> {
+                    GroupInvitePhase.Failed(GroupInviteFailure.INACTIVE)
+                }
 
-                ZMGroupJoinStatus.EXPIRED -> GroupInvitePhase.Failed(GroupInviteFailure.EXPIRED)
+                ZMGroupJoinStatus.EXPIRED -> {
+                    GroupInvitePhase.Failed(GroupInviteFailure.EXPIRED)
+                }
 
-                ZMGroupJoinStatus.FULL -> GroupInvitePhase.Failed(GroupInviteFailure.FULL)
+                ZMGroupJoinStatus.FULL -> {
+                    GroupInvitePhase.Failed(GroupInviteFailure.FULL)
+                }
 
-                ZMGroupJoinStatus.DECLINED -> GroupInvitePhase.Failed(GroupInviteFailure.DECLINED)
+                ZMGroupJoinStatus.DECLINED -> {
+                    GroupInvitePhase.Failed(GroupInviteFailure.DECLINED)
+                }
 
-                ZMGroupJoinStatus.CANCELLED -> GroupInvitePhase.Dismissed
+                ZMGroupJoinStatus.CANCELLED -> {
+                    GroupInvitePhase.Dismissed
+                }
 
                 // A status a newer SDK knows and this app does not: keep waiting rather than guess.
-                ZMGroupJoinStatus.UNKNOWN -> GroupInvitePhase.Waiting(name, update.linkId, withOwner = false)
+                ZMGroupJoinStatus.UNKNOWN -> {
+                    GroupInvitePhase.Waiting(name, update.linkId, sentStage(update.sent))
+                }
             }
         return GroupInviteStep(phase, dropLink = true)
     }
+
+    private fun sentStage(sent: Boolean) = if (sent) GroupInviteWaitingStage.SENT else GroupInviteWaitingStage.QUEUED
 
     private fun fail(reason: GroupInviteFailure) = GroupInviteStep(GroupInvitePhase.Failed(reason), dropLink = true)
 }

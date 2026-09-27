@@ -293,8 +293,7 @@ class GroupLinkVM(
         val value = link.link
         return if (link.state == ZMGroupLinkState.ACTIVE && value != null) {
             listOf(
-                action(R.string.group_link_copy, ZappButtonVariant.Primary, enabled) { onCopyClick(value) },
-                action(R.string.group_link_share, ZappButtonVariant.Secondary, enabled) { onShareClick(value) },
+                action(R.string.group_link_share, ZappButtonVariant.Primary, enabled) { onShareClick(value) },
                 action(R.string.group_link_reset, ZappButtonVariant.Ghost, enabled, ::onResetClick),
                 action(R.string.group_link_turn_off, ZappButtonVariant.Ghost, enabled, ::onTurnOffClick),
             )

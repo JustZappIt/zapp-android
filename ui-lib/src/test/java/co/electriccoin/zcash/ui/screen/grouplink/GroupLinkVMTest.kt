@@ -101,7 +101,6 @@ class GroupLinkVMTest {
             )
             assertEquals(
                 listOf(
-                    R.string.group_link_copy,
                     R.string.group_link_share,
                     R.string.group_link_reset,
                     R.string.group_link_turn_off,

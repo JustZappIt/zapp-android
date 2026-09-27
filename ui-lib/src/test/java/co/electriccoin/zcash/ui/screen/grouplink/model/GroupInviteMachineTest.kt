@@ -45,17 +45,19 @@ class GroupInviteMachineTest {
     private fun answered(
         status: ZMGroupJoinRequestStatus,
         conversationId: String? = null,
-    ) = Answered(ZMGroupJoinResult(status, LINK_ID, conversationId))
+        sent: Boolean = true,
+    ) = Answered(ZMGroupJoinResult(status, LINK_ID, conversationId, sent))
 
     private fun updated(
         status: ZMGroupJoinStatus,
         linkId: String = LINK_ID,
         conversationId: String? = null,
-    ) = Updated(ZMGroupJoinUpdate(linkId, status, conversationId))
+        sent: Boolean = true,
+    ) = Updated(ZMGroupJoinUpdate(linkId, status, conversationId, sent = sent))
 
     private val preview = Preview(NAME, LINK_ID)
     private val requesting = Requesting(NAME, LINK_ID)
-    private val waiting = Waiting(NAME, LINK_ID, withOwner = false)
+    private val waiting = Waiting(NAME, LINK_ID, GroupInviteWaitingStage.SENT)
 
     @Test
     fun `reading a good link shows the preview and keeps the link`() {
@@ -113,6 +115,16 @@ class GroupInviteMachineTest {
     }
 
     @Test
+    fun `a request only queued on the device waits as queued, and moves on when it goes out`() {
+        val next = step(requesting, answered(ZMGroupJoinRequestStatus.REQUESTED, sent = false))
+        val queued = Waiting(NAME, LINK_ID, GroupInviteWaitingStage.QUEUED)
+        assertEquals(queued, next.phase)
+        assertTrue(next.dropLink, "the SDK holds the request and sends it later")
+        assertEquals(waiting, step(queued, updated(ZMGroupJoinStatus.WAITING)).phase)
+        assertEquals(queued, step(queued, updated(ZMGroupJoinStatus.WAITING, sent = false)).phase)
+    }
+
+    @Test
     fun `a request that did not leave the device goes back to the preview with a note and keeps the link`() {
         val next = step(requesting, SendFailed)
         assertEquals(Preview(NAME, LINK_ID, sendFailed = true), next.phase)
@@ -148,7 +160,7 @@ class GroupInviteMachineTest {
         val cases =
             mapOf(
                 ZMGroupJoinStatus.WAITING to waiting,
-                ZMGroupJoinStatus.PENDING_APPROVAL to Waiting(NAME, LINK_ID, withOwner = true),
+                ZMGroupJoinStatus.PENDING_APPROVAL to Waiting(NAME, LINK_ID, GroupInviteWaitingStage.WITH_OWNER),
                 ZMGroupJoinStatus.JOINED to Joined(NAME, "g1", alreadyMember = false),
                 ZMGroupJoinStatus.INACTIVE to Failed(GroupInviteFailure.INACTIVE),
                 ZMGroupJoinStatus.EXPIRED to Failed(GroupInviteFailure.EXPIRED),
@@ -181,7 +193,7 @@ class GroupInviteMachineTest {
     @Test
     fun `tapping a link already in flight shows where it stands`() {
         assertEquals(
-            Waiting(NAME, LINK_ID, withOwner = true),
+            Waiting(NAME, LINK_ID, GroupInviteWaitingStage.WITH_OWNER),
             step(preview, updated(ZMGroupJoinStatus.PENDING_APPROVAL)).phase,
         )
         assertEquals(
@@ -247,7 +259,8 @@ class GroupInviteMachineTest {
                     when (sdkStatus) {
                         null -> preview
                         ZMGroupJoinStatus.JOINED -> Joined(NAME, "g1", alreadyMember = true)
-                        else -> Waiting(NAME, LINK_ID, withOwner = sdkStatus == ZMGroupJoinStatus.PENDING_APPROVAL)
+                        ZMGroupJoinStatus.PENDING_APPROVAL -> Waiting(NAME, LINK_ID, GroupInviteWaitingStage.WITH_OWNER)
+                        else -> waiting
                     }
                 assertEquals(expected, relaunched, "after $event")
             } else {

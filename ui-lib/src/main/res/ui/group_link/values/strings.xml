@@ -11,6 +11,7 @@
     <string name="group_invite_waiting_title">Waiting to join</string>
     <string name="group_invite_waiting_body">You will join when the group owner opens Zapp.</string>
     <string name="group_invite_waiting_owner">Your request is with the group owner.</string>
+    <string name="group_invite_waiting_queued">Your request has not gone out yet. Zapp will send it when you are back online.</string>
     <string name="group_invite_cancel">Cancel request</string>
     <string name="group_invite_joined_named">You joined %1$s</string>
     <string name="group_invite_joined">You joined the group</string>
@@ -27,7 +28,7 @@
     <!-- The owner's invite link -->
     <string name="group_link_header">Invite link</string>
     <string name="group_link_warning">Anyone with this link can join. Share it only with people you trust.</string>
-    <string name="group_link_history_note">People who join can read earlier messages in this group.</string>
+    <string name="group_link_history_note">People who join may see some earlier messages in this group.</string>
     <string name="group_link_copy">Copy link</string>
     <string name="group_link_share">Share link</string>
     <string name="group_link_qr_content_description">QR code for the invite link</string>
