@@ -7,8 +7,9 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapProblem
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapStage
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapState
+import co.electriccoin.zcash.ui.common.privateusd.DollarRate
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalances
-import co.electriccoin.zcash.ui.common.privateusd.dollars
+import co.electriccoin.zcash.ui.common.privateusd.local
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -52,17 +53,23 @@ internal fun AtomicSwapState.stageDetail(confirmationsNeeded: Int?): StringResou
 }
 
 /** At a glance: what's spendable, and what's only in flight after a send. */
-internal fun PrivateUsdBalances.spendable(): StringResource = dollars(available + processing)
+internal fun PrivateUsdBalances.spendable(rate: DollarRate?): StringResource = rate.local(available + processing)
 
-internal fun PrivateUsdBalances.headline(): StringResource = spendable().asPrivacySensitive()
-
-internal fun PrivateUsdBalances.arrivingTag(): StringResource? =
-    arriving.takeIf { it.signum() > 0 }?.let { stringRes(R.string.private_usd_arriving_short, dollars(it)) }
+internal fun PrivateUsdBalances.arrivingTag(rate: DollarRate?): StringResource? =
+    arriving.takeIf { it.signum() > 0 }?.let { stringRes(R.string.private_usd_arriving_short, rate.local(it)) }
 
 /** The one line under a balance that needs saying, refused funds first. */
-internal fun PrivateUsdBalances.detail(): StringResource? =
+internal fun PrivateUsdBalances.detail(rate: DollarRate?): StringResource? =
     when {
-        blocked.signum() > 0 -> stringRes(R.string.private_usd_home_blocked, dollars(blocked).asPrivacySensitive())
-        arriving.signum() > 0 -> stringRes(R.string.private_usd_home_arriving, dollars(arriving).asPrivacySensitive())
-        else -> null
+        blocked.signum() > 0 -> {
+            stringRes(R.string.private_usd_home_blocked, rate.local(blocked).asPrivacySensitive())
+        }
+
+        arriving.signum() > 0 -> {
+            stringRes(R.string.private_usd_home_arriving, rate.local(arriving).asPrivacySensitive())
+        }
+
+        else -> {
+            null
+        }
     }

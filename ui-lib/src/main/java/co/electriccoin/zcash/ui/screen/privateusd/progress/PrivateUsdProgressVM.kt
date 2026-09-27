@@ -108,6 +108,7 @@ class PrivateUsdProgressVM(
                         }
                     }
                 },
+            info = steps.info,
             onBack = navigationRouter::back,
         )
     }

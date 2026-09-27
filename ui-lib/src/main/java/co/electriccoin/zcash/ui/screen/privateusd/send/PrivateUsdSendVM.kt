@@ -10,6 +10,8 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
+import co.electriccoin.zcash.ui.common.privateusd.DollarRate
+import co.electriccoin.zcash.ui.common.privateusd.ObserveDollarRateUseCase
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdAsset
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
@@ -18,6 +20,7 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendMode
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendRecord
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendRequest
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
+import co.electriccoin.zcash.ui.common.privateusd.local
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
 import co.electriccoin.zcash.ui.common.privateusd.tokenAmount
 import co.electriccoin.zcash.ui.common.repository.BiometricRepository
@@ -26,6 +29,7 @@ import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
 import co.electriccoin.zcash.ui.screen.privateusd.authorizeSpend
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -45,6 +49,7 @@ class PrivateUsdSendVM(
     senders: PrivateUsdSenders,
     railgunWalletRepository: RailgunWalletRepository,
     atomicSwapRepository: AtomicSwapRepository,
+    observeDollarRate: ObserveDollarRateUseCase,
     private val biometricRepository: BiometricRepository,
     private val sendLog: PrivateUsdSendLog,
     private val navigationRouter: NavigationRouter,
@@ -61,17 +66,19 @@ class PrivateUsdSendVM(
             form,
             balanceRepository.observe(),
             railgunWalletRepository.state.map { it.proof?.progress },
+            observeDollarRate(),
             ::createState,
         ).stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-            initialValue = createState(form.value, balanceRepository.state.value, null),
+            initialValue = createState(form.value, balanceRepository.state.value, null, null),
         )
 
     private fun createState(
         form: PrivateUsdSendForm,
         balance: PrivateUsdBalanceState,
         proof: Float?,
+        rate: DollarRate?,
     ): PrivateUsdSendState {
         val assets =
             balance.balances
@@ -80,27 +87,32 @@ class PrivateUsdSendVM(
                 .orEmpty()
         val asset = assets.firstOrNull { it.token.address == form.token } ?: assets.firstOrNull()
         val amountError = form.amountError(asset)
-        val recipientError = form.recipientError()
         val request = asset?.let(form::request)
+        val isWithdrawal = form.mode == PrivateUsdSendMode.WITHDRAW
         return PrivateUsdSendState(
             phase = form.phase,
-            isWithdrawal = form.mode == PrivateUsdSendMode.WITHDRAW,
+            isWithdrawal = isWithdrawal,
             onModeSelect = ::onModeSelect,
             assets = assets.map { it.token.symbol },
             selectedAsset = assets.indexOf(asset).coerceAtLeast(0),
             onAssetSelect = { index -> assets.getOrNull(index)?.let(::onAssetSelect) },
             amount = NumberTextFieldState(innerState = form.amount, onValueChange = ::onAmountChange),
-            amountSymbol = asset?.token?.takeUnless { it.isDollar }?.symbol ?: "$",
+            amountNote =
+                amountError
+                    ?: form.amount.amount
+                        ?.takeIf { rate != null }
+                        ?.let { stringRes(R.string.private_usd_worth, rate.local(it)) },
+            isAmountInvalid = amountError != null,
             available = asset?.let { tokenAmount(it.available, it.token) },
             onMax = { asset?.let(::onMax) },
             recipient = form.recipient,
             onRecipientChange = ::onRecipientChange,
-            recipientError = recipientError,
-            amountError = amountError,
+            recipientError = form.recipientError(),
             review = request?.let { form.review(it, sender.usesTestAccount) },
             proofProgress = proof?.takeIf { form.phase == PrivateUsdSendPhase.SENDING }?.let { it / PERCENT },
             done = asset?.let { form.done(it, explorerTxUrl) },
             error = form.error,
+            info = if (isWithdrawal) WITHDRAW_INFO else SEND_INFO,
             primaryButton = primaryButton(form, request),
             onBack = ::onBack,
         )
@@ -213,5 +225,32 @@ class PrivateUsdSendVM(
 
     private companion object {
         const val PERCENT = 100f
+
+        val SEND_INFO =
+            PrivateUsdInfo(
+                title = stringRes(R.string.private_usd_send_info_title),
+                steps =
+                    listOf(
+                        stringRes(R.string.private_usd_send_info_step_address),
+                        stringRes(R.string.private_usd_send_info_step_proof),
+                        stringRes(R.string.private_usd_send_info_step_private),
+                    ),
+            )
+
+        val WITHDRAW_INFO =
+            PrivateUsdInfo(
+                title = stringRes(R.string.private_usd_withdraw_info_title),
+                steps =
+                    listOf(
+                        stringRes(R.string.private_usd_withdraw_info_step_address),
+                        stringRes(R.string.private_usd_withdraw_info_step_proof),
+                    ),
+                notes =
+                    listOf(
+                        stringRes(R.string.private_usd_withdraw_info_note_public),
+                        stringRes(R.string.private_usd_withdraw_info_note_private),
+                        stringRes(R.string.private_usd_withdraw_info_note_fee),
+                    ),
+            )
     }
 }

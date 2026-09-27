@@ -6,6 +6,7 @@ package co.electriccoin.zcash.ui.screen.privateusd.progress
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
 import co.electriccoin.zcash.ui.design.util.StringResource
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
 
 internal data class PrivateUsdProgressState(
     val amounts: StringResource?,
@@ -18,6 +19,7 @@ internal data class PrivateUsdProgressState(
     val callOff: ButtonState?,
     val showsBackgroundNote: Boolean,
     val primaryButton: ButtonState?,
+    val info: PrivateUsdInfo,
     val onBack: () -> Unit,
 )
 

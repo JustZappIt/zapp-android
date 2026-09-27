@@ -11,6 +11,7 @@ internal data class PrivateUsdState(
     val total: StringResource?,
     val rows: List<PrivateUsdRowState>,
     val assets: List<PrivateUsdAssetState>,
+    /** The total in dollars while it shows in another currency, then when it was updated. */
     val status: StringResource?,
     val isRefreshing: Boolean,
     val refreshFailed: Boolean,
@@ -19,6 +20,7 @@ internal data class PrivateUsdState(
     /** Null while this build can't send. */
     val sending: PrivateUsdSendingState?,
     val activity: List<PrivateUsdActivityState>,
+    val info: PrivateUsdInfo,
     val onConvert: () -> Unit,
     val onRefresh: () -> Unit,
     val onBack: () -> Unit,

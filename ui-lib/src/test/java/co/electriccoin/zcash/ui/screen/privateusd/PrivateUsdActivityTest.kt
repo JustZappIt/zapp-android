@@ -6,16 +6,19 @@ package co.electriccoin.zcash.ui.screen.privateusd
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapState
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapTestnet
+import co.electriccoin.zcash.ui.common.privateusd.DollarRate
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendRecord
 import co.electriccoin.zcash.ui.design.util.StringResource
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
 import xyz.justzappit.offramp.atomicswap.NothingSentCause
 import xyz.justzappit.offramp.atomicswap.SwapQuote
+import java.math.BigDecimal
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class PrivateUsdActivityTest {
     private val opened = mutableListOf<String>()
@@ -37,6 +40,7 @@ class PrivateUsdActivityTest {
                     ),
                 sends = listOf(send(at = 300)),
                 current = AtomicSwapState(),
+                rate = null,
             )
 
         assertEquals(
@@ -52,10 +56,23 @@ class PrivateUsdActivityTest {
                 swaps = listOf(swap(index = 0, at = 10, AtomicSwapOutcome.Paid).copy(payoutTx = "0xpay")),
                 sends = emptyList(),
                 current = AtomicSwapState(),
+                rate = null,
             )
 
         assertEquals("0xpay", rows.single().txHash)
         assertEquals(AtomicSwapTestnet.deployment.explorerTxUrl + "0xpay", rows.single().txUrl)
+    }
+
+    @Test
+    fun `the amounts show in the user's currency beside the dollars only when it isn't the dollar`() {
+        val swaps = listOf(swap(index = 0, at = 10, AtomicSwapOutcome.Paid))
+        val sends = listOf(send(at = 20))
+
+        val inRupees = activity.of(swaps, sends, AtomicSwapState(), DollarRate("₹", BigDecimal("83.5")))
+        val inDollars = activity.of(swaps, sends, AtomicSwapState(), rate = null)
+
+        assertTrue(inRupees.all { it.local != null })
+        assertTrue(inDollars.all { it.local == null })
     }
 
     @Test
@@ -66,6 +83,7 @@ class PrivateUsdActivityTest {
                 swaps = listOf(swap(index = 0, at = 10, AtomicSwapOutcome.Paid), latest),
                 sends = listOf(send(at = 5)),
                 current = AtomicSwapState(record = latest),
+                rate = null,
             )
 
         rows.forEach { it.onClick?.invoke() }

@@ -13,13 +13,17 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
+import co.electriccoin.zcash.ui.common.privateusd.DollarRate
+import co.electriccoin.zcash.ui.common.privateusd.ObserveDollarRateUseCase
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
+import co.electriccoin.zcash.ui.common.privateusd.local
 import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
 import co.electriccoin.zcash.ui.screen.privateusd.authorizeSpend
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
 import kotlinx.coroutines.Job
@@ -53,6 +57,7 @@ class PrivateUsdConvertVM(
     private val biometricRepository: BiometricRepository,
     private val navigationRouter: NavigationRouter,
     accountDataSource: AccountDataSource,
+    observeDollarRate: ObserveDollarRateUseCase,
 ) : ViewModel() {
     private val terms =
         checkNotNull(atomicSwapRepository.deployment) { "no conversions in this build" }.let { deployment ->
@@ -80,37 +85,42 @@ class PrivateUsdConvertVM(
         }
 
     internal val state: StateFlow<PrivateUsdConvertState> =
-        combine(form, accountDataSource.zashiAccount.map { it?.spendableShieldedBalance }, clock, ::createState)
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-                initialValue = createState(form.value, null, Clock.System.now().epochSeconds),
-            )
+        combine(
+            form,
+            accountDataSource.zashiAccount.map { it?.spendableShieldedBalance },
+            observeDollarRate(),
+            clock,
+            ::createState,
+        ).stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
+            initialValue = createState(form.value, null, null, Clock.System.now().epochSeconds),
+        )
 
     private fun createState(
         form: ConvertForm,
         spendable: Zatoshi?,
+        rate: DollarRate?,
         now: Long,
     ): PrivateUsdConvertState {
         val ready = form.quote as? ConvertQuote.Ready
         val expired = ready != null && ready.secondsLeft(now) <= 0
         val short = ready != null && terms.isShort(ready, spendable)
-        val message = message(form, spendable?.takeIf { short }, expired)
+        val isAmountInvalid = terms.isInvalid(form.amount)
         return PrivateUsdConvertState(
             phase = form.phase,
-            amounts = terms.amounts,
-            selectedAmount = form.selected,
-            onAmountSelect = ::onAmountSelect,
-            customAmount =
-                NumberTextFieldState(innerState = form.custom, onValueChange = ::onCustomChange)
-                    .takeIf { form.selected == terms.custom },
-            limits = terms.limits,
+            amount = NumberTextFieldState(innerState = form.amount, onValueChange = ::onAmountChange),
+            amountNote =
+                form.amount.amount
+                    ?.takeIf { rate != null && !isAmountInvalid }
+                    ?.let { stringRes(R.string.private_usd_worth, rate.local(it)) }
+                    ?: terms.limits,
+            isAmountInvalid = isAmountInvalid,
             zecAvailable = spendable?.let { stringRes(it) },
             quote = ready?.let { terms.quote(it, now) },
             isQuoting = form.quote is ConvertQuote.Loading,
-            message = message,
-            isMessageDanger = message != null && message != terms.limits,
-            duration = terms.duration,
+            message = message(form, spendable?.takeIf { short }, expired),
+            info = info(form.phase),
             primaryButton = primaryButton(form, canGoOn = ready != null && !expired && !short, expired = expired),
             onBack = ::onBack,
         )
@@ -126,8 +136,41 @@ class PrivateUsdConvertVM(
             form.quote is ConvertQuote.Failed -> form.quote.message
             shortOf != null -> stringRes(R.string.convert_insufficient, stringRes(shortOf))
             expired && form.phase == PrivateUsdConvertPhase.REVIEW -> stringRes(R.string.convert_quote_ran_out)
-            form.selected == terms.custom && terms.units(form.custom) == null -> terms.limits
             else -> null
+        }
+
+    private fun info(phase: PrivateUsdConvertPhase): PrivateUsdInfo =
+        when (phase) {
+            PrivateUsdConvertPhase.AMOUNT -> {
+                PrivateUsdInfo(
+                    title = stringRes(R.string.convert_info_title),
+                    steps =
+                        listOf(
+                            stringRes(R.string.convert_info_step_quote),
+                            stringRes(R.string.convert_info_step_deposit),
+                            stringRes(R.string.convert_info_step_claim),
+                        ),
+                    notes =
+                        listOf(
+                            stringRes(R.string.convert_info_note_either),
+                            stringRes(R.string.convert_info_note_time, terms.duration),
+                        ),
+                )
+            }
+
+            PrivateUsdConvertPhase.REVIEW -> {
+                PrivateUsdInfo(
+                    title = stringRes(R.string.convert_review_info_title),
+                    notes =
+                        listOf(
+                            stringRes(R.string.convert_review_info_pay),
+                            stringRes(R.string.convert_review_info_receive),
+                            stringRes(R.string.convert_review_info_quote),
+                            stringRes(R.string.convert_info_note_either),
+                            stringRes(R.string.convert_info_note_time, terms.duration),
+                        ),
+                )
+            }
         }
 
     private fun primaryButton(
@@ -160,17 +203,8 @@ class PrivateUsdConvertVM(
             }
         }
 
-    private fun onAmountSelect(index: Int) {
-        form.update { it.copy(selected = index, error = null) }
-        if (index < terms.presets.size) {
-            requestQuote(terms.presets[index], Duration.ZERO)
-        } else {
-            onCustomChange(form.value.custom)
-        }
-    }
-
-    private fun onCustomChange(inner: NumberTextFieldInnerState) {
-        form.update { it.copy(custom = inner, error = null) }
+    private fun onAmountChange(inner: NumberTextFieldInnerState) {
+        form.update { it.copy(amount = inner, error = null) }
         val units = terms.units(inner)
         if (units != null) {
             requestQuote(units, TYPING_DEBOUNCE)

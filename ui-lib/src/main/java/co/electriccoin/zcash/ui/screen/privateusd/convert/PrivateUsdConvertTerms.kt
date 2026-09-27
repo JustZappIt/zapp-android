@@ -17,9 +17,7 @@ import co.electriccoin.zcash.ui.screen.privateusd.about
 
 internal data class ConvertForm(
     val phase: PrivateUsdConvertPhase = PrivateUsdConvertPhase.AMOUNT,
-    /** An index into the presets, or one past them for "Other". */
-    val selected: Int? = null,
-    val custom: NumberTextFieldInnerState = NumberTextFieldInnerState(),
+    val amount: NumberTextFieldInnerState = NumberTextFieldInnerState(),
     val quote: ConvertQuote = ConvertQuote.None,
     val isConfirming: Boolean = false,
     val error: StringResource? = null,
@@ -49,28 +47,25 @@ internal sealed interface ConvertQuote {
     ) : ConvertQuote
 }
 
-/** A deployment's amounts, in dollars: what the presets are, what a custom amount may be, what a quote says. */
+/** A deployment's amounts, in dollars: what may be converted, and what a quote says. */
 internal class PrivateUsdConvertTerms(
     deployment: AtomicSwapDeployment,
     private val token: PrivateUsdToken,
 ) {
-    val presets: List<Int> = deployment.presetUnits
-    val custom: Int = presets.size
     val duration: StringResource = deployment.expectedDuration.about()
     private val maxUnits = deployment.maxUnits
     private val unitDollars = deployment.unitBaseUnits.toBigInteger().toDecimal(token.decimals)
 
-    val amounts: List<StringResource> =
-        presets.map { stringRes("$" + (unitDollars * it.toBigDecimal()).stripTrailingZeros().toPlainString()) } +
-            stringRes(R.string.convert_custom)
-
     val limits: StringResource = stringRes(R.string.convert_limits, unitDollars.toInt(), unitDollars.toInt() * maxUnits)
 
     /** Whole units within the limits, or null. */
-    fun units(custom: NumberTextFieldInnerState): Int? {
-        val (units, remainder) = custom.amount?.divideAndRemainder(unitDollars) ?: return null
+    fun units(amount: NumberTextFieldInnerState): Int? {
+        val (units, remainder) = amount.amount?.divideAndRemainder(unitDollars) ?: return null
         return units.toInt().takeIf { remainder.signum() == 0 && it in 1..maxUnits }
     }
+
+    fun isInvalid(amount: NumberTextFieldInnerState): Boolean =
+        !amount.innerTextFieldState.value.isEmpty() && units(amount) == null
 
     fun isShort(
         ready: ConvertQuote.Ready,

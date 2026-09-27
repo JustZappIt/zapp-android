@@ -10,6 +10,8 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapState
+import co.electriccoin.zcash.ui.common.privateusd.DollarRate
+import co.electriccoin.zcash.ui.common.privateusd.ObserveDollarRateUseCase
 import co.electriccoin.zcash.ui.common.privateusd.ObservePrivateUsdAvailableUseCase
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
@@ -32,6 +34,7 @@ import kotlinx.coroutines.flow.stateIn
 class PrivateUsdWidgetVM(
     observePrivateUsdAvailable: ObservePrivateUsdAvailableUseCase,
     balanceRepository: PrivateUsdBalanceRepository,
+    observeDollarRate: ObserveDollarRateUseCase,
     private val atomicSwapRepository: AtomicSwapRepository,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
@@ -40,7 +43,12 @@ class PrivateUsdWidgetVM(
         observePrivateUsdAvailable()
             .flatMapLatest { isAvailable ->
                 if (isAvailable) {
-                    combine(balanceRepository.observe(), atomicSwapRepository.state, ::createState)
+                    combine(
+                        balanceRepository.observe(),
+                        atomicSwapRepository.state,
+                        observeDollarRate(),
+                        ::createState,
+                    )
                 } else {
                     flowOf(null)
                 }
@@ -52,12 +60,13 @@ class PrivateUsdWidgetVM(
 
     private fun createState(
         balance: PrivateUsdBalanceState,
-        swap: AtomicSwapState
+        swap: AtomicSwapState,
+        rate: DollarRate?,
     ): PrivateUsdWidgetState {
         val balances = balance.balances
         return PrivateUsdWidgetState(
-            balance = balances?.spendable(),
-            arriving = balances?.arrivingTag(),
+            balance = balances?.spendable(rate),
+            arriving = balances?.arrivingTag(rate),
             isBlocked = (balances?.blocked?.signum() ?: 0) > 0,
             conversion =
                 if (swap.isUnderWay) {

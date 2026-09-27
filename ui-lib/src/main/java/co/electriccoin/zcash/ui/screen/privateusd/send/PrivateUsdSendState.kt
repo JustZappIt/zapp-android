@@ -6,6 +6,7 @@ package co.electriccoin.zcash.ui.screen.privateusd.send
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
 
 internal enum class PrivateUsdSendPhase { FORM, REVIEW, SENDING, DONE }
 
@@ -16,19 +17,22 @@ internal data class PrivateUsdSendState(
     val assets: List<String>,
     val selectedAsset: Int,
     val onAssetSelect: (Int) -> Unit,
+    /** In dollars. */
     val amount: NumberTextFieldState,
-    val amountSymbol: String,
+    /** Under the amount: what's wrong with it, or what it's worth in the user's currency. */
+    val amountNote: StringResource?,
+    val isAmountInvalid: Boolean,
     val available: StringResource?,
     val onMax: () -> Unit,
     val recipient: String,
     val onRecipientChange: (String) -> Unit,
     val recipientError: StringResource?,
-    val amountError: StringResource?,
     val review: PrivateUsdSendReviewState?,
     /** From 0 to 1 while the proof is being built. */
     val proofProgress: Float?,
     val done: PrivateUsdSendDoneState?,
     val error: StringResource?,
+    val info: PrivateUsdInfo,
     val primaryButton: ButtonState,
     val onBack: () -> Unit,
 )

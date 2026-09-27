@@ -25,8 +25,6 @@ object AtomicSwapTestnet {
     // The maker's unit is one whole token, and it quotes up to 20 at a time.
     private const val UNIT_BASE_UNITS = 1_000_000L
     private const val MAX_UNITS = 20
-    private const val PRESET_FIVE = 5
-    private const val PRESET_TEN = 10
 
     val deployment =
         AtomicSwapDeployment(
@@ -45,7 +43,6 @@ object AtomicSwapTestnet {
             ethereumRpcUrl = "https://ethereum-sepolia-rpc.publicnode.com",
             explorerTxUrl = "https://sepolia.etherscan.io/tx/",
             unitBaseUnits = UNIT_BASE_UNITS,
-            presetUnits = listOf(1, PRESET_FIVE, PRESET_TEN, MAX_UNITS),
             maxUnits = MAX_UNITS,
             makerConfirmations = CONFIRMATIONS,
             screeningTime = 1.minutes,

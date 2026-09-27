@@ -13,6 +13,12 @@ import java.math.RoundingMode
 private const val CENTS = 2
 private const val MAX_TOKEN_DECIMALS = 6
 
+/** What a dollar is worth in the user's currency, which shows as [symbol]. */
+data class DollarRate(
+    val symbol: String,
+    val perDollar: BigDecimal,
+)
+
 fun BigInteger.toDecimal(decimals: Int): BigDecimal = BigDecimal(this, decimals)
 
 fun BigDecimal.toBaseUnits(decimals: Int): BigInteger =
@@ -22,14 +28,15 @@ fun BigDecimal.toBaseUnits(decimals: Int): BigInteger =
 fun dollars(
     amount: BigDecimal,
     estimate: Boolean = false
-): StringResource =
-    stringResByCurrencyNumber(
-        amount = amount.setScale(CENTS, if (estimate) RoundingMode.HALF_UP else RoundingMode.DOWN),
-        ticker = "$",
-        tickerLocation = TickerLocation.BEFORE,
-        minDecimals = CENTS,
-        maxDecimals = CENTS,
-    )
+): StringResource = money(amount.setScale(CENTS, if (estimate) RoundingMode.HALF_UP else RoundingMode.DOWN), "$")
+
+/** [amount] dollars in the user's currency, or as dollars without a rate. */
+fun DollarRate?.local(amount: BigDecimal): StringResource =
+    if (this == null) {
+        dollars(amount)
+    } else {
+        money((amount * perDollar).setScale(CENTS, RoundingMode.HALF_UP), symbol)
+    }
 
 fun tokenAmount(
     amount: BigInteger,
@@ -47,3 +54,15 @@ fun tokenAmount(
             maxDecimals = MAX_TOKEN_DECIMALS,
         )
     }
+
+private fun money(
+    amount: BigDecimal,
+    symbol: String
+): StringResource =
+    stringResByCurrencyNumber(
+        amount = amount,
+        ticker = symbol,
+        tickerLocation = TickerLocation.BEFORE,
+        minDecimals = CENTS,
+        maxDecimals = CENTS,
+    )

@@ -2,11 +2,14 @@ package co.electriccoin.zcash.ui.design.component.zapp
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -18,6 +21,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -101,7 +107,20 @@ fun ZappOfframpHeroAmountField(
             balance?.let {
                 Column(
                     horizontalAlignment = Alignment.End,
-                    modifier = Modifier.padding(start = 12.dp),
+                    verticalArrangement = Arrangement.Center,
+                    modifier =
+                        Modifier
+                            .padding(start = 12.dp)
+                            .then(
+                                if (it.onClick != null) {
+                                    Modifier
+                                        .defaultMinSize(minHeight = 48.dp)
+                                        .clickable(onClick = it.onClick)
+                                        .semantics(mergeDescendants = true) { role = Role.Button }
+                                } else {
+                                    Modifier
+                                }
+                            ),
                 ) {
                     BasicText(
                         text = it.label,
@@ -112,8 +131,8 @@ fun ZappOfframpHeroAmountField(
                         text = it.amount,
                         style =
                             ZappTheme.typography.caption.copy(
-                                color = c.textMuted,
-                                fontWeight = FontWeight.Medium,
+                                color = if (it.onClick != null) c.accentText else c.textMuted,
+                                fontWeight = if (it.onClick != null) FontWeight.SemiBold else FontWeight.Medium,
                                 textAlign = TextAlign.End,
                             ),
                         maxLines = 1,

@@ -3,20 +3,10 @@
 
 package co.electriccoin.zcash.ui.screen.privateusd.progress
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -24,7 +14,6 @@ import androidx.compose.ui.text.font.FontWeight
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
-import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
@@ -37,63 +26,41 @@ import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdScaffold
 
 @Composable
 internal fun PrivateUsdProgressView(state: PrivateUsdProgressState) {
     val c = ZappTheme.colors
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(c.bg)
-                .windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.displayCutout)),
+    PrivateUsdScaffold(
+        title = stringResource(R.string.convert_title),
+        info = state.info,
+        onBack = state.onBack,
+        primaryButton = state.primaryButton,
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = ZappTheme.spacing.xl, vertical = ZappTheme.spacing.xl),
-            verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.xl2),
-        ) {
-            Header(state)
-            state.problem?.let { Problem(message = it.getValue(), onRetry = state.onRetry) }
-            state.note?.let {
-                BasicText(
-                    text = it.getValue(),
-                    style = ZappTheme.typography.body.copy(color = c.accentText, fontWeight = FontWeight.Medium),
-                )
-            }
-            state.callOff?.let {
-                ZappButton(
-                    text = it.text.getValue(),
-                    variant = ZappButtonVariant.Ghost,
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = it.onClick,
-                )
-            }
-            if (state.steps.isNotEmpty()) ZappStepList(steps = state.steps)
-            if (state.showsBackgroundNote) {
-                BasicText(
-                    text = stringResource(R.string.convert_background_note),
-                    style = ZappTheme.typography.caption.copy(color = c.textMuted),
-                )
-            }
+        Header(state)
+        state.problem?.let { Problem(message = it.getValue(), onRetry = state.onRetry) }
+        state.note?.let {
+            BasicText(
+                text = it.getValue(),
+                style = ZappTheme.typography.body.copy(color = c.accentText, fontWeight = FontWeight.Medium),
+            )
         }
-        ZappBottomActionBar(
-            onBack = state.onBack,
-            primaryAction =
-                state.primaryButton?.let { button ->
-                    {
-                        ZappButton(
-                            text = button.text.getValue(),
-                            modifier = Modifier.weight(1f).padding(start = ZappTheme.spacing.lg),
-                            onClick = button.onClick,
-                        )
-                    }
-                },
-        )
+        state.callOff?.let {
+            ZappButton(
+                text = it.text.getValue(),
+                variant = ZappButtonVariant.Ghost,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = it.onClick,
+            )
+        }
+        if (state.steps.isNotEmpty()) ZappStepList(steps = state.steps)
+        if (state.showsBackgroundNote) {
+            BasicText(
+                text = stringResource(R.string.convert_background_note),
+                style = ZappTheme.typography.caption.copy(color = c.textMuted),
+            )
+        }
     }
 }
 
@@ -101,25 +68,17 @@ internal fun PrivateUsdProgressView(state: PrivateUsdProgressState) {
 private fun Header(state: PrivateUsdProgressState) {
     val c = ZappTheme.colors
     val result = state.result
-    Column(verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.sm)) {
-        when {
-            result?.isSuccess == true -> {
-                ZappSuccessHeader(title = result.title, subtitle = result.body)
+    if (result?.isSuccess == true) {
+        ZappSuccessHeader(title = result.title, subtitle = result.body)
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.sm)) {
+            BasicText(
+                text = result?.title?.getValue() ?: stringResource(R.string.convert_progress_title),
+                style = ZappTheme.typography.sectionTitle.copy(color = c.text),
+            )
+            result?.let {
+                BasicText(text = it.body.getValue(), style = ZappTheme.typography.body.copy(color = c.textMuted))
             }
-
-            result != null -> {
-                BasicText(text = result.title.getValue(), style = ZappTheme.typography.display.copy(color = c.text))
-                BasicText(text = result.body.getValue(), style = ZappTheme.typography.body.copy(color = c.textMuted))
-            }
-
-            else -> {
-                BasicText(
-                    text = stringResource(R.string.convert_progress_title),
-                    style = ZappTheme.typography.display.copy(color = c.text),
-                )
-            }
-        }
-        if (result?.isSuccess != true) {
             state.amounts?.let {
                 BasicText(text = it.getValue(), style = ZappTheme.typography.caption.copy(color = c.textMuted))
             }
@@ -173,6 +132,7 @@ private fun UnderWayPreview() =
                     callOff = null,
                     showsBackgroundNote = true,
                     primaryButton = null,
+                    info = PrivateUsdInfo(title = stringRes("What's happening")),
                     onBack = {},
                 ),
         )
@@ -199,6 +159,7 @@ private fun RefundedPreview() =
                     callOff = null,
                     showsBackgroundNote = false,
                     primaryButton = ButtonState(stringRes("Try again")),
+                    info = PrivateUsdInfo(title = stringRes("What's happening")),
                     onBack = {},
                 ),
         )

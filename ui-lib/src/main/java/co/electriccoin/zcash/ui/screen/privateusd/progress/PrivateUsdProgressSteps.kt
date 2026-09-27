@@ -15,6 +15,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
 import co.electriccoin.zcash.ui.screen.privateusd.about
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
@@ -57,6 +58,20 @@ internal class PrivateUsdProgressSteps(
             }
         }
     }
+
+    val info =
+        PrivateUsdInfo(
+            title = stringRes(R.string.convert_progress_info_title),
+            steps =
+                listOf(
+                    stringRes(R.string.convert_progress_info_open),
+                    stringRes(R.string.convert_progress_info_deposit),
+                    stringRes(R.string.convert_progress_info_confirm, deployment.makerConfirmations),
+                    stringRes(R.string.convert_progress_info_claim),
+                    stringRes(R.string.convert_progress_info_screen, deployment.screeningTime.about()),
+                ),
+            notes = listOf(stringRes(R.string.convert_progress_info_refund)),
+        )
 
     fun amounts(record: AtomicSwapRecord): StringResource =
         stringRes(R.string.convert_progress_amounts, stringRes(Zatoshi(record.quote.depositZat)), received(record))

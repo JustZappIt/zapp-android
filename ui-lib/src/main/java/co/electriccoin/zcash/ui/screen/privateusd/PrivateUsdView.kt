@@ -9,19 +9,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,15 +21,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.zapp.TX_HASH_ELLIPSIS_PREFIX
 import co.electriccoin.zcash.ui.design.component.zapp.TX_HASH_ELLIPSIS_SUFFIX
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
-import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
-import co.electriccoin.zcash.ui.design.component.zapp.ZappCompactButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappExplorerLink
-import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
+import co.electriccoin.zcash.ui.design.component.zapp.ZappRefreshButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSummaryRow
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
@@ -50,55 +40,30 @@ import co.electriccoin.zcash.ui.screen.privateusd.widget.PrivateUsdConversionBan
 
 @Composable
 internal fun PrivateUsdView(state: PrivateUsdState) {
-    val c = ZappTheme.colors
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(c.bg)
-                .windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.displayCutout)),
+    PrivateUsdScaffold(
+        title = stringResource(R.string.private_usd_title),
+        subtitle = stringResource(R.string.private_usd_subtitle),
+        info = state.info,
+        onBack = state.onBack,
+        primaryButton = ButtonState(stringRes(R.string.private_usd_action_convert), onClick = state.onConvert),
     ) {
-        ZappScreenHeader(
-            title = stringResource(R.string.private_usd_title),
-            subtitle = stringResource(R.string.private_usd_subtitle),
-        )
-        Column(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = ZappTheme.spacing.xl2, vertical = ZappTheme.spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.xl),
-        ) {
-            Total(state)
-            state.conversion?.let { PrivateUsdConversionBanner(state = it) }
-            if (state.isEmpty) {
-                Empty()
-            } else if (state.rows.isNotEmpty()) {
-                Buckets(state.rows)
-            }
-            if (state.assets.isNotEmpty()) Assets(state.assets)
-            Sending(state.sending)
-            Activity(state.activity)
+        Total(state)
+        state.conversion?.let { PrivateUsdConversionBanner(state = it) }
+        if (state.isEmpty) {
+            Empty()
+        } else if (state.rows.isNotEmpty()) {
+            Buckets(state.rows)
         }
-        ZappBottomActionBar(
-            onBack = state.onBack,
-            primaryAction = {
-                ZappButton(
-                    text = stringResource(R.string.private_usd_action_convert),
-                    modifier = Modifier.weight(1f).padding(start = ZappTheme.spacing.lg),
-                    onClick = state.onConvert,
-                )
-            },
-        )
+        if (state.assets.isNotEmpty()) Assets(state.assets)
+        Sending(state.sending)
+        Activity(state.activity)
     }
 }
 
 @Composable
 private fun Total(state: PrivateUsdState) {
     val c = ZappTheme.colors
-    Column(verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.xs)) {
+    Column {
         BasicText(
             text = state.total?.getValue() ?: "—",
             style = ZappTheme.typography.balanceDisplay.copy(color = if (state.total == null) c.textSubtle else c.text),
@@ -109,9 +74,11 @@ private fun Total(state: PrivateUsdState) {
                 style = ZappTheme.typography.caption.copy(color = c.textMuted),
                 modifier = Modifier.weight(1f),
             )
-            if (!state.isRefreshing) {
-                ZappCompactButton(text = stringResource(R.string.private_usd_refresh), onClick = state.onRefresh)
-            }
+            ZappRefreshButton(
+                isRefreshing = state.isRefreshing,
+                contentDescription = stringResource(R.string.private_usd_refresh),
+                onClick = state.onRefresh,
+            )
         }
         if (state.refreshFailed) {
             BasicText(
@@ -203,21 +170,29 @@ private fun ActivityRow(row: PrivateUsdActivityState) {
                 )
             }
         }
-        row.amount?.let {
-            BasicText(
-                text = it.getValue(),
-                style =
-                    ZappTheme.typography.rowTitle.copy(
-                        color =
-                            when (row.tone) {
-                                PrivateUsdActivityTone.IN -> c.success
-                                PrivateUsdActivityTone.OUT -> c.text
-                                PrivateUsdActivityTone.NEUTRAL -> c.textMuted
-                            },
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                modifier = Modifier.padding(start = ZappTheme.spacing.lg),
-            )
+        Column(
+            modifier = Modifier.padding(start = ZappTheme.spacing.lg),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.xxs),
+        ) {
+            row.amount?.let {
+                BasicText(
+                    text = it.getValue(),
+                    style =
+                        ZappTheme.typography.rowTitle.copy(
+                            color =
+                                when (row.tone) {
+                                    PrivateUsdActivityTone.IN -> c.success
+                                    PrivateUsdActivityTone.OUT -> c.text
+                                    PrivateUsdActivityTone.NEUTRAL -> c.textMuted
+                                },
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                )
+            }
+            row.local?.let {
+                BasicText(text = it.getValue(), style = ZappTheme.typography.rowSubtitle.copy(color = c.textMuted))
+            }
         }
     }
 }
@@ -271,18 +246,18 @@ private fun PrivateUsdPreview() =
         PrivateUsdView(
             state =
                 PrivateUsdState(
-                    total = stringRes("$13.32"),
+                    total = stringRes("₹1,112.40"),
                     rows =
                         listOf(
-                            PrivateUsdRowState(stringRes("Available"), stringRes("$12.34"), null),
+                            PrivateUsdRowState(stringRes("Available"), stringRes("₹1,030.56"), null),
                             PrivateUsdRowState(
                                 stringRes("Arriving"),
-                                stringRes("$0.98"),
+                                stringRes("₹81.84"),
                                 stringRes("Railgun screens new funds before they can be spent."),
                             ),
                         ),
                     assets = emptyList(),
-                    status = stringRes("Updated 14:32"),
+                    status = stringRes("$13.32 · Updated 14:32"),
                     isRefreshing = false,
                     refreshFailed = false,
                     isEmpty = false,
@@ -294,6 +269,7 @@ private fun PrivateUsdPreview() =
                                 title = stringRes("Withdrew"),
                                 detail = stringRes("Sep 26 5:31 PM · to 0x1c7f9a…5539"),
                                 amount = stringRes("−$1.00"),
+                                local = stringRes("₹83.51"),
                                 tone = PrivateUsdActivityTone.OUT,
                                 onClick = {},
                                 txHash = "0x04cae34d302d737aa606008caf6c8a7adcf7e99aa336f5a04a93e49f4ab4bbc0",
@@ -303,10 +279,14 @@ private fun PrivateUsdPreview() =
                                 title = stringRes("Converted ZEC"),
                                 detail = stringRes("Sep 26 5:12 PM · 0.00202021 ZEC"),
                                 amount = stringRes("+$0.98"),
+                                local = stringRes("₹81.84"),
                                 tone = PrivateUsdActivityTone.IN,
                                 onClick = null,
+                                txHash = "0x744565a1e4f967e0de58e8439cfe02f9ad19222f1b4819a932f9a1ce0dcd1218",
+                                txUrl = "https://sepolia.etherscan.io/tx/0x7445",
                             ),
                         ),
+                    info = PrivateUsdInfo(title = stringRes("About private USD")),
                     onConvert = {},
                     onRefresh = {},
                     onBack = {},

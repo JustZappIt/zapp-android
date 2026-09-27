@@ -18,7 +18,6 @@ data class AtomicSwapDeployment(
     val explorerTxUrl: String,
     /** Token base units in one quoted unit. */
     val unitBaseUnits: Long,
-    val presetUnits: List<Int>,
     val maxUnits: Int,
     /** Zcash confirmations the maker waits for before it marks a deposit ready. */
     val makerConfirmations: Int,

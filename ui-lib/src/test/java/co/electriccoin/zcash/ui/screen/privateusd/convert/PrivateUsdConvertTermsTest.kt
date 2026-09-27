@@ -8,7 +8,6 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapQuote
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapTestnet
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
-import co.electriccoin.zcash.ui.design.util.StringResource
 import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOffer
 import xyz.justzappit.offramp.atomicswap.SwapQuote
@@ -28,22 +27,21 @@ class PrivateUsdConvertTermsTest {
         )
 
     @Test
-    fun `the presets read as dollars`() {
-        assertEquals(
-            listOf("$1", "$5", "$10", "$20"),
-            terms.amounts.take(terms.presets.size).map { (it as StringResource.ByString).value },
-        )
-        assertEquals(terms.presets.size, terms.custom)
+    fun `an amount is whole dollars within the maker's limit`() {
+        assertEquals(7, terms.units(dollars("7")))
+        assertEquals(20, terms.units(dollars("20")))
+        assertNull(terms.units(dollars("7.5")))
+        assertNull(terms.units(dollars("0")))
+        assertNull(terms.units(dollars("21")))
+        assertNull(terms.units(NumberTextFieldInnerState()))
     }
 
     @Test
-    fun `a custom amount is whole dollars within the maker's limit`() {
-        assertEquals(7, terms.units(custom("7")))
-        assertEquals(20, terms.units(custom("20")))
-        assertNull(terms.units(custom("7.5")))
-        assertNull(terms.units(custom("0")))
-        assertNull(terms.units(custom("21")))
-        assertNull(terms.units(NumberTextFieldInnerState()))
+    fun `only an amount that was typed can be invalid`() {
+        assertFalse(terms.isInvalid(NumberTextFieldInnerState()))
+        assertFalse(terms.isInvalid(dollars("7")))
+        assertTrue(terms.isInvalid(dollars("7.5")))
+        assertTrue(terms.isInvalid(dollars("21")))
     }
 
     @Test
@@ -55,7 +53,7 @@ class PrivateUsdConvertTermsTest {
         assertFalse(terms.isShort(ready, null))
     }
 
-    private fun custom(dollars: String) = NumberTextFieldInnerState.fromAmount(BigDecimal(dollars))
+    private fun dollars(amount: String) = NumberTextFieldInnerState.fromAmount(BigDecimal(amount))
 
     private fun offer(depositZat: Long) =
         AtomicSwapOffer(
