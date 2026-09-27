@@ -43,6 +43,9 @@ sealed interface SellEstimate {
     ) : SellEstimate
 
     data object NothingHeld : SellEstimate
+
+    /** Selling everything, but the holding is worth less than 1Click's fixed fees. There's no minimum to show. */
+    data object TooSmallToSell : SellEstimate
 }
 
 /**

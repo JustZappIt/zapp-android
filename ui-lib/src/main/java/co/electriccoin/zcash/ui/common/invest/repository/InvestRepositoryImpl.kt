@@ -17,6 +17,7 @@ import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpoint
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProvider
+import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import co.electriccoin.zcash.ui.common.model.DynamicSwapAddress
@@ -76,6 +77,7 @@ internal class InvestRepositoryImpl(
     private val swapAssetProvider: SwapAssetProvider,
     private val synchronizerProvider: SynchronizerProvider,
     private val checkpoints: InvestBuyCheckpointStorageProvider,
+    private val sellCheckpoints: InvestSellCheckpointStorageProvider,
     private val now: () -> Instant = { Clock.System.now() },
     private val pollIntervalMillis: Long = DEFAULT_POLL_INTERVAL_MS,
 ) : InvestRepository,
@@ -176,6 +178,7 @@ internal class InvestRepositoryImpl(
     ): PreparedBuy {
         require(usdAmount >= InvestRepository.MINIMUM_USD) { "Below the Invest minimum" }
         check(isAccountSupported()) { "Invest isn't available for this account" }
+        check(!hasSaleInFlight(asset)) { SALE_IN_FLIGHT }
         // The ZEC amount comes from this price, so it is never more than a minute old here.
         val catalog = catalogNoOlderThan(CATALOG_MAX_AGE)
         val destinationAsset = requireNotNull(catalog.swapAssets[asset.assetId]) { "1Click no longer lists this stock" }
@@ -235,6 +238,10 @@ internal class InvestRepositoryImpl(
         )
     }
 
+    /** A pending sale decides "not sold" from this stock's balance, which a buy landing meanwhile would raise. */
+    private suspend fun hasSaleInFlight(asset: InvestAsset): Boolean =
+        sellCheckpoints.observe().first().any { it.assetId == asset.assetId }
+
     override suspend fun isAccountSupported(): Boolean = accountDataSource.getSelectedAccount() is ZashiAccount
 
     override suspend fun dismissBuy(depositAddress: String) {
@@ -250,6 +257,7 @@ internal class InvestRepositoryImpl(
             check(checkpoints.observe().first().none { it.depositAddress == depositAddress }) {
                 "This buy was already paid"
             }
+            check(!hasSaleInFlight(prepared.asset)) { SALE_IN_FLIGHT }
             paying += depositAddress
         }
         try {
@@ -458,6 +466,7 @@ internal class InvestRepositoryImpl(
     private fun Long.toZec(): BigDecimal = BigDecimal(this).movePointLeft(ZEC_DECIMALS)
 
     private companion object {
+        const val SALE_IN_FLIGHT = "A sale of this stock is still in progress"
         const val ZEC_ASSET_ID = "nep141:zec.omft.near"
         const val ZEC_DECIMALS = 8
         const val SLIPPAGE_BPS = 100

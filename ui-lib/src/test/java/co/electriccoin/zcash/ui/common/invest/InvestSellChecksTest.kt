@@ -97,11 +97,33 @@ class InvestSellChecksTest {
     }
 
     @Test
+    fun `1Click's floor, rounded down to a whole zat, is within the slippage`() {
+        val order = assertIs<Resolved.Order>(InvestSellChecks.resolve(SellAmount.All, held, 18, price))
+        val fair = response(order)
+        // A real pair from 2026-09-25: 6342045 × 0.99 = 6278624.55, and 1Click promised 6278624.
+        val real = fair.copy(quote = fair.quote.copy(amountOut = BigDecimal(6_342_045), minAmountOut = BigDecimal(6_278_624)))
+        InvestSellChecks.requireEcho(real, nvda, order, ACCOUNT, PAYOUT)
+
+        val short = real.copy(quote = real.quote.copy(minAmountOut = BigDecimal(6_278_623)))
+        assertFailsWith<IllegalArgumentException> { InvestSellChecks.requireEcho(short, nvda, order, ACCOUNT, PAYOUT) }
+    }
+
+    @Test
+    fun `an amount 1Click can't cover its fees for is recognised`() {
+        assertTrue(InvestSellChecks.isAmountTooSmall(400, "Quote error. INSUFFICIENT_AMOUNT"))
+        assertTrue(InvestSellChecks.isAmountTooSmall(400, "Amount is too low for bridge, try at least 1000000"))
+        assertFalse(InvestSellChecks.isAmountTooSmall(400, "tokenIn is not valid"))
+        assertFalse(InvestSellChecks.isAmountTooSmall(500, "INSUFFICIENT_AMOUNT"))
+    }
+
+    @Test
     fun `only a refusal that proves nothing ran is definite`() {
         assertTrue(InvestSellChecks.isDefiniteRefusal(429, null))
         assertTrue(InvestSellChecks.isDefiniteRefusal(400, "Invalid signature"))
         assertTrue(InvestSellChecks.isDefiniteRefusal(400, "Deadline has expired"))
         assertFalse(InvestSellChecks.isDefiniteRefusal(400, "Nonce already used"))
+        assertFalse(InvestSellChecks.isDefiniteRefusal(400, "Duplicate signature"))
+        assertFalse(InvestSellChecks.isDefiniteRefusal(400, "Signature already used"))
         assertFalse(InvestSellChecks.isDefiniteRefusal(400, "Insufficient balance"))
         assertFalse(InvestSellChecks.isDefiniteRefusal(400, null))
         assertFalse(InvestSellChecks.isDefiniteRefusal(500, "signature"))

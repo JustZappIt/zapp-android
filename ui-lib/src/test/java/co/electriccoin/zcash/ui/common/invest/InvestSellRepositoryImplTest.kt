@@ -261,6 +261,33 @@ internal class InvestSellRepositoryImplTest : InvestSellRepositoryTestBase() {
         }
 
     @Test
+    fun `a buy of the same stock, even one started during the prompt, holds the sale back`() =
+        runTest {
+            val prepared = repository.prepareSell(nvda, SellAmount.All)
+            coEvery { biometrics.requestBiometrics(any()) } answers {
+                buyCheckpoints.value = listOf(InvestBuyCheckpoint("buy-deposit", nvda.assetId, 0))
+            }
+
+            assertFailsWith<IllegalStateException> { repository.executeSell(prepared) }
+            assertFailsWith<IllegalStateException> { repository.prepareSell(nvda, SellAmount.All) }
+            assertTrue(api.submitted.isEmpty())
+            assertTrue(checkpoints.items.value.isEmpty())
+        }
+
+    @Test
+    fun `failing to note the intent hash doesn't report an accepted sale as failed`() =
+        runTest {
+            checkpoints.failOnHash = true
+
+            assertEquals(DEPOSIT, repository.executeSell(repository.prepareSell(nvda, SellAmount.All)))
+            assertNull(
+                checkpoints.items.value
+                    .single()
+                    .intentHash
+            )
+        }
+
+    @Test
     fun `an intent with anything beyond the transfer is refused`() =
         runTest {
             api.extraTransferField = "\"memo\":\"hi\","
@@ -269,10 +296,14 @@ internal class InvestSellRepositoryImplTest : InvestSellRepositoryTestBase() {
         }
 
     @Test
-    fun `a holding too small for the fees estimates as below the minimum`() =
+    fun `a holding too small for the fees can't be sold, with no minimum to show`() =
         runTest {
-            api.quoteFailure = InvestApiException.Api(400, "Amount is too low for bridge, try at least 1000000", "c")
-            assertEquals(SellEstimate.BelowMinimum(BigDecimal(40)), repository.estimateSell(nvda, SellAmount.All))
+            api.quoteFailure = InvestApiException.Api(400, "Quote error. INSUFFICIENT_AMOUNT", "c")
+            assertEquals(SellEstimate.TooSmallToSell, repository.estimateSell(nvda, SellAmount.All))
+            assertEquals(
+                SellEstimate.BelowMinimum(BigDecimal(40)),
+                repository.estimateSell(nvda, SellAmount.Usd(BigDecimal(50))),
+            )
 
             api.quoteFailure = InvestApiException.Api(400, "tokenIn is not valid", "c")
             assertFailsWith<InvestApiException.Api> { repository.estimateSell(nvda, SellAmount.All) }
@@ -283,10 +314,14 @@ internal class InvestSellRepositoryImplTest : InvestSellRepositoryTestBase() {
         runTest {
             now += 5.minutes
 
-            val order = assertIs<SellEstimate.Priced>(repository.estimateSell(nvda, SellAmount.Units(BigDecimal("0.1"))))
+            val order = assertIs<SellEstimate.Priced>(repository.estimateSell(nvda, SellAmount.Units(BigDecimal("0.440974"))))
 
             coVerify { investRepository.refreshMarket() }
-            assertEquals(BigDecimal("0.100000000000000000"), order.unitsIn)
+            assertEquals(BigDecimal("0.440974000000000000"), order.unitsIn)
+            assertEquals(
+                SellEstimate.BelowMinimum(BigDecimal(40)),
+                repository.estimateSell(nvda, SellAmount.Units(BigDecimal("0.1"))),
+            )
             assertFailsWith<IllegalArgumentException> { repository.prepareSell(nvda, SellAmount.Units(BigDecimal("0.1"))) }
             assertTrue(api.generateRequests.isEmpty())
             assertEquals(SellEstimate.NoPrice, repository.estimateSell(nvda, SellAmount.Usd(BigDecimal(50))))

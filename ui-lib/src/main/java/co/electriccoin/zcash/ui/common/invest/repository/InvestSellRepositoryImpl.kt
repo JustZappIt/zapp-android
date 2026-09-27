@@ -14,17 +14,13 @@ import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentRequest
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpoint
+import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSellChecks.Resolved
-import co.electriccoin.zcash.ui.common.model.near.Confidentiality
-import co.electriccoin.zcash.ui.common.model.near.QuoteRequest
-import co.electriccoin.zcash.ui.common.model.near.RecipientType
-import co.electriccoin.zcash.ui.common.model.near.RefundType
 import co.electriccoin.zcash.ui.common.model.near.SwapStatus
 import co.electriccoin.zcash.ui.common.model.near.SwapStatusResponseDto
-import co.electriccoin.zcash.ui.common.model.near.SwapType
 import co.electriccoin.zcash.ui.common.provider.OfframpBridgeWallet
 import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.common.repository.BiometricRequest
@@ -39,9 +35,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import xyz.justzappit.evm.intents.IntentTransferSigner
 import xyz.justzappit.evm.intents.IntentTransferSigner.ExpectedTransfer
 import java.math.BigDecimal
@@ -53,8 +46,8 @@ import kotlin.time.Instant
 /**
  * Sells a holding back to ZEC. The quote's deposit comes from the private account and the refund goes back
  * to it; the ZEC is paid to a fresh shielded address in this wallet. The intent `generate-intent` returns
- * is checked by [IntentTransferSigner] before it is shown, and again as it is signed. One sale per stock
- * runs at a time, so a pending sale's balance check can't be confused by another.
+ * is checked by [IntentTransferSigner] before it is shown, and again as it is signed. A stock is sold only
+ * while no other buy or sale of it is pending, so a pending sale's balance check can't be confused by one.
  *
  * UNVERIFIED end to end: see [InvestSellRepository].
  */
@@ -68,6 +61,7 @@ internal class InvestSellRepositoryImpl(
     private val swapAssets: InvestSwapAssetSource,
     private val biometricRepository: BiometricRepository,
     private val checkpoints: InvestSellCheckpointStorageProvider,
+    private val buyCheckpoints: InvestBuyCheckpointStorageProvider,
     private val now: () -> Instant = { Clock.System.now() },
     private val pollIntervalMillis: Long = DEFAULT_POLL_INTERVAL_MS,
 ) : InvestSellRepository {
@@ -90,16 +84,21 @@ internal class InvestSellRepositoryImpl(
                 is Resolved.Refused -> return resolved.estimate
             }
         val recipient = estimateRecipient ?: wallet.zcashAddress().also { estimateRecipient = it }
+        val accountId = keys.accountId()
+        val request = InvestSellChecks.quoteRequest(dry = true, asset, order.baseUnits, recipient, accountId, now())
         val response =
             try {
-                api.requestQuote(quoteRequest(dry = true, asset, order.baseUnits, recipient, keys.accountId()))
+                api.requestQuote(request)
             } catch (_: InvestApiException.NoPrice) {
                 return SellEstimate.NoPrice
             } catch (e: InvestApiException.Api) {
-                // Selling all of a holding worth less than the fixed fees: 1Click says the amount is too low.
-                if (e.isAmountTooLow()) return SellEstimate.BelowMinimum(InvestRepository.MINIMUM_USD)
-                throw e
+                if (!InvestSellChecks.isAmountTooSmall(e.status, e.apiMessage)) throw e
+                val minimum = SellEstimate.BelowMinimum(InvestRepository.MINIMUM_USD)
+                return if (order.isAll) SellEstimate.TooSmallToSell else minimum
             }
+        if (InvestSellChecks.isBelowMinimum(order, response.quote.amountInUsd)) {
+            return SellEstimate.BelowMinimum(InvestRepository.MINIMUM_USD)
+        }
         return SellEstimate.Priced(
             unitsIn = order.units,
             usdIn = response.quote.amountInUsd,
@@ -125,7 +124,10 @@ internal class InvestSellRepositoryImpl(
         val accountId = keys.accountId()
         // A fresh shielded address per sale, so the payout isn't linked to any other payment.
         val recipient = wallet.zcashAddress()
-        val response = api.requestQuote(quoteRequest(dry = false, asset, order.baseUnits, recipient, accountId))
+        val response =
+            api.requestQuote(
+                InvestSellChecks.quoteRequest(dry = false, asset, order.baseUnits, recipient, accountId, now()),
+            )
         InvestSellChecks.requireEcho(response, asset, order, accountId, recipient)
         val depositAddress =
             requireNotNull(response.quote.depositAddress?.takeIf { it.isNotBlank() }) {
@@ -141,7 +143,7 @@ internal class InvestSellRepositoryImpl(
         IntentTransferSigner.verify(payload, accountId, expected, now().toEpochMilliseconds())?.let { rejection ->
             throw SellIntentRefusedException(rejection, generated.correlationId)
         }
-        val intentDeadline = payloadDeadline(payload)
+        val intentDeadline = InvestSellChecks.payloadDeadline(payload)
         val quoteDeadline =
             requireNotNull(response.quote.deadline) { "1Click returned an executable quote with no deadline" }
         return PreparedSell(
@@ -182,8 +184,9 @@ internal class InvestSellRepositoryImpl(
                         ),
                 ),
             )
-            // The prompt can outlast the price hold; the signature must not.
+            // The prompt can outlast the price hold; the signature must not. A buy may have started meanwhile.
             check(now() < prepared.expiresAt) { PRICE_EXPIRED }
+            check(!hasSaleInFlight(prepared.asset)) { SALE_IN_FLIGHT }
             val signed = sign(prepared)
             // Read before anything leaves, so a sale that never reports back can still be told from one that ran.
             val heldBefore = heldBaseUnits(assetId)
@@ -239,7 +242,7 @@ internal class InvestSellRepositoryImpl(
                             ),
                     ),
                 )
-            checkpoints.add(checkpoint.copy(intentHash = response.intentHash))
+            rememberIntentHash(checkpoint, response.intentHash)
         } catch (e: InvestApiException) {
             val definite =
                 when (e) {
@@ -251,6 +254,22 @@ internal class InvestSellRepositoryImpl(
                 checkpoints.remove(checkpoint.depositAddress)
                 throw e
             }
+        }
+    }
+
+    /** Best effort: the sale was accepted, and failing to note its hash must not report it as failed. */
+    private suspend fun rememberIntentHash(
+        checkpoint: InvestBuyCheckpoint,
+        intentHash: String,
+    ) {
+        try {
+            checkpoints.add(checkpoint.copy(intentHash = intentHash))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") _: Exception
+        ) {
+            // Support falls back to the deposit address.
         }
     }
 
@@ -288,12 +307,17 @@ internal class InvestSellRepositoryImpl(
             null
         }
 
+    /**
+     * Status may not know the quote until its intent is seen: before the intent's deadline that's waiting, and
+     * after it the balance decides, as for a quote still pending. Without a checkpoint there's no deadline to
+     * wait for, so repeated rejections end in support.
+     */
     private suspend fun Poll.onRejected(e: InvestApiException.Api): SellProgress? {
-        // Status may not know the quote until its intent is seen; before the deadline that's still waiting.
-        val waiting = e.status == HTTP_NOT_FOUND && (intentDeadline == null || now() < intentDeadline)
-        rejected = if (!waiting && e.status in PERMANENT_POLL_ERRORS) rejected + 1 else 0
+        val unknownUntil = intentDeadline?.takeIf { e.status == HTTP_NOT_FOUND }
+        rejected = if (unknownUntil == null && e.status in PERMANENT_POLL_ERRORS) rejected + 1 else 0
         return when {
-            waiting -> SellProgress.Authorised(depositAddress)
+            unknownUntil != null && now() > unknownUntil + NOT_SOLD_GRACE -> notSoldOrAttention(depositAddress)
+            unknownUntil != null -> SellProgress.Authorised(depositAddress)
             rejected >= MAX_REJECTED_POLLS -> needsAttention(depositAddress)
             else -> null
         }
@@ -382,8 +406,10 @@ internal class InvestSellRepositoryImpl(
     private suspend fun checkpoint(depositAddress: String): InvestBuyCheckpoint? =
         checkpoints.observe().first().firstOrNull { it.depositAddress == depositAddress }
 
+    /** Any sale of [asset] not yet final, or a buy of it, whose shares would move the balance a sale checks. */
     private suspend fun hasSaleInFlight(asset: InvestAsset): Boolean =
-        checkpoints.observe().first().any { it.assetId == asset.assetId }
+        checkpoints.observe().first().any { it.assetId == asset.assetId } ||
+            buyCheckpoints.observe().first().any { it.assetId == asset.assetId }
 
     private suspend fun resolve(
         asset: InvestAsset,
@@ -427,49 +453,12 @@ internal class InvestSellRepositoryImpl(
         baseUnits: String,
     ) = ExpectedTransfer(receiverId = depositAddress, tokenId = asset.assetId, amount = baseUnits)
 
-    private fun quoteRequest(
-        dry: Boolean,
-        asset: InvestAsset,
-        baseUnits: BigInteger,
-        recipient: String,
-        accountId: String,
-    ) = QuoteRequest(
-        dry = dry,
-        swapType = SwapType.EXACT_INPUT,
-        slippageTolerance = InvestSellChecks.SLIPPAGE_BPS,
-        originAsset = asset.assetId,
-        depositType = RefundType.CONFIDENTIAL_INTENTS,
-        destinationAsset = InvestSellChecks.ZEC_ASSET_ID,
-        amount = BigDecimal(baseUnits),
-        refundTo = accountId,
-        refundType = RefundType.CONFIDENTIAL_INTENTS,
-        recipient = recipient,
-        recipientType = RecipientType.DESTINATION_CHAIN,
-        deadline = now() + QUOTE_DEADLINE,
-        quoteWaitingTimeMs = QUOTE_WAITING_TIME_MS,
-        appFees = emptyList(),
-        referral = REFERRAL,
-        confidentiality = Confidentiality.BASIC,
-    )
-
-    private fun payloadDeadline(payload: String): Instant {
-        val deadline = ((Json.parseToJsonElement(payload) as JsonObject)["deadline"] as JsonPrimitive).content
-        return Instant.parse(deadline)
-    }
-
-    private fun InvestApiException.Api.isAmountTooLow() =
-        status == HTTP_BAD_REQUEST && apiMessage.orEmpty().contains(TOO_LOW, ignoreCase = true)
-
     private companion object {
         const val STANDARD = "erc191"
         const val PRIVATE_SOURCE = "private"
         const val ZEC_DECIMALS = 8
-        const val QUOTE_WAITING_TIME_MS = 3_000
-        const val REFERRAL = "zapp"
-        const val TOO_LOW = "too low"
-        const val SALE_IN_FLIGHT = "A sale of this stock is still in progress"
+        const val SALE_IN_FLIGHT = "A buy or sale of this stock is still in progress"
         const val PRICE_EXPIRED = "The price is no longer held; prepare the sale again"
-        const val HTTP_BAD_REQUEST = 400
         const val HTTP_NOT_FOUND = 404
         const val DEFAULT_POLL_INTERVAL_MS = 5_000L
         const val MAX_REJECTED_POLLS = 3
@@ -477,7 +466,6 @@ internal class InvestSellRepositoryImpl(
         val PRICE_HELD = 10.minutes
         val PRICE_MAX_AGE = 1.minutes
         val SUBMIT_MARGIN = 1.minutes
-        val QUOTE_DEADLINE = 30.minutes
 
         // A signed intent past its deadline can't run; this covers clock differences before checking the balance.
         val NOT_SOLD_GRACE = 5.minutes
