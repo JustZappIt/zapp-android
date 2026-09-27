@@ -18,6 +18,8 @@ import co.electriccoin.zcash.ui.common.invest.repository.InvestSellRepositoryImp
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepositoryImpl
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSwapAssetSource
+import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollower
+import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollowerImpl
 import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeGuard
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
@@ -64,6 +66,7 @@ val investModule =
                 now = get<InvestServerClock>().let { clock -> { Instant.fromEpochMilliseconds(clock.nowMillis()) } },
             )
         } binds arrayOf(InvestRepository::class, InvestSwapAssetSource::class)
+        single<InvestTradeFollower> { InvestTradeFollowerImpl(buys = get(), sells = get()) }
         single {
             PrivateAccountSession(
                 api = get(),

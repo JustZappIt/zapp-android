@@ -72,7 +72,8 @@ internal class InvestSellRepositoryImpl(
     private val submitting = mutableSetOf<String>()
     private val submittingMutex = Mutex()
 
-    override val pendingSells: Flow<List<String>> = checkpoints.observe().map { list -> list.map { it.depositAddress } }
+    override val pendingSells: Flow<List<String>> =
+        trades.pendingTrades.map { list -> list.orEmpty().filter { it.isSale }.map { it.depositAddress } }
 
     // Each early return is one of the estimate's outcomes, in the order the screen explains them.
     @Suppress("ReturnCount")

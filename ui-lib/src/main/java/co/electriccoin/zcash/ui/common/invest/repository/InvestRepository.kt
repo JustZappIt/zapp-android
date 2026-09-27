@@ -26,8 +26,11 @@ interface InvestRepository {
     /** Buys that were sent but haven't finished, including ones from before the app was last closed. */
     val pendingBuys: Flow<List<String>>
 
-    /** Every buy and sale not yet final, by stock. A stock with one can't be bought or sold. */
-    val pendingTrades: Flow<List<PendingTrade>>
+    /**
+     * Every buy and sale not yet final, by stock, stuck ones included until dismissed. A stock with one can't
+     * be bought or sold. Null when the records can't be read: then nothing can be traded.
+     */
+    val pendingTrades: Flow<List<PendingTrade>?>
 
     suspend fun refreshMarket()
 

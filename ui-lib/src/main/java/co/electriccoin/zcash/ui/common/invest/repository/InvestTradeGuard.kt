@@ -1,9 +1,12 @@
 package co.electriccoin.zcash.ui.common.invest.repository
 
+import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProvider
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
@@ -20,10 +23,18 @@ internal class InvestTradeGuard(
 ) {
     private val mutex = Mutex()
 
-    val pendingTrades: Flow<List<PendingTrade>> =
+    /**
+     * Every buy and sale not yet final. Null when the records can't be read (a corrupted store): which trades
+     * are pending is then unknown, so nothing may be traded, and every trade refuses anyway.
+     */
+    val pendingTrades: Flow<List<PendingTrade>?> =
         combine(buys.observe(), sells.observe()) { buying, selling ->
             buying.map { PendingTrade(it.depositAddress, it.assetId, isSale = false) } +
                 selling.map { PendingTrade(it.depositAddress, it.assetId, isSale = true) }
+        }.catch<List<PendingTrade>?> { e ->
+            if (e is CancellationException) throw e
+            Twig.warn(e) { "Invest trade records can't be read" }
+            emit(null)
         }
 
     suspend fun <T> withLock(block: suspend () -> T): T = mutex.withLock { block() }
