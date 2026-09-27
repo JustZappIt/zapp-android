@@ -34,6 +34,9 @@ internal class FakeInvestRepository : InvestRepository {
     var onExecute: suspend (PreparedBuy) -> String = { error("no execute scripted") }
     var onObserve: (String) -> Flow<BuyProgress> = { emptyFlow() }
 
+    var accountSupported = true
+    val dismissedBuys = mutableListOf<String>()
+
     val estimateCalls = mutableListOf<BigDecimal>()
     val prepareCalls = mutableListOf<BigDecimal>()
     val executeCalls = mutableListOf<PreparedBuy>()
@@ -68,6 +71,12 @@ internal class FakeInvestRepository : InvestRepository {
     }
 
     override fun observeBuy(depositAddress: String): Flow<BuyProgress> = onObserve(depositAddress)
+
+    override suspend fun isAccountSupported(): Boolean = accountSupported
+
+    override suspend fun dismissBuy(depositAddress: String) {
+        dismissedBuys += depositAddress
+    }
 }
 
 internal class FakeInvestSettingsRepository(

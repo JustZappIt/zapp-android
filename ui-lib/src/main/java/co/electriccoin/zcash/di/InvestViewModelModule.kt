@@ -10,7 +10,6 @@ import co.electriccoin.zcash.ui.screen.invest.gate.InvestUnavailableVM
 import co.electriccoin.zcash.ui.screen.invest.gate.ResidenceHintProvider
 import co.electriccoin.zcash.ui.screen.invest.home.InvestHomeVM
 import co.electriccoin.zcash.ui.screen.invest.intro.InvestIntroVM
-import co.electriccoin.zcash.ui.screen.invest.progress.InvestBuyDismisser
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressVM
 import co.electriccoin.zcash.ui.screen.invest.receipt.InvestReceiptVM
 import co.electriccoin.zcash.ui.screen.invest.section.InvestmentsSectionVM
@@ -59,10 +58,6 @@ val investViewModelModule =
                 navigationRouter = get(),
                 clock = Clock.System,
             )
-        }
-        // The buy engine's InvestRepository.dismissBuy replaces this when the branches meet (see InvestBuyDismisser).
-        factory<InvestBuyDismisser> {
-            InvestBuyDismisser { throw UnsupportedOperationException("dismissBuy arrives with the buy engine") }
         }
         viewModelOf(::InvestProgressVM)
         viewModelOf(::InvestReceiptVM)

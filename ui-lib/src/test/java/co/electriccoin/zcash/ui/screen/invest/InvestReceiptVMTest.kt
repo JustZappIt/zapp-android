@@ -8,6 +8,7 @@ import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.invest.model.InvestMarket
 import co.electriccoin.zcash.ui.common.invest.model.MarketAsset
 import co.electriccoin.zcash.ui.common.model.DynamicSimpleSwapAsset
+import co.electriccoin.zcash.ui.common.model.SwapBlockchain
 import co.electriccoin.zcash.ui.common.model.SwapMode
 import co.electriccoin.zcash.ui.common.model.SwapStatus
 import co.electriccoin.zcash.ui.common.repository.MetadataRepository
@@ -19,6 +20,7 @@ import co.electriccoin.zcash.ui.screen.invest.receipt.InvestReceiptArgs
 import co.electriccoin.zcash.ui.screen.invest.receipt.InvestReceiptState
 import co.electriccoin.zcash.ui.screen.invest.receipt.InvestReceiptVM
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
@@ -136,7 +138,12 @@ class InvestReceiptVMTest {
             lastUpdated = java.time.Instant.ofEpochMilli(START_MILLIS),
             origin = mockk(relaxed = true),
             destination =
-                DynamicSimpleSwapAsset("NVDAon", stringRes("NVIDIA"), mockk(relaxed = true), mockk(relaxed = true)),
+                DynamicSimpleSwapAsset(
+                    tokenTicker = "NVDAon",
+                    tokenName = stringRes("NVIDIA"),
+                    tokenIcon = mockk(relaxed = true),
+                    blockchain = mockk<SwapBlockchain>(relaxed = true) { every { chainTicker } returns "bsc" },
+                ),
             mode = SwapMode.EXACT_INPUT,
             status = status,
             amountOutFormatted = BigDecimal("0.4410"),

@@ -32,7 +32,6 @@ import kotlinx.coroutines.launch
 internal class InvestProgressVM(
     private val args: InvestProgressArgs,
     private val investRepository: InvestRepository,
-    private val dismisser: InvestBuyDismisser,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     private val asset = args.assetId?.let(InvestAssets::find)
@@ -107,7 +106,7 @@ internal class InvestProgressVM(
     // Only the list entry goes: 1Click still settles or refunds the buy, and support has the reference.
     private fun onRemove() {
         viewModelScope.launch {
-            investCatching { dismisser.dismiss(args.depositAddress) }
+            investCatching { investRepository.dismissBuy(args.depositAddress) }
                 .onSuccess { navigationRouter.back() }
                 .onFailure { e ->
                     Twig.warn(e) { "InvestProgressVM: dismissing the buy failed" }

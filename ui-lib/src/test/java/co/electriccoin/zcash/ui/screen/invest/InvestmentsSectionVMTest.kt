@@ -7,9 +7,7 @@ import co.electriccoin.zcash.ui.common.invest.model.Holdings
 import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettings
-import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.WalletAccount
-import co.electriccoin.zcash.ui.common.model.ZashiAccount
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestGateArgs
 import co.electriccoin.zcash.ui.screen.invest.home.InvestHomeArgs
@@ -71,7 +69,7 @@ class InvestmentsSectionVMTest {
     @Test
     fun `a Keystone account sees nothing Invest and nothing is fetched for it`() =
         runTest {
-            val fixture = fixture(settings = READY, account = mockk<KeystoneAccount>())
+            val fixture = fixture(settings = READY, accountSupported = false)
             fixture.repo.holdings.value = HOLDINGS
 
             assertEquals(InvestPayState.HIDDEN, fixture.state())
@@ -180,17 +178,17 @@ class InvestmentsSectionVMTest {
     private fun TestScope.fixture(
         isEnabled: Boolean = true,
         settings: InvestSettings,
-        account: WalletAccount = mockk<ZashiAccount>(),
+        accountSupported: Boolean = true,
     ): Fixture {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val repo = FakeInvestRepository()
+        val repo = FakeInvestRepository().also { it.accountSupported = accountSupported }
         val settingsRepo = FakeInvestSettingsRepository(settings)
         val router = mockk<NavigationRouter>(relaxed = true)
         val vm =
             InvestmentsSectionVM(
                 investRepository = repo,
                 settingsRepository = settingsRepo,
-                accountDataSource = mockk<AccountDataSource>().also { every { it.selectedAccount } returns flowOf(account) },
+                accountDataSource = mockk<AccountDataSource>().also { every { it.selectedAccount } returns flowOf(mockk<WalletAccount>()) },
                 navigateToInvest = NavigateToInvestUseCase(settingsRepo, router),
                 isInvestEnabled = isEnabled,
             )

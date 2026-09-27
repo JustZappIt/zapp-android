@@ -66,6 +66,18 @@ class InvestProgressVMTest {
             listOf(ZappStepStatus.Completed, ZappStepStatus.Completed, ZappStepStatus.Failed),
             statuses(BuyProgress.NeedsAttention(DEPOSIT, "c8f4806d")),
         )
+        assertEquals(listOf(ZappStepStatus.Failed), statuses(BuyProgress.Expired(DEPOSIT)))
+    }
+
+    @Test
+    fun `an expired buy says nothing was bought`() {
+        val expired = BuyProgress.Expired(DEPOSIT)
+
+        assertEquals(stringRes(R.string.invest_progress_expired_title), BuyProgressToSteps.title(expired, NVIDIA))
+        assertEquals(
+            stringRes(R.string.invest_progress_expired_subtitle),
+            BuyProgressToSteps.subtitle(expired, NVIDIA, "$100.00"),
+        )
     }
 
     @Test
@@ -96,7 +108,7 @@ class InvestProgressVMTest {
             val repo = FakeInvestRepository()
             val updates = MutableSharedFlow<BuyProgress>()
             repo.onObserve = { updates }
-            val vm = InvestProgressVM(ARGS, repo, {}, mockk(relaxed = true))
+            val vm = InvestProgressVM(ARGS, repo, mockk(relaxed = true))
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
             advanceUntilIdle()
 
@@ -120,7 +132,7 @@ class InvestProgressVMTest {
             Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val repo = FakeInvestRepository()
             repo.onObserve = { flowOf(BuyProgress.NeedsAttention(DEPOSIT, "c8f4806d")) }
-            val vm = InvestProgressVM(ARGS, repo, {}, mockk(relaxed = true))
+            val vm = InvestProgressVM(ARGS, repo, mockk(relaxed = true))
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
             advanceUntilIdle()
 
@@ -135,7 +147,7 @@ class InvestProgressVMTest {
             val repo = FakeInvestRepository()
             repo.onObserve = { flow { throw InvestApiException.Unreachable(IOException()) } }
             val router = mockk<NavigationRouter>(relaxed = true)
-            val vm = InvestProgressVM(ARGS, repo, {}, router)
+            val vm = InvestProgressVM(ARGS, repo, router)
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
             advanceUntilIdle()
 
@@ -163,9 +175,8 @@ class InvestProgressVMTest {
             Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val repo = FakeInvestRepository()
             repo.onObserve = { flowOf(BuyProgress.NeedsAttention(DEPOSIT, "c8f4806d")) }
-            val dismissed = mutableListOf<String>()
             val router = mockk<NavigationRouter>(relaxed = true)
-            val vm = InvestProgressVM(ARGS, repo, { dismissed += it }, router)
+            val vm = InvestProgressVM(ARGS, repo, router)
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
             advanceUntilIdle()
 
@@ -173,7 +184,7 @@ class InvestProgressVMTest {
                 .onClick()
             advanceUntilIdle()
 
-            assertEquals(listOf(DEPOSIT), dismissed)
+            assertEquals(listOf(DEPOSIT), repo.dismissedBuys)
             verify { router.back() }
         }
 
@@ -183,7 +194,7 @@ class InvestProgressVMTest {
             Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             val repo = FakeInvestRepository()
             repo.onObserve = { flowOf(BuyProgress.Buying(DEPOSIT)) }
-            val vm = InvestProgressVM(ARGS, repo, {}, mockk(relaxed = true))
+            val vm = InvestProgressVM(ARGS, repo, mockk(relaxed = true))
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
             advanceUntilIdle()
 

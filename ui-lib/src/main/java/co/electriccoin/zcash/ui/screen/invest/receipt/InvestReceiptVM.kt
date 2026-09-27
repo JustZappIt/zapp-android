@@ -75,7 +75,7 @@ internal class InvestReceiptVM(
         market: InvestMarket?,
         supportOpen: Boolean,
     ): InvestReceiptState {
-        val asset = record?.destination?.tokenTicker?.let(::assetForTicker)
+        val asset = record?.destination?.let { InvestAssets.findBySwapTickers(it.tokenTicker, it.chainTicker) }
         val outcome = outcomeOf(progress, record?.status)
         val units =
             ((progress as? BuyProgress.Held)?.units ?: record?.amountOutFormatted)
@@ -114,7 +114,7 @@ internal class InvestReceiptVM(
             progress is BuyProgress.Held -> Outcome.HELD
             progress is BuyProgress.Refunded -> Outcome.REFUNDED
             progress is BuyProgress.NeedsAttention -> Outcome.ATTENTION
-            progress?.isFinal == true -> Outcome.EXPIRED
+            progress is BuyProgress.Expired -> Outcome.EXPIRED
             progress != null -> Outcome.PENDING
             recorded == SwapStatus.SUCCESS -> Outcome.HELD
             recorded == SwapStatus.REFUNDED -> Outcome.REFUNDED
@@ -164,18 +164,4 @@ internal class InvestReceiptVM(
 
     private fun onSeeProgress() = navigationRouter.forward(InvestProgressArgs(depositAddress = args.depositAddress))
 
-    private companion object {
-        /**
-         * The swap record names the token as 1Click lists it ("NVDAon"). The buy engine adds
-         * `InvestAssets.findBySwapTickers` for this; until the branches meet, match the ticker with or without
-         * Ondo's suffix.
-         */
-        fun assetForTicker(tokenTicker: String): InvestAsset? =
-            InvestAssets.curated.firstOrNull {
-                tokenTicker.equals(it.ticker, ignoreCase = true) ||
-                    tokenTicker.equals(it.ticker + ONDO_SUFFIX, ignoreCase = true)
-            }
-
-        const val ONDO_SUFFIX = "on"
-    }
 }

@@ -14,17 +14,16 @@ import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
  * warning on "Payment received", not a failure: 1Click either completes or refunds it. A refund or a FAILED status
  * replaces the last two steps.
  *
- * Any other final state is the quote expiring before a deposit arrived (the buy engine's `Expired`): nothing was
- * bought, and late ZEC is refunded by 1Click. The `when`s here have no subject so that state, and any later one,
- * lands in `else` rather than breaking the build.
+ * [BuyProgress.Expired] means no deposit reached 1Click before the quote's deadline: nothing was bought, and late
+ * ZEC is refunded by 1Click.
  */
 internal object BuyProgressToSteps {
     fun steps(
         progress: BuyProgress,
         asset: InvestAsset?,
     ): List<ZappStep> =
-        when {
-            progress is BuyProgress.SendingZec -> {
+        when (progress) {
+            is BuyProgress.SendingZec -> {
                 listOf(
                     sent(ZappStepStatus.InProgress, stringRes(R.string.invest_progress_step_sent_detail)),
                     received(ZappStepStatus.Pending),
@@ -33,7 +32,7 @@ internal object BuyProgressToSteps {
                 )
             }
 
-            progress is BuyProgress.PaymentReceived -> {
+            is BuyProgress.PaymentReceived -> {
                 listOf(
                     sent(ZappStepStatus.Completed),
                     received(
@@ -51,7 +50,7 @@ internal object BuyProgressToSteps {
                 )
             }
 
-            progress is BuyProgress.Buying -> {
+            is BuyProgress.Buying -> {
                 listOf(
                     sent(ZappStepStatus.Completed),
                     received(ZappStepStatus.Completed),
@@ -60,7 +59,7 @@ internal object BuyProgressToSteps {
                 )
             }
 
-            progress is BuyProgress.Held -> {
+            is BuyProgress.Held -> {
                 listOf(
                     sent(ZappStepStatus.Completed),
                     received(ZappStepStatus.Completed),
@@ -69,7 +68,7 @@ internal object BuyProgressToSteps {
                 )
             }
 
-            progress is BuyProgress.Refunded -> {
+            is BuyProgress.Refunded -> {
                 listOf(
                     sent(ZappStepStatus.Completed),
                     received(ZappStepStatus.Completed),
@@ -86,7 +85,7 @@ internal object BuyProgressToSteps {
                 )
             }
 
-            progress is BuyProgress.NeedsAttention -> {
+            is BuyProgress.NeedsAttention -> {
                 listOf(
                     sent(ZappStepStatus.Completed),
                     received(ZappStepStatus.Completed),
@@ -94,18 +93,8 @@ internal object BuyProgressToSteps {
                 )
             }
 
-            progress.isFinal -> {
+            is BuyProgress.Expired -> {
                 listOf(ZappStep(stringRes(R.string.invest_progress_step_expired), ZappStepStatus.Failed))
-            }
-
-            // A state this screen doesn't know yet that isn't final: still under way.
-            else -> {
-                listOf(
-                    sent(ZappStepStatus.InProgress),
-                    received(ZappStepStatus.Pending),
-                    buying(ZappStepStatus.Pending, asset),
-                    held(ZappStepStatus.Pending),
-                )
             }
         }
 
@@ -117,7 +106,7 @@ internal object BuyProgressToSteps {
             progress is BuyProgress.Held -> stringRes(R.string.invest_progress_held_title)
             progress is BuyProgress.Refunded -> stringRes(R.string.invest_progress_refunded_title)
             progress is BuyProgress.NeedsAttention -> stringRes(R.string.invest_progress_attention_title)
-            progress?.isFinal == true -> stringRes(R.string.invest_progress_expired_title)
+            progress is BuyProgress.Expired -> stringRes(R.string.invest_progress_expired_title)
             asset != null -> stringRes(R.string.invest_progress_title, asset.name)
             else -> stringRes(R.string.invest_progress_title_unknown)
         }
@@ -146,7 +135,7 @@ internal object BuyProgressToSteps {
                 null
             }
 
-            progress?.isFinal == true -> {
+            progress is BuyProgress.Expired -> {
                 stringRes(R.string.invest_progress_expired_subtitle)
             }
 

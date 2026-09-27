@@ -10,7 +10,6 @@ import co.electriccoin.zcash.ui.common.invest.model.InvestEligibility
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettings
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepository
-import co.electriccoin.zcash.ui.common.model.ZashiAccount
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.NavigateToInvestUseCase
@@ -35,8 +34,7 @@ import kotlinx.coroutines.launch
  * `BuildConfig.IS_INVEST_ENABLED` in the app and a plain flag in tests.
  *
  * Invest is only for the phone's own account (decided 2026-09-27): with a Keystone account selected, nothing
- * Invest-related shows. This reads the account type directly; the buy engine's
- * `InvestRepository.isAccountSupported()` makes the same decision and also refuses the buy.
+ * Invest-related shows. [InvestRepository.isAccountSupported] decides, asked again whenever the account changes.
  */
 internal class InvestmentsSectionVM(
     private val investRepository: InvestRepository,
@@ -57,12 +55,17 @@ internal class InvestmentsSectionVM(
 
     private val refresh = MutableStateFlow<Refresh>(Refresh.Idle)
 
+    private val isOwnAccount =
+        accountDataSource.selectedAccount
+            .map { investCatching { investRepository.isAccountSupported() }.getOrDefault(false) }
+            .distinctUntilChanged()
+
     init {
         if (isInvestEnabled) {
             viewModelScope.launch {
                 combine(
                     settingsRepository.settings.map { it.isAvailable && it.setupComplete },
-                    accountDataSource.selectedAccount.map { it is ZashiAccount },
+                    isOwnAccount,
                 ) { isSetUp, isOwnAccount -> isSetUp && isOwnAccount }
                     .distinctUntilChanged()
                     .filter { it }
@@ -79,7 +82,7 @@ internal class InvestmentsSectionVM(
                 settingsRepository.settings,
                 investRepository.holdings,
                 refresh,
-                accountDataSource.selectedAccount.map { it is ZashiAccount }.distinctUntilChanged(),
+                isOwnAccount.distinctUntilChanged(),
             ) { settings, holdings, status, isOwnAccount ->
                 if (isOwnAccount) buildState(settings, holdings, status) else InvestPayState.HIDDEN
             }.stateIn(
