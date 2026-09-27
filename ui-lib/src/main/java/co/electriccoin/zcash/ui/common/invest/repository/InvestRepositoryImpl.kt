@@ -1,6 +1,7 @@
 package co.electriccoin.zcash.ui.common.invest.repository
 
 import cash.z.ecc.android.sdk.type.AddressType
+import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.InsufficientFundsException
 import co.electriccoin.zcash.ui.common.datasource.TransactionProposalNotCreatedException
 import co.electriccoin.zcash.ui.common.invest.model.BuyEstimate
@@ -20,6 +21,7 @@ import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import co.electriccoin.zcash.ui.common.model.DynamicSwapAddress
 import co.electriccoin.zcash.ui.common.model.SwapAsset
+import co.electriccoin.zcash.ui.common.model.ZashiAccount
 import co.electriccoin.zcash.ui.common.model.ZcashShieldedSwapAddress
 import co.electriccoin.zcash.ui.common.model.ZcashSwapAddress
 import co.electriccoin.zcash.ui.common.model.ZcashTransparentSwapAddress
@@ -38,6 +40,7 @@ import co.electriccoin.zcash.ui.common.provider.SwapAssetProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.common.provider.ZEC_BRIDGE_FEE_RESERVE
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,6 +51,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.math.BigDecimal
 import java.math.RoundingMode
 import kotlin.time.Clock
@@ -68,6 +72,7 @@ internal class InvestRepositoryImpl(
     private val session: PrivateAccountSession,
     private val keys: PrivateAccountKeyProvider,
     private val wallet: OfframpBridgeWallet,
+    private val accountDataSource: AccountDataSource,
     private val swapAssetProvider: SwapAssetProvider,
     private val synchronizerProvider: SynchronizerProvider,
     private val checkpoints: InvestBuyCheckpointStorageProvider,
@@ -170,6 +175,7 @@ internal class InvestRepositoryImpl(
         usdAmount: BigDecimal,
     ): PreparedBuy {
         require(usdAmount >= InvestRepository.MINIMUM_USD) { "Below the Invest minimum" }
+        check(isAccountSupported()) { "Invest isn't available for this account" }
         // The ZEC amount comes from this price, so it is never more than a minute old here.
         val catalog = catalogNoOlderThan(CATALOG_MAX_AGE)
         val destinationAsset = requireNotNull(catalog.swapAssets[asset.assetId]) { "1Click no longer lists this stock" }
@@ -229,8 +235,15 @@ internal class InvestRepositoryImpl(
         )
     }
 
+    override suspend fun isAccountSupported(): Boolean = accountDataSource.getSelectedAccount() is ZashiAccount
+
+    override suspend fun dismissBuy(depositAddress: String) {
+        checkpoints.remove(depositAddress)
+    }
+
     override suspend fun executeBuy(prepared: PreparedBuy): String {
         check(now() < prepared.expiresAt) { "The price is no longer held; prepare the buy again" }
+        check(isAccountSupported()) { "Invest isn't available for this account" }
         val depositAddress = prepared.quote.depositAddress.address
         payingMutex.withLock {
             check(depositAddress !in paying) { "This buy is already being paid" }
@@ -258,7 +271,8 @@ internal class InvestRepositoryImpl(
             // Any other failure may come after a broadcast (a partial or gRPC result): the checkpoint stays, and
             // polling finds out whether 1Click saw the deposit or the quote expired without one.
         } finally {
-            payingMutex.withLock { paying -= depositAddress }
+            // Also when cancelled (a Keystone flow replaces the screen): the address mustn't stay marked in flight.
+            withContext(NonCancellable) { payingMutex.withLock { paying -= depositAddress } }
         }
         return depositAddress
     }
@@ -274,7 +288,7 @@ internal class InvestRepositoryImpl(
                         throw e
                     } catch (e: InvestApiException.Api) {
                         // A 4xx answers the same way every time; after a few, say so instead of polling forever.
-                        rejectedPolls = if (e.status in HTTP_CLIENT_ERRORS) rejectedPolls + 1 else 0
+                        rejectedPolls = if (e.status in PERMANENT_POLL_ERRORS) rejectedPolls + 1 else 0
                         if (rejectedPolls >= MAX_REJECTED_POLLS) {
                             BuyProgress.NeedsAttention(depositAddress, reference = depositAddress)
                         } else {
@@ -390,7 +404,7 @@ internal class InvestRepositoryImpl(
                 // No deposit by the quote's deadline: 1Click will never run this buy, and refunds any ZEC that
                 // arrives late. Without this, a buy whose send never happened would poll forever.
                 val deadline = quoteResponse.quote.deadline
-                if (deadline != null && now() > deadline) {
+                if (deadline != null && now() > deadline + EXPIRY_GRACE) {
                     BuyProgress.Expired(depositAddress)
                 } else {
                     BuyProgress.SendingZec(depositAddress)
@@ -457,7 +471,13 @@ internal class InvestRepositoryImpl(
         val CATALOG_MAX_AGE = 1.minutes
         val MAX_USD_DRIFT = BigDecimal("0.05")
         const val MAX_REJECTED_POLLS = 3
-        val HTTP_CLIENT_ERRORS = 400..499
+
+        // Statuses that answer the same way every time; 408 and 429 pass, so they don't count.
+        val PERMANENT_POLL_ERRORS = setOf(400, 404, 410)
+
+        // How long past its deadline an unfunded buy waits before it counts as expired: a deposit broadcast just
+        // before the deadline, or signed late on a hardware wallet, may take this long to show up.
+        val EXPIRY_GRACE = 30.minutes
         val DEPOSIT_DEADLINE = 2.hours
     }
 }

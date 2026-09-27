@@ -2,6 +2,7 @@ package co.electriccoin.zcash.ui.common.invest
 
 import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.android.sdk.type.AddressType
+import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.invest.model.AccountBalance
 import co.electriccoin.zcash.ui.common.invest.model.AuthenticateRequest
 import co.electriccoin.zcash.ui.common.invest.model.AuthenticateResponse
@@ -21,9 +22,12 @@ import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepositoryImpl
 import co.electriccoin.zcash.ui.common.model.DynamicSwapAsset
+import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.SwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapBlockchain
 import co.electriccoin.zcash.ui.common.model.SwapQuote
+import co.electriccoin.zcash.ui.common.model.WalletAccount
+import co.electriccoin.zcash.ui.common.model.ZashiAccount
 import co.electriccoin.zcash.ui.common.model.ZecSwapAsset
 import co.electriccoin.zcash.ui.common.model.near.Confidentiality
 import co.electriccoin.zcash.ui.common.model.near.NearTokenDto
@@ -71,6 +75,7 @@ class InvestRepositoryImplTest {
     private val checkpoints = FakeCheckpoints()
     private val session = mockk<PrivateAccountSession>()
     private val keys = PrivateAccountKeyProvider(SeedPhraseSource { TEST_MNEMONIC.toCharArray() })
+    private var currentAccount: WalletAccount = mockk<ZashiAccount>()
 
     private val repository =
         InvestRepositoryImpl(
@@ -78,6 +83,7 @@ class InvestRepositoryImplTest {
             session = session,
             keys = keys,
             wallet = wallet,
+            accountDataSource = mockk<AccountDataSource> { coEvery { getSelectedAccount() } answers { currentAccount } },
             swapAssetProvider = FakeSwapAssetProvider,
             synchronizerProvider =
                 mockk<SynchronizerProvider> {
@@ -251,7 +257,11 @@ class InvestRepositoryImplTest {
             checkpoints.add(InvestBuyCheckpoint(DEPOSIT, nvda.assetId, 0))
             api.deadline = now + 30.minutes
             api.statuses += status(SwapStatus.PENDING_DEPOSIT)
-            now += 31.minutes
+            api.statuses += status(SwapStatus.PENDING_DEPOSIT)
+            now += 31.minutes // past the deadline, within the grace period: still waiting
+            val waiting = repository.observeBuy(DEPOSIT).first()
+            assertEquals(BuyProgress.SendingZec(DEPOSIT), waiting)
+            now += 30.minutes
 
             assertEquals(listOf(BuyProgress.Expired(DEPOSIT)), repository.observeBuy(DEPOSIT).toList())
             assertTrue(checkpoints.items.value.isEmpty())
@@ -267,6 +277,41 @@ class InvestRepositoryImplTest {
             repository.observeBuy(DEPOSIT).first { it.isFinal }
 
             assertTrue(checkpoints.items.value.isEmpty())
+        }
+
+    @Test
+    fun `rate limiting is not mistaken for a permanent refusal`() =
+        runTest {
+            repeat(5) { api.statusFailures += InvestApiException.Api(429, "Too many requests", null) }
+            api.statuses += status(SwapStatus.SUCCESS, amountOut = BigDecimal("0.440974"))
+            coEvery { session.balances() } returns BalancesResponse(emptyList())
+
+            assertEquals(
+                listOf(BuyProgress.Held(DEPOSIT, BigDecimal("0.440974"))),
+                repository.observeBuy(DEPOSIT).toList(),
+            )
+        }
+
+    @Test
+    fun `a buy that needs attention can be dismissed`() =
+        runTest {
+            checkpoints.add(InvestBuyCheckpoint(DEPOSIT, nvda.assetId, 0))
+
+            repository.dismissBuy(DEPOSIT)
+
+            assertTrue(checkpoints.items.value.isEmpty())
+        }
+
+    @Test
+    fun `a Keystone account can't buy`() =
+        runTest {
+            val prepared = repository.prepareBuy(nvda, BigDecimal(100))
+            currentAccount = mockk<KeystoneAccount>()
+
+            assertEquals(false, repository.isAccountSupported())
+            assertFailsWith<IllegalStateException> { repository.prepareBuy(nvda, BigDecimal(100)) }
+            assertFailsWith<IllegalStateException> { repository.executeBuy(prepared) }
+            assertNull(wallet.checkpointsAtSend)
         }
 
     @Test

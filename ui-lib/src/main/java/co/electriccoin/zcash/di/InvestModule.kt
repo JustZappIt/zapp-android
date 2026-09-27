@@ -35,6 +35,7 @@ val investModule =
                 session = get(),
                 keys = get(),
                 wallet = get(),
+                accountDataSource = get(),
                 swapAssetProvider = get(),
                 synchronizerProvider = get(),
                 checkpoints = get(),

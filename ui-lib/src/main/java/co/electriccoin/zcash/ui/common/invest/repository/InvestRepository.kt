@@ -47,8 +47,20 @@ interface InvestRepository {
      */
     suspend fun executeBuy(prepared: PreparedBuy): String
 
+    /**
+     * Whether Invest may be used from the selected account. Only the phone's own account: a Keystone user's
+     * stocks would be held by a key on this phone, not by the hardware wallet (decided 2026-09-27).
+     */
+    suspend fun isAccountSupported(): Boolean
+
     /** Live progress of one buy, until it is final. */
     fun observeBuy(depositAddress: String): Flow<BuyProgress>
+
+    /**
+     * Stops listing a buy in [pendingBuys], for one that needs attention and has been taken to support. The
+     * buy itself is untouched: 1Click still settles or refunds it.
+     */
+    suspend fun dismissBuy(depositAddress: String)
 
     companion object {
         /** The in-app minimum (decided 2026-09-27): nothing below about $30 quoted on 2026-09-25/26. */
