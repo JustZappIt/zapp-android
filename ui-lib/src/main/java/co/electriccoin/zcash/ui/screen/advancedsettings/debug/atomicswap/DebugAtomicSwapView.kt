@@ -56,9 +56,8 @@ internal fun DebugAtomicSwapView(state: DebugAtomicSwapState) {
             ZappScreenHeader(title = "Atomic swap (spike)")
             Section("Status", state.status)
             ZappButton(text = "Copy swap id", variant = ZappButtonVariant.Secondary, onClick = state.onCopySwapId)
-            Step("1. Open a 1-unit swap", state.isBusy, state.onOpen)
-            Step("2. Verify and deposit", state.isBusy, state.onDeposit)
-            Step("3. Advance until finished", state.isBusy, state.onAdvance)
+            Step("Quote and accept 1 unit (deposits right after)", state.isBusy, state.onOpen)
+            Step("Advance now", state.isBusy, state.onAdvance)
             Step("Abandon (only if it never opened)", state.isBusy, state.onAbandon)
             if (state.activity.isNotEmpty()) Section("Activity", state.activity, mono = true)
             state.error?.let { error ->
@@ -124,7 +123,6 @@ private fun DebugAtomicSwapPreview() =
                     error = null,
                     isBusy = false,
                     onOpen = {},
-                    onDeposit = {},
                     onAdvance = {},
                     onAbandon = {},
                     onCopySwapId = {},

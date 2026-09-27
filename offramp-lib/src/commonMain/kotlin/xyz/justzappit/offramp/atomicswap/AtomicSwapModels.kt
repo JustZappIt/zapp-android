@@ -3,6 +3,7 @@
 
 package xyz.justzappit.offramp.atomicswap
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.types.Address
@@ -60,23 +61,83 @@ data class AtomicSwapRecord(
     val swapId: String,
     /** The Zcash height read before depositing: a refund imports the deposit account from here. */
     val zcashHeight: Long,
+    /** Unix seconds on this device's clock. */
+    val acceptedAt: Long,
+    /** What the offer said reaches Railgun, in token base units. */
+    val receives: String? = null,
     /** Set before the deposit is created, so an interrupted deposit is never paid twice. */
     val depositAttempted: Boolean = false,
     val depositTxId: String? = null,
-    val outcome: String? = null,
+    val outcome: AtomicSwapOutcome? = null,
+    val finishedAt: Long? = null,
 ) {
     val finished: Boolean get() = outcome != null
 }
 
+@Serializable
+sealed interface AtomicSwapOutcome {
+    @Serializable
+    @SerialName("paid")
+    data object Paid : AtomicSwapOutcome
+
+    /** The deposit came home in [sweepTxId]. */
+    @Serializable
+    @SerialName("refunded")
+    data class Refunded(
+        val sweepTxId: String,
+        val cause: RefundCause,
+    ) : AtomicSwapOutcome
+
+    /** Over before any ZEC left the wallet. */
+    @Serializable
+    @SerialName("nothing_sent")
+    data class NothingSent(
+        val cause: NothingSentCause
+    ) : AtomicSwapOutcome
+}
+
+enum class RefundCause { MAKER_CANCELLED, NOT_CLAIMED_IN_TIME }
+
+enum class NothingSentCause {
+    QUOTE_EXPIRED,
+    MAKER_REFUSED,
+    MAKER_UNAVAILABLE,
+    NEVER_OPENED,
+    MISMATCH,
+    DEPOSIT_WINDOW_MISSED,
+    MAKER_CANCELLED,
+}
+
 sealed interface AtomicSwapStep {
     data class Waiting(
-        val reason: String
+        val reason: AtomicSwapWait,
+        val t0: Long? = null,
+        val t1: Long? = null,
     ) : AtomicSwapStep
 
     data class Finished(
-        val outcome: String
+        val outcome: AtomicSwapOutcome
     ) : AtomicSwapStep
 }
+
+enum class AtomicSwapWait {
+    OPENING,
+    CONFIRMING,
+
+    /** A deposit was started but can't be found, and it's too late to pay it: the maker will call it off. */
+    DEPOSIT_UNSETTLED,
+}
+
+enum class AtomicSwapActivity { DEPOSITING, CLAIMING, PAYING_OUT, SWEEPING }
+
+/** A quote for swap [index], not accepted yet. [receives] is the payout after the relayer's and Railgun's fees. */
+data class AtomicSwapOffer(
+    val index: Int,
+    val units: Int,
+    val quote: SwapQuote,
+    val relayerFee: BigInteger,
+    val receives: BigInteger,
+)
 
 /** `POST /v1/quote`'s answer. Addresses, ids, shares and proofs are `0x` hex; `amount` is decimal. */
 @Serializable

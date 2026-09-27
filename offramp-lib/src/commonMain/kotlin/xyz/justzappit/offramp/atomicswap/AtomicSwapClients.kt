@@ -12,6 +12,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.io.IOException
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -19,12 +20,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.util.toHex
-
-class AtomicSwapHttpException(
-    message: String,
-    val status: Int? = null,
-    cause: Throwable? = null,
-) : Exception(message, cause)
 
 /**
  * The maker's quote API. The client must not retry: a quote is single-use, and an accept that timed
@@ -40,23 +35,25 @@ class MakerClient(
         payout: Address,
         payoutNote: ByteArray
     ): SwapQuote =
-        httpClient
-            .post(baseUrl.trimEnd('/') + "/v1/quote") {
+        reach(AtomicSwapService.MAKER) {
+            httpClient.post(baseUrl.trimEnd('/') + "/v1/quote") {
                 contentType(ContentType.Application.Json)
                 val request = QuoteRequest(units, payout.lowercaseHex, payoutNote.hex())
                 setBody(json.encodeToString(QuoteRequest.serializer(), request))
-            }.decode("maker", SwapQuote.serializer())
+            }
+        }.decode(AtomicSwapService.MAKER, SwapQuote.serializer())
 
     internal suspend fun accept(
         quoteId: String,
         acceptance: UserAcceptance
     ): Accepted {
         val body = AcceptRequest(acceptance.userShare.hex(), acceptance.userProof.hex(), acceptance.viewingKeys.hex())
-        return httpClient
-            .post(baseUrl.trimEnd('/') + "/v1/quote/$quoteId/accept") {
+        return reach(AtomicSwapService.MAKER) {
+            httpClient.post(baseUrl.trimEnd('/') + "/v1/quote/$quoteId/accept") {
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToString(AcceptRequest.serializer(), body))
-            }.decode("maker", Accepted.serializer())
+            }
+        }.decode(AtomicSwapService.MAKER, Accepted.serializer())
     }
 }
 
@@ -66,7 +63,8 @@ class RelayerClient(
     private val baseUrl: String,
 ) {
     internal suspend fun terms(): RelayerTerms =
-        httpClient.get(baseUrl.trimEnd('/') + "/v1/terms").decode("relayer", RelayerTerms.serializer())
+        reach(AtomicSwapService.RELAYER) { httpClient.get(baseUrl.trimEnd('/') + "/v1/terms") }
+            .decode(AtomicSwapService.RELAYER, RelayerTerms.serializer())
 
     internal suspend fun lockClaim(request: LockClaimRequest): Sent =
         post("/v1/lock-claim", request, LockClaimRequest.serializer())
@@ -80,11 +78,12 @@ class RelayerClient(
         request: T,
         serializer: KSerializer<T>
     ): Sent =
-        httpClient
-            .post(baseUrl.trimEnd('/') + path) {
+        reach(AtomicSwapService.RELAYER) {
+            httpClient.post(baseUrl.trimEnd('/') + path) {
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToString(serializer, request))
-            }.decode("relayer", Sent.serializer())
+            }
+        }.decode(AtomicSwapService.RELAYER, Sent.serializer())
 }
 
 private val json =
@@ -95,9 +94,20 @@ private val json =
 
 internal fun ByteArray.hex() = "0x" + toHex()
 
+/** A request that failed on the way, as an [AtomicSwapHttpException] naming the service it was for. */
+private suspend fun reach(
+    service: AtomicSwapService,
+    request: suspend () -> HttpResponse
+): HttpResponse =
+    try {
+        request()
+    } catch (e: IOException) {
+        throw AtomicSwapHttpException("${service.label} is unreachable: ${e.message}", service, cause = e)
+    }
+
 /** The body as [serializer], or the service's `{"error": …}` as an [AtomicSwapHttpException]. */
 private suspend fun <T> HttpResponse.decode(
-    service: String,
+    service: AtomicSwapService,
     serializer: KSerializer<T>
 ): T {
     val text = bodyAsText()
@@ -111,13 +121,15 @@ private suspend fun <T> HttpResponse.decode(
                     ?.content
             }.getOrNull()
         val detail = reason ?: text.take(ERROR_EXCERPT)
-        throw AtomicSwapHttpException("$service answered ${status.value}: $detail", status.value)
+        throw AtomicSwapHttpException("${service.label} answered ${status.value}: $detail", service, status.value)
     }
     return try {
         json.decodeFromString(serializer, text)
     } catch (e: SerializationException) {
-        throw AtomicSwapHttpException("$service sent an unreadable answer: ${e.message}", cause = e)
+        throw AtomicSwapHttpException("${service.label} sent an unreadable answer: ${e.message}", service, cause = e)
     }
 }
+
+private val AtomicSwapService.label get() = name.lowercase()
 
 private const val ERROR_EXCERPT = 200

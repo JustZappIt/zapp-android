@@ -32,6 +32,8 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.toRoute
 import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.compose.BindCompLocalProvider
 import co.electriccoin.zcash.ui.common.compose.DisableScreenTimeout
 import co.electriccoin.zcash.ui.common.extension.setContentCompat
@@ -100,6 +102,8 @@ class MainActivity : FragmentActivity() {
 
     private val pendingGiftLinks: PendingGiftLinkStore by inject()
     private val identityReturns: IdentityReturnInbox by inject()
+    private val atomicSwapDeployments: AtomicSwapDeployments by inject()
+    private val atomicSwapRepository: AtomicSwapRepository by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -254,6 +258,8 @@ class MainActivity : FragmentActivity() {
         Twig.debug { "Activity state: Start" }
         authenticationViewModel.runAuthenticationRequiredCheck()
         checkMigrationRecoveryOnStart()
+        // A conversion Android stopped in the background picks up again here, where it may run as a service.
+        if (atomicSwapDeployments.current != null) atomicSwapRepository.resume(isForeground = true)
         super.onStart()
     }
 

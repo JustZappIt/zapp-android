@@ -49,6 +49,11 @@
             android:name=".common.usecase.GiftShareCompletionReceiver"
             android:exported="false" />
 
+        <!-- Woken by the app's own alarms around a private USD conversion's deadlines. -->
+        <receiver
+            android:name=".common.atomicswap.AtomicSwapWakeReceiver"
+            android:exported="false" />
+
     </application>
 
 </manifest>

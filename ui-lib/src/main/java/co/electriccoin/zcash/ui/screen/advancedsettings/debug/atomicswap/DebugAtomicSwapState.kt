@@ -9,7 +9,6 @@ data class DebugAtomicSwapState(
     val error: String?,
     val isBusy: Boolean,
     val onOpen: () -> Unit,
-    val onDeposit: () -> Unit,
     val onAdvance: () -> Unit,
     val onAbandon: () -> Unit,
     val onCopySwapId: () -> Unit,

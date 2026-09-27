@@ -2,10 +2,14 @@ package co.electriccoin.zcash.di
 
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.BuildConfig
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapKeysImpl
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapNotifier
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapScheduler
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapStoreImpl
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapTestnet
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapZcashImpl
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapZcashInfo
 import co.electriccoin.zcash.ui.common.pricing.provider.HistoricalPriceCacheProvider
 import co.electriccoin.zcash.ui.common.pricing.provider.HistoricalPriceCacheProviderImpl
 import co.electriccoin.zcash.ui.common.provider.AndroidOnrampDeviceSignalsProvider
@@ -510,7 +514,8 @@ val providerModule =
             HasSeenHowToVoteKeystoneStorageProvider::class
         factoryOf(::IsBackgroundExecutionAvailableProvider)
         single { RailgunWallet(context = get(), debug = BuildConfig.DEBUG) }
-        single { AtomicSwapTestnet.config }
+        singleOf(::AtomicSwapDeployments)
+        single { AtomicSwapTestnet.deployment.config }
         // No retries: a quote is single-use and an accept or claim that timed out may have landed.
         // Minutes of timeout, since an accept waits for the maker's `open` to land.
         single(named(ATOMIC_SWAP_HTTP)) {
@@ -523,11 +528,12 @@ val providerModule =
         }
         single<AtomicSwapChainReader> {
             val config = get<AtomicSwapConfig>()
-            val rpc = BaseRpcClient(RpcHttpClient.create(), AtomicSwapTestnet.ETHEREUM_RPC_URL)
+            val rpc = BaseRpcClient(RpcHttpClient.create(), AtomicSwapTestnet.deployment.ethereumRpcUrl)
             AtomicSwapChain(rpc, config.contract, config.railgunProxy)
         }
         singleOf(::AtomicSwapKeysImpl) bind AtomicSwapKeys::class
         singleOf(::AtomicSwapZcashImpl) bind AtomicSwapZcash::class
+        singleOf(::AtomicSwapZcashInfo)
         singleOf(::AtomicSwapStoreImpl) bind AtomicSwapStore::class
         single {
             val config = get<AtomicSwapConfig>()
@@ -543,6 +549,8 @@ val providerModule =
             )
         }
         singleOf(::RailgunKeyProviderImpl) bind RailgunKeyProvider::class
+        singleOf(::AtomicSwapNotifier)
+        singleOf(::AtomicSwapScheduler)
     }
 
 private const val ATOMIC_SWAP_HTTP = "atomicswap_http"

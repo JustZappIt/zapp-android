@@ -19,6 +19,8 @@ class AtomicSwapChain(
     private val contract: Address,
     private val railgunProxy: Address,
 ) : AtomicSwapChainReader {
+    private var lockDuration: Long? = null
+
     override suspend fun swap(id: ByteArray): OnChainSwap? =
         decodeSwap(rpc.ethCall(contract, AbiEncoder.encodeFunctionCall("getSwap(bytes32)", listOf(AbiBytes32(id)))))
 
@@ -32,6 +34,12 @@ class AtomicSwapChain(
             // Railgun's proxy reverts every call while it is paused.
             false
         }
+
+    override suspend fun lockDuration(): Long =
+        lockDuration ?: AbiDecoder(rpc.ethCall(contract, AbiEncoder.encodeFunctionCall("LOCK_DURATION()", emptyList())))
+            .uint(0)
+            .toLong()
+            .also { lockDuration = it }
 
     companion object {
         private const val SHARE_BYTES = 64

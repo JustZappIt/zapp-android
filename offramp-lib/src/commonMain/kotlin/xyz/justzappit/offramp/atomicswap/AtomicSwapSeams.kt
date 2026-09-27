@@ -120,4 +120,7 @@ interface AtomicSwapChainReader {
 
     /** Whether Railgun would take a shield of [token] now: not blocklisted, and not paused. */
     suspend fun railgunAccepts(token: Address): Boolean
+
+    /** How long a claim or refund lock holds, in seconds. */
+    suspend fun lockDuration(): Long
 }

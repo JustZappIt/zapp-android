@@ -68,6 +68,7 @@ android {
                     "src/main/res/ui/onramp",
                     "src/main/res/ui/pay",
                     "src/main/res/ui/payment_request",
+                    "src/main/res/ui/private_usd",
                     "src/main/res/ui/qr_code",
                     "src/main/res/ui/reputation",
                     "src/main/res/ui/request",

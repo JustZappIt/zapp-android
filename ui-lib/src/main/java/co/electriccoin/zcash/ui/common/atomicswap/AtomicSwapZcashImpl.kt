@@ -160,7 +160,10 @@ class AtomicSwapZcashImpl(
         return result.txIdString()
     }
 
-    /** Waits for the imported account to find the deposit and for every note of it to confirm. */
+    /**
+     * Waits for the imported account to find the deposit and for every note of it to confirm. The
+     * engine stands still while the app is in the background, so each look asks for a sync first.
+     */
     private suspend fun awaitSpendable(
         synchronizer: Synchronizer,
         account: Account
@@ -168,6 +171,7 @@ class AtomicSwapZcashImpl(
         withTimeout(SPENDABLE_TIMEOUT) {
             var spendable = spendable(synchronizer, account)
             while (spendable == null) {
+                synchronizer.syncToTip(SYNC_BURST_TIMEOUT)
                 delay(SPENDABLE_POLL)
                 spendable = spendable(synchronizer, account)
             }
@@ -191,5 +195,6 @@ class AtomicSwapZcashImpl(
         val HEIGHT_TIMEOUT = 30.seconds
         val SPENDABLE_TIMEOUT = 45.minutes
         val SPENDABLE_POLL = 10.seconds
+        val SYNC_BURST_TIMEOUT = 2.minutes
     }
 }
