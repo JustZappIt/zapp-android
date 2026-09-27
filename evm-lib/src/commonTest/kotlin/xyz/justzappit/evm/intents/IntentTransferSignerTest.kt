@@ -29,6 +29,15 @@ class IntentTransferSignerTest {
     }
 
     @Test
+    fun `verify agrees with sign without producing a signature`() {
+        assertEquals(null, IntentTransferSigner.verify(payload(), account, expected, NOW))
+        assertEquals(
+            Rejection.UNEXPECTED_INTENTS,
+            IntentTransferSigner.verify(payload(intents = "[]"), account, expected, NOW),
+        )
+    }
+
+    @Test
     fun `accepts a deadline exactly at the allowed lifetime`() {
         val atLimit = payload(deadline = "2026-09-28T15:00:00.000Z")
         assertIs<SignResult.Signed>(IntentTransferSigner.sign(key, atLimit, expected, NOW))

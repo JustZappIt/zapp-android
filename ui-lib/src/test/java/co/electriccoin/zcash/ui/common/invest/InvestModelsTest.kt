@@ -114,6 +114,23 @@ class InvestModelsTest {
     }
 
     @Test
+    fun `a swap record is an Invest buy exactly when it points at a curated stock`() {
+        // What the wallet's swap metadata stores for a buy: 1Click's symbol and chain.
+        assertEquals("NVIDIA", InvestAssets.findBySwapTickers("NVDAon", "bsc")?.name)
+        assertEquals("NVIDIA", InvestAssets.findBySwapTickers("nvdaon", "BSC")?.name)
+        assertEquals(
+            InvestAssets.curated.map { it.symbol },
+            listOf("NVDAon", "TSLAon", "SPYon", "QQQon", "GOOGLon", "CRCLon", "AAPLon", "MSFTon", "AMZNon", "METAon"),
+        )
+        // Ordinary swaps, an Ondo token that isn't curated, and a curated symbol on another chain are not.
+        assertNull(InvestAssets.findBySwapTickers("btc", "btc"))
+        assertNull(InvestAssets.findBySwapTickers("USDC", "near"))
+        assertNull(InvestAssets.findBySwapTickers("GLDon", "bsc"))
+        assertNull(InvestAssets.findBySwapTickers("NVDAon", "eth"))
+        assertNull(InvestAssets.findBySwapTickers("NVDA", "bsc"))
+    }
+
+    @Test
     fun `the server clock follows the Date header and ignores garbage`() {
         val clock = InvestServerClock(deviceNowMillis = { 1_790_604_000_000L })
         assertFalse(clock.isSynchronised)

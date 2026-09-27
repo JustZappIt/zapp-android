@@ -104,11 +104,19 @@ sealed interface BuyProgress {
         val zec: BigDecimal?,
     ) : BuyProgress
 
+    /**
+     * No deposit reached 1Click before the quote's deadline, so nothing was bought. ZEC that arrives late is
+     * refunded to the buy's refund address by 1Click.
+     */
+    data class Expired(
+        override val depositAddress: String,
+    ) : BuyProgress
+
     /** 1Click says FAILED. Support needs [reference] (the deposit address or correlation ID). */
     data class NeedsAttention(
         override val depositAddress: String,
         val reference: String,
     ) : BuyProgress
 
-    val isFinal: Boolean get() = this is Held || this is Refunded || this is NeedsAttention
+    val isFinal: Boolean get() = this is Held || this is Refunded || this is Expired || this is NeedsAttention
 }

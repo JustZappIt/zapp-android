@@ -8,6 +8,7 @@ import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.SendTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.SwapTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.TransactionProposal
+import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.SubmitResult
 import co.electriccoin.zcash.ui.common.model.ZashiAccount
@@ -77,10 +78,16 @@ class SubmitProposalUseCase(
                 }
             if (proposal is SwapTransactionProposal) {
                 val selectedSwapAsset = proposal.quote.destinationAsset
-                metadataRepository.addSwapAssetToHistory(
-                    tokenTicker = selectedSwapAsset.tokenTicker,
-                    chainTicker = selectedSwapAsset.chainTicker
-                )
+                // An Invest buy isn't a swap the user picked: kept out of Swap's recent assets, which
+                // would otherwise preselect a stock the Swap screen doesn't offer.
+                val isInvestBuy =
+                    InvestAssets.findBySwapTickers(selectedSwapAsset.tokenTicker, selectedSwapAsset.chainTicker) != null
+                if (!isInvestBuy) {
+                    metadataRepository.addSwapAssetToHistory(
+                        tokenTicker = selectedSwapAsset.tokenTicker,
+                        chainTicker = selectedSwapAsset.chainTicker
+                    )
+                }
             }
             when (account) {
                 is KeystoneAccount -> {
