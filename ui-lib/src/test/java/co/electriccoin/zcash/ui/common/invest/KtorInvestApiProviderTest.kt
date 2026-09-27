@@ -8,6 +8,7 @@ import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentRequest
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestServerClock
 import co.electriccoin.zcash.ui.common.invest.provider.KtorInvestApiProvider
+import co.electriccoin.zcash.ui.common.provider.NEAR_PARTNER_AUTHORIZATION
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
@@ -82,9 +83,9 @@ class KtorInvestApiProviderTest {
             val (balanceRequest, generate, submit) = http.requests
             assertEquals("Bearer session-token", balanceRequest.headers[HttpHeaders.Authorization])
             assertEquals("10", balances.balances.single().available)
+            // The partner JWT when this build has one (local.properties), otherwise no header at all.
             listOf(generate, submit).forEach {
-                val auth = it.headers[HttpHeaders.Authorization].orEmpty()
-                assertTrue(auth.startsWith("Bearer ey") && auth != "Bearer session-token", it.url.encodedPath)
+                assertEquals(NEAR_PARTNER_AUTHORIZATION, it.headers[HttpHeaders.Authorization], it.url.encodedPath)
             }
             val generateBody = Json.parseToJsonElement((generate.body as TextContent).text).jsonObject
             assertEquals("swap_transfer", generateBody.getValue("type").jsonPrimitive.content)
