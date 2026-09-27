@@ -13,7 +13,9 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdAsset
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendLog
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendMode
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendRecord
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendRequest
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
@@ -35,6 +37,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.justzappit.railgun.RailgunException
+import kotlin.time.Clock
 
 class PrivateUsdSendVM(
     args: PrivateUsdSendArgs,
@@ -43,6 +46,7 @@ class PrivateUsdSendVM(
     railgunWalletRepository: RailgunWalletRepository,
     atomicSwapRepository: AtomicSwapRepository,
     private val biometricRepository: BiometricRepository,
+    private val sendLog: PrivateUsdSendLog,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     private val sender = checkNotNull(senders.current) { "no sending in this build" }
@@ -72,7 +76,7 @@ class PrivateUsdSendVM(
         val assets =
             balance.balances
                 ?.assets
-                ?.filter { it.available.signum() > 0 }
+                ?.filter { it.token.isDollar && it.available.signum() > 0 }
                 .orEmpty()
         val asset = assets.firstOrNull { it.token.address == form.token } ?: assets.firstOrNull()
         val amountError = form.amountError(asset)
@@ -177,6 +181,18 @@ class PrivateUsdSendVM(
                     Twig.warn(e) { "Private USD: the send failed" }
                     null
                 }
+            sent?.let {
+                val record =
+                    PrivateUsdSendRecord(
+                        txHash = it.txHash,
+                        withdraw = request.mode == PrivateUsdSendMode.WITHDRAW,
+                        token = request.token.address,
+                        amount = request.amount.toString(),
+                        to = request.to,
+                        sentAt = Clock.System.now().epochSeconds,
+                    )
+                sendLog.add(record)
+            }
             form.update {
                 if (sent != null) {
                     it.copy(phase = PrivateUsdSendPhase.DONE, sent = sent)

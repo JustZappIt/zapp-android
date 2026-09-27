@@ -4,7 +4,9 @@
 package co.electriccoin.zcash.ui.screen.privateusd
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
@@ -73,6 +76,7 @@ internal fun PrivateUsdView(state: PrivateUsdState) {
             }
             if (state.assets.isNotEmpty()) Assets(state.assets)
             Sending(state.sending)
+            Activity(state.activity)
         }
         ZappBottomActionBar(
             onBack = state.onBack,
@@ -147,6 +151,65 @@ private fun Assets(assets: List<PrivateUsdAssetState>) {
 }
 
 @Composable
+private fun Activity(activity: List<PrivateUsdActivityState>) {
+    val c = ZappTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.md)) {
+        ZappSectionLabel(text = stringResource(R.string.private_usd_activity_title))
+        if (activity.isEmpty()) {
+            BasicText(
+                text = stringResource(R.string.private_usd_activity_empty),
+                style = ZappTheme.typography.caption.copy(color = c.textMuted),
+            )
+        } else {
+            ZappBorderedCard(padding = 0.dp) {
+                activity.forEachIndexed { index, row ->
+                    if (index > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(c.border))
+                    ActivityRow(row)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActivityRow(row: PrivateUsdActivityState) {
+    val c = ZappTheme.colors
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .then(row.onClick?.let { Modifier.clickable(onClick = it) } ?: Modifier)
+                .padding(horizontal = ZappTheme.spacing.xl, vertical = ZappTheme.spacing.lg),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.xxs)) {
+            BasicText(text = row.title.getValue(), style = ZappTheme.typography.rowTitle.copy(color = c.text))
+            BasicText(
+                text = row.detail.getValue(),
+                style = ZappTheme.typography.rowSubtitle.copy(color = c.textMuted),
+                maxLines = 1,
+            )
+        }
+        row.amount?.let {
+            BasicText(
+                text = it.getValue(),
+                style =
+                    ZappTheme.typography.rowTitle.copy(
+                        color =
+                            when (row.tone) {
+                                PrivateUsdActivityTone.IN -> c.success
+                                PrivateUsdActivityTone.OUT -> c.text
+                                PrivateUsdActivityTone.NEUTRAL -> c.textMuted
+                            },
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                modifier = Modifier.padding(start = ZappTheme.spacing.lg),
+            )
+        }
+    }
+}
+
+@Composable
 private fun Empty() {
     val c = ZappTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.sm)) {
@@ -212,6 +275,23 @@ private fun PrivateUsdPreview() =
                     isEmpty = false,
                     conversion = null,
                     sending = PrivateUsdSendingState(isEnabled = true, onSend = {}, onWithdraw = {}),
+                    activity =
+                        listOf(
+                            PrivateUsdActivityState(
+                                title = stringRes("Withdrew"),
+                                detail = stringRes("Sep 26 5:31 PM · to 0x1c7f9a…5539"),
+                                amount = stringRes("−$1.00"),
+                                tone = PrivateUsdActivityTone.OUT,
+                                onClick = {},
+                            ),
+                            PrivateUsdActivityState(
+                                title = stringRes("Converted ZEC"),
+                                detail = stringRes("Sep 26 5:12 PM · 0.00202021 ZEC"),
+                                amount = stringRes("+$0.98"),
+                                tone = PrivateUsdActivityTone.IN,
+                                onClick = null,
+                            ),
+                        ),
                     onConvert = {},
                     onRefresh = {},
                     onBack = {},

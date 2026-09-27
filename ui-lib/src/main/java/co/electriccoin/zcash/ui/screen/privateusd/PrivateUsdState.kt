@@ -18,6 +18,7 @@ internal data class PrivateUsdState(
     val conversion: PrivateUsdConversionBannerState?,
     /** Null while this build can't send. */
     val sending: PrivateUsdSendingState?,
+    val activity: List<PrivateUsdActivityState>,
     val onConvert: () -> Unit,
     val onRefresh: () -> Unit,
     val onBack: () -> Unit,

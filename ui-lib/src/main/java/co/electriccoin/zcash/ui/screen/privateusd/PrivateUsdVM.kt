@@ -13,11 +13,13 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapState
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalances
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendLog
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
 import co.electriccoin.zcash.ui.common.privateusd.dollars
 import co.electriccoin.zcash.ui.common.privateusd.tokenAmount
 import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.ExternalUrl
 import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
 import co.electriccoin.zcash.ui.screen.privateusd.send.PrivateUsdSendArgs
@@ -38,15 +40,31 @@ class PrivateUsdVM(
     private val balanceRepository: PrivateUsdBalanceRepository,
     private val atomicSwapRepository: AtomicSwapRepository,
     private val senders: PrivateUsdSenders,
+    sendLog: PrivateUsdSendLog,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
-    internal val state: StateFlow<PrivateUsdState> =
-        combine(balanceRepository.observe(), atomicSwapRepository.state, ::createState)
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-                initialValue = createState(balanceRepository.state.value, atomicSwapRepository.state.value),
+    private val activity =
+        atomicSwapRepository.deployment?.let { deployment ->
+            PrivateUsdActivity(
+                deployment = deployment,
+                onOpenConversion = { navigationRouter.forward(PrivateUsdProgressArgs) },
+                onOpenUrl = { navigationRouter.forward(ExternalUrl(it)) },
             )
+        }
+
+    internal val state: StateFlow<PrivateUsdState> =
+        combine(
+            balanceRepository.observe(),
+            atomicSwapRepository.state,
+            atomicSwapRepository.history,
+            sendLog.observe,
+        ) { balance, swap, swaps, sends ->
+            createState(balance, swap, activity?.of(swaps, sends, swap).orEmpty())
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
+            initialValue = createState(balanceRepository.state.value, atomicSwapRepository.state.value, emptyList()),
+        )
 
     init {
         balanceRepository.refresh(maxAge = REFRESH_AFTER)
@@ -55,6 +73,7 @@ class PrivateUsdVM(
     private fun createState(
         balance: PrivateUsdBalanceState,
         swap: AtomicSwapState,
+        activity: List<PrivateUsdActivityState>,
     ): PrivateUsdState {
         val balances = balance.balances
         return PrivateUsdState(
@@ -84,11 +103,12 @@ class PrivateUsdVM(
             sending =
                 senders.current?.let {
                     PrivateUsdSendingState(
-                        isEnabled = balances?.assets?.any { asset -> asset.available.signum() > 0 } == true,
+                        isEnabled = balances?.assets?.any { it.token.isDollar && it.available.signum() > 0 } == true,
                         onSend = { navigationRouter.forward(PrivateUsdSendArgs(withdraw = false)) },
                         onWithdraw = { navigationRouter.forward(PrivateUsdSendArgs(withdraw = true)) },
                     )
                 },
+            activity = activity,
             onConvert = {
                 navigationRouter.forward(if (swap.isUnderWay) PrivateUsdProgressArgs else PrivateUsdConvertArgs)
             },
@@ -130,13 +150,13 @@ class PrivateUsdVM(
         )
     }
 
-    // Only worth listing when there's more than one asset, or one that isn't a dollar.
+    // Dollars only, and only worth listing when there's more than one kind.
     private fun assets(balances: PrivateUsdBalances): List<PrivateUsdAssetState> {
         val held =
             balances.assets.filter {
-                (it.available + it.arriving + it.blocked + it.processing).signum() > 0
+                it.token.isDollar && (it.available + it.arriving + it.blocked + it.processing).signum() > 0
             }
-        return if (held.size > 1 || held.any { !it.token.isDollar }) {
+        return if (held.size > 1) {
             held.map {
                 PrivateUsdAssetState(
                     name = it.token.name,

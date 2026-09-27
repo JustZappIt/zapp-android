@@ -38,6 +38,20 @@
     <string name="private_usd_empty_body">Convert ZEC into dollars nobody else can see: not your balance, and not who you pay.</string>
     <string name="private_usd_send_later">Sending and withdrawing are coming soon.</string>
 
+    <!-- Private USD activity -->
+    <string name="private_usd_activity_title">Activity</string>
+    <string name="private_usd_activity_empty">Your conversions, sends and withdrawals will show here.</string>
+    <string name="private_usd_activity_converting">Converting ZEC</string>
+    <string name="private_usd_activity_converted">Converted ZEC</string>
+    <string name="private_usd_activity_refunded">Conversion called off</string>
+    <string name="private_usd_activity_refunded_detail">your ZEC came back</string>
+    <string name="private_usd_activity_sent">Sent privately</string>
+    <string name="private_usd_activity_withdrew">Withdrew</string>
+    <string name="private_usd_activity_detail">%1$s · %2$s</string>
+    <string name="private_usd_activity_to">to %1$s</string>
+    <string name="private_usd_activity_in">+%1$s</string>
+    <string name="private_usd_activity_out">−%1$s</string>
+
     <!-- Convert: amount -->
     <string name="convert_title">Convert to private USD</string>
     <string name="convert_amount_label">Amount</string>

@@ -27,6 +27,12 @@ class AtomicSwapStoreImpl(
 
     val observeActive: Flow<AtomicSwapRecord?> = store.observe().map { it?.active }
 
+    /** Every swap accepted here, oldest first, the active one included. */
+    val observeHistory: Flow<List<AtomicSwapRecord>> =
+        store.observe().map { state ->
+            state?.history.orEmpty().filterNot { it.index == state?.active?.index } + listOfNotNull(state?.active)
+        }
+
     override suspend fun takeIndex(): Int =
         lock.withLock {
             val state = state()
@@ -38,7 +44,9 @@ class AtomicSwapStoreImpl(
 
     override suspend fun save(record: AtomicSwapRecord) =
         lock.withLock {
-            store.set(state().copy(active = record))
+            val state = state()
+            val history = (state.history.filterNot { it.index == record.index } + record).takeLast(MAX_HISTORY)
+            store.set(state.copy(active = record, history = history))
         }
 
     private suspend fun state(): State = store.get() ?: State(nextIndex = legacyNextIndex())
@@ -54,6 +62,7 @@ class AtomicSwapStoreImpl(
     private data class State(
         val nextIndex: Int = 0,
         val active: AtomicSwapRecord? = null,
+        val history: List<AtomicSwapRecord> = emptyList(),
     )
 
     @Serializable
@@ -63,6 +72,7 @@ class AtomicSwapStoreImpl(
 
     private companion object {
         const val PREF_KEY = "atomicswap_state_v2"
+        const val MAX_HISTORY = 100
         val LEGACY_KEY = PreferenceKey("atomicswap_state_v1")
         val legacyJson = Json { ignoreUnknownKeys = true }
     }

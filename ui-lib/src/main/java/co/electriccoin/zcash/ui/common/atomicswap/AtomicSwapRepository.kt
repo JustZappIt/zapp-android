@@ -8,6 +8,7 @@ import co.electriccoin.zcash.spackle.Twig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -61,6 +62,9 @@ interface AtomicSwapRepository {
 
     val state: StateFlow<AtomicSwapState>
 
+    /** Every swap accepted on this device, oldest first. */
+    val history: Flow<List<AtomicSwapRecord>>
+
     suspend fun quote(units: Int): AtomicSwapQuote
 
     /** Accepts [offer]; its deposit and the rest follow without the user. */
@@ -112,6 +116,12 @@ class AtomicSwapRepositoryImpl(
                 resuming = current.resuming,
             )
         }.stateIn(scope, SharingStarted.Eagerly, AtomicSwapState())
+
+    override val history: Flow<List<AtomicSwapRecord>> =
+        store.observeHistory.catch { e ->
+            Twig.error(e) { "Atomic swap: the store is unreadable" }
+            emit(emptyList())
+        }
 
     override suspend fun quote(units: Int): AtomicSwapQuote {
         val offer = driverLock.withLock { driver.quote(units) }
