@@ -141,7 +141,9 @@ class BundlerClientTest {
                     config =
                         RpcHttpClient.Config(
                             maxRetries = 3,
-                            maxBackoffMillis = 0,
+                            // ktor's exponentialDelay requires maxDelayMs > 0; keep it tiny so a
+                            // regression that does retry fails fast on the request count.
+                            maxBackoffMillis = 10,
                             randomJitterMillis = 0,
                         ),
                 )
