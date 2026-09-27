@@ -47,9 +47,11 @@ sealed interface SellEstimate {
 
 /**
  * A live sell quote and the intent `generate-intent` returned for it, already checked to move exactly [units]
- * of [asset] to the quote's deposit address and nothing else. Nothing is signed until [executeSell] runs.
+ * of [asset] to the quote's deposit address and nothing else. Nothing is signed until `executeSell` runs.
+ * Only the sell repository makes these, since `executeSell` trusts the fields it reads back.
  */
-data class PreparedSell(
+@ConsistentCopyVisibility
+data class PreparedSell internal constructor(
     val asset: InvestAsset,
     val units: BigDecimal,
     val usdIn: BigDecimal,

@@ -17,8 +17,14 @@ data class InvestBuyCheckpoint(
     val depositAddress: String,
     val assetId: String,
     val createdAtMillis: Long,
-    /** For a sell: when the signed intent stops being executable. After it, the stock provably never moved. */
+    /** For a sell: when the signed intent stops being executable. */
     val intentDeadlineMillis: Long? = null,
+    /** For a sell: the base units being sold. */
+    val baseUnits: String? = null,
+    /** For a sell: the private balance of this stock just before submitting, to tell whether the sale ran. */
+    val heldBeforeBaseUnits: String? = null,
+    /** For a sell: 1Click's hash of the submitted intent, the best reference for support. */
+    val intentHash: String? = null,
 ) {
     init {
         require(depositAddress.isNotBlank()) { "depositAddress must not be blank" }
