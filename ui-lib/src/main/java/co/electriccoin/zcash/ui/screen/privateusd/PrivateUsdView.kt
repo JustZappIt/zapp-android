@@ -25,15 +25,19 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.design.component.zapp.TX_HASH_ELLIPSIS_PREFIX
+import co.electriccoin.zcash.ui.design.component.zapp.TX_HASH_ELLIPSIS_SUFFIX
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappCompactButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappExplorerLink
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSummaryRow
@@ -189,6 +193,15 @@ private fun ActivityRow(row: PrivateUsdActivityState) {
                 style = ZappTheme.typography.rowSubtitle.copy(color = c.textMuted),
                 maxLines = 1,
             )
+            if (row.txHash != null && row.txUrl != null) {
+                ZappExplorerLink(
+                    value = row.txHash,
+                    url = row.txUrl,
+                    prefix = TX_HASH_ELLIPSIS_PREFIX,
+                    suffix = TX_HASH_ELLIPSIS_SUFFIX,
+                    uriHandler = LocalUriHandler.current,
+                )
+            }
         }
         row.amount?.let {
             BasicText(
@@ -283,6 +296,8 @@ private fun PrivateUsdPreview() =
                                 amount = stringRes("−$1.00"),
                                 tone = PrivateUsdActivityTone.OUT,
                                 onClick = {},
+                                txHash = "0x04cae34d302d737aa606008caf6c8a7adcf7e99aa336f5a04a93e49f4ab4bbc0",
+                                txUrl = "https://sepolia.etherscan.io/tx/0x04ca",
                             ),
                             PrivateUsdActivityState(
                                 title = stringRes("Converted ZEC"),

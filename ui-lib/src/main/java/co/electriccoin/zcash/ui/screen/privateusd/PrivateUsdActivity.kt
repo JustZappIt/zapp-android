@@ -29,6 +29,9 @@ internal data class PrivateUsdActivityState(
     val amount: StringResource?,
     val tone: PrivateUsdActivityTone,
     val onClick: (() -> Unit)?,
+    /** The Ethereum transaction behind it, and its page on the explorer. */
+    val txHash: String? = null,
+    val txUrl: String? = null,
 )
 
 /**
@@ -96,6 +99,8 @@ internal class PrivateUsdActivity(
                     amount = received,
                     tone = PrivateUsdActivityTone.IN,
                     onClick = onOpenConversion.takeIf { isCurrent },
+                    txHash = record.payoutTx,
+                    txUrl = record.payoutTx?.let { deployment.explorerTxUrl + it },
                 )
             }
         }
@@ -115,6 +120,8 @@ internal class PrivateUsdActivity(
                     .asPrivacySensitive(),
             tone = PrivateUsdActivityTone.OUT,
             onClick = { onOpenUrl(deployment.explorerTxUrl + send.txHash) },
+            txHash = send.txHash,
+            txUrl = deployment.explorerTxUrl + send.txHash,
         )
     }
 

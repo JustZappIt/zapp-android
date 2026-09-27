@@ -136,17 +136,19 @@ class AtomicSwapDriver(
             }
 
             SwapStage.CLAIMED -> {
-                if (!swap.paidOut) {
-                    onActivity(AtomicSwapActivity.PAYING_OUT)
-                    claim.payOut(record, swap)
-                }
-                finish(record, AtomicSwapOutcome.Paid)
+                val payoutTx =
+                    if (swap.paidOut) {
+                        null
+                    } else {
+                        onActivity(AtomicSwapActivity.PAYING_OUT)
+                        claim.payOut(record, swap)
+                    }
+                finish(record, AtomicSwapOutcome.Paid, payoutTx)
             }
 
             SwapStage.READY -> {
                 onActivity(AtomicSwapActivity.CLAIMING)
-                claim.claim(record, swap)
-                finish(record, AtomicSwapOutcome.Paid)
+                finish(record, AtomicSwapOutcome.Paid, claim.claim(record, swap))
             }
 
             SwapStage.OPEN -> {
@@ -172,8 +174,7 @@ class AtomicSwapDriver(
 
             chain.now() >= swap.t0 -> {
                 onActivity(AtomicSwapActivity.CLAIMING)
-                claim.claim(record, swap)
-                finish(record, AtomicSwapOutcome.Paid)
+                finish(record, AtomicSwapOutcome.Paid, claim.claim(record, swap))
             }
 
             else -> {
@@ -183,19 +184,23 @@ class AtomicSwapDriver(
 
     private suspend fun finish(
         record: AtomicSwapRecord,
-        outcome: AtomicSwapOutcome
+        outcome: AtomicSwapOutcome,
+        payoutTx: String? = null,
     ): AtomicSwapStep {
-        conclude(record, outcome)
+        conclude(record, outcome, payoutTx)
         return AtomicSwapStep.Finished(outcome)
     }
 
     // The stored record may be newer than the caller's copy within one step.
     private suspend fun conclude(
         record: AtomicSwapRecord,
-        outcome: AtomicSwapOutcome
+        outcome: AtomicSwapOutcome,
+        payoutTx: String? = null,
     ): AtomicSwapRecord {
         val current = store.active()?.takeIf { it.index == record.index } ?: record
-        return current.copy(outcome = outcome, finishedAt = nowSeconds()).also { store.save(it) }
+        return current
+            .copy(outcome = outcome, finishedAt = nowSeconds(), payoutTx = payoutTx ?: current.payoutTx)
+            .also { store.save(it) }
     }
 
     private companion object {
@@ -242,14 +247,14 @@ internal class AtomicSwapClaim(
     private val keys: AtomicSwapKeys,
 ) {
     /**
-     * Reveals `z` under a claim lock with time to spare, then has the payout sent. Checks first that
-     * Railgun would take it: a payout it refuses would sit in the contract, and it is better for the
-     * swap to unwind, which leaves the ZEC with the user.
+     * Reveals `z` under a claim lock with time to spare, then has the payout sent, and returns the
+     * payout's transaction. Checks first that Railgun would take it: a payout it refuses would sit in
+     * the contract, and it is better for the swap to unwind, which leaves the ZEC with the user.
      */
     suspend fun claim(
         record: AtomicSwapRecord,
         swap: OnChainSwap
-    ) {
+    ): String? {
         val payout = payoutRequest(record, swap)
         if (!chain.railgunAccepts(swap.token)) {
             throw AtomicSwapBlockedException(AtomicSwapBlock.RAILGUN_CLOSED, "Railgun is not taking the payout now")
@@ -258,17 +263,24 @@ internal class AtomicSwapClaim(
         val sent = relayer.claim(ClaimRequest(record.swapId, keys.claimSecret(record.index).hex(), payout))
         chain.caughtUp(record.swapId) { it.stage == SwapStage.CLAIMED }
         // The relayer reveals first and pays out after; a payout that failed is sent again.
-        if (sent.transactions.size < 2) relayer.payout(payout)
+        val payoutTx =
+            if (sent.transactions.size < 2) {
+                relayer.payout(payout).transactions.lastOrNull()
+            } else {
+                sent.transactions.last()
+            }
         chain.caughtUp(record.swapId) { it.paidOut }
+        return payoutTx
     }
 
-    /** A claim revealed before an interruption: only the payout is left. */
+    /** A claim revealed before an interruption: only the payout is left. Returns its transaction. */
     suspend fun payOut(
         record: AtomicSwapRecord,
         swap: OnChainSwap
-    ) {
-        relayer.payout(payoutRequest(record, swap))
+    ): String? {
+        val payoutTx = relayer.payout(payoutRequest(record, swap)).transactions.lastOrNull()
         chain.caughtUp(record.swapId) { it.paidOut }
+        return payoutTx
     }
 
     suspend fun relayerFee(amount: BigInteger): BigInteger = checkedFee(relayer.terms(), amount)

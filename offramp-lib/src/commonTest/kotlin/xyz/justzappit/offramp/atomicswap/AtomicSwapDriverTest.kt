@@ -50,6 +50,7 @@ class AtomicSwapDriverTest {
             assertTrue(h.bodies.getValue("/v1/claim").contains("0x" + "09".repeat(32)), "the claim reveals z")
             assertEquals(AtomicSwapOutcome.Paid, h.store.record?.outcome)
             assertEquals(h.clock, h.store.record?.finishedAt)
+            assertEquals("0x1", h.store.record?.payoutTx, "the claim's second transaction is the payout")
         }
 
     @Test
@@ -353,6 +354,7 @@ class AtomicSwapDriverTest {
             assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(record))
             assertEquals("/v1/payout", h.paths.last())
             assertTrue("/v1/claim" !in h.paths)
+            assertEquals("0x0", h.store.record?.payoutTx)
         }
 
     @Test

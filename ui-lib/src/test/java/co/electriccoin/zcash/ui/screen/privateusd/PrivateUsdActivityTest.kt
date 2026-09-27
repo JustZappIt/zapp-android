@@ -46,6 +46,19 @@ class PrivateUsdActivityTest {
     }
 
     @Test
+    fun `a paid conversion links its payout on the explorer`() {
+        val rows =
+            activity.of(
+                swaps = listOf(swap(index = 0, at = 10, AtomicSwapOutcome.Paid).copy(payoutTx = "0xpay")),
+                sends = emptyList(),
+                current = AtomicSwapState(),
+            )
+
+        assertEquals("0xpay", rows.single().txHash)
+        assertEquals(AtomicSwapTestnet.deployment.explorerTxUrl + "0xpay", rows.single().txUrl)
+    }
+
+    @Test
     fun `a send opens its transaction, and only the latest conversion opens its progress`() {
         val latest = swap(index = 2, at = 50, outcome = null)
         val rows =
@@ -57,6 +70,7 @@ class PrivateUsdActivityTest {
 
         rows.forEach { it.onClick?.invoke() }
         assertEquals(listOf("conversion", AtomicSwapTestnet.deployment.explorerTxUrl + "0xabc"), opened)
+        assertEquals(AtomicSwapTestnet.deployment.explorerTxUrl + "0xabc", rows.last().txUrl)
         assertNotNull(rows.first().onClick)
         assertNull(rows[1].onClick)
     }

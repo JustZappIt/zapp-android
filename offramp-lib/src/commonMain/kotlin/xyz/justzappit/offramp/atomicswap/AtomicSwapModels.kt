@@ -70,6 +70,8 @@ data class AtomicSwapRecord(
     val depositTxId: String? = null,
     val outcome: AtomicSwapOutcome? = null,
     val finishedAt: Long? = null,
+    /** The Ethereum transaction that shielded the payout, as the relayer reported it. */
+    val payoutTx: String? = null,
 ) {
     val finished: Boolean get() = outcome != null
 }
