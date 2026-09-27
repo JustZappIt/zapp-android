@@ -2,6 +2,8 @@ package co.electriccoin.zcash.ui.screen.invest
 
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.invest.model.Holding
+import co.electriccoin.zcash.ui.common.invest.model.Holdings
 import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.invest.model.InvestMarket
 import co.electriccoin.zcash.ui.common.invest.model.MarketAsset
@@ -9,10 +11,13 @@ import co.electriccoin.zcash.ui.common.usecase.IsTorEnabledUseCase
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyArgs
+import co.electriccoin.zcash.ui.screen.invest.common.PendingTrade
 import co.electriccoin.zcash.ui.screen.invest.common.UsMarketHours
 import co.electriccoin.zcash.ui.screen.invest.home.InvestHomeState
 import co.electriccoin.zcash.ui.screen.invest.home.InvestHomeVM
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
+import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellArgs
+import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressArgs
 import co.electriccoin.zcash.ui.screen.tor.settings.TorSettingsArgs
 import io.mockk.every
 import io.mockk.mockk
@@ -132,6 +137,34 @@ class InvestHomeVMTest {
             verify { fixture.router.forward(InvestBuyArgs(NVIDIA.assetId)) }
         }
 
+    @Test
+    fun `a holding offers Sell, and while a sale of it runs it says so and links to the sale`() =
+        runTest {
+            val fixture = fixture()
+            fixture.repo.holdings.value = HOLDINGS
+
+            val row =
+                fixture
+                    .state()
+                    .summary!!
+                    .rows
+                    .single()
+            assertNull(row.tradeInProgress)
+            assertNotNull(row.onSell).invoke()
+            verify { fixture.router.forward(InvestSellArgs(NVIDIA.assetId)) }
+
+            trades.value = listOf(PendingTrade("0xsale", NVIDIA.assetId, isSale = true))
+            advanceUntilIdle()
+
+            val state = fixture.vm.state.value
+            val selling = state.summary!!.rows.single()
+            assertTrue(assertNotNull(selling.tradeInProgress).isSale)
+            assertNull(selling.onSell)
+            state.pendingSales.single().onClick()
+            selling.tradeInProgress.onOpen()
+            verify(exactly = 2) { fixture.router.forward(InvestSellProgressArgs("0xsale", NVIDIA.assetId)) }
+        }
+
     private inner class Fixture(
         val vm: InvestHomeVM,
         val repo: FakeInvestRepository,
@@ -145,6 +178,8 @@ class InvestHomeVMTest {
         }
     }
 
+    private val trades = MutableStateFlow<List<PendingTrade>>(emptyList())
+
     private fun TestScope.fixture(
         torOn: Boolean = true,
         nowMillis: Long = START_MILLIS,
@@ -154,7 +189,7 @@ class InvestHomeVMTest {
         val router = mockk<NavigationRouter>(relaxed = true)
         val tor = mockk<IsTorEnabledUseCase>().also { every { it.observe() } returns MutableStateFlow(torOn) }
         val clock = virtualClock(kotlin.time.Instant.fromEpochMilliseconds(nowMillis))
-        val vm = InvestHomeVM(repo, tor, USD_CURRENCY, router, clock)
+        val vm = InvestHomeVM(repo, tor, USD_CURRENCY, { trades }, router, clock)
         return Fixture(vm, repo, router, this)
     }
 
@@ -169,5 +204,12 @@ class InvestHomeVMTest {
 
     private companion object {
         val NVIDIA = InvestAssets.curated.first { it.ticker == "NVDA" }
+        val HOLDINGS =
+            Holdings(
+                items = listOf(Holding(NVIDIA, BigDecimal("0.4410"), BigDecimal("98.99"))),
+                totalUsd = BigDecimal("98.99"),
+                updatedAt = kotlin.time.Instant.fromEpochMilliseconds(START_MILLIS),
+                isStale = false,
+            )
     }
 }

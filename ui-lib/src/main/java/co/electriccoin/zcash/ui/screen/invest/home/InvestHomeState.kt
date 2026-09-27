@@ -12,6 +12,8 @@ internal data class InvestHomeState(
     val marketBanner: StringResource?,
     /** Buys that were sent but haven't finished; each opens its progress screen. */
     val pendingBuys: List<InvestPendingBuyRow>,
+    /** Sales signed and not yet final; each opens its progress screen. */
+    val pendingSales: List<InvestPendingSaleRow>,
     val groups: List<InvestStockGroupState>,
     /** Set when prices couldn't be loaded and there are none to show. */
     val marketError: StringResource?,
@@ -35,6 +37,13 @@ internal data class InvestTorBannerState(
 
 internal data class InvestPendingBuyRow(
     val depositAddress: String,
+    val onClick: () -> Unit,
+)
+
+internal data class InvestPendingSaleRow(
+    val depositAddress: String,
+    /** The stock's name when it is one of the curated ten. */
+    val name: String?,
     val onClick: () -> Unit,
 )
 

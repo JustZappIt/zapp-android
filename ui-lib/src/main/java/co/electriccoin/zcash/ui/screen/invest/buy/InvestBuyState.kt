@@ -3,6 +3,7 @@ package co.electriccoin.zcash.ui.screen.invest.buy
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
+import co.electriccoin.zcash.ui.screen.invest.common.InvestTradeInProgressState
 
 /** I5: the amount to invest, with a live dry quote under it. */
 internal data class InvestBuyState(
@@ -26,6 +27,8 @@ internal data class InvestBuyState(
     /** "Review": enabled only with a priced estimate. */
     val primaryButton: ButtonState,
     val isPreparing: Boolean,
+    /** A buy or sale of this stock is still pending, so Review is off; links to it. */
+    val tradeInProgress: InvestTradeInProgressState?,
     val onBack: () -> Unit,
 )
 

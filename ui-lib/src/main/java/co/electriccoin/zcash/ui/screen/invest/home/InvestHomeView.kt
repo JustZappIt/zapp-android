@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.screen.invest.home
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
@@ -49,6 +53,18 @@ internal fun InvestHomeView(state: InvestHomeState) {
             ZappBorderedCard(padding = 0.dp) {
                 ZappRow(
                     title = stringResource(R.string.invest_home_pending_title),
+                    subtitle = stringResource(R.string.invest_home_pending_subtitle),
+                    onClick = pending.onClick,
+                )
+            }
+            Spacer(Modifier.height(INVEST_GAP_MD.dp))
+        }
+        state.pendingSales.forEach { pending ->
+            ZappBorderedCard(padding = 0.dp) {
+                ZappRow(
+                    title =
+                        pending.name?.let { stringResource(R.string.invest_home_pending_sale_title, it) }
+                            ?: stringResource(R.string.invest_home_pending_sale_title_unknown),
                     subtitle = stringResource(R.string.invest_home_pending_subtitle),
                     onClick = pending.onClick,
                 )
@@ -140,6 +156,42 @@ private fun HoldingLine(row: InvestHoldingRowState) {
                 style = ZappTheme.typography.caption.copy(color = c.textMuted),
             )
         }
+        SellAction(row)
+    }
+}
+
+/** "Sell" for a holding, or "Selling…"/"Buying…" while a trade of it runs (one at a time per stock). */
+@Composable
+private fun SellAction(row: InvestHoldingRowState) {
+    val c = ZappTheme.colors
+    val onSell = row.onSell
+    val trade = row.tradeInProgress
+    when {
+        trade != null -> {
+            BasicText(
+                text = stringResource(if (trade.isSale) R.string.invest_home_selling else R.string.invest_home_buying),
+                style = ZappTheme.typography.caption.copy(color = c.accentText),
+                modifier =
+                    Modifier
+                        .padding(start = INVEST_GAP_SM.dp)
+                        .clickable(onClick = trade.onOpen)
+                        .semantics { role = Role.Button }
+                        .padding(INVEST_GAP_SM.dp),
+            )
+        }
+
+        onSell != null -> {
+            BasicText(
+                text = stringResource(R.string.invest_home_sell),
+                style = ZappTheme.typography.caption.copy(color = c.accentText, fontWeight = FontWeight.SemiBold),
+                modifier =
+                    Modifier
+                        .padding(start = INVEST_GAP_SM.dp)
+                        .clickable(onClick = onSell)
+                        .semantics { role = Role.Button }
+                        .padding(INVEST_GAP_SM.dp),
+            )
+        }
     }
 }
 
@@ -217,6 +269,7 @@ private fun PreviewHome() {
                 torBanner = InvestTorBannerState({}, {}),
                 marketBanner = stringRes("US markets are closed. They reopen Mon 21:30 your time."),
                 pendingBuys = listOf(InvestPendingBuyRow("t1abc") {}),
+                pendingSales = emptyList(),
                 groups =
                     listOf(
                         InvestStockGroupState(

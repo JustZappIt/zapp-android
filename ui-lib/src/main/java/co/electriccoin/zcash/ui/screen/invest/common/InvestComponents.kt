@@ -312,6 +312,22 @@ internal fun InvestNotice(
     }
 }
 
+/** "A trade of NVIDIA is in progress" with "See it", which opens that trade (and its support options if stuck). */
+@Composable
+internal fun InvestTradeInProgressNotice(
+    state: InvestTradeInProgressState,
+    modifier: Modifier = Modifier,
+) {
+    InvestNotice(body = state.text.getValue(), modifier = modifier) {
+        ZappButton(
+            text = stringResource(R.string.invest_trade_see_it),
+            variant = ZappButtonVariant.Ghost,
+            modifier = Modifier.weight(1f),
+            onClick = state.onOpen,
+        )
+    }
+}
+
 /** "Updated 3 minutes ago", or "Couldn't refresh" with a retry link when the figures are stale. */
 @Composable
 internal fun InvestUpdatedLine(

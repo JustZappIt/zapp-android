@@ -6,6 +6,8 @@ import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyArgs
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyVM
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProviderImpl
+import co.electriccoin.zcash.ui.screen.invest.common.InvestPendingTrades
+import co.electriccoin.zcash.ui.screen.invest.common.InvestPendingTradesImpl
 import co.electriccoin.zcash.ui.screen.invest.gate.AndroidResidenceHintProvider
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestGateVM
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestUnavailableVM
@@ -15,6 +17,9 @@ import co.electriccoin.zcash.ui.screen.invest.intro.InvestIntroVM
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressVM
 import co.electriccoin.zcash.ui.screen.invest.receipt.InvestReceiptVM
 import co.electriccoin.zcash.ui.screen.invest.section.InvestmentsSectionVM
+import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellArgs
+import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellVM
+import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressVM
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.viewModel
@@ -31,6 +36,7 @@ val investViewModelModule =
     module {
         factoryOf(::NavigateToInvestUseCase)
         factoryOf(::InvestCurrencyProviderImpl) bind InvestCurrencyProvider::class
+        factoryOf(::InvestPendingTradesImpl) bind InvestPendingTrades::class
         factory<ResidenceHintProvider> { AndroidResidenceHintProvider(androidContext()) }
         viewModel {
             InvestmentsSectionVM(
@@ -50,6 +56,7 @@ val investViewModelModule =
                 investRepository = get(),
                 isTorEnabled = get(),
                 currencyProvider = get(),
+                pendingTrades = get(),
                 navigationRouter = get(),
                 clock = Clock.System,
             )
@@ -61,6 +68,7 @@ val investViewModelModule =
                 accountDataSource = get(),
                 swapRepository = get(),
                 currencyProvider = get(),
+                pendingTrades = get(),
                 keystoneProposalRepository = get(),
                 navigationRouter = get(),
                 clock = Clock.System,
@@ -68,4 +76,16 @@ val investViewModelModule =
         }
         viewModelOf(::InvestProgressVM)
         viewModelOf(::InvestReceiptVM)
+        viewModel { (args: InvestSellArgs) ->
+            InvestSellVM(
+                args = args,
+                investRepository = get(),
+                sellRepository = get(),
+                pendingTrades = get(),
+                currencyProvider = get(),
+                navigationRouter = get(),
+                clock = Clock.System,
+            )
+        }
+        viewModelOf(::InvestSellProgressVM)
     }

@@ -1,17 +1,28 @@
-package co.electriccoin.zcash.ui.screen.invest.buy
+package co.electriccoin.zcash.ui.screen.invest.sell
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
@@ -30,20 +41,17 @@ import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_MD
 import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_SM
 import co.electriccoin.zcash.ui.screen.invest.common.InvestModalSheet
 
-/**
- * I6, in ZappConfirmationBottomSheet's frame (same surface, handle and back handling) with the swap review's rows.
- * A null [state] keeps it hidden.
- */
+/** I9: what the private-account key is about to sign, in words, with the raw message one tap away. */
 @Composable
-internal fun InvestReviewSheet(state: InvestReviewState?) {
+internal fun InvestSellReviewSheet(state: InvestSellReviewState?) {
     InvestModalSheet(state = state, onDismiss = { it.onDismiss() }) { active ->
-        InvestReviewContent(active, Modifier.weight(1f, false))
+        InvestSellReviewContent(active, Modifier.weight(1f, false))
     }
 }
 
 @Composable
-private fun InvestReviewContent(
-    state: InvestReviewState,
+private fun InvestSellReviewContent(
+    state: InvestSellReviewState,
     modifier: Modifier = Modifier,
 ) {
     val c = ZappTheme.colors
@@ -57,33 +65,29 @@ private fun InvestReviewContent(
     ) {
         Spacer(Modifier.height(INVEST_GAP_SM.dp))
         BasicText(
-            text = stringResource(R.string.invest_review_title),
+            text = stringResource(R.string.invest_sell_review_title),
             style = ZappTheme.typography.sectionTitle.copy(color = c.text, fontWeight = FontWeight.SemiBold),
         )
+        BasicText(text = state.authorisation.getValue(), style = ZappTheme.typography.body.copy(color = c.text))
         ZappBorderedCard(verticalArrangement = Arrangement.spacedBy(INVEST_GAP_SM.dp)) {
-            ZappSummaryRow(
-                stringResource(R.string.invest_review_from),
-                stringResource(R.string.invest_review_from_value),
-            )
-            ZappSummaryRow(stringResource(R.string.invest_buy_ledger_you_send), state.youSend.getValue())
             ZappSummaryRow(stringResource(R.string.invest_review_at_least), state.atLeast.getValue())
             ZappSummaryRow(
                 stringResource(R.string.invest_review_expected),
                 state.expected.getValue(),
                 valueColor = c.textMuted,
             )
-            ZappSummaryRow(stringResource(R.string.invest_buy_ledger_fees), state.fees.getValue())
+            ZappSummaryRow(stringResource(R.string.invest_sell_ledger_fees), state.fees.getValue())
             ZappSummaryRow(
-                stringResource(R.string.invest_review_held_in),
-                stringResource(R.string.invest_review_held_in_value),
+                stringResource(R.string.invest_sell_ledger_paid_to),
+                stringResource(R.string.invest_sell_ledger_paid_to_value),
             )
             ZappSummaryRow(
-                stringResource(R.string.invest_review_price_held),
+                stringResource(R.string.invest_sell_valid_for),
                 state.countdown.getValue(),
                 valueColor = if (state.isExpired) c.danger else c.text,
             )
         }
-        BasicText(text = state.privacy.getValue(), style = ZappTheme.typography.caption.copy(color = c.textMuted))
+        SignedMessage(state)
         state.errorText?.let {
             BasicText(
                 text = it.getValue(),
@@ -102,22 +106,62 @@ private fun InvestReviewContent(
     }
 }
 
+/** "View signed message": the exact payload, in mono, for the curious and for support. Collapsed by default. */
+@Composable
+private fun SignedMessage(state: InvestSellReviewState) {
+    val c = ZappTheme.colors
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = state.onToggleSignedMessage)
+                .semantics { role = Role.Button }
+                .padding(vertical = INVEST_GAP_SM.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BasicText(
+            text = stringResource(R.string.invest_sell_view_signed_message),
+            style = ZappTheme.typography.caption.copy(color = c.accentText, fontWeight = FontWeight.SemiBold),
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            imageVector =
+                if (state.isSignedMessageOpen) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+            contentDescription = null,
+            tint = c.textMuted,
+            modifier = Modifier.size(CHEVRON_SIZE.dp),
+        )
+    }
+    if (state.isSignedMessageOpen) {
+        ZappBorderedCard {
+            BasicText(text = state.signedMessage, style = ZappTheme.typography.mono.copy(color = c.textMuted))
+        }
+    }
+}
+
 private const val SHEET_PADDING = 24
+private const val CHEVRON_SIZE = 20
 
 @PreviewScreens
 @Composable
-private fun PreviewReview() {
+private fun PreviewSellReview() {
     ZcashTheme {
-        InvestReviewContent(
-            InvestReviewState(
-                youSend = stringRes("0.06478 ZEC"),
-                atLeast = stringRes("$98.00 · 0.4366 NVDA"),
-                expected = stringRes("$99.01 · 0.4410 NVDA"),
-                fees = stringRes("$0.95"),
-                countdown = stringRes("9:42"),
+        InvestSellReviewContent(
+            InvestSellReviewState(
+                authorisation =
+                    stringRes(
+                        "Move 0.4410 NVDA (about $98.99) from your private account to NEAR Intents, to be sold " +
+                            "for ZEC and sent to your wallet. Nothing else.",
+                    ),
+                atLeast = stringRes("0.0628 ZEC"),
+                expected = stringRes("0.0634 ZEC"),
+                fees = stringRes("$1.12"),
+                countdown = stringRes("9:12"),
                 isExpired = false,
-                privacy = stringRes("Only you and NEAR Intents can see this holding."),
-                primaryButton = ButtonState(stringRes("Confirm and buy")),
+                signedMessage = "{\"signer_id\":\"…\",\"intents\":[{\"intent\":\"transfer\"}]}",
+                isSignedMessageOpen = true,
+                onToggleSignedMessage = {},
+                primaryButton = ButtonState(stringRes("Confirm and sell")),
                 isBusy = false,
                 errorText = null,
                 onDismiss = {},

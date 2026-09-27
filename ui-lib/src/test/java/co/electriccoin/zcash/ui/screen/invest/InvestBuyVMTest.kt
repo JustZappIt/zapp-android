@@ -21,7 +21,9 @@ import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyState
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyVM
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestReviewState
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
+import co.electriccoin.zcash.ui.screen.invest.common.PendingTrade
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
+import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressArgs
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -125,6 +127,24 @@ class InvestBuyVMTest {
                 fixture.vm.state.value.ledger
                     ?.youGet,
             )
+        }
+
+    @Test
+    fun `while a sale of the stock is in progress, Review is off and the screen says why`() =
+        runTest {
+            val fixture = fixture()
+            fixture.repo.onEstimate = { _, _ -> PRICED }
+            pending.value = listOf(PendingTrade("0xsale", NVIDIA.assetId, isSale = true))
+
+            fixture.type("100")
+            advanceUntilIdle()
+
+            val inProgress = assertNotNull(fixture.vm.state.value.tradeInProgress)
+            assertEquals(stringRes(R.string.invest_trade_in_flight, "NVIDIA"), inProgress.text)
+            assertFalse(fixture.vm.state.value.primaryButton.isEnabled)
+            // The note leads to the trade holding things up, where a stuck one can go to support or be dismissed.
+            inProgress.onOpen()
+            verify { fixture.router.forward(EXPECTED_ROUTE) }
         }
 
     @Test
@@ -337,6 +357,8 @@ class InvestBuyVMTest {
         }
     }
 
+    private val pending = MutableStateFlow<List<PendingTrade>>(emptyList())
+
     private fun TestScope.fixture(currency: InvestCurrencyProvider = USD_CURRENCY): Fixture {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val repo = FakeInvestRepository()
@@ -365,6 +387,7 @@ class InvestBuyVMTest {
                 accountDataSource = accounts,
                 swapRepository = swap,
                 currencyProvider = currency,
+                pendingTrades = { pending },
                 keystoneProposalRepository = keystone,
                 navigationRouter = router,
                 clock = virtualClock(),
@@ -373,6 +396,8 @@ class InvestBuyVMTest {
     }
 
     private companion object {
+        val EXPECTED_ROUTE =
+            InvestSellProgressArgs("0xsale", InvestAssets.curated.first { it.ticker == "NVDA" }.assetId)
         val NVIDIA = InvestAssets.curated.first { it.ticker == "NVDA" }
         val PRICED =
             BuyEstimate.Priced(

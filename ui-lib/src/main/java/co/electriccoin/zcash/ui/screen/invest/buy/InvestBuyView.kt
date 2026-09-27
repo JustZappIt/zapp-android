@@ -40,6 +40,7 @@ import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_MD
 import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_SM
 import co.electriccoin.zcash.ui.screen.invest.common.InvestNotice
 import co.electriccoin.zcash.ui.screen.invest.common.InvestScreenFrame
+import co.electriccoin.zcash.ui.screen.invest.common.InvestTradeInProgressNotice
 import java.math.BigDecimal
 
 @Composable
@@ -72,6 +73,10 @@ internal fun InvestBuyView(state: InvestBuyState) {
         Spacer(Modifier.height(INVEST_GAP_MD.dp))
         Presets(state.presets)
         Spacer(Modifier.height(INVEST_GAP_LG.dp))
+        state.tradeInProgress?.let {
+            InvestTradeInProgressNotice(it)
+            Spacer(Modifier.height(INVEST_GAP_MD.dp))
+        }
         state.ledger?.let { ledger -> Ledger(ledger, state) }
         state.noPrice?.let { NoPriceCard(it) }
     }
@@ -201,6 +206,7 @@ private fun previewState(
     isAmountError = false,
     primaryButton = ButtonState(stringRes("Review"), isEnabled = ledger != null),
     isPreparing = false,
+    tradeInProgress = null,
     onBack = {},
 )
 

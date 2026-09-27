@@ -26,7 +26,11 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
+import co.electriccoin.zcash.ui.screen.invest.common.InvestPendingTrades
+import co.electriccoin.zcash.ui.screen.invest.common.InvestTradeInProgressState
+import co.electriccoin.zcash.ui.screen.invest.common.PendingTrade
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
+import co.electriccoin.zcash.ui.screen.invest.common.progressRoute
 import co.electriccoin.zcash.ui.screen.invest.common.toInvestMessage
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
 import kotlinx.coroutines.Job
@@ -61,6 +65,7 @@ internal class InvestBuyVM(
     accountDataSource: AccountDataSource,
     swapRepository: SwapRepository,
     currencyProvider: InvestCurrencyProvider,
+    pendingTrades: InvestPendingTrades,
     private val keystoneProposalRepository: KeystoneProposalRepository,
     private val navigationRouter: NavigationRouter,
     private val clock: Clock,
@@ -100,6 +105,13 @@ internal class InvestBuyVM(
     private val currency =
         currencyProvider.observe().stateIn(viewModelScope, SharingStarted.Eagerly, InvestCurrency.USD)
 
+    // The engine refuses a buy while a sale of the same stock is pending (and one buy is enough at a time).
+    private val tradeInFlight =
+        pendingTrades
+            .observe()
+            .map { trades -> trades.firstOrNull { it.assetId == asset.assetId } }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     init {
         // collectLatest cancels the previous block, so the leading delay is the debounce: one quote per pause.
         viewModelScope.launch {
@@ -120,14 +132,14 @@ internal class InvestBuyVM(
     }
 
     val state: StateFlow<InvestBuyState> =
-        combine(amount, quote, isRetrying, isPreparing, combine(spendableZec, zecUsd, currency, ::Triple)) {
-            amt,
-            current,
-            retrying,
-            preparing,
-            (spendable, price, money),
-            ->
-            buildState(amt, current, retrying, preparing, Wallet(spendable, price), money)
+        combine(
+            amount,
+            quote,
+            combine(isRetrying, isPreparing, tradeInFlight, ::Triple),
+            combine(spendableZec, zecUsd, ::Wallet),
+            currency,
+        ) { amt, current, (retrying, preparing, inFlight), wallet, money ->
+            buildState(amt, current, retrying, preparing, wallet, money, inFlight)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
@@ -139,6 +151,7 @@ internal class InvestBuyVM(
                     preparing = false,
                     wallet = Wallet(spendableZec.value, zecUsd.value),
                     money = currency.value,
+                    inFlight = null,
                 ),
         )
 
@@ -185,6 +198,7 @@ internal class InvestBuyVM(
         preparing: Boolean,
         wallet: Wallet,
         money: InvestCurrency,
+        inFlight: PendingTrade?,
     ): InvestBuyState {
         val estimate = (current as? BuyQuote.Ready)?.estimate
         val (notice, isDanger) = InvestBuyPresenter.notice(current, money)
@@ -212,10 +226,16 @@ internal class InvestBuyVM(
             primaryButton =
                 ButtonState(
                     text = stringRes(R.string.invest_buy_review),
-                    isEnabled = estimate is BuyEstimate.Priced && !preparing,
+                    isEnabled = estimate is BuyEstimate.Priced && !preparing && inFlight == null,
                     onClick = ::onReview,
                 ),
             isPreparing = preparing,
+            tradeInProgress =
+                inFlight?.let { trade ->
+                    InvestTradeInProgressState(stringRes(R.string.invest_trade_in_flight, asset.name)) {
+                        navigationRouter.forward(trade.progressRoute())
+                    }
+                },
             onBack = navigationRouter::back,
         )
     }

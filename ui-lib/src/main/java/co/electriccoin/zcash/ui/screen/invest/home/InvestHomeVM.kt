@@ -19,11 +19,16 @@ import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyArgs
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
+import co.electriccoin.zcash.ui.screen.invest.common.InvestPendingTrades
+import co.electriccoin.zcash.ui.screen.invest.common.PendingTrade
 import co.electriccoin.zcash.ui.screen.invest.common.UsMarketHours
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
+import co.electriccoin.zcash.ui.screen.invest.common.progressRoute
 import co.electriccoin.zcash.ui.screen.invest.common.toInvestMessage
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
+import co.electriccoin.zcash.ui.screen.invest.section.HoldingTrade
 import co.electriccoin.zcash.ui.screen.invest.section.InvestHoldingRowState
+import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellArgs
 import co.electriccoin.zcash.ui.screen.tor.settings.TorSettingsArgs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -46,6 +51,7 @@ internal class InvestHomeVM(
     private val investRepository: InvestRepository,
     isTorEnabled: IsTorEnabledUseCase,
     currencyProvider: InvestCurrencyProvider,
+    pendingTrades: InvestPendingTrades,
     private val navigationRouter: NavigationRouter,
     private val clock: Clock,
 ) : ViewModel() {
@@ -75,26 +81,34 @@ internal class InvestHomeVM(
             investRepository.holdings,
             investRepository.pendingBuys,
             isTorEnabled.observe(),
-            combine(status, currency) { current, _ -> current },
-        ) { market, holdings, pending, torOn, current ->
-            buildState(market, holdings, pending, torOn, current)
+            combine(status, currency, pendingTrades.observe()) { current, _, trades -> current to trades },
+        ) { market, holdings, pending, torOn, (current, trades) ->
+            buildState(market, holdings, Pending(pending, trades), torOn, current)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-            initialValue = buildState(null, null, emptyList(), torOn = true, current = Status()),
+            initialValue = buildState(null, null, Pending(emptyList(), emptyList()), torOn = true, current = Status()),
         )
+
+    private data class Pending(
+        val buys: List<String>,
+        val trades: List<PendingTrade>,
+    ) {
+        val sales: List<PendingTrade> get() = trades.filter { it.isSale }
+    }
 
     private fun buildState(
         market: InvestMarket?,
         holdings: Holdings?,
-        pending: List<String>,
+        pending: Pending,
         torOn: Boolean,
         current: Status,
     ): InvestHomeState {
+        val trading = pending.trades.associateBy { it.assetId }
         market?.assets?.forEach { asset -> asset.usdPrice?.let { lastPrices[asset.asset.assetId] = it } }
         val now = clock.now().toJavaInstant()
         return InvestHomeState(
-            summary = holdings?.let { summaryOf(it, isStale = it.isStale || current.holdingsFailed) },
+            summary = holdings?.let { summaryOf(it, isStale = it.isStale || current.holdingsFailed, trading) },
             torBanner =
                 if (torOn || current.isTorBannerDismissed) {
                     null
@@ -108,7 +122,15 @@ internal class InvestHomeVM(
                     val reopens = InvestFormat.localDayTime(UsMarketHours.nextRegularOpen(now))
                     stringRes(R.string.invest_home_market_banner, reopens)
                 },
-            pendingBuys = pending.map { InvestPendingBuyRow(it) { onPendingBuyClick(it) } },
+            pendingBuys = pending.buys.map { InvestPendingBuyRow(it) { onPendingBuyClick(it) } },
+            pendingSales =
+                pending.sales.map { sale ->
+                    InvestPendingSaleRow(
+                        depositAddress = sale.depositAddress,
+                        name = InvestAssets.find(sale.assetId)?.name,
+                        onClick = { onPendingSaleClick(sale) },
+                    )
+                },
             groups = groupsOf(market, weekdaysOpen = UsMarketHours.isWeekdayWindowOpen(now)),
             marketError = current.marketError.takeIf { market == null },
             onRetryMarket = ::onRetryMarket,
@@ -119,6 +141,7 @@ internal class InvestHomeVM(
     private fun summaryOf(
         holdings: Holdings,
         isStale: Boolean,
+        trading: Map<String, PendingTrade>,
     ) = InvestHomeSummary(
         total = holdings.totalUsd?.let { stringRes(currency.value.format(it)) },
         rows =
@@ -131,6 +154,12 @@ internal class InvestHomeVM(
                     value = holding.usdValue?.let { stringRes(currency.value.format(it)) },
                     units = stringRes(InvestFormat.units(holding.units, holding.asset.ticker)),
                     onClick = { onStockClick(holding.asset) },
+                    // A stock can't be bought and sold at once: while a trade of it runs, the holding says so instead.
+                    tradeInProgress =
+                        trading[holding.asset.assetId]?.let { trade ->
+                            HoldingTrade(trade.isSale) { navigationRouter.forward(trade.progressRoute()) }
+                        },
+                    onSell = { onSellClick(holding.asset) }.takeIf { holding.asset.assetId !in trading },
                 )
             },
         updatedAtEpochMillis = holdings.updatedAt.toEpochMilliseconds(),
@@ -214,4 +243,8 @@ internal class InvestHomeVM(
         navigationRouter.forward(InvestProgressArgs(depositAddress = depositAddress))
 
     private fun onStockClick(asset: InvestAsset) = navigationRouter.forward(InvestBuyArgs(assetId = asset.assetId))
+
+    private fun onSellClick(asset: InvestAsset) = navigationRouter.forward(InvestSellArgs(assetId = asset.assetId))
+
+    private fun onPendingSaleClick(sale: PendingTrade) = navigationRouter.forward(sale.progressRoute())
 }

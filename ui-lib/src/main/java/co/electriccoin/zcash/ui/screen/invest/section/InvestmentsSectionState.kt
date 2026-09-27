@@ -54,5 +54,15 @@ internal data class InvestHoldingRowState(
     val value: StringResource?,
     /** Shares second. */
     val units: StringResource,
+    /** Invest home's Sell for this holding; null where it isn't offered (PAY, or while a sale of it runs). */
+    val onSell: (() -> Unit)? = null,
+    /** Set while a buy or sale of this stock runs: Sell isn't offered until it finishes. */
+    val tradeInProgress: HoldingTrade? = null,
     val onClick: () -> Unit,
+)
+
+/** The pending trade that holds a holding's Sell back, and the way to it. */
+internal data class HoldingTrade(
+    val isSale: Boolean,
+    val onOpen: () -> Unit,
 )

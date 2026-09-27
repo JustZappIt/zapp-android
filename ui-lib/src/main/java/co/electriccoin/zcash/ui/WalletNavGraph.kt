@@ -126,6 +126,10 @@ import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressScreen
 import co.electriccoin.zcash.ui.screen.invest.receipt.InvestReceiptArgs
 import co.electriccoin.zcash.ui.screen.invest.receipt.InvestReceiptScreen
+import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellArgs
+import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellScreen
+import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressArgs
+import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressScreen
 import co.electriccoin.zcash.ui.screen.ironwood.IronwoodAnnouncementArgs
 import co.electriccoin.zcash.ui.screen.ironwood.IronwoodAnnouncementScreen
 import co.electriccoin.zcash.ui.screen.keepopen.KeepOpenArgs
@@ -420,6 +424,8 @@ fun NavGraphBuilder.walletNavGraph(
         composable<InvestBuyArgs> { InvestBuyScreen(it.toRoute()) }
         composable<InvestProgressArgs> { InvestProgressScreen(it.toRoute()) }
         composable<InvestReceiptArgs> { InvestReceiptScreen(it.toRoute()) }
+        composable<InvestSellArgs> { InvestSellScreen(it.toRoute()) }
+        composable<InvestSellProgressArgs> { InvestSellProgressScreen(it.toRoute()) }
         dialogComposable<SwapSlippageArgs> { SwapSlippageScreen(it.toRoute()) }
         dialogComposable<SwapInfoArgs> { SwapInfoScreen() }
         dialogComposable<DepositSwapInfoArgs> { DepositSwapInfoScreen() }
