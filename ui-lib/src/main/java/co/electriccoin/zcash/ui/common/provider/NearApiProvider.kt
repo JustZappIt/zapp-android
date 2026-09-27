@@ -56,7 +56,7 @@ class KtorNearApiProvider(
         execute {
             post("https://1click.chaindefuser.com/v0/quote") {
                 contentType(ContentType.Application.Json)
-                header(HttpHeaders.Authorization, AUTH_TOKEN)
+                header(HttpHeaders.Authorization, NEAR_PARTNER_AUTHORIZATION)
                 setBody(request)
             }.body()
         }
@@ -65,7 +65,7 @@ class KtorNearApiProvider(
         execute {
             post("https://1click.chaindefuser.com/v0/deposit/submit") {
                 contentType(ContentType.Application.Json)
-                header(HttpHeaders.Authorization, AUTH_TOKEN)
+                header(HttpHeaders.Authorization, NEAR_PARTNER_AUTHORIZATION)
                 setBody(request)
             }
         }
@@ -75,7 +75,7 @@ class KtorNearApiProvider(
         execute {
             get("https://1click.chaindefuser.com/v0/status") {
                 contentType(ContentType.Application.Json)
-                header(HttpHeaders.Authorization, AUTH_TOKEN)
+                header(HttpHeaders.Authorization, NEAR_PARTNER_AUTHORIZATION)
                 parameter("depositAddress", depositAddress)
             }.body()
         }
@@ -102,5 +102,7 @@ class KtorNearApiProvider(
         }
 }
 
-private const val AUTH_TOKEN =
+// The 1Click partner JWT (partner_id "zapp"). Shared with Invest's Tor-only client; still in source
+// until it moves to local.properties.
+internal const val NEAR_PARTNER_AUTHORIZATION =
     "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjIwMjUtMDEtMTItdjEifQ.eyJ2IjoxLCJrZXlfdHlwZSI6ImRpc3RyaWJ1dGlvbl9jaGFubmVsIiwicGFydG5lcl9pZCI6InphcHAiLCJpYXQiOjE3NzgxNTU1ODQsImV4cCI6MTgwOTY5MTU4NH0.R7Nk8UI0ZI-q4h0nFHjij8-zZBIzHkeKAGHtySUX8FL3GLsDm53hnqoiGArQqcj2Iwf-x9fcg0GSV8-WAnlFTakQh6RBke91cU7CemIcqbffzw98wqiSw6iDGZxpbLDwUN7dD_6PNPhp4ZUWfiwmi7U6VcpARqqc2KJAiCn2GbZF6E_dQ-uNBFi7T4Paw641E-mKSrSDvn2OCUQbQLF3iY8_JyLMfbf8kCQPq8-MPv93nvMXieogeu5c6Z9PmZfWCKEfuMbCpjBHEe9BDD8_S9CcuzQCOLtdHkXEbmT4QQ7nBVAY-DMpYVGgOs1mzCK4xmW8frtStYBn194C-DK6yA"
