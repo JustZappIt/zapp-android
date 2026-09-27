@@ -63,7 +63,7 @@
     <!-- Convert: amount -->
     <string name="convert_title">Convert to private USD</string>
     <string name="convert_amount_label">Amount</string>
-    <string name="convert_limits">Whole dollars, $%1$d to $%2$d</string>
+    <string name="convert_limits">$%1$s to $%2$s</string>
     <string name="convert_zec_available">Available</string>
     <string name="convert_you_pay">You pay</string>
     <string name="convert_network_fee">Network fee</string>

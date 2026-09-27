@@ -22,9 +22,11 @@ object AtomicSwapTestnet {
     private const val MIN_SECONDS_TO_T0 = 9 * 60L
     private const val CONFIRMATIONS = 3
 
-    // The maker's unit is one whole token, and it quotes up to 20 at a time.
-    private const val UNIT_BASE_UNITS = 1_000_000L
-    private const val MAX_UNITS = 20
+    // Quote token base units, so any amount the six-decimal token can hold is representable.
+    // The 0.02-token relayer fee leaves a visible payout from 0.03.
+    private const val UNIT_BASE_UNITS = 1L
+    private const val MIN_UNITS = 30_000
+    private const val MAX_UNITS = 20_000_000
 
     val deployment =
         AtomicSwapDeployment(
@@ -43,6 +45,7 @@ object AtomicSwapTestnet {
             ethereumRpcUrl = "https://ethereum-sepolia-rpc.publicnode.com",
             explorerTxUrl = "https://sepolia.etherscan.io/tx/",
             unitBaseUnits = UNIT_BASE_UNITS,
+            minUnits = MIN_UNITS,
             maxUnits = MAX_UNITS,
             makerConfirmations = CONFIRMATIONS,
             screeningTime = 1.minutes,

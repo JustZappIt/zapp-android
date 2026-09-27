@@ -27,12 +27,16 @@ class PrivateUsdConvertTermsTest {
         )
 
     @Test
-    fun `an amount is whole dollars within the maker's limit`() {
-        assertEquals(7, terms.units(dollars("7")))
-        assertEquals(20, terms.units(dollars("20")))
-        assertNull(terms.units(dollars("7.5")))
+    fun `an amount accepts any token precision within the maker's limit`() {
+        assertEquals(7_000_000, terms.units(dollars("7")))
+        assertEquals(7_255_001, terms.units(dollars("7.255001")))
+        assertEquals(30_000, terms.units(dollars("0.03")))
+        assertEquals(20_000_000, terms.units(dollars("20")))
+        assertNull(terms.units(dollars("0.02")))
+        assertNull(terms.units(dollars("7.2550001")))
         assertNull(terms.units(dollars("0")))
         assertNull(terms.units(dollars("21")))
+        assertNull(terms.units(dollars("42949672.99")))
         assertNull(terms.units(NumberTextFieldInnerState()))
     }
 
@@ -40,7 +44,9 @@ class PrivateUsdConvertTermsTest {
     fun `only an amount that was typed can be invalid`() {
         assertFalse(terms.isInvalid(NumberTextFieldInnerState()))
         assertFalse(terms.isInvalid(dollars("7")))
-        assertTrue(terms.isInvalid(dollars("7.5")))
+        assertFalse(terms.isInvalid(dollars("7.5")))
+        assertFalse(terms.isInvalid(dollars("7.255001")))
+        assertTrue(terms.isInvalid(dollars("7.2550001")))
         assertTrue(terms.isInvalid(dollars("21")))
     }
 

@@ -206,8 +206,8 @@ private fun InvalidAmountPreview() =
             state =
                 PrivateUsdConvertState(
                     phase = PrivateUsdConvertPhase.AMOUNT,
-                    amount = NumberTextFieldState(NumberTextFieldInnerState.fromAmount(BigDecimal("7.5"))) {},
-                    amountNote = stringRes("Whole dollars, $1 to $20"),
+                    amount = NumberTextFieldState(NumberTextFieldInnerState.fromAmount(BigDecimal("7.2550001"))) {},
+                    amountNote = stringRes("$0.03 to $20"),
                     isAmountInvalid = true,
                     zecAvailable = stringRes("2.51 ZEC"),
                     quote = null,

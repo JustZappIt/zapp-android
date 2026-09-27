@@ -12,7 +12,9 @@ import co.electriccoin.zcash.ui.common.privateusd.toDecimal
 import co.electriccoin.zcash.ui.common.privateusd.tokenAmount
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.util.StringResource
+import co.electriccoin.zcash.ui.design.util.TickerLocation
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.design.util.stringResByCurrencyNumber
 import co.electriccoin.zcash.ui.screen.privateusd.about
 
 internal data class ConvertForm(
@@ -53,15 +55,23 @@ internal class PrivateUsdConvertTerms(
     private val token: PrivateUsdToken,
 ) {
     val duration: StringResource = deployment.expectedDuration.about()
+    private val minUnits = deployment.minUnits
     private val maxUnits = deployment.maxUnits
     private val unitDollars = deployment.unitBaseUnits.toBigInteger().toDecimal(token.decimals)
 
-    val limits: StringResource = stringRes(R.string.convert_limits, unitDollars.toInt(), unitDollars.toInt() * maxUnits)
+    val limits: StringResource =
+        stringRes(
+            R.string.convert_limits,
+            (unitDollars * minUnits.toBigDecimal()).stripTrailingZeros().toPlainString(),
+            (unitDollars * maxUnits.toBigDecimal()).stripTrailingZeros().toPlainString(),
+        )
 
-    /** Whole units within the limits, or null. */
+    /** Amounts in the maker's quoted units within the deployment limits, or null. */
     fun units(amount: NumberTextFieldInnerState): Int? {
         val (units, remainder) = amount.amount?.divideAndRemainder(unitDollars) ?: return null
-        return units.toInt().takeIf { remainder.signum() == 0 && it in 1..maxUnits }
+        return units
+            .takeIf { remainder.signum() == 0 && it >= minUnits.toBigDecimal() && it <= maxUnits.toBigDecimal() }
+            ?.toInt()
     }
 
     fun isInvalid(amount: NumberTextFieldInnerState): Boolean =
@@ -84,7 +94,18 @@ internal class PrivateUsdConvertTerms(
         return PrivateUsdQuoteState(
             pay = stringRes(Zatoshi(offer.quote.depositZat + (fee ?: 0))),
             networkFee = fee?.let { stringRes(Zatoshi(it)) },
-            receive = tokenAmount(offer.receives, token, estimate = true),
+            receive =
+                if (token.isDollar) {
+                    stringResByCurrencyNumber(
+                        amount = offer.receives.toDecimal(token.decimals),
+                        ticker = "$",
+                        tickerLocation = TickerLocation.BEFORE,
+                        minDecimals = 2,
+                        maxDecimals = token.decimals,
+                    )
+                } else {
+                    tokenAmount(offer.receives, token, estimate = true)
+                },
             fees = stringRes(R.string.convert_fees_value, tokenAmount(offer.relayerFee, token, estimate = true)),
             refreshesIn =
                 stringRes(
