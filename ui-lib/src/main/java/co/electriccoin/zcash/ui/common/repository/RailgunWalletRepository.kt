@@ -10,13 +10,17 @@ import co.electriccoin.zcash.ui.common.provider.RailgunKeyProvider
 import co.electriccoin.zcash.ui.common.provider.ZcashNetworkProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import xyz.justzappit.railgun.RailgunBalances
 import xyz.justzappit.railgun.RailgunEvent
 import xyz.justzappit.railgun.RailgunException
@@ -41,6 +45,17 @@ interface RailgunWalletRepository {
 
     /** A testnet round trip, paid for and sent by the gas account in place of a broadcaster. */
     fun run(action: RailgunTestAction)
+
+    /** Starts and opens what isn't yet, then syncs; waits for a call already running. */
+    suspend fun sync(): RailgunBalances
+
+    /** Sends [amount] of [token] privately to a 0zk address, or out to a public one when [withdraw]. */
+    suspend fun send(
+        to: String,
+        token: String,
+        amount: BigInteger,
+        withdraw: Boolean,
+    ): RailgunSent
 }
 
 enum class RailgunTestAction { SHIELD, SEND_TO_SELF, WITHDRAW }
@@ -92,48 +107,116 @@ class RailgunWalletRepositoryImpl(
 
     @Volatile
     private var opened = false
-    private var job: Job? = null
+    private val engineLock = Mutex()
 
     init {
-        scope.launch { railgunWallet.events.collect(::onEvent) }
+        scope.launch {
+            railgunWallet.events.collect { event ->
+                when (event) {
+                    is RailgunEvent.Log -> {
+                        Twig.debug { "Railgun: ${event.message}" }
+                    }
+
+                    RailgunEvent.Disconnected -> {
+                        started = false
+                        opened = false
+                    }
+
+                    else -> {
+                        mutableState.update { it.after(event) }
+                    }
+                }
+            }
+        }
+        // A wallet deleted and replaced in this process must not stay open in the engine.
+        scope.launch {
+            persistableWalletProvider.persistableWallet
+                .map { it?.seedPhrase?.joinToString()?.hashCode() }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { forgetWallet() }
+        }
     }
 
-    override fun refresh() = launch { sync() }
+    override fun refresh() = launch { syncLocked() }
 
     override fun run(action: RailgunTestAction) =
         launch {
             open()
             mutableState.update { it.copy(phase = RailgunWalletState.Phase.SENDING, proof = null) }
-            val sent = send(action)
+            val address = checkNotNull(state.value.address)
+            val gasAccount = checkNotNull(state.value.gasAccount).address
+            val sent =
+                when (action) {
+                    RailgunTestAction.SHIELD -> railgunWallet.shieldBaseToken(SHIELD_AMOUNT)
+                    RailgunTestAction.SEND_TO_SELF -> railgunWallet.transfer(address, WETH, SEND_AMOUNT)
+                    RailgunTestAction.WITHDRAW -> railgunWallet.unshield(gasAccount, WETH, SEND_AMOUNT)
+                }
             mutableState.update { it.copy(activity = it.activity + (action to sent)) }
-            sync()
+            syncLocked()
         }
 
-    private suspend fun send(action: RailgunTestAction): RailgunSent {
-        val address = state.value.address
-        val gasAccount = state.value.gasAccount?.address
-        return when (action) {
-            RailgunTestAction.SHIELD -> railgunWallet.shieldBaseToken(SHIELD_AMOUNT)
-            RailgunTestAction.SEND_TO_SELF -> railgunWallet.transfer(checkNotNull(address), WETH, SEND_AMOUNT)
-            RailgunTestAction.WITHDRAW -> railgunWallet.unshield(checkNotNull(gasAccount), WETH, SEND_AMOUNT)
+    override suspend fun sync(): RailgunBalances {
+        checkNotNull(network) { "this build has no Railgun network" }
+        return engineLock.withLock { reported { syncLocked() } }
+    }
+
+    override suspend fun send(
+        to: String,
+        token: String,
+        amount: BigInteger,
+        withdraw: Boolean,
+    ): RailgunSent {
+        checkNotNull(network) { "this build has no Railgun network" }
+        return engineLock.withLock {
+            reported {
+                open()
+                mutableState.update { it.copy(phase = RailgunWalletState.Phase.SENDING, proof = null) }
+                val sent =
+                    if (withdraw) {
+                        railgunWallet.unshield(to, token, amount)
+                    } else {
+                        railgunWallet.transfer(to, token, amount)
+                    }
+                // The send stands whatever the sync after it does.
+                try {
+                    syncLocked()
+                } catch (e: RailgunException) {
+                    mutableState.fail(e)
+                }
+                sent
+            }
         }
     }
 
     private fun launch(block: suspend () -> Unit) {
         if (network == null) return
-        synchronized(this) {
-            if (job?.isActive == true) return
-            job =
-                scope.launch {
-                    mutableState.update { it.copy(error = null) }
-                    try {
-                        block()
-                    } catch (e: RailgunException) {
-                        fail(e)
-                    } catch (e: IllegalStateException) {
-                        fail(e)
-                    }
-                }
+        scope.launch {
+            if (!engineLock.tryLock()) return@launch
+            mutableState.update { it.copy(error = null) }
+            try {
+                block()
+            } catch (e: RailgunException) {
+                mutableState.fail(e)
+            } catch (e: IllegalStateException) {
+                mutableState.fail(e)
+            } finally {
+                engineLock.unlock()
+            }
+        }
+    }
+
+    /** Runs [block], showing its failure on the state before passing it on. */
+    private suspend fun <T> reported(block: suspend () -> T): T {
+        mutableState.update { it.copy(error = null) }
+        return try {
+            block()
+        } catch (e: RailgunException) {
+            mutableState.fail(e)
+            throw e
+        } catch (e: IllegalStateException) {
+            mutableState.fail(e)
+            throw e
         }
     }
 
@@ -156,7 +239,7 @@ class RailgunWalletRepositoryImpl(
         }
     }
 
-    private suspend fun sync() {
+    private suspend fun syncLocked(): RailgunBalances {
         open()
         // The scan lines describe this sync only, not whatever scan finished last.
         mutableState.update { it.copy(phase = RailgunWalletState.Phase.SYNCING, utxoScan = null, txidScan = null) }
@@ -165,37 +248,28 @@ class RailgunWalletRepositoryImpl(
         mutableState.update {
             it.copy(phase = RailgunWalletState.Phase.READY, balances = balances, gasAccount = gasAccount)
         }
+        return balances
     }
 
-    private fun onEvent(event: RailgunEvent) {
-        when (event) {
-            is RailgunEvent.Scan -> {
-                mutableState.update {
-                    if (event.tree == RailgunMerkletree.UTXO) it.copy(utxoScan = event) else it.copy(txidScan = event)
-                }
-            }
-
-            is RailgunEvent.Proof -> {
-                mutableState.update { it.copy(proof = event) }
-            }
-
-            is RailgunEvent.Log -> {
-                Twig.debug { "Railgun: ${event.message}" }
-            }
-
-            RailgunEvent.Disconnected -> {
-                started = false
-                opened = false
+    private suspend fun forgetWallet() =
+        engineLock.withLock {
+            if (started) railgunWallet.close()
+            started = false
+            opened = false
+            mutableState.update {
+                it.copy(
+                    phase = RailgunWalletState.Phase.IDLE,
+                    address = null,
+                    balances = null,
+                    gasAccount = null,
+                    utxoScan = null,
+                    txidScan = null,
+                    proof = null,
+                    activity = emptyList(),
+                    error = null,
+                )
             }
         }
-    }
-
-    private fun fail(e: Exception) {
-        Twig.warn { "Railgun wallet failed: ${e.message}" }
-        mutableState.update {
-            it.copy(phase = RailgunWalletState.Phase.FAILED, error = e.message ?: e::class.simpleName)
-        }
-    }
 
     private suspend fun <T> timed(
         label: String,
@@ -216,4 +290,24 @@ class RailgunWalletRepositoryImpl(
         val SHIELD_AMOUNT: BigInteger = BigInteger.TEN.pow(16)
         val SEND_AMOUNT: BigInteger = BigInteger.TEN.pow(15)
     }
+}
+
+private fun RailgunWalletState.after(event: RailgunEvent): RailgunWalletState =
+    when (event) {
+        is RailgunEvent.Scan -> {
+            if (event.tree == RailgunMerkletree.UTXO) copy(utxoScan = event) else copy(txidScan = event)
+        }
+
+        is RailgunEvent.Proof -> {
+            copy(proof = event)
+        }
+
+        is RailgunEvent.Log, RailgunEvent.Disconnected -> {
+            this
+        }
+    }
+
+private fun MutableStateFlow<RailgunWalletState>.fail(e: Exception) {
+    Twig.warn { "Railgun wallet failed: ${e.message}" }
+    update { it.copy(phase = RailgunWalletState.Phase.FAILED, error = e.message ?: e::class.simpleName) }
 }
