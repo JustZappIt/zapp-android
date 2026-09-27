@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.di
 
+import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.screen.invest.NavigateToInvestUseCase
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyArgs
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyVM
@@ -12,6 +13,7 @@ import co.electriccoin.zcash.ui.screen.invest.intro.InvestIntroVM
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestBuyDismisser
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressVM
 import co.electriccoin.zcash.ui.screen.invest.receipt.InvestReceiptVM
+import co.electriccoin.zcash.ui.screen.invest.section.InvestmentsSectionVM
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.viewModel
@@ -27,6 +29,15 @@ val investViewModelModule =
     module {
         factoryOf(::NavigateToInvestUseCase)
         factory<ResidenceHintProvider> { AndroidResidenceHintProvider(androidContext()) }
+        viewModel {
+            InvestmentsSectionVM(
+                investRepository = get(),
+                settingsRepository = get(),
+                accountDataSource = get(),
+                navigateToInvest = get(),
+                isInvestEnabled = BuildConfig.IS_INVEST_ENABLED,
+            )
+        }
         viewModelOf(::InvestGateVM)
         viewModelOf(::InvestUnavailableVM)
         viewModelOf(::InvestIntroVM)
