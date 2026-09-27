@@ -22,7 +22,18 @@ data class InvestAsset(
     val ticker: String,
     val name: String,
     val schedule: TradingSchedule,
-)
+) {
+    /** 1Click's token symbol, e.g. `NVDAon`: what the wallet's swap record stores as the destination token. */
+    val symbol: String get() = ticker + ONDO_SUFFIX
+
+    /** 1Click's chain for every Ondo token today. */
+    val chain: String get() = ONDO_CHAIN
+
+    private companion object {
+        const val ONDO_SUFFIX = "on"
+        const val ONDO_CHAIN = "bsc"
+    }
+}
 
 /**
  * The launch list, decided 2026-09-27: six 24/7 names and four weekday names. All are Ondo tokens on BSC,
@@ -49,6 +60,18 @@ object InvestAssets {
     private val byAssetId = curated.associateBy { it.assetId }
 
     fun find(assetId: String): InvestAsset? = byAssetId[assetId]
+
+    /**
+     * The curated stock a swap record points at, by the token and chain tickers the record stores. Ordinary
+     * Swap never offers these tokens, so a match means the record is an Invest buy.
+     */
+    fun findBySwapTickers(
+        tokenTicker: String,
+        chainTicker: String,
+    ): InvestAsset? =
+        curated.firstOrNull {
+            it.symbol.equals(tokenTicker, ignoreCase = true) && it.chain.equals(chainTicker, ignoreCase = true)
+        }
 
     private fun ondo(
         bscContract: String,

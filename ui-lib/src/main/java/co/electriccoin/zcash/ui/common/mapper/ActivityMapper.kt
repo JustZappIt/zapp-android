@@ -4,9 +4,12 @@ import cash.z.ecc.android.sdk.model.TransactionPool
 import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.android.sdk.model.Zip318Kind
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.invest.model.InvestAsset
+import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.model.SwapMode.EXACT_INPUT
 import co.electriccoin.zcash.ui.common.model.SwapMode.EXACT_OUTPUT
 import co.electriccoin.zcash.ui.common.model.SwapMode.FLEX_INPUT
+import co.electriccoin.zcash.ui.common.model.SwapStatus
 import co.electriccoin.zcash.ui.common.model.SwapStatus.EXPIRED
 import co.electriccoin.zcash.ui.common.model.SwapStatus.FAILED
 import co.electriccoin.zcash.ui.common.model.SwapStatus.INCOMPLETE_DEPOSIT
@@ -256,7 +259,14 @@ class ActivityMapper {
                         }
                     }
                 } else {
-                    if (transaction is SendTransaction.Failed) {
+                    val investAsset =
+                        InvestAssets.findBySwapTickers(
+                            tokenTicker = data.metadata.swapMetadata.destination.tokenTicker,
+                            chainTicker = data.metadata.swapMetadata.destination.chainTicker,
+                        )
+                    if (investAsset != null) {
+                        getInvestBuyTitle(transaction, data.metadata.swapMetadata.status, investAsset)
+                    } else if (transaction is SendTransaction.Failed) {
                         when (data.metadata.swapMetadata.mode) {
                             EXACT_INPUT, FLEX_INPUT -> stringRes(R.string.swapStatus_swapFailed)
                             EXACT_OUTPUT -> stringRes(R.string.swapStatus_paymentFailed)
@@ -298,6 +308,23 @@ class ActivityMapper {
                     }
                 }
             }
+        }
+
+    /**
+     * An Invest buy is a ZEC send whose swap record points at a curated stock. EXPIRED is the app's own
+     * reading of a late deposit, not 1Click's, so it still reads as a buy in progress.
+     */
+    private fun getInvestBuyTitle(
+        transaction: SendTransaction,
+        status: SwapStatus,
+        asset: InvestAsset,
+    ): StringResource =
+        when {
+            transaction is SendTransaction.Failed -> stringRes(R.string.transaction_history_invest_failed)
+            status == SUCCESS -> stringRes(R.string.transaction_history_invest_bought, asset.name)
+            status == REFUNDED -> stringRes(R.string.transaction_history_invest_refunded)
+            status == FAILED -> stringRes(R.string.transaction_history_invest_needs_attention)
+            else -> stringRes(R.string.transaction_history_invest_buying, asset.name)
         }
 
     private fun getSubtitle(timestamp: Instant?): StringResource? {

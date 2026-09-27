@@ -21,8 +21,36 @@ enum class InvestEligibility {
         // EEA = the 27 EU member states plus Iceland, Liechtenstein and Norway.
         private val EEA =
             setOf(
-                "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV",
-                "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE", "IS", "LI", "NO",
+                "AT",
+                "BE",
+                "BG",
+                "HR",
+                "CY",
+                "CZ",
+                "DK",
+                "EE",
+                "FI",
+                "FR",
+                "DE",
+                "GR",
+                "HU",
+                "IE",
+                "IT",
+                "LV",
+                "LT",
+                "LU",
+                "MT",
+                "NL",
+                "PL",
+                "PT",
+                "RO",
+                "SK",
+                "SI",
+                "ES",
+                "SE",
+                "IS",
+                "LI",
+                "NO",
             )
 
         private val RESTRICTED_COUNTRIES = EEA + setOf("BR", "HK", "GB", "SG", "MY", "CH")

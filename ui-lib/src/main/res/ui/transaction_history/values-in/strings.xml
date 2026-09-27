@@ -40,4 +40,9 @@
     <string name="transaction_history_swap_refunded">Tukar dikembalikan</string>
     <string name="transaction_history_swap_expired">Tukar kedaluwarsa</string>
     <string name="transaction_history_payment_expired">Pembayaran kedaluwarsa</string>
+    <string name="transaction_history_invest_bought">Telah membeli %1$s</string>
+    <string name="transaction_history_invest_buying">Sedang membeli %1$s…</string>
+    <string name="transaction_history_invest_refunded">Pembelian dikembalikan</string>
+    <string name="transaction_history_invest_needs_attention">Pembelian perlu perhatian</string>
+    <string name="transaction_history_invest_failed">Pembelian gagal</string>
 </resources>

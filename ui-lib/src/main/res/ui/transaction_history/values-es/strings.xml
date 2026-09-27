@@ -40,4 +40,9 @@
     <string name="transaction_history_swap_refunded">Swap reembolsado</string>
     <string name="transaction_history_swap_expired">Swap expirado</string>
     <string name="transaction_history_payment_expired">Pago expirado</string>
+    <string name="transaction_history_invest_bought">Compraste %1$s</string>
+    <string name="transaction_history_invest_buying">Comprando %1$s…</string>
+    <string name="transaction_history_invest_refunded">Compra reembolsada</string>
+    <string name="transaction_history_invest_needs_attention">La compra requiere atención</string>
+    <string name="transaction_history_invest_failed">La compra falló</string>
 </resources>
