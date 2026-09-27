@@ -247,8 +247,11 @@ jobs:
       - name: Test
         timeout-minutes: 10
         run: |
-          # Note that we explicitly check just the Kotlin modules, to avoid compiling the Android modules here
-          ./gradlew :configuration-api-lib:check :crash-lib:check :preference-api-lib:check :spackle-lib:check
+          # Note that we explicitly check just the Kotlin modules, to avoid compiling the Android modules here.
+          # The multiplatform modules run jvmTest rather than check: check would also pull in the
+          # Kotlin/Native download and the iOS simulator tests, which this Linux runner cannot run.
+          ./gradlew :configuration-api-lib:check :crash-lib:check :preference-api-lib:check :spackle-lib:check \
+            :evm-lib:jvmTest :offramp-lib:jvmTest
       - name: Collect Artifacts
         if: ${{ always() }}
         timeout-minutes: 1
