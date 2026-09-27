@@ -115,6 +115,7 @@ tasks {
             "P2P_SCREENING_KEY" to "",
             "RECLAIM_APP_ID" to "",
             "RECLAIM_APP_SECRET" to "",
+            "ZAPP_NEAR_PARTNER_JWT" to "",
 
             "ZCASH_FLEXA_KEY" to "",
             "ZCASH_CMC_KEY" to "",
