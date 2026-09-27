@@ -65,55 +65,8 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
-// A holding of 0.440974 NVDAon (18 decimals) at $224.46; a sale quotes 0.0634 ZEC.
-@Suppress("MaxLineLength", "LargeClass")
-class InvestSellRepositoryImplTest {
-    private val nvda = InvestAssets.curated.first { it.ticker == "NVDA" }
-    private var now = Instant.parse("2026-09-28T14:00:00Z")
-    private val api = FakeApi()
-    private val checkpoints = FakeCheckpoints()
-    private val session = mockk<PrivateAccountSession>()
-    private val biometrics = mockk<BiometricRepository>(relaxed = true)
-    private val holdings = MutableStateFlow("440974000000000000")
-    private var addressesHandedOut = 0
-
-    private val investRepository =
-        mockk<InvestRepository>(relaxed = true) {
-            coEvery { isAccountSupported() } returns true
-            every { market } returns
-                MutableStateFlow(InvestMarket(listOf(MarketAsset(nvda, BigDecimal("224.46"))), Instant.parse("2026-09-28T14:00:00Z")))
-        }
-
-    private val repository =
-        InvestSellRepositoryImpl(
-            api = api,
-            session = session,
-            keys = PrivateAccountKeyProvider(SeedPhraseSource { TEST_MNEMONIC.toCharArray() }),
-            wallet =
-                object : OfframpBridgeWallet {
-                    override suspend fun zcashAddress(): String = PAYOUT.also { addressesHandedOut++ }
-
-                    override suspend fun sendZecDeposit(quote: SwapQuote): String = error("a sale sends no ZEC")
-
-                    override suspend fun spendableZec(): Zatoshi = Zatoshi(0)
-                },
-            investRepository = investRepository,
-            swapAssets =
-                object : InvestSwapAssetSource {
-                    override suspend fun investSwapAssets(): List<SwapAsset> = listOf(NVDA_SWAP_ASSET)
-                },
-            biometricRepository = biometrics,
-            checkpoints = checkpoints,
-            now = { now },
-            pollIntervalMillis = 1,
-        )
-
-    init {
-        coEvery { session.balances() } answers {
-            BalancesResponse(listOf(AccountBalance(tokenId = nvda.assetId, available = holdings.value, source = "private")))
-        }
-    }
-
+@Suppress("MaxLineLength")
+internal class InvestSellRepositoryImplTest : InvestSellRepositoryTestBase() {
     @Test
     fun `an estimate is a dry quote from the private account to a fresh shielded address`() =
         runTest {
@@ -243,7 +196,7 @@ class InvestSellRepositoryImplTest {
     @Test
     fun `a definite refusal clears the checkpoint, an uncertain answer keeps it`() =
         runTest {
-            api.submitFailure = InvestApiException.Api(400, "Invalid signed data", "c")
+            api.submitFailure = InvestApiException.Api(400, "Invalid signature", "c")
             assertFailsWith<InvestApiException.Api> { repository.executeSell(repository.prepareSell(nvda, SellAmount.All)) }
             assertTrue(checkpoints.items.value.isEmpty())
 
@@ -258,6 +211,97 @@ class InvestSellRepositoryImplTest {
         }
 
     @Test
+    fun `Tor that didn't start or a rejected partner token clears the checkpoint`() =
+        runTest {
+            listOf(InvestApiException.TorUnavailable(IllegalStateException("tor")), InvestApiException.Unauthorized("c"))
+                .forEach { failure ->
+                    api.submitFailure = failure
+                    val thrown =
+                        assertFailsWith<InvestApiException> { repository.executeSell(repository.prepareSell(nvda, SellAmount.All)) }
+                    assertEquals(failure, thrown)
+                    assertTrue(checkpoints.items.value.isEmpty())
+                }
+        }
+
+    @Test
+    fun `a submitted sale records the balance before it and the intent hash`() =
+        runTest {
+            repository.executeSell(repository.prepareSell(nvda, SellAmount.All))
+
+            val checkpoint = checkpoints.items.value.single()
+            assertEquals("hash", checkpoint.intentHash)
+            assertEquals("440974000000000000", checkpoint.heldBeforeBaseUnits)
+            assertEquals("440974000000000000", checkpoint.baseUnits)
+        }
+
+    @Test
+    fun `a prompt that outlasts the price hold signs nothing`() =
+        runTest {
+            val prepared = repository.prepareSell(nvda, SellAmount.All)
+            // 14:07: past the price hold, still before the intent's own 14:08 deadline the signer would enforce.
+            coEvery { biometrics.requestBiometrics(any()) } answers { now += 7.minutes }
+
+            val refused = assertFailsWith<IllegalStateException> { repository.executeSell(prepared) }
+            assertTrue(refused !is SellIntentRefusedException)
+
+            assertTrue(api.submitted.isEmpty())
+            assertTrue(checkpoints.items.value.isEmpty())
+        }
+
+    @Test
+    fun `a second sale of the same stock waits for the first`() =
+        runTest {
+            val first = repository.prepareSell(nvda, SellAmount.Usd(BigDecimal(50)))
+            val second = repository.prepareSell(nvda, SellAmount.Usd(BigDecimal(50)))
+            repository.executeSell(first)
+
+            assertFailsWith<IllegalStateException> { repository.executeSell(second) }
+            assertFailsWith<IllegalStateException> { repository.prepareSell(nvda, SellAmount.All) }
+            assertEquals(1, api.submitted.size)
+        }
+
+    @Test
+    fun `an intent with anything beyond the transfer is refused`() =
+        runTest {
+            api.extraTransferField = "\"memo\":\"hi\","
+
+            assertFailsWith<SellIntentRefusedException> { repository.prepareSell(nvda, SellAmount.All) }
+        }
+
+    @Test
+    fun `a holding too small for the fees estimates as below the minimum`() =
+        runTest {
+            api.quoteFailure = InvestApiException.Api(400, "Amount is too low for bridge, try at least 1000000", "c")
+            assertEquals(SellEstimate.BelowMinimum(BigDecimal(40)), repository.estimateSell(nvda, SellAmount.All))
+
+            api.quoteFailure = InvestApiException.Api(400, "tokenIn is not valid", "c")
+            assertFailsWith<InvestApiException.Api> { repository.estimateSell(nvda, SellAmount.All) }
+        }
+
+    @Test
+    fun `a stale price is refreshed, and without one the quote is held to the minimum`() =
+        runTest {
+            now += 5.minutes
+
+            val order = assertIs<SellEstimate.Priced>(repository.estimateSell(nvda, SellAmount.Units(BigDecimal("0.1"))))
+
+            coVerify { investRepository.refreshMarket() }
+            assertEquals(BigDecimal("0.100000000000000000"), order.unitsIn)
+            assertFailsWith<IllegalArgumentException> { repository.prepareSell(nvda, SellAmount.Units(BigDecimal("0.1"))) }
+            assertTrue(api.generateRequests.isEmpty())
+            assertEquals(SellEstimate.NoPrice, repository.estimateSell(nvda, SellAmount.Usd(BigDecimal(50))))
+        }
+
+    @Test
+    fun `selling exactly the minimum in dollars goes through`() =
+        runTest {
+            val prepared = repository.prepareSell(nvda, SellAmount.Usd(BigDecimal(40)))
+
+            assertTrue(prepared.usdIn < BigDecimal(40))
+            assertEquals(1, api.generateRequests.size)
+        }
+
+    @Test
     fun `one intent is never submitted twice`() =
         runTest {
             val prepared = repository.prepareSell(nvda, SellAmount.All)
@@ -266,165 +310,4 @@ class InvestSellRepositoryImplTest {
             assertFailsWith<IllegalStateException> { repository.executeSell(prepared) }
             assertEquals(1, api.submitted.size)
         }
-
-    @Test
-    fun `progress runs to sent and refreshes holdings`() =
-        runTest {
-            api.statuses += listOf(status(SwapStatus.PENDING_DEPOSIT), status(SwapStatus.PROCESSING), status(SwapStatus.SUCCESS))
-
-            val progress = repository.observeSell(DEPOSIT).toList()
-
-            assertEquals(
-                listOf(SellProgress.Authorised(DEPOSIT), SellProgress.Selling(DEPOSIT), SellProgress.Sent(DEPOSIT, BigDecimal("0.0634"))),
-                progress,
-            )
-            coVerify { investRepository.refreshHoldings() }
-        }
-
-    @Test
-    fun `an intent past its deadline is reported unsold and cleared`() =
-        runTest {
-            checkpoints.add(InvestBuyCheckpoint(DEPOSIT, nvda.assetId, 0, intentDeadlineMillis = (now + 8.minutes).toEpochMilliseconds()))
-            api.statuses += status(SwapStatus.PENDING_DEPOSIT)
-            now += 14.minutes
-
-            assertEquals(listOf(SellProgress.NotSold(DEPOSIT)), repository.observeSell(DEPOSIT).toList())
-            assertTrue(checkpoints.items.value.isEmpty())
-        }
-
-    @Test
-    fun `a refund returns the stock and a failure stays listed`() =
-        runTest {
-            api.statuses += status(SwapStatus.REFUNDED)
-            assertEquals(listOf(SellProgress.ReturnedToAccount(DEPOSIT)), repository.observeSell(DEPOSIT).toList())
-
-            checkpoints.add(InvestBuyCheckpoint(DEPOSIT, nvda.assetId, 0))
-            api.statuses += status(SwapStatus.FAILED)
-            assertEquals(listOf(SellProgress.NeedsAttention(DEPOSIT, DEPOSIT)), repository.observeSell(DEPOSIT).toList())
-            assertEquals(1, checkpoints.items.value.size)
-            repository.dismissSell(DEPOSIT)
-            assertNull(checkpoints.items.value.firstOrNull())
-        }
-
-    private fun status(status: SwapStatus) =
-        SwapStatusResponseDto(
-            quoteResponse = api.response(api.lastRequest ?: api.requestFor()),
-            status = status,
-            updatedAt = "2026-09-28T14:05:00Z",
-            swapDetails = SwapDetails(amountOutFormatted = BigDecimal("0.0634")),
-        )
-
-    private inner class FakeApi : InvestApiProvider {
-        val quotes = mutableListOf<QuoteRequest>()
-        val generateRequests = mutableListOf<GenerateIntentRequest>()
-        val submitted = mutableListOf<SubmitIntentRequest>()
-        val statuses = ArrayDeque<SwapStatusResponseDto>()
-        var lastRequest: QuoteRequest? = null
-        var quoteFailure: InvestApiException? = null
-        var submitFailure: InvestApiException? = null
-        var echoTamper: (QuoteRequest) -> QuoteRequest = { it }
-        var payloadAmount: String? = null
-        var checkpointsAtSubmit: List<String>? = null
-
-        fun payload(): String =
-            "{\"signer_id\":\"$TEST_ACCOUNT_ID\",\"verifying_contract\":\"intents.near\",\"deadline\":\"2026-09-28T14:08:00.000Z\"," +
-                "\"nonce\":\"Vij2xgAlKBKzAMg6wgOB2RgAwGTZ2YDZGAECAwQFBgc=\",\"intents\":[{\"intent\":\"transfer\"," +
-                "\"receiver_id\":\"$DEPOSIT\",\"tokens\":{\"${nvda.assetId}\":\"${payloadAmount ?: lastRequest?.amount?.toPlainString()}\"}}]}"
-
-        fun requestFor() =
-            QuoteRequest(
-                dry = false,
-                slippageTolerance = 100,
-                originAsset = nvda.assetId,
-                destinationAsset = "nep141:zec.omft.near",
-                amount = BigDecimal("440974000000000000"),
-                refundTo = TEST_ACCOUNT_ID,
-                recipient = PAYOUT,
-                deadline = now,
-                appFees = emptyList(),
-            )
-
-        override suspend fun requestQuote(request: QuoteRequest): QuoteResponseDto {
-            quoteFailure?.let { throw it }
-            quotes += request
-            lastRequest = request
-            return response(request)
-        }
-
-        fun response(request: QuoteRequest): QuoteResponseDto {
-            val units = request.amount.movePointLeft(18)
-            return QuoteResponseDto(
-                timestamp = now,
-                quoteRequest = echoTamper(request),
-                quote =
-                    QuoteDetails(
-                        depositAddress = if (request.dry) null else DEPOSIT,
-                        amountIn = request.amount,
-                        amountInFormatted = units,
-                        amountInUsd = units.multiply(BigDecimal("224.46")),
-                        minAmountIn = request.amount,
-                        amountOut = BigDecimal(6_340_000),
-                        amountOutFormatted = BigDecimal("0.0634"),
-                        amountOutUsd = BigDecimal("97.87"),
-                        minAmountOut = BigDecimal(6_280_000),
-                        deadline = if (request.dry) null else now + 30.minutes,
-                        timeEstimate = 140,
-                        refundFee = BigDecimal.ZERO,
-                        withdrawFee = BigDecimal(64_000),
-                    ),
-            )
-        }
-
-        override suspend fun generateIntent(request: GenerateIntentRequest): GenerateIntentResponse {
-            generateRequests += request
-            return GenerateIntentResponse(GeneratedIntent(standard = "erc191", payload = payload()), correlationId = "gen-cid")
-        }
-
-        override suspend fun submitIntent(request: SubmitIntentRequest): SubmitIntentResponse {
-            checkpointsAtSubmit = checkpoints.items.value.map { it.depositAddress }
-            submitted += request
-            submitFailure?.let { throw it }
-            return SubmitIntentResponse(intentHash = "hash", correlationId = "sub-cid")
-        }
-
-        override suspend fun checkStatus(depositAddress: String): SwapStatusResponseDto = statuses.removeFirst()
-
-        override suspend fun getOndoTokens(): List<NearTokenDto> = error("unused")
-
-        override suspend fun submitDeposit(request: SubmitDepositTransactionRequest) = error("unused")
-
-        override suspend fun authenticate(request: AuthenticateRequest): AuthenticateResponse = error("unused")
-
-        override suspend fun getBalances(accessToken: String): BalancesResponse = error("unused")
-    }
-
-    private class FakeCheckpoints : InvestSellCheckpointStorageProvider {
-        val items = MutableStateFlow<List<InvestBuyCheckpoint>>(emptyList())
-
-        override fun observe(): Flow<List<InvestBuyCheckpoint>> = items
-
-        override suspend fun add(checkpoint: InvestBuyCheckpoint) {
-            items.value = items.value + checkpoint
-        }
-
-        override suspend fun remove(depositAddress: String) {
-            items.value = items.value.filterNot { it.depositAddress == depositAddress }
-        }
-    }
-
-    private companion object {
-        const val PAYOUT = "u1freshpayoutaddress"
-        const val DEPOSIT = "0000000000000000000000000000000000000000000000000000000000000001"
-
-        val NVDA_SWAP_ASSET =
-            DynamicSwapAsset(
-                tokenTicker = "NVDAon",
-                tokenName = StringResource.ByString("NVDAon"),
-                tokenIcon = imageRes("NVDAon"),
-                usdPrice = BigDecimal("224.46"),
-                assetId = "nep141:bnb-0xa9ee28c80f960b889dfbd1902055218cba016f75.omdep.near",
-                decimals = 18,
-                blockchain = SwapBlockchain("bsc", StringResource.ByString("bsc"), imageRes("bsc")),
-            )
-    }
 }
