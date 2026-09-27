@@ -6,6 +6,8 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepositoryImpl
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepository
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepositoryImpl
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepositoryImpl
 import co.electriccoin.zcash.ui.common.provider.IdentityVerificationStorageProvider
 import co.electriccoin.zcash.ui.common.provider.OrderRecipientUpiStorageProvider
 import co.electriccoin.zcash.ui.common.provider.RelayIdentityStorageProvider
@@ -107,6 +109,7 @@ val repositoryModule =
         singleOf(::MockOrchardBalanceRepositoryImpl) bind MockOrchardBalanceRepository::class
         singleOf(::RailgunWalletRepositoryImpl) bind RailgunWalletRepository::class
         singleOf(::AtomicSwapRepositoryImpl) bind AtomicSwapRepository::class
+        singleOf(::PrivateUsdBalanceRepositoryImpl) bind PrivateUsdBalanceRepository::class
         singleOf(::LinkPreviewRepository)
         singleOf(::HistoricalPriceRepositoryImpl) bind HistoricalPriceRepository::class
         single<BaseBalanceRepository> {

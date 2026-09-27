@@ -34,6 +34,7 @@ import androidx.navigation.toRoute
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
+import co.electriccoin.zcash.ui.common.atomicswap.PRIVATE_USD_CONVERSION_EXTRA
 import co.electriccoin.zcash.ui.common.compose.BindCompLocalProvider
 import co.electriccoin.zcash.ui.common.compose.DisableScreenTimeout
 import co.electriccoin.zcash.ui.common.extension.setContentCompat
@@ -58,6 +59,7 @@ import co.electriccoin.zcash.ui.screen.gift.GiftClaimArgs
 import co.electriccoin.zcash.ui.screen.gift.model.GIFT_LINK_HOST
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkIntake
 import co.electriccoin.zcash.ui.screen.gift.model.PendingGiftLinkStore
+import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
 import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnInbox
 import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnLink
 import co.electriccoin.zcash.ui.screen.reputation.increase.IncreaseReputationArgs
@@ -119,6 +121,7 @@ class MainActivity : FragmentActivity() {
 
         forwardUriIntent(intent, resumeReclaim = true)
         forwardChatNotificationIntent(intent)
+        forwardPrivateUsdIntent(intent)
         handleMigrationIntent(intent)
     }
 
@@ -128,6 +131,7 @@ class MainActivity : FragmentActivity() {
 
         forwardUriIntent(intent, resumeReclaim = false)
         forwardChatNotificationIntent(intent)
+        forwardPrivateUsdIntent(intent)
         handleMigrationIntent(intent)
     }
 
@@ -250,6 +254,18 @@ class MainActivity : FragmentActivity() {
         val destination = this?.destination ?: return false
         return destination.hasRoute<ChatRoomArgs>() &&
             toRoute<ChatRoomArgs>().conversationId == conversationId
+    }
+
+    private fun forwardPrivateUsdIntent(intent: Intent) {
+        if (!intent.getBooleanExtra(PRIVATE_USD_CONVERSION_EXTRA, false)) return
+        intent.removeExtra(PRIVATE_USD_CONVERSION_EXTRA)
+        navigationRouter.custom { current ->
+            if (current?.destination?.hasRoute<PrivateUsdProgressArgs>() == true) {
+                null
+            } else {
+                NavigationCommand.Forward(listOf(PrivateUsdProgressArgs))
+            }
+        }
     }
 
     private fun handleMigrationIntent(intent: Intent): Boolean = migrationAppHooks.handleIntent(intent, lifecycleScope)

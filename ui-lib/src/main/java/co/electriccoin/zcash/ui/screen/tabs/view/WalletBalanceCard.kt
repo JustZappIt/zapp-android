@@ -72,6 +72,8 @@ import co.electriccoin.zcash.ui.screen.balances.BalanceWidgetState
 import co.electriccoin.zcash.ui.screen.balances.ShieldBreakdownState
 import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartPeriod
 import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartState
+import co.electriccoin.zcash.ui.screen.privateusd.widget.PrivateUsdBalanceLine
+import co.electriccoin.zcash.ui.screen.privateusd.widget.PrivateUsdWidgetState
 import kotlinx.coroutines.delay
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -94,6 +96,7 @@ internal fun BalanceCard(
     showZecAsPrimary: Boolean? = null,
     onToggleBalanceDisplay: (() -> Unit)? = null,
     onToggleBalanceVisibility: (() -> Unit)? = null,
+    privateUsd: PrivateUsdWidgetState? = null,
     modifier: Modifier = Modifier,
 ) {
     val hasBalance = balanceState.totalBalance.value > 0L
@@ -153,6 +156,11 @@ internal fun BalanceCard(
                     Unit
                 }
             }
+        }
+
+        privateUsd?.let {
+            Spacer(Modifier.height(20.dp))
+            PrivateUsdBalanceLine(state = it)
         }
 
         balanceState.breakdown?.let { breakdown ->

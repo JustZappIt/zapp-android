@@ -55,6 +55,11 @@ import co.electriccoin.zcash.ui.screen.more.MoreVM
 import co.electriccoin.zcash.ui.screen.onboarding.OnboardingSecurityVM
 import co.electriccoin.zcash.ui.screen.onboarding.ZappRestoreFlowVM
 import co.electriccoin.zcash.ui.screen.onramp.OnrampVM
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdVM
+import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertVM
+import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressVM
+import co.electriccoin.zcash.ui.screen.privateusd.send.PrivateUsdSendVM
+import co.electriccoin.zcash.ui.screen.privateusd.widget.PrivateUsdWidgetVM
 import co.electriccoin.zcash.ui.screen.qrcode.QrCodeVM
 import co.electriccoin.zcash.ui.screen.receive.ReceiveVM
 import co.electriccoin.zcash.ui.screen.reputation.ReputationVM
@@ -254,6 +259,11 @@ val viewModelModule =
         viewModelOf(::DebugOrchardBalanceVM)
         viewModelOf(::DebugRailgunVM)
         viewModelOf(::DebugAtomicSwapVM)
+        viewModelOf(::PrivateUsdWidgetVM)
+        viewModelOf(::PrivateUsdVM)
+        viewModelOf(::PrivateUsdConvertVM)
+        viewModelOf(::PrivateUsdProgressVM)
+        viewModelOf(::PrivateUsdSendVM)
         viewModelOf(::TEXUnsupportedVM)
         viewModelOf(::InsufficientFundsVM)
         viewModelOf(::TopUpVM)
