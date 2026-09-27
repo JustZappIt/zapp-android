@@ -52,12 +52,12 @@ internal fun AtomicSwapState.stageDetail(confirmationsNeeded: Int?): StringResou
 }
 
 /** At a glance: what's spendable, and what's only in flight after a send. */
-internal fun PrivateUsdBalances.headline(): StringResource = dollars(available + processing).asPrivacySensitive()
+internal fun PrivateUsdBalances.spendable(): StringResource = dollars(available + processing)
+
+internal fun PrivateUsdBalances.headline(): StringResource = spendable().asPrivacySensitive()
 
 internal fun PrivateUsdBalances.arrivingTag(): StringResource? =
-    arriving.takeIf { it.signum() > 0 }?.let {
-        stringRes(R.string.private_usd_arriving_short, dollars(it).asPrivacySensitive())
-    }
+    arriving.takeIf { it.signum() > 0 }?.let { stringRes(R.string.private_usd_arriving_short, dollars(it)) }
 
 /** The one line under a balance that needs saying, refused funds first. */
 internal fun PrivateUsdBalances.detail(): StringResource? =

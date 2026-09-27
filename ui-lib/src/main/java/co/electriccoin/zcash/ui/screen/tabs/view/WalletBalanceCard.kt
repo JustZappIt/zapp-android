@@ -47,8 +47,12 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selectableGroup
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,13 +70,13 @@ import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.balances.LocalBalancesAvailable
 import co.electriccoin.zcash.ui.design.util.TickerLocation
 import co.electriccoin.zcash.ui.design.util.getString
+import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.orHiddenString
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.balances.BalanceWidgetState
 import co.electriccoin.zcash.ui.screen.balances.ShieldBreakdownState
 import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartPeriod
 import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartState
-import co.electriccoin.zcash.ui.screen.privateusd.widget.PrivateUsdBalanceTag
 import co.electriccoin.zcash.ui.screen.privateusd.widget.PrivateUsdWidgetState
 import kotlinx.coroutines.delay
 import java.math.BigDecimal
@@ -109,13 +113,7 @@ internal fun BalanceCard(
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 18.dp),
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BalanceSectionLabel(onBalanceClick = balanceState.onBalanceClick)
-            privateUsd?.let {
-                Spacer(Modifier.weight(1f))
-                PrivateUsdBalanceTag(state = it, modifier = Modifier.padding(top = 18.dp, bottom = 8.dp))
-            }
-        }
+        BalanceSectionLabel(onBalanceClick = balanceState.onBalanceClick)
 
         BalanceAmount(
             balanceState = balanceState,
@@ -123,6 +121,7 @@ internal fun BalanceCard(
             showZecAsPrimary = showZecAsPrimary,
             onToggleBalanceDisplay = onToggleBalanceDisplay,
             onToggleBalanceVisibility = onToggleBalanceVisibility,
+            privateUsd = privateUsd,
         )
 
         if (balancesAvailable && hasBalance && chartState !is BalanceChartState.Hidden) {
@@ -285,6 +284,7 @@ private fun BalanceAmount(
     showZecAsPrimary: Boolean? = null,
     onToggleBalanceDisplay: (() -> Unit)? = null,
     onToggleBalanceVisibility: (() -> Unit)? = null,
+    privateUsd: PrivateUsdWidgetState? = null,
 ) {
     val c = ZappTheme.colors
     val isBalanceHidden = LocalBalancesAvailable.current.not()
@@ -377,6 +377,7 @@ private fun BalanceAmount(
                     hiddenText = hiddenBalance,
                     isHidden = isBalanceHidden,
                     style = captionStyle,
+                    privateUsd = privateUsd,
                     onToggleBalanceVisibility = onToggleBalanceVisibility,
                 )
             } else {
@@ -409,10 +410,23 @@ private fun BalanceAmount(
                     hiddenText = "$hiddenBalance ZEC",
                     isHidden = isBalanceHidden,
                     style = captionStyle,
+                    privateUsd = privateUsd,
                     onToggleBalanceVisibility = onToggleBalanceVisibility,
                 )
             }
         }
+    } else if (privateUsd != null) {
+        // With no fiat line to sit beside, private USD gets one of its own, and the eye follows it.
+        zecHero(false)
+        Spacer(Modifier.height(2.dp))
+        SecondaryBalanceLine(
+            clearText = null,
+            hiddenText = hiddenBalance,
+            isHidden = isBalanceHidden,
+            style = captionStyle,
+            privateUsd = privateUsd,
+            onToggleBalanceVisibility = onToggleBalanceVisibility,
+        )
     } else {
         zecHero(true)
     }
@@ -420,21 +434,79 @@ private fun BalanceAmount(
 
 @Composable
 private fun SecondaryBalanceLine(
-    clearText: String,
+    clearText: String?,
     hiddenText: String,
     isHidden: Boolean,
     style: TextStyle,
+    privateUsd: PrivateUsdWidgetState?,
     onToggleBalanceVisibility: (() -> Unit)?,
 ) {
-    val displayText = rememberScrambledBalanceText(clearText, hiddenText, isHidden)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        BasicText(text = displayText, style = style, maxLines = 1)
+        clearText?.let {
+            BasicText(text = rememberScrambledBalanceText(it, hiddenText, isHidden), style = style, maxLines = 1)
+        }
+        privateUsd?.let {
+            PrivateUsdAmount(
+                state = it,
+                style = style,
+                isHidden = isHidden,
+                followsBalance = clearText != null,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+        }
         onToggleBalanceVisibility?.let { onToggle ->
             BalanceVisibilityButton(
                 isHidden = isHidden,
                 onClick = onToggle,
             )
         }
+    }
+}
+
+/** Private USD after the smaller balance, tapped through to its own screen. */
+@Composable
+private fun PrivateUsdAmount(
+    state: PrivateUsdWidgetState,
+    style: TextStyle,
+    isHidden: Boolean,
+    followsBalance: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val c = ZappTheme.colors
+    val description = stringResource(R.string.private_usd_home_content_description)
+    val label = stringResource(R.string.private_usd_title)
+    val amount =
+        rememberScrambledBalanceText(
+            clearText = state.balance?.getValue() ?: stringResource(R.string.private_usd_home_loading),
+            hiddenText = stringResource(DesignR.string.hide_balance_placeholder),
+            isHidden = isHidden,
+        )
+    val arriving = state.arriving?.getValue()?.let { rememberScrambledBalanceText(it, "", isHidden) }
+    val text =
+        buildAnnotatedString {
+            if (followsBalance) withStyle(SpanStyle(color = c.textSubtle)) { append("·  ") }
+            append("$label ")
+            withStyle(
+                SpanStyle(color = if (state.isBlocked) c.danger else c.text, fontWeight = FontWeight.SemiBold)
+            ) { append(amount) }
+            if (!arriving.isNullOrEmpty()) withStyle(SpanStyle(color = c.accentText)) { append(" $arriving") }
+        }
+    Box(
+        modifier =
+            modifier
+                .padding(start = if (followsBalance) 8.dp else 0.dp)
+                .defaultMinSize(minHeight = 40.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = state.onClick,
+                ).semantics {
+                    role = Role.Button
+                    contentDescription = description
+                },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        BasicText(text = text, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

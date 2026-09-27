@@ -6,7 +6,7 @@ package co.electriccoin.zcash.ui.screen.privateusd.widget
 import co.electriccoin.zcash.ui.design.util.StringResource
 
 internal data class PrivateUsdWidgetState(
-    /** Null until a first balance is known. */
+    /** Null until a first balance is known. Shown as is: the balance card hides it with the rest. */
     val balance: StringResource?,
     val arriving: StringResource?,
     /** Screening refused some of it. */

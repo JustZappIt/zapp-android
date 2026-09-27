@@ -17,8 +17,8 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdArgs
 import co.electriccoin.zcash.ui.screen.privateusd.arrivingTag
 import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
-import co.electriccoin.zcash.ui.screen.privateusd.headline
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
+import co.electriccoin.zcash.ui.screen.privateusd.spendable
 import co.electriccoin.zcash.ui.screen.privateusd.stageDetail
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -56,7 +56,7 @@ class PrivateUsdWidgetVM(
     ): PrivateUsdWidgetState {
         val balances = balance.balances
         return PrivateUsdWidgetState(
-            balance = balances?.headline(),
+            balance = balances?.spendable(),
             arriving = balances?.arrivingTag(),
             isBlocked = (balances?.blocked?.signum() ?: 0) > 0,
             conversion =
