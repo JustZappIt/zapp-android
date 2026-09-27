@@ -111,8 +111,13 @@ internal class InvestSellProgressTest : InvestSellRepositoryTestBase() {
                 repository.observeSell(DEPOSIT).toList(),
             )
 
+            // Past the deadline an unknown sale is settled by the balance, like one still pending.
             checkpoints.add(pastDeadline())
             now += 14.minutes
+            api.statuses.addAll(listOf(notFound()))
+            assertEquals(listOf(SellProgress.NotSold(DEPOSIT)), repository.observeSell(DEPOSIT).toList())
+
+            // With no checkpoint there's no deadline to wait for: repeated rejections go to support.
             api.statuses.addAll(listOf(notFound(), notFound(), notFound()))
             assertEquals(listOf(SellProgress.NeedsAttention(DEPOSIT, DEPOSIT)), repository.observeSell(DEPOSIT).toList())
         }

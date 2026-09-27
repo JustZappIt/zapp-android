@@ -44,6 +44,7 @@ val investModule =
                 swapAssets = get(),
                 biometricRepository = get(),
                 checkpoints = get(),
+                buyCheckpoints = get(),
                 now = get<InvestServerClock>().let { clock -> { Instant.fromEpochMilliseconds(clock.nowMillis()) } },
             )
         } bind InvestSellRepository::class
@@ -57,6 +58,7 @@ val investModule =
                 swapAssetProvider = get(),
                 synchronizerProvider = get(),
                 checkpoints = get(),
+                sellCheckpoints = get(),
                 now = get<InvestServerClock>().let { clock -> { Instant.fromEpochMilliseconds(clock.nowMillis()) } },
             )
         } binds arrayOf(InvestRepository::class, InvestSwapAssetSource::class)

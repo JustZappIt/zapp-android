@@ -18,6 +18,7 @@ import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpoint
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProvider
+import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepositoryImpl
@@ -73,6 +74,7 @@ class InvestRepositoryImplTest {
     private val api = FakeApi()
     private val wallet = FakeWallet()
     private val checkpoints = FakeCheckpoints()
+    private val sellCheckpoints = MutableStateFlow<List<InvestBuyCheckpoint>>(emptyList())
     private val session = mockk<PrivateAccountSession>()
     private val keys = PrivateAccountKeyProvider(SeedPhraseSource { TEST_MNEMONIC.toCharArray() })
     private var currentAccount: WalletAccount = mockk<ZashiAccount>()
@@ -90,6 +92,7 @@ class InvestRepositoryImplTest {
                     coEvery { getSynchronizer() } returns mockk { coEvery { validateAddress(any()) } returns AddressType.Transparent }
                 },
             checkpoints = checkpoints,
+            sellCheckpoints = mockk<InvestSellCheckpointStorageProvider> { every { observe() } returns sellCheckpoints },
             now = { now },
             pollIntervalMillis = 1,
         )
@@ -219,6 +222,18 @@ class InvestRepositoryImplTest {
 
             assertFailsWith<IllegalStateException> { repository.executeBuy(prepared) }
             assertNull(wallet.checkpointsAtSend)
+        }
+
+    @Test
+    fun `a stock being sold can't be bought until the sale is final`() =
+        runTest {
+            val prepared = repository.prepareBuy(nvda, BigDecimal(100))
+            sellCheckpoints.value = listOf(InvestBuyCheckpoint("sell-deposit", nvda.assetId, 0))
+
+            assertFailsWith<IllegalStateException> { repository.prepareBuy(nvda, BigDecimal(100)) }
+            assertFailsWith<IllegalStateException> { repository.executeBuy(prepared) }
+            assertNull(wallet.checkpointsAtSend)
+            assertTrue(checkpoints.items.value.isEmpty())
         }
 
     @Test

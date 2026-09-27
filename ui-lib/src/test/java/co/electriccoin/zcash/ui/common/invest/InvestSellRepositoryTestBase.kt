@@ -20,6 +20,7 @@ import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentResponse
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpoint
+import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
@@ -72,6 +73,7 @@ internal abstract class InvestSellRepositoryTestBase {
     protected var now = Instant.parse("2026-09-28T14:00:00Z")
     protected val api = FakeApi()
     protected val checkpoints = FakeCheckpoints()
+    protected val buyCheckpoints = MutableStateFlow<List<InvestBuyCheckpoint>>(emptyList())
     protected val session = mockk<PrivateAccountSession>()
     protected val biometrics = mockk<BiometricRepository>(relaxed = true)
     protected val holdings = MutableStateFlow("440974000000000000")
@@ -104,6 +106,7 @@ internal abstract class InvestSellRepositoryTestBase {
                 },
             biometricRepository = biometrics,
             checkpoints = checkpoints,
+            buyCheckpoints = mockk<InvestBuyCheckpointStorageProvider> { every { observe() } returns buyCheckpoints },
             now = { now },
             pollIntervalMillis = 1,
         )
@@ -233,7 +236,10 @@ internal abstract class InvestSellRepositoryTestBase {
 
         override fun observe(): Flow<List<InvestBuyCheckpoint>> = items
 
+        var failOnHash = false
+
         override suspend fun add(checkpoint: InvestBuyCheckpoint) {
+            if (failOnHash && checkpoint.intentHash != null) error("disk full")
             // Like the real store: one checkpoint per deposit address, replaced when added again.
             items.value = items.value.filterNot { it.depositAddress == checkpoint.depositAddress } + checkpoint
         }
