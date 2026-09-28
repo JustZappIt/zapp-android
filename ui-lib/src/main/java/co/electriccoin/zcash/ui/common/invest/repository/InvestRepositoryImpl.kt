@@ -180,7 +180,7 @@ internal class InvestRepositoryImpl(
     ): PreparedBuy {
         require(usdAmount >= InvestRepository.MINIMUM_USD) { "Below the Invest minimum" }
         check(isAccountSupported()) { "Invest isn't available for this account" }
-        check(!trades.hasSale(asset.assetId)) { SALE_IN_FLIGHT }
+        check(!trades.hasTrade(asset.assetId)) { TRADE_IN_FLIGHT }
         // The ZEC amount comes from this price, so it is never more than a minute old here.
         val catalog = catalogNoOlderThan(CATALOG_MAX_AGE)
         val destinationAsset = requireNotNull(catalog.swapAssets[asset.assetId]) { "1Click no longer lists this stock" }
@@ -259,10 +259,11 @@ internal class InvestRepositoryImpl(
         }
         try {
             // Persisted BEFORE any ZEC moves: a crash after sending must resume polling this deposit address,
-            // never prepare and pay for a second buy. No sale of the stock may start in between.
+            // never prepare and pay for a second buy. No other trade of the stock may be pending: one whose
+            // outcome is unknown must settle before the same stock is paid for again.
             trades.withLock {
                 val assetId = prepared.asset.assetId
-                check(!trades.hasSale(assetId)) { SALE_IN_FLIGHT }
+                check(!trades.hasTrade(assetId)) { TRADE_IN_FLIGHT }
                 checkpoints.add(InvestBuyCheckpoint(depositAddress, assetId, now().toEpochMilliseconds()))
             }
             try {
@@ -467,7 +468,7 @@ internal class InvestRepositoryImpl(
     private fun Long.toZec(): BigDecimal = BigDecimal(this).movePointLeft(ZEC_DECIMALS)
 
     private companion object {
-        const val SALE_IN_FLIGHT = "A sale of this stock is still in progress"
+        const val TRADE_IN_FLIGHT = "A buy or sale of this stock is still in progress"
         const val ZEC_ASSET_ID = "nep141:zec.omft.near"
         const val ZEC_DECIMALS = 8
         const val SLIPPAGE_BPS = 100
