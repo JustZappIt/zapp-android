@@ -180,7 +180,7 @@
     <string name="invest_sell_step_sent_detail">%1$s · shielded</string>
     <string name="invest_sell_step_returned">Returned to your private account</string>
     <string name="invest_sell_step_not_sold">Not sold</string>
-    <string name="invest_sell_sent_title">ZEC received</string>
+    <string name="invest_sell_sent_title">ZEC on its way</string>
     <string name="invest_sell_sent_subtitle">%1$s is on its way to your shielded balance.</string>
     <string name="invest_sell_sent_subtitle_unknown">Your ZEC is on its way to your shielded balance.</string>
     <string name="invest_sell_not_sold_title">Sale didn\'t go through</string>
@@ -196,5 +196,6 @@
     <string name="invest_trades_unreadable">Invest can\'t read its trade records right now. Contact support.</string>
     <string name="invest_home_pending_buy_title">Buy of %1$s in progress</string>
     <string name="invest_sell_zec_with_value">≈ %1$s (%2$s)</string>
-    <string name="invest_sell_zec_with_value_exact">%1$s (%2$s)</string>
+    <string name="invest_home_pending_buy_title_unknown">Buy in progress</string>
+    <string name="invest_sell_zec_at_least_with_value">%1$s (≈ %2$s)</string>
 </resources>

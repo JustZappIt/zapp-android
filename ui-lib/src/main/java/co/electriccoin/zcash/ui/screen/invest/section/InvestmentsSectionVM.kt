@@ -19,6 +19,7 @@ import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
 import co.electriccoin.zcash.ui.screen.invest.common.toInvestMessage
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -44,7 +45,7 @@ internal class InvestmentsSectionVM(
     settingsRepository: InvestSettingsRepository,
     accountDataSource: AccountDataSource,
     currencyProvider: InvestCurrencyProvider,
-    tradeFollower: InvestTradeFollower,
+    private val tradeFollower: InvestTradeFollower,
     private val navigateToInvest: NavigateToInvestUseCase,
     private val isInvestEnabled: Boolean,
 ) : ViewModel() {
@@ -80,8 +81,6 @@ internal class InvestmentsSectionVM(
                     .filter { it }
                     .collect { refreshHoldings() }
             }
-            // Settles pending trades while PAY is on screen, so a buy or sale finishes without its progress screen.
-            viewModelScope.launch { tradeFollower.followPendingTrades() }
         }
     }
 
@@ -166,6 +165,13 @@ internal class InvestmentsSectionVM(
         onHeaderClick = ::onInvestClick,
         onRetry = ::onRetry,
     )
+
+    /**
+     * Follows pending trades so a buy or sale settles without its progress screen. The PAY screen calls this while
+     * it is STARTED only: this view model lives as long as the tabs do, and following polls (over Tor) all the time.
+     */
+    suspend fun followPendingTrades(): Nothing =
+        if (isInvestEnabled) tradeFollower.followPendingTrades() else awaitCancellation()
 
     private fun onInvestClick() {
         viewModelScope.launch { navigateToInvest() }

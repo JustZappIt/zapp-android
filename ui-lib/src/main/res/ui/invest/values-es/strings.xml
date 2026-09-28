@@ -180,7 +180,7 @@
     <string name="invest_sell_step_sent_detail">%1$s · protegido</string>
     <string name="invest_sell_step_returned">Devuelta a tu cuenta privada</string>
     <string name="invest_sell_step_not_sold">No vendida</string>
-    <string name="invest_sell_sent_title">ZEC recibido</string>
+    <string name="invest_sell_sent_title">ZEC en camino</string>
     <string name="invest_sell_sent_subtitle">%1$s está en camino a tu saldo protegido.</string>
     <string name="invest_sell_sent_subtitle_unknown">Tu ZEC está en camino a tu saldo protegido.</string>
     <string name="invest_sell_not_sold_title">La venta no se realizó</string>
@@ -196,5 +196,6 @@
     <string name="invest_trades_unreadable">Invertir no puede leer sus registros de operaciones ahora mismo. Contacta con soporte.</string>
     <string name="invest_home_pending_buy_title">Compra de %1$s en curso</string>
     <string name="invest_sell_zec_with_value">≈ %1$s (%2$s)</string>
-    <string name="invest_sell_zec_with_value_exact">%1$s (%2$s)</string>
+    <string name="invest_home_pending_buy_title_unknown">Compra en curso</string>
+    <string name="invest_sell_zec_at_least_with_value">%1$s (≈ %2$s)</string>
 </resources>

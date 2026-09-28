@@ -39,9 +39,6 @@ internal fun AndroidWalletBackup(args: WalletBackup) {
 @Serializable
 data class WalletBackup(
     val isOpenedFromSeedBackupInfo: Boolean,
-    /**
-     * Started from Invest setup: once the phrase is saved, return to the Invest intro rather than the tabs. A
-     * navigation argument, so it survives the process being killed while the user writes the phrase down.
-     */
-    val returnToInvestIntro: Boolean = false,
+    /** Where to go once the phrase is saved (see [WalletBackupReturnTarget]). */
+    val returnTarget: WalletBackupReturnTarget = WalletBackupReturnTarget.TABS,
 )

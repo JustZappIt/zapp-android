@@ -52,7 +52,7 @@ internal class InvestHomeVM(
     private val investRepository: InvestRepository,
     isTorEnabled: IsTorEnabledUseCase,
     currencyProvider: InvestCurrencyProvider,
-    tradeFollower: InvestTradeFollower,
+    private val tradeFollower: InvestTradeFollower,
     private val session: InvestSession,
     private val navigationRouter: NavigationRouter,
     private val clock: Clock,
@@ -74,8 +74,6 @@ internal class InvestHomeVM(
     init {
         viewModelScope.launch { refreshMarket() }
         viewModelScope.launch { refreshHoldings() }
-        // Settles pending trades (and unlocks their stocks) while Invest is on screen, progress screen or not.
-        viewModelScope.launch { tradeFollower.followPendingTrades() }
     }
 
     val state: StateFlow<InvestHomeState> =
@@ -129,6 +127,12 @@ internal class InvestHomeVM(
             onBack = navigationRouter::back,
         )
     }
+
+    /**
+     * Follows pending trades so they settle (and unlock their stocks) without their progress screen. Invest home
+     * calls this while it is STARTED, not merely on the back stack.
+     */
+    suspend fun followPendingTrades(): Nothing = tradeFollower.followPendingTrades()
 
     private fun summaryOf(
         holdings: Holdings,
@@ -231,7 +235,7 @@ internal class InvestHomeVM(
 
     private fun onTurnOnTor() = navigationRouter.forward(TorSettingsArgs)
 
-    private fun onDismissTorBanner() = session.isTorBannerDismissed.update { true }
+    private fun onDismissTorBanner() = session.dismissTorBanner()
 
     private fun onStockClick(asset: InvestAsset) = navigationRouter.forward(InvestBuyArgs(assetId = asset.assetId))
 
@@ -242,7 +246,8 @@ internal class InvestHomeVM(
         val name = InvestAssets.find(trade.assetId)?.name
         val title =
             when {
-                name == null -> stringRes(R.string.invest_home_pending_sale_title_unknown)
+                name == null && trade.isSale -> stringRes(R.string.invest_home_pending_sale_title_unknown)
+                name == null -> stringRes(R.string.invest_home_pending_buy_title_unknown)
                 trade.isSale -> stringRes(R.string.invest_home_pending_sale_title, name)
                 else -> stringRes(R.string.invest_home_pending_buy_title, name)
             }

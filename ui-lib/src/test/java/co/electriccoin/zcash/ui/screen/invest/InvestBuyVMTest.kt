@@ -404,6 +404,48 @@ class InvestBuyVMTest {
         }
 
     @Test
+    fun `a buy the engine recorded is followed, not offered again, even when the price lapsed meanwhile`() =
+        runTest {
+            val fixture = fixture()
+            fixture.repo.onEstimate = { _, _ -> PRICED }
+            fixture.repo.onPrepare = { asset, _ -> preparedBuy(asset, fixture.now() + 10.minutes) }
+            // The prompt outlasts the held price, then the send broadcasts and fails uncertainly: the engine keeps
+            // the checkpoint, so ZEC may have gone out.
+            fixture.repo.onExecute = {
+                delay(11.minutes.inWholeMilliseconds)
+                fixture.repo.pendingTrades.value = listOf(PendingTrade("t1deposit", NVIDIA.assetId, isSale = false))
+                throw IOException("broadcast, then no answer")
+            }
+
+            fixture.openReview().primaryButton.onClick()
+            advanceTimeBy(11.minutes.inWholeMilliseconds + 100)
+            runCurrent()
+
+            assertNull(fixture.reviewState())
+            verify { fixture.router.replace(InvestProgressArgs("t1deposit", NVIDIA.assetId, "100")) }
+            assertEquals(1, fixture.repo.prepareCalls.size)
+            assertFalse(fixture.vm.state.value.primaryButton.isEnabled)
+        }
+
+    @Test
+    fun `a trade of the stock appearing while the sheet is open closes it instead of paying`() =
+        runTest {
+            val fixture = fixture()
+            fixture.repo.onEstimate = { _, _ -> PRICED }
+            fixture.repo.onPrepare = { asset, _ -> preparedBuy(asset, fixture.now() + 10.minutes) }
+
+            val review = fixture.openReview()
+            fixture.repo.pendingTrades.value = listOf(PendingTrade("0xsale", NVIDIA.assetId, isSale = true))
+            runCurrent()
+            review.primaryButton.onClick()
+            runCurrent()
+
+            assertNull(fixture.reviewState())
+            assertTrue(fixture.repo.executeCalls.isEmpty())
+            assertNotNull(fixture.vm.state.value.tradeInProgress)
+        }
+
+    @Test
     fun `Confirm checks the clock, not the last countdown tick`() =
         runTest {
             val clock = SkewedClock(virtualClock())

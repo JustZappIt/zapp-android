@@ -180,7 +180,7 @@
     <string name="invest_sell_step_sent_detail">%1$s · terlindungi</string>
     <string name="invest_sell_step_returned">Dikembalikan ke akun privat Anda</string>
     <string name="invest_sell_step_not_sold">Tidak terjual</string>
-    <string name="invest_sell_sent_title">ZEC diterima</string>
+    <string name="invest_sell_sent_title">ZEC sedang dalam perjalanan</string>
     <string name="invest_sell_sent_subtitle">%1$s sedang dalam perjalanan ke saldo terlindungi Anda.</string>
     <string name="invest_sell_sent_subtitle_unknown">ZEC Anda sedang dalam perjalanan ke saldo terlindungi Anda.</string>
     <string name="invest_sell_not_sold_title">Penjualan tidak berhasil</string>
@@ -196,5 +196,6 @@
     <string name="invest_trades_unreadable">Investasi tidak dapat membaca catatan transaksinya saat ini. Hubungi dukungan.</string>
     <string name="invest_home_pending_buy_title">Pembelian %1$s sedang diproses</string>
     <string name="invest_sell_zec_with_value">≈ %1$s (%2$s)</string>
-    <string name="invest_sell_zec_with_value_exact">%1$s (%2$s)</string>
+    <string name="invest_home_pending_buy_title_unknown">Pembelian sedang diproses</string>
+    <string name="invest_sell_zec_at_least_with_value">%1$s (≈ %2$s)</string>
 </resources>

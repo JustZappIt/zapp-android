@@ -163,12 +163,21 @@ class InvestmentsSectionVMTest {
         }
 
     @Test
-    fun `the PAY block follows pending trades so they settle without their screen`() =
+    fun `the PAY block follows pending trades only while the screen asks it to`() =
         runTest {
             val fixture = fixture(settings = READY)
             fixture.state()
+            // The view model lives as long as the tabs; following is up to the STARTED screen.
+            assertEquals(0, follower.followers)
 
+            val following =
+                backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { fixture.vm.followPendingTrades() }
+            advanceUntilIdle()
             assertEquals(1, follower.followers)
+
+            following.cancel()
+            advanceUntilIdle()
+            assertEquals(0, follower.followers)
         }
 
     private val follower = FakeInvestTradeFollower()

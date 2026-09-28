@@ -231,8 +231,8 @@ class InvestSellVMTest {
                 stringRes(R.string.invest_sell_authorise, "0.4410 NVDA", "$98.99"),
                 review.authorisation,
             )
-            // The ZEC and what it is worth in the user's currency; the floor is rounded down after converting.
-            assertEquals(stringRes(R.string.invest_sell_zec_with_value_exact, "0.0628 ZEC", "$94.20"), review.atLeast)
+            // The ZEC floor, and roughly what it is worth in the user's currency (not a guaranteed floor).
+            assertEquals(stringRes(R.string.invest_sell_zec_at_least_with_value, "0.0628 ZEC", "$94.20"), review.atLeast)
             assertEquals(stringRes(R.string.invest_sell_zec_with_value, "0.0634 ZEC", "$95.10"), review.expected)
             assertEquals(stringRes("10:00"), review.countdown)
             assertFalse(review.isSignedMessageOpen)
@@ -447,6 +447,27 @@ class InvestSellVMTest {
             assertTrue(review.isExpired)
             assertNull(review.errorText)
             assertEquals(stringRes(R.string.invest_review_refresh), review.primaryButton.text)
+        }
+
+    @Test
+    fun `a sale the engine recorded is followed, not offered again, even when the price lapsed meanwhile`() =
+        runTest {
+            val fixture = fixture()
+            fixture.sell.onEstimate = { _, _ -> PRICED }
+            fixture.sell.onPrepare = { asset, _ -> preparedSell(asset, fixture.now() + 10.minutes) }
+            fixture.sell.onExecute = {
+                delay(11.minutes.inWholeMilliseconds)
+                fixture.repo.pendingTrades.value = listOf(PendingTrade("0xdeposit", NVIDIA.assetId, isSale = true))
+                throw IOException("submitted, then no answer")
+            }
+
+            fixture.openReview().primaryButton.onClick()
+            advanceTimeBy(11.minutes.inWholeMilliseconds + 100)
+            runCurrent()
+
+            assertNull(fixture.reviewState())
+            verify { fixture.router.replace(InvestSellProgressArgs("0xdeposit", NVIDIA.assetId, "98.99")) }
+            assertEquals(1, fixture.sell.prepareCalls.size)
         }
 
     @Test

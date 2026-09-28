@@ -1,9 +1,11 @@
 package co.electriccoin.zcash.ui.screen.invest.sell
 
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.invest.model.Holding
 import co.electriccoin.zcash.ui.common.invest.model.InvestAsset
 import co.electriccoin.zcash.ui.common.invest.model.PreparedSell
 import co.electriccoin.zcash.ui.common.invest.model.SellEstimate
+import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyPresenter
@@ -11,6 +13,7 @@ import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
 import java.math.BigDecimal
 import java.math.MathContext
+import java.math.RoundingMode
 
 /** The dry sell quote's state on the amount screen. */
 internal sealed interface SellQuote {
@@ -124,6 +127,63 @@ internal object InvestSellPresenter {
             }
         }
 
+    /** "You hold": value first, then shares; shares alone without a price. */
+    fun holdingText(
+        held: Holding?,
+        asset: InvestAsset,
+        money: InvestCurrency,
+    ): StringResource {
+        val units = InvestFormat.units(held?.units ?: BigDecimal.ZERO, asset.ticker)
+        val value = held?.usdValue ?: return stringRes(units)
+        return stringRes(R.string.invest_buy_you_get_value_exact, money.format(value), units)
+    }
+
+    /**
+     * "This would leave less than $40. Sell all instead?", only for a partial sale that would leave less than the
+     * minimum behind: selling that remainder later would cost more in fixed fees than it is worth.
+     */
+    fun sellAllSuggestion(
+        estimate: SellEstimate?,
+        held: Holding?,
+        sellAll: Boolean,
+        money: InvestCurrency,
+    ): StringResource? {
+        val usdIn = (estimate as? SellEstimate.Priced)?.usdIn
+        val left = held?.usdValue?.let { value -> usdIn?.let { value.subtract(it) } }
+        val leavesTooLittle = left != null && left.signum() > 0 && left < InvestRepository.MINIMUM_USD
+        return if (!sellAll && leavesTooLittle) {
+            stringRes(
+                R.string.invest_sell_all_suggestion,
+                money.formatPreset(money.presetFromUsd(InvestRepository.MINIMUM_USD)),
+            )
+        } else {
+            null
+        }
+    }
+
+    /**
+     * [fraction] of the holding as the field shows it: shares to four places, or money to the cent, rounded down
+     * so it never asks for more than is held. Null when there is nothing (or no price, in money) to take it from.
+     */
+    fun share(
+        held: Holding?,
+        mode: SellAmountMode,
+        money: InvestCurrency,
+        fraction: BigDecimal,
+    ): BigDecimal? =
+        when (mode) {
+            SellAmountMode.SHARES -> {
+                held?.units?.multiply(fraction)?.setScale(UNITS_SCALE, RoundingMode.DOWN)
+            }
+
+            SellAmountMode.MONEY -> {
+                held?.usdValue?.let { money.fromUsd(it.multiply(fraction)) }?.setScale(2, RoundingMode.DOWN)
+            }
+        }
+
+    val HALF: BigDecimal = BigDecimal("0.5")
+    private const val UNITS_SCALE = 4
+
     fun noPriceBody(asset: InvestAsset): StringResource = stringRes(R.string.invest_sell_no_price_body, asset.name)
 
     fun review(
@@ -142,10 +202,11 @@ internal object InvestSellPresenter {
                 ),
             atLeast =
                 zecPrice?.let {
+                    // The ZEC is the guaranteed floor; its value in the user's currency moves with the price.
                     stringRes(
-                        R.string.invest_sell_zec_with_value_exact,
+                        R.string.invest_sell_zec_at_least_with_value,
                         InvestFormat.zec(prepared.zecOutMin),
-                        money.formatAtLeast(prepared.zecOutMin.multiply(it)),
+                        money.format(prepared.zecOutMin.multiply(it)),
                     )
                 } ?: stringRes(InvestFormat.zec(prepared.zecOutMin)),
             expected =

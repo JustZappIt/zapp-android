@@ -174,12 +174,32 @@ class InvestHomeVMTest {
         }
 
     @Test
-    fun `Invest home follows pending trades while it is open`() =
+    fun `Invest home follows pending trades while its screen asks it to`() =
         runTest {
             val fixture = fixture()
             fixture.state()
+            assertEquals(0, follower.followers)
+
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { fixture.vm.followPendingTrades() }
+            advanceUntilIdle()
 
             assertEquals(1, follower.followers)
+        }
+
+    @Test
+    fun `a pending buy of a stock not on the list is still called a buy`() =
+        runTest {
+            val fixture = fixture()
+            fixture.repo.pendingTrades.value = listOf(PendingTrade("t1old", "nep141:delisted.near", isSale = false))
+
+            assertEquals(
+                stringRes(R.string.invest_home_pending_buy_title_unknown),
+                fixture
+                    .state()
+                    .pendingTrades
+                    .single()
+                    .title,
+            )
         }
 
     @Test

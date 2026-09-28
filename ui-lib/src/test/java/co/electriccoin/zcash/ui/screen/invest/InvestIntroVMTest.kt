@@ -12,6 +12,7 @@ import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupDetail
 import co.electriccoin.zcash.ui.screen.invest.home.InvestHomeArgs
 import co.electriccoin.zcash.ui.screen.invest.intro.InvestIntroState
 import co.electriccoin.zcash.ui.screen.invest.intro.InvestIntroVM
+import co.electriccoin.zcash.ui.screen.walletbackup.WalletBackupReturnTarget
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -51,7 +52,10 @@ class InvestIntroVMTest {
 
             verify {
                 fixture.router.forward(
-                    WalletBackupDetail(isOpenedFromSeedBackupInfo = false, returnToInvestIntro = true),
+                    WalletBackupDetail(
+                        isOpenedFromSeedBackupInfo = false,
+                        returnTarget = WalletBackupReturnTarget.INVEST_SETUP,
+                    ),
                 )
             }
             assertEquals(0, fixture.repo.refreshHoldingsCalls)

@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import co.electriccoin.zcash.ui.screen.walletbackup.WalletBackupReturnTarget
 import kotlinx.serialization.Serializable
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -19,6 +20,6 @@ fun AndroidWalletBackupDetail(args: WalletBackupDetail) {
 @Serializable
 data class WalletBackupDetail(
     val isOpenedFromSeedBackupInfo: Boolean,
-    /** Started from Invest setup: once the phrase is saved, go back there so setup can carry on. */
-    val returnToInvestIntro: Boolean = false,
+    /** Where to go once the phrase is saved: the tabs, or back to the task that asked for the backup. */
+    val returnTarget: WalletBackupReturnTarget = WalletBackupReturnTarget.TABS,
 )

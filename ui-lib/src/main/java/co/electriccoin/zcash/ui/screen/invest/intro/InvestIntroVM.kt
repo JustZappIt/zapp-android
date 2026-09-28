@@ -18,6 +18,7 @@ import co.electriccoin.zcash.ui.screen.home.backup.WalletBackupDetail
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
 import co.electriccoin.zcash.ui.screen.invest.common.toInvestMessage
 import co.electriccoin.zcash.ui.screen.invest.home.InvestHomeArgs
+import co.electriccoin.zcash.ui.screen.walletbackup.WalletBackupReturnTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -95,7 +96,12 @@ internal class InvestIntroVM(
             onSetUp()
         } else {
             isAwaitingBackup = true
-            navigationRouter.forward(WalletBackupDetail(isOpenedFromSeedBackupInfo = false, returnToInvestIntro = true))
+            navigationRouter.forward(
+                WalletBackupDetail(
+                    isOpenedFromSeedBackupInfo = false,
+                    returnTarget = WalletBackupReturnTarget.INVEST_SETUP,
+                ),
+            )
         }
     }
 

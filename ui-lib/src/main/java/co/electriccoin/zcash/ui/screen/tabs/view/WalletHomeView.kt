@@ -23,7 +23,10 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import co.electriccoin.zcash.di.koinActivityViewModel
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.appbar.ZashiTopAppBarVM
@@ -79,6 +82,11 @@ internal fun WalletHomeView() {
     val chartState by chartVM.state.collectAsStateWithLifecycle()
     val syncChip by syncVM.state.collectAsStateWithLifecycle()
     val investState by investVM.state.collectAsStateWithLifecycle()
+    // Pending Invest trades settle while PAY is on screen (STARTED), not for as long as the tabs exist.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(investVM, lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) { investVM.followPendingTrades() }
+    }
 
     // The send screen sources its USD figure from the 1-Click swap asset list (always on, no opt-in),
     // so the balance card reuses it for parity. Ensure the catalog is loaded even if swap was never opened.

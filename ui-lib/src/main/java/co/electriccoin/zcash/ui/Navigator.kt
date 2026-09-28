@@ -73,10 +73,13 @@ class NavigatorImpl(
     @SuppressLint("RestrictedApi")
     @OptIn(InternalSerializationApi::class)
     private fun backTo(command: NavigationCommand.BackTo) {
-        navController.popBackStack(
-            destinationId = command.route.serializer().generateHashCode(),
-            inclusive = false
-        )
+        val popped =
+            navController.popBackStack(
+                destinationId = command.route.serializer().generateHashCode(),
+                inclusive = false
+            )
+        // The screen to return to may be gone (not on the back stack any more): the tabs are the safe landing.
+        if (!popped) backToRoot()
     }
 
     private fun backToRoot() {

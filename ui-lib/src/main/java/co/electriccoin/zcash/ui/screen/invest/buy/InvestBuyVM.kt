@@ -22,6 +22,7 @@ import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.invest.common.ExecuteFailure
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
@@ -39,7 +40,6 @@ import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -54,9 +54,9 @@ import kotlin.time.toJavaInstant
  * for [AMOUNT_SETTLE_DELAY_MS]. "Review" fetches a live quote the repository has checked against the request, and
  * the sheet holds it until [PreparedBuy.expiresAt]; after that the only way on is a fresh one.
  *
- * Confirming hands the quote to the repository, which runs the existing authenticated send. Only a cancelled
- * prompt, an expired price or a refusal made before anything was sent leaves the user on the sheet; any other
- * failure may have sent ZEC, so the sheet closes and, if the engine now lists the buy, its progress screen opens.
+ * Confirming hands the quote to the repository, which runs the existing authenticated send. After a failure the
+ * engine is asked first whether it recorded the buy: if so, ZEC may have gone out, so its progress screen opens and
+ * nothing offers to pay again. Only an unrecorded failure is read as nothing sent (see [ExecuteFailure]).
  */
 @Suppress("TooManyFunctions")
 internal class InvestBuyVM(
@@ -359,8 +359,8 @@ internal class InvestBuyVM(
     }
 
     private fun onRefreshPrice() {
-        val current = review.value ?: return
-        if (current.isBusy) return
+        val current = review.value
+        if (current == null || current.isBusy || closeIfBlocked()) return
         review.update { it?.copy(isBusy = true, error = null) }
         viewModelScope.launch {
             investCatching { investRepository.prepareBuy(asset, current.usd) }
@@ -373,13 +373,18 @@ internal class InvestBuyVM(
     }
 
     private fun onConfirm() {
-        val current = review.value
-        if (current == null || current.isBusy || current.isBlocked) return
-        // The clock, not the last countdown tick: the price may have lapsed since the sheet last redrew.
-        if (isExpired(current.prepared)) {
-            review.update { it?.copy(remainingSeconds = 0) }
-            return
+        val current = review.value?.takeUnless { it.isBusy || it.isBlocked } ?: return
+        when {
+            closeIfBlocked() -> Unit
+
+            // The clock, not the last countdown tick: the price may have lapsed since the sheet last redrew.
+            isExpired(current.prepared) -> review.update { it?.copy(remainingSeconds = 0) }
+
+            else -> execute(current)
         }
+    }
+
+    private fun execute(current: Review) {
         // Busy until executeBuy returns: a second tap does nothing, and the engine refuses a second payment anyway.
         review.update { it?.copy(isBusy = true, error = null) }
         viewModelScope.launch {
@@ -396,34 +401,30 @@ internal class InvestBuyVM(
         current: Review,
     ) {
         Twig.warn(e) { "InvestBuyVM: executeBuy did not complete" }
-        when {
-            e is BridgeAuthorizationCancelledException || e is BiometricsCancelledException -> {
+        val failure =
+            ExecuteFailure.classify(
+                isCancelled = e is BridgeAuthorizationCancelledException || e is BiometricsCancelledException,
+                isRefused = false,
+                isExpired = isExpired(current.prepared),
+                ourDeposit = current.prepared.quote.depositAddress.address,
+                asset = asset,
+                pendingTrades = investRepository.pendingTrades,
+            )
+        when (failure) {
+            ExecuteFailure.Cancelled -> {
                 review.update { it?.copy(isBusy = false) }
             }
 
-            isExpired(current.prepared) -> {
+            is ExecuteFailure.OursPending -> {
+                closeReview()
+                navigationRouter.replace(progressArgs(failure.trade.depositAddress, current.usd))
+            }
+
+            ExecuteFailure.Expired -> {
                 review.update { it?.copy(isBusy = false, remainingSeconds = 0) }
             }
 
-            else -> {
-                afterUncertainFailure(current)
-            }
-        }
-    }
-
-    // Anything else may have sent ZEC. If the engine lists this buy now, follow it; if another trade of the stock
-    // refused it, nothing was sent; otherwise close the sheet and say it didn't complete.
-    private suspend fun afterUncertainFailure(current: Review) {
-        val trades = investCatching { investRepository.pendingTrades.first() }.getOrNull()
-        val ours = trades?.firstOrNull { it.depositAddress == current.prepared.quote.depositAddress.address }
-        val other = trades?.firstOrNull { it.assetId == asset.assetId }
-        when {
-            ours != null -> {
-                closeReview()
-                navigationRouter.replace(progressArgs(ours.depositAddress, current.usd))
-            }
-
-            other != null -> {
+            ExecuteFailure.OtherTradePending -> {
                 review.update {
                     it?.copy(
                         isBusy = false,
@@ -433,7 +434,7 @@ internal class InvestBuyVM(
                 }
             }
 
-            else -> {
+            ExecuteFailure.Refused, ExecuteFailure.Failed -> {
                 closeReview()
                 quote.update { BuyQuote.Failed(stringRes(R.string.invest_review_failed)) }
             }
@@ -444,6 +445,14 @@ internal class InvestBuyVM(
         depositAddress: String,
         usd: BigDecimal,
     ) = InvestProgressArgs(depositAddress = depositAddress, assetId = asset.assetId, usdAmount = usd.toPlainString())
+
+    // A pending trade of this stock (a buy that may already have been paid, say) rules out paying again: the sheet
+    // gives way to the screen, which names that trade and links to it.
+    private fun closeIfBlocked(): Boolean {
+        val isBlocked = tradeBlock.value != null
+        if (isBlocked) closeReview()
+        return isBlocked
+    }
 
     private fun onDismissReview() {
         if (review.value?.isBusy == true) return

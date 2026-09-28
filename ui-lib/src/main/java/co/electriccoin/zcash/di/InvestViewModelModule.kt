@@ -12,6 +12,7 @@ import co.electriccoin.zcash.ui.screen.invest.gate.InvestGateVM
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestUnavailableVM
 import co.electriccoin.zcash.ui.screen.invest.gate.ResidenceHintProvider
 import co.electriccoin.zcash.ui.screen.invest.home.InvestHomeVM
+import co.electriccoin.zcash.ui.screen.invest.intro.InvestIntroArgs
 import co.electriccoin.zcash.ui.screen.invest.intro.InvestIntroVM
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressVM
 import co.electriccoin.zcash.ui.screen.invest.receipt.InvestReceiptVM
@@ -19,6 +20,8 @@ import co.electriccoin.zcash.ui.screen.invest.section.InvestmentsSectionVM
 import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellArgs
 import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellVM
 import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressVM
+import co.electriccoin.zcash.ui.screen.walletbackup.WalletBackupReturnRoutes
+import co.electriccoin.zcash.ui.screen.walletbackup.WalletBackupReturnTarget
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.viewModel
@@ -36,6 +39,15 @@ val investViewModelModule =
         factoryOf(::NavigateToInvestUseCase)
         factoryOf(::InvestCurrencyProviderImpl) bind InvestCurrencyProvider::class
         single { InvestSession() }
+        // A backup started from Invest setup comes back to the intro, so setup carries on.
+        factory<WalletBackupReturnRoutes> {
+            WalletBackupReturnRoutes { target ->
+                when (target) {
+                    WalletBackupReturnTarget.INVEST_SETUP -> InvestIntroArgs::class
+                    WalletBackupReturnTarget.TABS -> null
+                }
+            }
+        }
         factory<ResidenceHintProvider> { AndroidResidenceHintProvider(androidContext()) }
         viewModel {
             InvestmentsSectionVM(
