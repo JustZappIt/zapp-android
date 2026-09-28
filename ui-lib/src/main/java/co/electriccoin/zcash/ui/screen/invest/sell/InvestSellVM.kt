@@ -15,6 +15,7 @@ import co.electriccoin.zcash.ui.common.invest.model.SellIntentRefusedException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSellRepository
+import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollower
 import co.electriccoin.zcash.ui.common.repository.BiometricsCancelledException
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.design.component.ButtonState
@@ -66,6 +67,7 @@ internal class InvestSellVM(
     private val sellRepository: InvestSellRepository,
     swapRepository: SwapRepository,
     currencyProvider: InvestCurrencyProvider,
+    private val tradeFollower: InvestTradeFollower,
     private val navigationRouter: NavigationRouter,
     private val clock: Clock,
 ) : ViewModel() {
@@ -149,6 +151,9 @@ internal class InvestSellVM(
     val reviewState: StateFlow<InvestSellReviewState?> =
         combine(review, currency, zecUsd) { current, money, price -> current?.let { buildReview(it, money, price) } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT), null)
+
+    /** Follows pending trades while this screen is STARTED, so a held-back stock unblocks here; one shared poller. */
+    suspend fun followPendingTrades(): Nothing = tradeFollower.followPendingTrades()
 
     private fun sellAmountOf(
         current: Form,
@@ -422,6 +427,11 @@ internal class InvestSellVM(
         when (failure) {
             ExecuteFailure.Cancelled -> {
                 review.update { it?.copy(isBusy = false) }
+            }
+
+            // Unknown whether it went out: the screen's unreadable-records note (and its support link) takes over.
+            ExecuteFailure.RecordsUnreadable -> {
+                closeReview()
             }
 
             is ExecuteFailure.OursPending -> {

@@ -14,6 +14,7 @@ class OnUserSavedWalletBackupUseCase(
     suspend operator fun invoke(returnTarget: WalletBackupReturnTarget = WalletBackupReturnTarget.TABS) {
         walletBackupFlagStorageProvider.store(true)
         val route = returnRoutes.routeFor(returnTarget)
-        if (route != null) navigationRouter.backTo(route) else navigationRouter.backToRoot()
+        // The screen to return to may have left the back stack meanwhile; then the tabs are the landing.
+        if (route != null) navigationRouter.backToOrRoot(route) else navigationRouter.backToRoot()
     }
 }

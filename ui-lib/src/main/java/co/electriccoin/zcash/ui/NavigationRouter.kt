@@ -1,6 +1,7 @@
 package co.electriccoin.zcash.ui
 
 import androidx.navigation.NavBackStackEntry
+import androidx.navigation.serialization.generateHashCode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -10,6 +11,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.InternalSerializationApi
+import kotlinx.serialization.serializer
 import kotlin.reflect.KClass
 import kotlin.time.Duration.Companion.seconds
 
@@ -43,6 +46,9 @@ interface NavigationRouter {
      */
     fun backToRoot()
 
+    /** [backTo] when [route] is still on the back stack, [backToRoot] when it isn't. */
+    fun backToOrRoot(route: KClass<*>) = custom { NavigationCommand.BackToOrRoot(route) }
+
     fun observePipeline(): Flow<BaseNavigationCommand>
 }
 
@@ -72,6 +78,8 @@ class NavigationRouterImpl : NavigationRouter {
         navigateWithBackoff(CustomNavigationCommand(block))
 
     override fun backToRoot() = navigateWithBackoff(NavigationCommand.BackToRoot)
+
+    override fun backToOrRoot(route: KClass<*>) = navigateWithBackoff(NavigationCommand.BackToOrRoot(route))
 
     override fun observePipeline() = channel.receiveAsFlow()
 
@@ -114,4 +122,24 @@ sealed interface NavigationCommand : BaseNavigationCommand {
     ) : NavigationCommand
 
     data object BackToRoot : NavigationCommand
+
+    /** Back to [route] when it is on the back stack, else to the root: for a screen that may have gone meanwhile. */
+    data class BackToOrRoot(
+        val route: KClass<*>
+    ) : NavigationCommand {
+        companion object {
+            /**
+             * [BackTo] when [route]'s destination is on the back stack ([backStackIds]), else [BackToRoot]. Checked
+             * up front because popBackStack's "false" also means the target is already on top.
+             */
+            @OptIn(InternalSerializationApi::class)
+            fun resolve(
+                route: KClass<*>,
+                backStackIds: List<Int>,
+            ): NavigationCommand {
+                val isOnStack = route.serializer().generateHashCode() in backStackIds
+                return if (isOnStack) BackTo(route) else BackToRoot
+            }
+        }
+    }
 }

@@ -14,6 +14,7 @@ import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.invest.model.PreparedBuy
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
+import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollower
 import co.electriccoin.zcash.ui.common.provider.BridgeAuthorizationCancelledException
 import co.electriccoin.zcash.ui.common.repository.BiometricsCancelledException
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
@@ -65,6 +66,7 @@ internal class InvestBuyVM(
     accountDataSource: AccountDataSource,
     swapRepository: SwapRepository,
     currencyProvider: InvestCurrencyProvider,
+    private val tradeFollower: InvestTradeFollower,
     private val navigationRouter: NavigationRouter,
     private val clock: Clock,
 ) : ViewModel() {
@@ -166,6 +168,12 @@ internal class InvestBuyVM(
     val reviewState: StateFlow<InvestReviewState?> =
         combine(review, currency) { current, money -> current?.let { buildReview(it, money) } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT), null)
+
+    /**
+     * Follows pending trades while this screen is STARTED, so a stock held back by one unblocks while the user waits
+     * here. The follower is shared, so this adds no second poller.
+     */
+    suspend fun followPendingTrades(): Nothing = tradeFollower.followPendingTrades()
 
     private fun usdOf(local: BigDecimal): BigDecimal = currency.value.toUsd(local)
 
@@ -413,6 +421,11 @@ internal class InvestBuyVM(
         when (failure) {
             ExecuteFailure.Cancelled -> {
                 review.update { it?.copy(isBusy = false) }
+            }
+
+            // Unknown whether it went out: the screen's unreadable-records note (and its support link) takes over.
+            ExecuteFailure.RecordsUnreadable -> {
+                closeReview()
             }
 
             is ExecuteFailure.OursPending -> {

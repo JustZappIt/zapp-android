@@ -471,6 +471,30 @@ class InvestSellVMTest {
         }
 
     @Test
+    fun `a failure while the trade records can't be read is never taken for nothing sent`() =
+        runTest {
+            val fixture = fixture()
+            fixture.sell.onEstimate = { _, _ -> PRICED }
+            fixture.sell.onPrepare = { asset, _ -> preparedSell(asset, fixture.now() + 10.minutes) }
+            fixture.sell.onExecute = {
+                fixture.repo.pendingTrades.value = null
+                throw IOException("submitted, then no answer")
+            }
+
+            fixture.openReview().primaryButton.onClick()
+            advanceTimeBy(100)
+            runCurrent()
+
+            assertNull(fixture.reviewState())
+            assertEquals(
+                stringRes(R.string.invest_trades_unreadable),
+                fixture.vm.state.value.tradeInProgress
+                    ?.text,
+            )
+            assertFalse(fixture.vm.state.value.isRefused)
+        }
+
+    @Test
     fun `Confirm checks the clock, not the last countdown tick`() =
         runTest {
             val clock = SkewedClock(virtualClock())
@@ -564,6 +588,7 @@ class InvestSellVMTest {
                 sellRepository = sell,
                 swapRepository = swap,
                 currencyProvider = currency,
+                tradeFollower = FakeInvestTradeFollower(),
                 navigationRouter = router,
                 clock = clock,
             )

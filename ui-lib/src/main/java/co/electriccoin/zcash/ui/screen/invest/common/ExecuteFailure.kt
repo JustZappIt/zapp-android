@@ -24,6 +24,12 @@ internal sealed interface ExecuteFailure {
     /** Not recorded, but another trade of the stock is pending: nothing was sent, and Confirm stays off. */
     data object OtherTradePending : ExecuteFailure
 
+    /**
+     * The trade records can't be read, so whether this trade went out is unknown: it must not be read as "nothing
+     * sent". The sheet closes and the screen shows the unreadable-records note, which leads to support.
+     */
+    data object RecordsUnreadable : ExecuteFailure
+
     /** Not recorded and no known reason: close the sheet and say it didn't complete. */
     data object Failed : ExecuteFailure
 
@@ -45,10 +51,11 @@ internal sealed interface ExecuteFailure {
             val trades = investCatching { pendingTrades.first() }.getOrNull()
             val ours = trades?.firstOrNull { it.depositAddress == ourDeposit }
             return when {
+                trades == null -> RecordsUnreadable
                 ours != null -> OursPending(ours)
                 isRefused -> Refused
                 isExpired -> Expired
-                trades?.any { it.assetId == asset.assetId } == true -> OtherTradePending
+                trades.any { it.assetId == asset.assetId } -> OtherTradePending
                 else -> Failed
             }
         }

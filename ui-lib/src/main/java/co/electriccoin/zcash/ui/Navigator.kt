@@ -23,6 +23,7 @@ interface Navigator {
     suspend fun executeCommand(command: CustomNavigationCommand)
 }
 
+@Suppress("TooManyFunctions")
 class NavigatorImpl(
     private val activity: Activity,
     private val navController: NavHostController,
@@ -37,6 +38,7 @@ class NavigatorImpl(
         when (command) {
             NavigationCommand.Back,
             NavigationCommand.BackToRoot,
+            is NavigationCommand.BackToOrRoot,
             is NavigationCommand.BackTo -> {
                 val currentRoute =
                     navController
@@ -59,6 +61,7 @@ class NavigatorImpl(
             NavigationCommand.Back -> navController.popBackStack()
             is NavigationCommand.BackTo -> backTo(command)
             NavigationCommand.BackToRoot -> backToRoot()
+            is NavigationCommand.BackToOrRoot -> backToOrRoot(command)
         }
     }
 
@@ -73,13 +76,18 @@ class NavigatorImpl(
     @SuppressLint("RestrictedApi")
     @OptIn(InternalSerializationApi::class)
     private fun backTo(command: NavigationCommand.BackTo) {
-        val popped =
-            navController.popBackStack(
-                destinationId = command.route.serializer().generateHashCode(),
-                inclusive = false
-            )
-        // The screen to return to may be gone (not on the back stack any more): the tabs are the safe landing.
-        if (!popped) backToRoot()
+        navController.popBackStack(
+            destinationId = command.route.serializer().generateHashCode(),
+            inclusive = false
+        )
+    }
+
+    private fun backToOrRoot(command: NavigationCommand.BackToOrRoot) {
+        val backStackIds = navController.currentBackStack.value.map { it.destination.id }
+        when (val resolved = NavigationCommand.BackToOrRoot.resolve(command.route, backStackIds)) {
+            is NavigationCommand.BackTo -> backTo(resolved)
+            else -> backToRoot()
+        }
     }
 
     private fun backToRoot() {

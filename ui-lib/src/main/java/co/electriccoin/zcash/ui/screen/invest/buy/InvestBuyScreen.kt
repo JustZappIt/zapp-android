@@ -2,8 +2,12 @@ package co.electriccoin.zcash.ui.screen.invest.buy
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.serialization.Serializable
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -13,6 +17,10 @@ fun InvestBuyScreen(args: InvestBuyArgs) {
     val vm = koinViewModel<InvestBuyVM> { parametersOf(args) }
     val state by vm.state.collectAsStateWithLifecycle()
     val review by vm.reviewState.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(vm, lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.followPendingTrades() }
+    }
     InvestBuyView(state = state)
     InvestReviewSheet(state = review)
     BackHandler { state.onBack() }

@@ -446,6 +446,43 @@ class InvestBuyVMTest {
         }
 
     @Test
+    fun `a failure while the trade records can't be read is never taken for nothing sent`() =
+        runTest {
+            val fixture = fixture()
+            fixture.repo.onEstimate = { _, _ -> PRICED }
+            fixture.repo.onPrepare = { asset, _ -> preparedBuy(asset, fixture.now() + 10.minutes) }
+            fixture.repo.onExecute = {
+                delay(11.minutes.inWholeMilliseconds)
+                fixture.repo.pendingTrades.value = null
+                throw IOException("broadcast, then no answer")
+            }
+
+            fixture.openReview().primaryButton.onClick()
+            advanceTimeBy(11.minutes.inWholeMilliseconds + 100)
+            runCurrent()
+
+            // Not "Refresh price": whether ZEC went out is unknown, so the sheet closes and support is the way on.
+            assertNull(fixture.reviewState())
+            assertEquals(
+                stringRes(R.string.invest_trades_unreadable),
+                fixture.vm.state.value.tradeInProgress
+                    ?.text,
+            )
+            assertFalse(fixture.vm.state.value.primaryButton.isEnabled)
+            verify(exactly = 0) { fixture.router.replace(any()) }
+        }
+
+    @Test
+    fun `the buy screen follows pending trades while it asks to`() =
+        runTest {
+            val fixture = fixture()
+
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { fixture.vm.followPendingTrades() }
+
+            assertEquals(1, follower.followers)
+        }
+
+    @Test
     fun `Confirm checks the clock, not the last countdown tick`() =
         runTest {
             val clock = SkewedClock(virtualClock())
@@ -565,6 +602,8 @@ class InvestBuyVMTest {
         }
     }
 
+    private val follower = FakeInvestTradeFollower()
+
     private fun TestScope.fixture(
         currency: InvestCurrencyProvider = USD_CURRENCY,
         clock: Clock = virtualClock(),
@@ -595,6 +634,7 @@ class InvestBuyVMTest {
                 accountDataSource = accounts,
                 swapRepository = swap,
                 currencyProvider = currency,
+                tradeFollower = follower,
                 navigationRouter = router,
                 clock = clock,
             )

@@ -81,6 +81,7 @@ val investViewModelModule =
                 accountDataSource = get(),
                 swapRepository = get(),
                 currencyProvider = get(),
+                tradeFollower = get(),
                 navigationRouter = get(),
                 clock = Clock.System,
             )
@@ -94,6 +95,7 @@ val investViewModelModule =
                 sellRepository = get(),
                 swapRepository = get(),
                 currencyProvider = get(),
+                tradeFollower = get(),
                 navigationRouter = get(),
                 clock = Clock.System,
             )
