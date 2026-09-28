@@ -1,7 +1,6 @@
 package co.electriccoin.zcash.ui
 
 import androidx.navigation.NavBackStackEntry
-import androidx.navigation.serialization.generateHashCode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -11,8 +10,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.InternalSerializationApi
-import kotlinx.serialization.serializer
 import kotlin.reflect.KClass
 import kotlin.time.Duration.Companion.seconds
 
@@ -127,19 +124,11 @@ sealed interface NavigationCommand : BaseNavigationCommand {
     data class BackToOrRoot(
         val route: KClass<*>
     ) : NavigationCommand {
-        companion object {
-            /**
-             * [BackTo] when [route]'s destination is on the back stack ([backStackIds]), else [BackToRoot]. Checked
-             * up front because popBackStack's "false" also means the target is already on top.
-             */
-            @OptIn(InternalSerializationApi::class)
-            fun resolve(
-                route: KClass<*>,
-                backStackIds: List<Int>,
-            ): NavigationCommand {
-                val isOnStack = route.serializer().generateHashCode() in backStackIds
-                return if (isOnStack) BackTo(route) else BackToRoot
-            }
-        }
+        /**
+         * [BackTo] when [route] is on the back stack, else [BackToRoot]. Asked up front because popBackStack's
+         * "false" also means the target is already on top.
+         */
+        fun resolve(isOnStack: (KClass<*>) -> Boolean): NavigationCommand =
+            if (isOnStack(route)) BackTo(route) else BackToRoot
     }
 }

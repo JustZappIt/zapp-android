@@ -1,6 +1,5 @@
 package co.electriccoin.zcash.ui.common.usecase
 
-import androidx.navigation.serialization.generateHashCode
 import co.electriccoin.zcash.ui.NavigationCommand
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.provider.WalletBackupFlagStorageProvider
@@ -11,8 +10,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.InternalSerializationApi
-import kotlinx.serialization.serializer
+import kotlin.reflect.KClass
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -37,25 +35,21 @@ class OnUserSavedWalletBackupUseCaseTest {
             verify(exactly = 0) { router.backToRoot() }
         }
 
-    @OptIn(InternalSerializationApi::class)
     @Test
     fun `the return goes back to the intro when it is on the stack, and to the tabs when it is gone`() {
-        val intro = InvestIntroArgs::class.serializer().generateHashCode()
-        val tabs = 1
+        val command = NavigationCommand.BackToOrRoot(InvestIntroArgs::class)
+        var asked: KClass<*>? = null
 
+        // On the stack, including already on top, where popBackStack's "false" would mislead.
         assertEquals(
             NavigationCommand.BackTo(InvestIntroArgs::class),
-            NavigationCommand.BackToOrRoot.resolve(InvestIntroArgs::class, listOf(tabs, intro, 2, 3)),
+            command.resolve { route ->
+                asked = route
+                true
+            },
         )
-        // Also when the intro is already on top, which is where popBackStack's "false" would mislead.
-        assertEquals(
-            NavigationCommand.BackTo(InvestIntroArgs::class),
-            NavigationCommand.BackToOrRoot.resolve(InvestIntroArgs::class, listOf(tabs, intro)),
-        )
-        assertEquals(
-            NavigationCommand.BackToRoot,
-            NavigationCommand.BackToOrRoot.resolve(InvestIntroArgs::class, listOf(tabs, 2, 3)),
-        )
+        assertEquals(InvestIntroArgs::class, asked)
+        assertEquals(NavigationCommand.BackToRoot, command.resolve { false })
     }
 
     @Test
