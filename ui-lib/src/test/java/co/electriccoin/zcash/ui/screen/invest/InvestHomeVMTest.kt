@@ -7,11 +7,12 @@ import co.electriccoin.zcash.ui.common.invest.model.Holdings
 import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.invest.model.InvestMarket
 import co.electriccoin.zcash.ui.common.invest.model.MarketAsset
+import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import co.electriccoin.zcash.ui.common.usecase.IsTorEnabledUseCase
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyArgs
-import co.electriccoin.zcash.ui.screen.invest.common.PendingTrade
+import co.electriccoin.zcash.ui.screen.invest.common.InvestSession
 import co.electriccoin.zcash.ui.screen.invest.common.UsMarketHours
 import co.electriccoin.zcash.ui.screen.invest.home.InvestHomeState
 import co.electriccoin.zcash.ui.screen.invest.home.InvestHomeVM
@@ -44,6 +45,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@Suppress("MaxLineLength")
 class InvestHomeVMTest {
     @AfterTest
     fun tearDown() = Dispatchers.resetMain()
@@ -61,6 +63,9 @@ class InvestHomeVMTest {
             advanceUntilIdle()
             assertNull(fixture.vm.state.value.torBanner)
             assertEquals(2, fixture.vm.state.value.groups.size)
+
+            // Remembered for the app session: opening Invest home again doesn't bring it back.
+            assertNull(fixture(torOn = false).state().torBanner)
         }
 
     @Test
@@ -121,20 +126,60 @@ class InvestHomeVMTest {
         }
 
     @Test
-    fun `a pending buy offers a way back to its progress, and a stock opens the buy screen`() =
+    fun `pending trades are named by stock and lead to their progress, and a stock opens the buy screen`() =
         runTest {
             val fixture = fixture()
-            fixture.repo.pendingBuys.value = listOf("t1pending")
+            fixture.repo.pendingTrades.value =
+                listOf(
+                    PendingTrade("t1pending", NVIDIA.assetId, isSale = false),
+                    PendingTrade("0xsale", TESLA.assetId, isSale = true),
+                )
 
             val state = fixture.state()
-            state.pendingBuys.single().onClick()
+            assertEquals(
+                listOf(
+                    stringRes(R.string.invest_home_pending_buy_title, "NVIDIA"),
+                    stringRes(R.string.invest_home_pending_sale_title, "Tesla"),
+                ),
+                state.pendingTrades.map { it.title },
+            )
+            state.pendingTrades.forEach { it.onClick() }
             state.groups[0]
                 .rows
                 .first()
                 .onClick()
 
-            verify { fixture.router.forward(InvestProgressArgs(depositAddress = "t1pending")) }
+            verify { fixture.router.forward(InvestProgressArgs(depositAddress = "t1pending", assetId = NVIDIA.assetId)) }
+            verify { fixture.router.forward(InvestSellProgressArgs(depositAddress = "0xsale", assetId = TESLA.assetId)) }
             verify { fixture.router.forward(InvestBuyArgs(NVIDIA.assetId)) }
+        }
+
+    @Test
+    fun `unreadable trade records stop every Sell and point to support`() =
+        runTest {
+            val fixture = fixture()
+            fixture.repo.holdings.value = HOLDINGS
+            fixture.repo.pendingTrades.value = null
+
+            val state = fixture.state()
+
+            assertEquals(stringRes(R.string.invest_trades_unreadable), assertNotNull(state.recordsUnreadable).text)
+            assertNull(
+                state.summary!!
+                    .rows
+                    .single()
+                    .onSell,
+            )
+            assertTrue(state.pendingTrades.isEmpty())
+        }
+
+    @Test
+    fun `Invest home follows pending trades while it is open`() =
+        runTest {
+            val fixture = fixture()
+            fixture.state()
+
+            assertEquals(1, follower.followers)
         }
 
     @Test
@@ -153,14 +198,14 @@ class InvestHomeVMTest {
             assertNotNull(row.onSell).invoke()
             verify { fixture.router.forward(InvestSellArgs(NVIDIA.assetId)) }
 
-            trades.value = listOf(PendingTrade("0xsale", NVIDIA.assetId, isSale = true))
+            fixture.repo.pendingTrades.value = listOf(PendingTrade("0xsale", NVIDIA.assetId, isSale = true))
             advanceUntilIdle()
 
             val state = fixture.vm.state.value
             val selling = state.summary!!.rows.single()
             assertTrue(assertNotNull(selling.tradeInProgress).isSale)
             assertNull(selling.onSell)
-            state.pendingSales.single().onClick()
+            state.pendingTrades.single().onClick()
             selling.tradeInProgress.onOpen()
             verify(exactly = 2) { fixture.router.forward(InvestSellProgressArgs("0xsale", NVIDIA.assetId)) }
         }
@@ -178,7 +223,10 @@ class InvestHomeVMTest {
         }
     }
 
-    private val trades = MutableStateFlow<List<PendingTrade>>(emptyList())
+    private val follower = FakeInvestTradeFollower()
+
+    // One session per test, as the app has one per run.
+    private val session = InvestSession()
 
     private fun TestScope.fixture(
         torOn: Boolean = true,
@@ -189,7 +237,7 @@ class InvestHomeVMTest {
         val router = mockk<NavigationRouter>(relaxed = true)
         val tor = mockk<IsTorEnabledUseCase>().also { every { it.observe() } returns MutableStateFlow(torOn) }
         val clock = virtualClock(kotlin.time.Instant.fromEpochMilliseconds(nowMillis))
-        val vm = InvestHomeVM(repo, tor, USD_CURRENCY, { trades }, router, clock)
+        val vm = InvestHomeVM(repo, tor, USD_CURRENCY, follower, session, router, clock)
         return Fixture(vm, repo, router, this)
     }
 
@@ -204,6 +252,7 @@ class InvestHomeVMTest {
 
     private companion object {
         val NVIDIA = InvestAssets.curated.first { it.ticker == "NVDA" }
+        val TESLA = InvestAssets.curated.first { it.ticker == "TSLA" }
         val HOLDINGS =
             Holdings(
                 items = listOf(Holding(NVIDIA, BigDecimal("0.4410"), BigDecimal("98.99"))),

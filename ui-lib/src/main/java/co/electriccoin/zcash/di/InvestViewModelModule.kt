@@ -6,8 +6,7 @@ import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyArgs
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyVM
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProviderImpl
-import co.electriccoin.zcash.ui.screen.invest.common.InvestPendingTrades
-import co.electriccoin.zcash.ui.screen.invest.common.InvestPendingTradesImpl
+import co.electriccoin.zcash.ui.screen.invest.common.InvestSession
 import co.electriccoin.zcash.ui.screen.invest.gate.AndroidResidenceHintProvider
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestGateVM
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestUnavailableVM
@@ -36,7 +35,7 @@ val investViewModelModule =
     module {
         factoryOf(::NavigateToInvestUseCase)
         factoryOf(::InvestCurrencyProviderImpl) bind InvestCurrencyProvider::class
-        factoryOf(::InvestPendingTradesImpl) bind InvestPendingTrades::class
+        single { InvestSession() }
         factory<ResidenceHintProvider> { AndroidResidenceHintProvider(androidContext()) }
         viewModel {
             InvestmentsSectionVM(
@@ -44,6 +43,7 @@ val investViewModelModule =
                 settingsRepository = get(),
                 accountDataSource = get(),
                 currencyProvider = get(),
+                tradeFollower = get(),
                 navigateToInvest = get(),
                 isInvestEnabled = BuildConfig.IS_INVEST_ENABLED,
             )
@@ -56,7 +56,8 @@ val investViewModelModule =
                 investRepository = get(),
                 isTorEnabled = get(),
                 currencyProvider = get(),
-                pendingTrades = get(),
+                tradeFollower = get(),
+                session = get(),
                 navigationRouter = get(),
                 clock = Clock.System,
             )
@@ -68,8 +69,6 @@ val investViewModelModule =
                 accountDataSource = get(),
                 swapRepository = get(),
                 currencyProvider = get(),
-                pendingTrades = get(),
-                keystoneProposalRepository = get(),
                 navigationRouter = get(),
                 clock = Clock.System,
             )
@@ -81,7 +80,7 @@ val investViewModelModule =
                 args = args,
                 investRepository = get(),
                 sellRepository = get(),
-                pendingTrades = get(),
+                swapRepository = get(),
                 currencyProvider = get(),
                 navigationRouter = get(),
                 clock = Clock.System,

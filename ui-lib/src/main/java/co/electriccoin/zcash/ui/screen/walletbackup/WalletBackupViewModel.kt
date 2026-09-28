@@ -24,6 +24,7 @@ import co.electriccoin.zcash.ui.design.component.SeedTextState
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.preference.AuthMethod
 import co.electriccoin.zcash.ui.preference.getAuthMethod
+import co.electriccoin.zcash.ui.screen.invest.intro.InvestIntroArgs
 import co.electriccoin.zcash.ui.screen.restore.info.SeedInfo
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -190,7 +191,7 @@ class WalletBackupViewModel(
 
     private fun onWalletBackupSavedClick() =
         viewModelScope.launch {
-            onUserSavedWalletBackup()
+            onUserSavedWalletBackup(returnTo = InvestIntroArgs::class.takeIf { args.returnToInvestIntro })
         }
 
     private fun onRevealClick() =

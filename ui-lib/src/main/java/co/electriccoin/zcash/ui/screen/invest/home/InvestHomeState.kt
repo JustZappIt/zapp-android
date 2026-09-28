@@ -1,6 +1,7 @@
 package co.electriccoin.zcash.ui.screen.invest.home
 
 import co.electriccoin.zcash.ui.design.util.StringResource
+import co.electriccoin.zcash.ui.screen.invest.common.InvestTradeInProgressState
 import co.electriccoin.zcash.ui.screen.invest.section.InvestHoldingRowState
 
 internal data class InvestHomeState(
@@ -10,10 +11,10 @@ internal data class InvestHomeState(
     val torBanner: InvestTorBannerState?,
     /** "Prices can be patchy": outside US regular weekday hours only. */
     val marketBanner: StringResource?,
-    /** Buys that were sent but haven't finished; each opens its progress screen. */
-    val pendingBuys: List<InvestPendingBuyRow>,
-    /** Sales signed and not yet final; each opens its progress screen. */
-    val pendingSales: List<InvestPendingSaleRow>,
+    /** Buys and sales not yet final (stuck ones until dismissed); each names its stock and opens its progress. */
+    val pendingTrades: List<InvestPendingTradeRow>,
+    /** Set when the trade records can't be read: nothing can be bought or sold, and support is the way out. */
+    val recordsUnreadable: InvestTradeInProgressState?,
     val groups: List<InvestStockGroupState>,
     /** Set when prices couldn't be loaded and there are none to show. */
     val marketError: StringResource?,
@@ -35,15 +36,10 @@ internal data class InvestTorBannerState(
     val onDismiss: () -> Unit,
 )
 
-internal data class InvestPendingBuyRow(
+internal data class InvestPendingTradeRow(
     val depositAddress: String,
-    val onClick: () -> Unit,
-)
-
-internal data class InvestPendingSaleRow(
-    val depositAddress: String,
-    /** The stock's name when it is one of the curated ten. */
-    val name: String?,
+    /** "Buy of NVIDIA in progress" or "Sale of NVIDIA in progress". */
+    val title: StringResource,
     val onClick: () -> Unit,
 )
 

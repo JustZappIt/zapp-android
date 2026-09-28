@@ -7,6 +7,7 @@ import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.chat.SupportChatArgs
 import co.electriccoin.zcash.ui.screen.invest.progress.BuyProgressToSteps
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressVM
@@ -180,12 +181,32 @@ class InvestProgressVMTest {
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
             advanceUntilIdle()
 
+            assertEquals(stringRes(R.string.invest_progress_attention_body, "c8f4806d"), vm.state.value.attention)
             assertNotNull(vm.state.value.removeButton)
                 .onClick()
             advanceUntilIdle()
 
             assertEquals(listOf(DEPOSIT), repo.dismissedBuys)
             verify { router.back() }
+        }
+
+    @Test
+    fun `Contact support opens the support chat with the buy's reference in the message box`() =
+        runTest {
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            val repo = FakeInvestRepository()
+            repo.onObserve = { flowOf(BuyProgress.NeedsAttention(DEPOSIT, "c8f4806d")) }
+            val router = mockk<NavigationRouter>(relaxed = true)
+            val vm = InvestProgressVM(ARGS, repo, USD_CURRENCY, router)
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }
+            advanceUntilIdle()
+
+            assertNotNull(vm.state.value.contactSupportButton)
+                .onClick()
+
+            verify {
+                router.forward(SupportChatArgs(prefilledMessage = "My Invest buy needs attention. Reference: c8f4806d"))
+            }
         }
 
     @Test

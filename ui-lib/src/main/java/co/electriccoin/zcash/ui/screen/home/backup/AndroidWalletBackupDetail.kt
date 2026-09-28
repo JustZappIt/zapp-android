@@ -18,5 +18,7 @@ fun AndroidWalletBackupDetail(args: WalletBackupDetail) {
 
 @Serializable
 data class WalletBackupDetail(
-    val isOpenedFromSeedBackupInfo: Boolean
+    val isOpenedFromSeedBackupInfo: Boolean,
+    /** Started from Invest setup: once the phrase is saved, go back there so setup can carry on. */
+    val returnToInvestIntro: Boolean = false,
 )

@@ -162,6 +162,17 @@ class InvestmentsSectionVMTest {
             assertIs<InvestmentsSectionState.Entry>(fixture.state().section)
         }
 
+    @Test
+    fun `the PAY block follows pending trades so they settle without their screen`() =
+        runTest {
+            val fixture = fixture(settings = READY)
+            fixture.state()
+
+            assertEquals(1, follower.followers)
+        }
+
+    private val follower = FakeInvestTradeFollower()
+
     private class Fixture(
         val vm: InvestmentsSectionVM,
         val repo: FakeInvestRepository,
@@ -190,6 +201,7 @@ class InvestmentsSectionVMTest {
                 settingsRepository = settingsRepo,
                 accountDataSource = mockk<AccountDataSource>().also { every { it.selectedAccount } returns flowOf(mockk<WalletAccount>()) },
                 currencyProvider = USD_CURRENCY,
+                tradeFollower = follower,
                 navigateToInvest = NavigateToInvestUseCase(settingsRepo, router),
                 isInvestEnabled = isEnabled,
             )

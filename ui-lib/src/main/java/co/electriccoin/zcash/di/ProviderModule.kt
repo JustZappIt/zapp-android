@@ -103,7 +103,6 @@ import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeCountStorage
 import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeCountStorageProviderImpl
 import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeTimestampStorageProvider
 import co.electriccoin.zcash.ui.common.provider.WalletBackupRemindMeTimestampStorageProviderImpl
-import co.electriccoin.zcash.ui.common.provider.WalletBackupReturnRoute
 import co.electriccoin.zcash.ui.common.provider.WalletRestoringStateProvider
 import co.electriccoin.zcash.ui.common.provider.WalletRestoringStateProviderImpl
 import co.electriccoin.zcash.ui.common.provider.WalletSeedPhraseSource
@@ -197,7 +196,6 @@ val providerModule =
         singleOf(::WalletBackupRemindMeTimestampStorageProviderImpl) bind
             WalletBackupRemindMeTimestampStorageProvider::class
         singleOf(::WalletBackupFlagStorageProviderImpl) bind WalletBackupFlagStorageProvider::class
-        single { WalletBackupReturnRoute() }
         singleOf(::IsIronwoodAnnouncementShownStorageProviderImpl) bind
             IsIronwoodAnnouncementShownStorageProvider::class
         singleOf(::WalletBackupConsentStorageProviderImpl) bind WalletBackupConsentStorageProvider::class

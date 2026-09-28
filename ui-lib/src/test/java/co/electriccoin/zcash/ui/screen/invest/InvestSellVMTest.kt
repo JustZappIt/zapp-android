@@ -5,24 +5,31 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.invest.model.Holding
 import co.electriccoin.zcash.ui.common.invest.model.Holdings
 import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
+import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import co.electriccoin.zcash.ui.common.invest.model.SellAmount
 import co.electriccoin.zcash.ui.common.invest.model.SellEstimate
 import co.electriccoin.zcash.ui.common.invest.model.SellIntentRefusedException
+import co.electriccoin.zcash.ui.common.model.SwapAsset
 import co.electriccoin.zcash.ui.common.repository.BiometricsCancelledException
+import co.electriccoin.zcash.ui.common.repository.SwapAssetsData
+import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
-import co.electriccoin.zcash.ui.screen.invest.common.PendingTrade
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
 import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellArgs
 import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellReviewState
 import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellVM
 import co.electriccoin.zcash.ui.screen.invest.sell.SellAmountMode
 import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressArgs
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -34,6 +41,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import xyz.justzappit.evm.intents.IntentTransferSigner
+import java.io.IOException
 import java.math.BigDecimal
 import java.util.Locale
 import kotlin.test.AfterTest
@@ -44,6 +52,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
@@ -108,7 +117,7 @@ class InvestSellVMTest {
             val state = fixture.vm.state.value
             val ledger = assertNotNull(state.ledger)
             assertEquals(stringRes(R.string.invest_buy_you_get_value_exact, "$98.99", "0.4410 NVDA"), ledger.youSell)
-            assertEquals(stringRes(R.string.invest_sell_you_get_value, "0.0634 ZEC"), ledger.youGet)
+            assertEquals(stringRes(R.string.invest_sell_zec_with_value, "0.0634 ZEC", "$97.87"), ledger.youGet)
             assertEquals(stringRes("$1.12"), ledger.fees)
             assertEquals(stringRes(R.string.invest_sell_fee_note, "0.00064 ZEC"), ledger.feeNote)
             assertTrue(state.primaryButton.isEnabled)
@@ -197,7 +206,7 @@ class InvestSellVMTest {
         runTest {
             val fixture = fixture()
             fixture.sell.onEstimate = { _, _ -> PRICED }
-            fixture.sell.pending.value = listOf(PendingTrade("0xother", NVIDIA.assetId, isSale = false))
+            fixture.repo.pendingTrades.value = listOf(PendingTrade("0xother", NVIDIA.assetId, isSale = false))
 
             fixture.type("98.99")
             advanceUntilIdle()
@@ -222,7 +231,9 @@ class InvestSellVMTest {
                 stringRes(R.string.invest_sell_authorise, "0.4410 NVDA", "$98.99"),
                 review.authorisation,
             )
-            assertEquals(stringRes("0.0628 ZEC"), review.atLeast)
+            // The ZEC and what it is worth in the user's currency; the floor is rounded down after converting.
+            assertEquals(stringRes(R.string.invest_sell_zec_with_value_exact, "0.0628 ZEC", "$94.20"), review.atLeast)
+            assertEquals(stringRes(R.string.invest_sell_zec_with_value, "0.0634 ZEC", "$95.10"), review.expected)
             assertEquals(stringRes("10:00"), review.countdown)
             assertFalse(review.isSignedMessageOpen)
             review.onToggleSignedMessage()
@@ -310,8 +321,169 @@ class InvestSellVMTest {
             verify { fixture.router.replace(InvestSellProgressArgs("0xdeposit", NVIDIA.assetId, "98.99")) }
         }
 
+    @Test
+    fun `a new exchange rate re-asks rather than leaving the quote on getting a price`() =
+        runTest {
+            val rates = MutableStateFlow(InvestCurrency.USD)
+            val fixture = fixture(currency = { rates })
+            fixture.sell.onEstimate = { _, _ -> PRICED }
+
+            fixture.type("50")
+            advanceTimeBy(InvestSellVM.AMOUNT_SETTLE_DELAY_MS - 100)
+            rates.value = InvestCurrency("EUR", "€", BigDecimal("0.92"))
+            advanceUntilIdle()
+
+            assertEquals(listOf<SellAmount>(SellAmount.Usd(BigDecimal("54.34"))), fixture.sell.estimateCalls)
+            assertNotNull(
+                fixture.vm.state.value.ledger
+                    ?.youSell
+            )
+            assertNull(fixture.vm.state.value.notice)
+        }
+
+    @Test
+    fun `tapping Review and Confirm twice prepares and signs once`() =
+        runTest {
+            val fixture = fixture()
+            fixture.sell.onEstimate = { _, _ -> PRICED }
+            fixture.sell.onPrepare = { asset, _ ->
+                delay(1_000)
+                preparedSell(asset, fixture.now() + 10.minutes)
+            }
+            fixture.sell.onExecute = {
+                delay(1_000)
+                "0xdeposit"
+            }
+
+            fixture.type("98.99")
+            advanceTimeBy(InvestSellVM.AMOUNT_SETTLE_DELAY_MS + 1)
+            runCurrent()
+            val review = fixture.vm.state.value.primaryButton
+            review.onClick()
+            review.onClick()
+            advanceTimeBy(1_100)
+            runCurrent()
+            assertEquals(1, fixture.sell.prepareCalls.size)
+
+            val confirm = fixture.reviewState()!!.primaryButton
+            confirm.onClick()
+            confirm.onClick()
+            advanceTimeBy(1_100)
+            runCurrent()
+            assertEquals(1, fixture.sell.executeCalls.size)
+        }
+
+    @Test
+    fun `an uncertain failure for a sale the engine now lists opens its progress`() =
+        runTest {
+            val fixture = fixture()
+            fixture.sell.onEstimate = { _, _ -> PRICED }
+            fixture.sell.onPrepare = { asset, _ -> preparedSell(asset, fixture.now() + 10.minutes) }
+            fixture.sell.onExecute = {
+                fixture.repo.pendingTrades.value = listOf(PendingTrade("0xdeposit", NVIDIA.assetId, isSale = true))
+                throw IOException("submit went quiet")
+            }
+
+            fixture.openReview().primaryButton.onClick()
+            advanceTimeBy(100)
+            runCurrent()
+
+            assertNull(fixture.reviewState())
+            verify { fixture.router.replace(InvestSellProgressArgs("0xdeposit", NVIDIA.assetId, "98.99")) }
+        }
+
+    @Test
+    fun `an uncertain failure with nothing recorded closes the sheet and says it didn't complete`() =
+        runTest {
+            val fixture = fixture()
+            fixture.sell.onEstimate = { _, _ -> PRICED }
+            fixture.sell.onPrepare = { asset, _ -> preparedSell(asset, fixture.now() + 10.minutes) }
+            fixture.sell.onExecute = { throw IOException("no route") }
+
+            fixture.openReview().primaryButton.onClick()
+            advanceTimeBy(100)
+            runCurrent()
+
+            assertNull(fixture.reviewState())
+            assertEquals(stringRes(R.string.invest_sell_review_failed), fixture.vm.state.value.notice)
+        }
+
+    @Test
+    fun `a refusal because another trade of the stock is pending keeps the sheet with Confirm off`() =
+        runTest {
+            val fixture = fixture()
+            fixture.sell.onEstimate = { _, _ -> PRICED }
+            fixture.sell.onPrepare = { asset, _ -> preparedSell(asset, fixture.now() + 10.minutes) }
+            fixture.sell.onExecute = {
+                fixture.repo.pendingTrades.value = listOf(PendingTrade("t1buy", NVIDIA.assetId, isSale = false))
+                error("A buy or sale of this stock is still in progress")
+            }
+
+            fixture.openReview().primaryButton.onClick()
+            advanceTimeBy(100)
+            runCurrent()
+
+            val review = assertNotNull(fixture.reviewState())
+            assertEquals(stringRes(R.string.invest_trade_in_flight, "NVIDIA"), review.errorText)
+            assertFalse(review.primaryButton.isEnabled)
+        }
+
+    @Test
+    fun `a price that lapses during the biometric prompt asks for a fresh one`() =
+        runTest {
+            val fixture = fixture()
+            fixture.sell.onEstimate = { _, _ -> PRICED }
+            fixture.sell.onPrepare = { asset, _ -> preparedSell(asset, fixture.now() + 10.minutes) }
+            fixture.sell.onExecute = {
+                delay(11.minutes.inWholeMilliseconds)
+                error("The price is no longer held; prepare the sale again")
+            }
+
+            fixture.openReview().primaryButton.onClick()
+            advanceTimeBy(11.minutes.inWholeMilliseconds + 100)
+            runCurrent()
+
+            val review = assertNotNull(fixture.reviewState())
+            assertTrue(review.isExpired)
+            assertNull(review.errorText)
+            assertEquals(stringRes(R.string.invest_review_refresh), review.primaryButton.text)
+        }
+
+    @Test
+    fun `Confirm checks the clock, not the last countdown tick`() =
+        runTest {
+            val clock = SkewedClock(virtualClock())
+            val fixture = fixture(clock = clock)
+            fixture.sell.onEstimate = { _, _ -> PRICED }
+            fixture.sell.onPrepare = { asset, _ -> preparedSell(asset, fixture.now() + 10.minutes) }
+
+            val review = fixture.openReview()
+            clock.skew = 11.minutes
+            review.primaryButton.onClick()
+            runCurrent()
+
+            assertTrue(fixture.sell.executeCalls.isEmpty())
+            assertTrue(fixture.reviewState()!!.isExpired)
+        }
+
+    @Test
+    fun `when the trade records can't be read, Review is off and support is the way out`() =
+        runTest {
+            val fixture = fixture()
+            fixture.sell.onEstimate = { _, _ -> PRICED }
+            fixture.repo.pendingTrades.value = null
+
+            fixture.type("98.99")
+            advanceUntilIdle()
+
+            val blocked = assertNotNull(fixture.vm.state.value.tradeInProgress)
+            assertEquals(stringRes(R.string.invest_trades_unreadable), blocked.text)
+            assertFalse(fixture.vm.state.value.primaryButton.isEnabled)
+        }
+
     private inner class Fixture(
         val vm: InvestSellVM,
+        val repo: FakeInvestRepository,
         val sell: FakeInvestSellRepository,
         val router: NavigationRouter,
         private val scope: TestScope,
@@ -342,7 +514,10 @@ class InvestSellVMTest {
         }
     }
 
-    private fun TestScope.fixture(currency: InvestCurrencyProvider = USD_CURRENCY): Fixture {
+    private fun TestScope.fixture(
+        currency: InvestCurrencyProvider = USD_CURRENCY,
+        clock: Clock = virtualClock(),
+    ): Fixture {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val repo = FakeInvestRepository()
         repo.holdings.value =
@@ -354,22 +529,30 @@ class InvestSellVMTest {
             )
         val sell = FakeInvestSellRepository()
         val router = mockk<NavigationRouter>(relaxed = true)
+        val swap =
+            mockk<SwapRepository>().also {
+                every { it.assets } returns
+                    MutableStateFlow(
+                        SwapAssetsData(zecAsset = mockk<SwapAsset>(relaxed = true) { every { usdPrice } returns ZEC_USD }),
+                    )
+            }
         val vm =
             InvestSellVM(
                 args = InvestSellArgs(NVIDIA.assetId),
                 investRepository = repo,
                 sellRepository = sell,
-                pendingTrades = sell.pendingTrades,
+                swapRepository = swap,
                 currencyProvider = currency,
                 navigationRouter = router,
-                clock = virtualClock(),
+                clock = clock,
             )
-        return Fixture(vm, sell, router, this)
+        return Fixture(vm, repo, sell, router, this)
     }
 
     private companion object {
         val EXPECTED_ROUTE = InvestProgressArgs("0xother", InvestAssets.curated.first { it.ticker == "NVDA" }.assetId)
         val NVIDIA = InvestAssets.curated.first { it.ticker == "NVDA" }
+        val ZEC_USD = BigDecimal(1500)
         val PRICED =
             SellEstimate.Priced(
                 unitsIn = BigDecimal("0.4410"),

@@ -34,11 +34,17 @@ data class InvestCurrency(
     /** A USD amount in this currency, e.g. "$1,204.87", "€1,112.40" or "IDR 19,654,321.00". */
     fun format(usd: BigDecimal): String = formatLocal(fromUsd(usd))
 
+    /** A guaranteed floor ("at least") in this currency: converted first, then rounded down, never up. */
+    fun formatAtLeast(usd: BigDecimal): String = formatLocal(fromUsd(usd), RoundingMode.DOWN)
+
     /** An amount already in this currency. */
-    fun formatLocal(local: BigDecimal): String {
-        val number = DecimalFormat("#,##0.00", SYMBOLS).format(local.setScale(2, RoundingMode.HALF_UP))
+    fun formatLocal(
+        local: BigDecimal,
+        rounding: RoundingMode = RoundingMode.HALF_UP,
+    ): String {
+        val number = DecimalFormat("#,##0.00", SYMBOLS).format(local.setScale(2, rounding))
         // A letter code ("IDR") reads better with a space; a sign ("$", "€", "R$") sits against the number.
-        return if (symbol.last().isLetter()) "$symbol $number" else "$symbol$number"
+        return if (symbol.lastOrNull()?.isLetter() == true) "$symbol $number" else "$symbol$number"
     }
 
     /** A preset in this currency: [usd] converted and rounded up to two significant figures ("$40", "€37"). */

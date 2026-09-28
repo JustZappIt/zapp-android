@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.screen.invest.intro
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
@@ -9,7 +10,6 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepository
 import co.electriccoin.zcash.ui.common.provider.WalletBackupFlagStorageProvider
-import co.electriccoin.zcash.ui.common.provider.WalletBackupReturnRoute
 import co.electriccoin.zcash.ui.common.usecase.IsTorEnabledUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -37,9 +37,9 @@ internal class InvestIntroVM(
     private val investRepository: InvestRepository,
     private val settingsRepository: InvestSettingsRepository,
     private val walletBackupFlag: WalletBackupFlagStorageProvider,
-    private val walletBackupReturnRoute: WalletBackupReturnRoute,
     isTorEnabled: IsTorEnabledUseCase,
     private val navigationRouter: NavigationRouter,
+    private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
     private data class Setup(
         val isRunning: Boolean = false,
@@ -49,7 +49,12 @@ internal class InvestIntroVM(
     private val setup = MutableStateFlow(Setup())
 
     // Set when the user went to back up from here: once the phrase is saved, setup continues without a second tap.
-    private var isAwaitingBackup = false
+    // Kept in the saved state, so it survives the process being killed while the user writes the phrase down.
+    private var isAwaitingBackup: Boolean
+        get() = savedStateHandle[AWAITING_BACKUP_KEY] ?: false
+        set(value) {
+            savedStateHandle[AWAITING_BACKUP_KEY] = value
+        }
 
     init {
         viewModelScope.launch {
@@ -90,14 +95,12 @@ internal class InvestIntroVM(
             onSetUp()
         } else {
             isAwaitingBackup = true
-            walletBackupReturnRoute.route = InvestIntroArgs::class
-            navigationRouter.forward(WalletBackupDetail(isOpenedFromSeedBackupInfo = false))
+            navigationRouter.forward(WalletBackupDetail(isOpenedFromSeedBackupInfo = false, returnToInvestIntro = true))
         }
     }
 
-    override fun onCleared() {
-        if (walletBackupReturnRoute.route == InvestIntroArgs::class) walletBackupReturnRoute.route = null
-        super.onCleared()
+    private companion object {
+        const val AWAITING_BACKUP_KEY = "invest_intro_awaiting_backup"
     }
 
     private fun onSetUp() {

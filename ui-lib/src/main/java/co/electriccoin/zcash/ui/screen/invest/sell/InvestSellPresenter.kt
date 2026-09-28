@@ -46,7 +46,10 @@ internal object InvestSellPresenter {
                         InvestFormat.units(it.unitsIn, asset.ticker),
                     )
                 },
-            youGet = priced?.let { stringRes(R.string.invest_sell_you_get_value, InvestFormat.zec(it.zecOut)) },
+            youGet =
+                priced?.let {
+                    stringRes(R.string.invest_sell_zec_with_value, InvestFormat.zec(it.zecOut), money.format(it.usdOut))
+                },
             fees = priced?.let { stringRes(money.format(it.feesUsd)) },
             feeNote = priced?.let(::feeNote),
             eta =
@@ -127,6 +130,8 @@ internal object InvestSellPresenter {
         prepared: PreparedSell,
         remainingSeconds: Long,
         money: InvestCurrency,
+        /** 1Click's USD price of ZEC, to value the payout in the user's currency; ZEC alone without it. */
+        zecPrice: BigDecimal?,
     ): SellReviewFigures =
         SellReviewFigures(
             authorisation =
@@ -135,8 +140,22 @@ internal object InvestSellPresenter {
                     InvestFormat.units(prepared.units, prepared.asset.ticker),
                     money.format(prepared.usdIn),
                 ),
-            atLeast = stringRes(InvestFormat.zec(prepared.zecOutMin)),
-            expected = stringRes(InvestFormat.zec(prepared.zecOutExpected)),
+            atLeast =
+                zecPrice?.let {
+                    stringRes(
+                        R.string.invest_sell_zec_with_value_exact,
+                        InvestFormat.zec(prepared.zecOutMin),
+                        money.formatAtLeast(prepared.zecOutMin.multiply(it)),
+                    )
+                } ?: stringRes(InvestFormat.zec(prepared.zecOutMin)),
+            expected =
+                zecPrice?.let {
+                    stringRes(
+                        R.string.invest_sell_zec_with_value,
+                        InvestFormat.zec(prepared.zecOutExpected),
+                        money.format(prepared.zecOutExpected.multiply(it)),
+                    )
+                } ?: stringRes(R.string.invest_sell_you_get_value, InvestFormat.zec(prepared.zecOutExpected)),
             fees = stringRes(money.format(prepared.feesUsd)),
             countdown =
                 if (remainingSeconds > 0) {

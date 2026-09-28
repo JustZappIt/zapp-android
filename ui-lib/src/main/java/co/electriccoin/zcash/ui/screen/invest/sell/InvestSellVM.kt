@@ -16,6 +16,7 @@ import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSellRepository
 import co.electriccoin.zcash.ui.common.repository.BiometricsCancelledException
+import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
@@ -27,12 +28,10 @@ import co.electriccoin.zcash.ui.screen.invest.buy.InvestPresetState
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
-import co.electriccoin.zcash.ui.screen.invest.common.InvestPendingTrades
-import co.electriccoin.zcash.ui.screen.invest.common.InvestTradeInProgressState
-import co.electriccoin.zcash.ui.screen.invest.common.PendingTrade
+import co.electriccoin.zcash.ui.screen.invest.common.TradeBlock
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
-import co.electriccoin.zcash.ui.screen.invest.common.progressRoute
 import co.electriccoin.zcash.ui.screen.invest.common.toInvestMessage
+import co.electriccoin.zcash.ui.screen.invest.common.toState
 import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressArgs
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -43,6 +42,7 @@ import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -64,7 +64,7 @@ internal class InvestSellVM(
     args: InvestSellArgs,
     private val investRepository: InvestRepository,
     private val sellRepository: InvestSellRepository,
-    pendingTrades: InvestPendingTrades,
+    swapRepository: SwapRepository,
     currencyProvider: InvestCurrencyProvider,
     private val navigationRouter: NavigationRouter,
     private val clock: Clock,
@@ -85,6 +85,8 @@ internal class InvestSellVM(
         val prepared: PreparedSell,
         val remainingSeconds: Long,
         val isBusy: Boolean = false,
+        /** Refused because another trade of the stock is pending: nothing was signed, and Confirm stays off. */
+        val isBlocked: Boolean = false,
         val error: StringResource? = null,
         val isSignedMessageOpen: Boolean = false,
     )
@@ -101,18 +103,28 @@ internal class InvestSellVM(
             .map { holdings -> holdings?.items?.firstOrNull { it.asset.assetId == asset.assetId } }
             .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    // The engine refuses a sale while a buy or sale of the same stock is still pending.
-    private val tradeInFlight =
-        pendingTrades
-            .observe()
-            .map { trades -> trades.firstOrNull { it.assetId == asset.assetId } }
+    // 1Click's USD price of ZEC, to value the ZEC a sale pays out in the user's currency on the review sheet.
+    private val zecUsd =
+        swapRepository.assets
+            .map { it.zecAsset?.usdPrice }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.Eagerly,
+                swapRepository.assets.value.zecAsset
+                    ?.usdPrice
+            )
+
+    // The engine refuses a sale while a buy or sale of the same stock is still pending, or the records are unreadable.
+    private val tradeBlock =
+        investRepository.pendingTrades
+            .map { TradeBlock.of(it, asset) }
             .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     init {
         // collectLatest cancels the previous block, so the leading delay is the debounce: one quote per pause.
+        // The currency is part of the key: a new exchange rate changes the USD asked for, so it re-asks.
         viewModelScope.launch {
-            form
-                .map(::sellAmountOf)
+            combine(form, currency, ::sellAmountOf)
                 .distinctUntilChanged()
                 .collectLatest { request ->
                     if (request == null) {
@@ -127,7 +139,7 @@ internal class InvestSellVM(
     }
 
     val state: StateFlow<InvestSellState> =
-        combine(form, quote, holding, currency, tradeInFlight, ::buildState)
+        combine(form, quote, holding, currency, tradeBlock, ::buildState)
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
@@ -135,16 +147,19 @@ internal class InvestSellVM(
             )
 
     val reviewState: StateFlow<InvestSellReviewState?> =
-        combine(review, currency) { current, money -> current?.let { buildReview(it, money) } }
+        combine(review, currency, zecUsd) { current, money, price -> current?.let { buildReview(it, money, price) } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT), null)
 
-    private fun sellAmountOf(current: Form): SellAmount? {
+    private fun sellAmountOf(
+        current: Form,
+        money: InvestCurrency = currency.value,
+    ): SellAmount? {
         val typed = current.amount.amount?.takeIf { it.signum() > 0 }
         return when {
             current.sellAll -> SellAmount.All
             typed == null -> null
             current.mode == SellAmountMode.SHARES -> SellAmount.Units(typed)
-            else -> SellAmount.Usd(currency.value.toUsd(typed))
+            else -> SellAmount.Usd(money.toUsd(typed))
         }
     }
 
@@ -172,7 +187,7 @@ internal class InvestSellVM(
         currentQuote: SellQuote,
         held: Holding?,
         money: InvestCurrency,
-        inFlight: PendingTrade?,
+        block: TradeBlock?,
     ): InvestSellState {
         val estimate = (currentQuote as? SellQuote.Ready)?.estimate
         val (notice, isDanger) = InvestSellPresenter.notice(currentQuote, asset, money)
@@ -206,17 +221,12 @@ internal class InvestSellVM(
             primaryButton =
                 ButtonState(
                     text = stringRes(R.string.invest_buy_review),
-                    isEnabled = estimate is SellEstimate.Priced && !current.isPreparing && inFlight == null,
+                    isEnabled = estimate is SellEstimate.Priced && !current.isPreparing && block == null,
                     onClick = ::onReview,
                 ),
             isPreparing = current.isPreparing,
             isRefused = current.isRefused,
-            tradeInProgress =
-                inFlight?.let { trade ->
-                    InvestTradeInProgressState(stringRes(R.string.invest_trade_in_flight, asset.name)) {
-                        navigationRouter.forward(trade.progressRoute())
-                    }
-                },
+            tradeInProgress = block?.toState(asset, navigationRouter),
             onBack = navigationRouter::back,
         )
     }
@@ -322,7 +332,8 @@ internal class InvestSellVM(
 
     private fun onReview() {
         val request = sellAmountOf(form.value) ?: return
-        if (form.value.isPreparing) return
+        // Set before launching, so a second tap while the first is still preparing does nothing.
+        if (form.value.isPreparing || tradeBlock.value != null) return
         form.update { it.copy(isPreparing = true) }
         viewModelScope.launch {
             investCatching { sellRepository.prepareSell(asset, request) }
@@ -358,11 +369,14 @@ internal class InvestSellVM(
     private fun remainingSeconds(prepared: PreparedSell): Long =
         (prepared.expiresAt - clock.now()).inWholeSeconds.coerceAtLeast(0)
 
+    private fun isExpired(prepared: PreparedSell): Boolean = clock.now() >= prepared.expiresAt
+
     private fun buildReview(
         current: Review,
         money: InvestCurrency,
+        zecPrice: BigDecimal?,
     ): InvestSellReviewState {
-        val figures = InvestSellPresenter.review(current.prepared, current.remainingSeconds, money)
+        val figures = InvestSellPresenter.review(current.prepared, current.remainingSeconds, money, zecPrice)
         val isExpired = current.remainingSeconds <= 0
         return InvestSellReviewState(
             authorisation = figures.authorisation,
@@ -377,7 +391,7 @@ internal class InvestSellVM(
             primaryButton =
                 ButtonState(
                     text = stringRes(if (isExpired) R.string.invest_review_refresh else R.string.invest_sell_confirm),
-                    isEnabled = !current.isBusy,
+                    isEnabled = !current.isBusy && (isExpired || !current.isBlocked),
                     onClick = if (isExpired) ::onRefreshPrice else ::onConfirm,
                 ),
             isBusy = current.isBusy,
@@ -407,42 +421,87 @@ internal class InvestSellVM(
     }
 
     private fun onConfirm() {
-        val current = review.value ?: return
-        if (current.isBusy || current.remainingSeconds <= 0) return
-        // Busy until executeSell returns: the engine refuses a second sale of the same stock meanwhile.
+        val current = review.value
+        if (current == null || current.isBusy || current.isBlocked) return
+        // The clock, not the last countdown tick: the price may have lapsed since the sheet last redrew.
+        if (isExpired(current.prepared)) {
+            review.update { it?.copy(remainingSeconds = 0) }
+            return
+        }
+        // Busy until executeSell returns: a second tap does nothing, and the engine refuses a second sale anyway.
         review.update { it?.copy(isBusy = true, error = null) }
         viewModelScope.launch {
             investCatching { sellRepository.executeSell(current.prepared) }
                 .onSuccess { depositAddress ->
                     closeReview()
-                    navigationRouter.replace(
-                        InvestSellProgressArgs(
-                            depositAddress = depositAddress,
-                            assetId = asset.assetId,
-                            usdAmount = current.prepared.usdIn.toPlainString(),
-                        ),
-                    )
-                }.onFailure(::onExecuteFailed)
+                    navigationRouter.replace(progressArgs(depositAddress, current.prepared))
+                }.onFailure { e -> onExecuteFailed(e, current) }
         }
     }
 
-    private fun onExecuteFailed(e: Throwable) {
+    private suspend fun onExecuteFailed(
+        e: Throwable,
+        current: Review,
+    ) {
         Twig.warn(e) { "InvestSellVM: executeSell did not complete" }
-        when (e) {
-            is BiometricsCancelledException -> {
+        when {
+            e is BiometricsCancelledException -> {
                 review.update { it?.copy(isBusy = false) }
             }
 
-            is SellIntentRefusedException -> {
+            e is SellIntentRefusedException -> {
                 closeReview()
                 form.update { it.copy(isRefused = true) }
             }
 
+            // The prompt can outlast the held price: then it's a fresh price the user needs, not an error.
+            isExpired(current.prepared) -> {
+                review.update { it?.copy(isBusy = false, remainingSeconds = 0) }
+            }
+
             else -> {
-                review.update { it?.copy(isBusy = false, error = stringRes(R.string.invest_sell_review_failed)) }
+                afterUncertainFailure(current)
             }
         }
     }
+
+    // Anything else may have submitted the intent. If the engine lists this sale now, follow it; if another trade
+    // of the stock refused it, nothing was signed; otherwise close the sheet and say it didn't complete.
+    private suspend fun afterUncertainFailure(current: Review) {
+        val trades = investCatching { investRepository.pendingTrades.first() }.getOrNull()
+        val ours = trades?.firstOrNull { it.depositAddress == current.prepared.depositAddress }
+        val other = trades?.firstOrNull { it.assetId == asset.assetId }
+        when {
+            ours != null -> {
+                closeReview()
+                navigationRouter.replace(progressArgs(ours.depositAddress, current.prepared))
+            }
+
+            other != null -> {
+                review.update {
+                    it?.copy(
+                        isBusy = false,
+                        isBlocked = true,
+                        error = stringRes(R.string.invest_trade_in_flight, asset.name),
+                    )
+                }
+            }
+
+            else -> {
+                closeReview()
+                quote.update { SellQuote.Failed(stringRes(R.string.invest_sell_review_failed)) }
+            }
+        }
+    }
+
+    private fun progressArgs(
+        depositAddress: String,
+        prepared: PreparedSell,
+    ) = InvestSellProgressArgs(
+        depositAddress = depositAddress,
+        assetId = asset.assetId,
+        usdAmount = prepared.usdIn.toPlainString(),
+    )
 
     private fun onDismissReview() {
         if (review.value?.isBusy == true) return

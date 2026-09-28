@@ -16,7 +16,6 @@ import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
 import co.electriccoin.zcash.ui.common.provider.BridgeAuthorizationCancelledException
 import co.electriccoin.zcash.ui.common.repository.BiometricsCancelledException
-import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
@@ -26,12 +25,10 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
-import co.electriccoin.zcash.ui.screen.invest.common.InvestPendingTrades
-import co.electriccoin.zcash.ui.screen.invest.common.InvestTradeInProgressState
-import co.electriccoin.zcash.ui.screen.invest.common.PendingTrade
+import co.electriccoin.zcash.ui.screen.invest.common.TradeBlock
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
-import co.electriccoin.zcash.ui.screen.invest.common.progressRoute
 import co.electriccoin.zcash.ui.screen.invest.common.toInvestMessage
+import co.electriccoin.zcash.ui.screen.invest.common.toState
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -42,6 +39,7 @@ import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -52,11 +50,13 @@ import kotlin.time.Clock
 import kotlin.time.toJavaInstant
 
 /**
- * I5 and its review sheet I6. The amount is in USD; a dry quote runs once typing has stopped for
- * [AMOUNT_SETTLE_DELAY_MS]. "Review" fetches a live quote the repository has checked against the request, and the
- * sheet holds it until [PreparedBuy.expiresAt]; after that the only way on is a fresh one. Confirming hands the
- * quote to the repository, which runs the existing authenticated send; a cancelled authentication leaves the user
- * on the sheet.
+ * I5 and its review sheet I6. The amount is typed in the user's currency and quoted in USD once typing has stopped
+ * for [AMOUNT_SETTLE_DELAY_MS]. "Review" fetches a live quote the repository has checked against the request, and
+ * the sheet holds it until [PreparedBuy.expiresAt]; after that the only way on is a fresh one.
+ *
+ * Confirming hands the quote to the repository, which runs the existing authenticated send. Only a cancelled
+ * prompt, an expired price or a refusal made before anything was sent leaves the user on the sheet; any other
+ * failure may have sent ZEC, so the sheet closes and, if the engine now lists the buy, its progress screen opens.
  */
 @Suppress("TooManyFunctions")
 internal class InvestBuyVM(
@@ -65,8 +65,6 @@ internal class InvestBuyVM(
     accountDataSource: AccountDataSource,
     swapRepository: SwapRepository,
     currencyProvider: InvestCurrencyProvider,
-    pendingTrades: InvestPendingTrades,
-    private val keystoneProposalRepository: KeystoneProposalRepository,
     private val navigationRouter: NavigationRouter,
     private val clock: Clock,
 ) : ViewModel() {
@@ -79,8 +77,12 @@ internal class InvestBuyVM(
 
     private data class Review(
         val prepared: PreparedBuy,
+        /** The USD asked for at review, which the progress screen shows (not a recomputation at a later rate). */
+        val usd: BigDecimal,
         val remainingSeconds: Long,
         val isBusy: Boolean = false,
+        /** Refused because another trade of the stock is pending: nothing was sent, and Confirm stays off. */
+        val isBlocked: Boolean = false,
         val error: StringResource? = null,
     )
 
@@ -105,28 +107,25 @@ internal class InvestBuyVM(
     private val currency =
         currencyProvider.observe().stateIn(viewModelScope, SharingStarted.Eagerly, InvestCurrency.USD)
 
-    // The engine refuses a buy while a sale of the same stock is pending (and one buy is enough at a time).
-    private val tradeInFlight =
-        pendingTrades
-            .observe()
-            .map { trades -> trades.firstOrNull { it.assetId == asset.assetId } }
+    private val tradeBlock =
+        investRepository.pendingTrades
+            .map { TradeBlock.of(it, asset) }
             .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     init {
         // collectLatest cancels the previous block, so the leading delay is the debounce: one quote per pause.
+        // The currency is part of the key, so a new exchange rate re-asks for the same typed amount.
         viewModelScope.launch {
-            amount
-                .map { it.amount }
+            combine(amount.map { it.amount }, currency) { local, money -> local?.let(money::toUsd) }
                 .distinctUntilChanged()
-                .collectLatest { local ->
-                    if (local == null || local.signum() <= 0) {
+                .collectLatest { usd ->
+                    if (usd == null || usd.signum() <= 0) {
                         quote.update { BuyQuote.Idle }
                         return@collectLatest
                     }
-                    val isEnough = usdOf(local) >= InvestRepository.MINIMUM_USD
-                    quote.update { if (isEnough) BuyQuote.Loading else BuyQuote.Idle }
+                    quote.update { if (usd >= InvestRepository.MINIMUM_USD) BuyQuote.Loading else BuyQuote.Idle }
                     delay(AMOUNT_SETTLE_DELAY_MS)
-                    requestEstimate(local)
+                    requestEstimate(usd)
                 }
         }
     }
@@ -135,11 +134,11 @@ internal class InvestBuyVM(
         combine(
             amount,
             quote,
-            combine(isRetrying, isPreparing, tradeInFlight, ::Triple),
+            combine(isRetrying, isPreparing, tradeBlock, ::Triple),
             combine(spendableZec, zecUsd, ::Wallet),
             currency,
-        ) { amt, current, (retrying, preparing, inFlight), wallet, money ->
-            buildState(amt, current, retrying, preparing, wallet, money, inFlight)
+        ) { amt, current, (retrying, preparing, block), wallet, money ->
+            buildState(amt, current, Flags(retrying, preparing, block), wallet, money)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
@@ -147,11 +146,9 @@ internal class InvestBuyVM(
                 buildState(
                     amount.value,
                     quote.value,
-                    retrying = false,
-                    preparing = false,
-                    wallet = Wallet(spendableZec.value, zecUsd.value),
-                    money = currency.value,
-                    inFlight = null,
+                    Flags(retrying = false, preparing = false, block = null),
+                    Wallet(spendableZec.value, zecUsd.value),
+                    currency.value,
                 ),
         )
 
@@ -160,22 +157,26 @@ internal class InvestBuyVM(
         val zecUsd: BigDecimal?,
     )
 
+    private data class Flags(
+        val retrying: Boolean,
+        val preparing: Boolean,
+        val block: TradeBlock?,
+    )
+
     val reviewState: StateFlow<InvestReviewState?> =
-        review
-            .map { it?.let(::buildReview) }
+        combine(review, currency) { current, money -> current?.let { buildReview(it, money) } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT), null)
 
     private fun usdOf(local: BigDecimal): BigDecimal = currency.value.toUsd(local)
 
-    private suspend fun requestEstimate(local: BigDecimal) {
-        val usd = usdOf(local)
+    private suspend fun requestEstimate(usd: BigDecimal) {
         if (usd < InvestRepository.MINIMUM_USD) {
             quote.update { BuyQuote.Ready(BuyEstimate.BelowMinimum(InvestRepository.MINIMUM_USD)) }
             return
         }
         val result = investCatching { investRepository.estimateBuy(asset, usd) }
         // A figure for an amount the user has already changed is worth nothing.
-        if (amount.value.amount != local) return
+        if (amount.value.amount?.let(::usdOf) != usd) return
         quote.update {
             result.fold(
                 onSuccess = { BuyQuote.Ready(it) },
@@ -194,11 +195,9 @@ internal class InvestBuyVM(
     private fun buildState(
         amt: NumberTextFieldInnerState,
         current: BuyQuote,
-        retrying: Boolean,
-        preparing: Boolean,
+        flags: Flags,
         wallet: Wallet,
         money: InvestCurrency,
-        inFlight: PendingTrade?,
     ): InvestBuyState {
         val estimate = (current as? BuyQuote.Ready)?.estimate
         val (notice, isDanger) = InvestBuyPresenter.notice(current, money)
@@ -214,7 +213,7 @@ internal class InvestBuyVM(
                     InvestNoPriceState(
                         body = InvestBuyPresenter.noPriceBody(asset),
                         reopen = InvestBuyPresenter.reopen(asset, clock.now().toJavaInstant()),
-                        isRetrying = retrying,
+                        isRetrying = flags.retrying,
                         onTryAgain = ::onTryAgain,
                     )
                 } else {
@@ -226,16 +225,11 @@ internal class InvestBuyVM(
             primaryButton =
                 ButtonState(
                     text = stringRes(R.string.invest_buy_review),
-                    isEnabled = estimate is BuyEstimate.Priced && !preparing && inFlight == null,
+                    isEnabled = estimate is BuyEstimate.Priced && !flags.preparing && flags.block == null,
                     onClick = ::onReview,
                 ),
-            isPreparing = preparing,
-            tradeInProgress =
-                inFlight?.let { trade ->
-                    InvestTradeInProgressState(stringRes(R.string.invest_trade_in_flight, asset.name)) {
-                        navigationRouter.forward(trade.progressRoute())
-                    }
-                },
+            isPreparing = flags.preparing,
+            tradeInProgress = flags.block?.toState(asset, navigationRouter),
             onBack = navigationRouter::back,
         )
     }
@@ -285,22 +279,23 @@ internal class InvestBuyVM(
     private fun onAmountChange(next: NumberTextFieldInnerState) = amount.update { next }
 
     private fun onTryAgain() {
-        val local = amount.value.amount ?: return
+        val usd = amount.value.amount?.let(::usdOf) ?: return
         if (isRetrying.value) return
         isRetrying.update { true }
         viewModelScope.launch {
-            requestEstimate(local)
+            requestEstimate(usd)
             isRetrying.update { false }
         }
     }
 
     private fun onReview() {
         val usd = amount.value.amount?.let(::usdOf) ?: return
-        if (isPreparing.value) return
+        // Set before launching, so a second tap while the first is still preparing does nothing.
+        if (isPreparing.value || tradeBlock.value != null) return
         isPreparing.update { true }
         viewModelScope.launch {
             investCatching { investRepository.prepareBuy(asset, usd) }
-                .onSuccess(::openReview)
+                .onSuccess { openReview(it, usd) }
                 .onFailure { e ->
                     Twig.warn(e) { "InvestBuyVM: prepareBuy failed" }
                     quote.update {
@@ -315,8 +310,11 @@ internal class InvestBuyVM(
         }
     }
 
-    private fun openReview(prepared: PreparedBuy) {
-        review.update { Review(prepared, remainingSeconds(prepared)) }
+    private fun openReview(
+        prepared: PreparedBuy,
+        usd: BigDecimal,
+    ) {
+        review.update { Review(prepared, usd, remainingSeconds(prepared)) }
         countdownJob?.cancel()
         countdownJob =
             viewModelScope.launch {
@@ -332,8 +330,13 @@ internal class InvestBuyVM(
     private fun remainingSeconds(prepared: PreparedBuy): Long =
         (prepared.expiresAt - clock.now()).inWholeSeconds.coerceAtLeast(0)
 
-    private fun buildReview(current: Review): InvestReviewState {
-        val figures = InvestBuyPresenter.review(current.prepared, current.remainingSeconds, currency.value)
+    private fun isExpired(prepared: PreparedBuy): Boolean = clock.now() >= prepared.expiresAt
+
+    private fun buildReview(
+        current: Review,
+        money: InvestCurrency,
+    ): InvestReviewState {
+        val figures = InvestBuyPresenter.review(current.prepared, current.remainingSeconds, money)
         val isExpired = current.remainingSeconds <= 0
         return InvestReviewState(
             youSend = figures.youSend,
@@ -346,7 +349,7 @@ internal class InvestBuyVM(
             primaryButton =
                 ButtonState(
                     text = stringRes(if (isExpired) R.string.invest_review_refresh else R.string.invest_review_confirm),
-                    isEnabled = !current.isBusy,
+                    isEnabled = !current.isBusy && (isExpired || !current.isBlocked),
                     onClick = if (isExpired) ::onRefreshPrice else ::onConfirm,
                 ),
             isBusy = current.isBusy,
@@ -360,8 +363,8 @@ internal class InvestBuyVM(
         if (current.isBusy) return
         review.update { it?.copy(isBusy = true, error = null) }
         viewModelScope.launch {
-            investCatching { investRepository.prepareBuy(asset, current.prepared.usdAmountRequested()) }
-                .onSuccess(::openReview)
+            investCatching { investRepository.prepareBuy(asset, current.usd) }
+                .onSuccess { openReview(it, current.usd) }
                 .onFailure { e ->
                     Twig.warn(e) { "InvestBuyVM: refreshing the price failed" }
                     review.update { it?.copy(isBusy = false, error = e.toInvestMessage()) }
@@ -370,44 +373,77 @@ internal class InvestBuyVM(
     }
 
     private fun onConfirm() {
-        val current = review.value ?: return
-        if (current.isBusy || current.remainingSeconds <= 0) return
-        // Busy until executeBuy returns: a second call for the same quote is refused ("already being paid").
+        val current = review.value
+        if (current == null || current.isBusy || current.isBlocked) return
+        // The clock, not the last countdown tick: the price may have lapsed since the sheet last redrew.
+        if (isExpired(current.prepared)) {
+            review.update { it?.copy(remainingSeconds = 0) }
+            return
+        }
+        // Busy until executeBuy returns: a second tap does nothing, and the engine refuses a second payment anyway.
         review.update { it?.copy(isBusy = true, error = null) }
         viewModelScope.launch {
-            // Keeps this screen (and this coroutine) alive while a Keystone signs over the QR screen.
-            keystoneProposalRepository.signReturnRoute = InvestBuyArgs::class
-            val result =
-                try {
-                    investCatching { investRepository.executeBuy(current.prepared) }
-                } finally {
-                    keystoneProposalRepository.signReturnRoute = null
-                }
-            result
+            investCatching { investRepository.executeBuy(current.prepared) }
                 .onSuccess { depositAddress ->
                     closeReview()
-                    navigationRouter.replace(
-                        InvestProgressArgs(
-                            depositAddress = depositAddress,
-                            assetId = asset.assetId,
-                            usdAmount =
-                                amount.value.amount
-                                    ?.let(::usdOf)
-                                    ?.toPlainString(),
-                        ),
-                    )
-                }.onFailure { e ->
-                    Twig.warn(e) { "InvestBuyVM: executeBuy did not complete" }
-                    val cancelled = e is BiometricsCancelledException || e is BridgeAuthorizationCancelledException
-                    review.update {
-                        it?.copy(
-                            isBusy = false,
-                            error = if (cancelled) null else stringRes(R.string.invest_review_failed),
-                        )
-                    }
-                }
+                    navigationRouter.replace(progressArgs(depositAddress, current.usd))
+                }.onFailure { e -> onExecuteFailed(e, current) }
         }
     }
+
+    private suspend fun onExecuteFailed(
+        e: Throwable,
+        current: Review,
+    ) {
+        Twig.warn(e) { "InvestBuyVM: executeBuy did not complete" }
+        when {
+            e is BridgeAuthorizationCancelledException || e is BiometricsCancelledException -> {
+                review.update { it?.copy(isBusy = false) }
+            }
+
+            isExpired(current.prepared) -> {
+                review.update { it?.copy(isBusy = false, remainingSeconds = 0) }
+            }
+
+            else -> {
+                afterUncertainFailure(current)
+            }
+        }
+    }
+
+    // Anything else may have sent ZEC. If the engine lists this buy now, follow it; if another trade of the stock
+    // refused it, nothing was sent; otherwise close the sheet and say it didn't complete.
+    private suspend fun afterUncertainFailure(current: Review) {
+        val trades = investCatching { investRepository.pendingTrades.first() }.getOrNull()
+        val ours = trades?.firstOrNull { it.depositAddress == current.prepared.quote.depositAddress.address }
+        val other = trades?.firstOrNull { it.assetId == asset.assetId }
+        when {
+            ours != null -> {
+                closeReview()
+                navigationRouter.replace(progressArgs(ours.depositAddress, current.usd))
+            }
+
+            other != null -> {
+                review.update {
+                    it?.copy(
+                        isBusy = false,
+                        isBlocked = true,
+                        error = stringRes(R.string.invest_trade_in_flight, asset.name),
+                    )
+                }
+            }
+
+            else -> {
+                closeReview()
+                quote.update { BuyQuote.Failed(stringRes(R.string.invest_review_failed)) }
+            }
+        }
+    }
+
+    private fun progressArgs(
+        depositAddress: String,
+        usd: BigDecimal,
+    ) = InvestProgressArgs(depositAddress = depositAddress, assetId = asset.assetId, usdAmount = usd.toPlainString())
 
     private fun onDismissReview() {
         if (review.value?.isBusy == true) return
@@ -419,9 +455,6 @@ internal class InvestBuyVM(
         countdownJob = null
         review.update { null }
     }
-
-    // The amount the user asked for is what a refreshed quote is for; the field can't change under the sheet.
-    private fun PreparedBuy.usdAmountRequested(): BigDecimal = amount.value.amount?.let(::usdOf) ?: usdOut
 
     companion object {
         /** How long the amount has to sit still before it is worth a (Tor) round trip. */

@@ -6,22 +6,23 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.invest.model.BuyEstimate
 import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
+import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.model.SwapAsset
 import co.electriccoin.zcash.ui.common.model.WalletAccount
-import co.electriccoin.zcash.ui.common.repository.BiometricsCancelledException
-import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
+import co.electriccoin.zcash.ui.common.provider.BridgeAuthorizationCancelledException
 import co.electriccoin.zcash.ui.common.repository.SwapAssetsData
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.chat.SupportChatArgs
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyArgs
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyState
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyVM
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestReviewState
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
-import co.electriccoin.zcash.ui.screen.invest.common.PendingTrade
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
 import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressArgs
 import io.mockk.every
@@ -29,6 +30,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -41,6 +43,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import java.io.IOException
 import java.math.BigDecimal
 import java.util.Locale
 import kotlin.test.AfterTest
@@ -51,6 +54,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
@@ -134,7 +138,7 @@ class InvestBuyVMTest {
         runTest {
             val fixture = fixture()
             fixture.repo.onEstimate = { _, _ -> PRICED }
-            pending.value = listOf(PendingTrade("0xsale", NVIDIA.assetId, isSale = true))
+            fixture.repo.pendingTrades.value = listOf(PendingTrade("0xsale", NVIDIA.assetId, isSale = true))
 
             fixture.type("100")
             advanceUntilIdle()
@@ -276,7 +280,7 @@ class InvestBuyVMTest {
             val fixture = fixture()
             fixture.repo.onEstimate = { _, _ -> PRICED }
             fixture.repo.onPrepare = { asset, _ -> preparedBuy(asset, fixture.now() + 10.minutes) }
-            fixture.repo.onExecute = { throw BiometricsCancelledException() }
+            fixture.repo.onExecute = { throw BridgeAuthorizationCancelledException() }
 
             fixture.openReview().primaryButton.onClick()
             advanceTimeBy(100)
@@ -285,10 +289,173 @@ class InvestBuyVMTest {
             val review = assertNotNull(fixture.reviewState())
             assertFalse(review.isBusy)
             assertNull(review.errorText)
+            assertTrue(review.primaryButton.isEnabled)
             assertEquals(1, fixture.repo.executeCalls.size)
             verify(exactly = 0) { fixture.router.replace(any()) }
-            verify { fixture.keystone.signReturnRoute = InvestBuyArgs::class }
-            verify { fixture.keystone.signReturnRoute = null }
+        }
+
+    @Test
+    fun `tapping Review and Confirm twice prepares and pays once`() =
+        runTest {
+            val fixture = fixture()
+            fixture.repo.onEstimate = { _, _ -> PRICED }
+            fixture.repo.onPrepare = { asset, _ ->
+                delay(1_000)
+                preparedBuy(asset, fixture.now() + 10.minutes)
+            }
+            fixture.repo.onExecute = {
+                delay(1_000)
+                "t1deposit"
+            }
+
+            fixture.type("100")
+            advanceTimeBy(InvestBuyVM.AMOUNT_SETTLE_DELAY_MS + 1)
+            runCurrent()
+            val review = fixture.vm.state.value.primaryButton
+            review.onClick()
+            review.onClick()
+            advanceTimeBy(1_100)
+            runCurrent()
+            assertEquals(1, fixture.repo.prepareCalls.size)
+
+            val confirm = fixture.reviewState()!!.primaryButton
+            confirm.onClick()
+            confirm.onClick()
+            advanceTimeBy(1_100)
+            runCurrent()
+            assertEquals(1, fixture.repo.executeCalls.size)
+        }
+
+    @Test
+    fun `an uncertain failure for a buy the engine now lists opens its progress, with the USD from review`() =
+        runTest {
+            val fixture = fixture()
+            fixture.repo.onEstimate = { _, _ -> PRICED }
+            fixture.repo.onPrepare = { asset, _ -> preparedBuy(asset, fixture.now() + 10.minutes) }
+            fixture.repo.onExecute = {
+                fixture.repo.pendingTrades.value = listOf(PendingTrade("t1deposit", NVIDIA.assetId, isSale = false))
+                throw IOException("the broadcast went quiet")
+            }
+
+            fixture.openReview().primaryButton.onClick()
+            advanceTimeBy(100)
+            runCurrent()
+
+            assertNull(fixture.reviewState())
+            verify { fixture.router.replace(InvestProgressArgs("t1deposit", NVIDIA.assetId, "100")) }
+        }
+
+    @Test
+    fun `an uncertain failure with nothing recorded closes the sheet and says it didn't complete`() =
+        runTest {
+            val fixture = fixture()
+            fixture.repo.onEstimate = { _, _ -> PRICED }
+            fixture.repo.onPrepare = { asset, _ -> preparedBuy(asset, fixture.now() + 10.minutes) }
+            fixture.repo.onExecute = { throw IOException("no route") }
+
+            fixture.openReview().primaryButton.onClick()
+            advanceTimeBy(100)
+            runCurrent()
+
+            assertNull(fixture.reviewState())
+            assertEquals(stringRes(R.string.invest_review_failed), fixture.vm.state.value.notice)
+            verify(exactly = 0) { fixture.router.replace(any()) }
+        }
+
+    @Test
+    fun `a refusal because another trade of the stock is pending keeps the sheet with Confirm off`() =
+        runTest {
+            val fixture = fixture()
+            fixture.repo.onEstimate = { _, _ -> PRICED }
+            fixture.repo.onPrepare = { asset, _ -> preparedBuy(asset, fixture.now() + 10.minutes) }
+            fixture.repo.onExecute = {
+                fixture.repo.pendingTrades.value = listOf(PendingTrade("0xsale", NVIDIA.assetId, isSale = true))
+                error("A sale of this stock is still in progress")
+            }
+
+            fixture.openReview().primaryButton.onClick()
+            advanceTimeBy(100)
+            runCurrent()
+
+            val review = assertNotNull(fixture.reviewState())
+            assertEquals(stringRes(R.string.invest_trade_in_flight, "NVIDIA"), review.errorText)
+            assertFalse(review.primaryButton.isEnabled)
+        }
+
+    @Test
+    fun `a price that lapses during the prompt asks for a fresh one instead of reporting a failure`() =
+        runTest {
+            val fixture = fixture()
+            fixture.repo.onEstimate = { _, _ -> PRICED }
+            fixture.repo.onPrepare = { asset, _ -> preparedBuy(asset, fixture.now() + 10.minutes) }
+            fixture.repo.onExecute = {
+                delay(11.minutes.inWholeMilliseconds)
+                error("The price is no longer held; prepare the buy again")
+            }
+
+            fixture.openReview().primaryButton.onClick()
+            advanceTimeBy(11.minutes.inWholeMilliseconds + 100)
+            runCurrent()
+
+            val review = assertNotNull(fixture.reviewState())
+            assertTrue(review.isExpired)
+            assertNull(review.errorText)
+            assertEquals(stringRes(R.string.invest_review_refresh), review.primaryButton.text)
+        }
+
+    @Test
+    fun `Confirm checks the clock, not the last countdown tick`() =
+        runTest {
+            val clock = SkewedClock(virtualClock())
+            val fixture = fixture(clock = clock)
+            fixture.repo.onEstimate = { _, _ -> PRICED }
+            fixture.repo.onPrepare = { asset, _ -> preparedBuy(asset, fixture.now() + 10.minutes) }
+
+            val review = fixture.openReview()
+            // The phone's clock moves past the deadline before the countdown's next tick has run.
+            clock.skew = 11.minutes
+            review.primaryButton.onClick()
+            runCurrent()
+
+            assertTrue(fixture.repo.executeCalls.isEmpty())
+            assertTrue(fixture.reviewState()!!.isExpired)
+        }
+
+    @Test
+    fun `when the trade records can't be read, Review is off and support is the way out`() =
+        runTest {
+            val fixture = fixture()
+            fixture.repo.onEstimate = { _, _ -> PRICED }
+            fixture.repo.pendingTrades.value = null
+
+            fixture.type("100")
+            advanceUntilIdle()
+
+            val blocked = assertNotNull(fixture.vm.state.value.tradeInProgress)
+            assertEquals(stringRes(R.string.invest_trades_unreadable), blocked.text)
+            assertEquals(stringRes(R.string.invest_contact_support), blocked.actionLabel)
+            assertFalse(fixture.vm.state.value.primaryButton.isEnabled)
+            blocked.onOpen()
+            verify {
+                fixture.router.forward(
+                    SupportChatArgs(prefilledMessage = "Invest can't read its trade records on my phone."),
+                )
+            }
+        }
+
+    @Test
+    fun `a new exchange rate asks again for the same typed amount`() =
+        runTest {
+            val rates = MutableStateFlow(InvestCurrency.USD)
+            val fixture = fixture(currency = { rates })
+            fixture.repo.onEstimate = { _, _ -> PRICED }
+
+            fixture.type("100")
+            advanceUntilIdle()
+            rates.value = InvestCurrency("EUR", "€", BigDecimal("0.92"))
+            advanceUntilIdle()
+
+            assertEquals(listOf(BigDecimal("100"), BigDecimal("108.69")), fixture.repo.estimateCalls)
         }
 
     @Test
@@ -328,7 +495,6 @@ class InvestBuyVMTest {
         val vm: InvestBuyVM,
         val repo: FakeInvestRepository,
         val router: NavigationRouter,
-        val keystone: KeystoneProposalRepository,
         private val scope: TestScope,
     ) {
         init {
@@ -357,13 +523,13 @@ class InvestBuyVMTest {
         }
     }
 
-    private val pending = MutableStateFlow<List<PendingTrade>>(emptyList())
-
-    private fun TestScope.fixture(currency: InvestCurrencyProvider = USD_CURRENCY): Fixture {
+    private fun TestScope.fixture(
+        currency: InvestCurrencyProvider = USD_CURRENCY,
+        clock: Clock = virtualClock(),
+    ): Fixture {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val repo = FakeInvestRepository()
         val router = mockk<NavigationRouter>(relaxed = true)
-        val keystone = mockk<KeystoneProposalRepository>(relaxed = true)
         val account =
             mockk<WalletAccount>().also { every { it.spendableShieldedBalance } returns Zatoshi(100_000_000L) }
         val accounts =
@@ -387,12 +553,10 @@ class InvestBuyVMTest {
                 accountDataSource = accounts,
                 swapRepository = swap,
                 currencyProvider = currency,
-                pendingTrades = { pending },
-                keystoneProposalRepository = keystone,
                 navigationRouter = router,
-                clock = virtualClock(),
+                clock = clock,
             )
-        return Fixture(vm, repo, router, keystone, this)
+        return Fixture(vm, repo, router, this)
     }
 
     private companion object {

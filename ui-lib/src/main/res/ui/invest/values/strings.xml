@@ -58,7 +58,6 @@
     <string name="invest_home_closed_chip">Closed</string>
     <string name="invest_home_per_share">per share</string>
     <string name="invest_home_last_price">last price</string>
-    <string name="invest_home_pending_title">Buy in progress</string>
     <string name="invest_home_pending_subtitle">See where it is</string>
     <string name="invest_buy_title">Buy %1$s</string>
     <string name="invest_buy_amount_label">Amount to invest</string>
@@ -120,8 +119,8 @@
     <string name="invest_progress_held_subtitle">%1$s is in your private account.</string>
     <string name="invest_progress_held_subtitle_unknown">Your stock is in your private account.</string>
     <string name="invest_progress_refunded_title">Buy refunded</string>
-    <string name="invest_progress_refunded_subtitle">The buy didn\'t go through. %1$s is back in your shielded balance.</string>
-    <string name="invest_progress_refunded_subtitle_unknown">The buy didn\'t go through. Your ZEC is back in your shielded balance.</string>
+    <string name="invest_progress_refunded_subtitle">The buy didn\'t go through. %1$s is on its way to your shielded balance.</string>
+    <string name="invest_progress_refunded_subtitle_unknown">The buy didn\'t go through. Your ZEC is on its way to your shielded balance.</string>
     <string name="invest_progress_attention_title">Buy needs attention</string>
     <string name="invest_progress_attention_body">Something went wrong on NEAR Intents. Your reference is %1$s. Contact support and we\'ll chase it.</string>
     <string name="invest_progress_check_again">Check again</string>
@@ -182,8 +181,8 @@
     <string name="invest_sell_step_returned">Returned to your private account</string>
     <string name="invest_sell_step_not_sold">Not sold</string>
     <string name="invest_sell_sent_title">ZEC received</string>
-    <string name="invest_sell_sent_subtitle">%1$s is in your shielded balance.</string>
-    <string name="invest_sell_sent_subtitle_unknown">Your ZEC is in your shielded balance.</string>
+    <string name="invest_sell_sent_subtitle">%1$s is on its way to your shielded balance.</string>
+    <string name="invest_sell_sent_subtitle_unknown">Your ZEC is on its way to your shielded balance.</string>
     <string name="invest_sell_not_sold_title">Sale didn\'t go through</string>
     <string name="invest_sell_returned_subtitle">Your %1$s is back in your private account.</string>
     <string name="invest_sell_returned_subtitle_unknown">Your stock is back in your private account.</string>
@@ -194,4 +193,8 @@
     <string name="invest_sell_too_small">Too small to sell: this holding is worth less than the fees.</string>
     <string name="invest_home_buying">Buying…</string>
     <string name="invest_trade_see_it">See the trade</string>
+    <string name="invest_trades_unreadable">Invest can\'t read its trade records right now. Contact support.</string>
+    <string name="invest_home_pending_buy_title">Buy of %1$s in progress</string>
+    <string name="invest_sell_zec_with_value">≈ %1$s (%2$s)</string>
+    <string name="invest_sell_zec_with_value_exact">%1$s (%2$s)</string>
 </resources>

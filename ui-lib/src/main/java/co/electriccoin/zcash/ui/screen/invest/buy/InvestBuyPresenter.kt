@@ -120,7 +120,6 @@ internal object InvestBuyPresenter {
                 prepared.usdOut
                     .multiply(prepared.unitsOutMin)
                     .divide(prepared.unitsOutExpected, MathContext.DECIMAL64)
-                    .setScale(2, RoundingMode.DOWN)
             } else {
                 BigDecimal.ZERO
             }
@@ -129,7 +128,7 @@ internal object InvestBuyPresenter {
             atLeast =
                 stringRes(
                     R.string.invest_buy_you_get_value_exact,
-                    money.format(atLeastUsd),
+                    money.formatAtLeast(atLeastUsd),
                     InvestFormat.units(prepared.unitsOutMin, ticker),
                 ),
             expected =

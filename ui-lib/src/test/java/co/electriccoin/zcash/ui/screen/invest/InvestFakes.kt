@@ -5,22 +5,29 @@ import co.electriccoin.zcash.ui.common.invest.model.BuyProgress
 import co.electriccoin.zcash.ui.common.invest.model.Holdings
 import co.electriccoin.zcash.ui.common.invest.model.InvestAsset
 import co.electriccoin.zcash.ui.common.invest.model.InvestMarket
+import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import co.electriccoin.zcash.ui.common.invest.model.PreparedBuy
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettings
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepository
+import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollower
+import co.electriccoin.zcash.ui.common.model.DynamicSwapAddress
 import co.electriccoin.zcash.ui.common.model.SwapQuote
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.TestScope
 import java.math.BigDecimal
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
@@ -28,7 +35,11 @@ import kotlin.time.Instant
 internal class FakeInvestRepository : InvestRepository {
     override val market = MutableStateFlow<InvestMarket?>(null)
     override val holdings = MutableStateFlow<Holdings?>(null)
-    override val pendingBuys = MutableStateFlow<List<String>>(emptyList())
+
+    /** Null stands for trade records that can't be read. */
+    override val pendingTrades = MutableStateFlow<List<PendingTrade>?>(emptyList())
+    override val pendingBuys: Flow<List<String>> =
+        pendingTrades.map { trades -> trades.orEmpty().filterNot { it.isSale }.map { it.depositAddress } }
 
     var onRefreshMarket: suspend () -> Unit = {}
     var onRefreshHoldings: suspend () -> Unit = {}
@@ -82,6 +93,21 @@ internal class FakeInvestRepository : InvestRepository {
     }
 }
 
+/** Counts who is following; never returns, like the real one, until the caller's scope ends. */
+internal class FakeInvestTradeFollower : InvestTradeFollower {
+    var followers = 0
+        private set
+
+    override suspend fun followPendingTrades(): Nothing {
+        followers++
+        try {
+            awaitCancellation()
+        } finally {
+            followers--
+        }
+    }
+}
+
 internal class FakeInvestSettingsRepository(
     initial: InvestSettings = InvestSettings(),
 ) : InvestSettingsRepository {
@@ -103,6 +129,15 @@ internal class FakeInvestSettingsRepository(
     }
 }
 
+/** Virtual time plus a [skew] a test can set, as when the phone's clock jumps between two countdown ticks. */
+internal class SkewedClock(
+    private val base: Clock,
+) : Clock {
+    var skew: Duration = Duration.ZERO
+
+    override fun now(): Instant = base.now() + skew
+}
+
 /** Virtual time as wall-clock time, so countdowns follow `advanceTimeBy`. */
 @OptIn(ExperimentalCoroutinesApi::class)
 internal fun TestScope.virtualClock(start: Instant = Instant.fromEpochMilliseconds(START_MILLIS)): Clock =
@@ -114,6 +149,7 @@ internal fun preparedBuy(
     asset: InvestAsset,
     expiresAt: Instant,
     refundFeeZec: BigDecimal? = BigDecimal("0.00032"),
+    depositAddress: String = "t1deposit",
 ) = PreparedBuy(
     asset = asset,
     zecIn = BigDecimal("0.06478"),
@@ -124,7 +160,11 @@ internal fun preparedBuy(
     refundFeeZec = refundFeeZec,
     etaSeconds = 470,
     expiresAt = expiresAt,
-    quote = mockk<SwapQuote>(relaxed = true),
+    // Delegation rather than stubbing: mockk mishandles a value class returned through an interface-typed property.
+    quote =
+        object : SwapQuote by mockk<SwapQuote>(relaxed = true) {
+            override val depositAddress = DynamicSwapAddress(depositAddress)
+        },
 )
 
 internal val USD_CURRENCY = InvestCurrencyProvider { flowOf(InvestCurrency.USD) }

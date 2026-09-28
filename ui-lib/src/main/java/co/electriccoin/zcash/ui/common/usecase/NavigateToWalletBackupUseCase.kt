@@ -6,7 +6,15 @@ import co.electriccoin.zcash.ui.screen.walletbackup.WalletBackup
 class NavigateToWalletBackupUseCase(
     private val navigationRouter: NavigationRouter,
 ) {
-    operator fun invoke(isOpenedFromSeedBackupInfo: Boolean) {
-        navigationRouter.forward(WalletBackup(isOpenedFromSeedBackupInfo = isOpenedFromSeedBackupInfo))
+    operator fun invoke(
+        isOpenedFromSeedBackupInfo: Boolean,
+        returnToInvestIntro: Boolean = false,
+    ) {
+        navigationRouter.forward(
+            WalletBackup(
+                isOpenedFromSeedBackupInfo = isOpenedFromSeedBackupInfo,
+                returnToInvestIntro = returnToInvestIntro,
+            ),
+        )
     }
 }

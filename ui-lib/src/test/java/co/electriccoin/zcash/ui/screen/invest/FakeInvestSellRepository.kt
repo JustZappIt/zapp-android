@@ -6,19 +6,15 @@ import co.electriccoin.zcash.ui.common.invest.model.SellAmount
 import co.electriccoin.zcash.ui.common.invest.model.SellEstimate
 import co.electriccoin.zcash.ui.common.invest.model.SellProgress
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSellRepository
-import co.electriccoin.zcash.ui.screen.invest.common.InvestPendingTrades
-import co.electriccoin.zcash.ui.screen.invest.common.PendingTrade
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.map
 import java.math.BigDecimal
 import kotlin.time.Instant
 
 /** A scripted [InvestSellRepository]: each call is recorded and answered by the lambda the test sets. */
 internal class FakeInvestSellRepository : InvestSellRepository {
-    val pending = MutableStateFlow<List<PendingTrade>>(emptyList())
-    override val pendingSells: Flow<List<String>> = pending.map { list -> list.map { it.depositAddress } }
+    override val pendingSells: Flow<List<String>> = MutableStateFlow(emptyList())
 
     var onEstimate: suspend (InvestAsset, SellAmount) -> SellEstimate = { _, _ -> SellEstimate.NoPrice }
     var onPrepare: suspend (InvestAsset, SellAmount) -> PreparedSell = { _, _ -> error("no prepare scripted") }
@@ -29,9 +25,6 @@ internal class FakeInvestSellRepository : InvestSellRepository {
     val prepareCalls = mutableListOf<SellAmount>()
     val executeCalls = mutableListOf<PreparedSell>()
     val dismissed = mutableListOf<String>()
-
-    /** The pending-trades view the screens read, backed by the same list as [pendingSells]. */
-    val pendingTrades = InvestPendingTrades { pending }
 
     override suspend fun estimateSell(
         asset: InvestAsset,

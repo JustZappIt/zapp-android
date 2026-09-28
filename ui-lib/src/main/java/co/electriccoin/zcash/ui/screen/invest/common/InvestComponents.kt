@@ -312,7 +312,7 @@ internal fun InvestNotice(
     }
 }
 
-/** "A trade of NVIDIA is in progress" with "See it", which opens that trade (and its support options if stuck). */
+/** Why Buy or Sell is off, with the way forward: the pending trade, or support when the records can't be read. */
 @Composable
 internal fun InvestTradeInProgressNotice(
     state: InvestTradeInProgressState,
@@ -320,7 +320,7 @@ internal fun InvestTradeInProgressNotice(
 ) {
     InvestNotice(body = state.text.getValue(), modifier = modifier) {
         ZappButton(
-            text = stringResource(R.string.invest_trade_see_it),
+            text = state.actionLabel.getValue(),
             variant = ZappButtonVariant.Ghost,
             modifier = Modifier.weight(1f),
             onClick = state.onOpen,

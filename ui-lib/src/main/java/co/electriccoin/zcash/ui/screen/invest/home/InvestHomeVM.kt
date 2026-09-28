@@ -10,8 +10,10 @@ import co.electriccoin.zcash.ui.common.invest.model.Holdings
 import co.electriccoin.zcash.ui.common.invest.model.InvestAsset
 import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.invest.model.InvestMarket
+import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import co.electriccoin.zcash.ui.common.invest.model.TradingSchedule
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
+import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollower
 import co.electriccoin.zcash.ui.common.usecase.IsTorEnabledUseCase
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -19,13 +21,12 @@ import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyArgs
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
-import co.electriccoin.zcash.ui.screen.invest.common.InvestPendingTrades
-import co.electriccoin.zcash.ui.screen.invest.common.PendingTrade
+import co.electriccoin.zcash.ui.screen.invest.common.InvestSession
 import co.electriccoin.zcash.ui.screen.invest.common.UsMarketHours
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
 import co.electriccoin.zcash.ui.screen.invest.common.progressRoute
 import co.electriccoin.zcash.ui.screen.invest.common.toInvestMessage
-import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
+import co.electriccoin.zcash.ui.screen.invest.common.unreadableRecordsState
 import co.electriccoin.zcash.ui.screen.invest.section.HoldingTrade
 import co.electriccoin.zcash.ui.screen.invest.section.InvestHoldingRowState
 import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellArgs
@@ -51,12 +52,12 @@ internal class InvestHomeVM(
     private val investRepository: InvestRepository,
     isTorEnabled: IsTorEnabledUseCase,
     currencyProvider: InvestCurrencyProvider,
-    pendingTrades: InvestPendingTrades,
+    tradeFollower: InvestTradeFollower,
+    private val session: InvestSession,
     private val navigationRouter: NavigationRouter,
     private val clock: Clock,
 ) : ViewModel() {
     private data class Status(
-        val isTorBannerDismissed: Boolean = false,
         val marketError: StringResource? = null,
         val holdingsFailed: Boolean = false,
     )
@@ -73,44 +74,42 @@ internal class InvestHomeVM(
     init {
         viewModelScope.launch { refreshMarket() }
         viewModelScope.launch { refreshHoldings() }
+        // Settles pending trades (and unlocks their stocks) while Invest is on screen, progress screen or not.
+        viewModelScope.launch { tradeFollower.followPendingTrades() }
     }
 
     val state: StateFlow<InvestHomeState> =
         combine(
             investRepository.market,
             investRepository.holdings,
-            investRepository.pendingBuys,
-            isTorEnabled.observe(),
-            combine(status, currency, pendingTrades.observe()) { current, _, trades -> current to trades },
-        ) { market, holdings, pending, torOn, (current, trades) ->
-            buildState(market, holdings, Pending(pending, trades), torOn, current)
+            investRepository.pendingTrades,
+            combine(isTorEnabled.observe(), session.isTorBannerDismissed) { torOn, dismissed -> torOn || dismissed },
+            combine(status, currency) { current, _ -> current },
+        ) { market, holdings, trades, hideTorBanner, current ->
+            buildState(market, holdings, trades, hideTorBanner, current)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-            initialValue = buildState(null, null, Pending(emptyList(), emptyList()), torOn = true, current = Status()),
+            initialValue = buildState(null, null, emptyList(), hideTorBanner = true, current = Status()),
         )
-
-    private data class Pending(
-        val buys: List<String>,
-        val trades: List<PendingTrade>,
-    ) {
-        val sales: List<PendingTrade> get() = trades.filter { it.isSale }
-    }
 
     private fun buildState(
         market: InvestMarket?,
         holdings: Holdings?,
-        pending: Pending,
-        torOn: Boolean,
+        trades: List<PendingTrade>?,
+        hideTorBanner: Boolean,
         current: Status,
     ): InvestHomeState {
-        val trading = pending.trades.associateBy { it.assetId }
+        val trading = trades.orEmpty().associateBy { it.assetId }
         market?.assets?.forEach { asset -> asset.usdPrice?.let { lastPrices[asset.asset.assetId] = it } }
         val now = clock.now().toJavaInstant()
         return InvestHomeState(
-            summary = holdings?.let { summaryOf(it, isStale = it.isStale || current.holdingsFailed, trading) },
+            summary =
+                holdings?.let {
+                    summaryOf(it, isStale = it.isStale || current.holdingsFailed, trading, canSell = trades != null)
+                },
             torBanner =
-                if (torOn || current.isTorBannerDismissed) {
+                if (hideTorBanner) {
                     null
                 } else {
                     InvestTorBannerState(onTurnOn = ::onTurnOnTor, onDismiss = ::onDismissTorBanner)
@@ -122,15 +121,8 @@ internal class InvestHomeVM(
                     val reopens = InvestFormat.localDayTime(UsMarketHours.nextRegularOpen(now))
                     stringRes(R.string.invest_home_market_banner, reopens)
                 },
-            pendingBuys = pending.buys.map { InvestPendingBuyRow(it) { onPendingBuyClick(it) } },
-            pendingSales =
-                pending.sales.map { sale ->
-                    InvestPendingSaleRow(
-                        depositAddress = sale.depositAddress,
-                        name = InvestAssets.find(sale.assetId)?.name,
-                        onClick = { onPendingSaleClick(sale) },
-                    )
-                },
+            pendingTrades = trades.orEmpty().map(::pendingRow),
+            recordsUnreadable = if (trades == null) unreadableRecordsState(navigationRouter) else null,
             groups = groupsOf(market, weekdaysOpen = UsMarketHours.isWeekdayWindowOpen(now)),
             marketError = current.marketError.takeIf { market == null },
             onRetryMarket = ::onRetryMarket,
@@ -142,6 +134,8 @@ internal class InvestHomeVM(
         holdings: Holdings,
         isStale: Boolean,
         trading: Map<String, PendingTrade>,
+        /** False when the trade records can't be read: then no stock can be sold. */
+        canSell: Boolean,
     ) = InvestHomeSummary(
         total = holdings.totalUsd?.let { stringRes(currency.value.format(it)) },
         rows =
@@ -159,7 +153,7 @@ internal class InvestHomeVM(
                         trading[holding.asset.assetId]?.let { trade ->
                             HoldingTrade(trade.isSale) { navigationRouter.forward(trade.progressRoute()) }
                         },
-                    onSell = { onSellClick(holding.asset) }.takeIf { holding.asset.assetId !in trading },
+                    onSell = { onSellClick(holding.asset) }.takeIf { canSell && holding.asset.assetId !in trading },
                 )
             },
         updatedAtEpochMillis = holdings.updatedAt.toEpochMilliseconds(),
@@ -237,14 +231,21 @@ internal class InvestHomeVM(
 
     private fun onTurnOnTor() = navigationRouter.forward(TorSettingsArgs)
 
-    private fun onDismissTorBanner() = status.update { it.copy(isTorBannerDismissed = true) }
-
-    private fun onPendingBuyClick(depositAddress: String) =
-        navigationRouter.forward(InvestProgressArgs(depositAddress = depositAddress))
+    private fun onDismissTorBanner() = session.isTorBannerDismissed.update { true }
 
     private fun onStockClick(asset: InvestAsset) = navigationRouter.forward(InvestBuyArgs(assetId = asset.assetId))
 
     private fun onSellClick(asset: InvestAsset) = navigationRouter.forward(InvestSellArgs(assetId = asset.assetId))
 
-    private fun onPendingSaleClick(sale: PendingTrade) = navigationRouter.forward(sale.progressRoute())
+    // Each row names its stock: the trades come with it.
+    private fun pendingRow(trade: PendingTrade): InvestPendingTradeRow {
+        val name = InvestAssets.find(trade.assetId)?.name
+        val title =
+            when {
+                name == null -> stringRes(R.string.invest_home_pending_sale_title_unknown)
+                trade.isSale -> stringRes(R.string.invest_home_pending_sale_title, name)
+                else -> stringRes(R.string.invest_home_pending_buy_title, name)
+            }
+        return InvestPendingTradeRow(trade.depositAddress, title) { navigationRouter.forward(trade.progressRoute()) }
+    }
 }

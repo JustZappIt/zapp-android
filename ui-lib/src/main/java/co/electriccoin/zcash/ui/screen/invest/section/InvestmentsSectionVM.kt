@@ -10,6 +10,7 @@ import co.electriccoin.zcash.ui.common.invest.model.InvestEligibility
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettings
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepository
+import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollower
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.NavigateToInvestUseCase
@@ -43,6 +44,7 @@ internal class InvestmentsSectionVM(
     settingsRepository: InvestSettingsRepository,
     accountDataSource: AccountDataSource,
     currencyProvider: InvestCurrencyProvider,
+    tradeFollower: InvestTradeFollower,
     private val navigateToInvest: NavigateToInvestUseCase,
     private val isInvestEnabled: Boolean,
 ) : ViewModel() {
@@ -78,6 +80,8 @@ internal class InvestmentsSectionVM(
                     .filter { it }
                     .collect { refreshHoldings() }
             }
+            // Settles pending trades while PAY is on screen, so a buy or sale finishes without its progress screen.
+            viewModelScope.launch { tradeFollower.followPendingTrades() }
         }
     }
 

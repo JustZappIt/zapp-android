@@ -58,7 +58,6 @@
     <string name="invest_home_closed_chip">Cerrado</string>
     <string name="invest_home_per_share">por acción</string>
     <string name="invest_home_last_price">último precio</string>
-    <string name="invest_home_pending_title">Compra en curso</string>
     <string name="invest_home_pending_subtitle">Mira en qué punto está</string>
     <string name="invest_buy_title">Comprar %1$s</string>
     <string name="invest_buy_amount_label">Cantidad a invertir</string>
@@ -120,8 +119,8 @@
     <string name="invest_progress_held_subtitle">%1$s está en tu cuenta privada.</string>
     <string name="invest_progress_held_subtitle_unknown">Tu acción está en tu cuenta privada.</string>
     <string name="invest_progress_refunded_title">Compra reembolsada</string>
-    <string name="invest_progress_refunded_subtitle">La compra no se realizó. %1$s ha vuelto a tu saldo protegido.</string>
-    <string name="invest_progress_refunded_subtitle_unknown">La compra no se realizó. Tu ZEC ha vuelto a tu saldo protegido.</string>
+    <string name="invest_progress_refunded_subtitle">La compra no se realizó. %1$s está en camino a tu saldo protegido.</string>
+    <string name="invest_progress_refunded_subtitle_unknown">La compra no se realizó. Tu ZEC está en camino a tu saldo protegido.</string>
     <string name="invest_progress_attention_title">La compra requiere atención</string>
     <string name="invest_progress_attention_body">Algo salió mal en NEAR Intents. Tu referencia es %1$s. Contacta con soporte y lo resolveremos.</string>
     <string name="invest_progress_check_again">Comprobar de nuevo</string>
@@ -182,8 +181,8 @@
     <string name="invest_sell_step_returned">Devuelta a tu cuenta privada</string>
     <string name="invest_sell_step_not_sold">No vendida</string>
     <string name="invest_sell_sent_title">ZEC recibido</string>
-    <string name="invest_sell_sent_subtitle">%1$s está en tu saldo protegido.</string>
-    <string name="invest_sell_sent_subtitle_unknown">Tu ZEC está en tu saldo protegido.</string>
+    <string name="invest_sell_sent_subtitle">%1$s está en camino a tu saldo protegido.</string>
+    <string name="invest_sell_sent_subtitle_unknown">Tu ZEC está en camino a tu saldo protegido.</string>
     <string name="invest_sell_not_sold_title">La venta no se realizó</string>
     <string name="invest_sell_returned_subtitle">Tus acciones de %1$s han vuelto a tu cuenta privada.</string>
     <string name="invest_sell_returned_subtitle_unknown">Tus acciones han vuelto a tu cuenta privada.</string>
@@ -194,4 +193,8 @@
     <string name="invest_sell_too_small">Demasiado pequeña para vender: esta posición vale menos que las comisiones.</string>
     <string name="invest_home_buying">Comprando…</string>
     <string name="invest_trade_see_it">Ver la operación</string>
+    <string name="invest_trades_unreadable">Invertir no puede leer sus registros de operaciones ahora mismo. Contacta con soporte.</string>
+    <string name="invest_home_pending_buy_title">Compra de %1$s en curso</string>
+    <string name="invest_sell_zec_with_value">≈ %1$s (%2$s)</string>
+    <string name="invest_sell_zec_with_value_exact">%1$s (%2$s)</string>
 </resources>

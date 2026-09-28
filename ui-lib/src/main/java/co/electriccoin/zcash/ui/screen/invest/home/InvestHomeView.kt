@@ -39,6 +39,7 @@ import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_SM
 import co.electriccoin.zcash.ui.screen.invest.common.InvestAssetRow
 import co.electriccoin.zcash.ui.screen.invest.common.InvestNotice
 import co.electriccoin.zcash.ui.screen.invest.common.InvestScreenFrame
+import co.electriccoin.zcash.ui.screen.invest.common.InvestTradeInProgressNotice
 import co.electriccoin.zcash.ui.screen.invest.common.InvestUpdatedLine
 import co.electriccoin.zcash.ui.screen.invest.section.InvestHoldingRowState
 
@@ -49,22 +50,14 @@ internal fun InvestHomeView(state: InvestHomeState) {
             SummaryCard(it)
             Spacer(Modifier.height(INVEST_GAP_LG.dp))
         }
-        state.pendingBuys.forEach { pending ->
-            ZappBorderedCard(padding = 0.dp) {
-                ZappRow(
-                    title = stringResource(R.string.invest_home_pending_title),
-                    subtitle = stringResource(R.string.invest_home_pending_subtitle),
-                    onClick = pending.onClick,
-                )
-            }
+        state.recordsUnreadable?.let {
+            InvestTradeInProgressNotice(it)
             Spacer(Modifier.height(INVEST_GAP_MD.dp))
         }
-        state.pendingSales.forEach { pending ->
+        state.pendingTrades.forEach { pending ->
             ZappBorderedCard(padding = 0.dp) {
                 ZappRow(
-                    title =
-                        pending.name?.let { stringResource(R.string.invest_home_pending_sale_title, it) }
-                            ?: stringResource(R.string.invest_home_pending_sale_title_unknown),
+                    title = pending.title.getValue(),
                     subtitle = stringResource(R.string.invest_home_pending_subtitle),
                     onClick = pending.onClick,
                 )
@@ -268,8 +261,8 @@ private fun PreviewHome() {
                     ),
                 torBanner = InvestTorBannerState({}, {}),
                 marketBanner = stringRes("US markets are closed. They reopen Mon 21:30 your time."),
-                pendingBuys = listOf(InvestPendingBuyRow("t1abc") {}),
-                pendingSales = emptyList(),
+                pendingTrades = listOf(InvestPendingTradeRow("t1abc", stringRes("Buy of NVIDIA in progress")) {}),
+                recordsUnreadable = null,
                 groups =
                     listOf(
                         InvestStockGroupState(

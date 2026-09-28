@@ -58,7 +58,6 @@
     <string name="invest_home_closed_chip">Tutup</string>
     <string name="invest_home_per_share">per saham</string>
     <string name="invest_home_last_price">harga terakhir</string>
-    <string name="invest_home_pending_title">Pembelian sedang diproses</string>
     <string name="invest_home_pending_subtitle">Lihat posisinya</string>
     <string name="invest_buy_title">Beli %1$s</string>
     <string name="invest_buy_amount_label">Jumlah investasi</string>
@@ -120,8 +119,8 @@
     <string name="invest_progress_held_subtitle">%1$s ada di akun privat Anda.</string>
     <string name="invest_progress_held_subtitle_unknown">Saham Anda ada di akun privat Anda.</string>
     <string name="invest_progress_refunded_title">Pembelian dikembalikan</string>
-    <string name="invest_progress_refunded_subtitle">Pembelian tidak berhasil. %1$s sudah kembali ke saldo terlindungi Anda.</string>
-    <string name="invest_progress_refunded_subtitle_unknown">Pembelian tidak berhasil. ZEC Anda sudah kembali ke saldo terlindungi Anda.</string>
+    <string name="invest_progress_refunded_subtitle">Pembelian tidak berhasil. %1$s sedang dalam perjalanan ke saldo terlindungi Anda.</string>
+    <string name="invest_progress_refunded_subtitle_unknown">Pembelian tidak berhasil. ZEC Anda sedang dalam perjalanan ke saldo terlindungi Anda.</string>
     <string name="invest_progress_attention_title">Pembelian perlu perhatian</string>
     <string name="invest_progress_attention_body">Terjadi kesalahan di NEAR Intents. Referensi Anda adalah %1$s. Hubungi dukungan dan kami akan menindaklanjutinya.</string>
     <string name="invest_progress_check_again">Periksa lagi</string>
@@ -182,8 +181,8 @@
     <string name="invest_sell_step_returned">Dikembalikan ke akun privat Anda</string>
     <string name="invest_sell_step_not_sold">Tidak terjual</string>
     <string name="invest_sell_sent_title">ZEC diterima</string>
-    <string name="invest_sell_sent_subtitle">%1$s ada di saldo terlindungi Anda.</string>
-    <string name="invest_sell_sent_subtitle_unknown">ZEC Anda ada di saldo terlindungi Anda.</string>
+    <string name="invest_sell_sent_subtitle">%1$s sedang dalam perjalanan ke saldo terlindungi Anda.</string>
+    <string name="invest_sell_sent_subtitle_unknown">ZEC Anda sedang dalam perjalanan ke saldo terlindungi Anda.</string>
     <string name="invest_sell_not_sold_title">Penjualan tidak berhasil</string>
     <string name="invest_sell_returned_subtitle">Saham %1$s Anda sudah kembali ke akun privat Anda.</string>
     <string name="invest_sell_returned_subtitle_unknown">Saham Anda sudah kembali ke akun privat Anda.</string>
@@ -194,4 +193,8 @@
     <string name="invest_sell_too_small">Terlalu kecil untuk dijual: nilai kepemilikan ini lebih kecil dari biayanya.</string>
     <string name="invest_home_buying">Membeli…</string>
     <string name="invest_trade_see_it">Lihat transaksi</string>
+    <string name="invest_trades_unreadable">Investasi tidak dapat membaca catatan transaksinya saat ini. Hubungi dukungan.</string>
+    <string name="invest_home_pending_buy_title">Pembelian %1$s sedang diproses</string>
+    <string name="invest_sell_zec_with_value">≈ %1$s (%2$s)</string>
+    <string name="invest_sell_zec_with_value_exact">%1$s (%2$s)</string>
 </resources>
