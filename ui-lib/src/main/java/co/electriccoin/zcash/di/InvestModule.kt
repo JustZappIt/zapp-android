@@ -35,7 +35,9 @@ val investModule =
         single { IntentsSaltProvider(httpClientProvider = get(), serverClock = get()) }
         singleOf(::PrivateAccountKeyProvider)
         singleOf(::InvestSettingsRepositoryImpl) bind InvestSettingsRepository::class
-        singleOf(::InvestBuyCheckpointStorageProviderImpl) bind InvestBuyCheckpointStorageProvider::class
+        // Not singleOf: its defaulted prefKey would be asked of Koin as a String.
+        single { InvestBuyCheckpointStorageProviderImpl(encryptedPreferenceProvider = get()) } bind
+            InvestBuyCheckpointStorageProvider::class
         singleOf(::InvestSellCheckpointStorageProviderImpl) bind InvestSellCheckpointStorageProvider::class
         single { InvestTradeGuard(buys = get(), sells = get()) }
         single {
