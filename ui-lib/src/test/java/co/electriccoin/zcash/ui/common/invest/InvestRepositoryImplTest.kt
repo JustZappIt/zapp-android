@@ -23,6 +23,8 @@ import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStora
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepositoryImpl
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSettings
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeGuard
 import co.electriccoin.zcash.ui.common.model.DynamicSwapAsset
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
@@ -76,6 +78,7 @@ class InvestRepositoryImplTest {
     private val api = FakeApi()
     private val wallet = FakeWallet()
     private val checkpoints = FakeCheckpoints()
+    private var residence = InvestSettings(countryCode = "AE", setupComplete = true)
     private val sellCheckpoints = MutableStateFlow<List<InvestBuyCheckpoint>>(emptyList())
     private val session = mockk<PrivateAccountSession>()
     private val keys = PrivateAccountKeyProvider(SeedPhraseSource { TEST_MNEMONIC.toCharArray() })
@@ -94,6 +97,7 @@ class InvestRepositoryImplTest {
                     coEvery { getSynchronizer() } returns mockk { coEvery { validateAddress(any()) } returns AddressType.Transparent }
                 },
             checkpoints = checkpoints,
+            settings = mockk<InvestSettingsRepository> { coEvery { get() } answers { residence } },
             trades =
                 InvestTradeGuard(
                     buys = checkpoints,
@@ -266,6 +270,21 @@ class InvestRepositoryImplTest {
                 listOf(PendingTrade(DEPOSIT, nvda.assetId, isSale = false), PendingTrade("sell-deposit", "nep141:other", isSale = true)),
                 repository.pendingTrades.first(),
             )
+        }
+
+    @Test
+    fun `after moving where Invest isn't offered, buying stops`() =
+        runTest {
+            val prepared = repository.prepareBuy(nvda, BigDecimal(100))
+            residence = residence.copy(countryCode = "CA")
+
+            assertFailsWith<IllegalStateException> { repository.prepareBuy(nvda, BigDecimal(100)) }
+            assertFailsWith<IllegalStateException> { repository.executeBuy(prepared) }
+            assertNull(wallet.checkpointsAtSend)
+
+            // A restricted country is fine once the user has attested to being a qualified investor.
+            residence = InvestSettings(countryCode = "SG", qualifiedInvestor = true, setupComplete = true)
+            repository.prepareBuy(nvda, BigDecimal(100))
         }
 
     @Test

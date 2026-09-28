@@ -65,6 +65,7 @@ val investModule =
                 synchronizerProvider = get(),
                 checkpoints = get(),
                 trades = get(),
+                settings = get(),
                 now = get<InvestServerClock>().let { clock -> { Instant.fromEpochMilliseconds(clock.nowMillis()) } },
             )
         } binds arrayOf(InvestRepository::class, InvestSwapAssetSource::class)
