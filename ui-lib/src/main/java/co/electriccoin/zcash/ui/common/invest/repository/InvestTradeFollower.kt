@@ -1,16 +1,19 @@
 package co.electriccoin.zcash.ui.common.invest.repository
 
 import co.electriccoin.zcash.ui.common.bestEffort
+import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Follows every pending buy and sale to its final state, so a trade settles (and its stock unlocks) without
@@ -31,6 +34,13 @@ internal class InvestTradeFollowerImpl(
 
     override suspend fun followPendingTrades(): Nothing = following.collect {}
 
+    private suspend fun observe(trade: PendingTrade) =
+        if (trade.isSale) {
+            sells.observeSell(trade.depositAddress).collect()
+        } else {
+            buys.observeBuy(trade.depositAddress).collect()
+        }
+
     /** One poller per pending trade; a trade that leaves the list (final, or dismissed) stops its poller. */
     private suspend fun follow() =
         coroutineScope {
@@ -41,16 +51,16 @@ internal class InvestTradeFollowerImpl(
                 pending.values.filter { it.depositAddress !in pollers }.forEach { trade ->
                     pollers[trade.depositAddress] =
                         launch {
-                            // A poller that fails stays down until the trade is listed again; the screens still poll.
-                            bestEffort("Following an Invest trade failed") {
-                                if (trade.isSale) {
-                                    sells.observeSell(trade.depositAddress).collect()
-                                } else {
-                                    buys.observeBuy(trade.depositAddress).collect()
-                                }
+                            // Polling already rides out API errors; anything else (a store error) is retried later.
+                            while (!bestEffort("Following an Invest trade failed") { observe(trade) }) {
+                                delay(RETRY_AFTER)
                             }
                         }
                 }
             }
         }
+
+    private companion object {
+        val RETRY_AFTER = 1.minutes
+    }
 }

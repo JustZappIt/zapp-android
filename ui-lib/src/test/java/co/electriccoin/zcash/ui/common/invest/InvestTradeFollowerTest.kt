@@ -21,12 +21,14 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @Suppress("MaxLineLength")
@@ -81,6 +83,23 @@ class InvestTradeFollowerTest {
             screen.cancel()
             runCurrent()
             assertEquals(listOf("buy-1", "buy-2"), cancelled)
+        }
+
+    @Test
+    fun `a poller that fails for another reason than the API is retried`() =
+        runTest {
+            var attempts = 0
+            every { sells.observeSell("sell-1") } answers {
+                flow { if (++attempts == 1) error("store unreadable") else emit(SellProgress.Sent("sell-1", null)) }
+            }
+            val follower = InvestTradeFollowerImpl(buys, sells, backgroundScope)
+            pending.value = listOf(PendingTrade("sell-1", "tsla", isSale = true))
+            backgroundScope.launch { follower.followPendingTrades() }
+            runCurrent()
+            assertEquals(1, attempts)
+
+            advanceTimeBy(61.seconds)
+            assertEquals(2, attempts)
         }
 
     @Test

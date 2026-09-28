@@ -216,11 +216,21 @@ class InvestRepositoryImplTest {
     fun `a failure that may follow a broadcast keeps the buy to resume`() =
         runTest {
             val prepared = repository.prepareBuy(nvda, BigDecimal(100))
+            api.depositAddress = "t1seconddeposit"
+            val second = repository.prepareBuy(nvda, BigDecimal(100))
             wallet.sendFailure = IllegalStateException("ZEC bridge deposit did not succeed: Partial")
 
             assertFailsWith<IllegalStateException> { repository.executeBuy(prepared) }
 
             assertEquals(listOf(DEPOSIT), checkpoints.items.value.map { it.depositAddress })
+
+            // Its outcome is unknown, so the same stock can't be paid for again until it settles, not even
+            // with another quote prepared before it failed.
+            wallet.sendFailure = null
+            wallet.checkpointsAtSend = null
+            assertFailsWith<IllegalStateException> { repository.prepareBuy(nvda, BigDecimal(100)) }
+            assertFailsWith<IllegalStateException> { repository.executeBuy(second) }
+            assertNull(wallet.checkpointsAtSend)
         }
 
     @Test
@@ -490,6 +500,7 @@ class InvestRepositoryImplTest {
         var amountInOverride: BigDecimal? = null
         var usdIn: BigDecimal? = null
         var deadline: Instant? = null
+        var depositAddress = DEPOSIT
         val statuses = ArrayDeque<SwapStatusResponseDto?>()
 
         var tokenLoads = 0
@@ -516,7 +527,7 @@ class InvestRepositoryImplTest {
                 quoteRequest = echoTamper(request),
                 quote =
                     QuoteDetails(
-                        depositAddress = if (request.dry) null else DEPOSIT,
+                        depositAddress = if (request.dry) null else depositAddress,
                         amountIn = amountInOverride ?: request.amount,
                         amountInFormatted = request.amount.movePointLeft(8),
                         amountInUsd = usdIn ?: request.amount.movePointLeft(8).multiply(BigDecimal("1543.62")),
