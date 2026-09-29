@@ -1,10 +1,13 @@
 // The host hands the page one MessagePort, then sends it JSON requests {id, method, params} and
 // reads back {id, result} or {id, error}, plus events {event, data} (scan progress, logs).
+import { reverseCost, prepareReverse } from './reverse.js';
 import * as transact from './transact.js';
 import * as wallet from './wallet.js';
 
 const INIT = 'zapp-railgun-init';
 const handlers = {
+  reverseCost,
+  prepareReverse,
   start: wallet.start,
   openWallet: wallet.openWallet,
   refresh: wallet.refresh,

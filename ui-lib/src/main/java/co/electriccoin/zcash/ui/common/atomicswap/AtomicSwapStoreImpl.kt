@@ -24,6 +24,7 @@ class AtomicSwapStoreImpl(
 ) : AtomicSwapStore {
     private val store = EncryptedJsonStore(encryptedPreferenceProvider, PREF_KEY, State.serializer(), strict = true)
     private val lock = Mutex()
+    internal val acceptanceLock = Mutex()
 
     val observeActive: Flow<AtomicSwapRecord?> = store.observe().map { it?.active }
 
@@ -36,6 +37,7 @@ class AtomicSwapStoreImpl(
     override suspend fun takeIndex(): Int =
         lock.withLock {
             val state = state()
+            check(state.nextIndex in 0 until Int.MAX_VALUE)
             store.set(state.copy(nextIndex = state.nextIndex + 1))
             state.nextIndex
         }

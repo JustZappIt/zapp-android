@@ -275,7 +275,7 @@ fun NavGraphBuilder.walletNavGraph(
     navigation<MainAppGraph>(startDestination = TabsArgs) {
         // Zapp-style bottom-tab shell — Pay, Chats, Contacts, Settings.
         composable<TabsArgs> {
-            AndroidTabs()
+            AndroidTabs(it.savedStateHandle)
 
             val showIronwoodAnnouncement by
                 walletViewModel.shouldShowIronwoodAnnouncement.collectAsStateWithLifecycle()
@@ -440,6 +440,10 @@ fun NavGraphBuilder.walletNavGraph(
         composable<DebugRailgunArgs> { DebugRailgunScreen() }
         composable<DebugAtomicSwapArgs> { DebugAtomicSwapScreen() }
         composable<PrivateUsdArgs> { PrivateUsdScreen() }
+        composable<co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseArgs> {
+            co.electriccoin.zcash.ui.screen.privateusd.reverse
+                .PrivateUsdReverseScreen()
+        }
         composable<PrivateUsdConvertArgs> { PrivateUsdConvertScreen() }
         composable<PrivateUsdProgressArgs> { PrivateUsdProgressScreen() }
         composable<PrivateUsdSendArgs> { PrivateUsdSendScreen(it.toRoute()) }

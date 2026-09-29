@@ -3,6 +3,7 @@
 
 package co.electriccoin.zcash.ui.common.privateusd
 
+import cash.z.ecc.android.sdk.model.FiatCurrency
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.TickerLocation
 import co.electriccoin.zcash.ui.design.util.stringResByCurrencyNumber
@@ -17,6 +18,7 @@ private const val MAX_TOKEN_DECIMALS = 6
 data class DollarRate(
     val symbol: String,
     val perDollar: BigDecimal,
+    val currency: FiatCurrency? = null,
 )
 
 fun BigInteger.toDecimal(decimals: Int): BigDecimal = BigDecimal(this, decimals)

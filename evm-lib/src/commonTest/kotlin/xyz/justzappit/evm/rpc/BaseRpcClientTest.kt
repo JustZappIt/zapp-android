@@ -163,6 +163,19 @@ class BaseRpcClientTest {
         }
 
     @Test
+    fun `ethGetTransactionByHash verifies known transactions and rejects mismatches`() =
+        runTest {
+            val hash = TxHash.fromHex("0x" + "01".repeat(32))
+            nextResponse = """{"jsonrpc":"2.0","id":1,"result":null}"""
+            assertNull(rpc.ethGetTransactionByHash(hash))
+            nextResponse = """{"jsonrpc":"2.0","id":1,"result":{"hash":"${hash.hex}"}}"""
+            assertEquals(hash.hex, rpc.ethGetTransactionByHash(hash)?.hash)
+            assertFailsWith<IllegalStateException> {
+                rpc.ethGetTransactionByHash(TxHash.fromHex("0x" + "02".repeat(32)))
+            }
+        }
+
+    @Test
     fun `ethGetTransactionReceipt returns null when result is null`() =
         runTest {
             nextResponse = """{"jsonrpc":"2.0","id":1,"result":null}"""

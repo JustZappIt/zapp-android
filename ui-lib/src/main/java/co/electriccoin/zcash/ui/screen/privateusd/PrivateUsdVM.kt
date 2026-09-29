@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.backToPay
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapState
 import co.electriccoin.zcash.ui.common.privateusd.DollarRate
@@ -88,9 +89,10 @@ class PrivateUsdVM(
         val balances = balance.balances
         return PrivateUsdState(
             total = balances?.let { rate.local(it.total).asPrivacySensitive() },
+            usdTotal = balances?.takeIf { rate != null }?.let { dollars(it.total).asPrivacySensitive() },
             rows = balances?.let { rows(it, rate) }.orEmpty(),
             assets = balances?.let { assets(it, rate) }.orEmpty(),
-            status = status(balance, rate),
+            status = status(balance),
             isRefreshing = balance.isRefreshing,
             refreshFailed = balance.refreshFailed,
             isEmpty = balances != null && balances.total.signum() == 0 && !swap.isUnderWay,
@@ -119,23 +121,20 @@ class PrivateUsdVM(
                 navigationRouter.forward(if (swap.isUnderWay) PrivateUsdProgressArgs else PrivateUsdConvertArgs)
             },
             onRefresh = { balanceRepository.refresh() },
-            onBack = navigationRouter::back,
+            onBack = navigationRouter::backToPay,
         )
     }
 
     private fun status(
         balance: PrivateUsdBalanceState,
-        rate: DollarRate?
     ): StringResource? {
-        val balances = balance.balances
-        val inDollars = balances?.takeIf { rate != null }?.let { dollars(it.total).asPrivacySensitive() }
         val updated =
             when {
-                balance.isRefreshing && balances == null -> stringRes(R.string.private_usd_first_load)
+                balance.isRefreshing && balance.balances == null -> stringRes(R.string.private_usd_first_load)
                 balance.isRefreshing -> stringRes(R.string.private_usd_updating)
                 else -> balance.updatedAt?.let { stringRes(R.string.private_usd_updated, time(it)) }
             }
-        return listOfNotNull(inDollars, updated).reduceOrNull { line, next -> line + " · " + next }
+        return updated
     }
 
     private fun rows(
@@ -143,11 +142,6 @@ class PrivateUsdVM(
         rate: DollarRate?
     ): List<PrivateUsdRowState> =
         listOfNotNull(
-            PrivateUsdRowState(
-                label = stringRes(R.string.private_usd_row_available),
-                amount = rate.local(balances.available).asPrivacySensitive(),
-                explanation = null,
-            ),
             balances.arriving.takeIf { it.signum() > 0 }?.let {
                 PrivateUsdRowState(
                     label = stringRes(R.string.private_usd_row_arriving),
@@ -201,7 +195,8 @@ class PrivateUsdVM(
                 listOfNotNull(
                     stringRes(R.string.private_usd_info_step_convert),
                     stringRes(R.string.private_usd_info_step_screen, screening.about()),
-                    stringRes(R.string.private_usd_info_step_send).takeIf { senders.current != null },
+                    stringRes(R.string.private_usd_info_send).takeIf { senders.current != null },
+                    stringRes(R.string.private_usd_info_withdraw).takeIf { senders.current != null },
                 ),
             notes =
                 listOfNotNull(

@@ -13,10 +13,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.ButtonState
-import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
-import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStepList
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
@@ -39,7 +37,6 @@ internal fun PrivateUsdProgressView(state: PrivateUsdProgressState) {
         primaryButton = state.primaryButton,
     ) {
         Header(state)
-        state.problem?.let { Problem(message = it.getValue(), onRetry = state.onRetry) }
         state.note?.let {
             BasicText(
                 text = it.getValue(),
@@ -49,6 +46,8 @@ internal fun PrivateUsdProgressView(state: PrivateUsdProgressState) {
         state.callOff?.let {
             ZappButton(
                 text = it.text.getValue(),
+                enabled = it.isEnabled,
+                loading = it.isLoading,
                 variant = ZappButtonVariant.Ghost,
                 modifier = Modifier.fillMaxWidth(),
                 onClick = it.onClick,
@@ -86,24 +85,6 @@ private fun Header(state: PrivateUsdProgressState) {
     }
 }
 
-@Composable
-private fun Problem(
-    message: String,
-    onRetry: () -> Unit,
-) {
-    val c = ZappTheme.colors
-    ZappBorderedCard(borderColor = c.danger, verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.md)) {
-        ZappSectionLabel(text = stringResource(R.string.convert_problem_title), color = c.danger)
-        BasicText(text = message, style = ZappTheme.typography.body.copy(color = c.text))
-        ZappButton(
-            text = stringResource(R.string.convert_problem_retry),
-            variant = ZappButtonVariant.Secondary,
-            modifier = Modifier.fillMaxWidth(),
-            onClick = onRetry,
-        )
-    }
-}
-
 @PreviewScreens
 @Composable
 private fun UnderWayPreview() =
@@ -127,8 +108,6 @@ private fun UnderWayPreview() =
                             ZappStep(stringRes("Screening"), ZappStepStatus.Pending),
                         ),
                     note = null,
-                    problem = null,
-                    onRetry = {},
                     callOff = null,
                     showsBackgroundNote = true,
                     primaryButton = null,
@@ -154,8 +133,6 @@ private fun RefundedPreview() =
                         ),
                     steps = emptyList(),
                     note = null,
-                    problem = null,
-                    onRetry = {},
                     callOff = null,
                     showsBackgroundNote = false,
                     primaryButton = ButtonState(stringRes("Try again")),

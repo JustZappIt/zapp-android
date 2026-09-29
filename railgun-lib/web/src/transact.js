@@ -21,7 +21,7 @@ const SEND_WITH_PUBLIC_WALLET = true;
 
 let gasWallet;
 
-function requireGasWallet() {
+export function requireGasWallet() {
   if (gasWallet === undefined) throw new Error('no gas account is set');
   return gasWallet;
 }
@@ -103,7 +103,7 @@ async function send(transaction) {
   return response.hash;
 }
 
-async function gasDetails(gasEstimate) {
+export async function gasDetails(gasEstimate) {
   const { network } = session();
   const fees = await requireGasWallet().provider.getFeeData();
   const evmGasType = getEVMGasTypeForTransaction(network, SEND_WITH_PUBLIC_WALLET);

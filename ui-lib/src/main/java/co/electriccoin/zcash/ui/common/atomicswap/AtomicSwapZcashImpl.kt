@@ -42,6 +42,7 @@ class AtomicSwapZcashImpl(
     private val zashiSpendingKeyDataSource: ZashiSpendingKeyDataSource,
     private val persistableWalletProvider: PersistableWalletProvider,
     private val keys: AtomicSwapKeysImpl,
+    private val store: AtomicSwapStoreImpl,
 ) : AtomicSwapZcash {
     override suspend fun chainHeight(): Long =
         withTimeout(HEIGHT_TIMEOUT) {
@@ -60,6 +61,9 @@ class AtomicSwapZcashImpl(
         val proposal =
             synchronizer.proposeTransfer(accountDataSource.getZashiAccount().sdkAccount, address, Zatoshi(zatoshi))
         check(proposal.transactionCount() == 1) { "the deposit would take more than one transaction" }
+        store.active()?.maxTotalZat?.let { maximum ->
+            check(zatoshi <= maximum - proposal.totalFeeRequired().value) { "deposit exceeds authorized amount" }
+        }
         val usk = zashiSpendingKeyDataSource.getZashiSpendingKey()
         val endpoint = persistableWalletProvider.requirePersistableWallet().endpoint
         // Once created, the transaction may be sent by the wallet on its own, so its id is the answer

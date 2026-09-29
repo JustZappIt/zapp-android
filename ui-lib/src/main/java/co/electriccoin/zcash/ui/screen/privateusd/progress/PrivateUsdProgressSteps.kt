@@ -8,8 +8,11 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployment
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapStage
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapState
+import co.electriccoin.zcash.ui.common.privateusd.ConversionCurrency
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdToken
+import co.electriccoin.zcash.ui.common.privateusd.format
+import co.electriccoin.zcash.ui.common.privateusd.toDecimal
 import co.electriccoin.zcash.ui.common.privateusd.tokenAmount
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
@@ -73,8 +76,12 @@ internal class PrivateUsdProgressSteps(
             notes = listOf(stringRes(R.string.convert_progress_info_refund)),
         )
 
-    fun amounts(record: AtomicSwapRecord): StringResource =
-        stringRes(R.string.convert_progress_amounts, stringRes(Zatoshi(record.quote.depositZat)), received(record))
+    fun amounts(record: AtomicSwapRecord, currency: ConversionCurrency?): StringResource =
+        stringRes(
+            R.string.convert_progress_amounts,
+            stringRes(Zatoshi(record.quote.depositZat)),
+            received(record, currency)
+        )
 
     fun note(
         swap: AtomicSwapState,
@@ -99,6 +106,7 @@ internal class PrivateUsdProgressSteps(
     fun result(
         record: AtomicSwapRecord,
         balance: PrivateUsdBalanceState,
+        currency: ConversionCurrency?,
     ): PrivateUsdResultState? =
         when (val outcome = record.outcome) {
             null -> {
@@ -110,10 +118,10 @@ internal class PrivateUsdProgressSteps(
                     title = stringRes(R.string.convert_result_paid_title),
                     body =
                         if (arrival(record, balance).second) {
-                            stringRes(R.string.convert_result_screened_body, received(record))
+                            stringRes(R.string.convert_result_screened_body, received(record, currency))
                         } else {
                             val screening = deployment.screeningTime.about()
-                            stringRes(R.string.convert_result_paid_body, received(record), screening)
+                            stringRes(R.string.convert_result_paid_body, received(record, currency), screening)
                         },
                     isSuccess = true,
                 )
@@ -231,8 +239,16 @@ internal class PrivateUsdProgressSteps(
             }
         }
 
-    private fun received(record: AtomicSwapRecord): StringResource =
-        tokenAmount(record.receives?.let(::BigInteger) ?: BigInteger(record.quote.amount), token, estimate = true)
+    private fun received(record: AtomicSwapRecord, currency: ConversionCurrency?): StringResource {
+        val units = record.receives?.let(::BigInteger) ?: BigInteger(record.quote.amount)
+        return if (token.isDollar) {
+            currency.format(
+                units.toDecimal(token.decimals)
+            )
+        } else {
+            tokenAmount(units, token, estimate = true)
+        }
+    }
 
     private companion object {
         val BLOCK_TIME = 75.seconds

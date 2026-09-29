@@ -28,7 +28,7 @@
     <string name="private_usd_row_processing">Processing</string>
     <string name="private_usd_row_processing_info">A send is being confirmed. These funds are available again once it settles.</string>
     <string name="private_usd_assets_title">Assets</string>
-    <string name="private_usd_action_convert">Convert ZEC</string>
+    <string name="private_usd_action_convert">Convert</string>
     <string name="private_usd_action_send">Send</string>
     <string name="private_usd_action_withdraw">Withdraw</string>
     <string name="private_usd_updated">Updated %1$s</string>
@@ -40,7 +40,7 @@
     <string name="private_usd_empty_body">Convert ZEC into dollars nobody else can see: not your balance, and not who you pay.</string>
     <string name="private_usd_send_later">Sending and withdrawing are coming soon.</string>
     <string name="private_usd_info_title">About private USD</string>
-    <string name="private_usd_info_step_convert">Convert ZEC into dollars. They land in your private balance, held on Ethereum through Railgun.</string>
+    <string name="private_usd_info_step_convert">Convert — exchange ZEC and private USD. Amounts use the local currency selected under You.</string>
     <string name="private_usd_info_step_screen">Railgun screens new funds for %1$s before they can be spent.</string>
     <string name="private_usd_info_step_send">Send them privately to a Railgun address, or withdraw them to an Ethereum address.</string>
     <string name="private_usd_info_note_private">Nobody else can see your balance, or who you pay.</string>
@@ -61,7 +61,7 @@
     <string name="private_usd_activity_out">−%1$s</string>
 
     <!-- Convert: amount -->
-    <string name="convert_title">Convert to private USD</string>
+    <string name="convert_title">Convert</string>
     <string name="convert_amount_label">Amount</string>
     <string name="convert_limits">$%1$s to $%2$s</string>
     <string name="convert_zec_available">Available</string>
@@ -69,9 +69,9 @@
     <string name="convert_network_fee">Network fee</string>
     <string name="convert_you_receive">You receive about</string>
     <string name="convert_fees">Conversion fees</string>
-    <string name="convert_fees_value">%1$s relayer + 0.25%% Railgun</string>
+    <string name="convert_fees_value">%1$s relayer · 0.25%% Railgun</string>
     <string name="convert_quote_expires">Quote refreshes in %1$s</string>
-    <string name="convert_quote_loading">Getting a quote…</string>
+    <string name="convert_quote_loading">Getting quote…</string>
     <string name="convert_insufficient">Not enough ZEC. You have %1$s available.</string>
     <string name="convert_review">Review</string>
     <string name="convert_error_maker">The market maker can\'t be reached right now. Try again in a moment.</string>
@@ -125,7 +125,6 @@
     <string name="convert_progress_info_refund">If the swap can\'t finish in time, it\'s called off and your ZEC comes back, less a small network fee.</string>
 
     <!-- Convert: needs attention -->
-    <string name="convert_problem_title">Taking longer than usual</string>
     <string name="convert_problem_relayer">Zapp can\'t reach the relayer that sends your claim. It keeps trying by itself.</string>
     <string name="convert_problem_maker">Zapp can\'t reach the market maker. It keeps trying by itself.</string>
     <string name="convert_problem_ethereum">Zapp can\'t reach Ethereum right now. It keeps trying by itself.</string>
@@ -133,7 +132,6 @@
     <string name="convert_problem_turn">The market maker holds the claim for a few minutes. Zapp claims as soon as it\'s your turn.</string>
     <string name="convert_problem_wallet">Your Zcash wallet isn\'t ready. Zapp retries once it has synced.</string>
     <string name="convert_problem_unexpected">Something went wrong. Zapp keeps trying by itself.</string>
-    <string name="convert_problem_retry">Try now</string>
 
     <!-- Convert: results -->
     <string name="convert_result_paid_title">Dollars on their way</string>
@@ -215,4 +213,60 @@
     <string name="private_usd_send_done_body">%1$s went to %2$s.</string>
     <string name="private_usd_send_view_tx">View on Etherscan</string>
     <string name="private_usd_send_failed">The send didn\'t go through, and your balance is unchanged. Try again in a moment.</string>
+    <string name="reverse_title">Private USDC → ZEC</string>
+    <string name="reverse_intro">Approve sending private USDC first. After your wallet independently confirms the full ZEC deposit, approve settlement to receive shielded ZEC.</string>
+    <string name="reverse_ready">Authorize settlement</string>
+    <string name="reverse_new">New conversion</string>
+    <string name="reverse_refresh">Check progress</string>
+    <string name="reverse_cancel">Cancel / request private refund</string>
+    <string name="reverse_rescue">Recover refund</string>
+    <string name="reverse_accepting">Preparing your receiving account</string>
+    <string name="reverse_review">Review and authorize your payment</string>
+    <string name="reverse_sending">Sending private USDC</string>
+    <string name="reverse_confirming">Confirming escrow</string>
+    <string name="reverse_receiving">Waiting for confirmed ZEC</string>
+    <string name="reverse_ready_explanation">The full ZEC deposit is confirmed and spendable. Authorize settlement to release USDC and move ZEC to your shielded wallet.</string>
+    <string name="reverse_settling">Waiting for settlement</string>
+    <string name="reverse_sweeping">Moving ZEC to your shielded wallet</string>
+    <string name="reverse_refund_wait">Refund waiting for its deadline or lock. You can request a refund now; it will proceed when allowed.</string>
+    <string name="reverse_refunding">Securing your private refund</string>
+    <string name="reverse_payout">Returning USDC to Railgun</string>
+    <string name="reverse_complete">ZEC received in your shielded wallet</string>
+    <string name="reverse_refunded">Private refund paid. Railgun screening may delay availability.</string>
+    <string name="reverse_cancelled">Conversion cancelled; no escrow payment remains</string>
+    <string name="reverse_error">Unable to complete this step. Your saved conversion will resume after reconciling the chains. A payment is never repeated because a request timed out.</string>
+    <string name="reverse_escrow">Escrow value</string>
+    <string name="reverse_railgun_fee">Railgun unshield fee</string>
+    <string name="reverse_broadcaster_fee">Broadcast fee</string>
+    <string name="reverse_gas_account">Paid separately in Sepolia ETH by your test gas account</string>
+    <string name="reverse_total">Total paid</string>
+    <string name="reverse_receive_estimate">Estimated ZEC after sweep fee</string>
+    <string name="reverse_receive_net">Net ZEC received</string>
+    <string name="reverse_refund_terms">Before settlement authorization, you can cancel. Afterwards, refunds wait for the contract deadline and lock. The refund fee is at most 0.10 USDC, plus Railgun shielding fees. Closing the app never authorizes settlement.</string>
+    <string name="reverse_usdc">%1$s USDC</string>
+    <string name="reverse_zec">%1$s ZEC</string>
+    <string name="reverse_balance_loading">Loading…</string>
+    <string name="reverse_balance_unavailable">Unavailable</string>
+    <string name="reverse_insufficient">Not enough private USDC for this amount and its fees.</string>
+    <string name="convert_asset_private_usd">Private USD</string>
+    <string name="convert_asset_zec">ZEC</string>
+    <string name="convert_swap_direction">Swap conversion direction</string>
+    <string name="convert_estimated_amount">Estimated amount</string>
+    <string name="convert_zec_includes_fee">Includes the Zcash network fee</string>
+    <string name="convert_zec_no_quote">No quote fits this amount. Try a different amount or tap Available for the maximum.</string>
+    <string name="reverse_sweep_confirmations">Zcash confirmations: %1$d</string>
+    <string name="reverse_progress_amounts">%1$s for %2$s ZEC after fees</string>
+    <string name="reverse_progress_estimate">%1$s for about %2$s ZEC after fees</string>
+    <string name="reverse_result_received">ZEC received</string>
+    <string name="reverse_result_refunded">Refund sent</string>
+    <string name="reverse_result_cancelled">Conversion cancelled</string>
+    <string name="reverse_progress_received">%1$s ZEC arrived after fees.</string>
+    <string name="reverse_step_fund">Sending private USD to escrow</string>
+    <string name="reverse_step_settle">Settling your conversion</string>
+    <string name="reverse_step_approval_detail">Your approval is needed to continue.</string>
+    <string name="convert_currency_loading">Loading rate…</string>
+    <string name="convert_local_limits">%1$s to %2$s</string>
+    <string name="private_usd_switch_currency">Switch balance currency</string>
+    <string name="private_usd_info_send">Send — transfer private USD to another Railgun address. The recipient receives it privately.</string>
+    <string name="private_usd_info_withdraw">Withdraw — move private USD to a public Ethereum address. The destination and amount are visible on Ethereum.</string>
 </resources>

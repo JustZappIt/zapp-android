@@ -35,6 +35,7 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.PRIVATE_USD_CONVERSION_EXTRA
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
 import co.electriccoin.zcash.ui.common.compose.BindCompLocalProvider
 import co.electriccoin.zcash.ui.common.compose.DisableScreenTimeout
 import co.electriccoin.zcash.ui.common.extension.setContentCompat
@@ -105,6 +106,7 @@ class MainActivity : FragmentActivity() {
     private val pendingGiftLinks: PendingGiftLinkStore by inject()
     private val identityReturns: IdentityReturnInbox by inject()
     private val atomicSwapDeployments: AtomicSwapDeployments by inject()
+    private val reverseSwapRepository: ReverseSwapRepository by inject()
     private val atomicSwapRepository: AtomicSwapRepository by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -258,12 +260,22 @@ class MainActivity : FragmentActivity() {
 
     private fun forwardPrivateUsdIntent(intent: Intent) {
         if (!intent.getBooleanExtra(PRIVATE_USD_CONVERSION_EXTRA, false)) return
+        val reverse =
+            intent.getBooleanExtra(
+                co.electriccoin.zcash.ui.common.atomicswap.PRIVATE_USD_REVERSE_EXTRA,
+                false
+            )
         intent.removeExtra(PRIVATE_USD_CONVERSION_EXTRA)
-        navigationRouter.custom { current ->
-            if (current?.destination?.hasRoute<PrivateUsdProgressArgs>() == true) {
-                null
-            } else {
-                NavigationCommand.Forward(listOf(PrivateUsdProgressArgs))
+        intent.removeExtra(co.electriccoin.zcash.ui.common.atomicswap.PRIVATE_USD_REVERSE_EXTRA)
+        if (reverse) {
+            navigationRouter.forward(co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseArgs)
+        } else {
+            navigationRouter.custom { current ->
+                if (current?.destination?.hasRoute<PrivateUsdProgressArgs>() == true) {
+                    null
+                } else {
+                    NavigationCommand.Forward(listOf(PrivateUsdProgressArgs))
+                }
             }
         }
     }
@@ -275,7 +287,10 @@ class MainActivity : FragmentActivity() {
         authenticationViewModel.runAuthenticationRequiredCheck()
         checkMigrationRecoveryOnStart()
         // A conversion Android stopped in the background picks up again here, where it may run as a service.
-        if (atomicSwapDeployments.current != null) atomicSwapRepository.resume(isForeground = true)
+        if (atomicSwapDeployments.current != null) {
+            atomicSwapRepository.resume(isForeground = true)
+            reverseSwapRepository.resume(isForeground = true)
+        }
         super.onStart()
     }
 

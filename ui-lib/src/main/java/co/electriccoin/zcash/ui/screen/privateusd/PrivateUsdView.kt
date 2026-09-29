@@ -13,11 +13,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.CallMade
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
@@ -63,11 +72,39 @@ internal fun PrivateUsdView(state: PrivateUsdState) {
 @Composable
 private fun Total(state: PrivateUsdState) {
     val c = ZappTheme.colors
+    var usdFirst by rememberSaveable { mutableStateOf(false) }
+    val primary = if (usdFirst && state.usdTotal != null) state.usdTotal else state.total
+    val secondary = if (usdFirst && state.usdTotal != null) state.total else state.usdTotal
     Column {
-        BasicText(
-            text = state.total?.getValue() ?: "—",
-            style = ZappTheme.typography.balanceDisplay.copy(color = if (state.total == null) c.textSubtle else c.text),
-        )
+        Row(
+            modifier =
+                Modifier.fillMaxWidth().clickable(
+                    enabled = state.usdTotal != null,
+                    role = Role.Button,
+                    onClickLabel = stringResource(R.string.private_usd_switch_currency),
+                ) { usdFirst = !usdFirst },
+            horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.md),
+        ) {
+            BasicText(
+                text = primary?.getValue() ?: "—",
+                style = ZappTheme.typography.balanceDisplay.copy(color = if (primary == null) c.textSubtle else c.text),
+                modifier = Modifier.weight(1f).alignByBaseline(),
+                maxLines = 1,
+                autoSize =
+                    TextAutoSize.StepBased(
+                        minFontSize = ZappTheme.typography.displaySecondary.fontSize,
+                        maxFontSize = ZappTheme.typography.balanceDisplay.fontSize,
+                    ),
+            )
+            secondary?.let {
+                BasicText(
+                    text = it.getValue(),
+                    style = ZappTheme.typography.caption.copy(color = c.textMuted),
+                    modifier = Modifier.alignByBaseline(),
+                    maxLines = 1,
+                )
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             BasicText(
                 text = state.status?.getValue().orEmpty(),
@@ -223,6 +260,7 @@ private fun Sending(sending: PrivateUsdSendingState?) {
         Row(horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.lg)) {
             ZappButton(
                 text = stringResource(R.string.private_usd_action_send),
+                leadingIcon = Icons.AutoMirrored.Filled.Send,
                 variant = ZappButtonVariant.Secondary,
                 enabled = sending.isEnabled,
                 modifier = Modifier.weight(1f),
@@ -230,6 +268,7 @@ private fun Sending(sending: PrivateUsdSendingState?) {
             )
             ZappButton(
                 text = stringResource(R.string.private_usd_action_withdraw),
+                leadingIcon = Icons.AutoMirrored.Filled.CallMade,
                 variant = ZappButtonVariant.Secondary,
                 enabled = sending.isEnabled,
                 modifier = Modifier.weight(1f),
@@ -247,9 +286,9 @@ private fun PrivateUsdPreview() =
             state =
                 PrivateUsdState(
                     total = stringRes("₹1,112.40"),
+                    usdTotal = stringRes("$13.32"),
                     rows =
                         listOf(
-                            PrivateUsdRowState(stringRes("Available"), stringRes("₹1,030.56"), null),
                             PrivateUsdRowState(
                                 stringRes("Arriving"),
                                 stringRes("₹81.84"),
@@ -257,7 +296,7 @@ private fun PrivateUsdPreview() =
                             ),
                         ),
                     assets = emptyList(),
-                    status = stringRes("$13.32 · Updated 14:32"),
+                    status = stringRes("Updated 14:32"),
                     isRefreshing = false,
                     refreshFailed = false,
                     isEmpty = false,

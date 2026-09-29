@@ -9,11 +9,6 @@ import xyz.justzappit.offramp.atomicswap.AtomicSwapConfig
 import xyz.justzappit.railgun.RailgunNetwork
 import kotlin.time.Duration.Companion.minutes
 
-/**
- * The phone-testing deployment on Ethereum Sepolia (zecSwap's docs/local/android.md, section 7): a
- * maker and a relayer on the developer's machine, reached over `adb reverse tcp:8787 tcp:8787` and
- * `adb reverse tcp:8788 tcp:8788`. Redeploying changes the contract and token.
- */
 object AtomicSwapTestnet {
     // 0.1 of the test token, whose relayer asks 0.02.
     private const val MAX_RELAYER_FEE = 100_000L
@@ -28,7 +23,8 @@ object AtomicSwapTestnet {
     private const val MIN_UNITS = 30_000
     private const val MAX_UNITS = 20_000_000
 
-    val deployment =
+    // Persisted swaps retain the original local deployment.
+    val legacy =
         AtomicSwapDeployment(
             config =
                 AtomicSwapConfig(
@@ -49,5 +45,16 @@ object AtomicSwapTestnet {
             maxUnits = MAX_UNITS,
             makerConfirmations = CONFIRMATIONS,
             screeningTime = 1.minutes,
+        )
+
+    val deployment =
+        legacy.copy(
+            config =
+                legacy.config.copy(
+                    makerUrl = ReverseSwapTestnet.deployment.makerUrl,
+                    relayerUrl = ReverseSwapTestnet.deployment.relayerUrl,
+                    contract = Address.parse(ReverseSwapTestnet.deployment.contract),
+                ),
+            minUnits = 110_000,
         )
 }

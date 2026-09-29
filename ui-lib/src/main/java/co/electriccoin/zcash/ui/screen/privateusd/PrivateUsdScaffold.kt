@@ -35,6 +35,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappInfoButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappInfoSheet
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
+import co.electriccoin.zcash.ui.design.component.zapp.ZappSendActionBar
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.getValue
@@ -46,6 +47,7 @@ internal fun PrivateUsdScaffold(
     info: PrivateUsdInfo,
     onBack: () -> Unit,
     subtitle: String? = null,
+    sendLayout: Boolean = false,
     primaryButton: ButtonState? = null,
     isBackEnabled: Boolean = true,
     error: StringResource? = null,
@@ -63,6 +65,7 @@ internal fun PrivateUsdScaffold(
         ZappScreenHeader(
             title = title,
             subtitle = subtitle,
+            titleStyle = if (sendLayout) ZappTheme.typography.displaySecondary else ZappTheme.typography.screenTitle,
             right = {
                 ZappInfoButton(
                     contentDescription = stringResource(R.string.private_usd_info_content_description),
@@ -76,7 +79,10 @@ internal fun PrivateUsdScaffold(
                     .weight(1f)
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = GUTTER, vertical = ZappTheme.spacing.xl),
+                    .padding(
+                        horizontal = if (sendLayout) ZappTheme.spacing.xl2 + ZappTheme.spacing.md else GUTTER,
+                        vertical = if (sendLayout) ZappTheme.spacing.md else ZappTheme.spacing.xl,
+                    ),
             verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.xl2),
         ) {
             content()
@@ -91,22 +97,36 @@ internal fun PrivateUsdScaffold(
                 )
             }
         }
-        ZappBottomActionBar(
-            onBack = onBack,
-            isBackEnabled = isBackEnabled,
-            primaryAction =
+        if (sendLayout) {
+            ZappSendActionBar(onBack = onBack, isBackEnabled = isBackEnabled) {
                 primaryButton?.let { button ->
-                    {
-                        ZappButton(
-                            text = button.text.getValue(),
-                            enabled = button.isEnabled,
-                            loading = button.isLoading,
-                            modifier = Modifier.weight(1f).padding(start = ZappTheme.spacing.lg),
-                            onClick = button.onClick,
-                        )
-                    }
-                },
-        )
+                    ZappButton(
+                        text = button.text.getValue(),
+                        enabled = button.isEnabled,
+                        loading = button.isLoading,
+                        modifier = Modifier.weight(1f).padding(start = ZappTheme.spacing.lg),
+                        onClick = button.onClick,
+                    )
+                }
+            }
+        } else {
+            ZappBottomActionBar(
+                onBack = onBack,
+                isBackEnabled = isBackEnabled,
+                primaryAction =
+                    primaryButton?.let { button ->
+                        {
+                            ZappButton(
+                                text = button.text.getValue(),
+                                enabled = button.isEnabled,
+                                loading = button.isLoading,
+                                modifier = Modifier.weight(1f).padding(start = ZappTheme.spacing.lg),
+                                onClick = button.onClick,
+                            )
+                        }
+                    },
+            )
+        }
     }
     if (showsInfo) {
         ZappInfoSheet(

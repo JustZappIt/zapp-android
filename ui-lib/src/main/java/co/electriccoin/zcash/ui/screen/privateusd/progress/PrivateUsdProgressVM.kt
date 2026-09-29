@@ -9,8 +9,11 @@ import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.backToPay
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapState
+import co.electriccoin.zcash.ui.common.privateusd.ConversionCurrency
+import co.electriccoin.zcash.ui.common.privateusd.ObserveConversionCurrencyUseCase
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
@@ -18,7 +21,6 @@ import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdArgs
 import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
-import co.electriccoin.zcash.ui.screen.privateusd.message
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -36,6 +38,7 @@ import kotlin.time.Duration.Companion.seconds
 class PrivateUsdProgressVM(
     private val atomicSwapRepository: AtomicSwapRepository,
     balanceRepository: PrivateUsdBalanceRepository,
+    observeConversionCurrency: ObserveConversionCurrencyUseCase,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     private val steps =
@@ -55,17 +58,23 @@ class PrivateUsdProgressVM(
         }
 
     internal val state: StateFlow<PrivateUsdProgressState> =
-        combine(atomicSwapRepository.state, balanceRepository.observe(), clock, ::createState)
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-                initialValue =
-                    createState(
-                        atomicSwapRepository.state.value,
-                        balanceRepository.state.value,
-                        Clock.System.now().epochSeconds,
-                    ),
-            )
+        combine(
+            atomicSwapRepository.state,
+            balanceRepository.observe(),
+            clock,
+            observeConversionCurrency(),
+            ::createState
+        ).stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
+            initialValue =
+                createState(
+                    atomicSwapRepository.state.value,
+                    balanceRepository.state.value,
+                    Clock.System.now().epochSeconds,
+                    null,
+                ),
+        )
 
     init {
         atomicSwapRepository.resume(isForeground = true)
@@ -75,17 +84,16 @@ class PrivateUsdProgressVM(
         swap: AtomicSwapState,
         balance: PrivateUsdBalanceState,
         now: Long,
+        currency: ConversionCurrency?,
     ): PrivateUsdProgressState {
         val record = swap.record
         val isSlowToOpen =
             swap.wait?.reason == AtomicSwapWait.OPENING && record != null && now - record.acceptedAt > SLOW_OPEN_SECONDS
         return PrivateUsdProgressState(
-            amounts = record?.let(steps::amounts),
-            result = record?.let { steps.result(it, balance) },
+            amounts = record?.let { steps.amounts(it, currency) },
+            result = record?.let { steps.result(it, balance, currency) },
             steps = steps.of(swap, balance),
             note = steps.note(swap, isSlowToOpen).takeIf { swap.isUnderWay },
-            problem = swap.problem?.takeIf { swap.isUnderWay }?.message(),
-            onRetry = atomicSwapRepository::retryNow,
             callOff =
                 ButtonState(stringRes(R.string.convert_call_off), onClick = ::onCallOff)
                     .takeIf { isSlowToOpen && swap.problem == null },
@@ -109,7 +117,7 @@ class PrivateUsdProgressVM(
                     }
                 },
             info = steps.info,
-            onBack = navigationRouter::back,
+            onBack = navigationRouter::backToPay,
         )
     }
 

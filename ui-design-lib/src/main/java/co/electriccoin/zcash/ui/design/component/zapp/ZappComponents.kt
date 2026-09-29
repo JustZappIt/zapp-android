@@ -344,7 +344,7 @@ fun ZappButton(
     leadingIcon: ImageVector? = null,
     onClick: () -> Unit,
 ) {
-    val (bg, fg, borderCol) = zappButtonPalette(variant, enabled)
+    val (bg, fg, borderCol) = zappButtonPalette(variant, enabled || loading)
 
     val animatedBg by
         animateColorAsState(
@@ -367,14 +367,14 @@ fun ZappButton(
                     },
                 ).alpha(if (enabled || variant == ZappButtonVariant.Primary) 1f else 0.45f)
                 .clickable(
-                    enabled = enabled,
+                    enabled = enabled && !loading,
                     interactionSource = interactionSource,
                     indication = ripple(color = fg),
                     onClick = onClick,
                 ).semantics(mergeDescendants = true) {
                     this.contentDescription = text
                     this.role = Role.Button
-                    if (!enabled) disabled()
+                    if (!enabled || loading) disabled()
                 }.padding(horizontal = 18.dp, vertical = 14.dp),
         contentAlignment = Alignment.Center,
     ) {

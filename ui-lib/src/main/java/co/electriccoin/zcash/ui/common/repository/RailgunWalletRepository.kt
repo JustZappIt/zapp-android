@@ -27,6 +27,10 @@ import xyz.justzappit.railgun.RailgunException
 import xyz.justzappit.railgun.RailgunGasAccount
 import xyz.justzappit.railgun.RailgunMerkletree
 import xyz.justzappit.railgun.RailgunNetwork
+import xyz.justzappit.railgun.RailgunReverseCost
+import xyz.justzappit.railgun.RailgunReverseCostRequest
+import xyz.justzappit.railgun.RailgunReverseRequest
+import xyz.justzappit.railgun.RailgunReverseTransaction
 import xyz.justzappit.railgun.RailgunSent
 import xyz.justzappit.railgun.RailgunWallet
 import java.math.BigInteger
@@ -47,6 +51,10 @@ interface RailgunWalletRepository {
     fun run(action: RailgunTestAction)
 
     /** Starts and opens what isn't yet, then syncs; waits for a call already running. */
+    suspend fun reverseCost(params: RailgunReverseCostRequest): RailgunReverseCost
+
+    suspend fun prepareReverse(params: RailgunReverseRequest): RailgunReverseTransaction
+
     suspend fun sync(): RailgunBalances
 
     /** Sends [amount] of [token] privately to a 0zk address, or out to a public one when [withdraw]. */
@@ -76,6 +84,7 @@ data class RailgunWalletState(
     enum class Phase { UNAVAILABLE, IDLE, STARTING, OPENING, SYNCING, SENDING, READY, FAILED }
 }
 
+@Suppress("TooManyFunctions")
 class RailgunWalletRepositoryImpl(
     private val railgunWallet: RailgunWallet,
     private val persistableWalletProvider: PersistableWalletProvider,
@@ -154,6 +163,19 @@ class RailgunWalletRepositoryImpl(
                 }
             mutableState.update { it.copy(activity = it.activity + (action to sent)) }
             syncLocked()
+        }
+
+    override suspend fun reverseCost(params: RailgunReverseCostRequest): RailgunReverseCost =
+        engineLock.withLock {
+            open()
+            railgunWallet.reverseCost(params)
+        }
+
+    override suspend fun prepareReverse(params: RailgunReverseRequest): RailgunReverseTransaction =
+        engineLock.withLock {
+            open()
+            railgunWallet.refresh()
+            railgunWallet.prepareReverse(params)
         }
 
     override suspend fun sync(): RailgunBalances {

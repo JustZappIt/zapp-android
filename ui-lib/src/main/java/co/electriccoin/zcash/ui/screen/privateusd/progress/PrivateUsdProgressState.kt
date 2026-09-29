@@ -14,8 +14,6 @@ internal data class PrivateUsdProgressState(
     val result: PrivateUsdResultState?,
     val steps: List<ZappStep>,
     val note: StringResource?,
-    val problem: StringResource?,
-    val onRetry: () -> Unit,
     val callOff: ButtonState?,
     val showsBackgroundNote: Boolean,
     val primaryButton: ButtonState?,

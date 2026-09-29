@@ -72,6 +72,7 @@ data class AtomicSwapRecord(
     val finishedAt: Long? = null,
     /** The Ethereum transaction that shielded the payout, as the relayer reported it. */
     val payoutTx: String? = null,
+    val maxTotalZat: Long? = null,
 ) {
     val finished: Boolean get() = outcome != null
 }
@@ -139,6 +140,7 @@ data class AtomicSwapOffer(
     val quote: SwapQuote,
     val relayerFee: BigInteger,
     val receives: BigInteger,
+    val maxTotalZat: Long? = null,
 )
 
 /** `POST /v1/quote`'s answer. Addresses, ids, shares and proofs are `0x` hex; `amount` is decimal. */

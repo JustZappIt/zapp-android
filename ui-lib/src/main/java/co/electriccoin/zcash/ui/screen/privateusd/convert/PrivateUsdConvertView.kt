@@ -22,9 +22,6 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
-import co.electriccoin.zcash.ui.design.component.zapp.ZappFieldBalance
-import co.electriccoin.zcash.ui.design.component.zapp.ZappOfframpHeroAmountField
-import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSettlementLedger
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSettlementLedgerRow
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
@@ -37,13 +34,17 @@ import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdScaffold
 import java.math.BigDecimal
 
 @Composable
-internal fun PrivateUsdConvertView(state: PrivateUsdConvertState) {
+internal fun PrivateUsdConvertView(
+    state: PrivateUsdConvertState,
+    directionSelector: @Composable () -> Unit = {},
+) {
     val askForNotifications = rememberNotificationsRequest()
     PrivateUsdScaffold(
         title = stringResource(R.string.convert_title),
+        sendLayout = true,
         info = state.info,
         onBack = state.onBack,
-        isBackEnabled = !state.primaryButton.isLoading,
+        isBackEnabled = state.isQuoting || !state.primaryButton.isLoading,
         error = state.message,
         primaryButton =
             state.primaryButton.copy(
@@ -58,27 +59,26 @@ internal fun PrivateUsdConvertView(state: PrivateUsdConvertState) {
             ),
     ) {
         when (state.phase) {
-            PrivateUsdConvertPhase.AMOUNT -> Amount(state)
+            PrivateUsdConvertPhase.AMOUNT -> Amount(state, directionSelector)
             PrivateUsdConvertPhase.REVIEW -> Review(state)
         }
     }
 }
 
 @Composable
-private fun Amount(state: PrivateUsdConvertState) {
-    Column(verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.md)) {
-        ZappSectionLabel(text = stringResource(R.string.convert_amount_label))
-        ZappOfframpHeroAmountField(
-            symbol = "$",
-            state = state.amount,
-            secondaryText = state.amountNote.getValue(),
-            isError = state.isAmountInvalid,
-            balance =
-                state.zecAvailable?.let {
-                    ZappFieldBalance(stringResource(R.string.convert_zec_available), it.getValue())
-                },
-        )
-    }
+private fun Amount(state: PrivateUsdConvertState, directionSelector: @Composable () -> Unit) {
+    PrivateUsdConvertAmountView(
+        amount = state.amount,
+        usdAvailable = state.usdAvailable,
+        zecAvailable = state.zecAvailable,
+        receiveEstimate = state.usdEstimate,
+        onMax = state.onMax,
+        usdOnTop = false,
+        currencySymbol = state.currencySymbol,
+        note = state.amountNote,
+        isInvalid = state.isAmountInvalid,
+        directionSelector = directionSelector,
+    )
     when {
         state.quote != null -> {
             ZappSettlementLedger(
@@ -92,21 +92,14 @@ private fun Amount(state: PrivateUsdConvertState) {
                             stringResource(R.string.convert_you_receive),
                             state.quote.receive.getValue(),
                         ),
-                        ZappSettlementLedgerRow(stringResource(R.string.convert_fees), state.quote.fees.getValue()),
+                        ZappSettlementLedgerRow(
+                            stringResource(R.string.convert_fees),
+                            state.quote.fees.getValue(),
+                            isCompact = true
+                        ),
                     ),
                 notice =
-                    if (state.isQuoting) {
-                        stringResource(R.string.convert_quote_loading)
-                    } else {
-                        state.quote.refreshesIn.getValue()
-                    },
-            )
-        }
-
-        state.isQuoting -> {
-            BasicText(
-                text = stringResource(R.string.convert_quote_loading),
-                style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.textMuted),
+                    state.quote.refreshesIn.getValue(),
             )
         }
     }
@@ -137,7 +130,11 @@ private fun Review(state: PrivateUsdConvertState) {
                     quote.networkFee?.let {
                         ZappSettlementLedgerRow(stringResource(R.string.convert_network_fee), it.getValue())
                     },
-                    ZappSettlementLedgerRow(stringResource(R.string.convert_fees), quote.fees.getValue()),
+                    ZappSettlementLedgerRow(
+                        stringResource(R.string.convert_fees),
+                        quote.fees.getValue(),
+                        isCompact = true
+                    ),
                 ),
             notice = quote.refreshesIn.getValue(),
             noticeIsDanger = state.message != null,

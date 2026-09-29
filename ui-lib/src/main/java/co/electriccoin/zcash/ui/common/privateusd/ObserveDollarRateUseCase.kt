@@ -29,7 +29,7 @@ class ObserveDollarRateUseCase(
             if (local == null || zecInDollars == null || local.currency == FiatCurrency.USD) {
                 null
             } else {
-                DollarRate(local.symbol, local.pricePerZec.divide(zecInDollars, MathContext.DECIMAL64))
+                DollarRate(local.symbol, local.pricePerZec.divide(zecInDollars, MathContext.DECIMAL64), local.currency)
             }
         }.distinctUntilChanged()
 }

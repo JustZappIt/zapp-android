@@ -76,6 +76,7 @@ class AtomicSwapDriver(
                 zcashHeight = zcash.chainHeight(),
                 acceptedAt = nowSeconds(),
                 receives = offer.receives.toString(),
+                maxTotalZat = offer.maxTotalZat,
             )
         store.save(record)
         return try {

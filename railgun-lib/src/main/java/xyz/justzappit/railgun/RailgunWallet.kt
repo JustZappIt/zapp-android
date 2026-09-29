@@ -5,6 +5,7 @@ package xyz.justzappit.railgun
 
 import android.content.Context
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
@@ -19,6 +20,7 @@ import java.math.BigInteger
  * [RailgunEvent.Disconnected], [start] and [openWallet] again. `debug` exposes the WebView to
  * chrome://inspect and forwards the SDK's logs as [RailgunEvent.Log].
  */
+@Suppress("TooManyFunctions")
 class RailgunWallet(
     context: Context,
     private val debug: Boolean = false,
@@ -102,6 +104,24 @@ class RailgunWallet(
         token: String,
         amount: BigInteger,
     ): RailgunSent = RailgunProtocol.decodeSent(host.call("unshield", transferParams(to, token, amount)))
+
+    suspend fun reverseCost(request: RailgunReverseCostRequest): RailgunReverseCost =
+        Json.decodeFromJsonElement(
+            RailgunReverseCost.serializer(),
+            host.call(
+                "reverseCost",
+                Json.encodeToJsonElement(RailgunReverseCostRequest.serializer(), request).jsonObject
+            )
+        )
+
+    suspend fun prepareReverse(request: RailgunReverseRequest): RailgunReverseTransaction =
+        Json.decodeFromJsonElement(
+            RailgunReverseTransaction.serializer(),
+            host.call(
+                "prepareReverse",
+                Json.encodeToJsonElement(RailgunReverseRequest.serializer(), request).jsonObject
+            )
+        )
 
     suspend fun close() = host.close()
 

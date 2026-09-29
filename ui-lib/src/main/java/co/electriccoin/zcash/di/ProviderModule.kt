@@ -6,10 +6,14 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapKeysImpl
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapNotifier
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapScheduler
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapSessions
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapStoreImpl
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapTestnet
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapZcashImpl
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapZcashInfo
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapKeysImpl
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapStoreImpl
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapZcashImpl
 import co.electriccoin.zcash.ui.common.pricing.provider.HistoricalPriceCacheProvider
 import co.electriccoin.zcash.ui.common.pricing.provider.HistoricalPriceCacheProviderImpl
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendLog
@@ -516,6 +520,10 @@ val providerModule =
             HasSeenHowToVoteKeystoneStorageProvider::class
         factoryOf(::IsBackgroundExecutionAvailableProvider)
         single { RailgunWallet(context = get(), debug = BuildConfig.DEBUG) }
+        singleOf(::ReverseSwapKeysImpl)
+        singleOf(::ReverseSwapStoreImpl)
+        singleOf(::ReverseSwapZcashImpl)
+        single { AtomicSwapSessions(get(named(ATOMIC_SWAP_HTTP)), get(), get(), get()) }
         singleOf(::AtomicSwapDeployments)
         single { AtomicSwapTestnet.deployment.config }
         // No retries: a quote is single-use and an accept or claim that timed out may have landed.

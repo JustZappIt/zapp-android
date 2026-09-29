@@ -11,8 +11,8 @@ import androidx.work.WorkerParameters
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.R
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.KoinComponent
@@ -32,17 +32,21 @@ class AtomicSwapWorker(
 ) : CoroutineWorker(context, workerParameters),
     KoinComponent {
     private val repository: AtomicSwapRepository by inject()
+    private val reverse: ReverseSwapRepository by inject()
     private val notifier: AtomicSwapNotifier by inject()
 
     override suspend fun doWork(): Result {
-        if (!repository.isUnderWay()) return Result.success()
-        val isForeground = promote(applicationContext.getString(AtomicSwapStage.of(repository.state.value).label))
+        if (!repository.isUnderWay() && !reverse.isUnderWay()) return Result.success()
+        val isForeground = promote(applicationContext.getString(R.string.convert_progress_title))
         repository.resume(isForeground = false)
+        reverse.resume(isForeground = false)
         val settled =
             coroutineScope {
                 val updates = if (isForeground) launch { keepNotificationCurrent() } else null
                 withTimeoutOrNull(if (isForeground) FOREGROUND_BUDGET else BACKGROUND_BUDGET) {
+                    val reverseWait = launch { reverse.awaitSettled() }
                     repository.awaitSettled()
+                    reverseWait.join()
                 }.also { updates?.cancel() }
             } != null
         if (!settled) AtomicSwapScheduler(applicationContext).runAfter(FOLLOW_UP_DELAY)
@@ -53,15 +57,23 @@ class AtomicSwapWorker(
         notifier.foregroundInfo(applicationContext.getString(R.string.convert_progress_title))
 
     private suspend fun keepNotificationCurrent() {
-        repository.state
-            .map { AtomicSwapStage.of(it) }
-            .distinctUntilChanged()
-            .collect { stage -> promote(applicationContext.getString(stage.label)) }
+        combine(repository.state, reverse.state) { forward, reverse ->
+            reverse.record
+                ?.takeIf { it.underWay }
+                ?.phase
+                ?.label() ?: AtomicSwapStage.of(forward).label
+        }.distinctUntilChanged().collect { label -> promote(applicationContext.getString(label)) }
     }
 
     private suspend fun promote(text: String): Boolean =
         try {
-            setForeground(notifier.foregroundInfo(text))
+            setForeground(
+                notifier.foregroundInfo(
+                    text,
+                    reverse.state.value.record
+                        ?.underWay == true
+                )
+            )
             true
         } catch (e: IllegalStateException) {
             Twig.info { "Atomic swap: no foreground service from here, ${e.message}" }

@@ -12,7 +12,7 @@ internal enum class PrivateUsdConvertPhase { AMOUNT, REVIEW }
 
 internal data class PrivateUsdConvertState(
     val phase: PrivateUsdConvertPhase,
-    /** In dollars. */
+    /** Total ZEC spend, including its network fee. */
     val amount: NumberTextFieldState,
     /** Under the amount: what it's worth in the user's currency, or the limits. */
     val amountNote: StringResource,
@@ -25,6 +25,10 @@ internal data class PrivateUsdConvertState(
     val info: PrivateUsdInfo,
     val primaryButton: ButtonState,
     val onBack: () -> Unit,
+    val currencySymbol: String = "",
+    val usdAvailable: StringResource? = null,
+    val usdEstimate: java.math.BigDecimal? = null,
+    val onMax: (() -> Unit)? = null,
 )
 
 internal data class PrivateUsdQuoteState(

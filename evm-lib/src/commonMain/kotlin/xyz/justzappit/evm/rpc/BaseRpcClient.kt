@@ -142,6 +142,14 @@ class BaseRpcClient(
         return json.decodeFromJsonElement(TransactionReceipt.serializer(), result)
     }
 
+    suspend fun ethGetTransactionByHash(txHash: TxHash): TransactionReference? {
+        val result = rpcCall("eth_getTransactionByHash", buildJsonArray { add(txHash.hex) })
+        if (result == kotlinx.serialization.json.JsonNull) return null
+        return json.decodeFromJsonElement(TransactionReference.serializer(), result).also {
+            check(TxHash.fromHex(it.hash) == txHash) { "transaction hash mismatch" }
+        }
+    }
+
     /** The logs [address] emitted in the blocks from [fromBlock] to [toBlock] whose topics start with [topics]. */
     suspend fun ethGetLogs(
         address: Address,

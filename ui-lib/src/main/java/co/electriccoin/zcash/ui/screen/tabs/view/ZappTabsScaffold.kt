@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
+import androidx.lifecycle.SavedStateHandle
 import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.usecase.NavigateToVotingUseCase
@@ -35,6 +36,7 @@ import co.electriccoin.zcash.ui.screen.chat.list.ChatListScreen
 import co.electriccoin.zcash.ui.screen.chat.repository.ChatConversationsRepository
 import co.electriccoin.zcash.ui.screen.onboarding.ZappOnboardingFlow
 import co.electriccoin.zcash.ui.screen.onboarding.ZappRestoreFlow
+import co.electriccoin.zcash.ui.screen.tabs.SELECTED_TAB_KEY
 import co.electriccoin.zcash.ui.screen.tabs.TabsVM
 import co.electriccoin.zcash.ui.screen.welcome.WelcomeGateVM
 import co.electriccoin.zcash.ui.screen.welcome.view.WelcomeGateView
@@ -45,6 +47,7 @@ import org.koin.compose.koinInject
 @Composable
 internal fun ZappTabsScaffold(
     navigationRouter: NavigationRouter,
+    tabState: SavedStateHandle,
 ) {
     val welcomeGateVM: WelcomeGateVM = koinViewModel()
     val walletViewModel: WalletViewModel = koinViewModel()
@@ -106,15 +109,16 @@ internal fun ZappTabsScaffold(
         }
 
         else -> {
-            ZappTabsScaffoldContent()
+            ZappTabsScaffoldContent(tabState)
         }
     }
 }
 
 @Composable
-private fun ZappTabsScaffoldContent() {
+private fun ZappTabsScaffoldContent(tabState: SavedStateHandle) {
     val tabsVM: TabsVM = koinViewModel()
-    var currentTab by rememberSaveable { mutableStateOf(ZappTab.CHATS) }
+    val selectedTabName by tabState.getStateFlow(SELECTED_TAB_KEY, ZappTab.CHATS.name).collectAsState()
+    val currentTab = ZappTab.valueOf(selectedTabName)
     val localCurrency by tabsVM.localCurrency.collectAsState()
     val p2pPaymentMethod by tabsVM.p2pPaymentMethod.collectAsState()
     val hasPeerActivity by tabsVM.hasPeerActivity.collectAsState()
@@ -197,7 +201,7 @@ private fun ZappTabsScaffoldContent() {
                     if (selectedTab == ZappTab.PAY && currentTab != ZappTab.PAY) {
                         BalanceChartReadinessTrace.begin()
                     }
-                    currentTab = selectedTab
+                    tabState[SELECTED_TAB_KEY] = selectedTab.name
                 },
                 modifier = Modifier.align(Alignment.BottomCenter)
             )

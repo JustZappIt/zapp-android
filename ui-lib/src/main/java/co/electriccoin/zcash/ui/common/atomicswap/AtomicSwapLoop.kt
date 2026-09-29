@@ -25,7 +25,6 @@ import xyz.justzappit.evm.rpc.RpcException
 import xyz.justzappit.offramp.atomicswap.AtomicSwapActivity
 import xyz.justzappit.offramp.atomicswap.AtomicSwapBlock
 import xyz.justzappit.offramp.atomicswap.AtomicSwapBlockedException
-import xyz.justzappit.offramp.atomicswap.AtomicSwapDriver
 import xyz.justzappit.offramp.atomicswap.AtomicSwapHttpException
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
 import xyz.justzappit.offramp.atomicswap.AtomicSwapService
@@ -48,7 +47,7 @@ internal data class AtomicSwapProgress(
 
 /** Advances the swap under way until it finishes, retrying failed steps and saying why they failed. */
 internal class AtomicSwapLoop(
-    private val driver: AtomicSwapDriver,
+    private val sessions: AtomicSwapSessions,
     private val driverLock: Mutex,
     private val store: AtomicSwapStoreImpl,
     private val zcash: AtomicSwapZcashInfo,
@@ -130,7 +129,11 @@ internal class AtomicSwapLoop(
             val step =
                 driverLock.withLock {
                     val current = store.active()?.takeIf { it.index == record.index } ?: record
-                    driver.advance(current) { activity -> mutableProgress.update { it.copy(activity = activity) } }
+                    sessions
+                        .forRecord(
+                            current
+                        ).driver
+                        .advance(current) { activity -> mutableProgress.update { it.copy(activity = activity) } }
                 }
             mutableProgress.update {
                 it.copy(

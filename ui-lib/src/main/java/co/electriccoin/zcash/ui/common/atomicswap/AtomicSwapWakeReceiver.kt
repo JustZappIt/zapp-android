@@ -21,6 +21,7 @@ class AtomicSwapWakeReceiver :
     BroadcastReceiver(),
     KoinComponent {
     private val repository: AtomicSwapRepository by inject()
+    private val reverse: ReverseSwapRepository by inject()
     private val notifier: AtomicSwapNotifier by inject()
 
     override fun onReceive(
@@ -31,6 +32,7 @@ class AtomicSwapWakeReceiver :
         val pending = goAsync()
         scope.launch {
             try {
+                if (reverse.isUnderWay()) reverse.resume(isForeground = false)
                 if (repository.isUnderWay()) {
                     repository.resume(isForeground = false)
                     if (lastCall) notifier.needsYou()

@@ -32,6 +32,7 @@ import co.electriccoin.zcash.ui.design.component.ZashiNumberTextField
 import co.electriccoin.zcash.ui.design.component.ZashiNumberTextFieldDefaults
 import co.electriccoin.zcash.ui.design.component.ZashiTextFieldDefaults
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
+import co.electriccoin.zcash.ui.design.util.getValue
 
 @Composable
 fun ZappOfframpHeroAmountField(
@@ -42,10 +43,29 @@ fun ZappOfframpHeroAmountField(
     balance: ZappFieldBalance? = null,
     isError: Boolean = false,
     flag: Painter? = null,
+    leadingIcon: Painter? = null,
 ) {
     val c = ZappTheme.colors
+    val amountStyle =
+        if (leadingIcon != null &&
+            state.innerState.innerTextFieldState.value
+                .getValue()
+                .length > COMPACT_AMOUNT_LENGTH
+        ) {
+            ZappTheme.typography.displaySecondary
+        } else {
+            ZappTheme.typography.display
+        }
     Column(modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            leadingIcon?.let {
+                Image(
+                    painter = it,
+                    contentDescription = null,
+                    modifier = Modifier.size(ZappTheme.spacing.xl4),
+                )
+                Spacer(Modifier.width(ZappTheme.spacing.lg))
+            }
             flag?.let {
                 Image(
                     painter = it,
@@ -57,7 +77,7 @@ fun ZappOfframpHeroAmountField(
             BasicText(
                 text = symbol,
                 style =
-                    ZappTheme.typography.display.copy(
+                    amountStyle.copy(
                         color = c.text,
                         fontWeight = FontWeight.SemiBold,
                     ),
@@ -68,7 +88,7 @@ fun ZappOfframpHeroAmountField(
                 modifier = Modifier.weight(1f),
                 shape = RectangleShape,
                 textStyle =
-                    ZappTheme.typography.display.copy(
+                    amountStyle.copy(
                         color = if (isError) c.danger else c.text,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Start,
@@ -97,7 +117,7 @@ fun ZappOfframpHeroAmountField(
                 placeholder = {
                     ZashiNumberTextFieldDefaults.Placeholder(
                         modifier = Modifier.fillMaxWidth(),
-                        style = ZappTheme.typography.display,
+                        style = amountStyle,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Start,
                         contentAlignment = Alignment.CenterStart,
@@ -157,3 +177,5 @@ fun ZappOfframpHeroAmountField(
         }
     }
 }
+
+private const val COMPACT_AMOUNT_LENGTH = 8

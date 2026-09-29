@@ -11,7 +11,7 @@ internal data class PrivateUsdState(
     val total: StringResource?,
     val rows: List<PrivateUsdRowState>,
     val assets: List<PrivateUsdAssetState>,
-    /** The total in dollars while it shows in another currency, then when it was updated. */
+    /** When the balance was updated. */
     val status: StringResource?,
     val isRefreshing: Boolean,
     val refreshFailed: Boolean,
@@ -24,6 +24,7 @@ internal data class PrivateUsdState(
     val onConvert: () -> Unit,
     val onRefresh: () -> Unit,
     val onBack: () -> Unit,
+    val usdTotal: StringResource? = null,
 )
 
 internal data class PrivateUsdRowState(

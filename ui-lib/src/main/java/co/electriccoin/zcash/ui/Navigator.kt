@@ -12,6 +12,9 @@ import co.electriccoin.zcash.ui.screen.ExternalUrl
 import co.electriccoin.zcash.ui.screen.about.util.WebBrowserUtil
 import co.electriccoin.zcash.ui.screen.flexa.FlexaViewModel
 import co.electriccoin.zcash.ui.screen.home.HomeArgs
+import co.electriccoin.zcash.ui.screen.tabs.SELECTED_TAB_KEY
+import co.electriccoin.zcash.ui.screen.tabs.TabsArgs
+import co.electriccoin.zcash.ui.screen.tabs.view.ZappTab
 import com.flexa.core.Flexa
 import com.flexa.spend.buildSpend
 import kotlinx.serialization.InternalSerializationApi
@@ -37,6 +40,7 @@ class NavigatorImpl(
         when (command) {
             NavigationCommand.Back,
             NavigationCommand.BackToRoot,
+            NavigationCommand.BackToPay,
             is NavigationCommand.BackTo -> {
                 val currentRoute =
                     navController
@@ -53,12 +57,34 @@ class NavigatorImpl(
         }
 
         when (command) {
-            is NavigationCommand.Forward -> forward(command)
-            is NavigationCommand.Replace -> replace(command)
-            is NavigationCommand.ReplaceAll -> replaceAll(command)
-            NavigationCommand.Back -> navController.popBackStack()
-            is NavigationCommand.BackTo -> backTo(command)
-            NavigationCommand.BackToRoot -> backToRoot()
+            is NavigationCommand.Forward -> {
+                forward(command)
+            }
+
+            is NavigationCommand.Replace -> {
+                replace(command)
+            }
+
+            is NavigationCommand.ReplaceAll -> {
+                replaceAll(command)
+            }
+
+            NavigationCommand.Back -> {
+                navController.popBackStack()
+            }
+
+            is NavigationCommand.BackTo -> {
+                backTo(command)
+            }
+
+            NavigationCommand.BackToRoot -> {
+                backToRoot()
+            }
+
+            NavigationCommand.BackToPay -> {
+                navController.getBackStackEntry<TabsArgs>().savedStateHandle[SELECTED_TAB_KEY] = ZappTab.PAY.name
+                backTo(NavigationCommand.BackTo(TabsArgs::class))
+            }
         }
     }
 

@@ -7,14 +7,15 @@ import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployment
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapQuote
+import co.electriccoin.zcash.ui.common.privateusd.ConversionCurrency
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdToken
+import co.electriccoin.zcash.ui.common.privateusd.format
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
 import co.electriccoin.zcash.ui.common.privateusd.tokenAmount
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.util.StringResource
-import co.electriccoin.zcash.ui.design.util.TickerLocation
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.design.util.stringResByCurrencyNumber
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
 import co.electriccoin.zcash.ui.screen.privateusd.about
 
 internal data class ConvertForm(
@@ -29,7 +30,7 @@ internal sealed interface ConvertQuote {
     data object None : ConvertQuote
 
     data class Loading(
-        val units: Int
+        val units: Long
     ) : ConvertQuote
 
     data class Ready(
@@ -86,7 +87,8 @@ internal class PrivateUsdConvertTerms(
 
     fun quote(
         ready: ConvertQuote.Ready,
-        now: Long
+        now: Long,
+        currency: ConversionCurrency? = null,
     ): PrivateUsdQuoteState {
         val offer = ready.quote.offer
         val fee = ready.quote.depositFeeZat
@@ -96,17 +98,11 @@ internal class PrivateUsdConvertTerms(
             networkFee = fee?.let { stringRes(Zatoshi(it)) },
             receive =
                 if (token.isDollar) {
-                    stringResByCurrencyNumber(
-                        amount = offer.receives.toDecimal(token.decimals),
-                        ticker = "$",
-                        tickerLocation = TickerLocation.BEFORE,
-                        minDecimals = 2,
-                        maxDecimals = token.decimals,
-                    )
+                    currency.format(offer.receives.toDecimal(token.decimals))
                 } else {
                     tokenAmount(offer.receives, token, estimate = true)
                 },
-            fees = stringRes(R.string.convert_fees_value, tokenAmount(offer.relayerFee, token, estimate = true)),
+            fees = stringRes(R.string.convert_fees_value, currency.format(offer.relayerFee.toDecimal(token.decimals))),
             refreshesIn =
                 stringRes(
                     R.string.convert_quote_expires,
@@ -122,3 +118,37 @@ internal class PrivateUsdConvertTerms(
         const val FEE_FALLBACK_ZAT = 15_000L
     }
 }
+
+internal fun PrivateUsdConvertTerms.info(phase: PrivateUsdConvertPhase): PrivateUsdInfo =
+    when (phase) {
+        PrivateUsdConvertPhase.AMOUNT -> {
+            PrivateUsdInfo(
+                title = stringRes(R.string.convert_info_title),
+                steps =
+                    listOf(
+                        stringRes(R.string.convert_info_step_quote),
+                        stringRes(R.string.convert_info_step_deposit),
+                        stringRes(R.string.convert_info_step_claim),
+                    ),
+                notes =
+                    listOf(
+                        stringRes(R.string.convert_info_note_either),
+                        stringRes(R.string.convert_info_note_time, duration),
+                    ),
+            )
+        }
+
+        PrivateUsdConvertPhase.REVIEW -> {
+            PrivateUsdInfo(
+                title = stringRes(R.string.convert_review_info_title),
+                notes =
+                    listOf(
+                        stringRes(R.string.convert_review_info_pay),
+                        stringRes(R.string.convert_review_info_receive),
+                        stringRes(R.string.convert_review_info_quote),
+                        stringRes(R.string.convert_info_note_either),
+                        stringRes(R.string.convert_info_note_time, duration),
+                    ),
+            )
+        }
+    }

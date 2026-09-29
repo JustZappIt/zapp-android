@@ -23,8 +23,8 @@ import kotlinx.coroutines.sync.withLock
 import xyz.justzappit.evm.rpc.RpcException
 import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.offramp.atomicswap.AtomicSwapActivity
-import xyz.justzappit.offramp.atomicswap.AtomicSwapChainReader
-import xyz.justzappit.offramp.atomicswap.AtomicSwapDriver
+import xyz.justzappit.offramp.atomicswap.AtomicSwapBlock
+import xyz.justzappit.offramp.atomicswap.AtomicSwapBlockedException
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOffer
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
@@ -93,8 +93,8 @@ interface AtomicSwapRepository {
 
 class AtomicSwapRepositoryImpl(
     deployments: AtomicSwapDeployments,
-    private val driver: AtomicSwapDriver,
-    private val chain: AtomicSwapChainReader,
+    private val reverseStore: ReverseSwapStoreImpl,
+    private val sessions: AtomicSwapSessions,
     private val store: AtomicSwapStoreImpl,
     private val keys: AtomicSwapKeysImpl,
     private val zcash: AtomicSwapZcashInfo,
@@ -105,7 +105,7 @@ class AtomicSwapRepositoryImpl(
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val driverLock = Mutex()
-    private val loop = AtomicSwapLoop(driver, driverLock, store, zcash, scheduler, notifier, scope)
+    private val loop = AtomicSwapLoop(sessions, driverLock, store, zcash, scheduler, notifier, scope)
     private var payoutLookup: Job? = null
 
     override val state: StateFlow<AtomicSwapState> =
@@ -134,13 +134,17 @@ class AtomicSwapRepositoryImpl(
         }
 
     override suspend fun quote(units: Int): AtomicSwapQuote {
-        val offer = driverLock.withLock { driver.quote(units) }
+        requireForwardAvailable(reverseStore.active())
+        val offer = driverLock.withLock { sessions.current.quote(units) }
         return AtomicSwapQuote(offer, depositFee(offer))
     }
 
     override suspend fun accept(offer: AtomicSwapOffer): AtomicSwapRecord {
         try {
-            return driverLock.withLock { driver.accept(offer) }
+            return store.acceptanceLock.withLock {
+                requireForwardAvailable(reverseStore.active())
+                driverLock.withLock { sessions.current.accept(offer) }
+            }
         } finally {
             // An accept cut short may still have opened the swap: the loop finds out.
             if (store.active()?.let { it.index == offer.index && !it.finished } == true) {
@@ -163,7 +167,7 @@ class AtomicSwapRepositoryImpl(
 
     override suspend fun abandon() {
         val record = store.active() ?: return
-        driverLock.withLock { driver.abandon(record) }
+        driverLock.withLock { sessions.forRecord(record).driver.abandon(record) }
         loop.settle()
     }
 
@@ -186,7 +190,12 @@ class AtomicSwapRepositoryImpl(
 
     private suspend fun findPayout(record: AtomicSwapRecord) {
         try {
-            val tx = chain.payoutTx(record.swapId.hexToBytes(), record.finishedAt ?: record.acceptedAt) ?: return
+            val tx =
+                sessions.forRecord(record).chain.payoutTx(
+                    record.swapId.hexToBytes(),
+                    record.finishedAt ?: record.acceptedAt
+                )
+                    ?: return
             store.update(record.index) { it.copy(payoutTx = tx) }
         } catch (e: RpcException) {
             Twig.info { "Atomic swap: no payout found for ${record.index}, ${e.message}" }
@@ -207,4 +216,10 @@ class AtomicSwapRepositoryImpl(
             Twig.info { "Atomic swap: no deposit fee estimate, ${e.message}" }
             null
         }
+}
+
+private fun requireForwardAvailable(record: xyz.justzappit.offramp.atomicswap.ReverseSwapRecord?) {
+    if (record?.underWay == true) {
+        throw AtomicSwapBlockedException(AtomicSwapBlock.SWAP_UNDER_WAY, "a reverse swap is under way")
+    }
 }

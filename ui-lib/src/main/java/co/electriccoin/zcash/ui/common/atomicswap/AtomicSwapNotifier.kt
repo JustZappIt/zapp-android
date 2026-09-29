@@ -20,6 +20,8 @@ import co.electriccoin.zcash.ui.R
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 
 /** Intent extra: a notification tap that should open the conversion under way. */
+const val PRIVATE_USD_REVERSE_EXTRA = "private_usd_reverse_conversion"
+
 const val PRIVATE_USD_CONVERSION_EXTRA = "private_usd_conversion"
 
 /** Notifications for conversions. None names an amount: they show on the lock screen. */
@@ -46,10 +48,10 @@ class AtomicSwapNotifier(
         }
     }
 
-    fun foregroundInfo(text: String): ForegroundInfo {
+    fun foregroundInfo(text: String, reverse: Boolean = false): ForegroundInfo {
         manager
         val notification =
-            builder(PROGRESS_CHANNEL, R.string.private_usd_banner_title, text)
+            builder(PROGRESS_CHANNEL, R.string.private_usd_banner_title, text, reverse)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setSilent(true)
@@ -81,11 +83,23 @@ class AtomicSwapNotifier(
         post(RESULT_ID, builder(UPDATES_CHANNEL, title, context.getString(body)).setAutoCancel(true).build())
     }
 
-    fun needsYou() {
+    fun reverseFinished(
+        @StringRes message: Int
+    ) {
+        manager.cancel(NEEDS_YOU_ID)
+        post(
+            RESULT_ID,
+            builder(UPDATES_CHANNEL, R.string.reverse_title, context.getString(message), true)
+                .setAutoCancel(true)
+                .build()
+        )
+    }
+
+    fun needsYou(reverse: Boolean = false) {
         val body = context.getString(R.string.private_usd_notification_needs_you_body)
         post(
             NEEDS_YOU_ID,
-            builder(UPDATES_CHANNEL, R.string.private_usd_notification_needs_you_title, body)
+            builder(UPDATES_CHANNEL, R.string.private_usd_notification_needs_you_title, body, reverse)
                 .setAutoCancel(true)
                 .setCategory(NotificationCompat.CATEGORY_REMINDER)
                 .build(),
@@ -107,6 +121,7 @@ class AtomicSwapNotifier(
         channel: String,
         @StringRes title: Int,
         text: String,
+        reverse: Boolean = false,
     ): NotificationCompat.Builder =
         NotificationCompat
             .Builder(context, channel)
@@ -114,7 +129,7 @@ class AtomicSwapNotifier(
             .setContentTitle(context.getString(title))
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(openConversion())
+            .setContentIntent(openConversion(reverse))
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(
                 NotificationCompat
@@ -125,12 +140,13 @@ class AtomicSwapNotifier(
                     .build(),
             )
 
-    private fun openConversion(): PendingIntent =
+    private fun openConversion(reverse: Boolean): PendingIntent =
         PendingIntent.getActivity(
             context,
-            REQUEST_CODE,
+            REQUEST_CODE + if (reverse) 1 else 0,
             Intent(context, MainActivity::class.java).apply {
                 putExtra(PRIVATE_USD_CONVERSION_EXTRA, true)
+                putExtra(PRIVATE_USD_REVERSE_EXTRA, reverse)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,

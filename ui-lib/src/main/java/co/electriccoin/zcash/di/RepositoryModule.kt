@@ -4,6 +4,7 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepositoryImpl
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepository
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepositoryImpl
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
@@ -108,6 +109,22 @@ val repositoryModule =
         singleOf(::EphemeralAddressRepositoryImpl) bind EphemeralAddressRepository::class
         singleOf(::MockOrchardBalanceRepositoryImpl) bind MockOrchardBalanceRepository::class
         singleOf(::RailgunWalletRepositoryImpl) bind RailgunWalletRepository::class
+        single {
+            ReverseSwapRepository(
+                get(),
+                get(),
+                get(),
+                get(),
+                get(),
+                get(),
+                io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+                    install(io.ktor.client.plugins.HttpTimeout) { requestTimeoutMillis = REVERSE_SWAP_TIMEOUT_MILLIS }
+                },
+                get(),
+                get(),
+                get()
+            )
+        }
         singleOf(::AtomicSwapRepositoryImpl) bind AtomicSwapRepository::class
         singleOf(::PrivateUsdBalanceRepositoryImpl) bind PrivateUsdBalanceRepository::class
         singleOf(::LinkPreviewRepository)
@@ -275,3 +292,5 @@ val repositoryModule =
             }
         }
     }
+
+private const val REVERSE_SWAP_TIMEOUT_MILLIS = 180_000L

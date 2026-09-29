@@ -3,6 +3,7 @@ package co.electriccoin.zcash.di
 import co.electriccoin.zcash.ui.common.mapper.SwapSupportMapper
 import co.electriccoin.zcash.ui.common.pricing.usecase.ObservePortfolioHistoryUseCase
 import co.electriccoin.zcash.ui.common.pricing.usecase.PrewarmPortfolioHistoryUseCase
+import co.electriccoin.zcash.ui.common.privateusd.ObserveConversionCurrencyUseCase
 import co.electriccoin.zcash.ui.common.privateusd.ObserveDollarRateUseCase
 import co.electriccoin.zcash.ui.common.privateusd.ObservePrivateUsdAvailableUseCase
 import co.electriccoin.zcash.ui.common.usecase.AddChatGroupMemberUseCase
@@ -209,6 +210,7 @@ val useCaseModule =
         factoryOf(::ObserveFastestServersUseCase)
         factoryOf(::ObservePrivateUsdAvailableUseCase)
         factoryOf(::ObserveDollarRateUseCase)
+        factoryOf(::ObserveConversionCurrencyUseCase)
         factoryOf(::GetSelectedEndpointUseCase)
         factoryOf(::RefreshFastestServersUseCase)
         factoryOf(::PersistEndpointUseCase)

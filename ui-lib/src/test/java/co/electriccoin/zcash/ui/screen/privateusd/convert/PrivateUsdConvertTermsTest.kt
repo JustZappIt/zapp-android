@@ -30,7 +30,8 @@ class PrivateUsdConvertTermsTest {
     fun `an amount accepts any token precision within the maker's limit`() {
         assertEquals(7_000_000, terms.units(dollars("7")))
         assertEquals(7_255_001, terms.units(dollars("7.255001")))
-        assertEquals(30_000, terms.units(dollars("0.03")))
+        assertEquals(110_000, terms.units(dollars("0.11")))
+        assertNull(terms.units(dollars("0.10")))
         assertEquals(20_000_000, terms.units(dollars("20")))
         assertNull(terms.units(dollars("0.02")))
         assertNull(terms.units(dollars("7.2550001")))

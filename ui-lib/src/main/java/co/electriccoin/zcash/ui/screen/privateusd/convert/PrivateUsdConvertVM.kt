@@ -11,21 +11,25 @@ import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.backToPay
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
-import co.electriccoin.zcash.ui.common.privateusd.DollarRate
-import co.electriccoin.zcash.ui.common.privateusd.ObserveDollarRateUseCase
+import co.electriccoin.zcash.ui.common.privateusd.ConversionCurrency
+import co.electriccoin.zcash.ui.common.privateusd.ObserveConversionCurrencyUseCase
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
-import co.electriccoin.zcash.ui.common.privateusd.local
+import co.electriccoin.zcash.ui.common.privateusd.format
 import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
+import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
 import co.electriccoin.zcash.ui.screen.privateusd.authorizeSpend
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
+import co.electriccoin.zcash.ui.screen.privateusd.reverse.reverseAvailable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,6 +51,7 @@ import xyz.justzappit.offramp.atomicswap.AtomicSwapHttpException
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOffer
 import xyz.justzappit.offramp.atomicswap.AtomicSwapService
 import java.io.IOException
+import java.math.BigDecimal
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -57,7 +62,8 @@ class PrivateUsdConvertVM(
     private val biometricRepository: BiometricRepository,
     private val navigationRouter: NavigationRouter,
     accountDataSource: AccountDataSource,
-    observeDollarRate: ObserveDollarRateUseCase,
+    balanceRepository: PrivateUsdBalanceRepository,
+    observeConversionCurrency: ObserveConversionCurrencyUseCase,
 ) : ViewModel() {
     private val terms =
         checkNotNull(atomicSwapRepository.deployment) { "no conversions in this build" }.let { deployment ->
@@ -68,6 +74,7 @@ class PrivateUsdConvertVM(
         }
     private val form = MutableStateFlow(ConvertForm())
     private var quoteJob: Job? = null
+    private val zecQuotes = PrivateUsdZecQuotes(atomicSwapRepository)
 
     // A quote left to run out on the amount step is replaced; on review the user decides.
     private val clock =
@@ -80,7 +87,7 @@ class PrivateUsdConvertVM(
             val current = form.value
             val ready = current.quote as? ConvertQuote.Ready
             if (current.phase == PrivateUsdConvertPhase.AMOUNT && ready != null && ready.secondsLeft(now) <= 0) {
-                requestQuote(ready.units, Duration.ZERO)
+                PrivateUsdZecQuotes.zatoshi(current.amount)?.let { requestQuote(it, Duration.ZERO) }
             }
         }
 
@@ -88,40 +95,67 @@ class PrivateUsdConvertVM(
         combine(
             form,
             accountDataSource.zashiAccount.map { it?.spendableShieldedBalance },
-            observeDollarRate(),
             clock,
+            balanceRepository.observe(),
+            observeConversionCurrency(),
             ::createState,
         ).stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-            initialValue = createState(form.value, null, null, Clock.System.now().epochSeconds),
+            initialValue =
+                createState(
+                    form.value,
+                    null,
+                    Clock.System.now().epochSeconds,
+                    balanceRepository.state.value,
+                    null,
+                ),
         )
 
     private fun createState(
         form: ConvertForm,
         spendable: Zatoshi?,
-        rate: DollarRate?,
         now: Long,
+        balance: PrivateUsdBalanceState,
+        currency: ConversionCurrency?,
     ): PrivateUsdConvertState {
         val ready = form.quote as? ConvertQuote.Ready
         val expired = ready != null && ready.secondsLeft(now) <= 0
         val short = ready != null && terms.isShort(ready, spendable)
-        val isAmountInvalid = terms.isInvalid(form.amount)
+        val isAmountInvalid = form.amount.amount != null && PrivateUsdZecQuotes.zatoshi(form.amount) == null
         return PrivateUsdConvertState(
             phase = form.phase,
+            currencySymbol = currency?.symbol.orEmpty(),
             amount = NumberTextFieldState(innerState = form.amount, onValueChange = ::onAmountChange),
-            amountNote =
-                form.amount.amount
-                    ?.takeIf { rate != null && !isAmountInvalid }
-                    ?.let { stringRes(R.string.private_usd_worth, rate.local(it)) }
-                    ?: terms.limits,
+            amountNote = stringRes(R.string.convert_zec_includes_fee),
             isAmountInvalid = isAmountInvalid,
-            zecAvailable = spendable?.let { stringRes(it) },
-            quote = ready?.let { terms.quote(it, now) },
+            zecAvailable = spendable?.let { stringRes(it).asPrivacySensitive() },
+            usdAvailable =
+                balance.reverseAvailable()?.let {
+                    currency
+                        .format(
+                            BigDecimal(it, USDC_DECIMALS)
+                        ).asPrivacySensitive()
+                },
+            usdEstimate =
+                ready?.quote?.offer?.receives?.let {
+                    currency
+                        ?.local(
+                            BigDecimal(it, USDC_DECIMALS)
+                        )?.setScale(ConversionCurrency.FIAT_DECIMALS, java.math.RoundingMode.HALF_UP)
+                },
+            onMax = spendable?.let { { onMax(it.value) } },
+            quote = ready?.let { terms.quote(it, now, currency) },
             isQuoting = form.quote is ConvertQuote.Loading,
             message = message(form, spendable?.takeIf { short }, expired),
-            info = info(form.phase),
-            primaryButton = primaryButton(form, canGoOn = ready != null && !expired && !short, expired = expired),
+            info = terms.info(form.phase),
+            primaryButton =
+                primaryButton(
+                    form,
+                    canGoOn =
+                        ready != null && !expired && !short && currency?.perDollar != null,
+                    expired = expired
+                ),
             onBack = ::onBack,
         )
     }
@@ -139,46 +173,16 @@ class PrivateUsdConvertVM(
             else -> null
         }
 
-    private fun info(phase: PrivateUsdConvertPhase): PrivateUsdInfo =
-        when (phase) {
-            PrivateUsdConvertPhase.AMOUNT -> {
-                PrivateUsdInfo(
-                    title = stringRes(R.string.convert_info_title),
-                    steps =
-                        listOf(
-                            stringRes(R.string.convert_info_step_quote),
-                            stringRes(R.string.convert_info_step_deposit),
-                            stringRes(R.string.convert_info_step_claim),
-                        ),
-                    notes =
-                        listOf(
-                            stringRes(R.string.convert_info_note_either),
-                            stringRes(R.string.convert_info_note_time, terms.duration),
-                        ),
-                )
-            }
-
-            PrivateUsdConvertPhase.REVIEW -> {
-                PrivateUsdInfo(
-                    title = stringRes(R.string.convert_review_info_title),
-                    notes =
-                        listOf(
-                            stringRes(R.string.convert_review_info_pay),
-                            stringRes(R.string.convert_review_info_receive),
-                            stringRes(R.string.convert_review_info_quote),
-                            stringRes(R.string.convert_info_note_either),
-                            stringRes(R.string.convert_info_note_time, terms.duration),
-                        ),
-                )
-            }
-        }
-
     private fun primaryButton(
         form: ConvertForm,
         canGoOn: Boolean,
         expired: Boolean,
     ): ButtonState =
         when {
+            form.quote is ConvertQuote.Loading -> {
+                ButtonState(stringRes(R.string.convert_quote_loading), isEnabled = false, isLoading = true)
+            }
+
             form.phase == PrivateUsdConvertPhase.AMOUNT -> {
                 ButtonState(stringRes(R.string.convert_review), isEnabled = canGoOn) {
                     this.form.update { it.copy(phase = PrivateUsdConvertPhase.REVIEW, error = null) }
@@ -187,7 +191,7 @@ class PrivateUsdConvertVM(
 
             expired -> {
                 ButtonState(stringRes(R.string.convert_new_quote)) {
-                    val units = (this.form.value.quote as? ConvertQuote.Ready)?.units
+                    val units = PrivateUsdZecQuotes.zatoshi(this.form.value.amount)
                     this.form.update { it.copy(phase = PrivateUsdConvertPhase.AMOUNT, error = null) }
                     units?.let { requestQuote(it, Duration.ZERO) }
                 }
@@ -203,9 +207,15 @@ class PrivateUsdConvertVM(
             }
         }
 
+    internal fun resetAmount() {
+        if (form.value.isConfirming) return
+        quoteJob?.cancel()
+        form.value = ConvertForm()
+    }
+
     private fun onAmountChange(inner: NumberTextFieldInnerState) {
         form.update { it.copy(amount = inner, error = null) }
-        val units = terms.units(inner)
+        val units = PrivateUsdZecQuotes.zatoshi(inner)
         if (units != null) {
             requestQuote(units, TYPING_DEBOUNCE)
         } else {
@@ -226,13 +236,13 @@ class PrivateUsdConvertVM(
             }
 
             else -> {
-                navigationRouter.back()
+                navigationRouter.backToPay()
             }
         }
     }
 
     private fun requestQuote(
-        units: Int,
+        units: Long,
         debounce: Duration
     ) {
         quoteJob?.cancel()
@@ -242,7 +252,9 @@ class PrivateUsdConvertVM(
                 delay(debounce)
                 val quote =
                     try {
-                        ConvertQuote.Ready(units, atomicSwapRepository.quote(units))
+                        zecQuotes.quote(units).let { ConvertQuote.Ready(it.offer.units, it) }
+                    } catch (e: ZecInputQuoteException) {
+                        noQuote(e, R.string.convert_zec_no_quote)
                     } catch (e: AtomicSwapBlockedException) {
                         if (e.reason == AtomicSwapBlock.SWAP_UNDER_WAY) navigationRouter.replace(PrivateUsdProgressArgs)
                         noQuote(e, R.string.convert_error_generic)
@@ -265,6 +277,24 @@ class PrivateUsdConvertVM(
                         noQuote(e, R.string.convert_error_generic)
                     }
                 form.update { it.copy(quote = quote) }
+            }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private fun onMax(availableZat: Long) {
+        quoteJob?.cancel()
+        quoteJob =
+            viewModelScope.launch {
+                try {
+                    val amount = PrivateUsdZecQuotes.input(zecQuotes.maximum(availableZat))
+                    quoteJob = null
+                    onAmountChange(amount)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Twig.warn(e) { "Private USD: maximum amount unavailable" }
+                    form.update { it.copy(error = stringRes(R.string.convert_error_generic)) }
+                }
             }
     }
 
@@ -318,6 +348,7 @@ class PrivateUsdConvertVM(
     }
 
     private companion object {
+        const val USDC_DECIMALS = 6
         val TYPING_DEBOUNCE = 700.milliseconds
 
         fun noQuote(
