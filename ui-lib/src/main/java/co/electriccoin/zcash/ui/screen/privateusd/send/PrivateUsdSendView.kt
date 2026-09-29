@@ -54,7 +54,7 @@ internal fun PrivateUsdSendView(state: PrivateUsdSendState) {
             ),
         info = state.info,
         onBack = state.onBack,
-        isBackEnabled = state.phase != PrivateUsdSendPhase.SENDING,
+        isBackEnabled = !state.isBusy && state.phase != PrivateUsdSendPhase.SENDING,
         primaryButton = state.primaryButton,
         error = state.error,
     ) {

@@ -35,6 +35,7 @@ internal data class PrivateUsdSendState(
     val info: PrivateUsdInfo,
     val primaryButton: ButtonState,
     val onBack: () -> Unit,
+    val isBusy: Boolean = false,
 )
 
 internal data class PrivateUsdSendReviewState(

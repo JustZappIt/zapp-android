@@ -78,7 +78,7 @@
     <string name="convert_error_relayer">The relayer that completes conversions can\'t be reached right now. Try again in a moment.</string>
     <string name="convert_error_generic">Couldn\'t get a quote. Try again in a moment.</string>
     <string name="convert_info_title">How converting works</string>
-    <string name="convert_info_step_quote">Enter the dollars you want. The market maker quotes a price in ZEC that holds for a few minutes.</string>
+    <string name="convert_info_step_quote">Enter the ZEC you want to convert, including the network fee. The market maker quotes how much private USD you receive. The quote holds for a few minutes.</string>
     <string name="convert_info_step_deposit">Your ZEC goes to a deposit address that you and the market maker control together.</string>
     <string name="convert_info_step_claim">Once the deposit is confirmed, Zapp claims the dollars into your private balance.</string>
     <string name="convert_info_note_either">Either the dollars reach your private balance, or your ZEC comes back to you.</string>
@@ -212,7 +212,7 @@
     <string name="private_usd_send_done_title_withdraw">Withdrawn</string>
     <string name="private_usd_send_done_body">%1$s went to %2$s.</string>
     <string name="private_usd_send_view_tx">View on Etherscan</string>
-    <string name="private_usd_send_failed">The send didn\'t go through, and your balance is unchanged. Try again in a moment.</string>
+    <string name="private_usd_send_failed">Couldn\'t confirm this send. Refresh your balance and check activity before trying again.</string>
     <string name="reverse_title">Private USDC → ZEC</string>
     <string name="reverse_intro">Approve sending private USDC first. After your wallet independently confirms the full ZEC deposit, approve settlement to receive shielded ZEC.</string>
     <string name="reverse_ready">Authorize settlement</string>

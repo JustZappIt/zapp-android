@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.screen.privateusd.send
 
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdAsset
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendCost
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendMode
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendRequest
@@ -24,6 +25,8 @@ internal data class PrivateUsdSendForm(
     val amount: NumberTextFieldInnerState = NumberTextFieldInnerState(),
     val recipient: String = "",
     val cost: PrivateUsdSendCost? = null,
+    val reviewedRequest: PrivateUsdSendRequest? = null,
+    val isBusy: Boolean = false,
     val sent: RailgunSent? = null,
     val error: StringResource? = null,
 ) {
@@ -38,6 +41,10 @@ internal data class PrivateUsdSendForm(
             null
         }
     }
+
+    fun canSend(request: PrivateUsdSendRequest?, balance: PrivateUsdBalanceState): Boolean =
+        request != null &&
+            balance.balances?.assets?.any { it.token == request.token && this.request(it) == request } == true
 
     fun amountError(asset: PrivateUsdAsset?): StringResource? =
         asset
@@ -75,19 +82,19 @@ internal data class PrivateUsdSendForm(
         }
 
     fun done(
-        asset: PrivateUsdAsset,
         explorerTxUrl: String?
     ): PrivateUsdSendDoneState? =
-        sent?.let {
-            val to = recipient.trim()
+        sent?.let { sent ->
+            val request = reviewedRequest ?: return null
+            val to = request.to
             PrivateUsdSendDoneState(
                 body =
                     stringRes(
                         R.string.private_usd_send_done_body,
-                        tokenAmount(amountIn(asset) ?: BigInteger.ZERO, asset.token),
+                        tokenAmount(request.amount, request.token),
                         "${to.take(ADDRESS_HEAD)}…${to.takeLast(ADDRESS_TAIL)}",
                     ),
-                explorerUrl = explorerTxUrl?.let { url -> url + it.txHash },
+                explorerUrl = explorerTxUrl?.let { url -> url + sent.txHash },
             )
         }
 

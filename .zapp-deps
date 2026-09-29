@@ -27,3 +27,7 @@ bare-kit=15a3569f3d704de7151761051c8d9cc2e299414f
 #
 # GitHub: https://github.com/zodl-inc/zodl-android-wallet-sdk (tag v3.2.1)
 zcashAndroidWalletSdk=2a496cc7c1513d6ab01e209163c0f7edd65408ab
+
+# Atomic swap Kotlin wrapper and prebuilt Android native libraries.
+# GitHub: https://github.com/JustZappIt/zecSwap
+zecSwap=ecad30c0dc9a393e7a212839f2e74aea5c7839ea

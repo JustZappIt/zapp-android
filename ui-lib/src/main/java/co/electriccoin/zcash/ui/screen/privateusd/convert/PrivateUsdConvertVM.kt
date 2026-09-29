@@ -153,7 +153,7 @@ class PrivateUsdConvertVM(
                 primaryButton(
                     form,
                     canGoOn =
-                        ready != null && !expired && !short && currency?.perDollar != null,
+                        ready != null && !expired && !short && spendable != null && currency?.perDollar != null,
                     expired = expired
                 ),
             onBack = ::onBack,
@@ -301,11 +301,15 @@ class PrivateUsdConvertVM(
     private fun onConfirm() {
         val offer = (form.value.quote as? ConvertQuote.Ready)?.quote?.offer ?: return
         if (form.value.isConfirming) return
+        form.update { it.copy(isConfirming = true, error = null) }
         viewModelScope.launch {
-            if (!biometricRepository.authorizeSpend()) return@launch
-            form.update { it.copy(isConfirming = true, error = null) }
-            val error = start(offer)
-            form.update { it.copy(isConfirming = false, error = error) }
+            try {
+                if (!biometricRepository.authorizeSpend()) return@launch
+                val error = start(offer)
+                form.update { it.copy(error = error) }
+            } finally {
+                form.update { it.copy(isConfirming = false) }
+            }
         }
     }
 
