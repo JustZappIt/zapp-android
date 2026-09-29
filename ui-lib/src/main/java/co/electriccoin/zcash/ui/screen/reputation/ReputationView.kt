@@ -236,7 +236,7 @@ private fun RaiseLimitAction(state: ReputationState) {
 private fun VerifiedPlatformRow(row: PlatformRow) {
     val c = ZappTheme.colors
     ZappRow(
-        title = row.name,
+        title = row.name.getValue(),
         icon = Icons.Default.Check,
         iconTint = c.success,
         iconBackground = c.successSoft,

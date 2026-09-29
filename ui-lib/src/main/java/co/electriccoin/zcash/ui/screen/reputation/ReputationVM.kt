@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
 import xyz.justzappit.offramp.p2p.Usdc6
+import xyz.justzappit.offramp.reputation.IdentityCheck
 import xyz.justzappit.offramp.reputation.ReputationReader
 import xyz.justzappit.offramp.reputation.ReputationSummary
 import xyz.justzappit.offramp.reputation.SocialPlatform
@@ -139,14 +140,28 @@ internal class ReputationVM(
                 },
             isLocked = !summary.canBuy,
             // Listed in awards order, so the most valuable account is always first.
-            verified = SocialPlatform.entries.filter { it in summary.verified }.map { summary.row(it) },
+            verified = summary.verifiedRows(),
         )
 
-    private fun ReputationSummary.row(platform: SocialPlatform) =
-        PlatformRow(
-            name = platform.onChainName,
-            reward = stringRes(R.string.reputation_rp_amount, award(platform).toString()),
-        )
+    private fun ReputationSummary.verifiedRows(): List<PlatformRow> =
+        SocialPlatform.entries.filter { it in verified }.map { platform ->
+            PlatformRow(
+                name = stringRes(platform.onChainName),
+                reward = stringRes(R.string.reputation_rp_amount, award(platform).toString()),
+            )
+        } +
+            IdentityCheck.entries.filter { it in identityVerified }.map { check ->
+                PlatformRow(
+                    name =
+                        stringRes(
+                            when (check) {
+                                IdentityCheck.Liveness -> R.string.increase_reputation_identity_liveness
+                                IdentityCheck.Passport -> R.string.increase_reputation_identity_passport
+                            },
+                        ),
+                    reward = stringRes(R.string.reputation_rp_amount, award(check).toString()),
+                )
+            }
 
     private fun Usdc6.usd(): String = toDisplayString(stripTrailingZeros = true)
 
