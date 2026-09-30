@@ -17,12 +17,10 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.work.ForegroundInfo
 import co.electriccoin.zcash.ui.MainActivity
 import co.electriccoin.zcash.ui.R
-import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
+import xyz.justzappit.offramp.atomicswap.SwapDirection
 
-/** Intent extra: a notification tap that should open the conversion under way. */
-const val PRIVATE_USD_REVERSE_EXTRA = "private_usd_reverse_conversion"
-
-const val PRIVATE_USD_CONVERSION_EXTRA = "private_usd_conversion"
+/** Intent extra: the [SwapDirection] of the conversion a notification tap opens. */
+const val PRIVATE_USD_CONVERSION_EXTRA = "private_usd_conversion_direction"
 
 /** Notifications for conversions. None names an amount: they show on the lock screen. */
 class AtomicSwapNotifier(
@@ -48,10 +46,13 @@ class AtomicSwapNotifier(
         }
     }
 
-    fun foregroundInfo(text: String, reverse: Boolean = false): ForegroundInfo {
+    fun foregroundInfo(
+        text: String,
+        direction: SwapDirection
+    ): ForegroundInfo {
         manager
         val notification =
-            builder(PROGRESS_CHANNEL, R.string.private_usd_banner_title, text, reverse)
+            builder(PROGRESS_CHANNEL, R.string.private_usd_banner_title, text, direction)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setSilent(true)
@@ -64,42 +65,25 @@ class AtomicSwapNotifier(
         }
     }
 
-    fun finished(outcome: AtomicSwapOutcome) {
-        val (title, body) =
-            when (outcome) {
-                AtomicSwapOutcome.Paid -> {
-                    R.string.private_usd_notification_paid_title to R.string.private_usd_notification_paid_body
-                }
-
-                is AtomicSwapOutcome.Refunded -> {
-                    R.string.private_usd_notification_refunded_title to R.string.private_usd_notification_refunded_body
-                }
-
-                is AtomicSwapOutcome.NothingSent -> {
-                    R.string.private_usd_notification_nothing_title to R.string.private_usd_notification_nothing_body
-                }
-            }
-        manager.cancel(NEEDS_YOU_ID)
-        post(RESULT_ID, builder(UPDATES_CHANNEL, title, context.getString(body)).setAutoCancel(true).build())
-    }
-
-    fun reverseFinished(
-        @StringRes message: Int
+    fun finished(
+        direction: SwapDirection,
+        @StringRes title: Int,
+        @StringRes body: Int,
     ) {
         manager.cancel(NEEDS_YOU_ID)
-        post(
-            RESULT_ID,
-            builder(UPDATES_CHANNEL, R.string.reverse_title, context.getString(message), true)
-                .setAutoCancel(true)
-                .build()
-        )
+        post(RESULT_ID, builder(UPDATES_CHANNEL, title, context.getString(body), direction).setAutoCancel(true).build())
     }
 
-    fun needsYou(reverse: Boolean = false) {
-        val body = context.getString(R.string.private_usd_notification_needs_you_body)
+    fun needsYou(direction: SwapDirection) {
+        val body =
+            when (direction) {
+                SwapDirection.FORWARD -> R.string.private_usd_notification_needs_you_body
+                SwapDirection.REVERSE -> R.string.reverse_notification_needs_you_body
+            }
+        val text = context.getString(body)
         post(
             NEEDS_YOU_ID,
-            builder(UPDATES_CHANNEL, R.string.private_usd_notification_needs_you_title, body, reverse)
+            builder(UPDATES_CHANNEL, R.string.private_usd_notification_needs_you_title, text, direction)
                 .setAutoCancel(true)
                 .setCategory(NotificationCompat.CATEGORY_REMINDER)
                 .build(),
@@ -107,6 +91,12 @@ class AtomicSwapNotifier(
     }
 
     fun clearNeedsYou() = manager.cancel(NEEDS_YOU_ID)
+
+    /** Takes back every conversion notification still showing. */
+    fun clear() {
+        manager.cancel(RESULT_ID)
+        manager.cancel(NEEDS_YOU_ID)
+    }
 
     // areNotificationsEnabled() is the real guard; lint can't see it as a permission check.
     @SuppressLint("MissingPermission")
@@ -121,7 +111,7 @@ class AtomicSwapNotifier(
         channel: String,
         @StringRes title: Int,
         text: String,
-        reverse: Boolean = false,
+        direction: SwapDirection,
     ): NotificationCompat.Builder =
         NotificationCompat
             .Builder(context, channel)
@@ -129,7 +119,7 @@ class AtomicSwapNotifier(
             .setContentTitle(context.getString(title))
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(openConversion(reverse))
+            .setContentIntent(openConversion(direction))
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(
                 NotificationCompat
@@ -140,13 +130,12 @@ class AtomicSwapNotifier(
                     .build(),
             )
 
-    private fun openConversion(reverse: Boolean): PendingIntent =
+    private fun openConversion(direction: SwapDirection): PendingIntent =
         PendingIntent.getActivity(
             context,
-            REQUEST_CODE + if (reverse) 1 else 0,
+            REQUEST_CODE + direction.ordinal,
             Intent(context, MainActivity::class.java).apply {
-                putExtra(PRIVATE_USD_CONVERSION_EXTRA, true)
-                putExtra(PRIVATE_USD_REVERSE_EXTRA, reverse)
+                putExtra(PRIVATE_USD_CONVERSION_EXTRA, direction.name)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,

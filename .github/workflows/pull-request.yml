@@ -30,7 +30,7 @@ env:
   # with .zapp-deps; verify_composite_build fails when the two disagree.
   ZAPP_MESSAGING_REF: bc5090a89965f1704af368f1867333e753361e13
   BARE_KIT_REF: 15a3569f3d704de7151761051c8d9cc2e299414f
-  ZECSWAP_REF: ecad30c0dc9a393e7a212839f2e74aea5c7839ea
+  ZECSWAP_REF: 9f2da32280369cf005f24c897b79cb64849e5fc6
 
 jobs:
   validate_gradle_wrapper:
@@ -233,6 +233,39 @@ jobs:
           name: Android Lint static analysis results
           path: ~/artifacts
 
+  railgun_web:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        timeout-minutes: 5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        timeout-minutes: 5
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: railgun-lib/web/package-lock.json
+      - name: Build the Railgun page
+        timeout-minutes: 10
+        working-directory: railgun-lib/web
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+      - name: Check the committed page is what its sources build
+        timeout-minutes: 1
+        run: |
+          git diff --exit-code -- railgun-lib/src/main/assets
+          test -z "$(git status --porcelain -- railgun-lib/src/main/assets)"
+      - name: Test
+        timeout-minutes: 5
+        working-directory: railgun-lib/web
+        run: npm test
+
   test_kotlin_modules:
     needs: validate_gradle_wrapper
     runs-on: ubuntu-latest
@@ -254,10 +287,11 @@ jobs:
         uses: ./.github/actions/setup-gradle
         timeout-minutes: 5
       - name: Test
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: |
           # Note that we explicitly check just the Kotlin modules, to avoid compiling the Android modules here
-          ./gradlew :configuration-api-lib:check :crash-lib:check :preference-api-lib:check :spackle-lib:check
+          ./gradlew :configuration-api-lib:check :crash-lib:check :preference-api-lib:check :spackle-lib:check \
+            :offramp-lib:jvmTest :evm-lib:jvmTest
       - name: Collect Artifacts
         if: ${{ always() }}
         timeout-minutes: 1

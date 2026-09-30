@@ -74,7 +74,7 @@ crashes in the biometric gate on emulators. `adb shell pm clear <package>` recov
   `npm run build:android` in `../zappMessaging` (regenerates the committed
   `android/src/main/assets/worklet.bundle`). Never rebuild the bundle for Kotlin-only changes.
 - The Railgun wallet runs Railgun's wallet SDK in a hidden WebView. Its JS lives in
-  `railgun-lib/web`. After changing that JS or its lockfile, run `npm ci && npm run build` there,
+  `railgun-lib/web`. After changing that JS or its lockfile, run `npm ci --ignore-scripts && npm run build` there,
   which regenerates the committed `railgun-lib/src/main/assets/railgun/`, then `npm run check`,
   which syncs Sepolia in headless Chrome over the app's message protocol.
 - New typed chat messages = new `contentType` + JSON payload on the Kotlin side only

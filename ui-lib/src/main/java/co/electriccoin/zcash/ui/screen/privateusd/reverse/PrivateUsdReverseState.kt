@@ -3,35 +3,47 @@
 
 package co.electriccoin.zcash.ui.screen.privateusd.reverse
 
+import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.design.component.ButtonState
+import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressState
-import java.math.BigDecimal
 
 internal data class PrivateUsdReverseState(
+    /** The private dollars to convert, in [currencySymbol]'s currency. */
     val amount: NumberTextFieldState,
-    val showAmount: Boolean,
-    val status: StringResource,
-    val showReview: Boolean = false,
-    val currencySymbol: String = "",
-    val zecAvailable: StringResource? = null,
-    val zecEstimate: BigDecimal? = null,
-    val isQuoting: Boolean = false,
-    val onMax: (() -> Unit)? = null,
-    val available: StringResource? = null,
-    val amountNote: StringResource? = null,
-    val isAmountInvalid: Boolean = false,
-    val escrow: StringResource? = null,
-    val debit: StringResource? = null,
-    val railgunFee: StringResource? = null,
-    val broadcasterFee: StringResource? = null,
-    val receive: String? = null,
-    val receiveIsEstimate: Boolean = true,
-    val error: StringResource? = null,
-    val progress: PrivateUsdProgressState? = null,
+    val isAmountInvalid: Boolean,
+    /** The least and the most one conversion takes. */
+    val amountNote: StringResource,
+    val currencySymbol: String,
+    val usdAvailable: StringResource,
+    val zecAvailable: StringResource?,
+    /** The ZEC a quote brings home. */
+    val receiveEstimate: NumberTextFieldInnerState,
+    val isQuoting: Boolean,
+    val onMax: (() -> Unit)?,
+    val canSwitchDirection: Boolean,
+    /** Set while the user looks over a quote before converting. */
+    val review: PrivateUsdReverseReviewState?,
+    /** Set once it's going ahead, under way or over. */
+    val progress: PrivateUsdProgressState?,
+    /** Recovers the refund of an earlier conversion, while one can be. */
+    val rescue: ButtonState?,
+    val error: StringResource?,
+    val info: PrivateUsdInfo,
     val primary: ButtonState,
-    val cancel: ButtonState? = null,
-    val rescue: ButtonState? = null,
+    val isBackEnabled: Boolean,
+    val pinVerify: PinVerifyState?,
     val onBack: () -> Unit,
+)
+
+internal data class PrivateUsdReverseReviewState(
+    val debit: StringResource,
+    val escrow: StringResource,
+    val railgunFee: StringResource,
+    /** Null while a test account pays the broadcast. */
+    val broadcasterFee: StringResource?,
+    val receive: StringResource,
 )

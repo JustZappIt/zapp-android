@@ -21,8 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
-import androidx.lifecycle.SavedStateHandle
-import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.usecase.NavigateToVotingUseCase
 import co.electriccoin.zcash.ui.common.viewmodel.SecretState
@@ -36,7 +34,7 @@ import co.electriccoin.zcash.ui.screen.chat.list.ChatListScreen
 import co.electriccoin.zcash.ui.screen.chat.repository.ChatConversationsRepository
 import co.electriccoin.zcash.ui.screen.onboarding.ZappOnboardingFlow
 import co.electriccoin.zcash.ui.screen.onboarding.ZappRestoreFlow
-import co.electriccoin.zcash.ui.screen.tabs.SELECTED_TAB_KEY
+import co.electriccoin.zcash.ui.screen.tabs.SelectedTabRepository
 import co.electriccoin.zcash.ui.screen.tabs.TabsVM
 import co.electriccoin.zcash.ui.screen.welcome.WelcomeGateVM
 import co.electriccoin.zcash.ui.screen.welcome.view.WelcomeGateView
@@ -47,7 +45,6 @@ import org.koin.compose.koinInject
 @Composable
 internal fun ZappTabsScaffold(
     navigationRouter: NavigationRouter,
-    tabState: SavedStateHandle,
 ) {
     val welcomeGateVM: WelcomeGateVM = koinViewModel()
     val walletViewModel: WalletViewModel = koinViewModel()
@@ -109,16 +106,24 @@ internal fun ZappTabsScaffold(
         }
 
         else -> {
-            ZappTabsScaffoldContent(tabState)
+            ZappTabsScaffoldContent()
         }
     }
 }
 
 @Composable
-private fun ZappTabsScaffoldContent(tabState: SavedStateHandle) {
+private fun ZappTabsScaffoldContent() {
     val tabsVM: TabsVM = koinViewModel()
-    val selectedTabName by tabState.getStateFlow(SELECTED_TAB_KEY, ZappTab.CHATS.name).collectAsState()
-    val currentTab = ZappTab.valueOf(selectedTabName)
+    val selectedTabRepository: SelectedTabRepository = koinInject()
+    var shownTab by rememberSaveable { mutableStateOf(ZappTab.DEFAULT) }
+    val requestedTab by selectedTabRepository.requested.collectAsState()
+    val currentTab = requestedTab ?: shownTab
+    LaunchedEffect(requestedTab) {
+        requestedTab?.let {
+            shownTab = it
+            selectedTabRepository.consume(it)
+        }
+    }
     val localCurrency by tabsVM.localCurrency.collectAsState()
     val p2pPaymentMethod by tabsVM.p2pPaymentMethod.collectAsState()
     val hasPeerActivity by tabsVM.hasPeerActivity.collectAsState()
@@ -180,8 +185,8 @@ private fun ZappTabsScaffoldContent(tabState: SavedStateHandle) {
                         onPortfolioChartClick = tabsVM::onPortfolioChartClick,
                         onViewingKeyExportClick = tabsVM::onViewingKeyExportClick,
                         onHardwareWalletClick = tabsVM::onHardwareWalletClick,
-                        onRailgunWalletClick = if (BuildConfig.DEBUG) tabsVM::onRailgunWalletClick else null,
-                        onAtomicSwapClick = if (BuildConfig.DEBUG) tabsVM::onAtomicSwapClick else null,
+                        onRailgunWalletClick = tabsVM::onRailgunWalletClick.takeIf { tabsVM.hasConversionDebug },
+                        onAtomicSwapClick = tabsVM::onAtomicSwapClick.takeIf { tabsVM.hasConversionDebug },
                         onVotingClick =
                             if (navigateToVoting.isEnabled) {
                                 { scope.launch { navigateToVoting() } }
@@ -201,7 +206,7 @@ private fun ZappTabsScaffoldContent(tabState: SavedStateHandle) {
                     if (selectedTab == ZappTab.PAY && currentTab != ZappTab.PAY) {
                         BalanceChartReadinessTrace.begin()
                     }
-                    tabState[SELECTED_TAB_KEY] = selectedTab.name
+                    shownTab = selectedTab
                 },
                 modifier = Modifier.align(Alignment.BottomCenter)
             )

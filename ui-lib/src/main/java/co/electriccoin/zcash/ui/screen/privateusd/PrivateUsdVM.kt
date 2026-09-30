@@ -8,71 +8,59 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.backToPay
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
-import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapState
-import co.electriccoin.zcash.ui.common.privateusd.DollarRate
-import co.electriccoin.zcash.ui.common.privateusd.ObserveDollarRateUseCase
+import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
+import co.electriccoin.zcash.ui.common.privateusd.ObserveLocalCurrencyUseCase
+import co.electriccoin.zcash.ui.common.privateusd.ObservePrivateUsdActivityUseCase
+import co.electriccoin.zcash.ui.common.privateusd.ObservePrivateUsdConversionUseCase
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdActivityData
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalances
-import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendLog
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdConversion
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
 import co.electriccoin.zcash.ui.common.privateusd.dollars
-import co.electriccoin.zcash.ui.common.privateusd.local
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
+import co.electriccoin.zcash.ui.common.usecase.NavigateBackToPayUseCase
+import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.ExternalUrl
 import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
-import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
 import co.electriccoin.zcash.ui.screen.privateusd.send.PrivateUsdSendArgs
-import co.electriccoin.zcash.ui.screen.privateusd.widget.PrivateUsdConversionBannerState
+import co.electriccoin.zcash.ui.screen.privateusd.send.PrivateUsdSendMode
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.Instant
 
 class PrivateUsdVM(
     private val balanceRepository: PrivateUsdBalanceRepository,
-    private val atomicSwapRepository: AtomicSwapRepository,
+    atomicSwapRepository: AtomicSwapRepository,
     private val senders: PrivateUsdSenders,
-    sendLog: PrivateUsdSendLog,
-    observeDollarRate: ObserveDollarRateUseCase,
+    observeConversion: ObservePrivateUsdConversionUseCase,
+    observeActivity: ObservePrivateUsdActivityUseCase,
+    observeLocalCurrency: ObserveLocalCurrencyUseCase,
+    private val activityMapper: PrivateUsdActivityMapper,
+    private val navigateBackToPay: NavigateBackToPayUseCase,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
-    private val screening = atomicSwapRepository.deployment?.screeningTime ?: SCREENING_FALLBACK
-    private val activity =
-        atomicSwapRepository.deployment?.let { deployment ->
-            PrivateUsdActivity(
-                deployment = deployment,
-                onOpenConversion = { navigationRouter.forward(PrivateUsdProgressArgs) },
-                onOpenUrl = { navigationRouter.forward(ExternalUrl(it)) },
-            )
-        }
+    private val deployment = atomicSwapRepository.requireDeployment()
 
     internal val state: StateFlow<PrivateUsdState> =
         combine(
             balanceRepository.observe(),
-            atomicSwapRepository.state,
-            atomicSwapRepository.history,
-            sendLog.observe,
-            observeDollarRate(),
-        ) { balance, swap, swaps, sends, rate ->
-            createState(balance, swap, rate, activity?.of(swaps, sends, swap, rate).orEmpty())
-        }.stateIn(
+            observeConversion(),
+            observeActivity(),
+            observeLocalCurrency(),
+            ::createState,
+        ).stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-            initialValue =
-                createState(balanceRepository.state.value, atomicSwapRepository.state.value, null, emptyList()),
+            initialValue = createState(balanceRepository.state.value, null, emptyList(), LocalCurrency.DOLLAR),
         )
 
     init {
@@ -82,84 +70,96 @@ class PrivateUsdVM(
 
     private fun createState(
         balance: PrivateUsdBalanceState,
-        swap: AtomicSwapState,
-        rate: DollarRate?,
-        activity: List<PrivateUsdActivityState>,
+        conversion: PrivateUsdConversion?,
+        activity: List<PrivateUsdActivityData>,
+        currency: LocalCurrency,
     ): PrivateUsdState {
         val balances = balance.balances
         return PrivateUsdState(
-            total = balances?.let { rate.local(it.total).asPrivacySensitive() },
-            usdTotal = balances?.takeIf { rate != null }?.let { dollars(it.total).asPrivacySensitive() },
-            rows = balances?.let { rows(it, rate) }.orEmpty(),
-            assets = balances?.let { assets(it, rate) }.orEmpty(),
+            headline = balances?.headline(currency)?.asPrivacySensitive() ?: balance.placeholder(),
+            isHeadlineKnown = balances != null,
+            usdHeadline =
+                balances?.takeUnless { currency.isDollar }?.let { dollars(it.spendable).asPrivacySensitive() },
+            rows = balances?.let { rows(it, currency) }.orEmpty(),
+            assets = balances?.let { assets(it, currency) }.orEmpty(),
             status = status(balance),
             isRefreshing = balance.isRefreshing,
-            refreshFailed = balance.refreshFailed,
-            isEmpty = balances != null && balances.total.signum() == 0 && !swap.isUnderWay,
-            conversion =
-                if (swap.isUnderWay) {
-                    PrivateUsdConversionBannerState(
-                        title = stringRes(R.string.private_usd_banner_title),
-                        detail = swap.stageDetail(atomicSwapRepository.deployment?.makerConfirmations),
-                        isAttention = swap.problem != null,
-                        onClick = { navigationRouter.forward(PrivateUsdProgressArgs) },
-                    )
-                } else {
-                    null
-                },
+            refreshError = refreshError(balance),
+            isEmpty = balances != null && balances.total.signum() == 0 && conversion == null,
+            conversion = conversion?.let { it.banner { onOpenConversion(it) } },
             sending =
-                senders.current?.let {
-                    PrivateUsdSendingState(
-                        isEnabled = balances?.assets?.any { it.token.isDollar && it.available.signum() > 0 } == true,
-                        onSend = { navigationRouter.forward(PrivateUsdSendArgs(withdraw = false)) },
-                        onWithdraw = { navigationRouter.forward(PrivateUsdSendArgs(withdraw = true)) },
+                PrivateUsdSendingState(
+                    isEnabled =
+                        senders.current != null &&
+                            balances?.assets?.any { it.token.isDollar && it.available.signum() > 0 } == true,
+                    onSend = { navigationRouter.forward(PrivateUsdSendArgs(PrivateUsdSendMode.PRIVATE)) },
+                    onWithdraw = { navigationRouter.forward(PrivateUsdSendArgs(PrivateUsdSendMode.WITHDRAW)) },
+                ),
+            activity =
+                activity.mapNotNull {
+                    activityMapper.createState(
+                        data = it,
+                        deployment = deployment,
+                        conversion = conversion,
+                        currency = currency,
+                        onOpenConversion = ::onOpenConversion,
+                        onOpenUrl = { url -> navigationRouter.forward(ExternalUrl(url)) },
                     )
                 },
-            activity = activity,
-            info = info(rate),
-            onConvert = {
-                navigationRouter.forward(if (swap.isUnderWay) PrivateUsdProgressArgs else PrivateUsdConvertArgs)
-            },
+            info = info(currency),
+            convertButton =
+                ButtonState(stringRes(R.string.private_usd_action_convert)) {
+                    navigationRouter.forward(conversion?.progressArgs ?: PrivateUsdConvertArgs)
+                },
             onRefresh = { balanceRepository.refresh() },
-            onBack = navigationRouter::backToPay,
+            onBack = navigateBackToPay::invoke,
         )
     }
 
-    private fun status(
-        balance: PrivateUsdBalanceState,
-    ): StringResource? {
-        val updated =
-            when {
-                balance.isRefreshing && balance.balances == null -> stringRes(R.string.private_usd_first_load)
-                balance.isRefreshing -> stringRes(R.string.private_usd_updating)
-                else -> balance.updatedAt?.let { stringRes(R.string.private_usd_updated, time(it)) }
-            }
-        return updated
-    }
+    private fun onOpenConversion(conversion: PrivateUsdConversion) = navigationRouter.forward(conversion.progressArgs)
+
+    private fun status(balance: PrivateUsdBalanceState): StringResource? =
+        when {
+            balance.isRefreshing && balance.balances == null -> stringRes(R.string.private_usd_first_load)
+            balance.isRefreshing -> stringRes(R.string.private_usd_updating)
+            else -> balance.updatedAt?.let { stringRes(R.string.private_usd_updated, dateTime(it)) }
+        }
+
+    private fun refreshError(balance: PrivateUsdBalanceState): StringResource? =
+        when {
+            !balance.refreshFailed -> null
+            balance.balances == null -> stringRes(R.string.private_usd_load_failed)
+            else -> stringRes(R.string.private_usd_refresh_failed)
+        }
 
     private fun rows(
         balances: PrivateUsdBalances,
-        rate: DollarRate?
+        currency: LocalCurrency
     ): List<PrivateUsdRowState> =
         listOfNotNull(
-            balances.arriving.takeIf { it.signum() > 0 }?.let {
-                PrivateUsdRowState(
-                    label = stringRes(R.string.private_usd_row_arriving),
-                    amount = rate.local(it).asPrivacySensitive(),
-                    explanation = stringRes(R.string.private_usd_row_arriving_info, screening.about()),
-                )
-            },
+            PrivateUsdRowState(
+                label = stringRes(R.string.private_usd_row_available),
+                amount = currency.format(balances.available).asPrivacySensitive(),
+                explanation = null,
+            ),
             balances.processing.takeIf { it.signum() > 0 }?.let {
                 PrivateUsdRowState(
                     label = stringRes(R.string.private_usd_row_processing),
-                    amount = rate.local(it).asPrivacySensitive(),
+                    amount = currency.format(it).asPrivacySensitive(),
                     explanation = stringRes(R.string.private_usd_row_processing_info),
+                )
+            },
+            balances.arriving.takeIf { it.signum() > 0 }?.let {
+                PrivateUsdRowState(
+                    label = stringRes(R.string.private_usd_row_arriving),
+                    amount = currency.format(it).asPrivacySensitive(),
+                    explanation = stringRes(R.string.private_usd_row_arriving_info, deployment.screeningTime.about()),
                 )
             },
             balances.blocked.takeIf { it.signum() > 0 }?.let {
                 PrivateUsdRowState(
                     label = stringRes(R.string.private_usd_row_blocked),
-                    amount = rate.local(it).asPrivacySensitive(),
+                    amount = currency.format(it).asPrivacySensitive(),
                     explanation = stringRes(R.string.private_usd_row_blocked_info),
                     isDanger = true,
                 )
@@ -169,7 +169,7 @@ class PrivateUsdVM(
     // Dollars only, and only worth listing when there's more than one kind.
     private fun assets(
         balances: PrivateUsdBalances,
-        rate: DollarRate?
+        currency: LocalCurrency
     ): List<PrivateUsdAssetState> {
         val held =
             balances.assets
@@ -179,8 +179,8 @@ class PrivateUsdVM(
         return if (held.size > 1) {
             held.map { (asset, amount) ->
                 PrivateUsdAssetState(
-                    name = asset.token.name,
-                    amount = rate.local(amount.toDecimal(asset.token.decimals)).asPrivacySensitive(),
+                    name = stringRes(asset.token.name),
+                    amount = currency.format(amount.toDecimal(asset.token.decimals)).asPrivacySensitive(),
                 )
             }
         } else {
@@ -188,31 +188,24 @@ class PrivateUsdVM(
         }
     }
 
-    private fun info(rate: DollarRate?) =
+    private fun info(currency: LocalCurrency) =
         PrivateUsdInfo(
             title = stringRes(R.string.private_usd_info_title),
             steps =
-                listOfNotNull(
+                listOf(
                     stringRes(R.string.private_usd_info_step_convert),
-                    stringRes(R.string.private_usd_info_step_screen, screening.about()),
-                    stringRes(R.string.private_usd_info_send).takeIf { senders.current != null },
-                    stringRes(R.string.private_usd_info_withdraw).takeIf { senders.current != null },
+                    stringRes(R.string.private_usd_info_step_screen, deployment.screeningTime.about()),
+                    stringRes(R.string.private_usd_info_send),
+                    stringRes(R.string.private_usd_info_withdraw),
                 ),
             notes =
                 listOfNotNull(
                     stringRes(R.string.private_usd_info_note_private),
-                    stringRes(R.string.private_usd_info_note_currency).takeIf { rate != null },
+                    stringRes(R.string.private_usd_info_note_currency).takeUnless { currency.isDollar },
                 ),
         )
 
-    private fun time(instant: Instant): String =
-        DateTimeFormatter
-            .ofLocalizedTime(FormatStyle.SHORT)
-            .withZone(ZoneId.systemDefault())
-            .format(java.time.Instant.ofEpochMilli(instant.toEpochMilliseconds()))
-
     private companion object {
         val REFRESH_AFTER = 30.seconds
-        val SCREENING_FALLBACK = 60.minutes
     }
 }

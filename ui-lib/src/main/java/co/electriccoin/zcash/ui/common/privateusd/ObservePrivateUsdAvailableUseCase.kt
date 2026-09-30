@@ -3,7 +3,7 @@
 
 package co.electriccoin.zcash.ui.common.privateusd
 
-import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
 import co.electriccoin.zcash.ui.common.repository.ConfigurationRepository
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import co.electriccoin.zcash.ui.configuration.ConfigurationEntries
@@ -16,11 +16,11 @@ import kotlinx.coroutines.flow.map
 /** Private USD shows only in builds with a swap deployment and a Railgun network, and while its flag is on. */
 class ObservePrivateUsdAvailableUseCase(
     private val configurationRepository: ConfigurationRepository,
-    private val atomicSwapRepository: AtomicSwapRepository,
+    private val deployments: AtomicSwapDeployments,
     private val railgunWalletRepository: RailgunWalletRepository,
 ) {
     operator fun invoke(): Flow<Boolean> =
-        if (atomicSwapRepository.deployment == null || railgunWalletRepository.state.value.network == null) {
+        if (deployments.current == null || railgunWalletRepository.state.value.network == null) {
             flowOf(false)
         } else {
             configurationRepository.configurationFlow

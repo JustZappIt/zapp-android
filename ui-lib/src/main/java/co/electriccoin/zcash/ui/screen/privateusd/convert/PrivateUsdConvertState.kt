@@ -3,7 +3,9 @@
 
 package co.electriccoin.zcash.ui.screen.privateusd.convert
 
+import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.design.component.ButtonState
+import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
@@ -12,29 +14,32 @@ internal enum class PrivateUsdConvertPhase { AMOUNT, REVIEW }
 
 internal data class PrivateUsdConvertState(
     val phase: PrivateUsdConvertPhase,
-    /** Total ZEC spend, including its network fee. */
+    /** The ZEC to spend in all, network fee included. */
     val amount: NumberTextFieldState,
-    /** Under the amount: what it's worth in the user's currency, or the limits. */
-    val amountNote: StringResource,
     val isAmountInvalid: Boolean,
     val zecAvailable: StringResource?,
+    val usdAvailable: StringResource,
+    val currencySymbol: String,
+    /** What the quote brings, in the user's currency. */
+    val receiveEstimate: NumberTextFieldInnerState,
+    val onMax: (() -> Unit)?,
     val quote: PrivateUsdQuoteState?,
     val isQuoting: Boolean,
     /** Why it can't go on. */
     val message: StringResource?,
+    val canSwitchDirection: Boolean,
     val info: PrivateUsdInfo,
     val primaryButton: ButtonState,
+    val isBackEnabled: Boolean,
+    val pinVerify: PinVerifyState?,
     val onBack: () -> Unit,
-    val currencySymbol: String = "",
-    val usdAvailable: StringResource? = null,
-    val usdEstimate: java.math.BigDecimal? = null,
-    val onMax: (() -> Unit)? = null,
 )
 
 internal data class PrivateUsdQuoteState(
     val pay: StringResource,
-    val networkFee: StringResource?,
+    val networkFee: StringResource,
     val receive: StringResource,
     val fees: StringResource,
-    val refreshesIn: StringResource,
+    /** How long the quote has left. */
+    val expiry: StringResource,
 )

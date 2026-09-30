@@ -19,10 +19,7 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toJavaDuration
 
-/**
- * Keeps the swap under way advancing outside the app's screens: the worker holds the process up while
- * it runs, and two alarms wake the app around `t0` and before `t1` in case Android stopped it.
- */
+/** The worker keeps a conversion going; for a forward swap, alarms around `t0` and `t1` wake a stopped app too. */
 class AtomicSwapScheduler(
     private val context: Context,
 ) {
@@ -50,6 +47,12 @@ class AtomicSwapScheduler(
     ) {
         alarm(Wake.CLAIMABLE, t0 + CLAIMABLE_SLACK.inWholeSeconds)
         alarm(Wake.LAST_CALL, maxOf(t0 + LAST_CALL_AFTER_T0.inWholeSeconds, t1 - LAST_CALL_BEFORE_T1.inWholeSeconds))
+    }
+
+    /** Stops the worker and its wakes. */
+    fun cancel() {
+        workManager.cancelUniqueWork(WORK_NAME)
+        cancelWakes()
     }
 
     fun cancelWakes() {

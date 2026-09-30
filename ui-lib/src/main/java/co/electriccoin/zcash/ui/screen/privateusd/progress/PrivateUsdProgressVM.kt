@@ -6,30 +6,35 @@ package co.electriccoin.zcash.ui.screen.privateusd.progress
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
-import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.backToPay
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapState
-import co.electriccoin.zcash.ui.common.privateusd.ConversionCurrency
-import co.electriccoin.zcash.ui.common.privateusd.ObserveConversionCurrencyUseCase
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
+import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
+import co.electriccoin.zcash.ui.common.privateusd.ObserveLocalCurrencyUseCase
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
-import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
+import co.electriccoin.zcash.ui.common.usecase.NavigateBackToPayUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
+import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdArgs
 import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
-import kotlinx.coroutines.delay
+import co.electriccoin.zcash.ui.screen.privateusd.epochSeconds
+import co.electriccoin.zcash.ui.screen.privateusd.message
+import co.electriccoin.zcash.ui.screen.privateusd.requireDeployment
+import co.electriccoin.zcash.ui.screen.privateusd.runConversionStep
+import co.electriccoin.zcash.ui.screen.privateusd.showConversionUnderWay
+import co.electriccoin.zcash.ui.screen.privateusd.toFailure
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import xyz.justzappit.offramp.atomicswap.AtomicSwapBlockedException
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.offramp.atomicswap.AtomicSwapWait
 import kotlin.time.Clock
@@ -37,32 +42,22 @@ import kotlin.time.Duration.Companion.seconds
 
 class PrivateUsdProgressVM(
     private val atomicSwapRepository: AtomicSwapRepository,
+    private val reverseSwapRepository: ReverseSwapRepository,
     balanceRepository: PrivateUsdBalanceRepository,
-    observeConversionCurrency: ObserveConversionCurrencyUseCase,
+    observeLocalCurrency: ObserveLocalCurrencyUseCase,
     private val navigationRouter: NavigationRouter,
+    private val navigateBackToPay: NavigateBackToPayUseCase,
 ) : ViewModel() {
-    private val steps =
-        checkNotNull(atomicSwapRepository.deployment) { "no conversions in this build" }.let { deployment ->
-            PrivateUsdProgressSteps(
-                deployment,
-                checkNotNull(PrivateUsdTokens.find(deployment.railgunNetwork, deployment.config.token.checksumHex)),
-            )
-        }
-
-    private val clock =
-        flow {
-            while (true) {
-                emit(Clock.System.now().epochSeconds)
-                delay(TICK)
-            }
-        }
+    private val steps = PrivateUsdProgressSteps(atomicSwapRepository.requireDeployment())
+    private val callOff = MutableStateFlow(CallOff())
 
     internal val state: StateFlow<PrivateUsdProgressState> =
         combine(
             atomicSwapRepository.state,
             balanceRepository.observe(),
-            clock,
-            observeConversionCurrency(),
+            epochSeconds(TICK),
+            observeLocalCurrency(),
+            callOff,
             ::createState
         ).stateIn(
             scope = viewModelScope,
@@ -72,19 +67,22 @@ class PrivateUsdProgressVM(
                     atomicSwapRepository.state.value,
                     balanceRepository.state.value,
                     Clock.System.now().epochSeconds,
-                    null,
+                    LocalCurrency.DOLLAR,
+                    callOff.value,
                 ),
         )
 
     init {
         atomicSwapRepository.resume(isForeground = true)
+        viewModelScope.launch { leaveIfNothingToShow() }
     }
 
     private fun createState(
         swap: AtomicSwapState,
         balance: PrivateUsdBalanceState,
         now: Long,
-        currency: ConversionCurrency?,
+        currency: LocalCurrency,
+        callOff: CallOff,
     ): PrivateUsdProgressState {
         val record = swap.record
         val isSlowToOpen =
@@ -93,10 +91,19 @@ class PrivateUsdProgressVM(
             amounts = record?.let { steps.amounts(it, currency) },
             result = record?.let { steps.result(it, balance, currency) },
             steps = steps.of(swap, balance),
-            note = steps.note(swap, isSlowToOpen).takeIf { swap.isUnderWay },
+            note = steps.note(swap, now, isSlowToOpen).takeIf { swap.isUnderWay },
+            problem =
+                swap.problem
+                    ?.takeIf { swap.isUnderWay }
+                    ?.let { PrivateUsdProblemState(it.message(), onRetry = atomicSwapRepository::retryNow) },
+            error = callOff.error,
             callOff =
-                ButtonState(stringRes(R.string.convert_call_off), onClick = ::onCallOff)
-                    .takeIf { isSlowToOpen && swap.problem == null },
+                ButtonState(
+                    text = stringRes(R.string.convert_call_off),
+                    isEnabled = !callOff.isBusy,
+                    isLoading = callOff.isBusy,
+                    onClick = ::onCallOff,
+                ).takeIf { isSlowToOpen && swap.problem == null },
             showsBackgroundNote = swap.isUnderWay,
             primaryButton =
                 when (record?.outcome) {
@@ -110,27 +117,44 @@ class PrivateUsdProgressVM(
                         }
                     }
 
-                    else -> {
+                    is AtomicSwapOutcome.Refunded, is AtomicSwapOutcome.NothingSent -> {
                         ButtonState(stringRes(R.string.convert_result_try_again)) {
                             navigationRouter.replace(PrivateUsdConvertArgs)
                         }
                     }
                 },
             info = steps.info,
-            onBack = navigationRouter::backToPay,
+            onBack = navigateBackToPay::invoke,
         )
     }
 
-    private fun onCallOff() {
-        viewModelScope.launch {
-            try {
-                atomicSwapRepository.abandon()
-            } catch (e: AtomicSwapBlockedException) {
-                // It reached the chain meanwhile, so it carries on.
-                Twig.info { "Private USD: not called off, ${e.message}" }
-            }
+    // A forward conversion is what this screen shows: without one, the reverse one under way or a new one.
+    private suspend fun leaveIfNothingToShow() {
+        val kept = runConversionStep("no conversion history") { atomicSwapRepository.history.first() }.getOrNull()
+        if (kept.isNullOrEmpty() &&
+            !navigationRouter.showConversionUnderWay(atomicSwapRepository, reverseSwapRepository)
+        ) {
+            navigationRouter.replace(PrivateUsdConvertArgs)
         }
     }
+
+    private fun onCallOff() {
+        if (callOff.value.isBusy) return
+        callOff.value = CallOff(isBusy = true)
+        viewModelScope.launch {
+            val error =
+                runConversionStep("not called off") { atomicSwapRepository.abandon() }
+                    .exceptionOrNull()
+                    ?.toFailure()
+                    ?.message(R.string.convert_call_off_failed)
+            callOff.value = CallOff(error = error)
+        }
+    }
+
+    private data class CallOff(
+        val isBusy: Boolean = false,
+        val error: StringResource? = null,
+    )
 
     private companion object {
         val TICK = 15.seconds

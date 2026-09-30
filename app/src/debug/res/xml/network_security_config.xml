@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Debug builds only: main's policy, plus cleartext to this device's loopback. The atomic swap spike
-  reaches a maker and relayer on the developer's machine over `adb reverse`, which never leaves the
-  device. Release builds keep main's config.
+  Debug builds only: main's policy, plus cleartext to this device's loopback, where a maker and relayer
+  on the developer's machine are reached over `adb reverse`, which never leaves the device. Release
+  builds keep main's config.
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">

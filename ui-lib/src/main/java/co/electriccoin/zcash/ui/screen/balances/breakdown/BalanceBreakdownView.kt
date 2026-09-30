@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cash.z.ecc.android.sdk.model.Zatoshi
@@ -28,6 +29,7 @@ import co.electriccoin.zcash.ui.design.component.rememberScreenModalBottomSheetS
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappModalBottomSheetDragHandle
+import co.electriccoin.zcash.ui.design.component.zapp.ZappRowChevron
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ProvideZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
@@ -162,14 +164,22 @@ private fun PrivateUsdCard(
     modifier: Modifier = Modifier,
 ) {
     val c = ZappTheme.colors
-    ZappBorderedCard(modifier = modifier.clickable(onClick = state.onClick), padding = 16.dp) {
+    ZappBorderedCard(
+        modifier =
+            modifier.clickable(
+                onClickLabel = stringResource(R.string.private_usd_home_content_description),
+                role = Role.Button,
+                onClick = state.onClick,
+            ),
+        padding = 16.dp,
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             BasicText(
                 text = stringResource(R.string.private_usd_title),
                 style = ZappTheme.typography.rowSubtitle.copy(color = c.textMuted),
                 modifier = Modifier.weight(1f),
             )
-            BasicText(text = "›", style = ZappTheme.typography.rowSubtitle.copy(color = c.textSubtle))
+            ZappRowChevron()
         }
         Spacer(6.dp)
         BasicText(

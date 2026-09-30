@@ -4,23 +4,25 @@
 package co.electriccoin.zcash.ui.screen.privateusd.send
 
 import androidx.lifecycle.viewModelScope
+import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
-import co.electriccoin.zcash.ui.common.privateusd.ObserveDollarRateUseCase
+import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
+import co.electriccoin.zcash.ui.common.privateusd.ObserveLocalCurrencyUseCase
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdAsset
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalances
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendCost
-import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendLog
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendOutcome
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSender
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
-import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
-import co.electriccoin.zcash.ui.common.repository.BiometricRepository
-import co.electriccoin.zcash.ui.common.repository.BiometricsCancelledException
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletState
+import co.electriccoin.zcash.ui.common.security.PinVerifyState
+import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
+import co.electriccoin.zcash.ui.design.util.stringRes
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -40,21 +42,28 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import xyz.justzappit.evm.types.TxHash
+import xyz.justzappit.railgun.RailgunException
 import xyz.justzappit.railgun.RailgunNetwork
-import xyz.justzappit.railgun.RailgunSent
 import java.math.BigDecimal
 import java.math.BigInteger
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PrivateUsdSendVMTest {
     private val token = PrivateUsdTokens.of(RailgunNetwork.SEPOLIA).first { it.isDollar }
     private val balance = MutableStateFlow(balance(AVAILABLE))
     private val sender = mockk<PrivateUsdSender>()
-    private val biometrics = mockk<BiometricRepository>()
-    private val sendLog = mockk<PrivateUsdSendLog>()
+    private val pin = MutableStateFlow<PinVerifyState?>(null)
+    private val auth =
+        mockk<SecretAuthGate> {
+            every { pinPrompt } returns pin
+            coEvery { authenticate(any(), any()) } returns true
+        }
     private lateinit var vm: PrivateUsdSendVM
 
     @Before
@@ -65,29 +74,24 @@ class PrivateUsdSendVMTest {
         every { balanceRepository.observe() } returns balance
         val senders = mockk<PrivateUsdSenders>()
         every { senders.current } returns sender
-        every { sender.usesTestAccount } returns true
-        coEvery { sender.cost(any()) } returns PrivateUsdSendCost(BigInteger.ZERO, null)
-        coEvery { sender.send(any()) } returns RailgunSent(TX_HASH, null)
-        coEvery { biometrics.requestBiometrics(any()) } returns Unit
-        coEvery { sendLog.add(any()) } returns Unit
+        coEvery { sender.cost(any()) } returns PrivateUsdSendCost(BigInteger.ZERO, 0)
+        coEvery { sender.send(any()) } returns PrivateUsdSendOutcome.Sent(TX_HASH)
         val wallet = mockk<RailgunWalletRepository>()
-        val walletState = mockk<RailgunWalletState>()
-        every { walletState.proof } returns null
-        every { wallet.state } returns MutableStateFlow(walletState)
+        every { wallet.state } returns
+            MutableStateFlow(RailgunWalletState(RailgunWalletState.Phase.READY, RailgunNetwork.SEPOLIA))
         val swaps = mockk<AtomicSwapRepository>()
         every { swaps.deployment } returns null
-        val rates = mockk<ObserveDollarRateUseCase>()
-        every { rates() } returns flowOf(null)
+        val rates = mockk<ObserveLocalCurrencyUseCase>()
+        every { rates() } returns flowOf(LocalCurrency.DOLLAR)
         vm =
             PrivateUsdSendVM(
-                PrivateUsdSendArgs(true),
+                PrivateUsdSendArgs(PrivateUsdSendMode.WITHDRAW),
                 balanceRepository,
                 senders,
                 wallet,
                 swaps,
                 rates,
-                biometrics,
-                sendLog,
+                auth,
                 mockk(relaxed = true)
             )
     }
@@ -103,19 +107,41 @@ class PrivateUsdSendVMTest {
         runTest {
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
             review()
-            val authorized = CompletableDeferred<Unit>()
-            coEvery { biometrics.requestBiometrics(any()) } coAnswers { authorized.await() }
+            val authorized = CompletableDeferred<Boolean>()
+            coEvery { auth.authenticate(any(), any()) } coAnswers { authorized.await() }
             val confirm = vm.state.value.primaryButton.onClick
 
             confirm()
             confirm()
             assertFalse(vm.state.value.primaryButton.isEnabled)
-            authorized.complete(Unit)
+            authorized.complete(true)
             confirm()
 
-            coVerify(exactly = 1) { biometrics.requestBiometrics(any()) }
+            coVerify(exactly = 1) { auth.authenticate(any(), any()) }
             coVerify(exactly = 1) { sender.send(any()) }
             assertEquals(PrivateUsdSendPhase.DONE, vm.state.value.phase)
+        }
+
+    @Test
+    fun `the app's PIN is asked for over the review before anything is sent`() =
+        runTest {
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
+            review()
+            val entered = CompletableDeferred<Boolean>()
+            val prompt = PinVerifyState(hasError = false, lockoutSecondsRemaining = 0, onPinSubmit = {}, onCancel = {})
+            coEvery { auth.authenticate(any(), any()) } coAnswers {
+                pin.value = prompt
+                entered.await().also { pin.value = null }
+            }
+
+            vm.state.value.primaryButton
+                .onClick()
+
+            assertEquals(prompt, vm.state.value.pinVerify)
+            coVerify(exactly = 0) { sender.send(any()) }
+            entered.complete(true)
+            assertNull(vm.state.value.pinVerify)
+            coVerify(exactly = 1) { sender.send(any()) }
         }
 
     @Test
@@ -125,29 +151,62 @@ class PrivateUsdSendVMTest {
             review()
             coEvery { sender.send(any()) } coAnswers {
                 balance.value = balance(BigInteger.ZERO)
-                RailgunSent(TX_HASH, null)
+                PrivateUsdSendOutcome.Sent(TX_HASH)
             }
 
             vm.state.value.primaryButton
                 .onClick()
 
             assertEquals(PrivateUsdSendPhase.DONE, vm.state.value.phase)
-            assertNotNull(vm.state.value.done)
+            assertNull(checkNotNull(vm.state.value.done).note)
         }
 
     @Test
-    fun `a corrupt activity log does not turn a successful send into a retry`() =
+    fun `a send that may have gone out never goes back to review`() =
         runTest {
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
             review()
-            coEvery { sendLog.add(any()) } throws StoreCorruptedException("unreadable")
+            coEvery { sender.send(any()) } returns PrivateUsdSendOutcome.Unconfirmed(TX_HASH)
 
             vm.state.value.primaryButton
                 .onClick()
 
             assertEquals(PrivateUsdSendPhase.DONE, vm.state.value.phase)
-            assertNotNull(vm.state.value.done)
-            coVerify(exactly = 1) { sender.send(any()) }
+            assertEquals(stringRes(R.string.private_usd_send_unconfirmed), checkNotNull(vm.state.value.done).note)
+            assertEquals(stringRes(R.string.convert_result_done), vm.state.value.primaryButton.text)
+        }
+
+    @Test
+    fun `a send that left nothing behind can be confirmed again, and says why`() =
+        runTest {
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
+            review()
+            coEvery { sender.send(any()) } returns PrivateUsdSendOutcome.NotSent
+
+            vm.state.value.primaryButton
+                .onClick()
+
+            assertEquals(PrivateUsdSendPhase.REVIEW, vm.state.value.phase)
+            assertEquals(stringRes(R.string.private_usd_send_not_sent), vm.state.value.error)
+            assertTrue(vm.state.value.primaryButton.isEnabled)
+        }
+
+    @Test
+    fun `a review the engine can't price stays on the form, with nothing sent`() =
+        runTest {
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
+            coEvery { sender.cost(any()) } throws RailgunException.Unavailable(IllegalStateException("updating"))
+
+            vm.state.value.amount
+                .onValueChange(NumberTextFieldInnerState.fromAmount(BigDecimal.ONE))
+            vm.state.value.recipient
+                .onValueChange(RECIPIENT)
+            vm.state.value.primaryButton
+                .onClick()
+
+            assertEquals(PrivateUsdSendPhase.FORM, vm.state.value.phase)
+            assertEquals(stringRes(R.string.private_usd_send_not_sent), vm.state.value.error)
+            assertFalse(vm.state.value.isBusy)
         }
 
     @Test
@@ -155,7 +214,7 @@ class PrivateUsdSendVMTest {
         runTest {
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
             review()
-            coEvery { biometrics.requestBiometrics(any()) } throws BiometricsCancelledException()
+            coEvery { auth.authenticate(any(), any()) } returns false
 
             vm.state.value.primaryButton
                 .onClick()
@@ -184,10 +243,85 @@ class PrivateUsdSendVMTest {
             coVerify(exactly = 0) { sender.send(any()) }
         }
 
+    @Test
+    fun `a balance refresh can't swap the token the form started on for another`() =
+        runTest {
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
+            val otherToken = PrivateUsdTokens.of(RailgunNetwork.SEPOLIA).first { it.isDollar && it != token }
+
+            balance.value =
+                PrivateUsdBalanceState(
+                    balances =
+                        PrivateUsdBalances(
+                            listOf(PrivateUsdAsset(otherToken, AVAILABLE), PrivateUsdAsset(token, BigInteger.ZERO))
+                        )
+                )
+            vm.state.value.amount
+                .onValueChange(NumberTextFieldInnerState.fromAmount(BigDecimal.ONE))
+
+            val selected =
+                vm.state.value.assets
+                    .single { it.isSelected }
+            assertEquals(token.symbol, selected.symbol)
+            assertEquals(stringRes(R.string.private_usd_send_too_much), vm.state.value.amountNote)
+            assertFalse(vm.state.value.primaryButton.isEnabled)
+        }
+
+    @Test
+    fun `a reviewed send the balance no longer covers says so`() =
+        runTest {
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
+            review()
+
+            balance.value = balance(BigInteger.ONE)
+
+            assertEquals(stringRes(R.string.private_usd_send_balance_dropped), vm.state.value.error)
+            assertFalse(vm.state.value.primaryButton.isEnabled)
+        }
+
+    @Test
+    fun `editing the form clears what went wrong before`() =
+        runTest {
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
+            coEvery { sender.cost(any()) } throws RailgunException.Unavailable(IllegalStateException("updating"))
+            vm.state.value.amount
+                .onValueChange(NumberTextFieldInnerState.fromAmount(BigDecimal.ONE))
+            vm.state.value.recipient
+                .onValueChange(RECIPIENT)
+            vm.state.value.primaryButton
+                .onClick()
+            assertEquals(stringRes(R.string.private_usd_send_not_sent), vm.state.value.error)
+
+            vm.state.value.amount
+                .onValueChange(NumberTextFieldInnerState.fromAmount(BigDecimal.TEN))
+
+            assertNull(vm.state.value.error)
+        }
+
+    @Test
+    fun `the recipient can't be edited while the send is being priced`() =
+        runTest {
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
+            val priced = CompletableDeferred<PrivateUsdSendCost>()
+            coEvery { sender.cost(any()) } coAnswers { priced.await() }
+            vm.state.value.amount
+                .onValueChange(NumberTextFieldInnerState.fromAmount(BigDecimal.ONE))
+            vm.state.value.recipient
+                .onValueChange(RECIPIENT)
+
+            vm.state.value.primaryButton
+                .onClick()
+
+            assertFalse(vm.state.value.recipient.isEnabled)
+            priced.complete(PrivateUsdSendCost(BigInteger.ZERO, 0))
+            assertEquals(PrivateUsdSendPhase.REVIEW, vm.state.value.phase)
+        }
+
     private fun review() {
         vm.state.value.amount
             .onValueChange(NumberTextFieldInnerState.fromAmount(BigDecimal.ONE))
-        vm.state.value.onRecipientChange(RECIPIENT)
+        vm.state.value.recipient
+            .onValueChange(RECIPIENT)
         vm.state.value.primaryButton
             .onClick()
         assertEquals(PrivateUsdSendPhase.REVIEW, vm.state.value.phase)
@@ -201,6 +335,6 @@ class PrivateUsdSendVMTest {
     private companion object {
         val AVAILABLE: BigInteger = BigInteger.TEN.pow(6)
         const val RECIPIENT = "0x09ed1f966745be18c711c346242c0974dad7c3e5"
-        const val TX_HASH = "0x1234"
+        val TX_HASH = TxHash.fromHex("0x" + "12".repeat(32))
     }
 }

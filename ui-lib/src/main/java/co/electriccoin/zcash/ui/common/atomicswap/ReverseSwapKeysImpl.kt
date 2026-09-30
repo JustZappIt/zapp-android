@@ -3,32 +3,27 @@
 
 package co.electriccoin.zcash.ui.common.atomicswap
 
-import xyz.justzappit.atomicswap.Deployment
 import xyz.justzappit.atomicswap.ReverseAtomicSwap
 import xyz.justzappit.atomicswap.ReverseEscrowTerms
-import xyz.justzappit.offramp.atomicswap.ReverseRelayerTerms
+import xyz.justzappit.offramp.atomicswap.RelayerTerms
 import xyz.justzappit.offramp.atomicswap.ReverseSwapKeys
 import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
-import xyz.justzappit.offramp.atomicswap.SWAP_ADDRESS_BYTES
-import xyz.justzappit.offramp.atomicswap.SWAP_SHARE_BYTES
-import xyz.justzappit.offramp.atomicswap.SWAP_WORD_BYTES
-import xyz.justzappit.offramp.atomicswap.decimalUnits
-import xyz.justzappit.offramp.atomicswap.fixedHex
 
 class ReverseSwapKeysImpl(
-    private val keys: AtomicSwapKeysImpl
+    private val keys: SwapKeyring
 ) : ReverseSwapKeys {
     override suspend fun signOpen(record: ReverseSwapRecord): ByteArray =
-        keys.withKey(record.index) { key ->
+        keys.withKey(record.index, record.railgunKeys) { key, railgun ->
             val quote = record.quote
             ReverseAtomicSwap.signOpen(
                 key,
+                railgun,
                 record.domain(),
                 ReverseEscrowTerms(
-                    fixedHex(quote.terms.maker, SWAP_ADDRESS_BYTES),
-                    fixedHex(quote.terms.token, SWAP_ADDRESS_BYTES),
-                    decimalUnits(quote.terms.amount),
-                    fixedHex(quote.terms.makerShare, SWAP_SHARE_BYTES),
+                    quote.terms.maker.bytes,
+                    quote.terms.token.bytes,
+                    quote.terms.amount.micros,
+                    quote.terms.makerShare.bytes,
                     quote.readyDeadline,
                     quote.refundAfter,
                     quote.fundingDeadline,
@@ -36,41 +31,50 @@ class ReverseSwapKeysImpl(
             )
         }
 
-    override suspend fun signReady(record: ReverseSwapRecord, deadline: Long): ByteArray =
+    override suspend fun signReady(
+        record: ReverseSwapRecord,
+        deadline: Long
+    ): ByteArray =
         keys.withKey(record.index) {
-            ReverseAtomicSwap.signReady(it, record.domain(), fixedHex(record.swapId, SWAP_WORD_BYTES), deadline)
+            ReverseAtomicSwap.signReady(it, record.domain(), record.swapId.bytes, deadline)
         }
 
-    override suspend fun signLockRefund(record: ReverseSwapRecord, deadline: Long): ByteArray =
+    override suspend fun signLockRefund(
+        record: ReverseSwapRecord,
+        deadline: Long
+    ): ByteArray =
         keys.withKey(record.index) {
-            ReverseAtomicSwap.signLockRefund(it, record.domain(), fixedHex(record.swapId, SWAP_WORD_BYTES), deadline)
+            ReverseAtomicSwap.signLockRefund(it, record.domain(), record.swapId.bytes, deadline)
         }
 
-    override suspend fun signPayout(record: ReverseSwapRecord, terms: ReverseRelayerTerms): ByteArray =
+    override suspend fun signPayout(
+        record: ReverseSwapRecord,
+        terms: RelayerTerms
+    ): ByteArray =
         keys.withKey(record.index) {
             ReverseAtomicSwap.signRefundPayout(
                 it,
                 record.domain(),
-                fixedHex(record.swapId, SWAP_WORD_BYTES),
-                fixedHex(terms.relayer, SWAP_ADDRESS_BYTES),
-                decimalUnits(terms.fee)
+                record.swapId.bytes,
+                terms.relayer.bytes,
+                terms.fee.micros,
             )
         }
 
-    override suspend fun signRescue(record: ReverseSwapRecord, terms: ReverseRelayerTerms): ByteArray =
-        keys.withKey(record.index) {
+    override suspend fun signRescue(
+        record: ReverseSwapRecord,
+        terms: RelayerTerms
+    ): ByteArray =
+        keys.withKey(record.index, record.railgunKeys) { key, railgun ->
             ReverseAtomicSwap.signRefundRescue(
-                it,
+                key,
+                railgun,
                 record.domain(),
-                fixedHex(record.swapId, SWAP_WORD_BYTES),
-                fixedHex(terms.relayer, SWAP_ADDRESS_BYTES),
-                decimalUnits(terms.fee)
+                record.swapId.bytes,
+                terms.relayer.bytes,
+                terms.fee.micros,
             )
         }
 
-    private fun ReverseSwapRecord.domain() =
-        Deployment(
-            deployment.chainId,
-            fixedHex(deployment.contract, SWAP_ADDRESS_BYTES)
-        )
+    private fun ReverseSwapRecord.domain() = domain(deployment.chainId, deployment.contract)
 }

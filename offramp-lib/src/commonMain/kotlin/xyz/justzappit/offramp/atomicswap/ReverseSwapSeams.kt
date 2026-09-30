@@ -3,74 +3,106 @@
 
 package xyz.justzappit.offramp.atomicswap
 
-interface ReverseSwapApi {
-    suspend fun info(): ReverseMakerInfo
+import xyz.justzappit.evm.rpc.TransactionStatus
+import xyz.justzappit.evm.types.TxHash
+import xyz.justzappit.offramp.p2p.Usdc6
 
-    suspend fun quote(units: Int, user: String, refundNote: String): ReverseQuote
-
-    suspend fun accept(quoteId: String, acceptance: ReverseAcceptance): String
-
-    suspend fun terms(): ReverseRelayerTerms
-
-    suspend fun ready(authorization: ReverseAuthorization)
-
-    suspend fun lockRefund(authorization: ReverseAuthorization)
-
-    suspend fun refund(request: ReverseRefund)
-
-    suspend fun payout(request: ReversePayout)
-
-    suspend fun rescue(request: ReversePayout)
-}
-
+/** The signatures only a reverse swap's own key makes. */
 interface ReverseSwapKeys {
     suspend fun signOpen(record: ReverseSwapRecord): ByteArray
 
-    suspend fun signReady(record: ReverseSwapRecord, deadline: Long): ByteArray
+    suspend fun signReady(
+        record: ReverseSwapRecord,
+        deadline: Long
+    ): ByteArray
 
-    suspend fun signLockRefund(record: ReverseSwapRecord, deadline: Long): ByteArray
+    suspend fun signLockRefund(
+        record: ReverseSwapRecord,
+        deadline: Long
+    ): ByteArray
 
-    suspend fun signPayout(record: ReverseSwapRecord, terms: ReverseRelayerTerms): ByteArray
+    suspend fun signPayout(
+        record: ReverseSwapRecord,
+        terms: RelayerTerms
+    ): ByteArray
 
-    suspend fun signRescue(record: ReverseSwapRecord, terms: ReverseRelayerTerms): ByteArray
+    suspend fun signRescue(
+        record: ReverseSwapRecord,
+        terms: RelayerTerms
+    ): ByteArray
 }
 
+/** Reads of the settlement chain a reverse swap needs, [ReverseSwapChain.read] far enough behind the head. */
 interface ReverseSwapChain {
-    suspend fun read(id: String): ReverseChainState
+    suspend fun read(id: SwapId): ReverseChainState
 
-    suspend fun fundingStatus(txId: String): ReverseTransactionStatus
+    /** The funding transaction as the node sees it, confirmed once its escrow would count. */
+    suspend fun fundingStatus(transaction: TxHash): TransactionStatus
 
-    suspend fun vaultBalance(id: String): String
+    /** What a refund Railgun sent back holds in the swap's vault. */
+    suspend fun vaultBalance(id: SwapId): Usdc6
 }
 
+/** Funding a reverse swap's escrow from the private balance. */
 interface ReverseSwapFunding {
-    suspend fun cost(escrowAmount: String): ReverseFundingCost
+    suspend fun cost(escrow: Usdc6): ReverseFundingCost
 
-    suspend fun prepare(record: ReverseSwapRecord, signature: ByteArray): ReverseFundingTransaction
+    suspend fun prepare(
+        record: ReverseSwapRecord,
+        signature: ByteArray
+    ): ReverseFundingTransaction
 
     suspend fun submit(transaction: ReverseFundingTransaction)
 }
 
-interface ReverseSwapZcash {
-    suspend fun height(): Long
+/** What both directions ask of the Zcash wallet. */
+interface SwapZcash {
+    suspend fun chainHeight(): Long
 
-    suspend fun importAccount(record: ReverseSwapRecord): String
+    suspend fun submit(transaction: ZcashTransaction)
+}
 
-    /** Syncs this exact joint account to the current tip before returning confirmed, spendable zatoshi. */
+/** The wallet's Zcash side of a reverse swap: the joint account the maker pays, and the sweep home. */
+interface ReverseSwapZcash : SwapZcash {
+    /** Imports the joint account from the swap's birthday, unless the wallet watches it already. */
+    suspend fun importAccount(record: ReverseSwapRecord): JointAccountId
+
+    /** The joint account's spendable zatoshi, once the wallet has synced to the tip. */
     suspend fun spendable(record: ReverseSwapRecord): Long
 
     suspend fun estimateReceive(record: ReverseSwapRecord): ReverseReceiveEstimate
 
-    /** Creates locally or recovers a previously created sweep; never broadcasts. */
-    suspend fun prepareReceive(record: ReverseSwapRecord, makerSecret: ByteArray): ReverseReceiveTransaction
+    /** The sweep home, or the one built before an interruption; never sent. Null until every note is spendable. */
+    suspend fun prepareReceive(
+        record: ReverseSwapRecord,
+        makerSecret: ByteArray
+    ): ReverseReceiveTransaction?
 
-    suspend fun submit(transaction: ReverseReceiveTransaction)
+    suspend fun receiveStatus(
+        record: ReverseSwapRecord,
+        receive: ReverseReceiveTransaction
+    ): ZcashTransactionStatus
 
-    suspend fun receiveStatus(record: ReverseSwapRecord): ReverseReceiveStatus
+    /** Stops watching the swap's joint account, if it was imported: nothing more comes from it. */
+    suspend fun forget(record: ReverseSwapRecord)
 }
 
 interface ReverseSwapStore {
     suspend fun active(): ReverseSwapRecord?
 
+    /** The conversion kept under [index], the active one or one before it. */
+    suspend fun find(index: Int): ReverseSwapRecord?
+
     suspend fun save(record: ReverseSwapRecord)
+
+    /** Replaces the conversion kept under [record]'s index, leaving which one is active alone. */
+    suspend fun update(record: ReverseSwapRecord)
+}
+
+/** Saves [updated] in [record]'s place, unless nothing changed. */
+internal suspend fun ReverseSwapStore.keep(
+    record: ReverseSwapRecord,
+    updated: ReverseSwapRecord,
+) {
+    if (updated != record) save(updated)
 }

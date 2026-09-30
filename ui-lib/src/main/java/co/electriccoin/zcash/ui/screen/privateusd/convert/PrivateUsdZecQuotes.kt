@@ -3,67 +3,86 @@
 
 package co.electriccoin.zcash.ui.screen.privateusd.convert
 
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployment
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapQuote
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
-import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
-import java.math.BigDecimal
+import co.electriccoin.zcash.ui.common.atomicswap.ZIP317_MIN_FEE_ZAT
+import xyz.justzappit.offramp.atomicswap.AtomicSwapBlock
+import xyz.justzappit.offramp.atomicswap.AtomicSwapBlockedException
+import xyz.justzappit.offramp.atomicswap.AtomicSwapOffer
+import xyz.justzappit.offramp.p2p.Usdc6
+import kotlin.time.Clock
 
-internal class PrivateUsdZecQuotes(
-    private val repository: AtomicSwapRepository
+/** An offer the wallet can pay now: its deposit and the network fee on it, capped at what they come to. */
+internal data class ZecQuote(
+    val offer: AtomicSwapOffer,
+    val feeZat: Long,
 ) {
-    private val deployment = checkNotNull(repository.deployment)
-    private var reference: AtomicSwapQuote? = null
+    val totalZat: Long get() = offer.quote.depositZat + feeZat
+}
 
-    suspend fun quote(totalZat: Long): AtomicSwapQuote {
-        val basis = reference ?: repository.quote(REFERENCE_UNITS).also { reference = it }
-        var units = unitsFor(totalZat, basis)
-        repeat(MAX_QUOTE_ATTEMPTS) {
-            val quote = repository.quote(units)
-            reference = quote
-            if (quote.totalZat() <= totalZat) {
-                return quote.copy(offer = quote.offer.copy(maxTotalZat = totalZat))
-            }
-            units = minOf(units - 1, unitsFor(totalZat, quote))
+/** Every quote spends a swap index, so the latest prices the next while it holds: an amount usually takes one. */
+internal class PrivateUsdZecQuotes(
+    private val repository: AtomicSwapRepository,
+    private val deployment: AtomicSwapDeployment,
+    private val nowSeconds: () -> Long = { Clock.System.now().epochSeconds },
+) {
+    private val limits = deployment.minAmount.micros..deployment.maxAmount.micros
+    private var latest: AtomicSwapQuote? = null
+
+    /** The dearest quote within [totalZat]; [requested] goes first when a quote for it just ran out. */
+    suspend fun quote(
+        totalZat: Long,
+        requested: Usdc6? = null
+    ): ZecQuote = fit(totalZat, requested ?: amountFor(totalZat, basis(), capped = false), capped = false)
+
+    /** The dearest quote [availableZat] pays for, up to the deployment's most. */
+    suspend fun maximum(availableZat: Long): ZecQuote =
+        fit(availableZat, amountFor(availableZat, basis(), capped = true), capped = true)
+
+    private suspend fun fit(
+        totalZat: Long,
+        first: Usdc6,
+        capped: Boolean,
+    ): ZecQuote {
+        var requested = first
+        repeat(MAX_QUOTES) {
+            val quote = repository.quote(requested).also { latest = it }
+            val payable = quote.payable()
+            if (payable.totalZat <= totalZat) return payable
+            requested = amountFor(totalZat, quote, capped, lessThan = requested)
         }
         throw ZecInputQuoteException()
     }
 
-    suspend fun maximum(availableZat: Long): Long =
-        minOf(availableZat, repository.quote(deployment.maxUnits).also { reference = it }.totalZat())
+    // The latest quote while it holds; otherwise one for the deployment's least, to price the next.
+    private suspend fun basis(): AtomicSwapQuote =
+        latest?.takeIf { it.offer.quote.expiresAt > nowSeconds() }
+            ?: repository.quote(deployment.minAmount).also { latest = it }
 
-    private fun unitsFor(totalZat: Long, quote: AtomicSwapQuote): Int {
-        val deposit = totalZat - (quote.depositFeeZat ?: FEE_FALLBACK_ZAT)
-        if (deposit <= 0) throw ZecInputQuoteException()
-        val units =
-            deposit.toBigInteger() * quote.offer.units.toBigInteger() /
-                quote.offer.quote.depositZat
-                    .toBigInteger()
-        if (units < deployment.minUnits.toBigInteger() || units > deployment.maxUnits.toBigInteger()) {
-            throw ZecInputQuoteException()
-        }
-        return units.toInt()
+    // What [basis]'s price buys with [totalZat], less [basis]'s fee or the least one there is.
+    private fun amountFor(
+        totalZat: Long,
+        basis: AtomicSwapQuote,
+        capped: Boolean,
+        lessThan: Usdc6? = null,
+    ): Usdc6 {
+        val depositZat = (totalZat - (basis.depositFeeZat ?: ZIP317_MIN_FEE_ZAT)).coerceAtLeast(0)
+        val offer = basis.offer
+        val priced = depositZat.toBigInteger() * offer.requested.micros / offer.quote.depositZat.toBigInteger()
+        val ceilings = listOfNotNull(lessThan?.micros?.dec(), deployment.maxAmount.micros.takeIf { capped })
+        val amount = ceilings.fold(priced) { least, ceiling -> least.min(ceiling) }
+        if (amount !in limits) throw ZecInputQuoteException()
+        return Usdc6(amount)
     }
 
-    private fun AtomicSwapQuote.totalZat() = offer.quote.depositZat + (depositFeeZat ?: FEE_FALLBACK_ZAT)
+    private fun AtomicSwapQuote.payable(): ZecQuote {
+        val feeZat = depositFeeZat ?: throw AtomicSwapBlockedException(AtomicSwapBlock.DEPOSIT_UNPAYABLE, "no fee")
+        return ZecQuote(offer.copy(maxTotalZat = offer.quote.depositZat + feeZat), feeZat)
+    }
 
-    companion object {
-        const val ZEC_DECIMALS = 8
-        private const val REFERENCE_UNITS = 1_000_000
-        private const val MAX_QUOTE_ATTEMPTS = 3
-        private const val FEE_FALLBACK_ZAT = 15_000L
-        private const val MAX_ZAT = 2_100_000_000_000_000L
-
-        fun zatoshi(amount: NumberTextFieldInnerState): Long? =
-            try {
-                amount.amount
-                    ?.movePointRight(ZEC_DECIMALS)
-                    ?.longValueExact()
-                    ?.takeIf { it in 1..MAX_ZAT }
-            } catch (_: ArithmeticException) {
-                null
-            }
-
-        fun input(zatoshi: Long) = NumberTextFieldInnerState.fromAmount(BigDecimal.valueOf(zatoshi, ZEC_DECIMALS))
+    private companion object {
+        const val MAX_QUOTES = 3
     }
 }
 

@@ -4,21 +4,17 @@
 package co.electriccoin.zcash.ui.screen.privateusd.widget
 
 import co.electriccoin.zcash.ui.design.util.StringResource
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdConversionBannerState
 
 internal data class PrivateUsdWidgetState(
-    /** Null until a first balance is known. Shown as is: the balance card hides it with the rest. */
-    val balance: StringResource?,
+    /** Shown as is: the balance card hides it with the rest. */
+    val balance: StringResource,
     val arriving: StringResource?,
+    /** [arriving] as it reads aloud. */
+    val arrivingDescription: StringResource? = null,
     /** Screening refused some of it. */
     val isBlocked: Boolean,
     val conversion: PrivateUsdConversionBannerState?,
     val onClick: () -> Unit,
     val onConvertClick: () -> Unit,
-)
-
-internal data class PrivateUsdConversionBannerState(
-    val title: StringResource,
-    val detail: StringResource,
-    val isAttention: Boolean,
-    val onClick: () -> Unit,
 )

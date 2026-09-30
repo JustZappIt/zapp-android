@@ -39,7 +39,7 @@ import co.electriccoin.zcash.ui.screen.home.HomeVM
 import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartState
 import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartVM
 import co.electriccoin.zcash.ui.screen.home.migration.MigrationMessageState
-import co.electriccoin.zcash.ui.screen.privateusd.widget.PrivateUsdConversionBanner
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdConversionBanner
 import co.electriccoin.zcash.ui.screen.privateusd.widget.PrivateUsdWidgetVM
 import co.electriccoin.zcash.ui.screen.tabs.viewmodel.WalletSyncStateVM
 import co.electriccoin.zcash.ui.screen.transactionhistory.widget.ActivityWidgetVM

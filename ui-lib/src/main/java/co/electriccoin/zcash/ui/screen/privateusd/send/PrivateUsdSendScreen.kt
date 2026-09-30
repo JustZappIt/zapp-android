@@ -21,5 +21,5 @@ fun PrivateUsdSendScreen(args: PrivateUsdSendArgs) {
 
 @Serializable
 data class PrivateUsdSendArgs(
-    val withdraw: Boolean
+    val mode: PrivateUsdSendMode
 )

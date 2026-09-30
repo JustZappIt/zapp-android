@@ -3,88 +3,116 @@
 
 package xyz.justzappit.offramp.atomicswap
 
-import xyz.justzappit.evm.math.BigInteger
-import xyz.justzappit.evm.util.hexToBytes
-
-internal enum class DepositResult { PAID, UNSETTLED, MISMATCH, TOO_LATE }
-
-/** The Zcash side: the deposit, paid once into a swap that matches its quote, and taken home after a refund. */
+/** A forward swap's Zcash side: the deposit, kept until it is mined, and taken home after a refund. */
 internal class AtomicSwapDeposits(
-    private val config: AtomicSwapConfig,
+    private val deployment: SwapDeployment,
+    private val terms: ZcashDepositTerms,
     private val chain: AtomicSwapChainReader,
     private val keys: AtomicSwapKeys,
     private val zcash: AtomicSwapZcash,
     private val store: AtomicSwapStore,
+    private val ending: AtomicSwapEnding,
 ) {
-    /**
-     * Pays the deposit to the account the on-chain shares make, only if every term matches the quote
-     * and there's time to confirm before t0, and never twice: a deposit cut short is looked up in the
-     * wallet's history first.
-     */
-    suspend fun pay(
+    /** Sends the deposit again until it's mined; pays anew only once the last is proven expired, in time for t0. */
+    suspend fun ensurePaid(
         record: AtomicSwapRecord,
         swap: OnChainSwap,
         onActivity: (AtomicSwapActivity) -> Unit,
-    ): DepositResult {
+    ): NothingSentCause? {
         val address = keys.depositAddress(record.index, swap.makerShare)
-        val earlier = if (record.depositAttempted) zcash.findPayment(address) else null
-        val now = chain.now()
-        val tooLate = swap.t0 < now + config.minSecondsToT0
-        return when {
-            earlier != null -> {
-                store.save(record.copy(depositTxId = earlier))
-                DepositResult.PAID
+        val unpayable = unpayable(swap)
+        var current = withFound(record, address)
+        val deposit =
+            keepSending(
+                kept = current.deposit.transaction,
+                status = zcash::depositStatus,
+                build = {
+                    if (unpayable == null) {
+                        val prepared = zcash.prepareDeposit(address, current.quote.depositZat, current.maxTotalZat)
+                        onActivity(AtomicSwapActivity.DEPOSITING)
+                        current = current.copy(deposit = SwapDeposit.Started).also { store.save(it) }
+                        prepared.create()
+                    } else {
+                        null
+                    }
+                },
+                keep = { kept -> current = current.copy(deposit = kept.asDeposit()).also { store.save(it) } },
+                // A deposit the maker is calling off is left to be mined or expire, not pushed.
+                send = { if (swap.refundLockUntil == 0L) zcash.submit(it) },
+            )
+        return unpayable.takeIf { deposit == null }
+    }
+
+    /** A refunded swap: a mined deposit is swept home, and one that may still be mined is waited for. */
+    suspend fun refunded(
+        record: AtomicSwapRecord,
+        swap: OnChainSwap,
+        onActivity: (AtomicSwapActivity) -> Unit,
+    ): AtomicSwapStep {
+        val current = withFound(record, keys.depositAddress(record.index, swap.makerShare))
+        return when (current.deposit.transaction?.let { zcash.depositStatus(it) }) {
+            is ZcashTransactionStatus.Mined -> {
+                sweep(current, swap, onActivity)
             }
 
-            !matchesQuote(record, swap, now) -> {
-                DepositResult.MISMATCH
+            ZcashTransactionStatus.Unmined, ZcashTransactionStatus.Unknown -> {
+                AtomicSwapStep.Waiting(AtomicSwapWait.DEPOSIT_UNSETTLED)
             }
 
-            // A deposit started earlier can't be proven absent: the maker's refund settles it.
-            tooLate && record.depositAttempted -> {
-                DepositResult.UNSETTLED
-            }
-
-            tooLate -> {
-                DepositResult.TOO_LATE
-            }
-
-            else -> {
-                onActivity(AtomicSwapActivity.DEPOSITING)
-                store.save(record.copy(depositAttempted = true))
-                val txId = zcash.pay(address, record.quote.depositZat)
-                store.save(record.copy(depositAttempted = true, depositTxId = txId))
-                DepositResult.PAID
+            ZcashTransactionStatus.Expired, null -> {
+                ending.finish(current, AtomicSwapOutcome.NothingSent(NothingSentCause.MAKER_CANCELLED))
             }
         }
     }
 
-    suspend fun refund(
+    // The account is forgotten only once the sweep has the confirmations a deposit gets.
+    private suspend fun sweep(
         record: AtomicSwapRecord,
         swap: OnChainSwap,
         onActivity: (AtomicSwapActivity) -> Unit,
-    ): AtomicSwapOutcome =
-        if (deposited(record, swap)) {
-            onActivity(AtomicSwapActivity.SWEEPING)
-            val txId = zcash.sweepRefund(record.index, swap.makerShare, swap.secret, record.zcashHeight)
-            AtomicSwapOutcome.Refunded(txId, refundCause(swap))
-        } else {
-            AtomicSwapOutcome.NothingSent(NothingSentCause.MAKER_CANCELLED)
+    ): AtomicSwapStep {
+        var current = record
+        val sweep =
+            keepSending(
+                kept = current.sweep,
+                status = { zcash.sweepStatus(current.index, swap.makerShare, it) },
+                build = {
+                    onActivity(AtomicSwapActivity.SWEEPING)
+                    zcash.prepareSweep(current.index, swap.makerShare, swap.secret, current.zcashHeight)
+                },
+                keep = { kept -> current = current.copy(sweep = kept).also { store.save(it) } },
+                send = zcash::submit,
+            )
+        val confirmations = (sweep?.second as? ZcashTransactionStatus.Mined)?.confirmations ?: 0
+        if (sweep == null || confirmations < deployment.zcashConfirmations) {
+            return AtomicSwapStep.Waiting(AtomicSwapWait.REFUNDING)
         }
+        val finished = ending.finish(current, AtomicSwapOutcome.Refunded(sweep.first.txId, refundCause(swap)))
+        zcash.forgetDepositAccount(current.index, swap.makerShare)
+        return finished
+    }
 
-    private suspend fun matchesQuote(
+    /** Why no deposit may be paid now, or null when one may. Until t0 an unresponsive maker holds it. */
+    private suspend fun unpayable(swap: OnChainSwap): NothingSentCause? {
+        val now = chain.now()
+        return when {
+            swap.refundLockUntil != 0L -> NothingSentCause.MAKER_CANCELLED
+            swap.t0 > now + MAX_SECONDS_TO_T0 -> NothingSentCause.MISMATCH
+            swap.t0 < now + terms.minSecondsToT0 -> NothingSentCause.DEPOSIT_WINDOW_MISSED
+            else -> null
+        }
+    }
+
+    /** [record] with the deposit an interruption cut short, found again in the wallet's history. */
+    private suspend fun withFound(
         record: AtomicSwapRecord,
-        swap: OnChainSwap,
-        now: Long,
-    ): Boolean =
-        swap.makerShare.contentEquals(record.quote.makerShare.hexToBytes()) &&
-            swap.userShare.contentEquals(keys.userShare(record.index)) &&
-            swap.user == keys.authAddress(record.index) &&
-            swap.payoutNote.contentEquals(keys.payoutNote(record.index).commitment) &&
-            swap.token == config.token &&
-            swap.amount.compareTo(BigInteger(record.quote.amount)) == 0 &&
-            // Until t0 an unresponsive maker holds the deposit.
-            swap.t0 <= now + MAX_SECONDS_TO_T0
+        address: String
+    ): AtomicSwapRecord {
+        if (record.deposit.transaction != null || record.deposit == SwapDeposit.NotStarted) return record
+        return record
+            .copy(deposit = zcash.findDeposit(address).asDeposit())
+            .also { if (it != record) store.save(it) }
+    }
 
     // A refund lock taken before t0 is the maker calling it off; one taken later waited out the user.
     private suspend fun refundCause(swap: OnChainSwap): RefundCause =
@@ -94,15 +122,10 @@ internal class AtomicSwapDeposits(
             RefundCause.NOT_CLAIMED_IN_TIME
         }
 
-    /** A deposit recorded as paid, or one cut short that the wallet's history shows went out. */
-    private suspend fun deposited(
-        record: AtomicSwapRecord,
-        swap: OnChainSwap
-    ): Boolean =
-        record.depositTxId != null ||
-            (record.depositAttempted && zcash.findPayment(keys.depositAddress(record.index, swap.makerShare)) != null)
-
     private companion object {
         const val MAX_SECONDS_TO_T0 = 2 * 60 * 60L
+
+        // A started deposit with no transaction known; only one that never started is NotStarted.
+        fun ZcashTransaction?.asDeposit(): SwapDeposit = this?.let(SwapDeposit::Kept) ?: SwapDeposit.Started
     }
 }

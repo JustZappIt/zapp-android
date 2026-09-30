@@ -3,9 +3,13 @@
 
 package co.electriccoin.zcash.ui.common.atomicswap
 
-import xyz.justzappit.evm.math.bigIntegerValueOf
+import co.electriccoin.zcash.ui.common.privateusd.Sepolia
+import io.ktor.http.Url
 import xyz.justzappit.evm.types.Address
-import xyz.justzappit.offramp.atomicswap.AtomicSwapConfig
+import xyz.justzappit.offramp.atomicswap.SwapDeployment
+import xyz.justzappit.offramp.atomicswap.SwapZcashNetwork
+import xyz.justzappit.offramp.atomicswap.ZcashDepositTerms
+import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.railgun.RailgunNetwork
 import kotlin.time.Duration.Companion.minutes
 
@@ -14,47 +18,51 @@ object AtomicSwapTestnet {
     private const val MAX_RELAYER_FEE = 100_000L
 
     // The testnet maker counts a deposit after 3 confirmations, about 4 minutes; its t0 comes 13.
-    private const val MIN_SECONDS_TO_T0 = 9 * 60L
     private const val CONFIRMATIONS = 3
+    private const val MIN_SECONDS_TO_T0 = 9 * 60L
 
-    // Quote token base units, so any amount the six-decimal token can hold is representable.
-    // The 0.02-token relayer fee leaves a visible payout from 0.03.
-    private const val UNIT_BASE_UNITS = 1L
-    private const val MIN_UNITS = 30_000
-    private const val MAX_UNITS = 20_000_000
+    // In the token's base units; the hosted services start above the most a relayer may keep.
+    private const val MIN_AMOUNT = 110_000L
+    private const val LEGACY_MIN_AMOUNT = 30_000L
+    private const val MAX_AMOUNT = 20_000_000L
 
-    // Persisted swaps retain the original local deployment.
-    val legacy =
+    /** The hosted testnet, which new conversions either way go to. */
+    val deployment =
         AtomicSwapDeployment(
-            config =
-                AtomicSwapConfig(
-                    makerUrl = "http://127.0.0.1:8787",
-                    relayerUrl = "http://127.0.0.1:8788",
-                    chainId = 11_155_111,
-                    contract = Address.parse("0x32CE55D00E6184c385E44e6b20b76d3a8407E809"),
-                    token = Address.parse("0x5764D0044bef5AA839E0dDafE2073421101B9Ed8"),
-                    railgunProxy = Address.parse("0xeCFCf3b4eC647c4Ca6D49108b311b7a7C9543fea"),
-                    maxRelayerFee = bigIntegerValueOf(MAX_RELAYER_FEE),
-                    minSecondsToT0 = MIN_SECONDS_TO_T0,
+            swap =
+                SwapDeployment(
+                    makerUrl = Url("https://zecswap-testnet.pepeman931.workers.dev/maker"),
+                    relayerUrl = Url("https://zecswap-testnet.pepeman931.workers.dev/relayer"),
+                    rpcUrl = Sepolia.RPC_URL,
+                    chainId = Sepolia.CHAIN_ID,
+                    contract = Address.parse("0xbd9a37f47a988aefc4d80395727f41feb698e225"),
+                    token = Sepolia.TEST_USD,
+                    railgunProxy = Sepolia.RAILGUN_PROXY,
+                    maker = Address.parse("0x2bac02b5032e9092493814c705f156b49e288922"),
+                    relayer = Address.parse("0xd9633572041886fa7584a2e12f36c8c7f1126412"),
+                    maxRelayerFee = Usdc6.ofMicros(MAX_RELAYER_FEE),
+                    zcashNetwork = SwapZcashNetwork.TESTNET,
+                    zcashConfirmations = CONFIRMATIONS,
                 ),
+            deposits = ZcashDepositTerms(MIN_SECONDS_TO_T0),
             railgunNetwork = RailgunNetwork.SEPOLIA,
-            ethereumRpcUrl = "https://ethereum-sepolia-rpc.publicnode.com",
-            explorerTxUrl = "https://sepolia.etherscan.io/tx/",
-            unitBaseUnits = UNIT_BASE_UNITS,
-            minUnits = MIN_UNITS,
-            maxUnits = MAX_UNITS,
-            makerConfirmations = CONFIRMATIONS,
+            explorerTxUrl = Sepolia.EXPLORER_TX_URL,
+            minAmount = Usdc6.ofMicros(MIN_AMOUNT),
+            maxAmount = Usdc6.ofMicros(MAX_AMOUNT),
             screeningTime = 1.minutes,
         )
 
-    val deployment =
-        legacy.copy(
-            config =
-                legacy.config.copy(
-                    makerUrl = ReverseSwapTestnet.deployment.makerUrl,
-                    relayerUrl = ReverseSwapTestnet.deployment.relayerUrl,
-                    contract = Address.parse(ReverseSwapTestnet.deployment.contract),
+    /** The first, local deployment: forward swaps accepted on it keep it. */
+    val legacy =
+        deployment.copy(
+            swap =
+                deployment.swap.copy(
+                    makerUrl = Url("http://127.0.0.1:8787"),
+                    relayerUrl = Url("http://127.0.0.1:8788"),
+                    contract = Address.parse("0x32CE55D00E6184c385E44e6b20b76d3a8407E809"),
+                    maker = Address.parse("0x09eD1F966745Be18C711C346242c0974DAd7c3e5"),
+                    relayer = Address.parse("0x507d1d152025e9F6DA7Bc03B358acc247f07b4eB"),
                 ),
-            minUnits = 110_000,
+            minAmount = Usdc6.ofMicros(LEGACY_MIN_AMOUNT),
         )
 }

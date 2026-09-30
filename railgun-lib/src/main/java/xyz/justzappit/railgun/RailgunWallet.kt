@@ -4,140 +4,211 @@
 package xyz.justzappit.railgun
 
 import android.content.Context
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.serialization.json.Json
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.SerializationStrategy
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.add
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
-import java.math.BigInteger
+import xyz.justzappit.evm.abi.keccak256
+import xyz.justzappit.evm.types.Address
+import xyz.justzappit.evm.types.TxHash
+import xyz.justzappit.evm.util.hexToBytes
+import xyz.justzappit.evm.util.toHex
+import kotlin.time.Duration.Companion.milliseconds
 
-/**
- * Railgun's wallet SDK, run in a hidden WebView. One engine and one wallet per WebView: after a
- * [RailgunEvent.Disconnected], [start] and [openWallet] again. `debug` exposes the WebView to
- * chrome://inspect and forwards the SDK's logs as [RailgunEvent.Log].
- */
-@Suppress("TooManyFunctions")
+/** Railgun's wallet SDK in a hidden WebView, one engine and wallet per page; `debug` makes the page inspectable. */
 class RailgunWallet(
     context: Context,
     private val debug: Boolean = false,
 ) {
     private val host = RailgunWebViewHost(context.applicationContext, debug)
 
+    @Volatile
+    private var opened: RailgunSession? = null
+
     val events: SharedFlow<RailgunEvent> get() = host.events
 
-    suspend fun start(
+    /** The wallet [open] opened, until its page closes or its renderer dies. */
+    val session: RailgunSession? get() = opened?.takeIf { it.isOpen }
+
+    /** Starts the engine on a fresh page and opens [mnemonic]'s wallet; the page closes if any step fails. */
+    suspend fun open(
         network: RailgunNetwork,
-        rpcUrls: List<String>,
-        poiNodeUrls: List<String>,
-    ) {
-        host.call(
-            "start",
-            buildJsonObject {
-                put("network", network.wireName)
-                putJsonArray("rpcUrls") { rpcUrls.forEach(::add) }
-                putJsonArray("poiNodeUrls") { poiNodeUrls.forEach(::add) }
-                put("debug", debug)
-            }
-        )
-    }
-
-    /**
-     * Opens the Railgun wallet [mnemonic] derives at index 0, the one Railway opens from the same
-     * words, and returns its 0zk address. [encryptionKey] (32 bytes) encrypts it in the WebView's
-     * storage; [creationBlock] skips the notes before it, so pass it only for a wallet known to be
-     * newer.
-     */
-    suspend fun openWallet(
         encryptionKey: ByteArray,
-        mnemonic: String,
-        creationBlock: Long? = null,
-    ): String {
-        require(encryptionKey.size == ENCRYPTION_KEY_BYTES) { "the encryption key must be 32 bytes" }
-        val result =
-            host.call(
-                "openWallet",
-                buildJsonObject {
-                    put("encryptionKey", encryptionKey.toHex())
-                    put("mnemonic", mnemonic)
-                    creationBlock?.let { put("creationBlock", it) }
+        mnemonic: CharArray,
+        gasAccountKey: ByteArray?,
+    ): RailgunSession {
+        require(encryptionKey.size == ENCRYPTION_KEY_BYTES) { "the key must be $ENCRYPTION_KEY_BYTES bytes" }
+        opened = null
+        val page = host.load()
+        var session: RailgunSession? = null
+        try {
+            val started =
+                page.request(
+                    RailgunMethod.START,
+                    StartParams(network, network.rpcUrls, listOf(RailgunEndpoints.POI_NODE_URL), debug),
+                    StartParams.serializer(),
+                    StartResult.serializer(),
+                )
+            val wallet =
+                page.request(
+                    RailgunMethod.OPEN_WALLET,
+                    OpenWalletParams(encryptionKey.toHex(), mnemonic.concatToString()),
+                    OpenWalletParams.serializer(),
+                    OpenWalletResult.serializer(),
+                )
+            val gasAccount =
+                gasAccountKey?.let {
+                    page.request(
+                        RailgunMethod.SET_GAS_ACCOUNT,
+                        SetGasAccountParams("0x${it.toHex()}"),
+                        SetGasAccountParams.serializer(),
+                        RailgunGasAccount.serializer(),
+                    )
                 }
-            )
-        val address = result.jsonObject.getValue("address")
-        return address.jsonPrimitive.content
+            session = RailgunSession(page, network, wallet.address, started.fees, gasAccount?.address)
+            opened = session
+            return session
+        } finally {
+            if (session == null) withContext(NonCancellable) { page.close() }
+        }
     }
 
-    /** Syncs to the chain's tip, asks the screening nodes about new notes, and returns balances. */
-    suspend fun refresh(): RailgunBalances =
-        RailgunProtocol.decodeBalances(host.call("refresh", JsonObject(emptyMap())))
-
-    /**
-     * A funded account that pays gas and sends the transactions below itself, standing in for a
-     * Railgun broadcaster while testnets have none. The page refuses one outside Sepolia: sending
-     * from it ties its public address to every transaction.
-     */
-    suspend fun setGasAccount(privateKey: ByteArray): RailgunGasAccount =
-        RailgunProtocol.decodeGasAccount(
-            host.call("setGasAccount", buildJsonObject { put("privateKey", "0x${privateKey.toHex()}") })
-        )
-
-    suspend fun gasAccount(): RailgunGasAccount =
-        RailgunProtocol.decodeGasAccount(host.call("gasAccount", JsonObject(emptyMap())))
-
-    /** Wraps [amount] wei of the gas account's ETH and shields it into the open wallet. */
-    suspend fun shieldBaseToken(amount: BigInteger): RailgunSent =
-        RailgunProtocol.decodeSent(host.call("shield", buildJsonObject { put("amount", amount.toString()) }))
-
-    /** Sends [amount] of [token] privately to the 0zk address [to]; proves in the WebView first. */
-    suspend fun transfer(
-        to: String,
-        token: String,
-        amount: BigInteger,
-    ): RailgunSent = RailgunProtocol.decodeSent(host.call("transfer", transferParams(to, token, amount)))
-
-    /** Withdraws [amount] of [token] to the public address [to]. */
-    suspend fun unshield(
-        to: String,
-        token: String,
-        amount: BigInteger,
-    ): RailgunSent = RailgunProtocol.decodeSent(host.call("unshield", transferParams(to, token, amount)))
-
-    suspend fun reverseCost(request: RailgunReverseCostRequest): RailgunReverseCost =
-        Json.decodeFromJsonElement(
-            RailgunReverseCost.serializer(),
-            host.call(
-                "reverseCost",
-                Json.encodeToJsonElement(RailgunReverseCostRequest.serializer(), request).jsonObject
-            )
-        )
-
-    suspend fun prepareReverse(request: RailgunReverseRequest): RailgunReverseTransaction =
-        Json.decodeFromJsonElement(
-            RailgunReverseTransaction.serializer(),
-            host.call(
-                "prepareReverse",
-                Json.encodeToJsonElement(RailgunReverseRequest.serializer(), request).jsonObject
-            )
-        )
-
-    suspend fun close() = host.close()
-
-    private fun transferParams(
-        to: String,
-        token: String,
-        amount: BigInteger,
-    ) = buildJsonObject {
-        put("to", to)
-        put("token", token)
-        put("amount", amount.toString())
+    suspend fun close() {
+        opened = null
+        host.close()
     }
+
+    /** Closes the page and deletes everything it stored, wallets included. */
+    suspend fun wipe() {
+        opened = null
+        host.wipe()
+    }
+
+    /** Deletes what the page stored before it had an origin of its own: a wallet of the Zcash seed itself. */
+    suspend fun forgetLegacyStorage() = host.forgetLegacyStorage()
 
     private companion object {
         const val ENCRYPTION_KEY_BYTES = 32
-
-        fun ByteArray.toHex() = joinToString("") { "%02x".format(it) }
     }
 }
+
+/** One page's engine and wallet. Every call throws [RailgunException.Disconnected] once the page is gone. */
+class RailgunSession internal constructor(
+    internal val page: RailgunPage,
+    val network: RailgunNetwork,
+    val address: RailgunAddress,
+    val fees: RailgunFees,
+    /** The account that pays gas and sends in place of a broadcaster, on Sepolia. */
+    val gasAccountAddress: Address?,
+) {
+    val isOpen: Boolean get() = page.isOpen
+
+    /** Syncs to the chain's tip, asks the screening nodes about new notes, and returns balances. */
+    suspend fun refresh(): RailgunBalances =
+        page
+            .request(RailgunMethod.REFRESH, EMPTY, BALANCES)
+            .mapNotNull { (name, amounts) ->
+                RailgunBalanceBucket.entries.firstOrNull { it.wireName == name }?.let { bucket ->
+                    bucket to amounts.map { RailgunTokenAmount(it.token, it.amount) }
+                }
+            }.toMap()
+            .let(::RailgunBalances)
+
+    /** Proves [transfer] and has the gas account sign it; nothing is sent. */
+    suspend fun sign(transfer: RailgunTransfer): RailgunSignedTransaction =
+        when (val to = transfer.to) {
+            is RailgunDestination.Private -> {
+                signed(
+                    RailgunMethod.TRANSFER,
+                    TransferParams(to.address, transfer.token, transfer.amount),
+                    TransferParams.serializer(),
+                )
+            }
+
+            is RailgunDestination.Public -> {
+                signed(
+                    RailgunMethod.UNSHIELD,
+                    UnshieldParams(to.address, transfer.token, transfer.amount),
+                    UnshieldParams.serializer(),
+                )
+            }
+        }
+
+    suspend fun reverseCost(request: RailgunReverseCostRequest): RailgunReverseCost =
+        page.request(
+            RailgunMethod.REVERSE_COST,
+            request,
+            RailgunReverseCostRequest.serializer(),
+            RailgunReverseCost.serializer(),
+        )
+
+    suspend fun prepareReverse(request: RailgunReverseRequest): RailgunReverseTransaction =
+        page
+            .request(
+                RailgunMethod.PREPARE_REVERSE,
+                request,
+                RailgunReverseRequest.serializer(),
+                RailgunReverseTransaction.serializer(),
+            ).also { requireHashOf(it.raw, it.txId) }
+
+    internal suspend fun <P> signed(
+        method: RailgunMethod,
+        params: P,
+        serializer: SerializationStrategy<P>,
+    ): RailgunSignedTransaction {
+        val signed = page.request(method, params, serializer, SignedResult.serializer())
+        requireHashOf(signed.raw, signed.txHash)
+        return RailgunSignedTransaction(
+            signed.raw,
+            signed.txHash,
+            signed.from,
+            signed.nonce,
+            signed.proofMs?.milliseconds,
+        )
+    }
+
+    internal companion object {
+        val EMPTY = JsonObject(emptyMap())
+        val BALANCES = MapSerializer(String.serializer(), ListSerializer(WireTokenAmount.serializer()))
+
+        // The hash the app logs must be the hash of what goes out.
+        fun requireHashOf(
+            raw: String,
+            txHash: TxHash
+        ) {
+            val matches =
+                try {
+                    keccak256(raw.hexToBytes()).contentEquals(txHash.bytes)
+                } catch (ignored: IllegalArgumentException) {
+                    false
+                }
+            if (!matches) throw RailgunException.Protocol("the page's transaction and its hash disagree")
+        }
+    }
+}
+
+internal suspend fun <R> RailgunPage.request(
+    method: RailgunMethod,
+    params: JsonElement,
+    result: DeserializationStrategy<R>,
+): R =
+    call(method, params).let {
+        try {
+            RailgunProtocol.json.decodeFromJsonElement(result, it)
+        } catch (e: IllegalArgumentException) {
+            throw RailgunException.Protocol("the page's result is unreadable", e)
+        }
+    }
+
+internal suspend fun <P, R> RailgunPage.request(
+    method: RailgunMethod,
+    params: P,
+    paramsSerializer: SerializationStrategy<P>,
+    result: DeserializationStrategy<R>,
+): R = request(method, RailgunProtocol.json.encodeToJsonElement(paramsSerializer, params), result)

@@ -1,4 +1,4 @@
-// Bundles src/ into the assets the hidden WebView loads: `npm ci && npm run build`.
+// Bundles src/ into the assets the hidden WebView loads: `npm ci --ignore-scripts && npm run build`.
 import { build } from 'esbuild';
 import { copyFile, mkdir, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -16,8 +16,7 @@ const wasm = [
 const browserBuilds = {
   name: 'browser-builds',
   setup(build) {
-    // esbuild gives require() a package's `main`, which here is the Node build that reads the
-    // wasm from disk; the engine requires both, so point them at wasm-bindgen's web builds.
+    // require() would get the Node builds, which read their wasm from disk; use wasm-bindgen's web builds.
     const web = {
       '@railgun-community/poseidon-hash-wasm': '@railgun-community/poseidon-hash-wasm/index.mjs',
       '@railgun-community/curve25519-scalarmult-wasm':

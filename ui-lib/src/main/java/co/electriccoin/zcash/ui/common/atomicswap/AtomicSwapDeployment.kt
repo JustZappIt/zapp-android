@@ -5,26 +5,28 @@ package co.electriccoin.zcash.ui.common.atomicswap
 
 import cash.z.ecc.android.sdk.model.ZcashNetwork
 import co.electriccoin.zcash.ui.common.provider.ZcashNetworkProvider
-import xyz.justzappit.offramp.atomicswap.AtomicSwapConfig
+import xyz.justzappit.offramp.atomicswap.SwapDeployment
+import xyz.justzappit.offramp.atomicswap.ZcashDepositTerms
+import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.railgun.RailgunNetwork
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
+/** A deployment conversions run on either way, with what the app offers on it. */
 data class AtomicSwapDeployment(
-    val config: AtomicSwapConfig,
+    val swap: SwapDeployment,
+    val deposits: ZcashDepositTerms,
     val railgunNetwork: RailgunNetwork,
-    val ethereumRpcUrl: String,
     val explorerTxUrl: String,
-    /** Token base units in one quoted unit. */
-    val unitBaseUnits: Long,
-    val minUnits: Int,
-    val maxUnits: Int,
-    /** Zcash confirmations the maker waits for before it marks a deposit ready. */
-    val makerConfirmations: Int,
+    val minAmount: Usdc6,
+    val maxAmount: Usdc6,
     /** How long Railgun screens a payout before it can be spent. */
     val screeningTime: Duration,
 ) {
+    /** Zcash confirmations the maker waits for before it marks a deposit ready. */
+    val makerConfirmations: Int get() = swap.zcashConfirmations
+
     /** Roughly from confirming to the payout landing: opening, the maker's confirmations, the claim. */
     val expectedDuration: Duration get() = ZCASH_BLOCK_TIME * makerConfirmations + OPEN_AND_CLAIM
 }

@@ -4,54 +4,45 @@
 package xyz.justzappit.railgun
 
 import kotlinx.serialization.Serializable
+import xyz.justzappit.evm.types.Address
+import xyz.justzappit.evm.types.TxHash
 import java.math.BigInteger
 
 @Serializable
 data class RailgunReverseCostRequest(
-    val amount: String,
-    val railgun: String
+    @Serializable(with = DecimalSerializer::class)
+    val amount: BigInteger,
+    val railgun: Address,
 )
 
 @Serializable
 data class RailgunContractCall(
-    val to: String,
-    val data: String
+    val to: Address,
+    val data: String,
 )
 
 @Serializable
 data class RailgunReverseRequest(
-    val amount: String,
-    val railgun: String,
-    val token: String,
+    @Serializable(with = DecimalSerializer::class)
+    val amount: BigInteger,
+    val railgun: Address,
+    val token: Address,
     val calls: List<RailgunContractCall>,
 )
 
 @Serializable
 data class RailgunReverseCost(
-    val debit: String,
-    val railgunFee: String,
-    val broadcasterFee: String? = null,
-    val unshieldFeeBasisPoints: Int,
-) {
-    init {
-        require(unshieldFeeBasisPoints in 0 until FEE_DENOMINATOR)
-        listOfNotNull(debit, railgunFee, broadcasterFee).forEach {
-            require(it.isNotEmpty() && it.all { digit -> digit in '0'..'9' })
-            require(BigInteger(it).bitLength() <= TOKEN_AMOUNT_BITS)
-        }
-    }
-
-    companion object {
-        private const val TOKEN_AMOUNT_BITS = 120
-        const val FEE_DENOMINATOR = 10_000
-    }
-}
+    @Serializable(with = DecimalSerializer::class)
+    val debit: BigInteger,
+    @Serializable(with = DecimalSerializer::class)
+    val railgunFee: BigInteger,
+)
 
 @Serializable
 data class RailgunReverseTransaction(
     val raw: String,
-    val txId: String,
-    val cost: RailgunReverseCost
+    val txId: TxHash,
+    val cost: RailgunReverseCost,
 ) {
     override fun toString() = "RailgunReverseTransaction(txId=$txId)"
 }

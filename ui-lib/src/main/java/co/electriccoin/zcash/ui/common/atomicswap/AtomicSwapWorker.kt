@@ -10,6 +10,7 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.R
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -17,14 +18,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import xyz.justzappit.offramp.atomicswap.SwapDirection
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-/**
- * Holds the process up while a swap is under way, as a foreground service when Android allows one.
- * The repository does the advancing; a run that has to end early hands over to the next.
- */
+/** Holds the process up while a conversion is under way, as a foreground service when Android allows one. */
 @Keep
 class AtomicSwapWorker(
     context: Context,
@@ -54,27 +53,23 @@ class AtomicSwapWorker(
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo =
-        notifier.foregroundInfo(applicationContext.getString(R.string.convert_progress_title))
+        notifier.foregroundInfo(applicationContext.getString(R.string.convert_progress_title), SwapDirection.FORWARD)
 
     private suspend fun keepNotificationCurrent() {
         combine(repository.state, reverse.state) { forward, reverse ->
-            reverse.record
-                ?.takeIf { it.underWay }
-                ?.phase
-                ?.label() ?: AtomicSwapStage.of(forward).label
+            val converting = reverse.record?.takeIf { it.underWay }
+            converting?.phase?.label() ?: AtomicSwapStage.of(forward).label
         }.distinctUntilChanged().collect { label -> promote(applicationContext.getString(label)) }
     }
 
-    private suspend fun promote(text: String): Boolean =
-        try {
-            setForeground(
-                notifier.foregroundInfo(
-                    text,
-                    reverse.state.value.record
-                        ?.underWay == true
-                )
-            )
+    private suspend fun promote(text: String): Boolean {
+        val converting = reverse.state.value.record
+        val direction = if (converting?.underWay == true) SwapDirection.REVERSE else SwapDirection.FORWARD
+        return try {
+            setForeground(notifier.foregroundInfo(text, direction))
             true
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: IllegalStateException) {
             Twig.info { "Atomic swap: no foreground service from here, ${e.message}" }
             false
@@ -82,6 +77,7 @@ class AtomicSwapWorker(
             Twig.info { "Atomic swap: no foreground service in this build, ${e.message}" }
             false
         }
+    }
 
     private companion object {
         val FOREGROUND_BUDGET = 3.hours

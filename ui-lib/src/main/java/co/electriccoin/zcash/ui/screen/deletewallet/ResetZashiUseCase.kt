@@ -5,7 +5,10 @@ import cash.z.ecc.android.sdk.WalletCoordinator
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
 import co.electriccoin.zcash.preference.StandardPreferenceProvider
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
 import co.electriccoin.zcash.ui.common.migration.MigrationAppHooks
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
 import co.electriccoin.zcash.ui.common.provider.ChatBlockedKeysStorageProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.common.repository.AddressBookRepository
@@ -18,14 +21,16 @@ import co.electriccoin.zcash.ui.common.repository.FlexaRepository
 import co.electriccoin.zcash.ui.common.repository.HomeMessageCacheRepository
 import co.electriccoin.zcash.ui.common.repository.MetadataRepository
 import co.electriccoin.zcash.ui.common.repository.PeerCashOutRepository
+import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnsharedGiftFundsUseCase
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.tabs.SelectedTabRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.internal.closeQuietly
 import kotlin.time.Duration.Companion.seconds
 
-class ResetZashiUseCase(
+class ResetZashiUseCase internal constructor(
     private val walletCoordinator: WalletCoordinator,
     private val flexaRepository: FlexaRepository,
     private val synchronizerProvider: SynchronizerProvider,
@@ -40,6 +45,11 @@ class ResetZashiUseCase(
     private val baseBalanceRepository: BaseBalanceRepository,
     private val migrationAppHooks: MigrationAppHooks,
     private val ensureNoUnsharedGiftFunds: EnsureNoUnsharedGiftFundsUseCase,
+    private val atomicSwapRepository: AtomicSwapRepository,
+    private val reverseSwapRepository: ReverseSwapRepository,
+    private val railgunWalletRepository: RailgunWalletRepository,
+    private val privateUsdSenders: PrivateUsdSenders,
+    private val selectedTabRepository: SelectedTabRepository,
 ) {
     @Suppress("TooGenericExceptionCaught", "ThrowsCount")
     suspend operator fun invoke(
@@ -61,6 +71,12 @@ class ResetZashiUseCase(
             // clear, and would keep driving the deleted wallet's smart account.
             peerCashOutRepository.reset()
             baseBalanceRepository.reset()
+            // Conversions too: a loop still running would write the wiped wallet's swap back.
+            atomicSwapRepository.reset()
+            reverseSwapRepository.reset()
+            // Private USD's sends, its engine, and the page storage holding the wallet it opened.
+            privateUsdSenders.current?.reset()
+            railgunWalletRepository.reset()
             deleteLocalFiles(keepFiles)
             closeSynchronizer()
             clearSDK()
@@ -118,6 +134,8 @@ class ResetZashiUseCase(
 
     private fun clearInMemoryData() {
         homeMessageCacheRepository.reset()
+        // The next wallet opens where a new one does, not on the tab this one was reset from.
+        selectedTabRepository.reset()
     }
 
     companion object {

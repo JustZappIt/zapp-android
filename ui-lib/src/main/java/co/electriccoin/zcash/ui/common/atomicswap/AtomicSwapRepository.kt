@@ -5,11 +5,9 @@ package co.electriccoin.zcash.ui.common.atomicswap
 
 import cash.z.ecc.android.sdk.exception.SdkException
 import co.electriccoin.zcash.spackle.Twig
-import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
+import co.electriccoin.zcash.ui.R
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -17,11 +15,9 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import xyz.justzappit.evm.rpc.RpcException
-import xyz.justzappit.evm.util.hexToBytes
+import kotlinx.coroutines.withContext
 import xyz.justzappit.offramp.atomicswap.AtomicSwapActivity
 import xyz.justzappit.offramp.atomicswap.AtomicSwapBlock
 import xyz.justzappit.offramp.atomicswap.AtomicSwapBlockedException
@@ -29,6 +25,10 @@ import xyz.justzappit.offramp.atomicswap.AtomicSwapOffer
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
 import xyz.justzappit.offramp.atomicswap.AtomicSwapStep
+import xyz.justzappit.offramp.atomicswap.AtomicSwapWait
+import xyz.justzappit.offramp.atomicswap.SwapDirection
+import xyz.justzappit.offramp.p2p.Usdc6
+import kotlin.time.Duration.Companion.seconds
 
 data class AtomicSwapState(
     val record: AtomicSwapRecord? = null,
@@ -42,27 +42,14 @@ data class AtomicSwapState(
     val isUnderWay: Boolean get() = record?.finished == false
 }
 
-enum class AtomicSwapProblem {
-    RELAYER_UNREACHABLE,
-    MAKER_UNREACHABLE,
-    ETHEREUM_UNREACHABLE,
-    RAILGUN_CLOSED,
-    CLAIM_TURN,
-    ZCASH_WALLET,
-    UNEXPECTED,
-}
-
 /** An offer to show before accepting it; [depositFeeZat] is null when the wallet can't pay it now. */
 data class AtomicSwapQuote(
     val offer: AtomicSwapOffer,
     val depositFeeZat: Long?,
 )
 
-/**
- * The one swap under way, run to its end a step at a time for as long as the process lives. The
- * worker keeps the process alive in the background.
- */
-interface AtomicSwapRepository {
+/** The one forward swap under way, run to its end a step at a time; the worker keeps the process alive meanwhile. */
+interface AtomicSwapRepository : SwapConversionLifecycle {
     val deployment: AtomicSwapDeployment?
 
     val state: StateFlow<AtomicSwapState>
@@ -70,53 +57,44 @@ interface AtomicSwapRepository {
     /** Every swap accepted on this device, oldest first. */
     val history: Flow<List<AtomicSwapRecord>>
 
-    suspend fun quote(units: Int): AtomicSwapQuote
+    suspend fun quote(requested: Usdc6): AtomicSwapQuote
 
     /** Accepts [offer]; its deposit and the rest follow without the user. */
     suspend fun accept(offer: AtomicSwapOffer): AtomicSwapRecord
 
-    /** Keeps a swap under way advancing. Only the foreground may start the worker's service. */
-    fun resume(isForeground: Boolean)
-
-    fun retryNow()
-
     /** Calls off a swap that never reached the chain. */
     suspend fun abandon()
-
-    suspend fun isUnderWay(): Boolean
-
-    suspend fun awaitSettled()
 
     /** Looks up, on the chain, the payout of paid swaps kept without one. */
     fun findMissingPayouts()
 }
 
-class AtomicSwapRepositoryImpl(
+internal class AtomicSwapRepositoryImpl(
     deployments: AtomicSwapDeployments,
-    private val reverseStore: ReverseSwapStoreImpl,
+    private val reverse: ReverseSwapRepository,
     private val sessions: AtomicSwapSessions,
-    private val store: AtomicSwapStoreImpl,
-    private val keys: AtomicSwapKeysImpl,
+    private val store: AtomicSwapRecords,
     private val zcash: AtomicSwapZcashInfo,
     private val scheduler: AtomicSwapScheduler,
     notifier: AtomicSwapNotifier,
-) : AtomicSwapRepository {
+    scope: CoroutineScope = swapScope(),
+    private val driverLock: Mutex = Mutex(),
+    private val payouts: AtomicSwapPayouts = AtomicSwapPayouts(sessions, store, scope),
+    private val runner: SwapConversionRunner<AtomicSwapRecord> =
+        SwapConversionRunner(
+            conversions = AtomicSwapConversions(sessions, driverLock, store, zcash, scheduler, notifier, payouts),
+            scheduler = scheduler,
+            notifier = notifier,
+            scope = scope,
+            isAvailable = deployments.current != null,
+        ),
+) : AtomicSwapRepository,
+    SwapConversionLifecycle by runner {
     override val deployment: AtomicSwapDeployment? = deployments.current
 
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-    private val driverLock = Mutex()
-    private val loop = AtomicSwapLoop(sessions, driverLock, store, zcash, scheduler, notifier, scope)
-    private var payoutLookup: Job? = null
-
     override val state: StateFlow<AtomicSwapState> =
-        combine(
-            store.observeActive.catch { e ->
-                Twig.error(e) { "Atomic swap: the store is unreadable" }
-                emit(null)
-            },
-            loop.progress,
-        ) { record, progress ->
-            val current = progress.takeIf { record != null && it.index == record.index } ?: AtomicSwapProgress()
+        combine(store.observeActive.unreadableAsNone(), runner.loop.progress) { record, progress ->
+            val current = progress.takeIf { record != null && it.index == record.index } ?: SwapProgress()
             AtomicSwapState(
                 record = record,
                 wait = current.wait,
@@ -133,93 +111,165 @@ class AtomicSwapRepositoryImpl(
             emit(emptyList())
         }
 
-    override suspend fun quote(units: Int): AtomicSwapQuote {
-        requireForwardAvailable(reverseStore.active())
-        val offer = driverLock.withLock { sessions.current.quote(units) }
-        return AtomicSwapQuote(offer, depositFee(offer))
+    override suspend fun quote(requested: Usdc6): AtomicSwapQuote {
+        reverse.requireNotUnderWay()
+        val offer = driverLock.withLock { sessions.forward(checkNotNull(deployment)).quote(requested) }
+        return AtomicSwapQuote(offer, zcash.depositFee(offer))
     }
 
     override suspend fun accept(offer: AtomicSwapOffer): AtomicSwapRecord {
+        val session = sessions.session
         try {
-            return store.acceptanceLock.withLock {
-                requireForwardAvailable(reverseStore.active())
-                driverLock.withLock { sessions.current.accept(offer) }
+            return sessions.acceptanceLock.withLock {
+                reverse.requireNotUnderWay()
+                driverLock.withLock { sessions.forward(checkNotNull(deployment), session).accept(offer) }
             }
         } finally {
-            // An accept cut short may still have opened the swap: the loop finds out.
-            if (store.active()?.let { it.index == offer.index && !it.finished } == true) {
-                loop.start(resuming = false)
-                scheduler.runNow()
+            // An accept cut short may still have opened the swap: the loop finds out, unless the wallet was reset.
+            withContext(NonCancellable) {
+                if (store.underWay()?.index == offer.index && runner.loop.start(resuming = false, session)) {
+                    scheduler.runNow()
+                }
             }
         }
     }
 
-    override fun resume(isForeground: Boolean) {
-        if (deployment == null) return
-        scope.launch {
-            if (!isUnderWay()) return@launch
-            loop.start(resuming = true)
-            if (isForeground) scheduler.runNow() else scheduler.runIfIdle()
-        }
-    }
-
-    override fun retryNow() = loop.nudge()
-
+    // What the loop last kept decides, not what was read before the lock: it may have paid the deposit since.
     override suspend fun abandon() {
-        val record = store.active() ?: return
-        driverLock.withLock { sessions.forRecord(record).driver.abandon(record) }
-        loop.settle()
-    }
-
-    override suspend fun isUnderWay(): Boolean = store.active()?.finished == false
-
-    override suspend fun awaitSettled() {
-        store.observeActive.first { it?.finished != false }
+        val abandoned = driverLock.withLock { store.underWay()?.let { sessions.forward(it).abandon(it) } }
+        if (abandoned != null) runner.loop.settle()
     }
 
     override fun findMissingPayouts() {
-        if (deployment == null || payoutLookup?.isActive == true) return
-        payoutLookup =
-            scope.launch {
-                history
-                    .first()
-                    .filter { it.outcome == AtomicSwapOutcome.Paid && it.payoutTx == null }
-                    .forEach { findPayout(it) }
-            }
+        if (deployment != null) payouts.findMissing { history.first() }
     }
+}
 
-    private suspend fun findPayout(record: AtomicSwapRecord) {
-        try {
-            val tx =
-                sessions.forRecord(record).chain.payoutTx(
-                    record.swapId.hexToBytes(),
-                    record.finishedAt ?: record.acceptedAt
-                )
-                    ?: return
-            store.update(record.index) { it.copy(payoutTx = tx) }
-        } catch (e: RpcException) {
-            Twig.info { "Atomic swap: no payout found for ${record.index}, ${e.message}" }
-        } catch (e: IllegalStateException) {
-            Twig.info { "Atomic swap: no payout found for ${record.index}, ${e.message}" }
-        } catch (e: StoreCorruptedException) {
-            Twig.error(e) { "Atomic swap: the store is unreadable" }
+/** Forward swaps as [SwapLoop] advances them; the wakes around their deadlines are set from here. */
+internal class AtomicSwapConversions(
+    private val sessions: AtomicSwapSessions,
+    private val driverLock: Mutex,
+    private val store: AtomicSwapRecords,
+    private val zcash: AtomicSwapZcashInfo,
+    private val scheduler: AtomicSwapScheduler,
+    private val notifier: AtomicSwapNotifier,
+    private val payouts: AtomicSwapPayouts,
+) : SwapConversions<AtomicSwapRecord> {
+    private var wakesFor: Pair<Long, Long>? = null
+
+    override val direction = SwapDirection.FORWARD
+
+    override val session: Long get() = sessions.session
+
+    override val active: Flow<AtomicSwapRecord?> = store.observeActive.unreadableAsNone()
+
+    override suspend fun underWay(): AtomicSwapRecord? = store.underWay()
+
+    override fun isUnderWay(record: AtomicSwapRecord) = !record.finished
+
+    override fun indexOf(record: AtomicSwapRecord) = record.index
+
+    override fun needsYou(record: AtomicSwapRecord) = false
+
+    override suspend fun advance(
+        record: AtomicSwapRecord,
+        session: Long,
+        onActivity: (AtomicSwapActivity) -> Unit,
+    ): SwapLoopStep {
+        val step =
+            driverLock.withLock {
+                val current = store.active()?.takeIf { it.index == record.index } ?: record
+                sessions.forward(current, session).advance(current, onActivity)
+            }
+        return when (step) {
+            is AtomicSwapStep.Finished -> {
+                announce(step.outcome)
+                SwapLoopStep.Over
+            }
+
+            is AtomicSwapStep.Waiting -> {
+                wake(step)
+                SwapLoopStep.Waiting(pollInterval(step.reason), step, confirmations(step))
+            }
         }
     }
 
-    private suspend fun depositFee(offer: AtomicSwapOffer): Long? =
-        try {
-            zcash.depositFee(
-                keys.depositAddress(offer.index, offer.quote.makerShare.hexToBytes()),
-                offer.quote.depositZat,
-            )
-        } catch (e: SdkException) {
-            Twig.info { "Atomic swap: no deposit fee estimate, ${e.message}" }
+    override fun settled() {
+        wakesFor = null
+        scheduler.cancelWakes()
+    }
+
+    override suspend fun reset() {
+        payouts.cancel()
+        sessions.reset { store.clear() }
+    }
+
+    private fun announce(outcome: AtomicSwapOutcome) =
+        when (outcome) {
+            AtomicSwapOutcome.Paid -> {
+                notifier.finished(
+                    direction,
+                    R.string.private_usd_notification_paid_title,
+                    R.string.private_usd_notification_paid_body
+                )
+            }
+
+            is AtomicSwapOutcome.Refunded -> {
+                notifier.finished(
+                    direction,
+                    R.string.convert_result_refunded_title,
+                    R.string.private_usd_notification_refunded_body
+                )
+            }
+
+            is AtomicSwapOutcome.NothingSent -> {
+                notifier.finished(
+                    direction,
+                    R.string.private_usd_notification_nothing_title,
+                    R.string.private_usd_notification_nothing_body
+                )
+            }
+        }
+
+    private fun wake(step: AtomicSwapStep.Waiting) {
+        val t0 = step.t0
+        val t1 = step.t1
+        if (t0 != null && t1 != null && wakesFor != t0 to t1) {
+            scheduler.wakeAt(t0, t1)
+            wakesFor = t0 to t1
+        }
+    }
+
+    private suspend fun confirmations(step: AtomicSwapStep.Waiting): Int? {
+        val txId = store.underWay()?.deposit?.txId
+        return if (step.reason == AtomicSwapWait.CONFIRMING && txId != null) {
+            try {
+                zcash.confirmations(txId)
+            } catch (e: SdkException) {
+                Twig.info { "Atomic swap: no confirmation count, ${e.message}" }
+                null
+            }
+        } else {
             null
         }
-}
+    }
 
-private fun requireForwardAvailable(record: xyz.justzappit.offramp.atomicswap.ReverseSwapRecord?) {
-    if (record?.underWay == true) {
-        throw AtomicSwapBlockedException(AtomicSwapBlock.SWAP_UNDER_WAY, "a reverse swap is under way")
+    private companion object {
+        fun pollInterval(reason: AtomicSwapWait) =
+            when (reason) {
+                AtomicSwapWait.OPENING -> 5.seconds
+                AtomicSwapWait.CONFIRMING -> 20.seconds
+                AtomicSwapWait.DEPOSIT_UNSETTLED, AtomicSwapWait.REFUNDING -> 30.seconds
+            }
     }
 }
+
+private suspend fun ReverseSwapRepository.requireNotUnderWay() {
+    if (isUnderWay()) throw AtomicSwapBlockedException(AtomicSwapBlock.SWAP_UNDER_WAY, "a reverse swap is under way")
+}
+
+private fun Flow<AtomicSwapRecord?>.unreadableAsNone(): Flow<AtomicSwapRecord?> =
+    catch { e ->
+        Twig.error(e) { "Atomic swap: the store is unreadable" }
+        emit(null)
+    }

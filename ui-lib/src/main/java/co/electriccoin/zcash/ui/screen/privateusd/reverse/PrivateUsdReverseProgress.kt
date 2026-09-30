@@ -6,68 +6,76 @@ package co.electriccoin.zcash.ui.screen.privateusd.reverse
 import androidx.annotation.StringRes
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.label
+import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
+import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
+import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProblemState
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressState
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdResultState
 import xyz.justzappit.offramp.atomicswap.ReversePhase
 import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
+import xyz.justzappit.offramp.atomicswap.ReverseSwapResult
+import xyz.justzappit.offramp.atomicswap.ReverseSwapStatus
 
-internal fun reverseProgress(record: ReverseSwapRecord, state: PrivateUsdReverseState): PrivateUsdProgressState? {
-    if (state.showAmount || state.showReview) return null
+/** What a reverse conversion's progress screen shows, from the moment it's paid for. */
+internal fun reverseProgress(
+    record: ReverseSwapRecord,
+    paid: StringResource,
+    received: StringResource,
+    callOff: ButtonState?,
+    problem: PrivateUsdProblemState?,
+    error: StringResource?,
+    primary: ButtonState,
+    info: PrivateUsdInfo,
+    isBackEnabled: Boolean,
+    onBack: () -> Unit,
+): PrivateUsdProgressState {
+    val ended = (record.status as? ReverseSwapStatus.Over)?.result
     return PrivateUsdProgressState(
         amounts =
-            if (record.phase in setOf(ReversePhase.REFUNDED, ReversePhase.CANCELLED)) {
-                null
-            } else {
-                stringRes(
-                    if (state.receiveIsEstimate) {
-                        R.string.reverse_progress_estimate
-                    } else {
-                        R.string.reverse_progress_amounts
-                    },
-                    state.debit ?: state.escrow ?: stringRes(""),
-                    state.receive.orEmpty(),
-                )
-            },
-        result =
-            if (record.finished) {
-                PrivateUsdResultState(
-                    title =
-                        stringRes(
-                            when (record.phase) {
-                                ReversePhase.COMPLETE -> R.string.reverse_result_received
-                                ReversePhase.REFUNDED -> R.string.reverse_result_refunded
-                                else -> R.string.reverse_result_cancelled
-                            }
-                        ),
-                    body =
-                        if (record.phase == ReversePhase.COMPLETE) {
-                            stringRes(R.string.reverse_progress_received, state.receive.orEmpty())
-                        } else {
-                            state.status
-                        },
-                    isSuccess = record.phase == ReversePhase.COMPLETE,
-                )
-            } else {
-                null
-            },
+            stringRes(
+                if (record.receive == null) R.string.reverse_progress_estimate else R.string.reverse_progress_amounts,
+                paid,
+                received,
+            ).takeUnless { ended == ReverseSwapResult.REFUNDED || ended == ReverseSwapResult.CANCELLED },
+        result = ended?.let { resultOf(record.phase, it, received) },
         steps = reverseSteps(record.phase, record.receiveConfirmations),
-        note = if (record.phase == ReversePhase.AWAITING_READY) stringRes(R.string.reverse_ready_explanation) else null,
-        callOff = state.cancel ?: state.rescue,
+        note = stringRes(R.string.reverse_ready_explanation).takeIf { record.phase == ReversePhase.AWAITING_READY },
+        problem = problem,
+        error = error,
+        callOff = callOff,
         showsBackgroundNote = record.underWay,
-        primaryButton = state.primary,
-        info =
-            PrivateUsdInfo(
-                title = stringRes(R.string.reverse_title),
-                steps = listOf(stringRes(R.string.reverse_intro)),
-                notes = listOf(stringRes(R.string.reverse_gas_account), stringRes(R.string.reverse_refund_terms)),
-            ),
-        onBack = state.onBack,
+        primaryButton = primary,
+        info = info,
+        onBack = onBack,
+        isBackEnabled = isBackEnabled,
     )
 }
+
+private fun resultOf(
+    phase: ReversePhase,
+    result: ReverseSwapResult,
+    received: StringResource
+) = PrivateUsdResultState(
+    title =
+        stringRes(
+            when (result) {
+                ReverseSwapResult.RECEIVED -> R.string.reverse_result_received
+                ReverseSwapResult.REFUNDED -> R.string.reverse_result_refunded
+                ReverseSwapResult.CANCELLED -> R.string.reverse_result_cancelled
+            }
+        ),
+    body =
+        if (result == ReverseSwapResult.RECEIVED) {
+            stringRes(R.string.reverse_progress_received, received)
+        } else {
+            stringRes(phase.label())
+        },
+    isSuccess = result == ReverseSwapResult.RECEIVED,
+)
 
 internal fun reverseSteps(phase: ReversePhase, receiveConfirmations: Long): List<ZappStep> {
     val current =
@@ -103,6 +111,10 @@ internal fun reverseSteps(phase: ReversePhase, receiveConfirmations: Long): List
         )
     }
 }
+
+/** A short name for where the conversion is: its step, or its refund's. */
+@StringRes
+internal fun ReversePhase.stageLabel(): Int = receiveStep()?.label ?: label()
 
 private fun ReversePhase.receiveStep(): ReceiveStep? =
     when (this) {

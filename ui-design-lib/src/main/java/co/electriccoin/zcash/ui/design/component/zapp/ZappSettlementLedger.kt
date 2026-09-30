@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 
@@ -29,7 +31,8 @@ data class ZappSettlementLedgerRow(
     val label: String,
     val value: String,
     val isDanger: Boolean = false,
-    val isCompact: Boolean = false,
+    /** Keeps the value on one line: it shrinks to caption size first, then ends in an ellipsis. */
+    val isSingleLine: Boolean = false,
 )
 
 @Composable
@@ -68,26 +71,7 @@ fun ZappSettlementLedger(
                         text = row.label,
                         style = ZappTheme.typography.caption.copy(color = c.textMuted),
                     )
-                    BasicText(
-                        text = row.value,
-                        style =
-                            (if (row.isCompact) ZappTheme.typography.caption else ZappTheme.typography.body).copy(
-                                color = if (row.isDanger) c.danger else c.text,
-                                fontWeight = FontWeight.Medium,
-                                textAlign = TextAlign.End,
-                            ),
-                        modifier = Modifier.weight(1f).padding(start = 12.dp),
-                        maxLines = if (row.isCompact) 1 else Int.MAX_VALUE,
-                        autoSize =
-                            if (row.isCompact) {
-                                TextAutoSize.StepBased(
-                                    minFontSize = ZappTheme.typography.caption.fontSize,
-                                    maxFontSize = ZappTheme.typography.body.fontSize,
-                                )
-                            } else {
-                                null
-                            },
-                    )
+                    if (row.isSingleLine) SingleLineValue(row) else Value(row)
                 }
             }
             notice?.let {
@@ -112,3 +96,39 @@ fun ZappSettlementLedger(
         }
     }
 }
+
+@Composable
+private fun Value(row: ZappSettlementLedgerRow) {
+    BasicText(
+        text = row.value,
+        style =
+            ZappTheme.typography.body.copy(
+                color = if (row.isDanger) ZappTheme.colors.danger else ZappTheme.colors.text,
+                fontWeight = FontWeight.Medium,
+            ),
+        modifier = Modifier.padding(start = VALUE_GAP),
+    )
+}
+
+@Composable
+private fun RowScope.SingleLineValue(row: ZappSettlementLedgerRow) {
+    BasicText(
+        text = row.value,
+        style =
+            ZappTheme.typography.body.copy(
+                color = if (row.isDanger) ZappTheme.colors.danger else ZappTheme.colors.text,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.End,
+            ),
+        modifier = Modifier.weight(1f).padding(start = VALUE_GAP),
+        overflow = TextOverflow.Ellipsis,
+        maxLines = 1,
+        autoSize =
+            TextAutoSize.StepBased(
+                minFontSize = ZappTheme.typography.caption.fontSize,
+                maxFontSize = ZappTheme.typography.body.fontSize,
+            ),
+    )
+}
+
+private val VALUE_GAP = 12.dp

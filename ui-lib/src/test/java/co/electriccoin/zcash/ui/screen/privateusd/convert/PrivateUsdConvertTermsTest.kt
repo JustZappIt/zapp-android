@@ -4,82 +4,93 @@
 package co.electriccoin.zcash.ui.screen.privateusd.convert
 
 import cash.z.ecc.android.sdk.model.Zatoshi
-import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapQuote
+import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapTestnet
-import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
+import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
-import xyz.justzappit.evm.math.bigIntegerValueOf
-import xyz.justzappit.offramp.atomicswap.AtomicSwapOffer
-import xyz.justzappit.offramp.atomicswap.SwapQuote
+import co.electriccoin.zcash.ui.design.util.StringResource
+import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.privateusd.offer
 import java.math.BigDecimal
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class PrivateUsdConvertTermsTest {
-    private val deployment = AtomicSwapTestnet.deployment
-    private val terms =
-        PrivateUsdConvertTerms(
-            deployment,
-            checkNotNull(PrivateUsdTokens.find(deployment.railgunNetwork, deployment.config.token.checksumHex)),
+    private val terms = PrivateUsdConvertTerms(AtomicSwapTestnet.deployment)
+    private val ready = ConvertQuote.Ready(ZecQuote(offerFor(depositZat = 202_021), feeZat = 15_000))
+
+    @Test
+    fun `the typed total, network fee included, must fit what the wallet can spend`() {
+        val form = ConvertForm(amount = zec("0.00217021"))
+
+        assertFalse(form.isShort(Zatoshi(217_021)))
+        assertTrue(form.isShort(Zatoshi(217_020)))
+        assertFalse(form.isShort(null))
+    }
+
+    @Test
+    fun `a quote landing once the review is up is dropped`() {
+        val reviewing = ConvertForm(phase = PrivateUsdConvertPhase.REVIEW, quote = ConvertQuote.Loading)
+
+        assertSame(reviewing, reviewing.withQuote(ready, fillsAmount = true))
+    }
+
+    @Test
+    fun `the maximum fills the amount with what its quote costs in all`() {
+        val form = ConvertForm(amount = zec("5")).withQuote(ready, fillsAmount = true)
+
+        assertEquals(BigDecimal("0.00217021"), form.amount.amount)
+        assertEquals(ready, form.quote)
+    }
+
+    @Test
+    fun `you pay the deposit and its fee, and the review says how long the quote holds`() {
+        val now = ready.quote.offer.quote.expiresAt - 272
+
+        val amount = terms.quote(ready, PrivateUsdConvertPhase.AMOUNT, now, LocalCurrency.DOLLAR)
+        val review = terms.quote(ready, PrivateUsdConvertPhase.REVIEW, now, LocalCurrency.DOLLAR)
+
+        assertEquals(stringRes(Zatoshi(217_021)), amount.pay)
+        val countdown = stringRes(R.string.convert_quote_countdown, 4L, 12L)
+        assertEquals(stringRes(R.string.convert_quote_expires, countdown), amount.expiry)
+        assertEquals(stringRes(R.string.convert_quote_holds, countdown), review.expiry)
+    }
+
+    @Test
+    fun `an expired quote reads as run out only on review`() {
+        val expired = ready.quote.offer.quote.expiresAt
+        val amount = ConvertForm(quote = ready)
+
+        assertNull(amount.message(Zatoshi(1_000_000), expired))
+        assertEquals(
+            stringRes(R.string.convert_quote_ran_out),
+            amount.copy(phase = PrivateUsdConvertPhase.REVIEW).message(Zatoshi(1_000_000), expired),
         )
-
-    @Test
-    fun `an amount accepts any token precision within the maker's limit`() {
-        assertEquals(7_000_000, terms.units(dollars("7")))
-        assertEquals(7_255_001, terms.units(dollars("7.255001")))
-        assertEquals(110_000, terms.units(dollars("0.11")))
-        assertNull(terms.units(dollars("0.10")))
-        assertEquals(20_000_000, terms.units(dollars("20")))
-        assertNull(terms.units(dollars("0.02")))
-        assertNull(terms.units(dollars("7.2550001")))
-        assertNull(terms.units(dollars("0")))
-        assertNull(terms.units(dollars("21")))
-        assertNull(terms.units(dollars("42949672.99")))
-        assertNull(terms.units(NumberTextFieldInnerState()))
+        assertFalse(amount.canGoOn(Zatoshi(1_000_000), expired))
     }
 
     @Test
-    fun `only an amount that was typed can be invalid`() {
-        assertFalse(terms.isInvalid(NumberTextFieldInnerState()))
-        assertFalse(terms.isInvalid(dollars("7")))
-        assertFalse(terms.isInvalid(dollars("7.5")))
-        assertFalse(terms.isInvalid(dollars("7.255001")))
-        assertTrue(terms.isInvalid(dollars("7.2550001")))
-        assertTrue(terms.isInvalid(dollars("21")))
+    fun `what you receive shows in the picked currency`() {
+        val receive =
+            terms.quote(ready, PrivateUsdConvertPhase.AMOUNT, 0, LocalCurrency.DOLLAR).receive
+                as StringResource.ByCurrencyNumber
+
+        assertEquals(BigDecimal("0.98"), receive.amount)
     }
 
-    @Test
-    fun `the deposit and its network fee must fit what the wallet can spend`() {
-        val ready = ConvertQuote.Ready(1, AtomicSwapQuote(offer(depositZat = 202_021), depositFeeZat = 15_000))
+    private fun zec(amount: String) = NumberTextFieldInnerState.fromAmount(BigDecimal(amount))
 
-        assertFalse(terms.isShort(ready, Zatoshi(217_021)))
-        assertTrue(terms.isShort(ready, Zatoshi(217_020)))
-        assertFalse(terms.isShort(ready, null))
-    }
-
-    private fun dollars(amount: String) = NumberTextFieldInnerState.fromAmount(BigDecimal(amount))
-
-    private fun offer(depositZat: Long) =
-        AtomicSwapOffer(
+    private fun offerFor(depositZat: Long) =
+        offer(
             index = 0,
-            units = 1,
-            quote =
-                SwapQuote(
-                    quoteId = "0x22",
-                    maker = "0x09eD1F966745Be18C711C346242c0974DAd7c3e5",
-                    makerShare = "0x0a",
-                    makerProof = "0x06",
-                    chainId = 11_155_111,
-                    contract = "0x32CE55D00E6184c385E44e6b20b76d3a8407E809",
-                    token = "0x5764D0044bef5AA839E0dDafE2073421101B9Ed8",
-                    amount = "1000000",
-                    depositZat = depositZat,
-                    expiresAt = 1_790_000_300,
-                ),
-            relayerFee = bigIntegerValueOf(20_000),
-            receives = bigIntegerValueOf(977_550),
+            requested = 1_000_000,
+            depositZat = depositZat,
+            expiresAt = 1_790_000_300,
+            receives = 977_550,
+            maxTotalZat = depositZat + 15_000,
         )
 }

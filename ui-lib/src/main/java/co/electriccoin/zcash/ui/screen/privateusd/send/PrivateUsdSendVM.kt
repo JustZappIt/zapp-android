@@ -6,45 +6,47 @@ package co.electriccoin.zcash.ui.screen.privateusd.send
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
-import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
-import co.electriccoin.zcash.ui.common.privateusd.DollarRate
-import co.electriccoin.zcash.ui.common.privateusd.ObserveDollarRateUseCase
-import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdAsset
+import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
+import co.electriccoin.zcash.ui.common.privateusd.ObserveLocalCurrencyUseCase
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
-import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendLog
-import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendMode
-import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendRecord
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendOutcome
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendRequest
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
-import co.electriccoin.zcash.ui.common.privateusd.local
+import co.electriccoin.zcash.ui.common.privateusd.basisPoints
+import co.electriccoin.zcash.ui.common.privateusd.exactTokenAmount
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
-import co.electriccoin.zcash.ui.common.privateusd.tokenAmount
-import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
-import co.electriccoin.zcash.ui.common.repository.BiometricRepository
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
+import co.electriccoin.zcash.ui.common.security.PinVerifyState
+import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
+import co.electriccoin.zcash.ui.design.component.TextFieldState
+import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.ExternalUrl
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
-import co.electriccoin.zcash.ui.screen.privateusd.authorizeSpend
-import kotlinx.coroutines.CancellationException
+import co.electriccoin.zcash.ui.screen.privateusd.authenticateSpend
+import co.electriccoin.zcash.ui.screen.privateusd.runConversionStep
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import xyz.justzappit.railgun.RailgunException
-import java.io.IOException
-import kotlin.time.Clock
+import xyz.justzappit.offramp.atomicswap.RAILGUN_FEE
+import xyz.justzappit.offramp.peer.Bps
+import xyz.justzappit.railgun.RailgunFees
 
 class PrivateUsdSendVM(
     args: PrivateUsdSendArgs,
@@ -52,89 +54,106 @@ class PrivateUsdSendVM(
     senders: PrivateUsdSenders,
     railgunWalletRepository: RailgunWalletRepository,
     atomicSwapRepository: AtomicSwapRepository,
-    observeDollarRate: ObserveDollarRateUseCase,
-    private val biometricRepository: BiometricRepository,
-    private val sendLog: PrivateUsdSendLog,
+    observeLocalCurrency: ObserveLocalCurrencyUseCase,
+    private val secretAuthGate: SecretAuthGate,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
     private val sender = checkNotNull(senders.current) { "no sending in this build" }
     private val explorerTxUrl = atomicSwapRepository.deployment?.explorerTxUrl
-    private val form =
-        MutableStateFlow(
-            PrivateUsdSendForm(mode = if (args.withdraw) PrivateUsdSendMode.WITHDRAW else PrivateUsdSendMode.PRIVATE)
-        )
+    private val form = MutableStateFlow(PrivateUsdSendForm(mode = args.mode))
+    private var reviewJob: Job? = null
 
     internal val state: StateFlow<PrivateUsdSendState> =
         combine(
             form,
-            balanceRepository.observe(),
-            railgunWalletRepository.state.map { it.proof?.progress },
-            observeDollarRate(),
+            balanceRepository.observe().onEach(::pinToken),
+            railgunWalletRepository.state.map { RailgunProgress(it.proof?.progress, it.fees) }.distinctUntilChanged(),
+            observeLocalCurrency(),
+            secretAuthGate.pinPrompt,
             ::createState,
         ).stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-            initialValue = createState(form.value, balanceRepository.state.value, null, null),
+            initialValue =
+                createState(
+                    form.value,
+                    balanceRepository.state.value,
+                    RailgunProgress(null, railgunWalletRepository.state.value.fees),
+                    LocalCurrency.DOLLAR,
+                    null,
+                ),
         )
 
     private fun createState(
         form: PrivateUsdSendForm,
         balance: PrivateUsdBalanceState,
-        proof: Float?,
-        rate: DollarRate?,
+        railgun: RailgunProgress,
+        currency: LocalCurrency,
+        pin: PinVerifyState?,
     ): PrivateUsdSendState {
-        val assets =
-            balance.balances
-                ?.assets
-                ?.filter { it.token.isDollar && it.available.signum() > 0 }
-                .orEmpty()
-        val token = form.reviewedRequest?.token?.address ?: form.token
-        val asset =
-            assets.firstOrNull { it.token.address == token }
-                ?: assets.firstOrNull().takeIf { form.phase == PrivateUsdSendPhase.FORM }
+        val token = form.reviewedRequest?.token ?: form.token
+        val assets = form.assets(balance)
+        val asset = assets.firstOrNull { it.token == token }
         val amountError = form.amountError(asset)
-        val availableRequest = asset?.let(form::request)
-        val request = form.reviewedRequest ?: availableRequest
+        val request = form.reviewedRequest ?: asset?.let(form::request)
         val canSend = form.canSend(request, balance)
-        val isWithdrawal = form.mode == PrivateUsdSendMode.WITHDRAW
         return PrivateUsdSendState(
             phase = form.phase,
-            isWithdrawal = isWithdrawal,
-            onModeSelect = { index ->
-                updateForm {
-                    it.copy(mode = PrivateUsdSendMode.entries[index], recipient = "", cost = null, error = null)
-                }
-            },
-            assets = assets.map { it.token.symbol },
-            selectedAsset = assets.indexOf(asset).coerceAtLeast(0),
-            onAssetSelect = { index -> assets.getOrNull(index)?.let(::onAssetSelect) },
+            mode = form.mode,
+            onModeSelect = { mode -> updateForm { it.copy(mode = mode, recipient = "") } },
+            assets =
+                assets.takeIf { it.size > 1 }.orEmpty().map { choice ->
+                    PrivateUsdSendAssetState(choice.token.symbol, isSelected = choice.token == token) {
+                        updateForm { it.copy(token = choice.token, amount = NumberTextFieldInnerState()) }
+                    }
+                },
             amount =
                 NumberTextFieldState(innerState = form.amount, isEnabled = !form.isBusy) { inner ->
-                    updateForm { it.copy(amount = inner, cost = null) }
+                    updateForm { it.copy(amount = inner) }
                 },
+            currencySymbol = LocalCurrency.DOLLAR.symbol,
             amountNote =
                 amountError
                     ?: form.amount.amount
-                        ?.takeIf { rate != null }
-                        ?.let { stringRes(R.string.private_usd_worth, rate.local(it)) },
+                        ?.takeUnless { currency.isDollar }
+                        ?.let { stringRes(R.string.private_usd_worth, currency.format(it)) },
             isAmountInvalid = amountError != null,
-            available = asset?.let { tokenAmount(it.available, it.token) },
-            onMax = { asset?.let(::onMax) },
-            recipient = form.recipient,
-            onRecipientChange = { recipient -> updateForm { it.copy(recipient = recipient, cost = null) } },
-            recipientError = form.recipientError(),
-            review = request?.let { form.review(it, sender.usesTestAccount) },
-            proofProgress = proof?.takeIf { form.phase == PrivateUsdSendPhase.SENDING }?.let { it / PERCENT },
-            done = form.done(explorerTxUrl),
-            error = form.error,
-            info = if (isWithdrawal) WITHDRAW_INFO else SEND_INFO,
+            available = asset?.let { exactTokenAmount(it.available, it.token).asPrivacySensitive() },
+            onMax = {
+                asset?.let { max ->
+                    updateForm {
+                        it.copy(
+                            token = max.token,
+                            amount = NumberTextFieldInnerState.fromAmount(max.available.toDecimal(max.token.decimals)),
+                        )
+                    }
+                }
+            },
+            recipient =
+                TextFieldState(
+                    value = stringRes(form.recipient),
+                    error = form.recipientError(),
+                    isEnabled = !form.isBusy,
+                ) { recipient -> updateForm { it.copy(recipient = recipient) } },
+            review = request?.let(form::review),
+            proofProgress = railgun.proof?.takeIf { form.phase == PrivateUsdSendPhase.SENDING },
+            done = form.done(explorerTxUrl) { navigationRouter.forward(ExternalUrl(it)) },
+            error = form.error ?: form.reviewError(balance),
+            info = info(form.mode, form.cost?.feeBasisPoints ?: railgun.fees?.unshieldBasisPoints),
             primaryButton =
                 primaryButton(form, request, canSend).let {
                     it.copy(isEnabled = it.isEnabled && !form.isBusy, isLoading = it.isLoading || form.isBusy)
                 },
             onBack = ::onBack,
             isBusy = form.isBusy,
+            isBackEnabled = form.phase == PrivateUsdSendPhase.FORM || !form.isBusy,
+            pinVerify = pin,
         )
+    }
+
+    // The first dollar there is to send is the default, and once one is picked a refresh can't swap it for another.
+    private fun pinToken(balance: PrivateUsdBalanceState) {
+        form.update { if (it.token == null) it.copy(token = it.assets(balance).firstOrNull()?.token) else it }
     }
 
     private fun primaryButton(
@@ -144,21 +163,14 @@ class PrivateUsdSendVM(
     ): ButtonState =
         when (form.phase) {
             PrivateUsdSendPhase.FORM -> {
-                ButtonState(stringRes(R.string.private_usd_send_review), isEnabled = request != null) {
+                ButtonState(stringRes(R.string.convert_review), isEnabled = request != null) {
                     request?.let(::onReview)
                 }
             }
 
             PrivateUsdSendPhase.REVIEW -> {
                 ButtonState(
-                    text =
-                        stringRes(
-                            if (form.mode == PrivateUsdSendMode.WITHDRAW) {
-                                R.string.private_usd_send_confirm_withdraw
-                            } else {
-                                R.string.private_usd_send_confirm_private
-                            }
-                        ),
+                    text = stringRes(form.mode.confirm),
                     isEnabled = canSend && form.cost != null,
                     onClick = ::onConfirm,
                 )
@@ -173,18 +185,6 @@ class PrivateUsdSendVM(
             }
         }
 
-    private fun onAssetSelect(asset: PrivateUsdAsset) =
-        updateForm { it.copy(token = asset.token.address, amount = NumberTextFieldInnerState(), cost = null) }
-
-    private fun onMax(asset: PrivateUsdAsset) =
-        updateForm {
-            it.copy(
-                token = asset.token.address,
-                amount = NumberTextFieldInnerState.fromAmount(asset.available.toDecimal(asset.token.decimals)),
-                cost = null,
-            )
-        }
-
     private fun onReview(request: PrivateUsdSendRequest) {
         val current = form.value
         if (current.isBusy || current.phase != PrivateUsdSendPhase.FORM ||
@@ -193,20 +193,21 @@ class PrivateUsdSendVM(
             return
         }
         form.update { it.copy(isBusy = true, error = null) }
-        viewModelScope.launch {
-            try {
-                val cost = sender.cost(request)
-                form.update { it.copy(phase = PrivateUsdSendPhase.REVIEW, cost = cost, reviewedRequest = request) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: RailgunException) {
-                onFailure(e)
-            } catch (e: IllegalStateException) {
-                onFailure(e)
-            } finally {
-                form.update { it.copy(isBusy = false) }
+        reviewJob =
+            viewModelScope.launch {
+                try {
+                    runConversionStep("no send cost") { sender.cost(request) }.fold(
+                        onSuccess = { cost ->
+                            form.update {
+                                it.copy(phase = PrivateUsdSendPhase.REVIEW, cost = cost, reviewedRequest = request)
+                            }
+                        },
+                        onFailure = { form.update { it.notSent() } },
+                    )
+                } finally {
+                    form.update { it.copy(isBusy = false) }
+                }
             }
-        }
     }
 
     private fun onConfirm() {
@@ -220,62 +221,44 @@ class PrivateUsdSendVM(
         form.update { it.copy(isBusy = true, error = null) }
         viewModelScope.launch {
             try {
-                if (!biometricRepository.authorizeSpend()) return@launch
-                form.update { it.copy(phase = PrivateUsdSendPhase.SENDING) }
-                val sent = sender.send(request)
-                // Success belongs to the submitted request, even after a balance refresh or log failure.
-                form.update { it.copy(phase = PrivateUsdSendPhase.DONE, sent = sent) }
-                recordSend(request, sent.txHash)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: RailgunException) {
-                onFailure(e)
-            } catch (e: IllegalStateException) {
-                onFailure(e)
+                if (authorize()) {
+                    form.update { it.copy(phase = PrivateUsdSendPhase.SENDING) }
+                    val outcome = sender.send(request)
+                    // Anything signed may be out there: it never goes back to review, where it could be paid again.
+                    form.update {
+                        if (outcome == PrivateUsdSendOutcome.NotSent) {
+                            it.notSent()
+                        } else {
+                            it.copy(phase = PrivateUsdSendPhase.DONE, outcome = outcome)
+                        }
+                    }
+                }
             } finally {
                 form.update { it.copy(isBusy = false) }
             }
         }
     }
 
+    private suspend fun authorize(): Boolean =
+        runConversionStep("the send wasn't authorized") { secretAuthGate.authenticateSpend() }
+            .onFailure { form.update { it.notSent() } }
+            .getOrDefault(false)
+
+    // An edit makes any earlier cost and error stale.
     private fun updateForm(update: (PrivateUsdSendForm) -> PrivateUsdSendForm) {
-        form.update { if (it.phase == PrivateUsdSendPhase.FORM && !it.isBusy) update(it) else it }
-    }
-
-    private fun onFailure(error: Exception) {
-        Twig.warn(error) { "Private USD: the send failed" }
         form.update {
-            it.copy(
-                phase = if (it.reviewedRequest == null) PrivateUsdSendPhase.FORM else PrivateUsdSendPhase.REVIEW,
-                error = stringRes(R.string.private_usd_send_failed),
-            )
+            if (it.phase == PrivateUsdSendPhase.FORM && !it.isBusy) update(it).copy(cost = null, error = null) else it
         }
     }
 
-    private suspend fun recordSend(request: PrivateUsdSendRequest, txHash: String) {
-        val record =
-            PrivateUsdSendRecord(
-                txHash = txHash,
-                withdraw = request.mode == PrivateUsdSendMode.WITHDRAW,
-                token = request.token.address,
-                amount = request.amount.toString(),
-                to = request.to,
-                sentAt = Clock.System.now().epochSeconds,
-            )
-        try {
-            sendLog.add(record)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: StoreCorruptedException) {
-            Twig.warn(e) { "Private USD: sent, but the activity could not be saved" }
-        } catch (e: IOException) {
-            Twig.warn(e) { "Private USD: sent, but the activity could not be saved" }
-        } catch (e: IllegalStateException) {
-            Twig.warn(e) { "Private USD: sent, but the activity could not be saved" }
-        }
-    }
-
+    // Back cancels a cost still loading on the form; it waits for a send the user authorized.
     private fun onBack() {
+        if (form.value.isBusy && form.value.phase == PrivateUsdSendPhase.FORM) {
+            reviewJob?.cancel()
+            form.update { it.copy(isBusy = false) }
+            navigationRouter.back()
+            return
+        }
         if (form.value.isBusy) return
         when (form.value.phase) {
             PrivateUsdSendPhase.REVIEW -> {
@@ -295,8 +278,6 @@ class PrivateUsdSendVM(
     }
 
     private companion object {
-        const val PERCENT = 100f
-
         val SEND_INFO =
             PrivateUsdInfo(
                 title = stringRes(R.string.private_usd_send_info_title),
@@ -308,7 +289,16 @@ class PrivateUsdSendVM(
                     ),
             )
 
-        val WITHDRAW_INFO =
+        fun info(
+            mode: PrivateUsdSendMode,
+            feeBasisPoints: Int?
+        ) = when (mode) {
+            PrivateUsdSendMode.PRIVATE -> SEND_INFO
+            PrivateUsdSendMode.WITHDRAW -> withdrawInfo(feeBasisPoints)
+        }
+
+        // Railgun's fee as the engine last read it, the one its contracts charge until it has.
+        fun withdrawInfo(feeBasisPoints: Int?) =
             PrivateUsdInfo(
                 title = stringRes(R.string.private_usd_withdraw_info_title),
                 steps =
@@ -320,8 +310,16 @@ class PrivateUsdSendVM(
                     listOf(
                         stringRes(R.string.private_usd_withdraw_info_note_public),
                         stringRes(R.string.private_usd_withdraw_info_note_private),
-                        stringRes(R.string.private_usd_withdraw_info_note_fee),
+                        stringRes(
+                            R.string.private_usd_withdraw_info_note_fee,
+                            basisPoints(feeBasisPoints?.let(::Bps) ?: RAILGUN_FEE),
+                        ),
                     ),
             )
     }
 }
+
+private data class RailgunProgress(
+    val proof: Float?,
+    val fees: RailgunFees?,
+)

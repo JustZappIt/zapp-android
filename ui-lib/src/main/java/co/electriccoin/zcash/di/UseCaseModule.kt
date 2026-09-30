@@ -3,9 +3,11 @@ package co.electriccoin.zcash.di
 import co.electriccoin.zcash.ui.common.mapper.SwapSupportMapper
 import co.electriccoin.zcash.ui.common.pricing.usecase.ObservePortfolioHistoryUseCase
 import co.electriccoin.zcash.ui.common.pricing.usecase.PrewarmPortfolioHistoryUseCase
-import co.electriccoin.zcash.ui.common.privateusd.ObserveConversionCurrencyUseCase
-import co.electriccoin.zcash.ui.common.privateusd.ObserveDollarRateUseCase
+import co.electriccoin.zcash.ui.common.privateusd.ObserveLocalCurrencyUseCase
+import co.electriccoin.zcash.ui.common.privateusd.ObservePrivateUsdActivityUseCase
 import co.electriccoin.zcash.ui.common.privateusd.ObservePrivateUsdAvailableUseCase
+import co.electriccoin.zcash.ui.common.privateusd.ObservePrivateUsdConversionUseCase
+import co.electriccoin.zcash.ui.common.privateusd.ObservePrivateUsdSummaryUseCase
 import co.electriccoin.zcash.ui.common.usecase.AddChatGroupMemberUseCase
 import co.electriccoin.zcash.ui.common.usecase.ApplyTransactionFiltersUseCase
 import co.electriccoin.zcash.ui.common.usecase.ApplyTransactionFulltextFiltersUseCase
@@ -92,6 +94,7 @@ import co.electriccoin.zcash.ui.common.usecase.IsRestoreSuccessDialogVisibleUseC
 import co.electriccoin.zcash.ui.common.usecase.IsScreenTimeoutDisabledDuringRestoreUseCase
 import co.electriccoin.zcash.ui.common.usecase.IsTorEnabledUseCase
 import co.electriccoin.zcash.ui.common.usecase.MarkTxMemoAsReadUseCase
+import co.electriccoin.zcash.ui.common.usecase.NavigateBackToPayUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToAddressBookUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToExportPrivateDataUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToNearPayUseCase
@@ -209,8 +212,18 @@ val useCaseModule =
     module {
         factoryOf(::ObserveFastestServersUseCase)
         factoryOf(::ObservePrivateUsdAvailableUseCase)
-        factoryOf(::ObserveDollarRateUseCase)
-        factoryOf(::ObserveConversionCurrencyUseCase)
+        factoryOf(::ObservePrivateUsdConversionUseCase)
+        factoryOf(::ObservePrivateUsdActivityUseCase)
+        factory {
+            ObservePrivateUsdSummaryUseCase(
+                observePrivateUsdAvailable = get(),
+                observeLocalCurrency = get(),
+                balanceRepository = lazy { get() },
+                observeConversion = lazy { get() },
+            )
+        }
+        factoryOf(::ObserveLocalCurrencyUseCase)
+        factoryOf(::NavigateBackToPayUseCase)
         factoryOf(::GetSelectedEndpointUseCase)
         factoryOf(::RefreshFastestServersUseCase)
         factoryOf(::PersistEndpointUseCase)

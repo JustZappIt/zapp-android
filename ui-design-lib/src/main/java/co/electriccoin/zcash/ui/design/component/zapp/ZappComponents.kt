@@ -306,13 +306,14 @@ fun ZappSelectionRow(
     )
 }
 
+/** The chevron at the end of a row that opens something; decorative, so a screen reader skips it. */
 @Composable
-private fun ZappRowChevron() {
+fun ZappRowChevron(modifier: Modifier = Modifier) {
     Icon(
         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
         contentDescription = null,
         tint = ZappTheme.colors.textSubtle,
-        modifier = Modifier.size(18.dp),
+        modifier = modifier.size(18.dp),
     )
 }
 
@@ -344,7 +345,9 @@ fun ZappButton(
     leadingIcon: ImageVector? = null,
     onClick: () -> Unit,
 ) {
-    val (bg, fg, borderCol) = zappButtonPalette(variant, enabled || loading)
+    // A loading button is busy, not unavailable: it keeps its colours.
+    val isActive = enabled || loading
+    val (bg, fg, borderCol) = zappButtonPalette(variant, isActive)
 
     val animatedBg by
         animateColorAsState(
@@ -365,7 +368,7 @@ fun ZappButton(
                     } else {
                         Modifier
                     },
-                ).alpha(if (enabled || variant == ZappButtonVariant.Primary) 1f else 0.45f)
+                ).alpha(if (isActive || variant == ZappButtonVariant.Primary) 1f else 0.45f)
                 .clickable(
                     enabled = enabled && !loading,
                     interactionSource = interactionSource,
@@ -461,6 +464,15 @@ fun ZappGroupHeader(
     )
 }
 
+/** Where a [ZappBottomActionBar] sits. */
+enum class ZappActionBarStyle {
+    /** Inset from the screen's edges, its panel drawn only behind a primary action. */
+    Floating,
+
+    /** Across the foot of the screen, under the navigation bar too, as the wallet's send has it. */
+    Docked,
+}
+
 /**
  * Bottom action bar for detail/sub-screens.
  *
@@ -469,9 +481,7 @@ fun ZappGroupHeader(
  * aligned with the back button. Respects system navigation bar insets.
  *
  * The content row holds a 52dp min height (the [ZappButton] height) so the bar
- * measures the same with or without a primary action. The surface/border panel
- * chrome only appears when there is a primary action; a lone back button
- * renders chrome-free.
+ * measures the same with or without a primary action.
  *
  * Usage: pass this as the `bottomBar` slot of a [androidx.compose.material3.Scaffold].
  */
@@ -480,25 +490,34 @@ fun ZappBottomActionBar(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     isBackEnabled: Boolean = true,
+    style: ZappActionBarStyle = ZappActionBarStyle.Floating,
     primaryAction: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val c = ZappTheme.colors
+    val spacing = ZappTheme.spacing
+    val panel = Modifier.background(c.surface).border(BorderStroke(1.dp, c.border), RectangleShape)
+    val frame =
+        when (style) {
+            ZappActionBarStyle.Floating -> {
+                Modifier
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(horizontal = spacing.gutter)
+                    .padding(bottom = spacing.md)
+                    .then(if (primaryAction != null) panel else Modifier)
+                    .padding(spacing.lg)
+            }
+
+            ZappActionBarStyle.Docked -> {
+                panel
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(horizontal = spacing.gutter, vertical = spacing.lg)
+            }
+        }
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(horizontal = 18.dp)
-                .padding(bottom = 8.dp)
-                .then(
-                    if (primaryAction != null) {
-                        Modifier
-                            .background(c.surface)
-                            .border(BorderStroke(1.dp, c.border), RectangleShape)
-                    } else {
-                        Modifier
-                    },
-                ).padding(12.dp)
+                .then(frame)
                 .heightIn(min = 52.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -516,30 +535,15 @@ fun ZappBackButton(
     enabled: Boolean = true,
 ) {
     val c = ZappTheme.colors
-    val backContentDescription = stringResource(R.string.general_back_content_description)
-    Box(
-        modifier =
-            modifier
-                .size(48.dp)
-                .clickable(
-                    enabled = enabled,
-                    onClick = onClick,
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = ripple(bounded = true, color = c.text),
-                ).semantics {
-                    contentDescription = backContentDescription
-                    role = Role.Button
-                    if (!enabled) disabled()
-                },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-            contentDescription = null,
-            tint = if (enabled) c.text else c.textSubtle,
-            modifier = Modifier.size(20.dp),
-        )
-    }
+    ZappIconButton(
+        icon = Icons.AutoMirrored.Filled.ArrowBack,
+        contentDescription = stringResource(R.string.general_back_content_description),
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        tint = if (enabled) c.text else c.textSubtle,
+        indication = ripple(bounded = true, color = c.text),
+    )
 }
 
 /**

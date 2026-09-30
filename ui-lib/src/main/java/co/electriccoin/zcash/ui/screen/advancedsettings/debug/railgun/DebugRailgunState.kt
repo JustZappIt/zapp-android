@@ -7,7 +7,7 @@ data class DebugRailgunState(
     val status: List<String>,
     val address: String?,
     val onCopyAddress: () -> Unit,
-    val balances: List<Pair<String, List<String>>>,
+    val balances: List<DebugRailgunBalance>,
     val gasAccount: List<String>,
     val onCopyGasAccount: () -> Unit,
     val activity: List<String>,
@@ -21,4 +21,9 @@ data class DebugRailgunState(
     val onSend: () -> Unit,
     val onWithdraw: () -> Unit,
     val onBack: () -> Unit,
+)
+
+data class DebugRailgunBalance(
+    val bucket: String,
+    val amounts: List<String>,
 )

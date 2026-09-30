@@ -61,7 +61,7 @@ internal fun PayActionSpeedDial(
                 onPrivateUsd?.let {
                     ZappSpeedDialAction(
                         icon = Icons.Default.CurrencyExchange,
-                        label = stringResource(R.string.private_usd_speed_dial),
+                        label = stringResource(R.string.private_usd_title),
                         onClick = it,
                     )
                 },

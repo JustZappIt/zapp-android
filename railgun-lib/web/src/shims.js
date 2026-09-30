@@ -2,11 +2,15 @@
 import { Buffer } from 'buffer';
 import process from 'process';
 
-// The shim's nextTick waits on setTimeout, which the browser clamps; streams in the AES and
-// LevelDB paths tick often enough during a sync for that to add up.
+// The shim's nextTick waits on a clamped setTimeout, which slows the streams a sync runs through.
 process.nextTick = (fn, ...args) => queueMicrotask(() => fn(...args));
 
 globalThis.Buffer ??= Buffer;
 globalThis.process ??= process;
+
+// WebRTC's STUN and ICE traffic goes around both the CSP and the host's request filter, and nothing here uses it.
+for (const name of ['RTCPeerConnection', 'webkitRTCPeerConnection', 'RTCDataChannel']) {
+  delete globalThis[name];
+}
 
 export { Buffer, process };

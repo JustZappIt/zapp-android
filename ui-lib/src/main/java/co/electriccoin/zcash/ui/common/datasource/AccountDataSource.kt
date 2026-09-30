@@ -366,7 +366,7 @@ private const val RETRY_DELAY = 3L
 private const val KEYSTONE_KEYSOURCE = "keystone"
 
 /**
- * An atomic swap's deposit account, imported only to take a refunded deposit back. It is never the
+ * An atomic swap's joint account, imported to sweep the ZEC a swap leaves in it home. It is never the
  * user's wallet, so it stays out of every account the app lists or selects.
  */
 internal const val ATOMIC_SWAP_KEYSOURCE = "atomicswap"

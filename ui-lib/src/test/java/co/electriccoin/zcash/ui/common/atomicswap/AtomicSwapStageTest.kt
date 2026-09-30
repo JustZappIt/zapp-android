@@ -3,11 +3,13 @@
 
 package co.electriccoin.zcash.ui.common.atomicswap
 
+import co.electriccoin.zcash.ui.screen.privateusd.toUsd
 import xyz.justzappit.offramp.atomicswap.AtomicSwapActivity
-import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
 import xyz.justzappit.offramp.atomicswap.AtomicSwapStep
 import xyz.justzappit.offramp.atomicswap.AtomicSwapWait
-import xyz.justzappit.offramp.atomicswap.SwapQuote
+import xyz.justzappit.offramp.atomicswap.SwapDeposit
+import xyz.justzappit.offramp.atomicswap.ZcashTransaction
+import xyz.justzappit.offramp.atomicswap.ZcashTxId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -31,36 +33,26 @@ class AtomicSwapStageTest {
     }
 
     @Test
+    fun `a sweep home that is out and waiting for confirmations is still the refund`() {
+        assertEquals(AtomicSwapStage.REFUNDING, AtomicSwapStage.of(state(AtomicSwapWait.REFUNDING)))
+    }
+
+    @Test
     fun `a deposit that went out waits for confirmations, even before the loop has looked`() {
         assertEquals(AtomicSwapStage.CONFIRMING, AtomicSwapStage.of(state(AtomicSwapWait.CONFIRMING)))
         assertEquals(AtomicSwapStage.CONFIRMING, AtomicSwapStage.of(state(AtomicSwapWait.DEPOSIT_UNSETTLED)))
         assertEquals(
             AtomicSwapStage.CONFIRMING,
-            AtomicSwapStage.of(AtomicSwapState(record = record().copy(depositAttempted = true, depositTxId = "0xab"))),
+            AtomicSwapStage.of(AtomicSwapState(record = record().copy(deposit = SwapDeposit.Kept(DEPOSIT)))),
         )
     }
 
     private fun state(reason: AtomicSwapWait) =
         AtomicSwapState(record = record(), wait = AtomicSwapStep.Waiting(reason, t0 = 100, t1 = 200))
 
-    private fun record() =
-        AtomicSwapRecord(
-            index = 0,
-            quote =
-                SwapQuote(
-                    quoteId = "0x22",
-                    maker = "0x09eD1F966745Be18C711C346242c0974DAd7c3e5",
-                    makerShare = "0x0a",
-                    makerProof = "0x06",
-                    chainId = 11_155_111,
-                    contract = "0x32CE55D00E6184c385E44e6b20b76d3a8407E809",
-                    token = "0x5764D0044bef5AA839E0dDafE2073421101B9Ed8",
-                    amount = "1000000",
-                    depositZat = 202_021,
-                    expiresAt = 1_790_000_300,
-                ),
-            swapId = "0x5c",
-            zcashHeight = 4_200_000,
-            acceptedAt = 1_790_000_000,
-        )
+    private fun record() = toUsd(index = 0, at = 1_790_000_000, outcome = null)
+
+    private companion object {
+        val DEPOSIT = ZcashTransaction(ZcashTxId.parse("ab".repeat(32)), "00", 4_200_040)
+    }
 }

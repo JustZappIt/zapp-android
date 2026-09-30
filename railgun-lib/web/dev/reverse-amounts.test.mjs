@@ -9,7 +9,6 @@ test('unshield leaves the exact escrow amount, including integer rounding bounda
       const debit = BigInt(cost.debit);
       assert.equal(debit - debit * bps / 10000n, escrow);
       assert.equal(BigInt(cost.railgunFee), debit - escrow);
-      assert.equal(cost.broadcasterFee, null);
     }
   }
 });

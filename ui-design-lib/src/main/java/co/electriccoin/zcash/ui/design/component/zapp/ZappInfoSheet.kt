@@ -9,12 +9,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.design.R
@@ -29,19 +34,32 @@ fun ZappInfoSheet(
     steps: List<String>,
     notes: List<String>,
     onDismiss: () -> Unit,
+    titleDescription: String? = null,
     content: @Composable ColumnScope.() -> Unit = {},
 ) {
     ZashiScreenModalBottomSheet(onDismissRequest = onDismiss) { padding ->
+        // weight(1f, false): content taller than the sheet scrolls, so OK stays reachable at any font size.
         Column(
             modifier =
-                Modifier.padding(
-                    start = SHEET_GUTTER.dp,
-                    end = SHEET_GUTTER.dp,
-                    bottom = padding.calculateBottomPadding(),
-                ),
+                Modifier
+                    .weight(1f, false)
+                    .verticalScroll(rememberScrollState())
+                    .padding(
+                        start = SHEET_GUTTER.dp,
+                        end = SHEET_GUTTER.dp,
+                        bottom = padding.calculateBottomPadding(),
+                    ),
             verticalArrangement = Arrangement.spacedBy(INFO_GAP.dp),
         ) {
-            BasicText(title, style = ZappTheme.typography.sectionTitle.copy(color = ZappTheme.colors.text))
+            BasicText(
+                text = title,
+                style = ZappTheme.typography.sectionTitle.copy(color = ZappTheme.colors.text),
+                modifier =
+                    Modifier.semantics {
+                        heading()
+                        titleDescription?.let { contentDescription = it }
+                    },
+            )
             steps.forEachIndexed { index, step -> Step(index + 1, step) }
             notes.forEach {
                 BasicText(it, style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.textMuted))
@@ -61,7 +79,10 @@ private fun Step(
     index: Int,
     text: String
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(INFO_GAP.dp)) {
+    Row(
+        modifier = Modifier.semantics(mergeDescendants = true) {},
+        horizontalArrangement = Arrangement.spacedBy(INFO_GAP.dp),
+    ) {
         Box(
             modifier = Modifier.size(STEP_BADGE.dp).background(ZappTheme.colors.accentSoft),
             contentAlignment = Alignment.Center,

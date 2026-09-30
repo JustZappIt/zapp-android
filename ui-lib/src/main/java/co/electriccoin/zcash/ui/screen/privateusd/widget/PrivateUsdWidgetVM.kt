@@ -8,88 +8,59 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
-import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapState
-import co.electriccoin.zcash.ui.common.privateusd.DollarRate
-import co.electriccoin.zcash.ui.common.privateusd.ObserveDollarRateUseCase
-import co.electriccoin.zcash.ui.common.privateusd.ObservePrivateUsdAvailableUseCase
-import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
-import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
+import co.electriccoin.zcash.ui.common.privateusd.ObservePrivateUsdSummaryUseCase
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdConversion
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSummary
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdArgs
 import co.electriccoin.zcash.ui.screen.privateusd.arrivingTag
+import co.electriccoin.zcash.ui.screen.privateusd.banner
 import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
-import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
-import co.electriccoin.zcash.ui.screen.privateusd.spendable
-import co.electriccoin.zcash.ui.screen.privateusd.stageDetail
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import co.electriccoin.zcash.ui.screen.privateusd.headline
+import co.electriccoin.zcash.ui.screen.privateusd.placeholder
+import co.electriccoin.zcash.ui.screen.privateusd.progressArgs
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 class PrivateUsdWidgetVM(
-    observePrivateUsdAvailable: ObservePrivateUsdAvailableUseCase,
-    balanceRepository: PrivateUsdBalanceRepository,
-    observeDollarRate: ObserveDollarRateUseCase,
-    private val atomicSwapRepository: AtomicSwapRepository,
+    observePrivateUsdSummary: ObservePrivateUsdSummaryUseCase,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
-    @OptIn(ExperimentalCoroutinesApi::class)
+    // Read when tapped, so every state keeps the same callbacks and the balance card doesn't recompose for them.
+    @Volatile
+    private var conversion: PrivateUsdConversion? = null
+    private val onClick: () -> Unit = { navigationRouter.forward(PrivateUsdArgs) }
+    private val onConvertClick: () -> Unit = {
+        navigationRouter.forward(conversion?.progressArgs ?: PrivateUsdConvertArgs)
+    }
+    private val onOpenConversion: () -> Unit = { conversion?.let { navigationRouter.forward(it.progressArgs) } }
+
     internal val state: StateFlow<PrivateUsdWidgetState?> =
-        observePrivateUsdAvailable()
-            .flatMapLatest { isAvailable ->
-                if (isAvailable) {
-                    combine(
-                        balanceRepository.observe(),
-                        atomicSwapRepository.state,
-                        observeDollarRate(),
-                        ::createState,
-                    )
-                } else {
-                    flowOf(null)
-                }
-            }.stateIn(
+        observePrivateUsdSummary()
+            .map { it?.let(::createState) }
+            .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
                 initialValue = null,
             )
 
-    private fun createState(
-        balance: PrivateUsdBalanceState,
-        swap: AtomicSwapState,
-        rate: DollarRate?,
-    ): PrivateUsdWidgetState {
-        val balances = balance.balances
+    private fun createState(summary: PrivateUsdSummary): PrivateUsdWidgetState {
+        val balances = summary.balance.balances
+        conversion = summary.conversion
         return PrivateUsdWidgetState(
-            balance = balances?.spendable(rate),
-            arriving = balances?.arrivingTag(rate),
-            isBlocked = (balances?.blocked?.signum() ?: 0) > 0,
-            conversion =
-                if (swap.isUnderWay) {
-                    PrivateUsdConversionBannerState(
-                        title =
-                            stringRes(
-                                if (swap.problem != null) {
-                                    R.string.private_usd_banner_attention_title
-                                } else {
-                                    R.string.private_usd_banner_title
-                                }
-                            ),
-                        detail = swap.stageDetail(atomicSwapRepository.deployment?.makerConfirmations),
-                        isAttention = swap.problem != null,
-                        onClick = { navigationRouter.forward(PrivateUsdProgressArgs) },
-                    )
-                } else {
-                    null
+            balance = balances?.headline(summary.currency) ?: summary.balance.placeholder(),
+            arriving = balances?.arrivingTag(summary.currency),
+            arrivingDescription =
+                balances?.arriving?.takeIf { it.signum() > 0 }?.let {
+                    stringRes(R.string.private_usd_home_arriving_description, summary.currency.format(it))
                 },
-            onClick = { navigationRouter.forward(PrivateUsdArgs) },
-            onConvertClick = {
-                navigationRouter.forward(if (swap.isUnderWay) PrivateUsdProgressArgs else PrivateUsdConvertArgs)
-            },
+            isBlocked = summary.isBlocked,
+            conversion = summary.conversion?.banner(onOpenConversion),
+            onClick = onClick,
+            onConvertClick = onConvertClick,
         )
     }
 }

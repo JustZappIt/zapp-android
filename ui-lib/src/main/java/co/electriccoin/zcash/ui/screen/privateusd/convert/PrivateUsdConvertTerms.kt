@@ -6,17 +6,21 @@ package co.electriccoin.zcash.ui.screen.privateusd.convert
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployment
-import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapQuote
-import co.electriccoin.zcash.ui.common.privateusd.ConversionCurrency
-import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdToken
-import co.electriccoin.zcash.ui.common.privateusd.format
+import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
+import co.electriccoin.zcash.ui.common.privateusd.basisPoints
+import co.electriccoin.zcash.ui.common.privateusd.privateUsdToken
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
-import co.electriccoin.zcash.ui.common.privateusd.tokenAmount
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
+import co.electriccoin.zcash.ui.screen.privateusd.QUOTE_EXPIRY_MARGIN_SECONDS
 import co.electriccoin.zcash.ui.screen.privateusd.about
+import co.electriccoin.zcash.ui.screen.privateusd.availableText
+import co.electriccoin.zcash.ui.screen.privateusd.zatoshi
+import co.electriccoin.zcash.ui.screen.privateusd.zecField
+import xyz.justzappit.offramp.atomicswap.RAILGUN_FEE
 
 internal data class ConvertForm(
     val phase: PrivateUsdConvertPhase = PrivateUsdConvertPhase.AMOUNT,
@@ -24,25 +28,60 @@ internal data class ConvertForm(
     val quote: ConvertQuote = ConvertQuote.None,
     val isConfirming: Boolean = false,
     val error: StringResource? = null,
-)
+) {
+    val ready: ConvertQuote.Ready? get() = quote as? ConvertQuote.Ready
+
+    /** More than [spendable], which is said before any quote is asked for. */
+    fun isShort(spendable: Zatoshi?): Boolean {
+        val totalZat = amount.zatoshi()
+        return totalZat != null && spendable != null && totalZat > spendable.value
+    }
+
+    fun isExpired(now: Long): Boolean = ready?.let { it.secondsLeft(now) <= 0 } == true
+
+    fun canGoOn(
+        spendable: Zatoshi?,
+        now: Long
+    ): Boolean = ready != null && !isExpired(now) && spendable != null && !isShort(spendable)
+
+    /** Why it can't go on, most pressing first. */
+    fun message(
+        spendable: Zatoshi?,
+        now: Long
+    ): StringResource? =
+        when {
+            error != null -> error
+            spendable != null && isShort(spendable) -> stringRes(R.string.convert_insufficient, stringRes(spendable))
+            quote is ConvertQuote.Failed -> quote.message
+            phase == PrivateUsdConvertPhase.REVIEW && isExpired(now) -> stringRes(R.string.convert_quote_ran_out)
+            else -> null
+        }
+
+    /** [next] where it still applies: a quote landing once the review is up is dropped. */
+    fun withQuote(
+        next: ConvertQuote,
+        fillsAmount: Boolean
+    ): ConvertForm =
+        when {
+            phase != PrivateUsdConvertPhase.AMOUNT -> this
+            fillsAmount && next is ConvertQuote.Ready -> copy(amount = zecField(next.quote.totalZat), quote = next)
+            else -> copy(quote = next)
+        }
+}
 
 internal sealed interface ConvertQuote {
     data object None : ConvertQuote
 
-    data class Loading(
-        val units: Long
-    ) : ConvertQuote
+    data object Loading : ConvertQuote
 
     data class Ready(
-        val units: Int,
-        val quote: AtomicSwapQuote,
+        val quote: ZecQuote
     ) : ConvertQuote {
-        // Runs out a little early: the driver won't accept a quote about to expire.
-        fun secondsLeft(now: Long) = quote.offer.quote.expiresAt - EXPIRY_MARGIN_SECONDS - now
+        fun secondsLeft(now: Long) = quote.offer.quote.expiresAt - QUOTE_EXPIRY_MARGIN_SECONDS - now
 
-        private companion object {
-            const val EXPIRY_MARGIN_SECONDS = 20L
-        }
+        // One run out on arrival would be asked for again every second: the device's clock is likely ahead.
+        fun arrived(now: Long): ConvertQuote =
+            if (secondsLeft(now) > 0) this else Failed(stringRes(R.string.convert_quote_clock_ahead))
     }
 
     data class Failed(
@@ -50,105 +89,98 @@ internal sealed interface ConvertQuote {
     ) : ConvertQuote
 }
 
-/** A deployment's amounts, in dollars: what may be converted, and what a quote says. */
+/** What the screen shows beside the amount: the ZEC there is to spend, and the private dollars in their currency. */
+internal data class ConvertHoldings(
+    val spendable: Zatoshi?,
+    val balance: PrivateUsdBalanceState,
+    val currency: LocalCurrency,
+)
+
+/** What a deployment's conversions cost and bring, in the user's currency. */
 internal class PrivateUsdConvertTerms(
     deployment: AtomicSwapDeployment,
-    private val token: PrivateUsdToken,
 ) {
-    val duration: StringResource = deployment.expectedDuration.about()
-    private val minUnits = deployment.minUnits
-    private val maxUnits = deployment.maxUnits
-    private val unitDollars = deployment.unitBaseUnits.toBigInteger().toDecimal(token.decimals)
+    private val token = deployment.privateUsdToken
+    private val duration: StringResource = deployment.expectedDuration.about()
 
-    val limits: StringResource =
-        stringRes(
-            R.string.convert_limits,
-            (unitDollars * minUnits.toBigDecimal()).stripTrailingZeros().toPlainString(),
-            (unitDollars * maxUnits.toBigDecimal()).stripTrailingZeros().toPlainString(),
-        )
+    fun available(holdings: ConvertHoldings): StringResource = holdings.balance.availableText(token, holdings.currency)
 
-    /** Amounts in the maker's quoted units within the deployment limits, or null. */
-    fun units(amount: NumberTextFieldInnerState): Int? {
-        val (units, remainder) = amount.amount?.divideAndRemainder(unitDollars) ?: return null
-        return units
-            .takeIf { remainder.signum() == 0 && it >= minUnits.toBigDecimal() && it <= maxUnits.toBigDecimal() }
-            ?.toInt()
+    fun estimate(
+        quote: ZecQuote,
+        currency: LocalCurrency
+    ): NumberTextFieldInnerState {
+        val receives = quote.offer.receives
+        return currency.field(receives.micros.toDecimal(token.decimals))
     }
-
-    fun isInvalid(amount: NumberTextFieldInnerState): Boolean =
-        !amount.innerTextFieldState.value.isEmpty() && units(amount) == null
-
-    fun isShort(
-        ready: ConvertQuote.Ready,
-        spendable: Zatoshi?
-    ): Boolean =
-        spendable != null &&
-            spendable.value < ready.quote.offer.quote.depositZat + (ready.quote.depositFeeZat ?: FEE_FALLBACK_ZAT)
 
     fun quote(
         ready: ConvertQuote.Ready,
+        phase: PrivateUsdConvertPhase,
         now: Long,
-        currency: ConversionCurrency? = null,
+        currency: LocalCurrency,
     ): PrivateUsdQuoteState {
         val offer = ready.quote.offer
-        val fee = ready.quote.depositFeeZat
         val secondsLeft = ready.secondsLeft(now).coerceAtLeast(0)
         return PrivateUsdQuoteState(
-            pay = stringRes(Zatoshi(offer.quote.depositZat + (fee ?: 0))),
-            networkFee = fee?.let { stringRes(Zatoshi(it)) },
-            receive =
-                if (token.isDollar) {
-                    currency.format(offer.receives.toDecimal(token.decimals))
-                } else {
-                    tokenAmount(offer.receives, token, estimate = true)
-                },
-            fees = stringRes(R.string.convert_fees_value, currency.format(offer.relayerFee.toDecimal(token.decimals))),
-            refreshesIn =
+            pay = stringRes(Zatoshi(ready.quote.totalZat)),
+            networkFee = stringRes(Zatoshi(ready.quote.feeZat)),
+            receive = currency.format(offer.receives.micros.toDecimal(token.decimals)),
+            fees =
                 stringRes(
-                    R.string.convert_quote_expires,
-                    "%d:%02d".format(secondsLeft / SECONDS_PER_MINUTE, secondsLeft % SECONDS_PER_MINUTE),
+                    R.string.convert_fees_value,
+                    currency.format(offer.relayerFee.micros.toDecimal(token.decimals)),
+                    basisPoints(RAILGUN_FEE),
+                ),
+            expiry =
+                stringRes(
+                    when (phase) {
+                        PrivateUsdConvertPhase.AMOUNT -> R.string.convert_quote_expires
+                        PrivateUsdConvertPhase.REVIEW -> R.string.convert_quote_holds
+                    },
+                    stringRes(
+                        R.string.convert_quote_countdown,
+                        secondsLeft / SECONDS_PER_MINUTE,
+                        secondsLeft % SECONDS_PER_MINUTE,
+                    ),
                 ),
         )
     }
 
+    fun info(phase: PrivateUsdConvertPhase): PrivateUsdInfo =
+        when (phase) {
+            PrivateUsdConvertPhase.AMOUNT -> {
+                PrivateUsdInfo(
+                    title = stringRes(R.string.convert_info_title),
+                    steps =
+                        listOf(
+                            stringRes(R.string.convert_info_step_quote),
+                            stringRes(R.string.convert_info_step_deposit),
+                            stringRes(R.string.convert_info_step_claim),
+                        ),
+                    notes =
+                        listOf(
+                            stringRes(R.string.convert_info_note_either),
+                            stringRes(R.string.convert_info_note_time, duration),
+                        ),
+                )
+            }
+
+            PrivateUsdConvertPhase.REVIEW -> {
+                PrivateUsdInfo(
+                    title = stringRes(R.string.convert_review_info_title),
+                    notes =
+                        listOf(
+                            stringRes(R.string.convert_review_info_pay),
+                            stringRes(R.string.convert_review_info_receive, basisPoints(RAILGUN_FEE)),
+                            stringRes(R.string.convert_review_info_quote),
+                            stringRes(R.string.convert_info_note_either),
+                            stringRes(R.string.convert_info_note_time, duration),
+                        ),
+                )
+            }
+        }
+
     private companion object {
         const val SECONDS_PER_MINUTE = 60
-
-        // ZIP 317 for a typical deposit, until the wallet can price the real one.
-        const val FEE_FALLBACK_ZAT = 15_000L
     }
 }
-
-internal fun PrivateUsdConvertTerms.info(phase: PrivateUsdConvertPhase): PrivateUsdInfo =
-    when (phase) {
-        PrivateUsdConvertPhase.AMOUNT -> {
-            PrivateUsdInfo(
-                title = stringRes(R.string.convert_info_title),
-                steps =
-                    listOf(
-                        stringRes(R.string.convert_info_step_quote),
-                        stringRes(R.string.convert_info_step_deposit),
-                        stringRes(R.string.convert_info_step_claim),
-                    ),
-                notes =
-                    listOf(
-                        stringRes(R.string.convert_info_note_either),
-                        stringRes(R.string.convert_info_note_time, duration),
-                    ),
-            )
-        }
-
-        PrivateUsdConvertPhase.REVIEW -> {
-            PrivateUsdInfo(
-                title = stringRes(R.string.convert_review_info_title),
-                notes =
-                    listOf(
-                        stringRes(R.string.convert_review_info_pay),
-                        stringRes(R.string.convert_review_info_receive),
-                        stringRes(R.string.convert_review_info_quote),
-                        stringRes(R.string.convert_info_note_either),
-                        stringRes(R.string.convert_info_note_time, duration),
-                    ),
-            )
-        }
-    }

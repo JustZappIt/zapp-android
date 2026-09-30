@@ -25,7 +25,8 @@ enum class AtomicSwapStage(
                 state.activity == AtomicSwapActivity.SWEEPING -> REFUNDING
                 state.activity != null -> CLAIMING
                 state.wait?.reason == AtomicSwapWait.OPENING -> OPENING
-                state.wait != null || state.record?.depositTxId != null -> CONFIRMING
+                state.wait?.reason == AtomicSwapWait.REFUNDING -> REFUNDING
+                state.wait != null || state.record?.deposit?.txId != null -> CONFIRMING
                 else -> OPENING
             }
     }

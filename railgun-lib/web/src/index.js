@@ -1,28 +1,37 @@
-// The host hands the page one MessagePort, then sends it JSON requests {id, method, params} and
-// reads back {id, result} or {id, error}, plus events {event, data} (scan progress, logs).
-import { reverseCost, prepareReverse } from './reverse.js';
+// Over the host's one port: {id, method, params} in; {id, result}, {id, error: {code, message}} and {event, data} out.
+import { RailgunError, errorCode } from './errors.js';
+import { prepareReverse, reverseCost } from './reverse.js';
 import * as transact from './transact.js';
 import * as wallet from './wallet.js';
 
 const INIT = 'zapp-railgun-init';
 const handlers = {
-  reverseCost,
-  prepareReverse,
   start: wallet.start,
   openWallet: wallet.openWallet,
   refresh: wallet.refresh,
-  balances: wallet.balances,
   setGasAccount: transact.setGasAccount,
-  gasAccount: transact.gasAccount,
-  shield: transact.shield,
   transfer: transact.transfer,
   unshield: transact.unshield,
+  reverseCost,
+  prepareReverse,
+};
+// Only an engine started with `debug` answers these: the app's debug screen, and dev/check.mjs.
+const debugHandlers = {
+  openNewWallet: wallet.openNewWallet,
+  gasAccount: transact.gasAccount,
+  shield: transact.shield,
 };
 
 let port;
 
-function emit(event, data) {
-  port.postMessage(JSON.stringify({ event, data }));
+const post = (message) => port.postMessage(JSON.stringify(message));
+
+const emit = (event, data) => post({ event, data });
+
+function handler(method) {
+  if (Object.hasOwn(handlers, method)) return handlers[method];
+  if (wallet.isDebug() && Object.hasOwn(debugHandlers, method)) return debugHandlers[method];
+  throw new RailgunError('BAD_REQUEST', `unknown method ${method}`);
 }
 
 async function dispatch(raw) {
@@ -32,20 +41,19 @@ async function dispatch(raw) {
   } catch {
     return;
   }
-  const { id, method, params } = request;
+  const { id, method, params } = request ?? {};
+  if (!Number.isSafeInteger(id)) return;
   try {
-    if (!Object.hasOwn(handlers, method)) throw new Error(`unknown method ${method}`);
-    const result = await handlers[method](params ?? {}, emit);
-    port.postMessage(JSON.stringify({ id, result: result ?? null }));
+    post({ id, result: (await handler(method)(params ?? {}, emit)) ?? null });
   } catch (error) {
-    port.postMessage(JSON.stringify({ id, error: error?.message ?? String(error) }));
+    post({ id, error: { code: errorCode(error), message: String(error?.message ?? error) } });
   }
 }
 
-// The page loads nothing but its own files, so the only other window that can post here is the
-// host, and only its first port is taken.
+// The host hands its port over as soon as the page loads, and only the first port ever handed over is taken: that,
+// not the missing source window (which a dispatched event lacks too), is what keeps anything else off it.
 window.addEventListener('message', (event) => {
-  if (port !== undefined || event.data !== INIT || event.ports.length !== 1) return;
+  if (port !== undefined || event.source !== null || event.data !== INIT || event.ports.length !== 1) return;
   [port] = event.ports;
   port.onmessage = ({ data }) => dispatch(data);
   emit('ready', null);

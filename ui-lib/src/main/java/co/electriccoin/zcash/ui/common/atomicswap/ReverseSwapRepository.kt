@@ -3,199 +3,186 @@
 
 package co.electriccoin.zcash.ui.common.atomicswap
 
-import cash.z.ecc.android.sdk.model.ZcashNetwork
 import co.electriccoin.zcash.spackle.Twig
-import co.electriccoin.zcash.ui.common.provider.ZcashNetworkProvider
-import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
-import io.ktor.client.HttpClient
-import kotlinx.coroutines.CancellationException
+import co.electriccoin.zcash.ui.R
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
-import xyz.justzappit.evm.rpc.BaseRpcClient
-import xyz.justzappit.evm.rpc.RpcHttpClient
-import xyz.justzappit.offramp.atomicswap.ReverseDeployment
-import xyz.justzappit.offramp.atomicswap.ReverseSwapChainImpl
-import xyz.justzappit.offramp.atomicswap.ReverseSwapClient
+import xyz.justzappit.offramp.atomicswap.AtomicSwapActivity
+import xyz.justzappit.offramp.atomicswap.AtomicSwapBlock
+import xyz.justzappit.offramp.atomicswap.AtomicSwapBlockedException
+import xyz.justzappit.offramp.atomicswap.ReversePhase
 import xyz.justzappit.offramp.atomicswap.ReverseSwapDriver
 import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
+import xyz.justzappit.offramp.atomicswap.SwapDirection
+import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.time.Duration.Companion.seconds
 
-internal data class ReverseSwapState(
+data class ReverseSwapState(
     val record: ReverseSwapRecord? = null,
-    val failed: Boolean = false
+    /** What holds the conversion up, while something does; it's tried again by itself. */
+    val problem: AtomicSwapProblem? = null,
 )
 
-@Suppress("TooManyFunctions")
-class ReverseSwapRepository(
-    private val store: ReverseSwapStoreImpl,
-    private val indices: AtomicSwapStoreImpl,
-    private val keys: AtomicSwapKeysImpl,
-    private val reverseKeys: ReverseSwapKeysImpl,
-    private val zcash: ReverseSwapZcashImpl,
-    private val wallet: RailgunWalletRepository,
-    private val http: HttpClient,
-    private val scheduler: AtomicSwapScheduler,
-    private val notifier: AtomicSwapNotifier,
-    network: ZcashNetworkProvider,
-) {
-    val available = network() == ZcashNetwork.Testnet
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-    private val failed = MutableStateFlow(false)
-    private var job: Job? = null
-    private val drivers = mutableMapOf<ReverseDeployment, ReverseSwapDriver>()
-    internal val state =
-        combine(store.observe, failed, ::ReverseSwapState)
-            .stateIn(scope, SharingStarted.Eagerly, ReverseSwapState())
-    val history = store.history
+/** The conversion from private USD to ZEC; only its funding and settlement wait for the user. */
+interface ReverseSwapRepository : SwapConversionLifecycle {
+    val state: StateFlow<ReverseSwapState>
 
-    suspend fun quote(units: Int): ReverseSwapRecord {
-        check(available)
-        return driver(ReverseSwapTestnet.deployment).quote(units).also { failed.value = false }
-    }
+    /** The conversions the user went ahead with, oldest first. */
+    val history: Flow<List<ReverseSwapRecord>>
 
-    suspend fun maximum(available: java.math.BigInteger): java.math.BigInteger {
-        val cost =
-            wallet.reverseCost(
-                xyz.justzappit.railgun.RailgunReverseCostRequest(
-                    available.toString(),
-                    ReverseSwapTestnet.deployment.railgun
-                )
-            )
-        val fee =
-            available * cost.unshieldFeeBasisPoints.toBigInteger() /
-                xyz.justzappit.railgun.RailgunReverseCost.FEE_DENOMINATOR
-                    .toBigInteger()
-        return available - fee
-    }
+    /** A verified quote for [requested], kept as a preview until the user goes ahead with it. */
+    suspend fun quote(requested: Usdc6): ReverseSwapRecord
 
-    suspend fun review(index: Int) {
-        indices.acceptanceLock.withLock { activeDriver().review(index) }
-        resume(true)
-    }
+    /** Goes ahead with the previewed quote: the maker accepts it, then its escrow is paid. Nothing commits before. */
+    suspend fun fund(index: Int)
 
-    suspend fun fund(index: Int) {
-        try {
-            activeDriver().fund(index)
-        } finally {
-            resume(true)
-        }
-    }
+    /** The second authorization: lets the maker settle once its ZEC is in. */
+    suspend fun ready(index: Int)
 
-    suspend fun ready(index: Int) {
-        try {
-            activeDriver().ready(index)
-        } finally {
-            resume(true)
-        }
-    }
+    suspend fun cancel(index: Int)
 
-    suspend fun cancel(index: Int) {
-        try {
-            activeDriver().cancel(index)
-        } finally {
-            resume(true)
-        }
-    }
+    /** Whether the refund Railgun returned to conversion [index], active or not, can be shielded again now. */
+    suspend fun canRescue(index: Int): Boolean
 
-    suspend fun rescue(index: Int) {
-        try {
-            activeDriver().rescue(index)
-        } finally {
-            resume(true)
-        }
-    }
+    suspend fun rescue(index: Int)
 
-    suspend fun isUnderWay(): Boolean = available && store.active()?.underWay == true
-
-    @Suppress("TooGenericExceptionCaught")
-    suspend fun canRescue(index: Int): Boolean =
-        try {
-            activeDriver().canRescue(index)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Twig.warn(e) { "Reverse refund availability check will retry" }
-            false
-        }
-
-    suspend fun awaitSettled() {
-        store.observe.first { it?.underWay != true }
-    }
-
-    suspend fun refresh() {
-        try {
-            val record = activeDriver().advance()
-            failed.value = false
-            notifyPhase(record)
-        } finally {
-            resume(true)
-        }
-    }
-
-    fun resume(isForeground: Boolean) {
-        if (!available) return
-        synchronized(this) {
-            if (job?.isActive != true) job = scope.launch { run() }
-        }
-        if (isForeground) scheduler.runNow() else scheduler.runIfIdle()
-    }
-
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun run() {
-        var previousPhase: xyz.justzappit.offramp.atomicswap.ReversePhase? = null
-        while (isUnderWay()) {
-            try {
-                val record = activeDriver().advance()
-                if (record?.phase != previousPhase) {
-                    notifyPhase(record)
-                    previousPhase = record?.phase
-                }
-                failed.value = false
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Twig.warn(e) { "Reverse swap reconciliation will retry" }
-                failed.value = true
-            }
-            delay(15.seconds)
-        }
-    }
-
-    private fun notifyPhase(record: ReverseSwapRecord?) {
-        when {
-            record?.finished == true -> notifier.reverseFinished(record.phase.label())
-            record?.phase == xyz.justzappit.offramp.atomicswap.ReversePhase.AWAITING_READY -> notifier.needsYou(true)
-        }
-    }
-
-    private suspend fun activeDriver() = driver(checkNotNull(store.active()).deployment)
-
-    private fun driver(deployment: ReverseDeployment): ReverseSwapDriver =
-        synchronized(drivers) {
-            check(available)
-            drivers.getOrPut(deployment) {
-                val rpc = BaseRpcClient(RpcHttpClient.create(), deployment.rpcUrl)
-                ReverseSwapDriver(
-                    deployment,
-                    ReverseSwapClient(http, deployment),
-                    ReverseSwapChainImpl(rpc, deployment),
-                    keys,
-                    reverseKeys,
-                    zcash,
-                    ReverseSwapFundingImpl(wallet, rpc, deployment),
-                    indices,
-                    store
-                )
-            }
-        }
+    /** One look at the conversion from its screen, which says what it shows; nothing is notified. */
+    suspend fun refresh()
 }
+
+internal class ReverseSwapRepositoryImpl(
+    deployments: AtomicSwapDeployments,
+    private val sessions: AtomicSwapSessions,
+    private val store: ReverseSwapRecords,
+    private val forward: AtomicSwapRecords,
+    scheduler: AtomicSwapScheduler,
+    notifier: AtomicSwapNotifier,
+    scope: CoroutineScope = swapScope(),
+    private val runner: SwapConversionRunner<ReverseSwapRecord> =
+        SwapConversionRunner(
+            conversions = ReverseSwapConversions(sessions, store, notifier),
+            scheduler = scheduler,
+            notifier = notifier,
+            scope = scope,
+            isAvailable = deployments.current != null,
+        ),
+) : ReverseSwapRepository,
+    SwapConversionLifecycle by runner {
+    private val deployment: AtomicSwapDeployment? = deployments.current
+
+    override val state: StateFlow<ReverseSwapState> =
+        combine(store.observeActive.unreadableAsNone(), runner.loop.progress) { record, progress ->
+            ReverseSwapState(record, progress.problem.takeIf { record != null && progress.index == record.index })
+        }.stateIn(scope, SharingStarted.Eagerly, ReverseSwapState())
+
+    override val history: Flow<List<ReverseSwapRecord>> =
+        store.observeHistory.catch { e ->
+            Twig.error(e) { "Reverse swap: the store is unreadable" }
+            emit(emptyList())
+        }
+
+    override suspend fun quote(requested: Usdc6): ReverseSwapRecord {
+        if (forward.underWay() != null) {
+            throw AtomicSwapBlockedException(AtomicSwapBlock.SWAP_UNDER_WAY, "a conversion to private USD is under way")
+        }
+        return sessions.reverse(checkNotNull(deployment).swap).quote(requested)
+    }
+
+    override suspend fun fund(index: Int) =
+        resumingAfter {
+            val driver = driverFor(index)
+            sessions.acceptanceLock.withLock { driver.goAhead(index) }
+            driver.fund(index)
+        }
+
+    override suspend fun ready(index: Int) = resumingAfter { driverFor(index).ready(index) }
+
+    override suspend fun cancel(index: Int) = resumingAfter { driverFor(index).cancel(index) }
+
+    override suspend fun rescue(index: Int) = resumingAfter { driverFor(index).rescue(index) }
+
+    override suspend fun canRescue(index: Int): Boolean = driverFor(index).canRescue(index)
+
+    override suspend fun refresh() =
+        resumingAfter {
+            store.active()?.let { sessions.reverse(it.deployment).advance() }
+            retryNow()
+        }
+
+    // Whatever the step came to, the loop picks the conversion up from there, unless the wallet was reset meanwhile.
+    private suspend fun resumingAfter(step: suspend () -> Unit) {
+        val session = sessions.session
+        try {
+            step()
+        } finally {
+            runner.resume(isForeground = true, session)
+        }
+    }
+
+    // Each conversion on the deployment it was quoted on, whichever one is active now.
+    private suspend fun driverFor(index: Int): ReverseSwapDriver =
+        sessions.reverse(checkNotNull(store.find(index)) { "no conversion $index" }.deployment)
+}
+
+/** Reverse swaps as [SwapLoop] advances them. */
+internal class ReverseSwapConversions(
+    private val sessions: AtomicSwapSessions,
+    private val store: ReverseSwapRecords,
+    private val notifier: AtomicSwapNotifier,
+) : SwapConversions<ReverseSwapRecord> {
+    override val direction = SwapDirection.REVERSE
+
+    override val session: Long get() = sessions.session
+
+    override val active: Flow<ReverseSwapRecord?> = store.observeActive.unreadableAsNone()
+
+    override suspend fun underWay(): ReverseSwapRecord? = store.underWay()
+
+    override fun isUnderWay(record: ReverseSwapRecord) = record.underWay
+
+    override fun indexOf(record: ReverseSwapRecord) = record.index
+
+    override fun needsYou(record: ReverseSwapRecord) = record.phase == ReversePhase.AWAITING_READY
+
+    override suspend fun advance(
+        record: ReverseSwapRecord,
+        session: Long,
+        onActivity: (AtomicSwapActivity) -> Unit,
+    ): SwapLoopStep {
+        val after = sessions.reverse(record.deployment, session).advance()
+        return when {
+            after == null -> {
+                SwapLoopStep.Over
+            }
+
+            after.finished -> {
+                notifier.finished(direction, R.string.reverse_title, after.phase.label())
+                SwapLoopStep.Over
+            }
+
+            else -> {
+                SwapLoopStep.Waiting(POLL_INTERVAL, needsYou = needsYou(after))
+            }
+        }
+    }
+
+    override fun settled() = Unit
+
+    override suspend fun reset() = sessions.reset { store.clear() }
+
+    private companion object {
+        val POLL_INTERVAL = 15.seconds
+    }
+}
+
+private fun Flow<ReverseSwapRecord?>.unreadableAsNone(): Flow<ReverseSwapRecord?> =
+    catch { e ->
+        Twig.error(e) { "Reverse swap: the store is unreadable" }
+        emit(null)
+    }

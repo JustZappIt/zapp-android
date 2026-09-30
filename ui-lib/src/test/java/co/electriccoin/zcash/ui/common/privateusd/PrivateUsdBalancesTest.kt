@@ -3,6 +3,7 @@
 
 package co.electriccoin.zcash.ui.common.privateusd
 
+import xyz.justzappit.evm.types.Address
 import xyz.justzappit.railgun.RailgunBalanceBucket
 import xyz.justzappit.railgun.RailgunNetwork
 import xyz.justzappit.railgun.RailgunTokenAmount
@@ -10,6 +11,7 @@ import java.math.BigDecimal
 import java.math.BigInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class PrivateUsdBalancesTest {
     @Test
@@ -65,10 +67,36 @@ class PrivateUsdBalancesTest {
         assertEquals(0, balances.arriving.signum())
     }
 
+    @Test
+    fun `a balance not loaded yet has nothing known available, and a synced one without the token has none`() {
+        val token = PrivateUsdTokens.of(RailgunNetwork.SEPOLIA).first { it.isDollar }
+        val synced = PrivateUsdBalanceState(balances = PrivateUsdBalances(emptyList()))
+
+        assertNull(PrivateUsdBalanceState().available(token))
+        assertNull(PrivateUsdBalanceState(refreshFailed = true).available(token))
+        assertEquals(BigInteger.ZERO, synced.available(token))
+    }
+
+    @Test
+    fun `only the token's spendable funds are available`() {
+        val tokens = PrivateUsdTokens.of(RailgunNetwork.SEPOLIA)
+        val held =
+            PrivateUsdAsset(
+                tokens.first(),
+                available = BigInteger.valueOf(1_234_567),
+                arriving = BigInteger.valueOf(9_000_000),
+                blocked = BigInteger.valueOf(5_000_000),
+            )
+        val other = PrivateUsdAsset(tokens.last(), available = BigInteger.valueOf(99_999_999))
+        val balance = PrivateUsdBalanceState(balances = PrivateUsdBalances(listOf(held, other)))
+
+        assertEquals(BigInteger.valueOf(1_234_567), balance.available(tokens.first()))
+    }
+
     private fun amount(
         token: String,
         value: Long
-    ) = RailgunTokenAmount(token, BigInteger.valueOf(value))
+    ) = RailgunTokenAmount(Address.parse(token), BigInteger.valueOf(value))
 
     private companion object {
         const val TEST_USD = "0x5764D0044bef5AA839E0dDafE2073421101B9Ed8"

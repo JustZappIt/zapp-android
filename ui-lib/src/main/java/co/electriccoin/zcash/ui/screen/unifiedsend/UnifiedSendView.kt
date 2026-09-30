@@ -71,10 +71,11 @@ import co.electriccoin.zcash.ui.design.component.ZashiNumberTextField
 import co.electriccoin.zcash.ui.design.component.ZashiNumberTextFieldDefaults
 import co.electriccoin.zcash.ui.design.component.ZashiTextField
 import co.electriccoin.zcash.ui.design.component.ZashiTextFieldDefaults
+import co.electriccoin.zcash.ui.design.component.zapp.ZappActionBarStyle
+import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
-import co.electriccoin.zcash.ui.design.component.zapp.ZappSendActionBar
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.screen.balances.BalanceWidgetState
@@ -216,7 +217,7 @@ internal fun UnifiedSendView(
                         .padding(horizontal = 18.dp, vertical = 8.dp),
             )
         }
-        ZappSendActionBar(onBack = state.onBack) {
+        ZappBottomActionBar(onBack = state.onBack, style = ZappActionBarStyle.Docked) {
             Row(
                 modifier = Modifier.weight(1f).padding(start = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

@@ -11,6 +11,7 @@ android {
 }
 
 dependencies {
+    api(projects.evmLib)
     implementation(libs.androidx.annotation)
     implementation(libs.androidx.webkit)
     implementation(libs.kotlin.stdlib)

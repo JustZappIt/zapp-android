@@ -114,8 +114,4 @@ sealed interface NavigationCommand : BaseNavigationCommand {
     ) : NavigationCommand
 
     data object BackToRoot : NavigationCommand
-
-    data object BackToPay : NavigationCommand
 }
-
-fun NavigationRouter.backToPay() = custom { NavigationCommand.BackToPay }

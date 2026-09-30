@@ -5,14 +5,15 @@ package co.electriccoin.zcash.ui.screen.advancedsettings.debug.atomicswap
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import cash.z.ecc.android.sdk.exception.SdkException
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
-import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapKeysImpl
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapState
+import co.electriccoin.zcash.ui.common.atomicswap.catchingSwapFailures
+import co.electriccoin.zcash.ui.common.provider.RailgunMnemonicProvider
 import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
+import co.electriccoin.zcash.ui.screen.privateusd.requireDeployment
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,15 +22,12 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import xyz.justzappit.atomicswap.AtomicSwap
-import xyz.justzappit.atomicswap.AtomicSwapException
-import xyz.justzappit.evm.rpc.RpcException
-import xyz.justzappit.offramp.atomicswap.AtomicSwapHttpException
-import java.io.IOException
+import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
+import xyz.justzappit.offramp.atomicswap.SwapDeposit
 
 class DebugAtomicSwapVM(
     private val repository: AtomicSwapRepository,
-    private val keys: AtomicSwapKeysImpl,
+    private val railgunMnemonicProvider: RailgunMnemonicProvider,
     private val copyToClipboardUseCase: CopyToClipboardUseCase,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
@@ -45,8 +43,8 @@ class DebugAtomicSwapVM(
 
     init {
         viewModelScope.launch {
-            val address = keys.withKey(0) { AtomicSwap.railgunAddress(it.seed) }
-            log.update { it.copy(railgunAddress = address) }
+            val address = railgunMnemonicProvider.address()
+            log.update { it.copy(railgunAddress = address.value) }
         }
         repository.resume(isForeground = true)
     }
@@ -72,7 +70,7 @@ class DebugAtomicSwapVM(
                     "abandoned"
                 }
             },
-            onCopySwapId = { record?.let { copyToClipboardUseCase(it.swapId, isSensitive = false) } },
+            onCopySwapId = { record?.let { copyToClipboardUseCase(it.swapId.hex, isSensitive = false) } },
             onBack = navigationRouter::back,
         )
     }
@@ -89,21 +87,16 @@ class DebugAtomicSwapVM(
             swap.confirmations?.let { "confirmations: $it" },
             swap.problem?.let { "problem: ${it.name.lowercase()}" },
             log.railgunAddress?.let { "payouts go to ${it.take(ADDRESS_PREFIX)}…" },
-            record?.let { "swap #${it.index}: ${it.swapId.take(ID_PREFIX)}…" },
-            record?.let { "quote: ${it.quote.depositZat} zat for ${it.quote.amount} token base units" },
-            record?.let {
-                when {
-                    it.depositTxId != null -> "deposit: ${it.depositTxId?.take(ID_PREFIX)}…"
-                    it.depositAttempted -> "deposit: started, no transaction id"
-                    else -> "deposit: not yet"
-                }
-            },
+            record?.let { "swap #${it.index}: ${it.swapId.hex.take(ID_PREFIX)}…" },
+            record?.let { "quote: ${it.quote.depositZat} zat for ${it.quote.amount.micros} token base units" },
+            record?.let(::deposit),
             record?.outcome?.let { "outcome: $it" },
         )
     }
 
     private suspend fun open(): String {
-        val quote = repository.quote(units = 1)
+        // The least the maker quotes: anything smaller can't cover the relayer's fee.
+        val quote = repository.quote(repository.requireDeployment().minAmount)
         val record = repository.accept(quote.offer)
         return "swap #${record.index} accepted for ${record.quote.depositZat} zat, fee ${quote.depositFeeZat}"
     }
@@ -115,24 +108,7 @@ class DebugAtomicSwapVM(
         if (log.value.busy != null) return
         log.update { it.copy(busy = name, error = null) }
         viewModelScope.launch {
-            val line =
-                try {
-                    "$name: ${block()}"
-                } catch (e: AtomicSwapHttpException) {
-                    fail(name, e)
-                } catch (e: AtomicSwapException) {
-                    fail(name, e)
-                } catch (e: RpcException) {
-                    fail(name, e)
-                } catch (e: SdkException) {
-                    fail(name, e)
-                } catch (e: IOException) {
-                    fail(name, e)
-                } catch (e: IllegalStateException) {
-                    fail(name, e)
-                } catch (e: IllegalArgumentException) {
-                    fail(name, e)
-                }
+            val line = catchingSwapFailures(onFailure = { e, _ -> fail(name, e) }) { "$name: ${block()}" }
             log.update { it.copy(busy = null, lines = it.lines + line) }
         }
     }
@@ -145,6 +121,10 @@ class DebugAtomicSwapVM(
         log.update { it.copy(error = "$name: ${e.message ?: e::class.simpleName}") }
         return "$name failed"
     }
+
+    private fun deposit(record: AtomicSwapRecord): String =
+        record.deposit.txId?.let { "deposit: ${it.hex.take(ID_PREFIX)}…" }
+            ?: if (record.deposit == SwapDeposit.Started) "deposit: started, no transaction id" else "deposit: not yet"
 
     private data class Log(
         val railgunAddress: String? = null,

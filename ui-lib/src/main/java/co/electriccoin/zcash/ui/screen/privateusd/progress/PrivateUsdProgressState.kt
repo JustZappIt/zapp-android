@@ -14,15 +14,27 @@ internal data class PrivateUsdProgressState(
     val result: PrivateUsdResultState?,
     val steps: List<ZappStep>,
     val note: StringResource?,
+    /** What holds the conversion up, while something does. */
+    val problem: PrivateUsdProblemState?,
+    /** Why what the user asked for last didn't happen. */
+    val error: StringResource?,
     val callOff: ButtonState?,
     val showsBackgroundNote: Boolean,
     val primaryButton: ButtonState?,
     val info: PrivateUsdInfo,
     val onBack: () -> Unit,
+    /** False while a step the user authorized runs. */
+    val isBackEnabled: Boolean = true,
 )
 
 internal data class PrivateUsdResultState(
     val title: StringResource,
     val body: StringResource,
     val isSuccess: Boolean,
+)
+
+internal data class PrivateUsdProblemState(
+    val message: StringResource,
+    /** Tries again at once; null where the screen's own action is the way to. */
+    val onRetry: (() -> Unit)?,
 )

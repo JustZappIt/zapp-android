@@ -6,17 +6,12 @@ package co.electriccoin.zcash.ui.common.atomicswap
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import xyz.justzappit.offramp.atomicswap.SwapDirection
 
-/**
- * Fired around a swap's deadlines in case Android stopped the worker: starts it again, and at the last
- * call asks the user to open the app, which can always run.
- */
+/** Woken around a forward swap's deadlines in case Android stopped the worker; the last call asks for the user. */
 class AtomicSwapWakeReceiver :
     BroadcastReceiver(),
     KoinComponent {
@@ -32,10 +27,10 @@ class AtomicSwapWakeReceiver :
         val pending = goAsync()
         scope.launch {
             try {
-                if (reverse.isUnderWay()) reverse.resume(isForeground = false)
+                reverse.resume(isForeground = false)
                 if (repository.isUnderWay()) {
                     repository.resume(isForeground = false)
-                    if (lastCall) notifier.needsYou()
+                    if (lastCall) notifier.needsYou(SwapDirection.FORWARD)
                 }
             } finally {
                 pending.finish()
@@ -44,6 +39,6 @@ class AtomicSwapWakeReceiver :
     }
 
     private companion object {
-        val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+        val scope = swapScope()
     }
 }

@@ -3,110 +3,126 @@
 
 package xyz.justzappit.offramp.atomicswap
 
+/** Getting a reverse swap's dollars back: the refund lock, the reveal under it, the payout, and a rescue. */
 internal class ReverseSwapRefunds(
-    private val api: ReverseSwapApi,
+    private val relayer: SwapRelayer,
     private val chain: ReverseSwapChain,
     private val keys: AtomicSwapKeys,
     private val reverseKeys: ReverseSwapKeys,
     private val store: ReverseSwapStore,
     private val verifier: ReverseSwapVerifier,
+    private val ending: ReverseSwapEnding,
+    private val nowSeconds: () -> Long,
 ) {
-    suspend fun canRescue(record: ReverseSwapRecord): Boolean =
-        record.phase == ReversePhase.REFUNDED && !record.rescuePending && rescueTerms(record) != null
+    /** Called off, refunded, or past the deadline of the stage its escrow is in. */
+    fun isDue(
+        record: ReverseSwapRecord,
+        observed: ReverseChainState
+    ): Boolean =
+        record.cancelRequested ||
+            when (observed.swap?.stage) {
+                SwapStage.REFUNDED -> true
+                SwapStage.READY -> observed.now >= record.quote.refundAfter
+                SwapStage.OPEN -> observed.now >= record.quote.readyDeadline
+                else -> false
+            }
 
-    suspend fun rescue(record: ReverseSwapRecord) {
-        if (record.rescuePending) {
-            advance(record, verifier.state(record))
-            return
-        }
+    /** Whether a refund Railgun sent back to its vault holds more than a rescue's relayer fee. */
+    suspend fun canRescue(record: ReverseSwapRecord): Boolean =
+        record.phase == ReversePhase.REFUNDED && rescueTerms(record) != null
+
+    /** One try at shielding a returned refund again. The swap stays finished, so it never holds up another. */
+    suspend fun rescue(
+        record: ReverseSwapRecord,
+        outbox: ReverseOutbox,
+    ) {
+        check(record.phase == ReversePhase.REFUNDED) { "only a refunded conversion is rescued" }
         val terms = rescueTerms(record) ?: return
         val payout = payout(record, terms, reverseKeys.signRescue(record, terms))
-        store.save(record.copy(payout = payout, rescuePending = true, phase = ReversePhase.REFUND_PAYOUT))
-        api.rescue(payout)
+        store.update(record.copy(payout = payout))
+        outbox.send { relayer.rescue(payout) }
     }
 
-    private suspend fun rescueTerms(record: ReverseSwapRecord): ReverseRelayerTerms? {
-        val state = verifier.state(record)
-        if (state.swap?.stage != SwapStage.REFUNDED || !state.swap.paidOut) return null
-        val terms = verifiedRelayer(record)
-        return terms.takeIf { decimalUnits(chain.vaultBalance(record.swapId)) > decimalUnits(it.fee) }
+    suspend fun advance(
+        record: ReverseSwapRecord,
+        observed: ReverseChainState,
+        outbox: ReverseOutbox,
+    ) {
+        val escrow = checkNotNull(observed.swap) { "a refund needs its escrow" }
+        when {
+            escrow.stage == SwapStage.REFUNDED && escrow.paidOut -> {
+                ending.finish(record.copy(rescuePending = false), ReversePhase.REFUNDED)
+            }
+
+            escrow.stage == SwapStage.REFUNDED -> {
+                sendPayout(record, ReversePhase.REFUND_PAYOUT, outbox) { relayer.refundPayout(it) }
+            }
+
+            escrow.stage == SwapStage.READY && observed.now < escrow.t1 -> {
+                store.keep(record, record.copy(phase = ReversePhase.REFUND_WAIT))
+            }
+
+            escrow.refundLockUntil <= observed.now -> {
+                lockRefund(record, escrow, observed, outbox)
+            }
+
+            else -> {
+                reveal(record, outbox)
+            }
+        }
     }
 
-    @Suppress("ReturnCount")
-    suspend fun advance(initial: ReverseSwapRecord, observed: ReverseChainState) {
-        var record = initial
-        val escrow = checkNotNull(observed.swap)
-        if (escrow.stage == SwapStage.REFUNDED && escrow.paidOut) {
-            if (record.rescuePending && decimalUnits(chain.vaultBalance(record.swapId)).signum() > 0) {
-                api.rescue(checkNotNull(record.payout))
-                return
-            }
-            store.save(record.copy(rescuePending = false, phase = ReversePhase.REFUNDED))
-            return
-        }
-        if (escrow.stage == SwapStage.READY && observed.now < escrow.t1) {
-            store.save(record.copy(phase = ReversePhase.REFUND_WAIT))
-            return
-        }
-        val terms = verifiedRelayer(record)
-        val payout = payout(record, terms, reverseKeys.signPayout(record, terms))
-        record = record.copy(payout = payout)
-        store.save(record)
-        if (escrow.stage == SwapStage.REFUNDED) {
-            store.save(record.copy(phase = ReversePhase.REFUND_PAYOUT))
-            api.payout(payout)
-            return
-        }
-        if (escrow.refundLockUntil <= observed.now) {
-            if (escrow.claimLockUntil > observed.now ||
-                (
-                    escrow.refundLockUntil > escrow.claimLockUntil &&
-                        observed.now < escrow.refundLockUntil + observed.lockDuration
-                )
-            ) {
-                return
-            }
-            val deadline = observed.now + ReverseSwapDriver.SIGNATURE_TTL
-            check(ReverseSwapDriver.SIGNATURE_TTL < observed.lockDuration)
-            val authorization =
-                record.refundLock?.takeIf { it.deadline >= observed.now } ?: ReverseAuthorization(
-                    record.swapId,
-                    deadline,
-                    reverseKeys.signLockRefund(record, deadline).hex(),
-                )
-            store.save(record.copy(refundLock = authorization, phase = ReversePhase.REFUNDING))
-            api.lockRefund(authorization)
-            return
-        }
-        // Never send the secret on the strength of a relayer response or an old lock observation.
+    // A claim lock held, or the maker's turn after a refund lock of ours lapsed, keeps the refund waiting.
+    private suspend fun lockRefund(
+        record: ReverseSwapRecord,
+        escrow: OnChainSwap,
+        observed: ReverseChainState,
+        outbox: ReverseOutbox,
+    ) {
+        if (!mayTakeLock(escrow.refundLockUntil, escrow.claimLockUntil, observed.now, observed.lockDuration)) return
+        check(SIGNATURE_TTL_SECONDS < observed.lockDuration) { "the lock is too short to sign for" }
+        val deadline = observed.now + SIGNATURE_TTL_SECONDS
+        val authorization =
+            record.refundLock?.takeIf { it.deadline >= observed.now }
+                ?: SwapAuthorization(record.swapId, deadline, reverseKeys.signLockRefund(record, deadline).hex())
+        store.keep(record, record.copy(refundLock = authorization, phase = ReversePhase.REFUNDING))
+        outbox.send { relayer.lockRefund(authorization) }
+    }
+
+    // Never sends the secret on the strength of a relayer response, an old lock observation or a lagging head.
+    private suspend fun reveal(
+        record: ReverseSwapRecord,
+        outbox: ReverseOutbox,
+    ) {
         val fresh = verifier.state(record)
-        check(fresh.swap?.stage in setOf(SwapStage.OPEN, SwapStage.READY))
-        if (checkNotNull(fresh.swap).refundLockUntil <= fresh.now + ReverseSwapDriver.REVEAL_MARGIN) return
-        store.save(record.copy(phase = ReversePhase.REFUNDING))
-        api.refund(ReverseRefund(record.swapId, keys.claimSecret(record.index).hex(), payout))
+        val escrow = fresh.swap?.takeIf { it.stage == SwapStage.OPEN || it.stage == SwapStage.READY } ?: return
+        if (escrow.refundLockUntil <= freshHead(fresh.now, nowSeconds()) + REVEAL_MARGIN_SECONDS) return
+        sendPayout(record, ReversePhase.REFUNDING, outbox) {
+            relayer.refund(SwapReveal(record.swapId, keys.claimSecret(record.index).hex(), it))
+        }
+    }
+
+    /** Signs the refund's payout only when it goes out, and keeps it with the record first. */
+    private suspend fun sendPayout(
+        record: ReverseSwapRecord,
+        phase: ReversePhase,
+        outbox: ReverseOutbox,
+        send: suspend (SwapPayout) -> Unit,
+    ) {
+        val terms = verifier.relayerTerms(record)
+        val payout = payout(record, terms, reverseKeys.signPayout(record, terms))
+        store.keep(record, record.copy(payout = payout, phase = phase))
+        outbox.send { send(payout) }
+    }
+
+    private suspend fun rescueTerms(record: ReverseSwapRecord): RelayerTerms? {
+        val refunded = verifier.state(record).swap?.takeIf { it.stage == SwapStage.REFUNDED && it.paidOut }
+        return refunded?.let { verifier.relayerTerms(record) }?.takeIf { chain.vaultBalance(record.swapId) > it.fee }
     }
 
     private suspend fun payout(
         record: ReverseSwapRecord,
-        terms: ReverseRelayerTerms,
+        terms: RelayerTerms,
         signature: ByteArray,
-    ): ReversePayout {
-        val note = keys.payoutNote(record.index)
-        return ReversePayout(
-            record.swapId,
-            ReverseNote(note.npk.hex(), note.encryptedBundle.map { it.hex() }, note.shieldKey.hex()),
-            terms.fee,
-            signature.hex(),
-        )
-    }
-
-    private suspend fun verifiedRelayer(record: ReverseSwapRecord): ReverseRelayerTerms =
-        api.terms().also {
-            check(it.chainId == record.deployment.chainId && sameAddress(it.contract, record.deployment.contract))
-            check(
-                sameAddress(it.relayer, record.deployment.relayer) && !sameAddress(it.relayer, record.quote.terms.maker)
-            )
-            check(decimalUnits(it.fee) <= decimalUnits(record.deployment.maxRefundFee))
-            check(decimalUnits(it.fee) < decimalUnits(record.quote.terms.amount))
-        }
+    ) = SwapPayout(record.swapId, keys.payoutNote(record.index, record.railgunKeys).wire(), terms.fee, signature.hex())
 }

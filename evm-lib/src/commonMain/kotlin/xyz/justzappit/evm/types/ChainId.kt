@@ -24,5 +24,6 @@ value class ChainId(
 
         val BASE_SEPOLIA: ChainId = ChainId(84_532L)
         val BASE_MAINNET: ChainId = ChainId(8_453L)
+        val ETHEREUM_SEPOLIA: ChainId = ChainId(11_155_111L)
     }
 }

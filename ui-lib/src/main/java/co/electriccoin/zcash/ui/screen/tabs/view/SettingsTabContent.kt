@@ -105,7 +105,7 @@ internal fun SettingsTabContent(
     onPortfolioChartClick: () -> Unit,
     onViewingKeyExportClick: () -> Unit,
     onHardwareWalletClick: () -> Unit,
-    // Null outside debug builds, which hides these rows.
+    // Null outside debug builds that have conversions, which hides these rows.
     onRailgunWalletClick: (() -> Unit)?,
     onAtomicSwapClick: (() -> Unit)?,
     // Null while the coinholder-polling kill switch is off, which hides the group entirely.

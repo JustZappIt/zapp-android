@@ -4,7 +4,7 @@
 //                                 account that RAILGUN_DEV_MNEMONIC and RAILGUN_DEV_GAS_KEY in
 //                                 local.properties name; Chrome keeps dev/.profile between runs
 //   npm run check -- --shield-to <0zk> <eth>   shields from that gas account into another wallet
-// Mnemonics and keys are never printed.
+// Mnemonics and keys are never printed. RAILGUN_CHECK_RPC must be a host the page's CSP allows.
 import { createServer } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -25,6 +25,7 @@ const SHIELD_AMOUNT = parseEther('0.02');
 const SEND_AMOUNT = parseEther('0.001');
 const SPENDABLE_POLL_MS = 30_000;
 const SPENDABLE_TIMEOUT_MS = 30 * 60_000;
+const CONFIRM_TIMEOUT_MS = 120_000;
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm' };
 
 /** The address Railgun's engine derives in Node, to compare with the browser's. */
@@ -80,7 +81,8 @@ async function connect(page, url, onEvent) {
       if (message.event !== undefined) return window.hostEvent(data);
       const { resolve, reject } = pending.get(message.id);
       pending.delete(message.id);
-      message.error === undefined ? resolve(message.result) : reject(new Error(message.error));
+      if (message.error === undefined) resolve(message.result);
+      else reject(new Error(`${message.error.code}: ${message.error.message}`));
     };
     window.call = (method, params) =>
       new Promise((resolve, reject) => {
@@ -88,7 +90,8 @@ async function connect(page, url, onEvent) {
         pending.set(id, { resolve, reject });
         port1.postMessage(JSON.stringify({ id, method, params }));
       });
-    window.postMessage('zapp-railgun-init', '*', [port2]);
+    // As the app's postWebMessage does, with no source window.
+    window.dispatchEvent(new MessageEvent('message', { data: 'zapp-railgun-init', ports: [port2] }));
   });
   return async (method, params) => {
     const started = performance.now();
@@ -107,7 +110,7 @@ function eventPrinter() {
     }
     let line;
     if (event === 'scan') line = `scan ${data.tree} ${data.status} ${Math.floor(data.progress * 10) * 10}%`;
-    else if (event === 'proof') line = `proof ${Math.floor(data.progress / 10) * 10}% ${data.status}`;
+    else if (event === 'proof') line = `proof ${Math.floor(data.progress * 10) * 10}% ${data.status}`;
     else if (event === 'log') line = process.env.RAILGUN_CHECK_VERBOSE ? `log ${data}` : undefined;
     else line = `${event}${data === null ? '' : ` ${typeof data === 'string' ? data : JSON.stringify(data)}`}`;
     if (line !== undefined && line !== last) console.log(`  ${line}`);
@@ -115,6 +118,15 @@ function eventPrinter() {
   };
   print.notesScans = 0;
   return print;
+}
+
+/** The page reaches only its own hosts, and names what it refuses. */
+async function boundaryCheck(page, call) {
+  const outside = await page.evaluate(() => fetch('https://example.com/').then(() => 'reached', () => 'blocked'));
+  if (outside !== 'blocked') throw new Error('the page reached a host outside its CSP');
+  const unknown = await call('nonsense', {}).then(() => 'answered', (error) => error.message);
+  if (!unknown.startsWith('BAD_REQUEST')) throw new Error(`an unknown method came back as ${unknown}`);
+  console.log('  other hosts are blocked, and an unknown method is a BAD_REQUEST');
 }
 
 async function syncCheck(page, url, onEvent) {
@@ -127,8 +139,9 @@ async function syncCheck(page, url, onEvent) {
   for (const pass of ['first open', 'reopen from IndexedDB']) {
     console.log(`${pass}:`);
     const call = await connect(page, url, onEvent);
+    if (pass === 'first open') await boundaryCheck(page, call);
     await call('start', { network: 'sepolia', rpcUrls: [RPC_URL], poiNodeUrls: [POI_NODE], debug: true });
-    const { address } = await call('openWallet', { encryptionKey, mnemonic, creationBlock: fromBlock });
+    const { address } = await call('openNewWallet', { encryptionKey, mnemonic, creationBlock: fromBlock });
     if (address !== expected) throw new Error(`the browser opened ${address}, Node derives ${expected}`);
     console.log(`  address matches Node's derivation: ${address.slice(0, 16)}…`);
     const balances = await call('refresh', {});
@@ -140,6 +153,16 @@ async function syncCheck(page, url, onEvent) {
     if (scans < 2) throw new Error(`two syncs at once started ${scans} notes scan(s)`);
     console.log('  two syncs at once each started a notes scan');
   }
+}
+
+/** Signs on the page, then sends and waits for a block from here, as the app sends from outside the page. */
+async function send(call, method, params) {
+  const signed = await call(method, params);
+  const provider = new JsonRpcProvider(RPC_URL);
+  await provider.broadcastTransaction(signed.raw);
+  const receipt = await provider.waitForTransaction(signed.txHash, 2, CONFIRM_TIMEOUT_MS);
+  if (receipt?.status !== 1) throw new Error(`${method} ${signed.txHash} is ${receipt === null ? 'pending' : 'reverted'}`);
+  return signed;
 }
 
 const weth = (bucket) => BigInt(bucket?.find(({ token }) => token === WETH)?.amount ?? 0);
@@ -178,7 +201,7 @@ async function openDevWallet(page, url, onEvent) {
 
 async function shieldTo(page, url, onEvent, to, eth) {
   const { call } = await openDevWallet(page, url, onEvent);
-  const { txHash } = await call('shield', { amount: parseEther(eth).toString(), to });
+  const { txHash } = await send(call, 'shield', { amount: parseEther(eth).toString(), to });
   console.log(`  shielded ${eth} ETH to ${to.slice(0, 16)}…: ${etherscan(txHash)}`);
 }
 
@@ -188,16 +211,16 @@ async function transactCheck(page, url, onEvent) {
   let balances = await call('refresh', {});
   console.log(`  WETH: ${summary(balances)}`);
   if (weth(balances.Spendable) < 2n * SEND_AMOUNT && weth(balances.ShieldPending) === 0n) {
-    const { txHash } = await call('shield', { amount: SHIELD_AMOUNT.toString() });
+    const { txHash } = await send(call, 'shield', { amount: SHIELD_AMOUNT.toString() });
     console.log(`  shielded ${formatEther(SHIELD_AMOUNT)} ETH: ${etherscan(txHash)}`);
   }
   await waitForSpendable(call, 2n * SEND_AMOUNT);
 
-  const sent = await call('transfer', { to: address, token: WETH, amount: SEND_AMOUNT.toString() });
+  const sent = await send(call, 'transfer', { to: address, token: WETH, amount: SEND_AMOUNT.toString() });
   console.log(`  sent ${formatEther(SEND_AMOUNT)} WETH privately to itself, proof ${sent.proofMs} ms: ${etherscan(sent.txHash)}`);
   await waitForSpendable(call, SEND_AMOUNT);
 
-  const withdrawn = await call('unshield', { to: gas.address, token: WETH, amount: SEND_AMOUNT.toString() });
+  const withdrawn = await send(call, 'unshield', { to: gas.address, token: WETH, amount: SEND_AMOUNT.toString() });
   console.log(`  withdrew ${formatEther(SEND_AMOUNT)} WETH to the gas account, proof ${withdrawn.proofMs} ms: ${etherscan(withdrawn.txHash)}`);
   balances = await call('refresh', {});
   console.log(`  WETH: ${summary(balances)}`);

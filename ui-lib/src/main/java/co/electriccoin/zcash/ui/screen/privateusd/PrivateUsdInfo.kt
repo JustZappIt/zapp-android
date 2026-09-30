@@ -10,4 +10,6 @@ internal data class PrivateUsdInfo(
     val title: StringResource,
     val steps: List<StringResource> = emptyList(),
     val notes: List<StringResource> = emptyList(),
+    /** How the title reads aloud, when its symbols don't. */
+    val titleDescription: StringResource? = null,
 )

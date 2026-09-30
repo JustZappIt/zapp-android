@@ -1,139 +1,98 @@
-# Android reverse conversion
+# Private USD to ZEC conversions
 
-The testnet **Convert** screen supports both ZEC → USD and USD → ZEC. Both use the colored
-amount fields with balances on the right, stacked ZEC and Private USD rows, and a
-swap icon that reverses their order. Only the sending (top) field is editable. Icons
-sit on the input line. Tapping its Available balance fills the usable maximum. The
-bottom action bar is shared with Send. The reverse
-balance counts only spendable notes for the pinned deployment token; an unknown
-balance is distinct from zero. Decimal precision is validated without an input hint.
-Fresh inputs and direction changes start blank; persisted preview quotes never fill
-an input. Only typing or tapping Available supplies an amount. Quote fetching uses
-the bottom button's spinner and “Getting quote…” label. Fee summaries fit one line.
-Conversion back navigation selects the Pay tab and removes intermediate wallet screens.
+A reverse conversion pays test USDC from the private (Railgun) balance into a zecSwap escrow on
+Sepolia. The maker deposits ZEC into a Zcash account both sides hold a share of, and the app sweeps
+that account into the wallet once the maker claims the escrow. Testnet builds only:
+`AtomicSwapDeployments.current` is null on mainnet, so neither direction is offered there.
 
-The currency selected under You controls fiat balances, input, estimates and fees.
-Private-USD input is converted to integer token units with decimal arithmetic; an
-unavailable or mismatched local rate cannot reinterpret that input as USD. Max rounds
-down before conversion. Accepted quotes retain their original USDC units and deployment.
-The Private USD overview places local fiat beside a smaller USD total; tapping swaps
-their sizes. It omits the duplicate Available row and explains Send and Withdraw in
-the info sheet, with icons on both actions.
-Both directions reuse `PrivateUsdProgressView` and `ZappStepList`, including the
-animated current step, completed steps, background-work note and success header.
-Reverse progress includes the explicit second approval and Zcash sweep confirmations;
-refund and cancellation outcomes have separate status displays.
-Progress screens omit the delay-warning card and its retry button. Reconciliation
-continues automatically in the background.
+The engine is `ReverseSwapDriver` in `offramp-lib` (pure JVM, host-tested). The app side is
+`ReverseSwapRepository`, which runs it through the same `SwapLoop`, worker and notifications as
+forward swaps.
 
 ## Deployment and storage
 
-`ReverseSwapTestnet` pins the hosted maker and relayer, Sepolia chain 11155111,
-contract `0xbd9a37f47a988aefc4d80395727f41feb698e225`, and token
-`0x5764d0044bef5aa839e0ddafe2073421101b9ed8`. Maker info and quotes must match.
-Reverse records persist the entire public deployment. `AtomicSwapSessions` selects
-forward deployments from each saved quote; legacy pending swaps keep their original
-contract and local service URLs. Unknown deployments fail closed.
+- A reverse record keeps its whole public `SwapDeployment`: service URLs, RPC URL, chain id,
+  contract, token, Railgun proxy, maker, relayer and the most a relayer may charge. Its driver
+  comes from that deployment, and the verifier rejects a record from any other one. A forward
+  record keeps only its quote. `AtomicSwapSessions.deploymentFor` matches the quote's chain,
+  contract and token against the known deployments and fails closed on anything else.
+- Both stores are encrypted preferences decoded strictly (an unknown key is an error):
+  `atomicswap_state_v2` for forward swaps, `reverse_swap_v1` for reverse ones. Typed fields write
+  the JSON earlier builds wrote. Addresses are lowercase hex, amounts are decimal strings of base
+  units, and swap ids are lowercase 32-byte hex. `SwapRecordStorageTest` and the store tests pin
+  kept records byte for byte.
+- Swap keys are derived again from the wallet seed and the swap index. `SwapIndices` hands out
+  indices for both directions and skips any that a known contract shows in use. No service signing
+  material is stored.
 
-The encrypted reverse store records the consumed shared derivation index, quote,
-authentication identity, refund-note commitment, acceptance, joint-account birthday
-and imported account, signed funding transaction, Ready/refund/payout authorizations,
-and signed receive transaction. Authentication keys are rederived from the wallet
-and index. No service signing material is embedded.
+## Authorizations
 
-## Authorizations and recovery
+1. **Preview.** `quote` checks the maker's info against the deployment, takes a fresh index, and
+   verifies the quote: deployment, our address and refund-note commitment, and deadlines far enough
+   off. It proves our acceptance and saves the record as `QUOTED`. A preview is never accepted or
+   funded on its own, and it doesn't block a forward swap.
+2. **Review.** The review shows the preview's own cost; nothing is accepted by looking at it.
+3. **Convert**, the first foreground authorization, behind the app lock. Going ahead moves the record
+   to `ACCEPTING`; the quote is accepted at the maker, which must return the expected swap id, and
+   the joint account is imported from the quote-time birthday. Then Railgun builds one Relay Adapt
+   transaction that unshields, approves exactly the escrow, and calls `openReverse`. Its cost must
+   equal the reviewed cost: a different one is kept and shown, and nothing is paid until the user
+   converts again or cancels. The signed bytes are checked against their hash and kept before the
+   first broadcast. After that they're only sent again unchanged, and only while the node doesn't
+   know the hash.
+4. **Ready**, the second foreground authorization. It's allowed only when the whole deposit is
+   spendable in the joint account, the escrow is open without a refund lock, and the signature's
+   two-minute lifetime ends before the ready deadline. The background sends a kept `ready` again
+   while it holds but never signs one.
+5. **Receive.** Once the escrow is claimed, the revealed share lets the native signer sign the sweep
+   home. The sweep is kept before it's first sent, and after that it's only sent again unchanged.
+   It's rebuilt only once proven expired, meaning the wallet has scanned past its expiry height
+   without finding it. The deployment's Zcash confirmations complete the conversion, as they do a
+   forward refund's sweep, and the joint account is forgotten.
 
-1. Typing previews a verified, persisted quote with a fresh consumed index. Review
-   accepts it and imports the joint account before funding. Preview drafts cannot
-   accept or fund themselves after restart.
-2. Convert requires foreground wallet authorization. Railgun builds and proves an
-   atomic Relay Adapt call: unshield enough to leave the exact escrow amount,
-   approve exactly that amount, and call `openReverse`. A revert rolls back the
-   entire transaction. Signed raw bytes and their hash are saved before broadcast.
-3. The worker reads confirmed escrow state and independently syncs the exact joint
-   Zcash account. Partial or unconfirmed deposits cannot enable Ready. Maker status
-   and transaction IDs are not settlement evidence. A proposal determines the sweep
-   fee before Ready can be authorized.
-4. The second foreground authorization signs Ready. The worker may retry those
-   saved bytes while valid, but never creates Ready by itself. A verified on-chain
-   claim supplies the share checked by the native receive signer. The local PCZT
-   finalization creates raw transaction bytes without broadcasting; those bytes are
-   persisted first and retried unchanged. Only proven transaction expiry permits
-   rebuilding the sweep. Mined sweeps wait for the SDK's confirmed state without
-   rebroadcasting. The screen shows their confirmation count. Check progress runs
-   a serialized reconciliation with visible loading feedback.
+## Refunds and cancellation
 
-Funding reconciliation also checks `eth_getTransactionByHash` for the exact saved
-hash before retrying a transaction without a receipt. If submission returns an RPC
-error, a matching transaction lookup establishes that the node already has the same
-bytes. Error-message text is never used to decide whether funding succeeded.
+- Cancelling persists `cancelRequested`. The screen offers it until the sweep home is built. With
+  nothing funded, the conversion ends at once. A funding transaction the node never saw is not sent
+  again. A funding that reverted, or no escrow 10 minutes after the funding deadline, ends it as
+  cancelled. Once there's an escrow, cancelling starts the refund.
+- A refund is due once cancelled, once the escrow shows refunded, when it's open past the ready
+  deadline, or when it's ready past `refundAfter`. The app takes a refund lock only on its own turn:
+  no claim lock held, and not the maker's turn after a lapsed lock of ours.
+- The claim secret is revealed only under a refund lock read fresh from the chain, with more than
+  five minutes left, through a head less than three minutes behind the device clock. A relayer
+  response or an earlier observation is never enough.
+- A payout is signed only when it's sent, and it's kept first. The relayer's terms must name this
+  deployment and a relayer other than the maker. The fee must be within the deployment's maximum
+  and below the amount.
+- Rescue reshields a refund that Railgun returned to its vault. It's offered only for a refunded
+  swap whose escrow shows paid out and whose vault holds more than the relayer's fee. The swap
+  stays finished, so a rescue never holds up another conversion.
 
-Cancellation intent persists. Refund recovery observes contract deadlines and
-alternating lock turns. The secret is sent only after a fresh confirmed refund lock
-has more than 300 seconds remaining. Private payout and rescue requests persist and
-retry. Reverse storage roles are checked explicitly: stored maker = USDC user;
-stored user = ZEC maker.
+## Invariants
 
-The refund screen offers “Recover refund” only after verifying a paid-out refund
-and a returned vault balance greater than the verified relayer fee. Eligibility is
-checked while the screen is observed. Empty or uneconomic vaults produce no recovery
-submission; duplicate actions reuse the persisted recovery request. Refunded and
-cancelled screens omit the former conversion estimate.
+- Only one conversion goes ahead at a time, either way. Accepting holds `AtomicSwapSessions.acceptanceLock`.
+- Everything the driver acts on is checked against the deployment, the swap's own keys, and the
+  escrow read at a block that has its confirmations. The roles are the forward swap's turned round:
+  our key is the contract's maker, and the ZEC maker is its user.
+- Maker status, relayer responses and error text are never evidence of funding or settlement.
+- Every transaction is kept before it's first sent and is only sent again from those bytes. A kept
+  Ready or refund-lock authorization is reused while it holds.
 
-The existing foreground WorkManager worker, restart receiver, notifications and
-activity resume path handle both directions. Forward escrow-before-ZEC-deposit
-ordering is unchanged. ZEC input includes the deposit fee; the client fits a verified
-USD-denominated quote below the entered total, and persists that authorized total.
-The actual Zcash proposal is checked against it before transaction creation. Preview
-drafts do not block the opposite direction; accepting a swap reserves the shared
-wallet under one lock.
+## Background work
 
-## Companion dependency
+`SwapLoop` advances the conversion under way in each direction and retries failed steps every
+15 seconds. It shows why a step failed as a typed `AtomicSwapProblem`. It asks for the user after
+five minutes of failures they could help with, or when a reverse swap waits for Ready. The
+WorkManager worker keeps the process alive for either direction. It runs as a foreground service
+when started from the app. Notifications and the app's resume path cover both directions. Only
+forward swaps set wake alarms, around `t0` and before `t1`. `AtomicSwapWakeReceiver` resumes both
+loops when woken, but its last-call notification is for forward swaps only.
 
-`../zecSwap` on `feature/android` needs companion commit `ecad30c` for the `signRefundRescue` JNI and
-Kotlin wrapper changes. This exposes the existing contract Rescue digest; it does
-not change the contract or API protocol. All three packaged Android ABIs were
-rebuilt with that export. Do not publish the Android change without its companion.
+## Dependency
 
-## Validation
-
-- The selected-currency and overview update passed the testnet APK build, Detekt and six focused
-  currency/quote tests. It was installed on the physical CPH2747 without clearing wallet data.
-  Device inspection confirmed INR balances, blank conversion inputs and the bottom
-  “Getting quote…” spinner. Remaining visual/navigation checks were stopped while the user
-  interacted with the phone; no payment was submitted during these UI checks.
-- Testnet APK build and installation on physical CPH2747 succeeded; mainnet Kotlin compilation also passed.
-- A full core run passed 612 offramp JVM tests, including forward tests and 21 reverse API/driver
-  tests for roles, quotes, confirmations, cancellation, deadlines and recovery.
-- 20 selected Android UI/model tests passed before the final input-layout adjustment, including deployment binding and
-  reverse spendable-balance handling.
-- The final input-layout build and Detekt passed, as did the focused 19-test reverse driver suite.
-- The progress refresh update also passed the testnet APK build, Detekt and all 19
-  focused driver tests, including resuming a mined sweep without rebuilding or rebroadcasting it.
-- The shared progress-screen update passed the APK build, Detekt and three focused
-  UI-state tests covering the approval step, sweep confirmations and refund/cancellation displays.
-- A focused RPC test passed for missing/known transactions and rejection of a mismatched hash.
-- The refund retry test also covers empty and fee-sized vaults, eligibility checks,
-  repeated recovery taps and reuse of an already signed recovery request.
-- Formatting of changed Kotlin files passed.
-- Railgun integer fee tests and browser Sepolia initialization/sync passed.
-- Nine JNI vector tests passed; Android native builds succeeded for all three ABIs.
-- The separate EVM suite has an existing retry-delay test failure in
-  `BundlerClientTest` / `RpcHttpClient`; the new transaction lookup was tested separately.
-- `checkProperties` is blocked by local developer property overrides. The committed
-  credential defaults and network filter remain blank and unchanged.
-
-On the physical CPH2747, the user authorized a 1 USDC reverse swap. It advanced
-through escrow and settlement to a persisted ZEC sweep, displaying a 1.002506 USDC
-total debit and 0.00188 ZEC net receive. After updating and restarting the app during
-sweep confirmation, the SDK confirmed the saved transaction and the screen showed
-“ZEC received in your shielded wallet.” This device run exercises the
-Railgun funding path absent from the public-token server smoke tests. Sepolia uses the
-wallet's existing public test gas account to broadcast Relay Adapt transactions;
-its ETH fee is separate from the private USDC debit. A production broadcaster
-integration and mainnet deployment remain outside this testnet implementation.
-
-A subsequent 0.5 USDC conversion reached the confirmed refund-payout state on the
-same phone. Repeated taps on the previously unconditional recovery button failed
-the balance check before signing or submitting. The conditional button fixes that UI;
-the refund's eventual Railgun screening/spendability was not independently checked.
+The app needs `../zecSwap` at or after `9f2da32` ("feat(android): derive payout notes from a separate
+railgun seed"), the commit that adds `RailgunSeed`, which payout notes and the Railgun address are
+derived from. It carries the packaged Android native libraries, and the rescue signature
+(`ReverseAtomicSwap.signRefundRescue`). The `.zapp-deps` pin and the workflow's `ZECSWAP_REF` must
+name it too.

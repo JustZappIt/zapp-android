@@ -3,47 +3,53 @@
 
 package xyz.justzappit.offramp.atomicswap
 
-import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.types.Address
+import xyz.justzappit.evm.types.ChainId
+import xyz.justzappit.evm.types.TxHash
+import xyz.justzappit.offramp.p2p.Usdc6
 
 /** The Railgun note a payout is shielded to. The quote names its [commitment]; the relayer sends the rest. */
 class PayoutNote(
     val npk: ByteArray,
     val encryptedBundle: List<ByteArray>,
     val shieldKey: ByteArray,
-    val commitment: ByteArray,
+    val commitment: NoteCommitment,
 )
 
 class UserAcceptance(
-    val userShare: ByteArray,
+    val userShare: SwapShare,
     val userProof: ByteArray,
     val viewingKeys: ByteArray,
 )
 
-/** The user's swap cryptography (libzecswap on Android), keyed by swap index. */
+/** The user's swap cryptography, keyed by swap index. */
 interface AtomicSwapKeys {
     /** `Z`, the public share a quote is accepted with. */
-    suspend fun userShare(index: Int): ByteArray
+    suspend fun userShare(index: Int): SwapShare
 
-    /** The swap's `user`: its own key, which signs for it and is never funded. */
+    /** The swap's own key, which signs for it and is never funded. */
     suspend fun authAddress(index: Int): Address
 
-    suspend fun payoutNote(index: Int): PayoutNote
+    suspend fun payoutNote(
+        index: Int,
+        railgunKeys: RailgunKeySource
+    ): PayoutNote
 
-    /** Throws unless the maker's share proof verifies for this quote; proves ours in return. */
+    /** Throws unless the maker's share proof verifies; proves ours in return, bound to the payout note. */
     suspend fun accept(
         index: Int,
-        chainId: Long,
+        railgunKeys: RailgunKeySource,
+        chainId: ChainId,
         contract: Address,
         quoteId: ByteArray,
-        makerShare: ByteArray,
+        makerShare: SwapShare,
         makerProof: ByteArray,
     ): UserAcceptance
 
     /** The deposit address, from the maker share as the contract records it. */
     suspend fun depositAddress(
         index: Int,
-        makerShare: ByteArray
+        makerShare: SwapShare
     ): String
 
     /** `z`, which a claim reveals. */
@@ -51,58 +57,64 @@ interface AtomicSwapKeys {
 
     suspend fun signLockClaim(
         index: Int,
-        chainId: Long,
+        chainId: ChainId,
         contract: Address,
-        swapId: ByteArray,
+        swapId: SwapId,
         deadline: Long,
     ): ByteArray
 
     suspend fun signPayout(
         index: Int,
-        chainId: Long,
+        chainId: ChainId,
         contract: Address,
-        swapId: ByteArray,
+        swapId: SwapId,
         relayer: Address,
-        fee: BigInteger,
+        fee: Usdc6,
     ): ByteArray
 }
 
-/** The wallet's Zcash side (the SDK on Android). */
-interface AtomicSwapZcash {
-    suspend fun chainHeight(): Long
-
-    /**
-     * Pays [zatoshi] to [address] in one transaction and returns its id. Creating the transaction is
-     * the point of no return, since the wallet may broadcast it on its own: callers record the attempt
-     * before calling.
-     */
-    suspend fun pay(
-        address: String,
-        zatoshi: Long
-    ): String
-
-    /**
-     * The id of a payment to [address] the wallet created, mined or still pending, or null if there
-     * is none or it expired unmined: how a [pay] cut short is found again.
-     */
-    suspend fun findPayment(address: String): String?
-
-    /**
-     * Takes a refunded deposit home: watches the deposit account from [birthday], sweeps its balance
-     * with the maker's revealed [makerSecret] added to the user's, and returns the sweep's id. A sweep
-     * that already went out before an interruption is returned instead of a second one.
-     */
-    suspend fun sweepRefund(
-        index: Int,
-        makerShare: ByteArray,
-        makerSecret: ByteArray,
-        birthday: Long,
-    ): String
+/** A deposit checked to fit in one transaction within its cap, not created yet. */
+fun interface PreparedDeposit {
+    /** Creates the transaction without sending it. */
+    suspend fun create(): ZcashTransaction
 }
 
-/** Where swaps are kept between steps. */
+/** The wallet's Zcash side of a forward swap. */
+interface AtomicSwapZcash : SwapZcash {
+    /** Checks that [zatoshi] to [address] fits in one transaction costing at most [maxTotalZat] in all. */
+    suspend fun prepareDeposit(
+        address: String,
+        zatoshi: Long,
+        maxTotalZat: Long?,
+    ): PreparedDeposit
+
+    /** A deposit to [address] the wallet created that isn't known to have expired, or null. */
+    suspend fun findDeposit(address: String): ZcashTransaction?
+
+    suspend fun depositStatus(deposit: ZcashTransaction): ZcashTransactionStatus
+
+    /** The sweep home of a refunded deposit, or the one built before; null until the whole balance is spendable. */
+    suspend fun prepareSweep(
+        index: Int,
+        makerShare: SwapShare,
+        makerSecret: ByteArray,
+        birthday: Long,
+    ): ZcashTransaction?
+
+    suspend fun sweepStatus(
+        index: Int,
+        makerShare: SwapShare,
+        sweep: ZcashTransaction,
+    ): ZcashTransactionStatus
+
+    suspend fun forgetDepositAccount(
+        index: Int,
+        makerShare: SwapShare
+    )
+}
+
 interface AtomicSwapStore {
-    /** The next swap index, counted as used before it is returned: an index is never reused. */
+    /** The next index of this store's count; swaps take theirs through [SwapIndices]. */
     suspend fun takeIndex(): Int
 
     suspend fun active(): AtomicSwapRecord?
@@ -110,10 +122,10 @@ interface AtomicSwapStore {
     suspend fun save(record: AtomicSwapRecord)
 }
 
-/** Reads of the settlement chain. */
+/** Reads of the settlement chain a forward swap needs. */
 interface AtomicSwapChainReader {
     /** Null until the swap is open. */
-    suspend fun swap(id: ByteArray): OnChainSwap?
+    suspend fun swap(id: SwapId): OnChainSwap?
 
     /** The latest block's time: the contract's clock. */
     suspend fun now(): Long
@@ -124,9 +136,15 @@ interface AtomicSwapChainReader {
     /** How long a claim or refund lock holds, in seconds. */
     suspend fun lockDuration(): Long
 
-    /** The transaction that paid swap [id] out, looked for around [near] (unix seconds), or null. */
+    /** Whether [owner] opened a swap with [share] as its own: a reverse swap's user share is spent. */
+    suspend fun makerKeyUsed(
+        owner: Address,
+        share: SwapShare
+    ): Boolean
+
+    /** The transaction that paid swap [id] out, looked for around [near] (unix seconds). */
     suspend fun payoutTx(
-        id: ByteArray,
+        id: SwapId,
         near: Long
-    ): String?
+    ): TxHash?
 }

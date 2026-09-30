@@ -42,17 +42,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selectableGroup
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -473,40 +471,60 @@ private fun PrivateUsdAmount(
     modifier: Modifier = Modifier,
 ) {
     val c = ZappTheme.colors
-    val description = stringResource(R.string.private_usd_home_content_description)
-    val label = stringResource(R.string.private_usd_title)
     val amount =
         rememberScrambledBalanceText(
-            clearText = state.balance?.getValue() ?: stringResource(R.string.private_usd_home_loading),
+            clearText = state.balance.getValue(),
             hiddenText = stringResource(DesignR.string.hide_balance_placeholder),
             isHidden = isHidden,
         )
     val arriving = state.arriving?.getValue()?.let { rememberScrambledBalanceText(it, "", isHidden) }
-    val text =
-        buildAnnotatedString {
-            if (followsBalance) withStyle(SpanStyle(color = c.textSubtle)) { append("·  ") }
-            append("$label ")
-            withStyle(
-                SpanStyle(color = if (state.isBlocked) c.danger else c.text, fontWeight = FontWeight.SemiBold)
-            ) { append(amount) }
-            if (!arriving.isNullOrEmpty()) withStyle(SpanStyle(color = c.accentText)) { append(" $arriving") }
-        }
-    Box(
+    Row(
         modifier =
             modifier
                 .padding(start = if (followsBalance) 8.dp else 0.dp)
-                .defaultMinSize(minHeight = 40.dp)
+                .defaultMinSize(minHeight = 48.dp)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
+                    onClickLabel = stringResource(R.string.private_usd_home_content_description),
+                    role = Role.Button,
                     onClick = state.onClick,
-                ).semantics {
-                    role = Role.Button
-                    contentDescription = description
-                },
-        contentAlignment = Alignment.CenterStart,
+                ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.xs),
     ) {
-        BasicText(text = text, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (followsBalance) {
+            BasicText(
+                text = stringResource(R.string.private_usd_home_separator),
+                style = style.copy(color = c.textSubtle),
+                modifier = Modifier.clearAndSetSemantics {},
+            )
+        }
+        BasicText(
+            text = stringResource(R.string.private_usd_title),
+            style = style,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        val blockedDescription =
+            stringResource(R.string.private_usd_home_blocked_description, amount)
+                .takeIf { state.isBlocked && !isHidden }
+        BasicText(
+            text = amount,
+            style = style.copy(color = if (state.isBlocked) c.danger else c.text, fontWeight = FontWeight.SemiBold),
+            maxLines = 1,
+            modifier = Modifier.semantics { blockedDescription?.let { contentDescription = it } },
+        )
+        if (!arriving.isNullOrEmpty()) {
+            val arrivingDescription = state.arrivingDescription?.getValue()?.takeUnless { isHidden }
+            BasicText(
+                text = arriving,
+                style = style.copy(color = c.accentText),
+                maxLines = 1,
+                modifier = Modifier.semantics { arrivingDescription?.let { contentDescription = it } },
+            )
+        }
     }
 }
 

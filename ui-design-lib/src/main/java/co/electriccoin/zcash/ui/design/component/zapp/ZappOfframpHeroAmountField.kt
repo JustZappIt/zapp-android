@@ -22,8 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -44,10 +42,12 @@ fun ZappOfframpHeroAmountField(
     isError: Boolean = false,
     flag: Painter? = null,
     leadingIcon: Painter? = null,
+    /** Steps an amount longer than eight characters down a size, for a field sharing its row with an icon. */
+    shrinksLongAmounts: Boolean = false,
 ) {
     val c = ZappTheme.colors
     val amountStyle =
-        if (leadingIcon != null &&
+        if (shrinksLongAmounts &&
             state.innerState.innerTextFieldState.value
                 .getValue()
                 .length > COMPACT_AMOUNT_LENGTH
@@ -74,15 +74,17 @@ fun ZappOfframpHeroAmountField(
                 )
                 Spacer(Modifier.width(10.dp))
             }
-            BasicText(
-                text = symbol,
-                style =
-                    amountStyle.copy(
-                        color = c.text,
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-            )
-            Spacer(Modifier.width(8.dp))
+            if (symbol.isNotEmpty()) {
+                BasicText(
+                    text = symbol,
+                    style =
+                        amountStyle.copy(
+                            color = c.text,
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                )
+                Spacer(Modifier.width(8.dp))
+            }
             ZashiNumberTextField(
                 state = state,
                 modifier = Modifier.weight(1f),
@@ -125,6 +127,7 @@ fun ZappOfframpHeroAmountField(
                 },
             )
             balance?.let {
+                val action = it.action
                 Column(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.Center,
@@ -132,11 +135,14 @@ fun ZappOfframpHeroAmountField(
                         Modifier
                             .padding(start = 12.dp)
                             .then(
-                                if (it.onClick != null) {
+                                if (action != null) {
                                     Modifier
                                         .defaultMinSize(minHeight = 48.dp)
-                                        .clickable(onClick = it.onClick)
-                                        .semantics(mergeDescendants = true) { role = Role.Button }
+                                        .clickable(
+                                            onClickLabel = action.onClickLabel,
+                                            role = Role.Button,
+                                            onClick = action.onClick,
+                                        )
                                 } else {
                                     Modifier
                                 }
@@ -151,8 +157,8 @@ fun ZappOfframpHeroAmountField(
                         text = it.amount,
                         style =
                             ZappTheme.typography.caption.copy(
-                                color = if (it.onClick != null) c.accentText else c.textMuted,
-                                fontWeight = if (it.onClick != null) FontWeight.SemiBold else FontWeight.Medium,
+                                color = if (action != null) c.accentText else c.textMuted,
+                                fontWeight = if (action != null) FontWeight.SemiBold else FontWeight.Medium,
                                 textAlign = TextAlign.End,
                             ),
                         maxLines = 1,

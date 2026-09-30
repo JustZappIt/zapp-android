@@ -5,6 +5,8 @@ import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepositoryImpl
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepositoryImpl
+import co.electriccoin.zcash.ui.common.backgroundScope
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepository
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepositoryImpl
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
@@ -37,6 +39,7 @@ import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepository
 import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.PeerCashOutRepository
 import co.electriccoin.zcash.ui.common.repository.PeerCashOutRepositoryImpl
+import co.electriccoin.zcash.ui.common.repository.RailgunWalletDebug
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
@@ -55,9 +58,11 @@ import co.electriccoin.zcash.ui.screen.chat.linkpreview.LinkPreviewRepository
 import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnInbox
 import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnLink
 import co.electriccoin.zcash.ui.screen.reputation.increase.ReclaimReturnLink
+import co.electriccoin.zcash.ui.screen.tabs.SelectedTabRepository
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.qualifier.named
 import org.koin.dsl.bind
+import org.koin.dsl.binds
 import org.koin.dsl.module
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.offramp.account.Erc4337SubmitterProvider
@@ -89,6 +94,7 @@ import xyz.justzappit.offramp.reclaim.ReclaimPoller
 import xyz.justzappit.offramp.reclaim.ReclaimSessionMinter
 import xyz.justzappit.offramp.reclaim.ReclaimVerificationDriver
 import xyz.justzappit.offramp.reputation.ReputationReader
+import kotlin.time.Clock
 
 val repositoryModule =
     module {
@@ -103,30 +109,54 @@ val repositoryModule =
         singleOf(::TransactionFilterRepositoryImpl) bind TransactionFilterRepository::class
         singleOf(::ZashiProposalRepositoryImpl) bind ZashiProposalRepository::class
         singleOf(::HomeMessageCacheRepositoryImpl) bind HomeMessageCacheRepository::class
+        singleOf(::SelectedTabRepository)
         singleOf(::WalletSnapshotRepositoryImpl) bind WalletSnapshotRepository::class
         singleOf(::ApplicationStateRepositoryImpl) bind ApplicationStateRepository::class
         singleOf(::SwapRepositoryImpl) bind SwapRepository::class
         singleOf(::EphemeralAddressRepositoryImpl) bind EphemeralAddressRepository::class
         singleOf(::MockOrchardBalanceRepositoryImpl) bind MockOrchardBalanceRepository::class
-        singleOf(::RailgunWalletRepositoryImpl) bind RailgunWalletRepository::class
         single {
-            ReverseSwapRepository(
-                get(),
-                get(),
-                get(),
-                get(),
-                get(),
-                get(),
-                io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
-                    install(io.ktor.client.plugins.HttpTimeout) { requestTimeoutMillis = REVERSE_SWAP_TIMEOUT_MILLIS }
-                },
-                get(),
-                get(),
-                get()
+            RailgunWalletRepositoryImpl(
+                railgunWallet = get(),
+                keyProvider = get(),
+                mnemonicProvider = get(),
+                zcashNetworkProvider = get(),
+                scope = backgroundScope("Railgun"),
+            )
+        } binds arrayOf(RailgunWalletRepository::class, RailgunWalletDebug::class)
+        single<ReverseSwapRepository> {
+            ReverseSwapRepositoryImpl(
+                deployments = get(),
+                sessions = get(),
+                store = get(),
+                forward = get(),
+                scheduler = get(),
+                notifier = get(),
             )
         }
-        singleOf(::AtomicSwapRepositoryImpl) bind AtomicSwapRepository::class
-        singleOf(::PrivateUsdBalanceRepositoryImpl) bind PrivateUsdBalanceRepository::class
+        single<AtomicSwapRepository> {
+            AtomicSwapRepositoryImpl(
+                deployments = get(),
+                reverse = get(),
+                sessions = get(),
+                store = get(),
+                zcash = get(),
+                scheduler = get(),
+                notifier = get(),
+            )
+        }
+        single<PrivateUsdBalanceRepository> {
+            PrivateUsdBalanceRepositoryImpl(
+                railgunWalletRepository = get(),
+                atomicSwapRepository = get(),
+                railgunMnemonicProvider = get(),
+                sendLog = get(),
+                senders = get(),
+                encryptedPreferenceProvider = get(),
+                scope = backgroundScope("Private USD"),
+                clock = Clock.System,
+            )
+        }
         singleOf(::LinkPreviewRepository)
         singleOf(::HistoricalPriceRepositoryImpl) bind HistoricalPriceRepository::class
         single<BaseBalanceRepository> {
@@ -292,5 +322,3 @@ val repositoryModule =
             }
         }
     }
-
-private const val REVERSE_SWAP_TIMEOUT_MILLIS = 180_000L

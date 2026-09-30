@@ -8,24 +8,23 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployment
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapStage
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapState
-import co.electriccoin.zcash.ui.common.privateusd.ConversionCurrency
+import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
-import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdToken
-import co.electriccoin.zcash.ui.common.privateusd.format
+import co.electriccoin.zcash.ui.common.privateusd.privateUsdToken
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
-import co.electriccoin.zcash.ui.common.privateusd.tokenAmount
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.design.util.stringResByQuantity
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
 import co.electriccoin.zcash.ui.screen.privateusd.about
+import co.electriccoin.zcash.ui.screen.privateusd.joinDetail
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
 import xyz.justzappit.offramp.atomicswap.AtomicSwapWait
 import xyz.justzappit.offramp.atomicswap.NothingSentCause
 import xyz.justzappit.offramp.atomicswap.RefundCause
-import java.math.BigInteger
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -35,8 +34,9 @@ import kotlin.time.Duration.Companion.seconds
 /** The steps, notes and result a conversion's progress screen shows. */
 internal class PrivateUsdProgressSteps(
     private val deployment: AtomicSwapDeployment,
-    private val token: PrivateUsdToken,
 ) {
+    private val token = deployment.privateUsdToken
+
     fun of(
         swap: AtomicSwapState,
         balance: PrivateUsdBalanceState
@@ -69,30 +69,37 @@ internal class PrivateUsdProgressSteps(
                 listOf(
                     stringRes(R.string.convert_progress_info_open),
                     stringRes(R.string.convert_progress_info_deposit),
-                    stringRes(R.string.convert_progress_info_confirm, deployment.makerConfirmations),
+                    stringResByQuantity(R.plurals.convert_progress_info_confirm, deployment.makerConfirmations),
                     stringRes(R.string.convert_progress_info_claim),
                     stringRes(R.string.convert_progress_info_screen, deployment.screeningTime.about()),
                 ),
             notes = listOf(stringRes(R.string.convert_progress_info_refund)),
         )
 
-    fun amounts(record: AtomicSwapRecord, currency: ConversionCurrency?): StringResource =
+    /** What the deposit costs in all, network fee included, as the review said, and what it brings. */
+    fun amounts(
+        record: AtomicSwapRecord,
+        currency: LocalCurrency
+    ): StringResource =
         stringRes(
             R.string.convert_progress_amounts,
-            stringRes(Zatoshi(record.quote.depositZat)),
+            stringRes(Zatoshi(record.maxTotalZat ?: record.quote.depositZat)),
             received(record, currency)
         )
 
     fun note(
         swap: AtomicSwapState,
+        now: Long,
         isSlowToOpen: Boolean
     ): StringResource? {
-        val needed = deployment.makerConfirmations
         // Enough confirmations and still no word from the maker: the app claims by itself at t0.
         val silentUntil =
-            swap.wait?.t0?.takeIf {
-                swap.wait.reason == AtomicSwapWait.CONFIRMING && (swap.confirmations ?: 0) >= needed
-            }
+            swap.wait
+                ?.t0
+                ?.takeIf {
+                    swap.wait.reason == AtomicSwapWait.CONFIRMING &&
+                        (swap.confirmations ?: 0) >= deployment.makerConfirmations
+                }?.takeIf { it > now && swap.problem == null }
         return when {
             swap.resuming -> stringRes(R.string.convert_resuming)
             AtomicSwapStage.of(swap) == AtomicSwapStage.REFUNDING -> stringRes(R.string.convert_refunding)
@@ -106,7 +113,7 @@ internal class PrivateUsdProgressSteps(
     fun result(
         record: AtomicSwapRecord,
         balance: PrivateUsdBalanceState,
-        currency: ConversionCurrency?,
+        currency: LocalCurrency,
     ): PrivateUsdResultState? =
         when (val outcome = record.outcome) {
             null -> {
@@ -117,7 +124,7 @@ internal class PrivateUsdProgressSteps(
                 PrivateUsdResultState(
                     title = stringRes(R.string.convert_result_paid_title),
                     body =
-                        if (arrival(record, balance).second) {
+                        if (arrival(record, balance) == Arrival.SCREENED) {
                             stringRes(R.string.convert_result_screened_body, received(record, currency))
                         } else {
                             val screening = deployment.screeningTime.about()
@@ -163,24 +170,21 @@ internal class PrivateUsdProgressSteps(
                     },
                 detailLines = if (index == current) listOfNotNull(eta(step, swap)) else emptyList(),
             )
-        } + tail(arrived = false, screened = false, isPaid = false)
+        } + tail(arrival = null)
     }
 
     private fun paid(
         record: AtomicSwapRecord,
         balance: PrivateUsdBalanceState,
-    ): List<ZappStep> {
-        val (arrived, screened) = arrival(record, balance)
-        return UNDER_WAY.map { ZappStep(stringRes(it.label), ZappStepStatus.Completed) } +
-            tail(arrived, screened, isPaid = true)
-    }
-
-    private fun tail(
-        arrived: Boolean,
-        screened: Boolean,
-        isPaid: Boolean,
     ): List<ZappStep> =
-        listOf(
+        UNDER_WAY.map { ZappStep(stringRes(it.label), ZappStepStatus.Completed) } + tail(arrival(record, balance))
+
+    // Arriving and screening: waiting until the payout, then as far as [arrival] has come.
+    private fun tail(arrival: Arrival?): List<ZappStep> {
+        val isPaid = arrival != null
+        val arrived = arrival == Arrival.ARRIVED || arrival == Arrival.SCREENED
+        val screened = arrival == Arrival.SCREENED
+        return listOf(
             ZappStep(
                 label = stringRes(R.string.convert_step_arrive),
                 status =
@@ -202,16 +206,21 @@ internal class PrivateUsdProgressSteps(
                 detailLines = if (arrived && !screened) listOf(deployment.screeningTime.about()) else emptyList(),
             ),
         )
+    }
 
     // A sync a moment after the payout shows it; screening is over once nothing is pending any more.
     private fun arrival(
         record: AtomicSwapRecord,
         balance: PrivateUsdBalanceState,
-    ): Pair<Boolean, Boolean> {
-        val paidAt = record.finishedAt ?: return false to false
+    ): Arrival {
+        val paidAt = record.end?.at ?: return Arrival.PAID
         val synced = balance.updatedAt?.let { it.epochSeconds >= paidAt + ARRIVAL_LAG_SECONDS } == true
         val pending = (balance.balances?.arriving?.signum() ?: 0) > 0
-        return (synced || pending) to (synced && !pending)
+        return when {
+            synced && !pending -> Arrival.SCREENED
+            synced || pending -> Arrival.ARRIVED
+            else -> Arrival.PAID
+        }
     }
 
     private fun eta(
@@ -231,7 +240,7 @@ internal class PrivateUsdProgressSteps(
                 val needed = deployment.makerConfirmations
                 val seen = (swap.confirmations ?: 0).coerceAtMost(needed)
                 val left = BLOCK_TIME * (needed - seen).coerceAtLeast(1)
-                stringRes(R.string.convert_step_confirm_count, seen, needed) + " · " + left.about()
+                joinDetail(stringRes(R.string.convert_step_confirm_count, seen, needed), left.about())
             }
 
             AtomicSwapStage.REFUNDING -> {
@@ -239,15 +248,12 @@ internal class PrivateUsdProgressSteps(
             }
         }
 
-    private fun received(record: AtomicSwapRecord, currency: ConversionCurrency?): StringResource {
-        val units = record.receives?.let(::BigInteger) ?: BigInteger(record.quote.amount)
-        return if (token.isDollar) {
-            currency.format(
-                units.toDecimal(token.decimals)
-            )
-        } else {
-            tokenAmount(units, token, estimate = true)
-        }
+    private fun received(
+        record: AtomicSwapRecord,
+        currency: LocalCurrency
+    ): StringResource {
+        val units = record.receives ?: record.quote.amount
+        return currency.format(units.micros.toDecimal(token.decimals))
     }
 
     private companion object {
@@ -279,3 +285,5 @@ private fun time(epochSeconds: Long): String =
         .ofLocalizedTime(FormatStyle.SHORT)
         .withZone(ZoneId.systemDefault())
         .format(Instant.ofEpochSecond(epochSeconds))
+
+private enum class Arrival { PAID, ARRIVED, SCREENED }

@@ -7,11 +7,8 @@ import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.common.privateusd.DollarRate
-import co.electriccoin.zcash.ui.common.privateusd.ObserveDollarRateUseCase
-import co.electriccoin.zcash.ui.common.privateusd.ObservePrivateUsdAvailableUseCase
-import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
-import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
+import co.electriccoin.zcash.ui.common.privateusd.ObservePrivateUsdSummaryUseCase
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSummary
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.usecase.BalancePools
 import co.electriccoin.zcash.ui.common.usecase.GetBalancePoolsUseCase
@@ -24,15 +21,14 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdArgs
 import co.electriccoin.zcash.ui.screen.privateusd.detail
-import co.electriccoin.zcash.ui.screen.privateusd.spendable
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import co.electriccoin.zcash.ui.screen.privateusd.headline
+import co.electriccoin.zcash.ui.screen.privateusd.placeholder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import java.math.BigDecimal
@@ -41,21 +37,13 @@ import java.math.MathContext
 class BalanceBreakdownVM(
     getBalancePools: GetBalancePoolsUseCase,
     exchangeRateRepository: ExchangeRateRepository,
-    observePrivateUsdAvailable: ObservePrivateUsdAvailableUseCase,
-    privateUsdBalanceRepository: PrivateUsdBalanceRepository,
-    observeDollarRate: ObserveDollarRateUseCase,
+    observePrivateUsdSummary: ObservePrivateUsdSummaryUseCase,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
-    @OptIn(ExperimentalCoroutinesApi::class)
     private val privateUsd: Flow<BalanceBreakdownPrivateUsdState?> =
-        observePrivateUsdAvailable()
-            .flatMapLatest { isAvailable ->
-                if (isAvailable) {
-                    combine(privateUsdBalanceRepository.observe(), observeDollarRate(), ::privateUsdState)
-                } else {
-                    flowOf(null)
-                }
-            }.onStart { emit(null) }
+        observePrivateUsdSummary()
+            .map { it?.let(::privateUsdState) }
+            .onStart { emit(null) }
 
     val state: StateFlow<BalanceBreakdownState?> =
         combine(
@@ -123,16 +111,15 @@ class BalanceBreakdownVM(
         )
     }
 
-    private fun privateUsdState(
-        balance: PrivateUsdBalanceState,
-        rate: DollarRate?
-    ) = BalanceBreakdownPrivateUsdState(
-        amount =
-            balance.balances?.spendable(rate)?.asPrivacySensitive() ?: stringRes(R.string.private_usd_home_loading),
-        detail = balance.balances?.detail(rate),
-        isBlocked = (balance.balances?.blocked?.signum() ?: 0) > 0,
-        onClick = { navigationRouter.replace(PrivateUsdArgs) },
-    )
+    private fun privateUsdState(summary: PrivateUsdSummary): BalanceBreakdownPrivateUsdState {
+        val balances = summary.balance.balances
+        return BalanceBreakdownPrivateUsdState(
+            amount = balances?.headline(summary.currency)?.asPrivacySensitive() ?: summary.balance.placeholder(),
+            detail = balances?.detail(summary.currency),
+            isBlocked = summary.isBlocked,
+            onClick = { navigationRouter.replace(PrivateUsdArgs) },
+        )
+    }
 
     private fun onBack() = navigationRouter.back()
 }

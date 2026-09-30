@@ -10,11 +10,17 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.ButtonState
+import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
+import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStepList
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
@@ -34,9 +40,12 @@ internal fun PrivateUsdProgressView(state: PrivateUsdProgressState) {
         title = stringResource(R.string.convert_title),
         info = state.info,
         onBack = state.onBack,
+        isBackEnabled = state.isBackEnabled,
         primaryButton = state.primaryButton,
+        error = state.error,
     ) {
         Header(state)
+        state.problem?.let { Problem(it) }
         state.note?.let {
             BasicText(
                 text = it.getValue(),
@@ -74,6 +83,7 @@ private fun Header(state: PrivateUsdProgressState) {
             BasicText(
                 text = result?.title?.getValue() ?: stringResource(R.string.convert_progress_title),
                 style = ZappTheme.typography.sectionTitle.copy(color = c.text),
+                modifier = Modifier.semantics { heading() },
             )
             result?.let {
                 BasicText(text = it.body.getValue(), style = ZappTheme.typography.body.copy(color = c.textMuted))
@@ -85,6 +95,27 @@ private fun Header(state: PrivateUsdProgressState) {
     }
 }
 
+@Composable
+private fun Problem(problem: PrivateUsdProblemState) {
+    val c = ZappTheme.colors
+    ZappBorderedCard(borderColor = c.danger, verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.md)) {
+        ZappSectionLabel(text = stringResource(R.string.convert_problem_title), color = c.danger)
+        BasicText(
+            text = problem.message.getValue(),
+            style = ZappTheme.typography.body.copy(color = c.text),
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        )
+        problem.onRetry?.let {
+            ZappButton(
+                text = stringResource(R.string.convert_problem_retry),
+                variant = ZappButtonVariant.Secondary,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = it,
+            )
+        }
+    }
+}
+
 @PreviewScreens
 @Composable
 private fun UnderWayPreview() =
@@ -92,7 +123,7 @@ private fun UnderWayPreview() =
         PrivateUsdProgressView(
             state =
                 PrivateUsdProgressState(
-                    amounts = stringRes("0.2020 ZEC for about $0.98"),
+                    amounts = stringRes("0.2021 ZEC for about $0.98"),
                     result = null,
                     steps =
                         listOf(
@@ -108,6 +139,40 @@ private fun UnderWayPreview() =
                             ZappStep(stringRes("Screening"), ZappStepStatus.Pending),
                         ),
                     note = null,
+                    problem = null,
+                    error = null,
+                    callOff = null,
+                    showsBackgroundNote = true,
+                    primaryButton = null,
+                    info = PrivateUsdInfo(title = stringRes("What's happening")),
+                    onBack = {},
+                ),
+        )
+    }
+
+@PreviewScreens
+@Composable
+private fun ProblemPreview() =
+    ZcashTheme {
+        PrivateUsdProgressView(
+            state =
+                PrivateUsdProgressState(
+                    amounts = stringRes("0.2021 ZEC for about $0.98"),
+                    result = null,
+                    steps =
+                        listOf(
+                            ZappStep(stringRes("Opening the swap on Ethereum"), ZappStepStatus.Completed),
+                            ZappStep(stringRes("Sending your ZEC"), ZappStepStatus.Completed),
+                            ZappStep(stringRes("Waiting for confirmations"), ZappStepStatus.Completed),
+                            ZappStep(stringRes("Claiming your dollars"), ZappStepStatus.InProgress),
+                        ),
+                    note = null,
+                    problem =
+                        PrivateUsdProblemState(
+                            message = stringRes("Zapp can't reach the relayer that sends your claim."),
+                            onRetry = {},
+                        ),
+                    error = null,
                     callOff = null,
                     showsBackgroundNote = true,
                     primaryButton = null,
@@ -124,7 +189,7 @@ private fun RefundedPreview() =
         PrivateUsdProgressView(
             state =
                 PrivateUsdProgressState(
-                    amounts = stringRes("0.2020 ZEC for about $0.98"),
+                    amounts = stringRes("0.2021 ZEC for about $0.98"),
                     result =
                         PrivateUsdResultState(
                             title = stringRes("Your ZEC came back"),
@@ -133,6 +198,8 @@ private fun RefundedPreview() =
                         ),
                     steps = emptyList(),
                     note = null,
+                    problem = null,
+                    error = null,
                     callOff = null,
                     showsBackgroundNote = false,
                     primaryButton = ButtonState(stringRes("Try again")),

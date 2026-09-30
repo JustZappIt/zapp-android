@@ -3,38 +3,45 @@
 
 package co.electriccoin.zcash.ui.common.atomicswap
 
+import cash.z.ecc.android.sdk.exception.SdkException
 import cash.z.ecc.android.sdk.model.Zatoshi
+import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
-import kotlinx.coroutines.flow.first
+import xyz.justzappit.offramp.atomicswap.AtomicSwapKeys
+import xyz.justzappit.offramp.atomicswap.AtomicSwapOffer
+import xyz.justzappit.offramp.atomicswap.ZcashTransactionStatus
+import xyz.justzappit.offramp.atomicswap.ZcashTxId
 
-/** What the screens show about a swap's Zcash side. */
+/** What the screens show about a forward swap's Zcash side. */
 class AtomicSwapZcashInfo(
     private val synchronizerProvider: SynchronizerProvider,
     private val accountDataSource: AccountDataSource,
+    private val transactions: SwapZcashTransactions,
+    private val keys: AtomicSwapKeys,
 ) {
-    /** The network fee of paying [zatoshi] to [address] from the wallet now; throws when it can't be paid. */
-    suspend fun depositFee(
-        address: String,
-        zatoshi: Long
-    ): Long =
-        synchronizerProvider
-            .getSynchronizer()
-            .proposeTransfer(accountDataSource.getZashiAccount().sdkAccount, address, Zatoshi(zatoshi))
-            .totalFeeRequired()
-            .value
-
-    /** How many blocks have mined [txId] so far, or null while the chain's height is unknown. */
-    suspend fun confirmations(txId: String): Int? {
-        val synchronizer = synchronizerProvider.getSynchronizer()
-        val minedHeight =
-            synchronizer
-                .getTransactions(accountDataSource.getZashiAccount().sdkAccount.accountUuid)
-                .first()
-                .firstOrNull { it.txId.txIdString() == txId }
-                ?.minedHeight
-        return synchronizer.networkHeight.value?.let { tip ->
-            minedHeight?.let { (tip.value - it.value + 1).toInt().coerceAtLeast(0) } ?: 0
+    /** The network fee of paying [offer]'s deposit from the wallet now, or null unless one transaction can. */
+    suspend fun depositFee(offer: AtomicSwapOffer): Long? =
+        try {
+            val proposal =
+                synchronizerProvider
+                    .getSynchronizer()
+                    .proposeTransfer(
+                        accountDataSource.getZashiAccount().sdkAccount,
+                        keys.depositAddress(offer.index, offer.quote.makerShare),
+                        Zatoshi(offer.quote.depositZat),
+                    )
+            proposal.totalFeeRequired().value.takeIf { proposal.transactionCount() == 1 }
+        } catch (e: SdkException) {
+            Twig.info { "Atomic swap: no deposit fee estimate, ${e.message}" }
+            null
         }
+
+    /** How many blocks have mined the wallet's [txId] so far, or null while the chain's height is unknown. */
+    suspend fun confirmations(txId: ZcashTxId): Int? {
+        if (synchronizerProvider.getSynchronizer().networkHeight.value == null) return null
+        val account = accountDataSource.getZashiAccount().sdkAccount.accountUuid
+        val status = transactions.find(account, txId)
+        return ((status as? ZcashTransactionStatus.Mined)?.confirmations ?: 0).toInt()
     }
 }

@@ -3,37 +3,19 @@
 
 package xyz.justzappit.offramp.atomicswap
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import xyz.justzappit.evm.math.BigInteger
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import xyz.justzappit.evm.types.Address
-
-/**
- * A ZecSwap deployment that pays into Railgun: the maker quoting it, the relayer sending the user's
- * transactions, and the contract they settle on.
- */
-data class AtomicSwapConfig(
-    val makerUrl: String,
-    val relayerUrl: String,
-    val chainId: Long,
-    val contract: Address,
-    val token: Address,
-    val railgunProxy: Address,
-    /** The most a relayer may keep from a payout, in token base units. */
-    val maxRelayerFee: BigInteger,
-    /**
-     * The soonest `t0` a swap may have: time for the deposit to get the confirmations its maker
-     * waits for. Until `t0` an unresponsive maker holds the deposit, so the latest is two hours.
-     */
-    val minSecondsToT0: Long = TEN_CONFIRMATIONS_AND_MARGIN_SECONDS,
-)
-
-// Ten Zcash confirmations take about 12.5 minutes; this leaves room for them and a margin.
-private const val TEN_CONFIRMATIONS_AND_MARGIN_SECONDS = 25 * 60L
+import xyz.justzappit.evm.types.TxHash
+import xyz.justzappit.offramp.p2p.Usdc6
 
 enum class SwapStage { OPEN, READY, CLAIMED, REFUNDED }
 
-/** `getSwap(id)` as the contract returns it. Shares are `x ‖ y`, 64 bytes. */
+/** `getSwap(id)` as the contract returns it. */
 class OnChainSwap(
     val maker: Address,
     val t0: Long,
@@ -44,37 +26,82 @@ class OnChainSwap(
     val t1: Long,
     val token: Address,
     val claimLockUntil: Long,
-    val amount: BigInteger,
+    val amount: Usdc6,
     val refundLockUntil: Long,
-    val makerShare: ByteArray,
-    val userShare: ByteArray,
+    val makerShare: SwapShare,
+    val userShare: SwapShare,
     /** The share a claim or refund revealed, once there has been one. */
     val secret: ByteArray,
-    val payoutNote: ByteArray,
+    /** All zero for a reverse swap, whose refund note the contract keeps apart. */
+    val payoutNote: NoteCommitment,
 )
 
 /** What the app keeps about a swap it accepted. Its keys derive from the seed and [index] again. */
-@Serializable
+@Serializable(with = AtomicSwapRecordSerializer::class)
 data class AtomicSwapRecord(
     val index: Int,
     val quote: SwapQuote,
-    val swapId: String,
+    val swapId: SwapId,
     /** The Zcash height read before depositing: a refund imports the deposit account from here. */
     val zcashHeight: Long,
     /** Unix seconds on this device's clock. */
     val acceptedAt: Long,
-    /** What the offer said reaches Railgun, in token base units. */
-    val receives: String? = null,
-    /** Set before the deposit is created, so an interrupted deposit is never paid twice. */
-    val depositAttempted: Boolean = false,
-    val depositTxId: String? = null,
-    val outcome: AtomicSwapOutcome? = null,
-    val finishedAt: Long? = null,
-    /** The Ethereum transaction that shielded the payout, as the relayer reported it. */
-    val payoutTx: String? = null,
+    /** What the offer said reaches Railgun; null on swaps from before it was kept. */
+    val receives: Usdc6? = null,
+    val deposit: SwapDeposit = SwapDeposit.NotStarted,
+    /** A refund's sweep home, kept before it is first sent. */
+    val sweep: ZcashTransaction? = null,
+    val end: SwapEnd? = null,
+    /** The Ethereum transaction that shielded the payout. */
+    val payoutTx: TxHash? = null,
     val maxTotalZat: Long? = null,
+    /** The relayer's fee the offer named: the most a payout may pay. Null on swaps from before it was kept. */
+    val relayerFee: Usdc6? = null,
+    val railgunKeys: RailgunKeySource = RailgunKeySource.ZCASH_SEED,
 ) {
-    val finished: Boolean get() = outcome != null
+    val outcome: AtomicSwapOutcome? get() = end?.outcome
+
+    val finished: Boolean get() = end != null
+}
+
+/** How far a swap's deposit got. It's marked started before it's created, so an interrupted one is never paid twice. */
+sealed interface SwapDeposit {
+    val txId: ZcashTxId? get() = null
+
+    /** The bytes to send again until it's mined. */
+    val transaction: ZcashTransaction? get() = null
+
+    data object NotStarted : SwapDeposit
+
+    /** Started, with no transaction known: an interruption may have cut it short. */
+    data object Started : SwapDeposit
+
+    data class Kept(
+        override val transaction: ZcashTransaction
+    ) : SwapDeposit {
+        override val txId: ZcashTxId get() = transaction.txId
+    }
+
+    /** Sent by a build that kept only its id. */
+    data class Recorded(
+        override val txId: ZcashTxId
+    ) : SwapDeposit
+}
+
+/** How a swap ended, and when on this device's clock. */
+data class SwapEnd(
+    val outcome: AtomicSwapOutcome,
+    val at: Long,
+)
+
+/** Which seed the Railgun wallet a swap's notes pay is derived from: its payout, or a reverse swap's refund. */
+@Serializable
+enum class RailgunKeySource {
+    /** The Zcash seed itself, which swaps accepted before [BIP85] committed to. */
+    ZCASH_SEED,
+
+    /** The Railgun wallet's own mnemonic, BIP-85's child of the Zcash seed: what every new swap pays. */
+    BIP85,
 }
 
 @Serializable
@@ -87,7 +114,7 @@ sealed interface AtomicSwapOutcome {
     @Serializable
     @SerialName("refunded")
     data class Refunded(
-        val sweepTxId: String,
+        val sweepTxId: ZcashTxId,
         val cause: RefundCause,
     ) : AtomicSwapOutcome
 
@@ -127,94 +154,101 @@ enum class AtomicSwapWait {
     OPENING,
     CONFIRMING,
 
-    /** A deposit was started but can't be found, and it's too late to pay it: the maker will call it off. */
+    /** The maker called the swap off while the deposit was unmined: it comes home if it is mined. */
     DEPOSIT_UNSETTLED,
+
+    /** The refunded deposit is on its way home. */
+    REFUNDING,
 }
 
 enum class AtomicSwapActivity { DEPOSITING, CLAIMING, PAYING_OUT, SWEEPING }
 
-/** A quote for swap [index], not accepted yet. [receives] is the payout after the relayer's and Railgun's fees. */
+/** A quote for swap [index], not accepted yet. [receives] reaches Railgun after the relayer's and Railgun's fees. */
 data class AtomicSwapOffer(
     val index: Int,
-    val units: Int,
+    val requested: Usdc6,
     val quote: SwapQuote,
-    val relayerFee: BigInteger,
-    val receives: BigInteger,
+    val relayerFee: Usdc6,
+    val receives: Usdc6,
+    val railgunKeys: RailgunKeySource,
     val maxTotalZat: Long? = null,
 )
 
-/** `POST /v1/quote`'s answer. Addresses, ids, shares and proofs are `0x` hex; `amount` is decimal. */
-@Serializable
-data class SwapQuote(
-    val quoteId: String,
-    val maker: String,
-    val makerShare: String,
-    val makerProof: String,
-    val chainId: Long,
-    val contract: String,
-    val token: String,
-    val amount: String,
-    val depositZat: Long,
-    val expiresAt: Long,
-)
+/** [AtomicSwapRecord] as every build has written it: flat, with the deposit and the end as flags and nullables. */
+internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
+    override val descriptor: SerialDescriptor = Stored.serializer().descriptor
 
-@Serializable
-internal data class QuoteRequest(
-    val units: Int,
-    val payout: String,
-    val payoutNote: String,
-)
+    override fun serialize(
+        encoder: Encoder,
+        value: AtomicSwapRecord
+    ) = encoder.encodeSerializableValue(Stored.serializer(), Stored.of(value))
 
-@Serializable
-internal data class AcceptRequest(
-    val userShare: String,
-    val userProof: String,
-    val viewingKeys: String,
-)
+    override fun deserialize(decoder: Decoder): AtomicSwapRecord =
+        decoder.decodeSerializableValue(Stored.serializer()).record()
 
-@Serializable
-internal data class Accepted(
-    val swapId: String
-)
+    @Serializable
+    private class Stored(
+        val index: Int,
+        val quote: SwapQuote,
+        val swapId: SwapId,
+        val zcashHeight: Long,
+        val acceptedAt: Long,
+        val receives: Usdc6? = null,
+        val depositAttempted: Boolean = false,
+        val depositTxId: ZcashTxId? = null,
+        val outcome: AtomicSwapOutcome? = null,
+        val finishedAt: Long? = null,
+        val payoutTx: TxHash? = null,
+        val maxTotalZat: Long? = null,
+        val deposit: ZcashTransaction? = null,
+        val sweep: ZcashTransaction? = null,
+        val relayerFee: Usdc6? = null,
+        val railgunKeys: RailgunKeySource = RailgunKeySource.ZCASH_SEED,
+    ) {
+        // Every build sets the outcome and its time together, and a deposit's id with its bytes.
+        fun record() =
+            AtomicSwapRecord(
+                index = index,
+                quote = quote,
+                swapId = swapId,
+                zcashHeight = zcashHeight,
+                acceptedAt = acceptedAt,
+                receives = receives,
+                deposit =
+                    when {
+                        deposit != null -> SwapDeposit.Kept(deposit)
+                        depositTxId != null -> SwapDeposit.Recorded(depositTxId)
+                        depositAttempted -> SwapDeposit.Started
+                        else -> SwapDeposit.NotStarted
+                    },
+                sweep = sweep,
+                end = outcome?.let { SwapEnd(it, finishedAt ?: acceptedAt) },
+                payoutTx = payoutTx,
+                maxTotalZat = maxTotalZat,
+                relayerFee = relayerFee,
+                railgunKeys = railgunKeys,
+            )
 
-@Serializable
-internal data class RelayerTerms(
-    val relayer: String,
-    val chainId: Long,
-    val contract: String,
-    val fee: String,
-)
-
-@Serializable
-internal data class LockClaimRequest(
-    val swapId: String,
-    val deadline: Long,
-    val signature: String,
-)
-
-@Serializable
-internal data class ClaimRequest(
-    val swapId: String,
-    val secret: String,
-    val payout: PayoutRequest,
-)
-
-@Serializable
-internal data class PayoutRequest(
-    val swapId: String,
-    val note: NoteJson,
-    val fee: String,
-    val signature: String,
-)
-
-@Serializable
-internal data class NoteJson(
-    val npk: String,
-    val encryptedBundle: List<String>,
-    val shieldKey: String,
-)
-
-@Serializable
-internal data class Sent(
-    val transactions: List<String>
-)
+        companion object {
+            fun of(record: AtomicSwapRecord) =
+                Stored(
+                    index = record.index,
+                    quote = record.quote,
+                    swapId = record.swapId,
+                    zcashHeight = record.zcashHeight,
+                    acceptedAt = record.acceptedAt,
+                    receives = record.receives,
+                    depositAttempted = record.deposit != SwapDeposit.NotStarted,
+                    depositTxId = record.deposit.txId,
+                    outcome = record.end?.outcome,
+                    finishedAt = record.end?.at,
+                    payoutTx = record.payoutTx,
+                    maxTotalZat = record.maxTotalZat,
+                    deposit = record.deposit.transaction,
+                    sweep = record.sweep,
+                    relayerFee = record.relayerFee,
+                    railgunKeys = record.railgunKeys,
+                )
+        }
+    }
+}
