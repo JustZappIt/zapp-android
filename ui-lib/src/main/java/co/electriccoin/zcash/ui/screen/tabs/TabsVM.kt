@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.sdk.model.FiatCurrency
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
+import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
 import co.electriccoin.zcash.ui.common.model.P2pRail
 import co.electriccoin.zcash.ui.common.pricing.usecase.PrewarmPortfolioHistoryUseCase
 import co.electriccoin.zcash.ui.common.provider.IsExchangeRateEnabledStorageProvider
@@ -15,6 +17,8 @@ import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetPeerActiveOrdersUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToSelectFiatCurrencyUseCase
 import co.electriccoin.zcash.ui.screen.accountlist.AccountListArgs
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.atomicswap.DebugAtomicSwapArgs
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.railgun.DebugRailgunArgs
 import co.electriccoin.zcash.ui.screen.chat.ChatContactsArgs
 import co.electriccoin.zcash.ui.screen.chat.ChatProfileArgs
 import co.electriccoin.zcash.ui.screen.chat.ChatSettingsArgs
@@ -46,7 +50,11 @@ class TabsVM(
     private val prewarmPortfolioHistory: PrewarmPortfolioHistoryUseCase,
     private val getPeerActiveOrders: GetPeerActiveOrdersUseCase,
     private val peerCashOutRepository: PeerCashOutRepository,
+    atomicSwapDeployments: AtomicSwapDeployments,
 ) : ViewModel() {
+    /** The Railgun and conversion debug screens: debug builds that have conversions only. */
+    val hasConversionDebug = BuildConfig.DEBUG && atomicSwapDeployments.current != null
+
     init {
         // Chats is the initial tab, so fill the small default price window in parallel with
         // normal chat use. This does not wait for wallet transactions or trigger an All backfill.
@@ -106,6 +114,10 @@ class TabsVM(
     fun onViewingKeyExportClick() = navigationRouter.forward(ViewingKeyExportArgs)
 
     fun onHardwareWalletClick() = navigationRouter.forward(AccountListArgs)
+
+    fun onRailgunWalletClick() = navigationRouter.forward(DebugRailgunArgs)
+
+    fun onAtomicSwapClick() = navigationRouter.forward(DebugAtomicSwapArgs)
 
     fun onRestoreWalletClick() = navigationRouter.forward(RestoreSeedArgs)
 

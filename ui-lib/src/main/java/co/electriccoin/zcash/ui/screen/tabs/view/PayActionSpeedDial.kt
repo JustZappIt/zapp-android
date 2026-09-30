@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallReceived
 import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Wallet
@@ -28,6 +29,7 @@ internal fun PayActionSpeedDial(
     onReceive: () -> Unit,
     onBuyUsdc: () -> Unit,
     onGift: () -> Unit,
+    onPrivateUsd: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -35,7 +37,7 @@ internal fun PayActionSpeedDial(
         expandContentDescription = stringResource(R.string.home_fab_actions_expand),
         collapseContentDescription = stringResource(R.string.home_fab_actions_collapse),
         actions =
-            listOf(
+            listOfNotNull(
                 ZappSpeedDialAction(
                     icon = Icons.Default.Wallet,
                     label = stringResource(R.string.onramp_speed_dial_buy_usdc),
@@ -56,6 +58,13 @@ internal fun PayActionSpeedDial(
                     label = stringResource(R.string.home_button_swap),
                     onClick = onSwap,
                 ),
+                onPrivateUsd?.let {
+                    ZappSpeedDialAction(
+                        icon = Icons.Default.CurrencyExchange,
+                        label = stringResource(R.string.private_usd_title),
+                        onClick = it,
+                    )
+                },
                 ZappSpeedDialAction(
                     icon = Icons.Default.CardGiftcard,
                     label = stringResource(R.string.gift_card_speed_dial),

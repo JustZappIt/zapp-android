@@ -4,6 +4,7 @@ package co.electriccoin.zcash.ui.design.util
 
 import android.content.Context
 import android.icu.util.Currency
+import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -27,6 +28,11 @@ sealed interface StringResource {
     data class ByResource(
         @param:StringRes val resource: Int,
         val args: List<Any>
+    ) : StringResource
+
+    data class ByQuantity(
+        @param:PluralsRes val resource: Int,
+        val quantity: Int,
     ) : StringResource
 
     @JvmInline
@@ -128,6 +134,13 @@ fun stringRes(
 @Stable
 fun stringRes(value: String): StringResource =
     StringResource.ByString(value)
+
+/** A plural resource in the form [quantity] takes, with [quantity] its one argument. */
+@Stable
+fun stringResByQuantity(
+    @PluralsRes resource: Int,
+    quantity: Int,
+): StringResource = StringResource.ByQuantity(resource, quantity)
 
 @Stable
 fun stringRes(zatoshi: Zatoshi, tickerLocation: TickerLocation = TickerLocation.AFTER): StringResource =
@@ -244,6 +257,7 @@ fun StringResource.getString(
     val string =
         when (this) {
             is StringResource.ByResource -> convertResource(context)
+            is StringResource.ByQuantity -> convertQuantity(context)
             is StringResource.ByString -> value
             is StringResource.ByZatoshi -> convertZatoshi()
             is StringResource.ByCurrencyNumber -> convertCurrencyNumber()
@@ -278,6 +292,9 @@ private fun StringResource.ByResource.convertResource(context: StringContext) =
         resource,
         *args.map { if (it is StringResource) it.getString(context) else it }.toTypedArray()
     )
+
+private fun StringResource.ByQuantity.convertQuantity(context: StringContext) =
+    context.context.resources.getQuantityString(resource, quantity, quantity)
 
 private fun StringResource.ByNumber.convertNumber(): String =
     convertNumberToString(number, minDecimals, maxDecimals, includeGroupingSeparator)

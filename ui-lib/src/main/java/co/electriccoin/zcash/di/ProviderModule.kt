@@ -2,8 +2,27 @@ package co.electriccoin.zcash.di
 
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.BuildConfig
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapKeysImpl
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapNotifier
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRecords
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapScheduler
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapSessions
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapStoreImpl
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapZcashImpl
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapZcashInfo
+import co.electriccoin.zcash.ui.common.atomicswap.JointAccounts
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapKeysImpl
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRecords
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapStoreImpl
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapZcashImpl
+import co.electriccoin.zcash.ui.common.atomicswap.SwapKeyring
+import co.electriccoin.zcash.ui.common.atomicswap.SwapZcashTransactions
 import co.electriccoin.zcash.ui.common.pricing.provider.HistoricalPriceCacheProvider
 import co.electriccoin.zcash.ui.common.pricing.provider.HistoricalPriceCacheProviderImpl
+import co.electriccoin.zcash.ui.common.privateusd.GasAccountTransactions
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendLog
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
 import co.electriccoin.zcash.ui.common.provider.AndroidOnrampDeviceSignalsProvider
 import co.electriccoin.zcash.ui.common.provider.ApplicationStateProvider
 import co.electriccoin.zcash.ui.common.provider.ApplicationStateProviderImpl
@@ -76,6 +95,10 @@ import co.electriccoin.zcash.ui.common.provider.PreferredP2pPaymentMethodProvide
 import co.electriccoin.zcash.ui.common.provider.PreferredP2pPaymentMethodProviderImpl
 import co.electriccoin.zcash.ui.common.provider.ProvingParamsProvider
 import co.electriccoin.zcash.ui.common.provider.ProvingParamsProviderImpl
+import co.electriccoin.zcash.ui.common.provider.RailgunKeyProvider
+import co.electriccoin.zcash.ui.common.provider.RailgunKeyProviderImpl
+import co.electriccoin.zcash.ui.common.provider.RailgunMnemonicProvider
+import co.electriccoin.zcash.ui.common.provider.RailgunMnemonicProviderImpl
 import co.electriccoin.zcash.ui.common.provider.RealOfframpBridgeWallet
 import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProvider
 import co.electriccoin.zcash.ui.common.provider.ReceivedGiftStorageProviderImpl
@@ -116,10 +139,13 @@ import co.electriccoin.zcash.ui.common.push.PushRegistrar
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.screen.gift.model.PendingGiftLinkStore
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpTimeout
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.qualifier.named
 import org.koin.dsl.bind
+import org.koin.dsl.binds
 import org.koin.dsl.module
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.rpc.BundlerClient
@@ -131,6 +157,12 @@ import xyz.justzappit.offramp.account.OfframpAccountProvider
 import xyz.justzappit.offramp.account.SeedPhraseSource
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
 import xyz.justzappit.offramp.account.StaticOfframpAccountProvider
+import xyz.justzappit.offramp.atomicswap.AtomicSwapKeys
+import xyz.justzappit.offramp.atomicswap.AtomicSwapStore
+import xyz.justzappit.offramp.atomicswap.AtomicSwapZcash
+import xyz.justzappit.offramp.atomicswap.ReverseSwapKeys
+import xyz.justzappit.offramp.atomicswap.ReverseSwapStore
+import xyz.justzappit.offramp.atomicswap.ReverseSwapZcash
 import xyz.justzappit.offramp.config.P2pConfigProvider
 import xyz.justzappit.offramp.config.P2pNetworkConfig
 import xyz.justzappit.offramp.config.P2pNetworks
@@ -164,6 +196,8 @@ import xyz.justzappit.offramp.peer.PeerIndexerClient
 import xyz.justzappit.offramp.peer.PeerNetworkConfig
 import xyz.justzappit.offramp.peer.PeerOracleRate
 import xyz.justzappit.offramp.peer.UnavailablePeerCashOutOrchestrator
+import xyz.justzappit.railgun.RailgunEndpoints
+import xyz.justzappit.railgun.RailgunWallet
 import java.util.Locale
 
 const val OFFRAMP_HTTP_CLIENT_QUALIFIER = "offramp_http"
@@ -491,4 +525,48 @@ val providerModule =
         singleOf(::HasSeenHowToVoteKeystoneStorageProviderImpl) bind
             HasSeenHowToVoteKeystoneStorageProvider::class
         factoryOf(::IsBackgroundExecutionAvailableProvider)
+        single { RailgunWallet(context = get(), debug = BuildConfig.DEBUG) }
+        singleOf(::AtomicSwapKeysImpl) binds arrayOf(AtomicSwapKeys::class, SwapKeyring::class)
+        singleOf(::ReverseSwapKeysImpl) bind ReverseSwapKeys::class
+        singleOf(::AtomicSwapStoreImpl) bind AtomicSwapRecords::class bind AtomicSwapStore::class
+        singleOf(::ReverseSwapStoreImpl) bind ReverseSwapRecords::class bind ReverseSwapStore::class
+        singleOf(::SwapZcashTransactions)
+        singleOf(::JointAccounts)
+        singleOf(::AtomicSwapZcashImpl) bind AtomicSwapZcash::class
+        singleOf(::ReverseSwapZcashImpl) bind ReverseSwapZcash::class
+        singleOf(::AtomicSwapZcashInfo)
+        singleOf(::AtomicSwapDeployments)
+        single {
+            AtomicSwapSessions(
+                http = get(named(ATOMIC_SWAP_HTTP)),
+                keys = get(),
+                zcash = get(),
+                store = get(),
+                reverseKeys = get(),
+                reverseZcash = get(),
+                reverseStore = get(),
+                wallet = get(),
+            )
+        }
+        // No retries: a quote is single-use and an accept or claim that timed out may have landed.
+        // Minutes of timeout, since an accept waits for the maker's `open` and a relayer for a receipt.
+        single(named(ATOMIC_SWAP_HTTP)) {
+            HttpClient(OkHttp) {
+                engine { config { retryOnConnectionFailure(false) } }
+                install(HttpTimeout) {
+                    requestTimeoutMillis = ATOMIC_SWAP_TIMEOUT_MILLIS
+                    socketTimeoutMillis = ATOMIC_SWAP_TIMEOUT_MILLIS
+                }
+            }
+        }
+        singleOf(::RailgunKeyProviderImpl) bind RailgunKeyProvider::class
+        singleOf(::RailgunMnemonicProviderImpl) bind RailgunMnemonicProvider::class
+        singleOf(::AtomicSwapNotifier)
+        singleOf(::AtomicSwapScheduler)
+        singleOf(::PrivateUsdSenders)
+        single { GasAccountTransactions(BaseRpcClient(RpcHttpClient.create(), RailgunEndpoints.SEPOLIA_RPC_URL)) }
+        singleOf(::PrivateUsdSendLog)
     }
+
+internal const val ATOMIC_SWAP_HTTP = "atomicswap_http"
+private const val ATOMIC_SWAP_TIMEOUT_MILLIS = 180_000L

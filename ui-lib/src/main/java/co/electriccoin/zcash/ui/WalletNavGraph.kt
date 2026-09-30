@@ -24,10 +24,14 @@ import co.electriccoin.zcash.ui.screen.advancedsettings.AdvancedSettingsArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.AdvancedSettingsScreen
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.DebugArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.DebugScreen
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.atomicswap.DebugAtomicSwapArgs
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.atomicswap.DebugAtomicSwapScreen
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBScreen
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceScreen
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.railgun.DebugRailgunArgs
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.railgun.DebugRailgunScreen
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.text.DebugTextArgs
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.text.DebugTextScreen
 import co.electriccoin.zcash.ui.screen.balances.breakdown.BalanceBreakdownArgs
@@ -120,6 +124,16 @@ import co.electriccoin.zcash.ui.screen.more.MoreArgs
 import co.electriccoin.zcash.ui.screen.more.MoreScreen
 import co.electriccoin.zcash.ui.screen.onramp.OnrampArgs
 import co.electriccoin.zcash.ui.screen.onramp.OnrampScreen
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdArgs
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdScreen
+import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
+import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertScreen
+import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
+import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressScreen
+import co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseArgs
+import co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseScreen
+import co.electriccoin.zcash.ui.screen.privateusd.send.PrivateUsdSendArgs
+import co.electriccoin.zcash.ui.screen.privateusd.send.PrivateUsdSendScreen
 import co.electriccoin.zcash.ui.screen.qrcode.QrCodeScreen
 import co.electriccoin.zcash.ui.screen.receive.ReceiveAddressType
 import co.electriccoin.zcash.ui.screen.receive.ReceiveArgs
@@ -425,6 +439,13 @@ fun NavGraphBuilder.walletNavGraph(
         composable<DebugArgs> { DebugScreen() }
         composable<DebugDBArgs> { DebugDBScreen() }
         composable<DebugOrchardBalanceArgs> { DebugOrchardBalanceScreen() }
+        composable<DebugRailgunArgs> { DebugRailgunScreen() }
+        composable<DebugAtomicSwapArgs> { DebugAtomicSwapScreen() }
+        composable<PrivateUsdArgs> { PrivateUsdScreen() }
+        composable<PrivateUsdReverseArgs> { PrivateUsdReverseScreen() }
+        composable<PrivateUsdConvertArgs> { PrivateUsdConvertScreen() }
+        composable<PrivateUsdProgressArgs> { PrivateUsdProgressScreen() }
+        composable<PrivateUsdSendArgs> { PrivateUsdSendScreen(it.toRoute()) }
         dialogComposable<DebugTextArgs> { DebugTextScreen(it.toRoute()) }
         composable<ResyncConfirmArgs> { ResyncConfirmScreen() }
         composable<ResyncDateArgs> { ResyncDateScreen(it.toRoute()) }

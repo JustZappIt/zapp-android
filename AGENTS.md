@@ -11,7 +11,7 @@ Kotlin + Jetpack Compose, Koin DI (not Hilt), Gradle 8.14.4 via wrapper.
   The system default `java` (25) fails at startup with `IllegalArgumentException: 25`.
 - NDK `27.0.12077973` and CMake `4.1.2` (bare-kit native build). `ANDROID_JVM_TARGET=1.8`
   is intentional, never change.
-- Sibling checkouts are required next to this repo: `../zappMessaging` and `../bare-kit`.
+- Sibling checkouts are required next to this repo: `../zappMessaging`, `../bare-kit`, and `../zecSwap`.
   `../zcash-android-wallet-sdk` is optional (absent → SDK comes from Maven snapshots).
   `../zodl-android` is the upstream reference clone, READ-ONLY, never edit it.
 
@@ -64,7 +64,7 @@ crashes in the biometric gate on emulators. `adb shell pm clear <package>` recov
 
 ## Upstream & sibling coupling (landmines)
 
-- `.zapp-deps` pins the `zappMessaging`, `bare-kit`, and `zcashAndroidWalletSdk` SHAs. Bumping one
+- `.zapp-deps` pins the `zappMessaging`, `bare-kit`, `zecSwap`, and `zcashAndroidWalletSdk` SHAs. Bumping one
   means checking out the new SHA in the sibling as well; nothing in this repository does it for
   you. The `.zapp-deps` comments refer to a CI check that runs on the private repository, which is
   where the workflows live.
@@ -73,6 +73,10 @@ crashes in the biometric gate on emulators. `adb shell pm clear <package>` recov
 - All P2P logic lives in `zappMessaging/core/` (JS). After any JS change there, run
   `npm run build:android` in `../zappMessaging` (regenerates the committed
   `android/src/main/assets/worklet.bundle`). Never rebuild the bundle for Kotlin-only changes.
+- The Railgun wallet runs Railgun's wallet SDK in a hidden WebView. Its JS lives in
+  `railgun-lib/web`. After changing that JS or its lockfile, run `npm ci --ignore-scripts && npm run build` there,
+  which regenerates the committed `railgun-lib/src/main/assets/railgun/`, then `npm run check`,
+  which syncs Sepolia in headless Chrome over the app's message protocol.
 - New typed chat messages = new `contentType` + JSON payload on the Kotlin side only
   (`ui-lib/.../screen/chat/model/ChatModels.kt`); no JS/worklet change needed. Only new IPC
   message types in `ipc-handler.js` need mirroring in the Kotlin AND Swift SDK wrappers.
@@ -89,7 +93,10 @@ crashes in the biometric gate on emulators. `adb shell pm clear <package>` recov
   `RepositoryModule`, `ProviderModule`, `MapperModule`. Not a new module file).
 - `ui-design-lib`: design system; new Zapp components go in `component/zapp/`, one per file.
 - `evm-lib`, `offramp-lib`: pure-JVM KMP (host-testable); keep Android deps out.
-- `:zappmessaging`, `:bare-kit`: external sibling Gradle projects.
+- `railgun-lib`: the hidden WebView host and `RailgunWallet` API. The page gets one message port
+  and loads only its own assets.
+- `:zappmessaging`, `:bare-kit`, `:zecswap`: external sibling Gradle projects. `zecSwap` includes
+  the atomic swap Kotlin wrapper and prebuilt Android native libraries; app builds need no Rust toolchain.
 
 ## Style essentials (fork-specific, enforced in review)
 

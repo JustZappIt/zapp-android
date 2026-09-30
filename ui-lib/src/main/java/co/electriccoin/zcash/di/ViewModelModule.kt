@@ -10,8 +10,10 @@ import co.electriccoin.zcash.ui.screen.addressbook.AddressBookVM
 import co.electriccoin.zcash.ui.screen.addressbook.SelectABRecipientVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.AdvancedSettingsVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.DebugVM
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.atomicswap.DebugAtomicSwapVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.DebugDBVM
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.orchardbalance.DebugOrchardBalanceVM
+import co.electriccoin.zcash.ui.screen.advancedsettings.debug.railgun.DebugRailgunVM
 import co.electriccoin.zcash.ui.screen.balances.BalanceWidgetVM
 import co.electriccoin.zcash.ui.screen.balances.breakdown.BalanceBreakdownVM
 import co.electriccoin.zcash.ui.screen.balances.spendable.SpendableBalanceVM
@@ -53,6 +55,12 @@ import co.electriccoin.zcash.ui.screen.more.MoreVM
 import co.electriccoin.zcash.ui.screen.onboarding.OnboardingSecurityVM
 import co.electriccoin.zcash.ui.screen.onboarding.ZappRestoreFlowVM
 import co.electriccoin.zcash.ui.screen.onramp.OnrampVM
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdVM
+import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertVM
+import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressVM
+import co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseVM
+import co.electriccoin.zcash.ui.screen.privateusd.send.PrivateUsdSendVM
+import co.electriccoin.zcash.ui.screen.privateusd.widget.PrivateUsdWidgetVM
 import co.electriccoin.zcash.ui.screen.qrcode.QrCodeVM
 import co.electriccoin.zcash.ui.screen.receive.ReceiveVM
 import co.electriccoin.zcash.ui.screen.reputation.ReputationVM
@@ -250,6 +258,14 @@ val viewModelModule =
         viewModelOf(::DebugVM)
         viewModelOf(::DebugDBVM)
         viewModelOf(::DebugOrchardBalanceVM)
+        viewModelOf(::DebugRailgunVM)
+        viewModelOf(::DebugAtomicSwapVM)
+        viewModelOf(::PrivateUsdWidgetVM)
+        viewModelOf(::PrivateUsdVM)
+        viewModelOf(::PrivateUsdReverseVM)
+        viewModelOf(::PrivateUsdConvertVM)
+        viewModelOf(::PrivateUsdProgressVM)
+        viewModelOf(::PrivateUsdSendVM)
         viewModelOf(::TEXUnsupportedVM)
         viewModelOf(::InsufficientFundsVM)
         viewModelOf(::TopUpVM)

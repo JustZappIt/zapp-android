@@ -1,0 +1,286 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
+
+package xyz.justzappit.offramp.atomicswap
+
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.Url
+import io.ktor.http.content.OutgoingContent
+import io.ktor.http.headersOf
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import xyz.justzappit.evm.abi.Selector4
+import xyz.justzappit.evm.math.bigIntegerValueOf
+import xyz.justzappit.evm.rpc.BaseRpcClient
+import xyz.justzappit.evm.rpc.TransactionStatus
+import xyz.justzappit.evm.types.Address
+import xyz.justzappit.evm.types.ChainId
+import xyz.justzappit.evm.types.TxHash
+import xyz.justzappit.evm.util.hexToBytes
+import xyz.justzappit.evm.util.toHex
+import xyz.justzappit.offramp.p2p.Usdc6
+import kotlin.test.Test
+import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class AtomicSwapChainTest {
+    @Test
+    fun swapIdMatchesZecSwapsVector() {
+        val maker = Address.parse("0x09eD1F966745Be18C711C346242c0974DAd7c3e5")
+        val userShare =
+            SwapShare.parse(
+                "0x0b42629d5b3f787aba7ccde87574c13f6db6b8fccb7c5cfeb3f4e4081c756461" +
+                    "311662156525fcaa692aeef5d2362c2a9ab2083cd6d968c618aec72617aa925a"
+            )
+        assertEquals(
+            "0x297f1ca9d44ff7136dbddb0720ecadc040229e22c03ad0f9e4c648212bfc7b66",
+            SwapId.of(maker, userShare).hex,
+        )
+    }
+
+    @Test
+    fun decodesGetSwapsSixteenWords() {
+        val swap = AtomicSwapChain.decodeSwap(swapWords(stage = 2))!!
+        assertEquals(Address.parse("0x09eD1F966745Be18C711C346242c0974DAd7c3e5"), swap.maker)
+        assertEquals(1_790_000_000, swap.t0)
+        assertEquals(SwapStage.READY, swap.stage)
+        assertTrue(swap.paidOut)
+        assertEquals(Address.parse("0x4444444444444444444444444444444444444444"), swap.user)
+        assertEquals(1_790_000_300, swap.t1)
+        assertEquals(1_789_999_000, swap.claimLockUntil)
+        assertEquals(Usdc6.ofMicros(1_000_000), swap.amount)
+        assertEquals(SwapShare.of(filled(0x0a) + filled(0x0b)), swap.makerShare)
+        assertEquals(SwapShare.of(filled(0x0c) + filled(0x0d)), swap.userShare)
+        assertContentEquals(filled(0x0e), swap.secret)
+        assertEquals(NoteCommitment.of(filled(0x0f)), swap.payoutNote)
+    }
+
+    @Test
+    fun aSwapThatIsNotOpenDecodesToNull() {
+        assertNull(AtomicSwapChain.decodeSwap(ByteArray(16 * 32)))
+    }
+
+    @Test
+    fun aShortOrUnknownAnswerIsUnreadable() {
+        val short = assertFailsWith<AtomicSwapBlockedException> { AtomicSwapChain.decodeSwap(ByteArray(15 * 32)) }
+        assertEquals(AtomicSwapBlock.CHAIN_UNREADABLE, short.reason)
+        val stage = ByteArray(16 * 32).also { it[3 * 32 - 1] = 9 }
+        val unknown = assertFailsWith<AtomicSwapBlockedException> { AtomicSwapChain.decodeSwap(stage) }
+        assertEquals(AtomicSwapBlock.CHAIN_UNREADABLE, unknown.reason)
+    }
+
+    @Test
+    fun aPayoutIsLookedForAroundTheBlockItsTimeFallsIn() =
+        runTest {
+            val node = Node()
+            val id = SwapId.of(filled(0x5c))
+
+            val tx = node.chain.payoutTx(id, near = NOW - 3_600)
+
+            assertEquals(TxHash.fromHex(PAYOUT_TX), tx)
+            val filter = node.logFilters.single()
+            assertEquals("0x" + (LATEST - 300 - 5_000).toString(16), filter["fromBlock"]!!.jsonPrimitive.content)
+            assertEquals("0x" + LATEST.toString(16), filter["toBlock"]!!.jsonPrimitive.content)
+            assertEquals(id.hex, filter["topics"]!!.jsonArray[1].jsonPrimitive.content)
+            node.close()
+        }
+
+    @Test
+    fun aReverseSwapIsReadWhereItsEscrowHasItsConfirmations() =
+        runTest {
+            val node = Node()
+
+            val state = node.chain.read(SwapId.of(filled(0x5c)))
+
+            val confirmed = "0x" + (LATEST - 3 + 1).toString(16)
+            assertEquals(listOf(confirmed, confirmed), node.callTags(GET_SWAP) + node.callTags(REVERSE_FUNDING))
+            assertEquals(SwapStage.OPEN, state.swap?.stage)
+            assertEquals(NoteCommitment.of(filled(0x06)), state.refundNote)
+            assertEquals(LATEST - 5, state.fundingBlock)
+            assertEquals(LATEST, state.block)
+            assertEquals(NOW, state.now)
+            assertEquals(600, state.lockDuration)
+            node.close()
+        }
+
+    @Test
+    fun theLockDurationIsReadOnceForBothDirections() =
+        runTest {
+            val node = Node()
+
+            node.chain.read(SwapId.of(filled(0x5c)))
+            node.chain.read(SwapId.of(filled(0x5c)))
+
+            assertEquals(600, node.chain.lockDuration())
+            assertEquals(1, node.callTags(LOCK_DURATION).size)
+            node.close()
+        }
+
+    @Test
+    fun aNodeOnAnotherChainIsNeverReadForAReverseSwap() =
+        runTest {
+            val node = Node(chainId = 1)
+
+            val refused = assertFailsWith<AtomicSwapBlockedException> { node.chain.read(SwapId.of(filled(0x5c))) }
+            assertEquals(AtomicSwapBlock.WRONG_DEPLOYMENT, refused.reason)
+            assertTrue(node.callTags(GET_SWAP).isEmpty())
+            node.close()
+        }
+
+    @Test
+    fun aFundingCountsOnlyOnceItHasItsConfirmations() =
+        runTest {
+            val node = Node()
+            val funding = TxHash.fromHex(FUNDING_TX)
+
+            assertEquals(TransactionStatus.UNKNOWN, node.chain.fundingStatus(funding))
+            node.known = true
+            assertEquals(TransactionStatus.PENDING, node.chain.fundingStatus(funding))
+            node.receipt = LATEST - 1 to "0x1"
+            assertEquals(TransactionStatus.PENDING, node.chain.fundingStatus(funding))
+            node.receipt = LATEST - 2 to "0x1"
+            assertEquals(TransactionStatus.CONFIRMED, node.chain.fundingStatus(funding))
+            node.receipt = LATEST - 2 to "0x0"
+            assertEquals(TransactionStatus.REVERTED, node.chain.fundingStatus(funding))
+            node.close()
+        }
+
+    @Test
+    fun aVaultHoldsWhatTheTokenSaysItDoes() =
+        runTest {
+            val node = Node()
+
+            assertEquals(Usdc6.ofMicros(900_000), node.chain.vaultBalance(SwapId.of(filled(0x5c))))
+            node.close()
+        }
+
+    /** A JSON-RPC node that answers what the reader asks, and remembers how it was asked. */
+    private class Node(
+        chainId: Long = 11_155_111,
+    ) {
+        val logFilters = mutableListOf<JsonObject>()
+        private val calls = mutableListOf<Pair<String, String>>()
+        var known = false
+        var receipt: Pair<Long, String>? = null
+        private val engine =
+            MockEngine { request ->
+                val body = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                val payload = Json.parseToJsonElement(body).jsonObject
+                val params = payload["params"]!!.jsonArray
+                val result =
+                    when (payload["method"]!!.jsonPrimitive.content) {
+                        "eth_chainId" -> "\"0x${chainId.toString(16)}\""
+                        "eth_getBlockByNumber" -> HEAD_BLOCK
+                        "eth_call" -> call(params)
+                        "eth_getLogs" -> PAYOUT_LOGS.also { logFilters += params[0].jsonObject }
+                        "eth_getTransactionReceipt" -> receiptJson()
+                        "eth_getTransactionByHash" -> if (known) """{"hash":"$FUNDING_TX"}""" else "null"
+                        else -> error("unexpected ${payload["method"]}")
+                    }
+                respond(
+                    """{"jsonrpc":"2.0","id":1,"result":$result}""",
+                    HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentType, "application/json"),
+                )
+            }
+        private val http = HttpClient(engine) { install(ContentNegotiation) { json() } }
+        val chain = AtomicSwapChain(BaseRpcClient(http, "http://mock/rpc"), DEPLOYMENT)
+
+        fun callTags(signature: String) = calls.filter { it.first == selector(signature) }.map { it.second }
+
+        fun close() = http.close()
+
+        private fun call(params: JsonArray): String {
+            val data = params[0].jsonObject["data"]!!.jsonPrimitive.content
+            val selector = data.take(10)
+            calls += selector to params[1].jsonPrimitive.content
+            val words =
+                when (selector) {
+                    selector(GET_SWAP) -> swapWords(stage = 1)
+                    selector(REVERSE_FUNDING) -> filled(0x06) + uint(LATEST - 5)
+                    selector(LOCK_DURATION) -> uint(600)
+                    selector(VAULT_OF) -> address("7777777777777777777777777777777777777777")
+                    selector(BALANCE_OF) -> uint(900_000)
+                    else -> error("unexpected call $selector")
+                }
+            return "\"0x${words.toHex()}\""
+        }
+
+        private fun receiptJson(): String =
+            receipt?.let { (block, status) ->
+                """{"transactionHash":"$FUNDING_TX","blockNumber":"0x${block.toString(16)}","status":"$status",""" +
+                    """"gasUsed":"0x1"}"""
+            } ?: "null"
+    }
+
+    private companion object {
+        const val LATEST = 11_790_175L
+        const val NOW = 1_790_000_000L
+        const val GET_SWAP = "getSwap(bytes32)"
+        const val REVERSE_FUNDING = "reverseFunding(bytes32)"
+        const val LOCK_DURATION = "LOCK_DURATION()"
+        const val VAULT_OF = "vaultOf(bytes32)"
+        const val BALANCE_OF = "balanceOf(address)"
+        val PAYOUT_TX = "0x" + "a1".repeat(32)
+        val FUNDING_TX = "0x" + "b2".repeat(32)
+        val HEAD_BLOCK = """{"number":"0x${LATEST.toString(16)}","timestamp":"0x${NOW.toString(16)}"}"""
+        val PAYOUT_LOGS =
+            """[{"address":"0x32ce55d00e6184c385e44e6b20b76d3a8407e809","topics":[],"data":"0x",""" +
+                """"blockNumber":"0x1","transactionHash":"$PAYOUT_TX","logIndex":"0x0"}]"""
+        val DEPLOYMENT =
+            SwapDeployment(
+                makerUrl = Url("http://maker"),
+                relayerUrl = Url("http://relayer"),
+                rpcUrl = Url("http://mock/rpc"),
+                chainId = ChainId(11_155_111),
+                contract = Address.parse("0x32CE55D00E6184c385E44e6b20b76d3a8407E809"),
+                token = Address.parse("0x5764D0044bef5AA839E0dDafE2073421101B9Ed8"),
+                railgunProxy = Address.parse("0xeCFCf3b4eC647c4Ca6D49108b311b7a7C9543fea"),
+                maker = Address.parse("0x09eD1F966745Be18C711C346242c0974DAd7c3e5"),
+                relayer = Address.parse("0x507d1d152025e9F6DA7Bc03B358acc247f07b4eB"),
+                maxRelayerFee = Usdc6.ofMicros(100_000),
+            )
+
+        fun selector(signature: String) = Selector4.fromCanonicalSignature(signature).hex
+
+        fun swapWords(stage: Int) =
+            listOf(
+                address("09eD1F966745Be18C711C346242c0974DAd7c3e5"),
+                uint(1_790_000_000),
+                uint(stage.toLong()),
+                uint(1),
+                address("4444444444444444444444444444444444444444"),
+                uint(1_790_000_300),
+                address("5764D0044bef5AA839E0dDafE2073421101B9Ed8"),
+                uint(1_789_999_000),
+                uint(1_000_000),
+                uint(0),
+                filled(0x0a),
+                filled(0x0b),
+                filled(0x0c),
+                filled(0x0d),
+                filled(0x0e),
+                filled(0x0f),
+            ).reduce(ByteArray::plus)
+
+        fun uint(value: Long) = bigIntegerValueOf(value).toByteArray().let { ByteArray(32 - it.size) + it }
+
+        fun address(hex: String) = ByteArray(12) + hex.hexToBytes()
+
+        fun filled(byte: Int) = ByteArray(32) { byte.toByte() }
+    }
+}

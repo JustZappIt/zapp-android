@@ -64,7 +64,12 @@ internal enum class ZappTab(
 ) {
     PAY(R.string.home_pay_title, PAY_TAB_TEST_TAG),
     CHATS(R.string.chat_list_title, CHATS_TAB_TEST_TAG),
-    YOU(R.string.settings_you_title, YOU_TAB_TEST_TAG),
+    YOU(R.string.settings_you_title, YOU_TAB_TEST_TAG);
+
+    companion object {
+        /** Where the app opens, and where a new wallet starts. */
+        val DEFAULT = CHATS
+    }
 }
 
 @Composable
