@@ -39,7 +39,7 @@ internal fun PrivateUsdReverseView(
     // Asked before paying: settling needs the user back in time, and a notification is what brings them.
     val askThenReview =
         rememberNotificationPermissionRequester(R.string.convert_notifications_off, toastsOnce = true) {
-            if (state.primary.isEnabled) state.primary.onClick()
+            state.primary?.let { if (it.isEnabled) it.onClick() }
         }
     val progress = state.progress
     if (progress != null) {
@@ -51,7 +51,7 @@ internal fun PrivateUsdReverseView(
             info = state.info,
             onBack = state.onBack,
             isBackEnabled = state.isBackEnabled,
-            primaryButton = if (state.review == null) state.primary.copy(onClick = askThenReview) else state.primary,
+            primaryButton = if (state.review == null) state.primary?.copy(onClick = askThenReview) else state.primary,
             error = state.error,
         ) {
             val review = state.review

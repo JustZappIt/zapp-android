@@ -33,7 +33,8 @@ internal data class PrivateUsdReverseState(
     val rescue: ButtonState?,
     val error: StringResource?,
     val info: PrivateUsdInfo,
-    val primary: ButtonState,
+    /** Null while the conversion goes on by itself. */
+    val primary: ButtonState?,
     val isBackEnabled: Boolean,
     val pinVerify: PinVerifyState?,
     val onBack: () -> Unit,

@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.screen.privateusd.reverse
 
 import androidx.annotation.StringRes
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.atomicswap.ZcashWait
 import co.electriccoin.zcash.ui.common.atomicswap.label
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
@@ -15,6 +16,7 @@ import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProblemState
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressState
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdResultState
+import co.electriccoin.zcash.ui.screen.privateusd.progress.stepDetail
 import xyz.justzappit.offramp.atomicswap.ReversePhase
 import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
 import xyz.justzappit.offramp.atomicswap.ReverseSwapResult
@@ -27,8 +29,9 @@ internal fun reverseProgress(
     received: StringResource,
     callOff: ButtonState?,
     problem: PrivateUsdProblemState?,
+    zcashWait: ZcashWait?,
     error: StringResource?,
-    primary: ButtonState,
+    primary: ButtonState?,
     info: PrivateUsdInfo,
     isBackEnabled: Boolean,
     onBack: () -> Unit,
@@ -42,7 +45,7 @@ internal fun reverseProgress(
                 received,
             ).takeUnless { ended == ReverseSwapResult.REFUNDED || ended == ReverseSwapResult.CANCELLED },
         result = ended?.let { resultOf(record.phase, it, received) },
-        steps = reverseSteps(record.phase, record.receiveConfirmations),
+        steps = reverseSteps(record.phase, record.receiveConfirmations, zcashWait),
         note = stringRes(R.string.reverse_ready_explanation).takeIf { record.phase == ReversePhase.AWAITING_READY },
         problem = problem,
         error = error,
@@ -77,7 +80,11 @@ private fun resultOf(
     isSuccess = result == ReverseSwapResult.RECEIVED,
 )
 
-internal fun reverseSteps(phase: ReversePhase, receiveConfirmations: Long): List<ZappStep> {
+internal fun reverseSteps(
+    phase: ReversePhase,
+    receiveConfirmations: Long,
+    zcashWait: ZcashWait? = null,
+): List<ZappStep> {
     val current =
         phase.receiveStep()
             ?: return if (phase in REFUND_PHASES) {
@@ -85,6 +92,7 @@ internal fun reverseSteps(phase: ReversePhase, receiveConfirmations: Long): List
             } else {
                 emptyList()
             }
+    val waiting = zcashWait?.stepDetail()
     return ReceiveStep.entries.map { step ->
         ZappStep(
             label = stringRes(step.label),
@@ -96,6 +104,10 @@ internal fun reverseSteps(phase: ReversePhase, receiveConfirmations: Long): List
                 },
             detailLines =
                 when {
+                    step == current && waiting != null -> {
+                        listOf(waiting)
+                    }
+
                     step == ReceiveStep.RECEIVE && receiveConfirmations > 0 -> {
                         listOf(stringRes(R.string.reverse_sweep_confirmations, receiveConfirmations))
                     }

@@ -55,7 +55,7 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
             assertEquals(1, h.prepares)
             assertNotNull(h.record.funding)
             h.funded()
-            h.spendable = DEPOSIT
+            h.paidIn = DEPOSIT
             h.driver.advance()
             assertEquals(ReversePhase.AWAITING_READY, h.record.phase)
             assertEquals(0, h.readyCalls)
@@ -90,13 +90,34 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
             h.driver.fund(0)
             h.funded()
             for (amount in listOf(0L, 1L, DEPOSIT - 1)) {
-                h.spendable = amount
+                h.paidIn = amount
                 h.driver.advance()
                 assertEquals(ReversePhase.RECEIVING_ZEC, h.record.phase)
                 assertFailsWith<IllegalStateException> { h.driver.ready(0) }
             }
             assertNull(h.record.ready)
             assertEquals(0, h.readyCalls)
+        }
+
+    @Test
+    fun readyWaitsForTheDepositsOwnConfirmationsAndNoMore() =
+        runTest {
+            val h = Harness()
+            h.prepared()
+            h.driver.fund(0)
+            h.funded()
+            h.paidIn = DEPOSIT
+            h.depositConfirmations = DEPLOYMENT.zcashConfirmations - 1
+            h.driver.advance()
+            assertEquals(ReversePhase.RECEIVING_ZEC, h.record.phase)
+            val early = assertFailsWith<AtomicSwapBlockedException> { h.driver.ready(0) }
+            assertEquals(AtomicSwapBlock.DEPOSIT_UNCONFIRMED, early.reason)
+
+            h.depositConfirmations = DEPLOYMENT.zcashConfirmations
+            h.driver.advance()
+            assertEquals(ReversePhase.AWAITING_READY, h.record.phase)
+            h.driver.ready(0)
+            assertEquals(1, h.readySignatures)
         }
 
     @Test
@@ -124,7 +145,7 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
             h.driver.fund(0)
             h.driver.fund(0)
             h.funded()
-            h.spendable = DEPOSIT
+            h.paidIn = DEPOSIT
             h.driver.ready(0)
             h.driver.ready(0)
             assertEquals(1, h.prepares)
@@ -138,7 +159,7 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
             h.prepared()
             h.driver.fund(0)
             h.funded()
-            h.spendable = DEPOSIT
+            h.paidIn = DEPOSIT
             h.restart()
             repeat(3) { h.driver.advance() }
             assertEquals(ReversePhase.AWAITING_READY, h.record.phase)
@@ -241,7 +262,7 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
             h.now = FUNDING
             assertFailsWith<IllegalStateException> { h.driver.fund(0) }
             h.funded()
-            h.spendable = DEPOSIT
+            h.paidIn = DEPOSIT
             h.now = READY - SIGNATURE_TTL_SECONDS
             assertFailsWith<IllegalStateException> { h.driver.ready(0) }
             assertNull(h.record.ready)
@@ -298,7 +319,7 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
             h.prepared()
             h.driver.fund(0)
             h.funded()
-            h.spendable = DEPOSIT
+            h.paidIn = DEPOSIT
             h.driver.ready(0)
             h.now += 121
             h.restart()

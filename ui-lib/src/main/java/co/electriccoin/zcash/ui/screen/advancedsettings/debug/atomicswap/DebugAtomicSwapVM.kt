@@ -86,6 +86,7 @@ class DebugAtomicSwapVM(
             swap.wait?.let { "waiting: ${it.reason.name.lowercase()}" },
             swap.confirmations?.let { "confirmations: $it" },
             swap.problem?.let { "problem: ${it.name.lowercase()}" },
+            swap.zcashWait?.let { "waiting on zcash: ${it.name.lowercase()}" },
             log.railgunAddress?.let { "payouts go to ${it.take(ADDRESS_PREFIX)}…" },
             record?.let { "swap #${it.index}: ${it.swapId.hex.take(ID_PREFIX)}…" },
             record?.let { "quote: ${it.quote.depositZat} zat for ${it.quote.amount.micros} token base units" },

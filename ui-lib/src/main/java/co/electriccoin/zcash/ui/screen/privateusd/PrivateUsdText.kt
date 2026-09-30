@@ -42,6 +42,7 @@ internal fun AtomicSwapProblem.message(): StringResource =
             AtomicSwapProblem.RAILGUN_CLOSED -> R.string.convert_problem_railgun
             AtomicSwapProblem.CLAIM_TURN -> R.string.convert_problem_turn
             AtomicSwapProblem.ZCASH_WALLET -> R.string.convert_problem_wallet
+            AtomicSwapProblem.DEPOSIT_UNPAYABLE -> R.string.convert_problem_unpayable
             AtomicSwapProblem.ZCASH_REJECTED -> R.string.convert_problem_rejected
             AtomicSwapProblem.MISMATCH -> R.string.convert_problem_mismatch
             AtomicSwapProblem.UNEXPECTED -> R.string.convert_problem_unexpected

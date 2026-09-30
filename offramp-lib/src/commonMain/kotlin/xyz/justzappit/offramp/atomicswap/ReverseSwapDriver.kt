@@ -141,9 +141,6 @@ class ReverseSwapDriver(
             advance()
             return
         }
-        if (zcash.spendable(snapshot) < snapshot.quote.terms.depositZat) {
-            throw AtomicSwapBlockedException(AtomicSwapBlock.DEPOSIT_UNCONFIRMED, "the ZEC isn't all spendable yet")
-        }
         val estimate = receiving.estimate(snapshot)
         val authorized = lock.withLock { approvals.authorizeReady(index, estimate) }
         relayer.ready(authorized)
@@ -417,9 +414,8 @@ internal class ReverseSwapOpening(
     }
 }
 
-/** The joint account as a look at it found it: its spendable ZEC, and what sweeping it home would bring. */
+/** The joint account as a look at it found it: what sweeping it home would bring, once the whole deposit counts. */
 internal class ReverseDeposit(
-    val spendableZat: Long,
     val estimate: ReverseReceiveEstimate?,
 )
 
@@ -431,19 +427,19 @@ internal class ReverseSwapReceiving(
     private val ending: ReverseSwapEnding,
 ) {
     /** What sweeping the joint account home would bring; it must pay its fee and leave the deposit whole. */
-    suspend fun estimate(record: ReverseSwapRecord): ReverseReceiveEstimate {
-        val estimate = zcash.estimateReceive(record)
-        if (estimate.availableZat < record.quote.terms.depositZat) {
-            throw AtomicSwapBlockedException(AtomicSwapBlock.DEPOSIT_UNCONFIRMED, "the ZEC isn't all spendable yet")
-        }
-        if (!estimate.isUsable) throw AtomicSwapBlockedException(AtomicSwapBlock.MISMATCH, "an empty sweep")
-        return estimate
-    }
+    suspend fun estimate(record: ReverseSwapRecord): ReverseReceiveEstimate =
+        lookAtDeposit(record).estimate
+            ?: throw AtomicSwapBlockedException(AtomicSwapBlock.DEPOSIT_UNCONFIRMED, "the ZEC isn't all confirmed yet")
 
-    /** The joint account synced to the tip, with the sweep's estimate once the whole deposit is spendable. */
+    /**
+     * The joint account synced to the tip, with the sweep's estimate once the whole deposit has the deployment's
+     * confirmations: the wallet counts ZEC from others spendable only much later, and only the sweep waits for that.
+     */
     suspend fun lookAtDeposit(record: ReverseSwapRecord): ReverseDeposit {
-        val spendable = zcash.spendable(record)
-        return ReverseDeposit(spendable, if (spendable >= record.quote.terms.depositZat) estimate(record) else null)
+        val estimate = zcash.estimateReceive(record, deployment.zcashConfirmations)
+        if (estimate.availableZat < record.quote.terms.depositZat) return ReverseDeposit(null)
+        if (!estimate.isUsable) throw AtomicSwapBlockedException(AtomicSwapBlock.MISMATCH, "an empty sweep")
+        return ReverseDeposit(estimate)
     }
 
     suspend fun awaitDeposit(

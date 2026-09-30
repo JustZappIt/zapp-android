@@ -11,6 +11,7 @@ import cash.z.ecc.android.sdk.model.AccountPurpose
 import cash.z.ecc.android.sdk.model.BlockHeight
 import cash.z.ecc.android.sdk.model.Pczt
 import cash.z.ecc.android.sdk.model.Proposal
+import cash.z.ecc.android.sdk.model.TransactionOverview
 import cash.z.ecc.android.sdk.model.UnifiedFullViewingKey
 import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.android.sdk.model.Zip32AccountIndex
@@ -33,7 +34,7 @@ class JointSweep(
     val feeZat: Long,
 )
 
-/** A joint account's spendable balance, and what sweeping it home would cost. */
+/** What a joint account received with enough confirmations, and the most sweeping it home would cost. */
 class JointSweepEstimate(
     val availableZat: Long,
     val feeZat: Long,
@@ -72,9 +73,6 @@ class JointAccounts(
         )
     }
 
-    /** [account]'s spendable zatoshi once the wallet has synced to the tip. */
-    suspend fun spendable(account: Account): Long = transactions.synced().available(account)
-
     /** [account]'s whole balance home, the sweep made before or one [sign] signs; null until all is spendable. */
     suspend fun sweep(
         account: Account,
@@ -85,10 +83,25 @@ class JointAccounts(
             ?: synchronizer.settled(account)?.let { build(synchronizer, account, it, sign) }
     }
 
-    suspend fun estimate(account: Account): JointSweepEstimate {
+    /**
+     * What [account] received in transactions with [confirmations] or more, against the tip the wallet synced to, and
+     * the most a sweep of those notes pays: an action a note and one for its output, the grace at least.
+     */
+    suspend fun estimate(
+        account: Account,
+        confirmations: Int,
+    ): JointSweepEstimate {
         val synchronizer = transactions.synced()
-        val available = synchronizer.available(account)
-        return JointSweepEstimate(available, proposal(synchronizer, account, available).feeZat)
+        val received =
+            synchronizer
+                .getTransactions(account.accountUuid)
+                .first()
+                .filter { !it.isSentTransaction && synchronizer.confirmations(it) >= confirmations }
+        val notes = received.sumOf { it.receivedNoteCount }
+        return JointSweepEstimate(
+            availableZat = received.sumOf { it.netValue.value },
+            feeZat = ZIP317_MARGINAL_FEE * maxOf(ZIP317_GRACE_ACTIONS, notes + 1),
+        )
     }
 
     /** Stops watching the joint account, if the wallet does. A failure leaves only scanning to pay for. */
@@ -187,6 +200,9 @@ internal suspend fun <P> proposeSweep(
 
 private suspend fun Synchronizer.watching(ufvk: String): Account? =
     getAccounts().firstOrNull { it.keySource == ATOMIC_SWAP_KEYSOURCE && it.ufvk == ufvk }
+
+private fun Synchronizer.confirmations(overview: TransactionOverview): Long =
+    (status(overview) as? ZcashTransactionStatus.Mined)?.confirmations ?: 0
 
 private fun Synchronizer.available(account: Account): Long {
     val balance = walletBalances.value?.get(account.accountUuid) ?: return 0

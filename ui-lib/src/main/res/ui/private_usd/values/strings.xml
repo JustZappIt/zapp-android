@@ -125,6 +125,7 @@
     <string name="convert_step_refund">Bringing your ZEC back</string>
     <string name="convert_eta_seconds">A few seconds</string>
     <string name="convert_eta_minute">About a minute</string>
+    <string name="convert_wait_syncing" tools:ignore="MissingTranslation">Waiting for your Zcash wallet to sync</string>
     <string name="convert_maker_silent">The market maker hasn\'t confirmed your deposit yet. If it still hasn\'t by %1$s, Zapp claims your dollars by itself.</string>
     <string name="convert_opening_slow">The market maker hasn\'t opened the swap yet. Nothing has been sent.</string>
     <string name="convert_call_off">Call it off</string>
@@ -152,6 +153,7 @@
     <string name="convert_problem_railgun">Railgun isn\'t accepting deposits right now, so Zapp holds off claiming. If it doesn\'t reopen in time, the swap is called off and your ZEC comes back.</string>
     <string name="convert_problem_turn">The market maker holds the claim for a few minutes. Zapp claims as soon as it\'s your turn.</string>
     <string name="convert_problem_wallet">Your Zcash wallet isn\'t ready. Zapp retries once it has synced.</string>
+    <string name="convert_problem_unpayable" tools:ignore="MissingTranslation">Your wallet can\'t pay the deposit right now, for example because the network fee went up. Zapp keeps trying. If it still can\'t pay in time, the swap ends and nothing is sent.</string>
     <string name="convert_problem_unexpected">Something went wrong. Zapp keeps trying by itself.</string>
     <string name="convert_problem_rejected" tools:ignore="MissingTranslation">The Zcash network turned down a transaction of this conversion. Zapp keeps sending it until it goes through or runs out.</string>
     <string name="convert_problem_mismatch" tools:ignore="MissingTranslation">What\'s on the chain doesn\'t match this conversion, so Zapp only brings your funds back.</string>
@@ -241,7 +243,6 @@
     <string name="reverse_intro">Approve sending Private USD first. After your wallet independently confirms the full ZEC deposit, approve settlement to receive shielded ZEC.</string>
     <string name="reverse_ready">Authorize settlement</string>
     <string name="reverse_new">New conversion</string>
-    <string name="reverse_refresh">Check progress</string>
     <string name="reverse_cancel">Cancel / request private refund</string>
     <string name="reverse_rescue">Recover refund</string>
     <string name="reverse_accepting">Preparing your receiving account</string>
@@ -249,7 +250,7 @@
     <string name="reverse_sending">Sending Private USD</string>
     <string name="reverse_confirming">Confirming escrow</string>
     <string name="reverse_receiving">Waiting for confirmed ZEC</string>
-    <string name="reverse_ready_explanation">The full ZEC deposit is confirmed and spendable. Authorize settlement to release your Private USD and move ZEC to your shielded wallet.</string>
+    <string name="reverse_ready_explanation">The full ZEC deposit is confirmed. Authorize settlement to release your Private USD and move ZEC to your shielded wallet.</string>
     <string name="reverse_settling">Waiting for settlement</string>
     <string name="reverse_sweeping">Moving ZEC to your shielded wallet</string>
     <string name="reverse_refund_wait">Refund waiting for its deadline or lock. You can request a refund now; it will proceed when allowed.</string>

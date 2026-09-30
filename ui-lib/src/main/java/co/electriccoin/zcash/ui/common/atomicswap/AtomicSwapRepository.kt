@@ -35,6 +35,7 @@ data class AtomicSwapState(
     val wait: AtomicSwapStep.Waiting? = null,
     val activity: AtomicSwapActivity? = null,
     val problem: AtomicSwapProblem? = null,
+    val zcashWait: ZcashWait? = null,
     val confirmations: Int? = null,
     /** Picked up after the app was closed, and no step has finished since. */
     val resuming: Boolean = false,
@@ -100,6 +101,7 @@ internal class AtomicSwapRepositoryImpl(
                 wait = current.wait,
                 activity = current.activity,
                 problem = current.problem,
+                zcashWait = current.zcashWait,
                 confirmations = current.confirmations,
                 resuming = current.resuming,
             )

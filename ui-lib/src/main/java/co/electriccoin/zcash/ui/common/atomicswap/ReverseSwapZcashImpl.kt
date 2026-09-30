@@ -23,10 +23,13 @@ class ReverseSwapZcashImpl(
     override suspend fun importAccount(record: ReverseSwapRecord): JointAccountId =
         JointAccountId.of(account(record).accountUuid.value)
 
-    override suspend fun spendable(record: ReverseSwapRecord): Long = jointAccounts.spendable(account(record))
-
-    override suspend fun estimateReceive(record: ReverseSwapRecord): ReverseReceiveEstimate =
-        jointAccounts.estimate(account(record)).let { ReverseReceiveEstimate(it.availableZat, it.feeZat) }
+    override suspend fun estimateReceive(
+        record: ReverseSwapRecord,
+        confirmations: Int,
+    ): ReverseReceiveEstimate {
+        val estimate = jointAccounts.estimate(account(record), confirmations)
+        return ReverseReceiveEstimate(estimate.availableZat, estimate.feeZat)
+    }
 
     override suspend fun prepareReceive(
         record: ReverseSwapRecord,

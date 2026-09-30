@@ -42,18 +42,31 @@ data class SwapProgress(
     val index: Int? = null,
     val wait: AtomicSwapStep.Waiting? = null,
     val activity: AtomicSwapActivity? = null,
-    val problem: AtomicSwapProblem? = null,
+    /** What holds the conversion up: Zcash to wait for, or a problem once steps have failed for a while. */
+    val hold: SwapHold? = null,
+    /** When the steps failing in a row began to. */
+    val failingSince: Long? = null,
     val confirmations: Int? = null,
     /** Picked up after the app was closed, and no step has finished since. */
     val resuming: Boolean = false,
-)
+) {
+    val problem: AtomicSwapProblem? get() = hold as? AtomicSwapProblem
 
-enum class AtomicSwapProblem {
+    val zcashWait: ZcashWait? get() = hold as? ZcashWait
+}
+
+/** What holds a conversion up; it's tried again by itself either way. */
+sealed interface SwapHold
+
+enum class AtomicSwapProblem : SwapHold {
     RELAYER_UNREACHABLE,
     ETHEREUM_UNREACHABLE,
     RAILGUN_CLOSED,
     CLAIM_TURN,
     ZCASH_WALLET,
+
+    /** The wallet can't pay the deposit within what the user approved; past its window, nothing is sent. */
+    DEPOSIT_UNPAYABLE,
 
     /** The Zcash network refused a transaction the conversion keeps sending. */
     ZCASH_REJECTED,
@@ -61,6 +74,15 @@ enum class AtomicSwapProblem {
     /** What's on the chain isn't what the conversion agreed: nothing more is done with it than bringing funds back. */
     MISMATCH,
     UNEXPECTED,
+}
+
+/** Zcash to wait for, never a problem: nobody is asked to help. */
+enum class ZcashWait : SwapHold {
+    /** The wallet is still connecting or syncing, or hasn't sent a transaction yet. */
+    SYNCING,
+
+    /** ZEC paid in isn't all confirmed yet. */
+    CONFIRMATIONS,
 }
 
 /** A direction's conversions as the app runs them, in the foreground or the background. */
@@ -162,13 +184,15 @@ internal class SwapLoop<R : Any>(
     suspend fun settle() {
         conversions.settled()
         notifier.clearNeedsYou()
-        mutableProgress.update { it.copy(wait = null, activity = null, problem = null, resuming = false) }
+        mutableProgress.update {
+            it.copy(wait = null, activity = null, hold = null, failingSince = null, resuming = false)
+        }
     }
 
     private fun restarts(session: Long) =
         CoroutineExceptionHandler { _, e ->
             Twig.error(e) { "${conversions.direction} swap: the loop stopped" }
-            mutableProgress.update { it.copy(activity = null, problem = AtomicSwapProblem.UNEXPECTED) }
+            mutableProgress.update { it.failing(AtomicSwapProblem.UNEXPECTED) }
             scope.launch {
                 delay(RESTART_DELAY)
                 start(resuming = true, session)
@@ -180,7 +204,14 @@ internal class SwapLoop<R : Any>(
         session: Long
     ) {
         var record = conversions.underWay()
-        record?.let { mutableProgress.value = SwapProgress(conversions.indexOf(it), resuming = resuming) }
+        record?.let {
+            val index = conversions.indexOf(it)
+            // Restarted after it stopped, it goes on counting how long steps have failed.
+            mutableProgress.update { kept ->
+                val failingSince = kept.failingSince.takeIf { kept.index == index }
+                SwapProgress(index, failingSince = failingSince, resuming = resuming)
+            }
+        }
         val attention = Attention(askedForYou = record?.let(conversions::needsYou) == true)
         while (record != null && session == conversions.session) {
             when (val step = step(record, session)) {
@@ -207,35 +238,46 @@ internal class SwapLoop<R : Any>(
     private inner class Attention(
         private var askedForYou: Boolean,
     ) {
-        private var failingSince: Long? = null
-
+        // Waiting for the maker's turn to pass, or for Railgun to reopen: opening the app changes neither.
         fun failed() {
-            val since = failingSince ?: nowSeconds().also { failingSince = it }
-            if (!askedForYou && canHelp() && nowSeconds() - since >= NEEDS_YOU_AFTER.inWholeSeconds) {
+            val current = progress.value
+            val failingFor = nowSeconds() - (current.failingSince ?: nowSeconds())
+            val canHelp = current.problem?.let { it !in OUT_OF_THE_USERS_HANDS } == true
+            if (!askedForYou && canHelp && failingFor >= NEEDS_YOU_AFTER.inWholeSeconds) {
                 notifier.needsYou(conversions.direction)
                 askedForYou = true
             }
         }
 
         fun waiting(needsYou: Boolean) {
-            failingSince = null
             if (needsYou == askedForYou) return
             if (needsYou) notifier.needsYou(conversions.direction) else notifier.clearNeedsYou()
             askedForYou = needsYou
         }
     }
 
-    /** One step, or null when it failed and should be tried again. */
+    /** One step, or null when it failed and should be tried again. Zcash to wait for is waited for like any step. */
     private suspend fun step(
         record: R,
         session: Long
     ): SwapLoopStep? {
         val index = conversions.indexOf(record)
         return catchingSwapFailures(
-            onFailure = { e, problem ->
+            onFailure = { e, hold ->
                 Twig.warn(e) { "${conversions.direction} swap: a step failed" }
-                mutableProgress.update { it.copy(index = index, activity = null, problem = problem, resuming = false) }
-                null
+                when (hold) {
+                    is ZcashWait -> {
+                        mutableProgress.update {
+                            it.copy(index = index, activity = null, hold = hold, failingSince = null, resuming = false)
+                        }
+                        SwapLoopStep.Waiting(RETRY_DELAY, needsYou = conversions.needsYou(record))
+                    }
+
+                    is AtomicSwapProblem -> {
+                        mutableProgress.update { it.failing(hold).copy(index = index, resuming = false) }
+                        null
+                    }
+                }
             },
         ) {
             val step = conversions.advance(record, session, ::show)
@@ -245,7 +287,8 @@ internal class SwapLoop<R : Any>(
                     index = index,
                     wait = waiting?.wait,
                     activity = null,
-                    problem = null,
+                    hold = null,
+                    failingSince = null,
                     confirmations = if (waiting != null) waiting.confirmations else it.confirmations,
                     resuming = false,
                 )
@@ -256,8 +299,16 @@ internal class SwapLoop<R : Any>(
 
     private fun show(activity: AtomicSwapActivity) = mutableProgress.update { it.copy(activity = activity) }
 
-    // Waiting for the maker's turn to pass, or for Railgun to reopen: opening the app changes neither.
-    private fun canHelp(): Boolean = progress.value.problem?.let { it !in OUT_OF_THE_USERS_HANDS } == true
+    // The next try often gets past a failure: a problem shows only once steps have failed for a while in a row.
+    private fun SwapProgress.failing(problem: AtomicSwapProblem): SwapProgress {
+        val now = nowSeconds()
+        val since = failingSince ?: now
+        return copy(
+            activity = null,
+            hold = problem.takeIf { now - since >= PROBLEM_AFTER.inWholeSeconds },
+            failingSince = since,
+        )
+    }
 
     private suspend fun nap(duration: Duration) {
         withTimeoutOrNull(duration) { nudges.receive() }
@@ -266,6 +317,7 @@ internal class SwapLoop<R : Any>(
     private companion object {
         val RETRY_DELAY = 15.seconds
         val RESTART_DELAY = 30.seconds
+        val PROBLEM_AFTER = 1.minutes
         val NEEDS_YOU_AFTER = 5.minutes
         val OUT_OF_THE_USERS_HANDS =
             setOf(
@@ -319,7 +371,7 @@ internal class SwapConversionRunner<R : Any>(
 
 /** [block]'s result, or [onFailure]'s for a failure a step expects; cancellation is never one. */
 internal inline fun <T> catchingSwapFailures(
-    onFailure: (Exception, AtomicSwapProblem) -> T,
+    onFailure: (Exception, SwapHold) -> T,
     block: () -> T,
 ): T =
     try {
@@ -327,7 +379,7 @@ internal inline fun <T> catchingSwapFailures(
     } catch (e: CancellationException) {
         throw e
     } catch (e: AtomicSwapBlockedException) {
-        onFailure(e, e.reason.problem())
+        onFailure(e, e.reason.hold())
     } catch (e: AtomicSwapHttpException) {
         onFailure(e, e.service.problem())
     } catch (e: RpcException) {
@@ -353,7 +405,7 @@ internal fun AtomicSwapService.problem() =
         AtomicSwapService.MAKER -> AtomicSwapProblem.UNEXPECTED
     }
 
-internal fun AtomicSwapBlock.problem() =
+internal fun AtomicSwapBlock.hold(): SwapHold =
     when (this) {
         AtomicSwapBlock.RAILGUN_CLOSED -> {
             AtomicSwapProblem.RAILGUN_CLOSED
@@ -371,8 +423,16 @@ internal fun AtomicSwapBlock.problem() =
             AtomicSwapProblem.RELAYER_UNREACHABLE
         }
 
-        AtomicSwapBlock.DEPOSIT_UNPAYABLE, AtomicSwapBlock.ZCASH_UNAVAILABLE, AtomicSwapBlock.DEPOSIT_UNCONFIRMED -> {
-            AtomicSwapProblem.ZCASH_WALLET
+        AtomicSwapBlock.ZCASH_UNAVAILABLE -> {
+            ZcashWait.SYNCING
+        }
+
+        AtomicSwapBlock.DEPOSIT_UNCONFIRMED -> {
+            ZcashWait.CONFIRMATIONS
+        }
+
+        AtomicSwapBlock.DEPOSIT_UNPAYABLE -> {
+            AtomicSwapProblem.DEPOSIT_UNPAYABLE
         }
 
         AtomicSwapBlock.ZCASH_REJECTED -> {

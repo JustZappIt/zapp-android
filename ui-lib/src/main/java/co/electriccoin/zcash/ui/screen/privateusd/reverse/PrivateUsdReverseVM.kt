@@ -180,8 +180,8 @@ class PrivateUsdReverseVM(
                     ?.let { mapper.progress(it, conversion, form, currency, primary) },
             rescue =
                 conversion.rescuable
-                    ?.takeIf { record?.underWay != true && review == null }
-                    ?.let { mapper.rescue(it, form) },
+                    ?.takeIf { record?.underWay != true && review == null && form.canAct }
+                    ?.let(mapper::rescue),
             error = form.message(record, available, conversion.isExpired),
             info = terms.info(currency),
             primary = primary,
@@ -301,7 +301,7 @@ class PrivateUsdReverseVM(
         step: suspend () -> Unit,
     ) {
         val from = form.value.step
-        if (from is ReverseStep.Acting || from == ReverseStep.Quoting) return
+        if (!form.value.canAct) return
         form.update { it.copy(step = ReverseStep.Acting(from, kind), error = null) }
         stepJob =
             viewModelScope.launch {
@@ -333,8 +333,6 @@ class PrivateUsdReverseVM(
 
         override fun rescue(index: Int) =
             runStep(ReverseStepKind.AUTHORIZED, R.string.reverse_error_rescue) { repository.rescue(index) }
-
-        override fun refresh() = runStep(ReverseStepKind.LOOK_UP, R.string.reverse_error) { repository.refresh() }
 
         override fun newQuote() {
             form.update { it.copy(step = ReverseStep.Typing, stale = null, error = null) }

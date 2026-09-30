@@ -7,6 +7,7 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.screen.privateusd.toUsd
 import co.electriccoin.zcash.ui.screen.privateusd.toZec
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -53,20 +54,21 @@ class SwapLoopTest {
     private val notifier = mockk<AtomicSwapNotifier>(relaxed = true)
 
     @Test
-    fun `a failed step is tried again, and says why until one goes through`() =
+    fun `a failed step is tried again, says why only once it keeps failing, and not after one goes through`() =
         runTest {
-            val conversions = Scripted(fail(unreachableRelayer()), fail(unreachableRelayer()), waiting())
+            val conversions = Scripted(*Array(5) { fail(unreachableRelayer()) }, waiting())
             val loop = loop(conversions)
 
             loop.start(resuming = false)
             runCurrent()
-            assertEquals(AtomicSwapProblem.RELAYER_UNREACHABLE, loop.progress.value.problem)
+            assertNull(loop.progress.value.problem)
             assertEquals(1, conversions.advances)
 
-            advanceTimeBy(RETRY + 1.seconds)
-            assertEquals(2, conversions.advances)
-            advanceTimeBy(RETRY + 1.seconds)
-            assertEquals(3, conversions.advances)
+            advanceTimeBy(PERSISTED)
+            assertEquals(5, conversions.advances)
+            assertEquals(AtomicSwapProblem.RELAYER_UNREACHABLE, loop.progress.value.problem)
+            advanceTimeBy(RETRY)
+            assertEquals(6, conversions.advances)
             assertNull(loop.progress.value.problem)
         }
 
@@ -103,17 +105,21 @@ class SwapLoopTest {
         }
 
     @Test
-    fun `a loop that stops unexpectedly says so, and picks the conversion up again`() =
+    fun `a loop that keeps stopping unexpectedly says so, and picks the conversion up again`() =
         runTest {
-            val conversions = Scripted(fail(UnsupportedOperationException("a bug")), waiting())
+            val conversions = Scripted(*Array(3) { fail(UnsupportedOperationException("a bug")) }, waiting())
             val loop = loop(conversions)
 
             loop.start(resuming = false)
             runCurrent()
+            assertNull(loop.progress.value.problem)
+
+            advanceTimeBy(RESTART * 2 + 1.seconds)
+            assertEquals(3, conversions.advances)
             assertEquals(AtomicSwapProblem.UNEXPECTED, loop.progress.value.problem)
 
-            advanceTimeBy(RESTART + 1.seconds)
-            assertEquals(2, conversions.advances)
+            advanceTimeBy(RESTART)
+            assertEquals(4, conversions.advances)
             assertNull(loop.progress.value.problem)
             assertFalse(loop.progress.value.resuming)
         }
@@ -206,19 +212,19 @@ class SwapLoopTest {
         }
 
     @Test
-    fun `a reverse conversion's failures show as typed problems, and it's looked at again`() =
+    fun `a reverse conversion's failures show as typed problems once they last, and it's looked at again`() =
         runTest {
             val store = ReverseRecords(toZec(index = 1, ReversePhase.RECEIVING_ZEC))
             val driver = mockk<ReverseSwapDriver>()
-            coEvery { driver.advance() } throws
-                RpcException.TransportError("eth_call", IOException("offline")) andThen store.record
+            coEvery { driver.advance() } throws RpcException.TransportError("eth_call", IOException("offline"))
             val loop = loop(ReverseSwapConversions(sessions(driver), store, notifier))
 
             loop.start(resuming = false)
-            runCurrent()
+            advanceTimeBy(PERSISTED)
             assertEquals(AtomicSwapProblem.ETHEREUM_UNREACHABLE, loop.progress.value.problem)
             assertEquals(1, loop.progress.value.index)
 
+            coEvery { driver.advance() } returns store.record
             advanceTimeBy(RETRY + 1.seconds)
             assertNull(loop.progress.value.problem)
         }
@@ -271,9 +277,10 @@ class SwapLoopTest {
 
             loop.start(resuming = false)
             runCurrent()
-            assertEquals(AtomicSwapProblem.UNEXPECTED, loop.progress.value.problem)
+            assertNull(loop.progress.value.problem)
 
             advanceTimeBy(RESTART + 1.seconds)
+            coVerify(exactly = 2) { driver.advance() }
             assertNull(loop.progress.value.problem)
         }
 
@@ -386,6 +393,9 @@ class SwapLoopTest {
         const val MILLIS = 1_000
         val RETRY = 15.seconds
         val RESTART = 30.seconds
+
+        // A minute of failing, and the step at its end.
+        val PERSISTED = 1.minutes + 1.seconds
 
         fun unreachableRelayer() =
             AtomicSwapHttpException.Unreachable(AtomicSwapService.RELAYER, IOException("offline"))

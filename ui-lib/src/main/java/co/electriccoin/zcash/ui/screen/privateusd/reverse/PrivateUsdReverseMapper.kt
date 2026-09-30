@@ -31,8 +31,6 @@ internal interface PrivateUsdReverseActions {
 
     fun rescue(index: Int)
 
-    fun refresh()
-
     fun newQuote()
 
     fun newConversion()
@@ -45,31 +43,28 @@ internal class PrivateUsdReverseMapper(
     private val terms: PrivateUsdReverseTerms,
     private val actions: PrivateUsdReverseActions,
 ) {
+    /** Null while the conversion goes on by itself: the screen follows it. */
     fun primary(
         record: ReverseSwapRecord?,
         form: ReverseForm,
         canPay: Boolean,
         isExpired: Boolean,
-    ): ButtonState {
-        val button =
-            when {
-                form.step == ReverseStep.Quoting -> {
-                    ButtonState(stringRes(R.string.convert_quote_loading), isEnabled = false, isLoading = true)
-                }
-
-                record == null || record.status == ReverseSwapStatus.Previewed -> {
-                    preview(record, form, canPay, isExpired)
-                }
-
-                else -> {
-                    underWay(record, canPay)
-                }
+    ): ButtonState? =
+        when {
+            form.step == ReverseStep.Quoting -> {
+                ButtonState(stringRes(R.string.convert_quote_loading), isEnabled = false, isLoading = true)
             }
-        return button.copy(
-            isEnabled = button.isEnabled && !form.isActing,
-            isLoading = button.isLoading || form.isActing,
-        )
-    }
+
+            record == null || record.status == ReverseSwapStatus.Previewed -> {
+                preview(record, form, canPay, isExpired)
+            }
+
+            else -> {
+                underWay(record, canPay)
+            }
+        }?.let { button ->
+            button.copy(isEnabled = button.isEnabled && !form.isActing, isLoading = button.isLoading || form.isActing)
+        }
 
     fun review(
         record: ReverseSwapRecord,
@@ -90,7 +85,7 @@ internal class PrivateUsdReverseMapper(
         conversion: ReverseConversion,
         form: ReverseForm,
         currency: LocalCurrency,
-        primary: ButtonState,
+        primary: ButtonState?,
     ): PrivateUsdProgressState =
         reverseProgress(
             record = record,
@@ -101,6 +96,7 @@ internal class PrivateUsdReverseMapper(
                 conversion.swap.problem
                     ?.takeIf { record.underWay }
                     ?.let { PrivateUsdProblemState(it.message(), onRetry = null) },
+            zcashWait = conversion.swap.zcashWait?.takeIf { record.underWay },
             error = form.error,
             primary = primary,
             info = terms.info(currency),
@@ -108,10 +104,7 @@ internal class PrivateUsdReverseMapper(
             onBack = actions::back,
         )
 
-    fun rescue(
-        index: Int,
-        form: ReverseForm
-    ) = ButtonState(stringRes(R.string.reverse_rescue), isEnabled = !form.isActing) { actions.rescue(index) }
+    fun rescue(index: Int) = ButtonState(stringRes(R.string.reverse_rescue)) { actions.rescue(index) }
 
     private fun preview(
         record: ReverseSwapRecord?,
@@ -140,7 +133,7 @@ internal class PrivateUsdReverseMapper(
     private fun underWay(
         record: ReverseSwapRecord,
         canPay: Boolean,
-    ): ButtonState {
+    ): ButtonState? {
         val status = record.status
         return when {
             status is ReverseSwapStatus.Over -> {
@@ -158,26 +151,29 @@ internal class PrivateUsdReverseMapper(
             }
 
             else -> {
-                ButtonState(stringRes(R.string.reverse_refresh), onClick = actions::refresh)
+                null
             }
         }
     }
 
-    // Cancelling while that can still stop the conversion, or recovering its refund once that can be done.
+    // Cancelling while that can still stop the conversion, or recovering its refund once that can be done; neither
+    // while another step runs.
     private fun callOff(
         record: ReverseSwapRecord,
         form: ReverseForm,
         rescuable: Int?,
     ): ButtonState? =
         when {
+            !form.canAct -> {
+                null
+            }
+
             (record.status as? ReverseSwapStatus.UnderWay)?.cancellable == true -> {
-                ButtonState(stringRes(R.string.reverse_cancel), isEnabled = !form.isActing) {
-                    actions.cancel(record.index)
-                }
+                ButtonState(stringRes(R.string.reverse_cancel)) { actions.cancel(record.index) }
             }
 
             record.status == ReverseSwapStatus.Over(ReverseSwapResult.REFUNDED) && rescuable == record.index -> {
-                rescue(record.index, form)
+                rescue(record.index)
             }
 
             else -> {

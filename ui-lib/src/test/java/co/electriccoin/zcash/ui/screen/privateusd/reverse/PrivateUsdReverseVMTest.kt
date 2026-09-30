@@ -101,7 +101,7 @@ class PrivateUsdReverseVMTest {
             type("10")
 
             assertFalse(vm.state.value.isQuoting)
-            assertFalse(vm.state.value.primary.isLoading)
+            assertFalse(checkNotNull(vm.state.value.primary).isLoading)
             assertEquals(stringRes(R.string.convert_error_wallet), vm.state.value.error)
         }
 

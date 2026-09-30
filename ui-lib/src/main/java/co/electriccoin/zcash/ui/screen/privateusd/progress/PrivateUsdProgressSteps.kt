@@ -8,6 +8,7 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployment
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapStage
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapState
+import co.electriccoin.zcash.ui.common.atomicswap.ZcashWait
 import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
 import co.electriccoin.zcash.ui.common.privateusd.privateUsdToken
@@ -168,7 +169,12 @@ internal class PrivateUsdProgressSteps(
                         index == current -> ZappStepStatus.InProgress
                         else -> ZappStepStatus.Pending
                     },
-                detailLines = if (index == current) listOfNotNull(eta(step, swap)) else emptyList(),
+                detailLines =
+                    if (index == current) {
+                        listOfNotNull(swap.zcashWait?.stepDetail() ?: eta(step, swap))
+                    } else {
+                        emptyList()
+                    },
             )
         } + tail(arrival = null)
     }
@@ -279,6 +285,13 @@ internal class PrivateUsdProgressSteps(
             }
     }
 }
+
+/** What the step under way says while Zcash holds it up; a deposit's confirmations are what its own step waits for. */
+internal fun ZcashWait.stepDetail(): StringResource? =
+    when (this) {
+        ZcashWait.SYNCING -> stringRes(R.string.convert_wait_syncing)
+        ZcashWait.CONFIRMATIONS -> null
+    }
 
 private fun time(epochSeconds: Long): String =
     DateTimeFormatter

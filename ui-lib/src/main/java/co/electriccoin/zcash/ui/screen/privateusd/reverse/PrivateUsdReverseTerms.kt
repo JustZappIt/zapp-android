@@ -39,6 +39,9 @@ internal data class ReverseForm(
 ) {
     val isActing: Boolean get() = step is ReverseStep.Acting
 
+    /** A step the user starts can run now: none is running, and no quote is loading. */
+    val canAct: Boolean get() = !isActing && step != ReverseStep.Quoting
+
     /** Back waits only for a step the user authorized. */
     val isBackEnabled: Boolean get() = (step as? ReverseStep.Acting)?.kind != ReverseStepKind.AUTHORIZED
 

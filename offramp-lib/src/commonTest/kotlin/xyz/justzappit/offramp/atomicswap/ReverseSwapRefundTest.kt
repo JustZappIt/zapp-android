@@ -219,7 +219,7 @@ class ReverseSwapRefundTest : ReverseSwapDriverFixtures() {
             val h = Harness()
             h.prepared()
             h.funded()
-            h.spendable = DEPOSIT
+            h.paidIn = DEPOSIT
             h.block = 10
             assertFailsWith<IllegalStateException> { h.driver.ready(0) }
             assertEquals(0, h.readySignatures)
@@ -245,7 +245,7 @@ class ReverseSwapRefundTest : ReverseSwapDriverFixtures() {
             val h = Harness()
             h.prepared()
             h.funded()
-            h.spendable = DEPOSIT
+            h.paidIn = DEPOSIT
             h.sweepFee = DEPOSIT
             val unusable = assertFailsWith<AtomicSwapBlockedException> { h.driver.ready(0) }
             assertEquals(AtomicSwapBlock.MISMATCH, unusable.reason)

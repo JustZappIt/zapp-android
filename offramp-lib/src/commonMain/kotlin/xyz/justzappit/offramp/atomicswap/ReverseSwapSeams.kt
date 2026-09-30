@@ -67,10 +67,14 @@ interface ReverseSwapZcash : SwapZcash {
     /** Imports the joint account from the swap's birthday, unless the wallet watches it already. */
     suspend fun importAccount(record: ReverseSwapRecord): JointAccountId
 
-    /** The joint account's spendable zatoshi, once the wallet has synced to the tip. */
-    suspend fun spendable(record: ReverseSwapRecord): Long
-
-    suspend fun estimateReceive(record: ReverseSwapRecord): ReverseReceiveEstimate
+    /**
+     * What the joint account received in transactions with [confirmations] or more, counted against the tip the
+     * wallet synced to, and the most a sweep of those notes home pays. Not yet spendable, as the wallet counts it.
+     */
+    suspend fun estimateReceive(
+        record: ReverseSwapRecord,
+        confirmations: Int,
+    ): ReverseReceiveEstimate
 
     /** The sweep home, or the one built before an interruption; never sent. Null until every note is spendable. */
     suspend fun prepareReceive(

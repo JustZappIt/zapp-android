@@ -17,8 +17,9 @@ object AtomicSwapTestnet {
     // 0.1 of the test token, whose relayer asks 0.02.
     private const val MAX_RELAYER_FEE = 100_000L
 
-    // The testnet maker counts a deposit after 3 confirmations, about 4 minutes; its t0 comes 13.
-    private const val CONFIRMATIONS = 3
+    // The testnet maker counts a deposit, and an escrow, after 2 confirmations: under 3 minutes on Zcash, with t0 13
+    // minutes out. Records kept with the defaults keep theirs.
+    private const val CONFIRMATIONS = 2
     private const val MIN_SECONDS_TO_T0 = 9 * 60L
 
     // In the token's base units; the hosted services start above the most a relayer may keep.
@@ -41,6 +42,7 @@ object AtomicSwapTestnet {
                     maker = Address.parse("0x2bac02b5032e9092493814c705f156b49e288922"),
                     relayer = Address.parse("0xd9633572041886fa7584a2e12f36c8c7f1126412"),
                     maxRelayerFee = Usdc6.ofMicros(MAX_RELAYER_FEE),
+                    escrowConfirmations = CONFIRMATIONS.toLong(),
                     zcashNetwork = SwapZcashNetwork.TESTNET,
                     zcashConfirmations = CONFIRMATIONS,
                 ),

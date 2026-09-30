@@ -52,7 +52,8 @@ abstract class ReverseSwapDriverFixtures {
         var now = 1_000L
         var nextIndex = 0
         var escrow: OnChainSwap? = null
-        var spendable = 0L
+        var paidIn = 0L
+        var depositConfirmations = 10
         var sweepFee = 10_000L
         var refundUntil = 0L
         var claimUntil = 0L
@@ -250,9 +251,10 @@ abstract class ReverseSwapDriverFixtures {
 
         override suspend fun importAccount(record: ReverseSwapRecord) = ACCOUNT
 
-        override suspend fun spendable(record: ReverseSwapRecord) = spendable
-
-        override suspend fun estimateReceive(record: ReverseSwapRecord) = ReverseReceiveEstimate(spendable, sweepFee)
+        override suspend fun estimateReceive(
+            record: ReverseSwapRecord,
+            confirmations: Int,
+        ) = ReverseReceiveEstimate(if (depositConfirmations >= confirmations) paidIn else 0, sweepFee)
 
         override suspend fun prepareReceive(
             record: ReverseSwapRecord,

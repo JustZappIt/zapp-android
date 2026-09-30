@@ -27,6 +27,7 @@ data class ReverseSwapState(
     val record: ReverseSwapRecord? = null,
     /** What holds the conversion up, while something does; it's tried again by itself. */
     val problem: AtomicSwapProblem? = null,
+    val zcashWait: ZcashWait? = null,
 )
 
 /** The conversion from private USD to ZEC; only its funding and settlement wait for the user. */
@@ -51,9 +52,6 @@ interface ReverseSwapRepository : SwapConversionLifecycle {
     suspend fun canRescue(index: Int): Boolean
 
     suspend fun rescue(index: Int)
-
-    /** One look at the conversion from its screen, which says what it shows; nothing is notified. */
-    suspend fun refresh()
 }
 
 internal class ReverseSwapRepositoryImpl(
@@ -78,7 +76,8 @@ internal class ReverseSwapRepositoryImpl(
 
     override val state: StateFlow<ReverseSwapState> =
         combine(store.observeActive.unreadableAsNone(), runner.loop.progress) { record, progress ->
-            ReverseSwapState(record, progress.problem.takeIf { record != null && progress.index == record.index })
+            val current = progress.takeIf { record != null && it.index == record.index } ?: SwapProgress()
+            ReverseSwapState(record, current.problem, current.zcashWait)
         }.stateIn(scope, SharingStarted.Eagerly, ReverseSwapState())
 
     override val history: Flow<List<ReverseSwapRecord>> =
@@ -108,12 +107,6 @@ internal class ReverseSwapRepositoryImpl(
     override suspend fun rescue(index: Int) = resumingAfter { driverFor(index).rescue(index) }
 
     override suspend fun canRescue(index: Int): Boolean = driverFor(index).canRescue(index)
-
-    override suspend fun refresh() =
-        resumingAfter {
-            store.active()?.let { sessions.reverse(it.deployment).advance() }
-            retryNow()
-        }
 
     // Whatever the step came to, the loop picks the conversion up from there, unless the wallet was reset meanwhile.
     private suspend fun resumingAfter(step: suspend () -> Unit) {

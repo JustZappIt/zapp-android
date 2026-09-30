@@ -4,7 +4,6 @@
     <string name="reverse_intro">Primero autoriza el envío de USD privado. Cuando tu billetera confirme de forma independiente el depósito completo de ZEC, autoriza la liquidación para recibir ZEC protegido.</string>
     <string name="reverse_ready">Autorizar liquidación</string>
     <string name="reverse_new">Nueva conversión</string>
-    <string name="reverse_refresh">Consultar progreso</string>
     <string name="reverse_cancel">Cancelar / solicitar reembolso privado</string>
     <string name="reverse_rescue">Recuperar reembolso</string>
     <string name="reverse_accepting">Preparando tu cuenta receptora</string>
@@ -12,7 +11,7 @@
     <string name="reverse_sending">Enviando USD privado</string>
     <string name="reverse_confirming">Confirmando el depósito en garantía</string>
     <string name="reverse_receiving">Esperando ZEC confirmado</string>
-    <string name="reverse_ready_explanation">El depósito completo de ZEC está confirmado y disponible. Autoriza la liquidación para liberar tus USD privados y mover ZEC a tu billetera protegida.</string>
+    <string name="reverse_ready_explanation">El depósito completo de ZEC está confirmado. Autoriza la liquidación para liberar tus USD privados y mover ZEC a tu billetera protegida.</string>
     <string name="reverse_settling">Esperando la liquidación</string>
     <string name="reverse_sweeping">Moviendo ZEC a tu billetera protegida</string>
     <string name="reverse_refund_wait">El reembolso espera su plazo o bloqueo. Puedes solicitarlo ahora; se realizará cuando esté permitido.</string>
