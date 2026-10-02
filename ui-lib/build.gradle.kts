@@ -58,6 +58,7 @@ android {
                     "src/main/res/ui/export_data",
                     "src/main/res/ui/error",
                     "src/main/res/ui/gift",
+                    "src/main/res/ui/group_link",
                     "src/main/res/ui/home",
                     "src/main/res/ui/insufficient_funds",
                     "src/main/res/ui/choose_server",
@@ -210,6 +211,19 @@ androidComponents {
                 type = "boolean",
                 value = project.property("P2P_ONRAMP_AUTO_ZEC_ENABLED").toString().toBoolean().toString(),
                 comment = "Whether new P2P onramps may automatically deliver ZEC"
+            )
+        )
+        variant.buildConfigFields?.put(
+            "IS_GROUP_LINKS_ENABLED",
+            BuildConfigField(
+                type = "boolean",
+                value =
+                    (
+                        project.property("ZAPP_GROUP_LINKS_ENABLED").toString().toBoolean() ||
+                            variant.buildType == "debug" ||
+                            variant.productFlavors.any { it.second == DistributionDimension.INTERNAL.value }
+                    ).toString(),
+                comment = "Whether group invite links are handled and offered"
             )
         )
         variant.buildConfigFields?.put(

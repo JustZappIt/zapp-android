@@ -56,6 +56,8 @@ import co.electriccoin.zcash.ui.screen.gift.GiftClaimArgs
 import co.electriccoin.zcash.ui.screen.gift.model.GIFT_LINK_HOST
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkIntake
 import co.electriccoin.zcash.ui.screen.gift.model.PendingGiftLinkStore
+import co.electriccoin.zcash.ui.screen.grouplink.GroupInviteCoordinator
+import co.electriccoin.zcash.ui.screen.grouplink.model.GroupInviteLinks
 import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnInbox
 import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnLink
 import co.electriccoin.zcash.ui.screen.reputation.increase.IncreaseReputationArgs
@@ -100,6 +102,8 @@ class MainActivity : FragmentActivity() {
 
     private val pendingGiftLinks: PendingGiftLinkStore by inject()
     private val identityReturns: IdentityReturnInbox by inject()
+
+    private val groupInvites: GroupInviteCoordinator by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -146,6 +150,8 @@ class MainActivity : FragmentActivity() {
             isIdentityReturnUri(intent, data) -> openIdentityReturn(intent, data, resumeReclaim)
 
             isGiftUri(intent, data) -> openGiftClaim(intent, data)
+
+            isGroupInviteUri(intent) -> openGroupInvite(intent)
 
             else -> navigationRouter.forward(ThirdPartyScan)
         }
@@ -223,6 +229,18 @@ class MainActivity : FragmentActivity() {
 
     private fun isGiftUri(intent: Intent, data: Uri): Boolean =
         intent.action == Intent.ACTION_VIEW && GIFT_LINK_HOST.equals(data.host, ignoreCase = true)
+
+    private fun isGroupInviteUri(intent: Intent): Boolean =
+        intent.action == Intent.ACTION_VIEW && intent.dataString?.let(GroupInviteLinks::isGroupLink) == true
+
+    // RootNavGraph opens the held invite once there is someone to join as. The fragment is a bearer secret.
+    private fun openGroupInvite(intent: Intent) {
+        val raw = intent.dataString ?: return
+        intent.data = null
+        lifecycleScope.launch {
+            groupInvites.intake(raw)?.let { navigationRouter.forward(it) }
+        }
+    }
 
     private fun forwardChatNotificationIntent(intent: Intent) {
         intent.getStringExtra(CHAT_CONVERSATION_ID_EXTRA)?.let { conversationId ->

@@ -35,6 +35,7 @@ val chatViewModelModule =
                 chatBootstrap = get(),
                 chatContactsRepository = get(),
                 chatConversationsRepository = get(),
+                groupLinks = get(),
                 transactionRepository = get(),
                 getZashiAccount = get(),
                 chatSendContext = get(),

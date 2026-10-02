@@ -84,21 +84,17 @@ object SupportChatConstants {
     /**
      * Returns true when the conversation should be treated as a support ticket on this device.
      *
-     * The two sides need different signals: the user's device must require the support agent's
-     * key in [participantIds] (`displayName` alone is spoofable), while the support agent's
-     * device falls back to the displayName prefix because its own key is excluded from the
-     * SDK's participant list.
+     * Tickets have the support prefix; ordinary groups may also include the support account.
+     * The user's device additionally requires the support agent's key in [participantIds]
+     * (`displayName` alone is spoofable). The agent's own key is excluded from its participant list.
      */
     fun isSupportConversation(
         displayName: String,
         participantIds: List<String>,
         localPublicKey: String?,
     ): Boolean {
+        if (!displayName.startsWith(DISPLAY_NAME_PREFIX)) return false
         val viewerIsSupportAgent = localPublicKey == SUPPORT_PUBLIC_KEY
-        return if (viewerIsSupportAgent) {
-            displayName.startsWith(DISPLAY_NAME_PREFIX)
-        } else {
-            participantIds.contains(SUPPORT_PUBLIC_KEY)
-        }
+        return viewerIsSupportAgent || participantIds.contains(SUPPORT_PUBLIC_KEY)
     }
 }
