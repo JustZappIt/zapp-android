@@ -410,29 +410,39 @@ class AtomicSwapClaimTest : AtomicSwapDriverFixtures() {
         }
 
     @Test
-    fun aPayoutAfterTheClaimPaysARaisedFeeWithinTheDeploymentsLimit() =
+    fun aPayoutAfterTheClaimNeverRaisesTheReviewedFee() =
         runTest {
             val h = Harness()
             val record = h.depositedRecord()
             h.chain.stage = SwapStage.CLAIMED
             h.relayerFee = "30000"
 
-            assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(record))
-            assertTrue(h.bodies.getValue("/v1/payout").contains("\"fee\":\"30000\""))
+            val blocked = assertFailsWith<AtomicSwapBlockedException> { h.driver.advance(record) }
+            assertEquals(AtomicSwapBlock.RELAYER_FEE, blocked.reason)
+            assertTrue("/v1/payout" !in h.paths)
+            assertTrue(h.keys.signedFees.isEmpty())
+            assertNull(h.store.record?.outcome)
         }
 
     @Test
-    fun aPayoutTheClaimLeftUndoneGoesAgainAtTheFeeTheRelayerAsksNow() =
+    fun aSplitClaimCannotAuthorizeAHigherFeeAndResumesAtTheReviewedFee() =
         runTest {
             val h = Harness()
             val record = h.depositedRecord()
             h.chain.stage = SwapStage.READY
             h.claimPaysOut = false
-            h.feeAfterClaim = "30000"
+            h.feeAfterClaim = "100000"
 
-            assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(record))
+            val blocked = assertFailsWith<AtomicSwapBlockedException> { h.driver.advance(record) }
+            assertEquals(AtomicSwapBlock.RELAYER_FEE, blocked.reason)
             assertTrue(h.bodies.getValue("/v1/claim").contains("\"fee\":\"20000\""))
-            assertTrue(h.bodies.getValue("/v1/payout").contains("\"fee\":\"30000\""))
+            assertTrue("/v1/payout" !in h.paths)
+            assertEquals(listOf(record.relayerFee), h.keys.signedFees)
+            assertNull(h.store.record?.outcome)
+
+            h.relayerFee = "20000"
+            assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(h.store.record!!))
+            assertTrue(h.bodies.getValue("/v1/payout").contains("\"fee\":\"20000\""))
         }
 
     @Test

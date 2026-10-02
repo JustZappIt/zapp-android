@@ -124,8 +124,17 @@ interface AtomicSwapStore {
 
 /** Reads of the settlement chain a forward swap needs. */
 interface AtomicSwapChainReader {
-    /** Null until the swap is open. */
+    /** Latest state, including swaps too recent to act on: used to avoid reusing keys or abandoning an open. */
     suspend fun swap(id: SwapId): OnChainSwap?
+
+    /** State at the deployment's confirmation depth; only this state authorizes deposits, reveals and completion. */
+    suspend fun confirmedSwap(id: SwapId): OnChainSwap?
+
+    /** The confirmed payout event, searched from around [since] (unix seconds) through the confirmed head. */
+    suspend fun confirmedPayout(
+        id: SwapId,
+        since: Long
+    ): SwapPayoutEvidence?
 
     /** The latest block's time: the contract's clock. */
     suspend fun now(): Long
@@ -146,5 +155,12 @@ interface AtomicSwapChainReader {
     suspend fun payoutTx(
         id: SwapId,
         near: Long
-    ): TxHash?
+    ): TxHash? = confirmedPayout(id, near)?.transaction
 }
+
+/** What the settlement contract actually paid, rather than what a relayer says it submitted. */
+data class SwapPayoutEvidence(
+    val transaction: TxHash,
+    val relayer: Address,
+    val fee: Usdc6,
+)

@@ -31,7 +31,7 @@ data class SwapDeployment(
     /** The most a relayer may keep from a payout. */
     @SerialName("maxRefundFee")
     val maxRelayerFee: Usdc6,
-    /** Blocks a reverse swap's escrow needs on top of it before it counts. */
+    /** Confirmations, including its own block, required for escrow, locks and payouts in either direction. */
     @SerialName("confirmations")
     val escrowConfirmations: Long = DEFAULT_ESCROW_CONFIRMATIONS,
     val zcashNetwork: SwapZcashNetwork = SwapZcashNetwork.TESTNET,

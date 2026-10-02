@@ -21,6 +21,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import xyz.justzappit.evm.abi.Selector4
+import xyz.justzappit.evm.abi.keccak256
 import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.rpc.TransactionStatus
@@ -84,7 +85,7 @@ class AtomicSwapChainTest {
     }
 
     @Test
-    fun aPayoutIsLookedForAroundTheBlockItsTimeFallsIn() =
+    fun aPayoutRequiresAConfirmedEventFromThisContractAndSwap() =
         runTest {
             val node = Node()
             val id = SwapId.of(filled(0x5c))
@@ -93,9 +94,93 @@ class AtomicSwapChainTest {
 
             assertEquals(TxHash.fromHex(PAYOUT_TX), tx)
             val filter = node.logFilters.single()
-            assertEquals("0x" + (LATEST - 300 - 5_000).toString(16), filter["fromBlock"]!!.jsonPrimitive.content)
-            assertEquals("0x" + LATEST.toString(16), filter["toBlock"]!!.jsonPrimitive.content)
+            assertEquals("0x" + (LATEST - 2 - 5_000 + 1).toString(16), filter["fromBlock"]!!.jsonPrimitive.content)
+            assertEquals("0x" + (LATEST - 2).toString(16), filter["toBlock"]!!.jsonPrimitive.content)
             assertEquals(id.hex, filter["topics"]!!.jsonArray[1].jsonPrimitive.content)
+            val payout = node.chain.confirmedPayout(id, NOW)!!
+            assertEquals(DEPLOYMENT.relayer, payout.relayer)
+            assertEquals(Usdc6.ofMicros(20_000), payout.fee)
+            node.close()
+        }
+
+    @Test
+    fun aRemovedUnconfirmedOrUnrelatedLogCannotConfirmAPayout() =
+        runTest {
+            val node = Node()
+            val id = SwapId.of(filled(0x5c))
+            val unrelated =
+                listOf(
+                    payoutLog(removed = true),
+                    payoutLog(block = LATEST - 1),
+                    payoutLog(contract = DEPLOYMENT.maker.lowercaseHex),
+                    payoutLog(topic = "0x" + filled(0x01).toHex()),
+                    payoutLog(id = SwapId.of(filled(0x01)).hex),
+                )
+            unrelated.forEach { log ->
+                node.logs = "[$log]"
+                assertNull(node.chain.confirmedPayout(id, NOW))
+            }
+            node.logs = "[${payoutLog(data = "0x")}]"
+            val malformed = assertFailsWith<AtomicSwapBlockedException> { node.chain.confirmedPayout(id, NOW) }
+            assertEquals(AtomicSwapBlock.CHAIN_UNREADABLE, malformed.reason)
+            node.close()
+        }
+
+    @Test
+    fun aDelayedPayoutCanBeFoundAcrossBoundedPages() =
+        runTest {
+            val node = Node()
+            node.logs = "[${payoutLog(block = LATEST - 10_000)}]"
+
+            val payout = node.chain.confirmedPayout(SwapId.of(filled(0x5c)), NOW - 12 * 15_000)
+
+            assertEquals(TxHash.fromHex(PAYOUT_TX), payout?.transaction)
+            assertEquals(2, node.logFilters.size)
+            var previousFrom = LATEST - 1
+            node.logFilters.forEach { filter ->
+                val from =
+                    filter["fromBlock"]!!
+                        .jsonPrimitive.content
+                        .removePrefix("0x")
+                        .toLong(16)
+                val to =
+                    filter["toBlock"]!!
+                        .jsonPrimitive.content
+                        .removePrefix("0x")
+                        .toLong(16)
+                assertEquals(previousFrom - 1, to)
+                assertTrue(to - from + 1 in 1..5_000)
+                previousFrom = from
+            }
+            node.close()
+        }
+
+    @Test
+    fun forwardAuthorizationUsesTheConfiguredDepthWhileKeyReuseChecksUseTheTip() =
+        runTest {
+            val node = Node(confirmations = 5)
+            val id = SwapId.of(filled(0x5c))
+
+            node.chain.confirmedSwap(id)
+            node.chain.swap(id)
+
+            assertEquals(listOf("0x" + (LATEST - 4).toString(16), "latest"), node.callTags(GET_SWAP))
+            node.close()
+        }
+
+    @Test
+    fun aNodeOnAnotherChainCannotAuthorizeAForwardSwapOrConfirmAPayout() =
+        runTest {
+            val node = Node(chainId = 1)
+            val id = SwapId.of(filled(0x5c))
+
+            val swap = assertFailsWith<AtomicSwapBlockedException> { node.chain.confirmedSwap(id) }
+            val payout = assertFailsWith<AtomicSwapBlockedException> { node.chain.confirmedPayout(id, NOW) }
+
+            assertEquals(AtomicSwapBlock.WRONG_DEPLOYMENT, swap.reason)
+            assertEquals(AtomicSwapBlock.WRONG_DEPLOYMENT, payout.reason)
+            assertTrue(node.callTags(GET_SWAP).isEmpty())
+            assertTrue(node.logFilters.isEmpty())
             node.close()
         }
 
@@ -171,8 +256,10 @@ class AtomicSwapChainTest {
     /** A JSON-RPC node that answers what the reader asks, and remembers how it was asked. */
     private class Node(
         chainId: Long = 11_155_111,
+        confirmations: Long = 3,
     ) {
         val logFilters = mutableListOf<JsonObject>()
+        var logs = "[${payoutLog()}]"
         private val calls = mutableListOf<Pair<String, String>>()
         var known = false
         var receipt: Pair<Long, String>? = null
@@ -186,7 +273,7 @@ class AtomicSwapChainTest {
                         "eth_chainId" -> "\"0x${chainId.toString(16)}\""
                         "eth_getBlockByNumber" -> HEAD_BLOCK
                         "eth_call" -> call(params)
-                        "eth_getLogs" -> PAYOUT_LOGS.also { logFilters += params[0].jsonObject }
+                        "eth_getLogs" -> logs.also { logFilters += params[0].jsonObject }
                         "eth_getTransactionReceipt" -> receiptJson()
                         "eth_getTransactionByHash" -> if (known) """{"hash":"$FUNDING_TX"}""" else "null"
                         else -> error("unexpected ${payload["method"]}")
@@ -198,7 +285,11 @@ class AtomicSwapChainTest {
                 )
             }
         private val http = HttpClient(engine) { install(ContentNegotiation) { json() } }
-        val chain = AtomicSwapChain(BaseRpcClient(http, "http://mock/rpc"), DEPLOYMENT)
+        val chain =
+            AtomicSwapChain(
+                BaseRpcClient(http, "http://mock/rpc"),
+                DEPLOYMENT.copy(escrowConfirmations = confirmations),
+            )
 
         fun callTags(signature: String) = calls.filter { it.first == selector(signature) }.map { it.second }
 
@@ -238,9 +329,6 @@ class AtomicSwapChainTest {
         val PAYOUT_TX = "0x" + "a1".repeat(32)
         val FUNDING_TX = "0x" + "b2".repeat(32)
         val HEAD_BLOCK = """{"number":"0x${LATEST.toString(16)}","timestamp":"0x${NOW.toString(16)}"}"""
-        val PAYOUT_LOGS =
-            """[{"address":"0x32ce55d00e6184c385e44e6b20b76d3a8407e809","topics":[],"data":"0x",""" +
-                """"blockNumber":"0x1","transactionHash":"$PAYOUT_TX","logIndex":"0x0"}]"""
         val DEPLOYMENT =
             SwapDeployment(
                 makerUrl = Url("http://maker"),
@@ -256,6 +344,17 @@ class AtomicSwapChainTest {
             )
 
         fun selector(signature: String) = Selector4.fromCanonicalSignature(signature).hex
+
+        fun payoutLog(
+            block: Long = LATEST - 2,
+            removed: Boolean = false,
+            contract: String = DEPLOYMENT.contract.lowercaseHex,
+            topic: String = "0x" + keccak256("PaidOut(bytes32,address,uint256)".encodeToByteArray()).toHex(),
+            id: String = SwapId.of(filled(0x5c)).hex,
+            data: String = "0x" + (address(DEPLOYMENT.relayer.lowercaseHex) + uint(20_000)).toHex(),
+        ) =
+            """{"address":"$contract","topics":["$topic","$id"],"data":"$data","removed":$removed,""" +
+                """"blockNumber":"0x${block.toString(16)}","transactionHash":"$PAYOUT_TX","logIndex":"0x0"}"""
 
         fun swapWords(stage: Int) =
             listOf(

@@ -52,6 +52,13 @@ class SwapIndicesTest {
     ) : AtomicSwapChainReader {
         private val forwardIds = forward.map { SwapId.of(maker, share(it)) }
 
+        override suspend fun confirmedSwap(id: SwapId): OnChainSwap? = error("indices must include unconfirmed swaps")
+
+        override suspend fun confirmedPayout(
+            id: SwapId,
+            since: Long
+        ): SwapPayoutEvidence? = null
+
         override suspend fun swap(id: SwapId): OnChainSwap? =
             if (id in forwardIds) {
                 OnChainSwap(

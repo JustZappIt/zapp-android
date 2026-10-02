@@ -46,7 +46,7 @@ data class AtomicSwapRecord(
     val zcashHeight: Long,
     /** Unix seconds on this device's clock. */
     val acceptedAt: Long,
-    /** What the offer said reaches Railgun; null on swaps from before it was kept. */
+    /** Expected net payout, replaced by the confirmed event's net payout at completion; null on older records. */
     val receives: Usdc6? = null,
     val deposit: SwapDeposit = SwapDeposit.NotStarted,
     /** A refund's sweep home, kept before it is first sent. */

@@ -15,6 +15,7 @@ import xyz.justzappit.evm.rpc.transactionStatus
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.evm.util.hexToBigInteger
+import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.offramp.p2p.Usdc6
 
 /** [deployment]'s contract and Railgun's proxy over JSON-RPC, read for swaps either way. */
@@ -27,6 +28,11 @@ class AtomicSwapChain(
     private var lockDuration: Long? = null
 
     override suspend fun swap(id: SwapId): OnChainSwap? = decodeSwap(rpc.call(deployment.contract, GET_SWAP, id))
+
+    override suspend fun confirmedSwap(id: SwapId): OnChainSwap? {
+        rpc.requireChain(deployment)
+        return decodeSwap(rpc.call(deployment.contract, GET_SWAP, id, deployment.confirmedTag(rpc.head())))
+    }
 
     override suspend fun now(): Long = rpc.head().timestamp
 
@@ -51,30 +57,46 @@ class AtomicSwapChain(
         share: SwapShare
     ): Boolean = abiWords(rpc.call(deployment.contract, MAKER_KEY_USED, SwapId.of(owner, share)), 1).uint8(0) != 0
 
-    // Public nodes cap a log query's range, so it looks only either side of the block [near] falls in.
-    override suspend fun payoutTx(
+    // Public nodes cap a log query's range. Walk backwards in bounded pages, including delayed payouts after [since].
+    override suspend fun confirmedPayout(
         id: SwapId,
-        near: Long
-    ): TxHash? {
+        since: Long
+    ): SwapPayoutEvidence? {
+        rpc.requireChain(deployment)
         val head = rpc.head()
-        val around = head.number - (head.timestamp - near) / SECONDS_PER_BLOCK
-        return rpc
-            .ethGetLogs(
-                address = deployment.contract,
-                topics = listOf(PAID_OUT_TOPIC, id.hex),
-                fromBlock = (around - LOG_WINDOW_BLOCKS).coerceIn(0, head.number),
-                toBlock = (around + LOG_WINDOW_BLOCKS).coerceIn(0, head.number),
-            ).firstOrNull { !it.removed }
-            ?.let { TxHash.fromHex(it.transactionHash) }
+        val confirmed = deployment.confirmedNumber(head)
+        val around = head.number - (head.timestamp - since) / SECONDS_PER_BLOCK
+        val earliest = (around - LOG_WINDOW_BLOCKS).coerceIn(0, confirmed)
+        var to = confirmed
+        while (to >= earliest) {
+            val from = (to - LOG_WINDOW_BLOCKS + 1).coerceAtLeast(earliest)
+            val log =
+                rpc
+                    .ethGetLogs(
+                        address = deployment.contract,
+                        topics = listOf(PAID_OUT_TOPIC, id.hex),
+                        fromBlock = from,
+                        toBlock = to,
+                    ).firstOrNull {
+                        !it.removed && it.address.equals(deployment.contract.lowercaseHex, ignoreCase = true) &&
+                            it.topics.size == 2 && it.topics[0].equals(PAID_OUT_TOPIC, ignoreCase = true) &&
+                            it.topics[1].equals(id.hex, ignoreCase = true) &&
+                            hexToBigInteger(it.blockNumber).toLong() in from..to
+                    }
+            if (log != null) {
+                val words = abiWords(log.data.hexToBytes(), 2)
+                return SwapPayoutEvidence(TxHash.fromHex(log.transactionHash), words.address(0), Usdc6(words.uint(1)))
+            }
+            to = from - 1
+        }
+        return null
     }
 
     // Read far enough behind the head that the escrow has its confirmations.
     override suspend fun read(id: SwapId): ReverseChainState {
-        if (rpc.ethChainId() != deployment.chainId) {
-            throw AtomicSwapBlockedException(AtomicSwapBlock.WRONG_DEPLOYMENT, "the node serves another chain")
-        }
+        rpc.requireChain(deployment)
         val head = rpc.head()
-        val confirmed = "0x" + (head.number - deployment.escrowConfirmations + 1).coerceAtLeast(0).toString(HEX_RADIX)
+        val confirmed = deployment.confirmedTag(head)
         val funding = abiWords(rpc.call(deployment.contract, REVERSE_FUNDING, id, confirmed), 2)
         return ReverseChainState(
             swap = decodeSwap(rpc.call(deployment.contract, GET_SWAP, id, confirmed)),
@@ -102,7 +124,6 @@ class AtomicSwapChain(
         private const val VAULT_OF = "vaultOf(bytes32)"
         private const val SECONDS_PER_BLOCK = 12
         private const val LOG_WINDOW_BLOCKS = 5_000L
-        private const val HEX_RADIX = 16
         private val PAID_OUT_TOPIC = keccak256("PaidOut(bytes32,address,uint256)".encodeToByteArray()).hex()
         private val LOCK_DURATION_CALL = AbiEncoder.encodeFunctionCall("LOCK_DURATION()", emptyList())
 
@@ -163,6 +184,21 @@ private class Head(
 
 private suspend fun BaseRpcClient.head(): Head =
     ethGetBlockByNumber().let { Head(hexToBigInteger(it.number).toLong(), hexToBigInteger(it.timestamp).toLong()) }
+
+private suspend fun BaseRpcClient.requireChain(deployment: SwapDeployment) {
+    if (ethChainId() != deployment.chainId) {
+        throw AtomicSwapBlockedException(AtomicSwapBlock.WRONG_DEPLOYMENT, "the node serves another chain")
+    }
+}
+
+private fun SwapDeployment.confirmedNumber(head: Head): Long {
+    require(escrowConfirmations > 0) { "confirmation depth must be positive" }
+    return (head.number - escrowConfirmations + 1).coerceAtLeast(0)
+}
+
+private fun SwapDeployment.confirmedTag(head: Head) = "0x" + confirmedNumber(head).toString(HEX_RADIX)
+
+private const val HEX_RADIX = 16
 
 private suspend fun BaseRpcClient.call(
     contract: Address,

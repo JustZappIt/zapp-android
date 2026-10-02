@@ -38,6 +38,7 @@ abstract class AtomicSwapDriverFixtures {
         var claimPaysOut = true
         var zcashNetwork = "testnet"
         var unreachable: String? = null
+        var afterLock: () -> Unit = {}
         private val engine =
             MockEngine { request ->
                 val path = request.url.encodedPath
@@ -73,18 +74,27 @@ abstract class AtomicSwapDriverFixtures {
                         }
 
                         path == "/v1/lock-claim" -> {
-                            sent(1).also { chain.claimLockUntil = chain.now + LOCK_SECONDS }
+                            sent(1).also {
+                                chain.claimLockUntil = chain.now + LOCK_SECONDS
+                                afterLock()
+                            }
                         }
 
                         path == "/v1/claim" -> {
                             chain.stage = SwapStage.CLAIMED
                             chain.paidOut = claimPaysOut
+                            chain.payoutHash = TxHash.fromHex(hash(1))
+                            chain.payoutFee = Usdc6.ofMicros(relayerFee.toLong())
                             feeAfterClaim?.let { relayerFee = it }
                             sent(if (claimPaysOut) 2 else 1)
                         }
 
                         path == "/v1/payout" -> {
-                            sent(1).also { chain.paidOut = true }
+                            sent(1).also {
+                                chain.paidOut = true
+                                chain.payoutHash = TxHash.fromHex(hash(0))
+                                chain.payoutFee = Usdc6.ofMicros(relayerFee.toLong())
+                            }
                         }
 
                         else -> {
@@ -137,6 +147,21 @@ abstract class AtomicSwapDriverFixtures {
         var payoutNote = NOTE_COMMITMENT
         var secret = ByteArray(32)
         var railgunAccepts = true
+        var confirmed: (() -> OnChainSwap?)? = null
+        var payoutVisible = true
+        var payoutHash = TxHash.fromHex(hash(0))
+        var payoutFee = Usdc6.ofMicros(20_000)
+
+        override suspend fun confirmedSwap(id: SwapId): OnChainSwap? {
+            confirmed?.let { return it() }
+            return swap(id)
+        }
+
+        override suspend fun confirmedPayout(
+            id: SwapId,
+            since: Long
+        ): SwapPayoutEvidence? =
+            SwapPayoutEvidence(payoutHash, RELAYER, payoutFee).takeIf { paidOut && payoutVisible && id == SWAP_ID }
 
         override suspend fun swap(id: SwapId): OnChainSwap? =
             OnChainSwap(
@@ -176,6 +201,8 @@ abstract class AtomicSwapDriverFixtures {
     protected class FakeKeys : AtomicSwapKeys {
         /** Whose Railgun wallet each note and acceptance was for, in order. */
         val railgunKeys = mutableListOf<RailgunKeySource>()
+        val signedFees = mutableListOf<Usdc6>()
+        var beforeClaimSecret: () -> Unit = {}
 
         override suspend fun userShare(index: Int) = USER_SHARE
 
@@ -207,7 +234,7 @@ abstract class AtomicSwapDriverFixtures {
             makerShare: SwapShare
         ) = "utest1deposit"
 
-        override suspend fun claimSecret(index: Int) = ByteArray(32) { 9 }
+        override suspend fun claimSecret(index: Int) = ByteArray(32) { 9 }.also { beforeClaimSecret() }
 
         override suspend fun signLockClaim(
             index: Int,
@@ -224,7 +251,7 @@ abstract class AtomicSwapDriverFixtures {
             swapId: SwapId,
             relayer: Address,
             fee: Usdc6,
-        ) = ByteArray(65) { 8 }
+        ) = ByteArray(65) { 8 }.also { signedFees += fee }
     }
 
     protected class FakeZcash : AtomicSwapZcash {

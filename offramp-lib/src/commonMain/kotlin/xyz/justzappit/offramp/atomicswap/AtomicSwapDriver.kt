@@ -103,7 +103,7 @@ class AtomicSwapDriver(
         onActivity: (AtomicSwapActivity) -> Unit = {},
     ): AtomicSwapStep {
         val end = record.end
-        val swap = if (end == null) chain.swap(record.swapId) else null
+        val swap = if (end == null) chain.confirmedSwap(record.swapId) else null
         return when {
             end != null -> {
                 AtomicSwapStep.Finished(end.outcome)
@@ -113,7 +113,7 @@ class AtomicSwapDriver(
                 notOnChain(record)
             }
 
-            matches(record, swap) -> {
+            keys.matches(record, swap, deployment) -> {
                 onChain(record, swap, onActivity)
             }
 
@@ -149,7 +149,7 @@ class AtomicSwapDriver(
 
     private suspend fun notOnChain(record: AtomicSwapRecord): AtomicSwapStep {
         val gaveUp = nowSeconds() > record.quote.expiresAt + OPEN_GRACE_SECONDS
-        return if (record.deposit == SwapDeposit.NotStarted && gaveUp) {
+        return if (record.deposit == SwapDeposit.NotStarted && gaveUp && chain.swap(record.swapId) == null) {
             ending.finish(record, AtomicSwapOutcome.NothingSent(NothingSentCause.NEVER_OPENED))
         } else {
             AtomicSwapStep.Waiting(AtomicSwapWait.OPENING)
@@ -167,19 +167,17 @@ class AtomicSwapDriver(
             }
 
             SwapStage.CLAIMED -> {
-                val payoutTx =
-                    if (swap.paidOut) {
-                        null
-                    } else {
-                        onActivity(AtomicSwapActivity.PAYING_OUT)
-                        claim.payOut(record, swap)
-                    }
-                ending.finish(record, AtomicSwapOutcome.Paid, payoutTx)
+                if (!swap.paidOut) {
+                    onActivity(AtomicSwapActivity.PAYING_OUT)
+                    claim.payOut(record, swap)
+                }
+                finishPaid(record)
             }
 
             SwapStage.READY -> {
                 onActivity(AtomicSwapActivity.CLAIMING)
-                ending.finish(record, AtomicSwapOutcome.Paid, claim.claim(record, swap))
+                claim.claim(record, swap)
+                finishPaid(record)
             }
 
             SwapStage.OPEN -> {
@@ -201,7 +199,8 @@ class AtomicSwapDriver(
             // Past t0 the claim needs no `ready`: a maker gone quiet holds the deposit no longer.
             chain.now() >= swap.t0 -> {
                 onActivity(AtomicSwapActivity.CLAIMING)
-                ending.finish(record, AtomicSwapOutcome.Paid, claim.claim(record, swap))
+                claim.claim(record, swap)
+                finishPaid(record)
             }
 
             else -> {
@@ -210,17 +209,20 @@ class AtomicSwapDriver(
         }
     }
 
-    private suspend fun matches(
-        record: AtomicSwapRecord,
-        swap: OnChainSwap
-    ): Boolean =
-        swap.maker == deployment.maker &&
-            swap.makerShare == record.quote.makerShare &&
-            swap.userShare == keys.userShare(record.index) &&
-            swap.user == keys.authAddress(record.index) &&
-            swap.payoutNote == keys.payoutNote(record.index, record.railgunKeys).commitment &&
-            swap.token == deployment.token &&
-            swap.amount == record.quote.amount
+    // A relayer's response is not the payout receipt. Keep the confirmed contract event and the amount it paid.
+    private suspend fun finishPaid(record: AtomicSwapRecord): AtomicSwapStep.Finished {
+        val paid =
+            chain.confirmedPayout(record.swapId, record.acceptedAt)
+                ?: throw AtomicSwapBlockedException(AtomicSwapBlock.CHAIN_LAGGING, "the payout event isn't confirmed")
+        RelayerTerms(paid.relayer, deployment.chainId, deployment.contract, paid.fee)
+            .checkedFee(deployment, record.quote.amount)
+        return ending.finish(
+            record,
+            AtomicSwapOutcome.Paid,
+            paid.transaction,
+            payoutAfterFees(record.quote.amount, paid.fee),
+        )
+    }
 
     private companion object {
         const val ACCEPT_MARGIN_SECONDS = 15L
@@ -271,6 +273,19 @@ private fun payoutAfterFees(
 /** Railgun's fee for shielding; it charges the same to unshield. */
 val RAILGUN_FEE = Bps(value = 25)
 
+private suspend fun AtomicSwapKeys.matches(
+    record: AtomicSwapRecord,
+    swap: OnChainSwap,
+    deployment: SwapDeployment,
+): Boolean =
+    swap.maker == deployment.maker &&
+        swap.makerShare == record.quote.makerShare &&
+        swap.userShare == userShare(record.index) &&
+        swap.user == authAddress(record.index) &&
+        swap.payoutNote == payoutNote(record.index, record.railgunKeys).commitment &&
+        swap.token == deployment.token &&
+        swap.amount == record.quote.amount
+
 /** Claiming into Railgun through a relayer: the lock, the reveal, and the payout. */
 internal class AtomicSwapClaim(
     private val deployment: SwapDeployment,
@@ -283,28 +298,27 @@ internal class AtomicSwapClaim(
     suspend fun claim(
         record: AtomicSwapRecord,
         swap: OnChainSwap
-    ): TxHash? {
+    ) {
         val payout = payout(record, swap, record.relayerFee ?: deployment.maxRelayerFee)
         requireRailgunOpen(swap)
         holdClaimLock(record, swap)
-        val sent = relayer.claim(SwapReveal(record.swapId, keys.claimSecret(record.index).hex(), payout))
+        // Key derivation may suspend too. Read the lock and the clock again after every preparatory step.
+        val reveal = SwapReveal(record.swapId, keys.claimSecret(record.index).hex(), payout)
+        requireFreshClaimLock(record)
+        relayer.claim(reveal)
         val claimed = chain.caughtUp(record.swapId) { it.stage == SwapStage.CLAIMED }
-        // The relayer reveals first and pays out after; a payout that failed goes again at the fee it asks now.
-        if (sent.transactions.size < 2) return payOut(record, claimed)
-        chain.caughtUp(record.swapId) { it.paidOut }
-        return sent.transactions.last()
+        if (!claimed.paidOut) payOut(record, claimed)
     }
 
-    /** Pays out a revealed claim, at up to the deployment's most for the relayer: unpaid dollars would sit. */
+    /** Retries a revealed claim's payout without expanding the fee authorization the user reviewed. */
     suspend fun payOut(
         record: AtomicSwapRecord,
         swap: OnChainSwap
-    ): TxHash? {
-        val payout = payout(record, swap, deployment.maxRelayerFee)
+    ) {
+        val payout = payout(record, swap, record.relayerFee ?: deployment.maxRelayerFee)
         requireRailgunOpen(swap)
-        val payoutTx = relayer.payout(payout).transactions.lastOrNull()
-        chain.caughtUp(record.swapId) { it.paidOut }
-        return payoutTx
+        relayer.payout(payout)
+        chain.caughtUp(record.swapId) { it.stage == SwapStage.CLAIMED && it.paidOut }
     }
 
     suspend fun relayerFee(amount: Usdc6): Usdc6 = relayer.terms().checkedFee(deployment, amount)
@@ -320,7 +334,7 @@ internal class AtomicSwapClaim(
         swap: OnChainSwap,
         limit: Usdc6,
     ): SwapPayout {
-        val fee = relayer.terms().checkedFee(deployment, swap.amount, limit)
+        val fee = relayer.terms().checkedFee(deployment, swap.amount, minOf(limit, deployment.maxRelayerFee))
         val note = keys.payoutNote(record.index, record.railgunKeys)
         val signature =
             keys.signPayout(
@@ -356,6 +370,24 @@ internal class AtomicSwapClaim(
         relayer.lockClaim(SwapAuthorization(record.swapId, deadline, signature.hex()))
         chain.caughtUp(record.swapId) { it.claimLockUntil > now }
     }
+
+    private suspend fun requireFreshClaimLock(record: AtomicSwapRecord) {
+        val fresh =
+            chain.confirmedSwap(record.swapId)
+                ?: throw AtomicSwapBlockedException(AtomicSwapBlock.CHAIN_LAGGING, "the claim lock isn't confirmed")
+        val matches = keys.matches(record, fresh, deployment)
+        val now = freshHead(chain.now(), nowSeconds())
+        val unsafe =
+            (fresh.stage != SwapStage.OPEN && fresh.stage != SwapStage.READY) ||
+                fresh.claimLockUntil <= now + REVEAL_MARGIN_SECONDS
+        when {
+            !matches -> AtomicSwapBlock.MISMATCH
+            unsafe -> AtomicSwapBlock.CLAIM_LOCK_LAPSING
+            else -> null
+        }?.let { reason ->
+            throw AtomicSwapBlockedException(reason, "no matching swap with a safe claim lock to reveal under")
+        }
+    }
 }
 
 /** Ends a swap. The end goes on the stored record, which may be newer than the caller's copy within one step. */
@@ -367,8 +399,9 @@ internal class AtomicSwapEnding(
         record: AtomicSwapRecord,
         outcome: AtomicSwapOutcome,
         payoutTx: TxHash? = null,
+        receives: Usdc6? = null,
     ): AtomicSwapStep.Finished {
-        conclude(record, outcome, payoutTx)
+        conclude(record, outcome, payoutTx, receives)
         return AtomicSwapStep.Finished(outcome)
     }
 
@@ -376,11 +409,15 @@ internal class AtomicSwapEnding(
         record: AtomicSwapRecord,
         outcome: AtomicSwapOutcome,
         payoutTx: TxHash? = null,
+        receives: Usdc6? = null,
     ): AtomicSwapRecord {
         val current = store.active()?.takeIf { it.index == record.index } ?: record
         return current
-            .copy(end = SwapEnd(outcome, nowSeconds()), payoutTx = payoutTx ?: current.payoutTx)
-            .also { store.save(it) }
+            .copy(
+                end = SwapEnd(outcome, nowSeconds()),
+                payoutTx = payoutTx ?: current.payoutTx,
+                receives = receives ?: current.receives,
+            ).also { store.save(it) }
     }
 }
 
@@ -390,7 +427,7 @@ internal suspend fun AtomicSwapChainReader.caughtUp(
     seen: (OnChainSwap) -> Boolean
 ): OnChainSwap {
     repeat(CATCH_UP_POLLS) {
-        swap(swapId)?.takeIf(seen)?.let { return it }
+        confirmedSwap(swapId)?.takeIf(seen)?.let { return it }
         delay(CATCH_UP_INTERVAL)
     }
     throw AtomicSwapBlockedException(AtomicSwapBlock.CHAIN_LAGGING, "our RPC node never showed the swap as expected")
