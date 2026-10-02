@@ -20,11 +20,6 @@ data class AppleOnrampQuote(
     val netUsdcMicros: String,
     val buyPriceMicros: String,
     val expiresAtMillis: Long,
-    /**
-     * `OnrampRoute.name`: where this order will be placed, decided with the price lock. Display
-     * only on the Swift side; it travels back unchanged with the quote.
-     */
-    val route: String,
 )
 
 data class AppleOnrampField(

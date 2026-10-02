@@ -44,12 +44,6 @@ import kotlin.io.encoding.Base64
 data class OnrampScreeningConfig(
     val apiUrl: String,
     val encryptionKeyHex: String,
-    /**
-     * What a B2B record says it was filed from. The reference widget sends its embedding
-     * hostname; the service uses it to scope a B2B rejection to one product rather than to every
-     * wallet in the ecosystem.
-     */
-    val b2bDomain: String = DEFAULT_B2B_DOMAIN,
     /** Which app filed the record. The service reads it per product, so each platform names itself. */
     val orderSource: String = DEFAULT_ORDER_SOURCE,
 ) {
@@ -57,22 +51,8 @@ data class OnrampScreeningConfig(
         get() = apiUrl.isNotBlank() && encryptionKeyHex.isNotBlank()
 
     companion object {
-        const val DEFAULT_B2B_DOMAIN = "justzappit.xyz"
         const val DEFAULT_ORDER_SOURCE = "zapp-android"
     }
-}
-
-/**
- * Which of the service's two intake endpoints a record is filed on. They differ in path, in the
- * AAD the payload is bound under, and in the envelope: the consumer one names its `type`, the
- * B2B one — for orders placed through an integrator — is typed by its path alone.
- */
-enum class OnrampScreeningKind(
-    val path: String,
-    val aadPrefix: String,
-) {
-    CONSUMER("/activity-logs", "buy_order"),
-    B2B("/activity-logs/b2b-buy-order", "b2b_buy_order"),
 }
 
 /**
@@ -157,11 +137,10 @@ class OnrampScreeningClient(
         signer: OnrampScreeningSigner,
         order: OnrampScreeningOrder,
         country: String?,
-        kind: OnrampScreeningKind = OnrampScreeningKind.CONSUMER,
     ): OnrampScreeningOutcome {
         require(config.isConfigured) { "screening is not configured" }
         return try {
-            file(signer, order, country, kind)
+            file(signer, order, country)
         } catch (e: CancellationException) {
             throw e
         } catch (
@@ -169,7 +148,7 @@ class OnrampScreeningClient(
             // order, but the record it never filed is the order that is never accepted.
             @Suppress("TooGenericExceptionCaught") e: Exception,
         ) {
-            unavailable("${kind.path} failed: ${e::class.simpleName}")
+            unavailable("$PATH_ACTIVITY_LOGS failed: ${e::class.simpleName}")
         }
     }
 
@@ -177,27 +156,26 @@ class OnrampScreeningClient(
         signer: OnrampScreeningSigner,
         order: OnrampScreeningOrder,
         country: String?,
-        kind: OnrampScreeningKind,
     ): OnrampScreeningOutcome {
         // The encrypted payload, AAD, and outer envelope share this exact millisecond timestamp.
         val bodyMillis = nowMillis()
         val userAddress = signer.subject.lowercaseHex
-        val payload = payloadJson(order, country, bodyMillis, kind)
+        val payload = payloadJson(order, country, bodyMillis)
         val encrypted =
             encrypt(
                 plaintext = payload,
-                aad = "${kind.aadPrefix}|$userAddress|$bodyMillis",
+                aad = "$SCREENING_TYPE|$userAddress|$bodyMillis",
             )
 
         val response =
-            httpClient.post("${config.apiUrl.trimEnd('/')}${kind.path}") {
+            httpClient.post("${config.apiUrl.trimEnd('/')}$PATH_ACTIVITY_LOGS") {
                 contentType(ContentType.Application.Json)
                 signedHeaders(signer, ACTION_ACTIVITY_LOG).forEach { (name, value) -> header(name, value) }
                 setBody(
                     Json.encodeToString(
                         JsonObject.serializer(),
                         buildJsonObject {
-                            if (kind == OnrampScreeningKind.CONSUMER) put("type", kind.aadPrefix)
+                            put("type", SCREENING_TYPE)
                             put("user_address", userAddress)
                             put("timestamp", bodyMillis)
                             put("encrypted_payload", encrypted)
@@ -205,8 +183,8 @@ class OnrampScreeningClient(
                     ),
                 )
             }
-        if (!response.status.isSuccess()) return unavailable("${kind.path} answered " + response.status)
-        return outcomeOf(Json.parseToJsonElement(response.bodyAsText()).jsonObject, kind)
+        if (!response.status.isSuccess()) return unavailable("$PATH_ACTIVITY_LOGS answered " + response.status)
+        return outcomeOf(Json.parseToJsonElement(response.bodyAsText()).jsonObject)
     }
 
     /**
@@ -216,23 +194,17 @@ class OnrampScreeningClient(
      * body that does not parse at all. Defaulting the absent field to `false` would stop every
      * order on the corridor the first time the schema drifted, worded to the user as though they
      * had been turned down.
-     *
-     * The B2B intake is the one exception, and in the other direction: its reference client
-     * types `approved` as optional and takes an `activity_log_id` beside a non-false `approved`
-     * as cleared, so an id alone clears here too — otherwise a field the service is entitled to
-     * drop would leave every integrator order placed but never linked.
      */
-    private fun outcomeOf(body: JsonObject, kind: OnrampScreeningKind): OnrampScreeningOutcome {
+    private fun outcomeOf(body: JsonObject): OnrampScreeningOutcome {
         val approved = body["approved"]?.jsonPrimitive?.content?.toBooleanStrictOrNull()
         if (approved == false) {
             val message = body["message"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.content
             return OnrampScreeningOutcome.Rejected(message.orEmpty())
         }
         val logId = body["activity_log_id"]?.takeUnless { it is JsonNull }
-        val cleared = approved == true || (kind == OnrampScreeningKind.B2B && logId != null)
         return when {
-            !cleared -> unavailable("${kind.path} answered 200 without an approval")
-            logId == null -> unavailable("${kind.path} approved without an activity_log_id")
+            approved != true -> unavailable("$PATH_ACTIVITY_LOGS answered 200 without an approval")
+            logId == null -> unavailable("$PATH_ACTIVITY_LOGS approved without an activity_log_id")
             else -> OnrampScreeningOutcome.Approved(logId)
         }
     }
@@ -295,9 +267,7 @@ class OnrampScreeningClient(
         order: OnrampScreeningOrder,
         country: String?,
         timestampMillis: Long,
-        kind: OnrampScreeningKind = OnrampScreeningKind.CONSUMER,
     ): String {
-        val device = deviceJson()
         val body =
             buildJsonObject {
                 putJsonObject("user_details") {
@@ -321,17 +291,7 @@ class OnrampScreeningClient(
                     put("order_timestamp", timestampMillis)
                     put("order_source", config.orderSource)
                 }
-                // The two endpoints read the device record under different key styles.
-                when (kind) {
-                    OnrampScreeningKind.CONSUMER -> {
-                        put("device_details", device)
-                    }
-
-                    OnrampScreeningKind.B2B -> {
-                        put("device_details", device.snakeCaseKeys())
-                        put("domain", config.b2bDomain)
-                    }
-                }
+                put("device_details", deviceJson())
             }
         return Json.encodeToString(JsonObject.serializer(), body)
     }
@@ -361,10 +321,6 @@ class OnrampScreeningClient(
         val signals = deviceSignals.collect().copy(seonSession = screeningSession.session())
         return SCREENING_JSON.encodeToJsonElement(OnrampDeviceSignals.serializer(), signals).jsonObject
     }
-
-    /** `userAgent` → `user_agent`, values untouched. Top level only; the record is flat. */
-    private fun JsonObject.snakeCaseKeys(): JsonObject =
-        JsonObject(mapKeys { (key, _) -> key.replace(CAMEL_HUMP) { "_" + it.value.lowercase() } })
 
     /**
      * Amounts cross the wire as JSON numbers in whole units, which is what the service's schema
@@ -400,10 +356,11 @@ class OnrampScreeningClient(
     }
 
     private companion object {
+        const val SCREENING_TYPE = "buy_order"
         const val ACTION_ACTIVITY_LOG = "activity-log"
         const val ACTION_LINK_ORDER = "link-order"
+        const val PATH_ACTIVITY_LOGS = "/activity-logs"
         const val PATH_LINK_ORDER = "/activity-logs/link-order"
-        val CAMEL_HUMP = Regex("[A-Z]")
         const val MILLIS_PER_SECOND = 1_000L
         const val AES_256_KEY_HEX_LEN = 64
         const val V_OFFSET = 27

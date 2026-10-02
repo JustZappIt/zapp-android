@@ -56,9 +56,11 @@ import co.electriccoin.zcash.ui.screen.gift.GiftClaimArgs
 import co.electriccoin.zcash.ui.screen.gift.model.GIFT_LINK_HOST
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkIntake
 import co.electriccoin.zcash.ui.screen.gift.model.PendingGiftLinkStore
+import co.electriccoin.zcash.ui.screen.grouplink.GroupInviteCoordinator
+import co.electriccoin.zcash.ui.screen.grouplink.model.GroupInviteLinks
+import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnInbox
+import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnLink
 import co.electriccoin.zcash.ui.screen.reputation.increase.IncreaseReputationArgs
-import co.electriccoin.zcash.ui.screen.reputation.increase.LivenessReturnInbox
-import co.electriccoin.zcash.ui.screen.reputation.increase.LivenessReturnLink
 import co.electriccoin.zcash.ui.screen.reputation.increase.ReclaimReturnLink
 import co.electriccoin.zcash.ui.screen.scan.thirdparty.ThirdPartyScan
 import co.electriccoin.zcash.ui.screen.splash.ZappSplashAnimation
@@ -72,8 +74,7 @@ import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
 import org.koin.androidx.viewmodel.ext.android.viewModel
-import xyz.justzappit.offramp.liveness.LivenessConfig
-import xyz.justzappit.offramp.liveness.LivenessReturn
+import xyz.justzappit.offramp.identity.IdentityReturn
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -100,8 +101,9 @@ class MainActivity : FragmentActivity() {
     private val chatNotificationTiming: ChatNotificationTiming by inject()
 
     private val pendingGiftLinks: PendingGiftLinkStore by inject()
-    private val livenessReturns: LivenessReturnInbox by inject()
-    private val livenessConfig: LivenessConfig by inject()
+    private val identityReturns: IdentityReturnInbox by inject()
+
+    private val groupInvites: GroupInviteCoordinator by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -145,9 +147,11 @@ class MainActivity : FragmentActivity() {
 
             isReclaimReturnUri(intent, data) -> openReclaimReturn(intent, data, resumeReclaim)
 
-            isLivenessReturnUri(intent, data) -> openLivenessReturn(intent, data, resumeReclaim)
+            isIdentityReturnUri(intent, data) -> openIdentityReturn(intent, data, resumeReclaim)
 
             isGiftUri(intent, data) -> openGiftClaim(intent, data)
+
+            isGroupInviteUri(intent) -> openGroupInvite(intent)
 
             else -> navigationRouter.forward(ThirdPartyScan)
         }
@@ -175,32 +179,32 @@ class MainActivity : FragmentActivity() {
             )?.let { navigationRouter.forward(it) }
     }
 
-    private fun isLivenessReturnUri(intent: Intent, data: Uri): Boolean =
+    private fun isIdentityReturnUri(intent: Intent, data: Uri): Boolean =
         intent.action == Intent.ACTION_VIEW &&
-            LivenessReturnLink.SCHEME.equals(data.scheme, ignoreCase = true) &&
-            LivenessReturnLink.HOST.equals(data.host, ignoreCase = true)
+            IdentityReturnLink.SCHEME.equals(data.scheme, ignoreCase = true) &&
+            IdentityReturnLink.checkForHost(data.host) != null
 
     /**
      * The code on this link is the only copy of the result. A live run picks it out of the inbox;
-     * a cold process gets the route rebuilt from `state` and the new run drains the inbox itself.
-     * A return with no usable state on a cold start has no route to rebuild and is dropped — the
-     * user starts again. A build with the check switched off drops every return: nothing in it
-     * could have opened the session.
+     * a cold process gets the route rebuilt from `state` and the new screen drains the inbox. A
+     * return with no usable state on a cold start has no route to rebuild and is dropped, and the
+     * user starts again.
      */
-    private fun openLivenessReturn(
+    private fun openIdentityReturn(
         intent: Intent,
         data: Uri,
         coldStart: Boolean,
     ) {
         intent.data = null
-        if (!livenessConfig.enabled) return
+        val check = IdentityReturnLink.checkForHost(data.host) ?: return
         val ret =
-            LivenessReturnLink.parse(
-                code = data.getQueryParameter(LivenessReturn.CODE_QUERY),
-                error = data.getQueryParameter(LivenessReturn.ERROR_QUERY),
-                state = data.getQueryParameter(LivenessReturn.STATE_QUERY),
+            IdentityReturnLink.parse(
+                check = check,
+                code = data.getQueryParameter(IdentityReturn.CODE_QUERY),
+                error = data.getQueryParameter(IdentityReturn.ERROR_QUERY),
+                state = data.getQueryParameter(IdentityReturn.STATE_QUERY),
             ) ?: return
-        livenessReturns.put(ret)
+        identityReturns.put(ret)
         if (coldStart) {
             ret.currency?.let { navigationRouter.forward(IncreaseReputationArgs(currency = it)) }
         }
@@ -225,6 +229,18 @@ class MainActivity : FragmentActivity() {
 
     private fun isGiftUri(intent: Intent, data: Uri): Boolean =
         intent.action == Intent.ACTION_VIEW && GIFT_LINK_HOST.equals(data.host, ignoreCase = true)
+
+    private fun isGroupInviteUri(intent: Intent): Boolean =
+        intent.action == Intent.ACTION_VIEW && intent.dataString?.let(GroupInviteLinks::isGroupLink) == true
+
+    // RootNavGraph opens the held invite once there is someone to join as. The fragment is a bearer secret.
+    private fun openGroupInvite(intent: Intent) {
+        val raw = intent.dataString ?: return
+        intent.data = null
+        lifecycleScope.launch {
+            groupInvites.intake(raw)?.let { navigationRouter.forward(it) }
+        }
+    }
 
     private fun forwardChatNotificationIntent(intent: Intent) {
         intent.getStringExtra(CHAT_CONVERSATION_ID_EXTRA)?.let { conversationId ->

@@ -4,6 +4,7 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepository
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepositoryImpl
+import co.electriccoin.zcash.ui.common.provider.IdentityVerificationStorageProvider
 import co.electriccoin.zcash.ui.common.provider.OrderRecipientUpiStorageProvider
 import co.electriccoin.zcash.ui.common.provider.RelayIdentityStorageProvider
 import co.electriccoin.zcash.ui.common.provider.TwigOfframpLogger
@@ -44,24 +45,25 @@ import co.electriccoin.zcash.ui.common.repository.WalletSnapshotRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepository
 import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepositoryImpl
 import co.electriccoin.zcash.ui.screen.chat.linkpreview.LinkPreviewRepository
-import co.electriccoin.zcash.ui.screen.reputation.increase.LivenessReturnInbox
-import co.electriccoin.zcash.ui.screen.reputation.increase.LivenessReturnLink
+import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnInbox
+import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnLink
 import co.electriccoin.zcash.ui.screen.reputation.increase.ReclaimReturnLink
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.qualifier.named
 import org.koin.dsl.bind
 import org.koin.dsl.module
 import xyz.justzappit.evm.rpc.BaseRpcClient
+import xyz.justzappit.offramp.account.Erc4337SubmitterProvider
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
 import xyz.justzappit.offramp.config.P2pNetworkConfig
-import xyz.justzappit.offramp.liveness.LivenessConfig
-import xyz.justzappit.offramp.liveness.LivenessReader
-import xyz.justzappit.offramp.liveness.LivenessVerificationDriver
-import xyz.justzappit.offramp.liveness.LivenessWidgetClient
+import xyz.justzappit.offramp.config.P2pNetworks
+import xyz.justzappit.offramp.identity.IdentityServices
+import xyz.justzappit.offramp.identity.IdentityVerificationDriver
+import xyz.justzappit.offramp.identity.IdentityVerificationStore
+import xyz.justzappit.offramp.identity.IdentityWidgetClient
 import xyz.justzappit.offramp.onramp.DirectOnrampDriver
 import xyz.justzappit.offramp.onramp.FakeOnrampDriver
 import xyz.justzappit.offramp.onramp.OnrampDriver
-import xyz.justzappit.offramp.onramp.OnrampRouteReader
 import xyz.justzappit.offramp.onramp.OnrampScreeningClient
 import xyz.justzappit.offramp.onramp.OnrampScreeningConfig
 import xyz.justzappit.offramp.orchestrator.AaOfframpDriver
@@ -193,35 +195,26 @@ val repositoryModule =
                 },
             )
         }
+        single { IdentityReturnInbox() }
+        single<IdentityVerificationStore> { IdentityVerificationStorageProvider(get()) }
+        // Same shape as Reclaim: the widget session is opened from the device through p2p.me's
+        // public proxy, and the attestation goes straight to the ReputationManager. p2p.me's
+        // tenants sign for mainnet only.
         single {
-            LivenessConfig(
-                apiUrl = BuildConfig.LIVENESS_API_URL,
-                apiKey = BuildConfig.LIVENESS_API_KEY,
-                tenant = BuildConfig.LIVENESS_TENANT,
-                enabled = BuildConfig.LIVENESS_ENABLED,
-            )
-        }
-        single { LivenessReader(rpc = get(), network = get()) }
-        single { OnrampRouteReader(rpc = get(), network = get()) }
-        single { LivenessReturnInbox() }
-        // Same shape as Reclaim: the widget session is opened from the device and the attestation
-        // goes straight to the integrator. The verifier is our own host, but it shares the offramp
-        // client for the same logging and retry behaviour.
-        single {
-            LivenessVerificationDriver(
-                widget =
-                    LivenessWidgetClient(
-                        httpClient = get(named(OFFRAMP_HTTP_CLIENT_QUALIFIER)),
-                        config = get(),
-                        redirectUri = LivenessReturnLink.URL,
-                    ),
-                reader = get(),
-                submitters = get(),
+            val network: P2pNetworkConfig = get()
+            IdentityVerificationDriver(
+                widget = IdentityWidgetClient(httpClient = get(named(OFFRAMP_HTTP_CLIENT_QUALIFIER))),
+                services =
+                    if (network.name == P2pNetworks.MAINNET_NAME) IdentityServices.MAINNET else IdentityServices.NONE,
+                returnUrl = IdentityReturnLink::url,
+                reputationReader = get(),
+                resolveAccount = get<Erc4337SubmitterProvider>()::resolve,
+                store = get(),
+                nowSeconds = { System.currentTimeMillis() / 1_000L },
                 rpc = get(),
-                network = get(),
-                config = get(),
+                network = network,
                 onUnrecognisedRevert = { selector ->
-                    Twig.warn { "submitLivenessAttestation reverted with an unmapped selector: $selector" }
+                    Twig.warn { "Identity attestation reverted with an unmapped selector: $selector" }
                 },
             )
         }
@@ -265,7 +258,6 @@ val repositoryModule =
                             },
                     relayIdentityStore = get(),
                     orderRecipientUpiCache = get(),
-                    routeReader = get(),
                     nowMillis = System::currentTimeMillis,
                     onUnrecognisedRevert = { revert ->
                         Twig.warn { "BUY reverted with no mapping — reporting it as upstream: $revert" }

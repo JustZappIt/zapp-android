@@ -7,8 +7,10 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.util.stringRes
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -29,14 +31,13 @@ import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.account.OfframpSmartAccount
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
-import xyz.justzappit.offramp.liveness.LivenessConfig
-import xyz.justzappit.offramp.liveness.LivenessReader
-import xyz.justzappit.offramp.liveness.LivenessStanding
-import xyz.justzappit.offramp.liveness.LivenessStatus
-import xyz.justzappit.offramp.liveness.LivenessVerificationDriver
+import xyz.justzappit.offramp.identity.IdentityFailure
+import xyz.justzappit.offramp.identity.IdentityStatus
+import xyz.justzappit.offramp.identity.IdentityVerificationDriver
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.reclaim.ReclaimVerificationDriver
+import xyz.justzappit.offramp.reputation.IdentityCheck
 import xyz.justzappit.offramp.reputation.ReputationReader
 import xyz.justzappit.offramp.reputation.ReputationSummary
 import xyz.justzappit.offramp.reputation.RpPerUsdcLimit
@@ -49,7 +50,7 @@ import kotlin.test.assertNull
 /**
  * The widget reports back only by redirecting the browser to Zapp. A user who switches back by
  * hand instead leaves that redirect blocked behind them, and the run it was for would otherwise
- * wait on the selfie step for good.
+ * wait on the browser step for good.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class IncreaseReputationVMTest {
@@ -57,12 +58,11 @@ class IncreaseReputationVMTest {
     private val accountProvider = mockk<SmartOfframpAccountProvider>()
     private val reputationReader = mockk<ReputationReader>()
     private val reclaimDriver = mockk<ReclaimVerificationDriver>()
-    private val livenessReader = mockk<LivenessReader>()
-    private val livenessDriver = mockk<LivenessVerificationDriver>()
-    private val returns = LivenessReturnInbox()
+    private val identityDriver = mockk<IdentityVerificationDriver>()
+    private val returns = IdentityReturnInbox()
 
     /** What the driver does once the user is away in the widget: wait, or move on by itself. */
-    private var afterVerifying: suspend () -> LivenessStatus? = { awaitCancellation() }
+    private var afterVerifying: suspend () -> IdentityStatus? = { awaitCancellation() }
 
     @AfterTest
     fun tearDown() {
@@ -70,7 +70,7 @@ class IncreaseReputationVMTest {
     }
 
     @Test
-    fun `coming back without the redirect calls the selfie step off`() =
+    fun `coming back without the redirect calls the browser step off`() =
         runTest {
             val vm = viewModelAwayInTheWidget()
 
@@ -80,7 +80,7 @@ class IncreaseReputationVMTest {
 
             val run = assertNotNull(vm.state.value.run)
             assertEquals(VerificationStage.FAILED, run.stage)
-            assertEquals(stringRes(R.string.increase_reputation_liveness_error_no_return), run.error)
+            assertEquals(stringRes(R.string.increase_reputation_identity_error_no_return), run.error)
         }
 
     @Test
@@ -88,7 +88,7 @@ class IncreaseReputationVMTest {
         runTest {
             afterVerifying = {
                 delay(REDIRECT_MILLIS)
-                LivenessStatus.Submitting
+                IdentityStatus.Submitting
             }
             val vm = viewModelAwayInTheWidget()
 
@@ -110,20 +110,51 @@ class IncreaseReputationVMTest {
             runCurrent()
 
             assertNull(vm.state.value.run)
+            coVerify(exactly = 1) { identityDriver.cancelWaiting(IdentityCheck.Passport, CurrencyCode.Inr) }
         }
 
-    /** A screen whose selfie row has been tapped and whose widget the user has opened. */
-    private fun TestScope.viewModelAwayInTheWidget(): IncreaseReputationVM {
+    @Test
+    fun `retry restarts the identity driver instead of merely dismissing the failure`() =
+        runTest {
+            afterVerifying = {
+                delay(REDIRECT_MILLIS)
+                IdentityStatus.Failed(IdentityFailure.Network)
+            }
+            val vm = viewModelAwayInTheWidget()
+            advanceTimeBy(REDIRECT_MILLIS + 1)
+            runCurrent()
+            assertEquals(VerificationStage.FAILED, stageOf(vm))
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            assertNotNull(vm.state.value.primaryAction).onClick()
+            runCurrent()
+            assertEquals(VerificationStage.READY, stageOf(vm))
+            vm.state.value.identityChecks
+                .single()
+                .onClick()
+            verify(exactly = 2) { identityDriver.verify(IdentityCheck.Passport, CurrencyCode.Inr, any(), any()) }
+        }
+
+    @Test
+    fun `screen load resumes a saved identity result without tapping its row`() =
+        runTest {
+            val vm = viewModelAwayInTheWidget(recoverOnLoad = true)
+            assertEquals(VerificationStage.VERIFYING, stageOf(vm))
+            verify(exactly = 1) { identityDriver.verify(IdentityCheck.Passport, CurrencyCode.Inr, any(), any()) }
+        }
+
+    /** A screen whose passport row has been tapped and whose widget the user has opened. */
+    private fun TestScope.viewModelAwayInTheWidget(recoverOnLoad: Boolean = false): IncreaseReputationVM {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         coEvery { accountProvider.resolve() } returns OfframpSmartAccount(mockk<EvmKey>(), Address.parse(WALLET))
         coEvery { reputationReader.read(any(), any()) } returns summary()
-        coEvery { livenessReader.read(any()) } returns
-            LivenessStanding(isVerified = false, limit = Usdc6.ofMicros(0), tierCap = Usdc6.ofMicros(TIER_CAP))
-        every { livenessDriver.verify(any(), any(), any()) } returns
+        coEvery { identityDriver.recoverableCheck(any()) } returns if (recoverOnLoad) IdentityCheck.Passport else null
+        coEvery { identityDriver.cancelWaiting(any(), any()) } returns Unit
+        every { identityDriver.isOffered(any(), any()) } answers { firstArg<IdentityCheck>() == IdentityCheck.Passport }
+        every { identityDriver.verify(IdentityCheck.Passport, any(), any(), any()) } returns
             flow {
-                emit(LivenessStatus.Preparing)
-                emit(LivenessStatus.Ready(WIDGET_URL, expiresInSeconds = SESSION_SECONDS))
-                emit(LivenessStatus.Verifying)
+                emit(IdentityStatus.Preparing)
+                emit(IdentityStatus.Ready(WIDGET_URL))
+                emit(IdentityStatus.Verifying)
                 afterVerifying()?.let { emit(it) }
                 awaitCancellation()
             }
@@ -135,15 +166,17 @@ class IncreaseReputationVMTest {
                 accountProvider = accountProvider,
                 reputationReader = reputationReader,
                 verificationDriver = reclaimDriver,
-                livenessConfig = LivenessConfig(API_URL, API_KEY, TENANT),
-                livenessReader = livenessReader,
-                livenessDriver = livenessDriver,
-                livenessReturns = returns,
+                identityDriver = identityDriver,
+                identityReturns = returns,
             )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
         runCurrent()
 
-        assertNotNull(vm.state.value.liveness).onClick()
+        if (!recoverOnLoad) {
+            vm.state.value.identityChecks
+                .single()
+                .onClick()
+        }
         runCurrent()
         assertEquals(VerificationStage.READY, stageOf(vm))
         // The view opens the browser, then tells the screen it did.
@@ -172,12 +205,7 @@ class IncreaseReputationVMTest {
 
     private companion object {
         const val WALLET = "0x111111111111111111111111111111111111baaf"
-        const val API_URL = "https://liveness.example"
-        const val API_KEY = "tenant-key"
-        const val TENANT = "zapp"
-        const val WIDGET_URL = "https://liveness.example/embed?handoff=handoff"
-        const val SESSION_SECONDS = 900
-        const val TIER_CAP = 20_000_000L
+        const val WIDGET_URL = "https://passport.example/wizard?s=abc"
         const val MAX_BUY = 500_000_000L
 
         /** [IncreaseReputationVM.RETURN_GRACE_MILLIS]. */

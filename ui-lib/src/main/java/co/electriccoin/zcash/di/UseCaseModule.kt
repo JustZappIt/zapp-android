@@ -168,6 +168,7 @@ import co.electriccoin.zcash.ui.common.usecase.SendSupportEmailUseCase
 import co.electriccoin.zcash.ui.common.usecase.SendTransactionAgainUseCase
 import co.electriccoin.zcash.ui.common.usecase.SetSlippageUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
+import co.electriccoin.zcash.ui.common.usecase.ShareGroupLinkUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShareImageUseCase
 import co.electriccoin.zcash.ui.common.usecase.SharePCZTUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShareQRUseCase
@@ -229,6 +230,7 @@ val useCaseModule =
         singleOf(::PendingGiftClaimCoordinator)
         factoryOf(::ClaimGiftCardUseCase)
         factoryOf(::ShareGiftLinkUseCase)
+        factoryOf(::ShareGroupLinkUseCase)
         factoryOf(::Zip321BuildUriUseCase)
         factoryOf(::Zip321ParseUriValidationUseCase)
         factoryOf(::GetPersistableWalletUseCase)

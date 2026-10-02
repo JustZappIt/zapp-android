@@ -14,9 +14,9 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,20 +29,18 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.justzappit.evm.util.toHex
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
-import xyz.justzappit.offramp.liveness.LivenessConfig
-import xyz.justzappit.offramp.liveness.LivenessFailure
-import xyz.justzappit.offramp.liveness.LivenessReader
-import xyz.justzappit.offramp.liveness.LivenessReturn
-import xyz.justzappit.offramp.liveness.LivenessReturnSignal
-import xyz.justzappit.offramp.liveness.LivenessStanding
-import xyz.justzappit.offramp.liveness.LivenessStatus
-import xyz.justzappit.offramp.liveness.LivenessVerificationDriver
+import xyz.justzappit.offramp.identity.IdentityFailure
+import xyz.justzappit.offramp.identity.IdentityReturn
+import xyz.justzappit.offramp.identity.IdentityReturnSignal
+import xyz.justzappit.offramp.identity.IdentityStatus
+import xyz.justzappit.offramp.identity.IdentityVerificationDriver
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.reclaim.ReclaimFailure
 import xyz.justzappit.offramp.reclaim.ReclaimLaunchSignal
 import xyz.justzappit.offramp.reclaim.ReclaimStatus
 import xyz.justzappit.offramp.reclaim.ReclaimVerificationDriver
+import xyz.justzappit.offramp.reputation.IdentityCheck
 import xyz.justzappit.offramp.reputation.ReputationReader
 import xyz.justzappit.offramp.reputation.ReputationSummary
 import xyz.justzappit.offramp.reputation.SocialPlatform
@@ -54,10 +52,6 @@ import java.security.SecureRandom
  * Everything the list shows is read on chain: which accounts are already verified, and what each
  * one is worth. The §3.1 table is today's configuration, not a constant, and a wrong number here
  * is a promise about money.
- *
- * Two kinds of run share the screen. A social row hands the user to the Reclaim app and writes
- * the proof to the ReputationManager; the selfie row hands them to a browser widget and writes
- * the attestation to Zapp's own integrator. Same stages, same buttons, different words.
  */
 @Suppress("TooManyFunctions")
 internal class IncreaseReputationVM(
@@ -66,10 +60,8 @@ internal class IncreaseReputationVM(
     private val accountProvider: SmartOfframpAccountProvider,
     private val reputationReader: ReputationReader,
     private val verificationDriver: ReclaimVerificationDriver,
-    private val livenessConfig: LivenessConfig,
-    private val livenessReader: LivenessReader,
-    private val livenessDriver: LivenessVerificationDriver,
-    private val livenessReturns: LivenessReturnInbox,
+    private val identityDriver: IdentityVerificationDriver,
+    private val identityReturns: IdentityReturnInbox,
 ) : ViewModel() {
     private val currency = args.currency
     private val resumeSession =
@@ -83,18 +75,20 @@ internal class IncreaseReputationVM(
     private var runJob: Job? = null
     private var launchSignal: ReclaimLaunchSignal? = null
     private var ready: ReclaimStatus.Ready? = null
-    private var returnSignal: LivenessReturnSignal? = null
+    private var lastActiveStage = VerificationStage.READY
+
+    private var identityCheck: IdentityCheck? = null
+    private var returnSignal: IdentityReturnSignal? = null
     private var returnGraceJob: Job? = null
     private var widgetUrl: String? = null
     private var widgetOpened = false
-    private var lastActiveStage = VerificationStage.READY
 
     private val mutableState =
         MutableStateFlow(
             IncreaseReputationState(
                 isLoading = true,
                 platforms = emptyList(),
-                liveness = null,
+                identityChecks = emptyList(),
                 run = null,
                 error = null,
                 primaryAction = null,
@@ -109,14 +103,11 @@ internal class IncreaseReputationVM(
         load()
         resumeSession?.let { (platform, sessionId) -> resumeRun(platform, sessionId) }
         // The widget's redirect lands here whether or not a run is waiting: a live run takes it
-        // through its signal, a cold-started screen resumes from it, and one that arrives after
-        // the user cancelled still finishes the check they went on to complete.
-        if (livenessConfig.enabled) {
-            livenessReturns.returns
-                .filterNotNull()
-                .onEach { onLivenessReturn() }
-                .launchIn(viewModelScope)
-        }
+        // through its signal, a cold-started screen resumes from it.
+        identityReturns.returns
+            .filterNotNull()
+            .onEach { onIdentityReturn() }
+            .launchIn(viewModelScope)
     }
 
     private fun load() {
@@ -125,21 +116,18 @@ internal class IncreaseReputationVM(
         loadJob =
             viewModelScope.launch {
                 try {
-                    val address = accountProvider.resolve().address
-                    val (read, standing) =
-                        coroutineScope {
-                            val reputation = async { reputationReader.read(address, currency) }
-                            val liveness = async { if (livenessConfig.enabled) livenessReader.read(address) else null }
-                            reputation.await() to liveness.await()
-                        }
+                    val read = reputationReader.read(accountProvider.resolve().address, currency)
                     summary = read
                     mutableState.update {
                         it.copy(
                             isLoading = false,
                             error = null,
                             platforms = rows(read),
-                            liveness = livenessRow(standing),
+                            identityChecks = identityRows(read),
                         )
+                    }
+                    if (runJob?.isActive != true) {
+                        identityDriver.recoverableCheck(currency)?.let(::startIdentityRun)
                     }
                 } catch (e: CancellationException) {
                     throw e
@@ -168,48 +156,54 @@ internal class IncreaseReputationVM(
         SocialPlatform.entries
             .filter { it != SocialPlatform.Binance || !isBinanceHidden() }
             .map { platform ->
+                val isVerified = platform in read.verified
                 VerifiableRow(
-                    platform = platform,
-                    name = platform.onChainName,
-                    reward =
-                        if (platform in read.verified) {
-                            stringRes(R.string.increase_reputation_verified)
-                        } else {
-                            stringRes(R.string.increase_reputation_reward, read.award(platform).toString())
-                        },
-                    limitGain =
-                        read.limitGainFor(platform)?.let {
-                            stringRes(
-                                R.string.increase_reputation_limit_gain,
-                                it.toDisplayString(stripTrailingZeros = true),
-                            )
-                        },
-                    requirement =
-                        if (platform.requiresMatureAccount && platform !in read.verified) {
+                    name = stringRes(platform.onChainName),
+                    reward = reward(isVerified, read.award(platform).toString()),
+                    limitGain = read.limitGainFor(platform)?.let(::limitGain),
+                    subtitle =
+                        if (platform.requiresMatureAccount && !isVerified) {
                             stringRes(R.string.increase_reputation_age_requirement)
                         } else {
                             null
                         },
-                    isVerified = platform in read.verified,
+                    isVerified = isVerified,
                     // Verified rows stay listed and inert: hiding one reads as a bug, and the user
                     // has no other place that says the account is already spent.
-                    onClick = { if (platform !in read.verified) startRun(platform) },
+                    onClick = { if (!isVerified) startRun(platform) },
                 )
             }
 
-    private fun livenessRow(standing: LivenessStanding?): LivenessRow? =
-        standing?.let {
-            LivenessRow(
-                reward =
-                    if (it.isVerified) {
-                        stringRes(R.string.reputation_amount_usd, it.limit.usd())
-                    } else {
-                        stringRes(R.string.increase_reputation_liveness_reward, it.tierCap.usd())
-                    },
-                isVerified = it.isVerified,
-                onClick = { if (!it.isVerified) startLivenessRun() },
-            )
+    private fun identityRows(read: ReputationSummary): List<VerifiableRow> =
+        IdentityCheck.entries
+            .filter { identityDriver.isOffered(it, currency) }
+            .map { check ->
+                val isVerified = check in read.identityVerified
+                VerifiableRow(
+                    name = identityName(check),
+                    reward = reward(isVerified, read.award(check).toString()),
+                    limitGain = read.limitGainFor(check)?.let(::limitGain),
+                    subtitle =
+                        stringRes(
+                            when (check) {
+                                IdentityCheck.Liveness -> R.string.increase_reputation_identity_liveness_subtitle
+                                IdentityCheck.Passport -> R.string.increase_reputation_identity_passport_subtitle
+                            },
+                        ),
+                    isVerified = isVerified,
+                    onClick = { if (!isVerified) startIdentityRun(check) },
+                )
+            }
+
+    private fun reward(isVerified: Boolean, points: String): StringResource =
+        if (isVerified) {
+            stringRes(R.string.increase_reputation_verified)
+        } else {
+            stringRes(R.string.increase_reputation_reward, points)
         }
+
+    private fun limitGain(gain: Usdc6): StringResource =
+        stringRes(R.string.increase_reputation_limit_gain, gain.toDisplayString(stripTrailingZeros = true))
 
     /**
      * p2p.me's own client hides Binance in India, so an INR user who tried it would meet a failure
@@ -234,6 +228,7 @@ internal class IncreaseReputationVM(
     }
 
     private fun collectRun(platform: SocialPlatform, statuses: Flow<ReclaimStatus>) {
+        identityCheck = null
         runJob =
             statuses
                 .onEach { status -> onStatus(platform, status) }
@@ -264,9 +259,8 @@ internal class IncreaseReputationVM(
             }
 
             is ReclaimStatus.Done -> {
-                summary = status.summary
+                onVerified(status.summary)
                 emitRun(platform, VerificationStage.DONE, summary = status.summary)
-                mutableState.update { it.copy(platforms = rows(status.summary)) }
             }
 
             is ReclaimStatus.Failed -> {
@@ -284,8 +278,7 @@ internal class IncreaseReputationVM(
         if (stage in ACTIVE_STAGES) lastActiveStage = stage
         publish(
             VerificationRun(
-                platform = platform,
-                name = stringRes(platform.onChainName),
+                isIdentityCheck = false,
                 stage = stage,
                 steps = verificationSteps(stage, lastActiveStage),
                 message = message(platform, stage),
@@ -294,10 +287,7 @@ internal class IncreaseReputationVM(
                 installIntentUrl = ready?.installIntentUrl,
                 storeUrl = ready?.storeUrl,
                 newPoints = summary?.points?.toString(),
-                newBuyLimit =
-                    summary?.let {
-                        stringRes(R.string.increase_reputation_new_limit, it.buyLimit.usd())
-                    },
+                newBuyLimit = summary?.let(::newBuyLimit),
             ),
         )
     }
@@ -325,33 +315,41 @@ internal class IncreaseReputationVM(
             ReclaimFailure.Network -> stringRes(R.string.increase_reputation_error_network)
         }
 
-    private fun startLivenessRun() {
+    private fun startIdentityRun(check: IdentityCheck) {
         if (runJob?.isActive == true) return
-        val signal = LivenessReturnSignal()
+        val signal = IdentityReturnSignal()
         returnSignal = signal
-        returnGraceJob?.cancel()
-        widgetUrl = null
         widgetOpened = false
-        collectLivenessRun(livenessDriver.verify(currency, nonce(), signal))
+        collectIdentityRun(check, identityDriver.verify(check, currency, nonce(), signal))
     }
 
-    /** Finishes a check whose redirect outlived the run that started it — a cold start, or a cancel. */
-    private fun resumeLivenessRun(ret: LivenessReturn) {
+    /** The driver validates persisted authorization before resuming a redirect without a live run. */
+    private fun resumeIdentityRun(ret: IdentityReturn) {
         if (runJob?.isActive == true) return
         returnSignal = null
-        returnGraceJob?.cancel()
-        widgetUrl = null
         widgetOpened = true
-        collectLivenessRun(livenessDriver.resume(ret))
+        collectIdentityRun(ret.check, identityDriver.resume(ret, currency))
+    }
+
+    private fun onIdentityReturn() {
+        val ret = identityReturns.take() ?: return
+        val signal = returnSignal
+        when {
+            signal != null && runJob?.isActive == true -> signal.deliver(ret)
+
+            runJob?.isActive != true -> resumeIdentityRun(ret)
+
+            // A Reclaim run owns the screen. The check is not lost: the user can take it again.
+            else -> Unit
+        }
     }
 
     /**
-     * The widget hands its result back only by redirecting the browser to Zapp, and only while
-     * the browser is in front: a user who switches back to Zapp by hand leaves the redirect
-     * blocked behind them, and the one-time handoff it carried cannot be replayed. A redirect
-     * that is on its way lands before this screen resumes, so a run still waiting a moment later
-     * has nothing coming. Say so, instead of a selfie step that spins for good; a late redirect
-     * still finishes the run it finds.
+     * The widget hands its result back only by redirecting the browser to Zapp, and only while the
+     * browser is in front: a user who switches back by hand leaves the redirect behind them, and
+     * the one-time code it carried cannot be replayed. A redirect on its way lands before this
+     * screen resumes, so a run still waiting a moment later has nothing coming. Say so, instead of
+     * a step that spins for good; a late redirect still finishes the run it finds.
      */
     fun onScreenVisible() {
         if (!isAwaitingWidgetReturn()) return
@@ -359,10 +357,12 @@ internal class IncreaseReputationVM(
         returnGraceJob =
             viewModelScope.launch {
                 delay(RETURN_GRACE_MILLIS)
-                if (isAwaitingWidgetReturn()) {
-                    emitLivenessRun(
+                val check = identityCheck
+                if (isAwaitingWidgetReturn() && check != null) {
+                    emitIdentityRun(
+                        check,
                         VerificationStage.FAILED,
-                        error = stringRes(R.string.increase_reputation_liveness_error_no_return),
+                        error = stringRes(R.string.increase_reputation_identity_error_no_return),
                     )
                 }
             }
@@ -370,116 +370,121 @@ internal class IncreaseReputationVM(
 
     private fun isAwaitingWidgetReturn(): Boolean {
         val run = mutableState.value.run ?: return false
-        return run.platform == null && run.stage == VerificationStage.VERIFYING
+        return run.isIdentityCheck && run.stage == VerificationStage.VERIFYING
     }
 
-    private fun onLivenessReturn() {
-        val ret = livenessReturns.take() ?: return
-        val signal = returnSignal
-        when {
-            signal != null && runJob?.isActive == true -> signal.deliver(ret)
-
-            runJob?.isActive != true -> resumeLivenessRun(ret)
-
-            // A Reclaim run owns the screen. The check is not lost: the user can take it again.
-            else -> Unit
-        }
-    }
-
-    private fun collectLivenessRun(statuses: Flow<LivenessStatus>) {
+    private fun collectIdentityRun(check: IdentityCheck, statuses: Flow<IdentityStatus>) {
+        identityCheck = check
+        widgetUrl = null
+        returnGraceJob?.cancel()
         runJob =
             statuses
-                .onEach(::onLivenessStatus)
+                .onEach { onIdentityStatus(check, it) }
                 .catch { e ->
                     if (e is CancellationException) throw e
-                    Twig.warn(e) { "Selfie check failed" }
-                    onLivenessStatus(LivenessStatus.Failed(LivenessFailure.Network))
+                    Twig.warn(e) { "$check check failed" }
+                    onIdentityStatus(check, IdentityStatus.Failed(IdentityFailure.Network))
                 }.launchIn(viewModelScope)
     }
 
-    private fun onLivenessStatus(status: LivenessStatus) {
+    private fun onIdentityStatus(check: IdentityCheck, status: IdentityStatus) {
         when (status) {
-            LivenessStatus.Preparing -> {
-                emitLivenessRun(VerificationStage.PREPARING)
+            IdentityStatus.Preparing -> {
+                emitIdentityRun(check, VerificationStage.PREPARING)
             }
 
-            is LivenessStatus.Ready -> {
+            is IdentityStatus.Ready -> {
                 widgetUrl = status.widgetUrl
-                emitLivenessRun(VerificationStage.READY)
+                emitIdentityRun(check, VerificationStage.READY)
             }
 
             // The driver waits on the redirect from the moment the session exists, before the
             // user has gone anywhere. The screen follows the tap instead, so "Open" stays offered
             // until it happens; a resumed run has no tap to wait for.
-            LivenessStatus.Verifying -> {
-                if (widgetOpened) emitLivenessRun(VerificationStage.VERIFYING)
+            IdentityStatus.Verifying -> {
+                if (widgetOpened) emitIdentityRun(check, VerificationStage.VERIFYING)
             }
 
-            LivenessStatus.Submitting -> {
-                emitLivenessRun(VerificationStage.SUBMITTING)
+            IdentityStatus.Submitting -> {
+                emitIdentityRun(check, VerificationStage.SUBMITTING)
             }
 
-            is LivenessStatus.Done -> {
-                emitLivenessRun(VerificationStage.DONE, standing = status.standing)
-                mutableState.update { it.copy(liveness = livenessRow(status.standing)) }
+            is IdentityStatus.Done -> {
+                onVerified(status.summary)
+                emitIdentityRun(check, VerificationStage.DONE, summary = status.summary)
             }
 
-            is LivenessStatus.Failed -> {
-                if (status.reason == LivenessFailure.Cancelled) {
+            is IdentityStatus.Failed -> {
+                if (status.reason == IdentityFailure.Cancelled) {
                     clearRun()
                 } else {
-                    emitLivenessRun(VerificationStage.FAILED, error = livenessFailureMessage(status.reason))
+                    emitIdentityRun(check, VerificationStage.FAILED, error = identityFailureMessage(status.reason))
                 }
             }
         }
     }
 
-    private fun emitLivenessRun(
+    private fun emitIdentityRun(
+        check: IdentityCheck,
         stage: VerificationStage,
-        standing: LivenessStanding? = null,
+        summary: ReputationSummary? = null,
         error: StringResource? = null,
     ) {
         if (stage in ACTIVE_STAGES) lastActiveStage = stage
         publish(
             VerificationRun(
-                platform = null,
-                name = stringRes(R.string.increase_reputation_liveness_row),
+                isIdentityCheck = true,
                 stage = stage,
-                steps = verificationSteps(stage, lastActiveStage, LIVENESS_STEP_LABELS),
-                message = livenessMessage(stage),
+                steps = verificationSteps(stage, lastActiveStage, IDENTITY_STEP_LABELS),
+                message = identityMessage(check, stage),
                 error = error,
                 launchUrl = widgetUrl,
                 installIntentUrl = null,
                 storeUrl = null,
-                newBuyLimit =
-                    standing?.let {
-                        stringRes(R.string.increase_reputation_new_limit, it.limit.usd())
-                    },
+                newPoints = summary?.points?.toString(),
+                newBuyLimit = summary?.let(::newBuyLimit),
             ),
         )
     }
 
-    private fun livenessMessage(stage: VerificationStage): StringResource =
+    private fun identityName(check: IdentityCheck): StringResource =
+        stringRes(
+            when (check) {
+                IdentityCheck.Liveness -> R.string.increase_reputation_identity_liveness
+                IdentityCheck.Passport -> R.string.increase_reputation_identity_passport
+            },
+        )
+
+    private fun identityMessage(check: IdentityCheck, stage: VerificationStage): StringResource =
         when (stage) {
             VerificationStage.PREPARING -> stringRes(R.string.increase_reputation_preparing)
-            VerificationStage.READY -> stringRes(R.string.increase_reputation_liveness_ready)
-            VerificationStage.VERIFYING -> stringRes(R.string.increase_reputation_liveness_waiting)
+            VerificationStage.READY -> stringRes(R.string.increase_reputation_identity_ready, identityName(check))
+            VerificationStage.VERIFYING -> stringRes(R.string.increase_reputation_identity_waiting)
             VerificationStage.SUBMITTING -> stringRes(R.string.increase_reputation_saving)
-            VerificationStage.DONE -> stringRes(R.string.increase_reputation_liveness_done)
+            VerificationStage.DONE -> stringRes(R.string.increase_reputation_identity_done, identityName(check))
             VerificationStage.FAILED -> stringRes(R.string.increase_reputation_failed)
         }
 
-    private fun livenessFailureMessage(failure: LivenessFailure): StringResource? =
+    private fun identityFailureMessage(failure: IdentityFailure): StringResource? =
         when (failure) {
-            LivenessFailure.NotConfigured -> stringRes(R.string.increase_reputation_liveness_error_unavailable)
-            LivenessFailure.NotLive -> stringRes(R.string.increase_reputation_liveness_error_not_live)
-            LivenessFailure.AlreadyClaimed -> stringRes(R.string.increase_reputation_liveness_error_already_claimed)
-            LivenessFailure.Expired -> stringRes(R.string.increase_reputation_liveness_error_expired)
-            LivenessFailure.Cancelled -> null
-            LivenessFailure.Rejected -> stringRes(R.string.increase_reputation_liveness_error_rejected)
-            LivenessFailure.SponsorshipUnavailable -> stringRes(R.string.increase_reputation_error_gas)
-            LivenessFailure.Network -> stringRes(R.string.increase_reputation_error_network)
+            IdentityFailure.Unavailable -> stringRes(R.string.increase_reputation_identity_error_unavailable)
+            IdentityFailure.NotPassed -> stringRes(R.string.increase_reputation_identity_error_not_passed)
+            IdentityFailure.AlreadyClaimed -> stringRes(R.string.increase_reputation_identity_error_already_claimed)
+            IdentityFailure.AlreadyVerified -> stringRes(R.string.increase_reputation_identity_error_already_verified)
+            IdentityFailure.Expired -> stringRes(R.string.increase_reputation_identity_error_expired)
+            IdentityFailure.Cancelled -> null
+            IdentityFailure.Rejected -> stringRes(R.string.increase_reputation_identity_error_rejected)
+            IdentityFailure.SponsorshipUnavailable -> stringRes(R.string.increase_reputation_error_gas)
+            IdentityFailure.Network -> stringRes(R.string.increase_reputation_error_network)
         }
+
+    private fun onVerified(read: ReputationSummary) {
+        summary = read
+        mutableState.update { it.copy(platforms = rows(read), identityChecks = identityRows(read)) }
+    }
+
+    private fun newBuyLimit(read: ReputationSummary): StringResource =
+        stringRes(R.string.increase_reputation_new_limit, read.buyLimit.toDisplayString(stripTrailingZeros = true))
 
     private fun publish(run: VerificationRun) {
         mutableState.update {
@@ -492,10 +497,13 @@ internal class IncreaseReputationVM(
     }
 
     private fun primaryFor(run: VerificationRun): ButtonState? {
-        val isLiveness = run.platform == null
         val open =
             stringRes(
-                if (isLiveness) R.string.increase_reputation_liveness_open else R.string.increase_reputation_open,
+                if (run.isIdentityCheck) {
+                    R.string.increase_reputation_identity_open
+                } else {
+                    R.string.increase_reputation_open
+                },
             )
         return when (run.stage) {
             VerificationStage.PREPARING -> {
@@ -504,7 +512,7 @@ internal class IncreaseReputationVM(
 
             // The view opens the link before invoking this: only it can reach an Intent.
             VerificationStage.READY -> {
-                ButtonState(open, onClick = if (isLiveness) ::onWidgetOpened else ::onReclaimLaunched)
+                ButtonState(open, onClick = if (run.isIdentityCheck) ::onWidgetOpened else ::onReclaimLaunched)
             }
 
             VerificationStage.VERIFYING -> {
@@ -520,7 +528,10 @@ internal class IncreaseReputationVM(
             }
 
             VerificationStage.FAILED -> {
-                ButtonState(stringRes(R.string.reputation_retry), onClick = ::onDismissRun)
+                ButtonState(
+                    stringRes(R.string.reputation_retry),
+                    onClick = if (run.isIdentityCheck) ::onRetryIdentityRun else ::onDismissRun,
+                )
             }
         }
     }
@@ -544,21 +555,45 @@ internal class IncreaseReputationVM(
     /** Called once the browser has actually been opened; only now is the user away in the check. */
     private fun onWidgetOpened() {
         widgetOpened = true
-        emitLivenessRun(VerificationStage.VERIFYING)
+        identityCheck?.let { emitIdentityRun(it, VerificationStage.VERIFYING) }
     }
 
-    /**
-     * Cancelling leaves the Reclaim session, or the widget session, to expire on its own. It is
-     * never surfaced later as an error — the user chose to stop.
-     */
-    private fun onCancelRun() {
-        runJob?.cancel()
-        onDismissRun()
+    private fun onRetryIdentityRun() {
+        val check = identityCheck ?: return
+        val previous = runJob
+        previous?.cancel()
+        runJob =
+            viewModelScope.launch(start = CoroutineStart.LAZY) {
+                previous?.join()
+                runJob = null
+                startIdentityRun(check)
+            }
+        runJob?.start()
     }
 
+    private fun onCancelRun() = onDismissRun()
+
+    /** Cancel browser authorization, but retain a redeemed result or a transaction awaiting a receipt. */
     private fun onDismissRun() {
-        runJob?.cancel()
-        clearRun()
+        val previous = runJob
+        val check = identityCheck
+        previous?.cancel()
+        runJob =
+            viewModelScope.launch(start = CoroutineStart.LAZY) {
+                try {
+                    previous?.cancelAndJoin()
+                    check?.let { identityDriver.cancelWaiting(it, currency) }
+                    clearRun()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (
+                    @Suppress("TooGenericExceptionCaught") e: Exception
+                ) {
+                    Twig.warn(e) { "Could not cancel pending identity check" }
+                    check?.let { onIdentityStatus(it, IdentityStatus.Failed(IdentityFailure.Network)) }
+                }
+            }
+        runJob?.start()
     }
 
     private fun clearRun() {
@@ -566,6 +601,7 @@ internal class IncreaseReputationVM(
         launchSignal = null
         returnSignal = null
         returnGraceJob?.cancel()
+        identityCheck = null
         widgetUrl = null
         mutableState.update { it.copy(run = null, primaryAction = null, secondaryAction = null) }
     }
@@ -585,8 +621,6 @@ internal class IncreaseReputationVM(
     /** Random enough that a redirect from any other session, ours or not, fails the state check. */
     private fun nonce(): String = ByteArray(NONCE_BYTES).also(SecureRandom()::nextBytes).toHex()
 
-    private fun Usdc6.usd(): String = toDisplayString(stripTrailingZeros = true)
-
     private companion object {
         const val NONCE_BYTES = 16
 
@@ -605,10 +639,10 @@ private val RECLAIM_STEP_LABELS =
         R.string.increase_reputation_step_save,
     )
 
-private val LIVENESS_STEP_LABELS =
+private val IDENTITY_STEP_LABELS =
     listOf(
-        R.string.increase_reputation_liveness_step_open,
-        R.string.increase_reputation_liveness_step_selfie,
+        R.string.increase_reputation_identity_step_open,
+        R.string.increase_reputation_identity_step_verify,
         R.string.increase_reputation_step_save,
     )
 

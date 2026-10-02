@@ -51,7 +51,7 @@ internal sealed interface ReputationContent {
 }
 
 internal data class PlatformRow(
-    /** The brand's own name, as the contract spells it. Not translated. */
-    val name: String,
+    /** A platform is the brand's own name, as the contract spells it, and is not translated. */
+    val name: StringResource,
     val reward: StringResource,
 )

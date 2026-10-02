@@ -9,9 +9,9 @@ package xyz.justzappit.offramp.reputation
  * ReputationManager's own name for it (what `socialVerify` is told it is verifying), and the slot
  * the contract reports it back in.
  *
- * Passport is deliberately absent. It occupies index 5 of the on-chain flags and nothing else
- * here — Zapp never mints a passport verification — but the gap it leaves is why
- * [socialVerifiedIndex] is written out per platform rather than taken from `ordinal`.
+ * Index 5 of the on-chain flags is p2p.me's retired zkPassport slot; passport now goes through
+ * [IdentityCheck.Passport] instead. The gap it leaves is why [socialVerifiedIndex] is written out
+ * per platform rather than taken from `ordinal`.
  */
 enum class SocialPlatform(
     /** Reclaim's provider id: which scripted TLS session the Verifier app runs. */
@@ -48,7 +48,7 @@ enum class SocialPlatform(
     ),
     Facebook("2701510b-c835-4820-84f0-d9e74569656b", "Facebook", "facebookRp()", FACEBOOK_FLAG),
 
-    /** Index 6, not 5 — index 5 is passport, which Zapp never mints. */
+    /** Index 6, not 5: index 5 is the retired zkPassport slot. */
     Binance("7e40c007-f432-4d47-ac00-3e0762f8a7a0", "Binance", "binanceRp()", BINANCE_FLAG),
     ;
 
@@ -57,9 +57,9 @@ enum class SocialPlatform(
         const val SOCIAL_VERIFIED_FLAGS = 7
 
         /**
-         * Index 5 of the flags tuple. Zapp never mints a passport verification, so nothing reads
-         * it — it is named because the gap it leaves between Facebook and Binance is exactly what
-         * makes reading the tuple positionally wrong.
+         * Index 5 of the flags tuple, the retired zkPassport slot. Nothing reads it; it is named
+         * because the gap it leaves between Facebook and Binance is exactly what makes reading the
+         * tuple positionally wrong.
          */
         const val PASSPORT_FLAG_INDEX = PASSPORT_FLAG
     }

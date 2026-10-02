@@ -58,6 +58,7 @@ android {
                     "src/main/res/ui/export_data",
                     "src/main/res/ui/error",
                     "src/main/res/ui/gift",
+                    "src/main/res/ui/group_link",
                     "src/main/res/ui/home",
                     "src/main/res/ui/insufficient_funds",
                     "src/main/res/ui/choose_server",
@@ -213,6 +214,19 @@ androidComponents {
             )
         )
         variant.buildConfigFields?.put(
+            "IS_GROUP_LINKS_ENABLED",
+            BuildConfigField(
+                type = "boolean",
+                value =
+                    (
+                        project.property("ZAPP_GROUP_LINKS_ENABLED").toString().toBoolean() ||
+                            variant.buildType == "debug" ||
+                            variant.productFlavors.any { it.second == DistributionDimension.INTERNAL.value }
+                    ).toString(),
+                comment = "Whether group invite links are handled and offered"
+            )
+        )
+        variant.buildConfigFields?.put(
             "P2P_SCREENING_API_URL",
             BuildConfigField(
                 type = "String",
@@ -242,38 +256,6 @@ androidComponents {
                 type = "String",
                 value = "\"${project.property("RECLAIM_APP_SECRET")?.toString().orEmpty()}\"",
                 comment = "Reclaim application secret — the appId's private key; ships in the APK by design"
-            )
-        )
-        variant.buildConfigFields?.put(
-            "LIVENESS_API_URL",
-            BuildConfigField(
-                type = "String",
-                value = "\"${project.property("LIVENESS_API_URL")?.toString().orEmpty()}\"",
-                comment = "Liveness verifier base URL; without it the selfie check reports itself unavailable"
-            )
-        )
-        variant.buildConfigFields?.put(
-            "LIVENESS_API_KEY",
-            BuildConfigField(
-                type = "String",
-                value = "\"${project.property("LIVENESS_API_KEY")?.toString().orEmpty()}\"",
-                comment = "Liveness verifier tenant key; ships in the APK by design, see LivenessConfig"
-            )
-        )
-        variant.buildConfigFields?.put(
-            "LIVENESS_TENANT",
-            BuildConfigField(
-                type = "String",
-                value = "\"${project.property("LIVENESS_TENANT")?.toString().orEmpty()}\"",
-                comment = "Liveness verifier tenant the key belongs to"
-            )
-        )
-        variant.buildConfigFields?.put(
-            "LIVENESS_ENABLED",
-            BuildConfigField(
-                type = "boolean",
-                value = project.property("LIVENESS_ENABLED").toString().toBoolean().toString(),
-                comment = "Whether the selfie check is offered; false hides it without removing it"
             )
         )
         variant.buildConfigFields?.put(
