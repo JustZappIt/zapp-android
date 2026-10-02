@@ -299,6 +299,14 @@ androidComponents {
             )
         )
         variant.buildConfigFields?.put(
+            "NEAR_PARTNER_JWT",
+            BuildConfigField(
+                type = "String",
+                value = "\"${project.property("ZAPP_NEAR_PARTNER_JWT")?.toString().orEmpty()}\"",
+                comment = "1Click partner JWT; blank when this build has none"
+            )
+        )
+        variant.buildConfigFields?.put(
             "PIMLICO_API_KEY",
             BuildConfigField(
                 type = "String",
