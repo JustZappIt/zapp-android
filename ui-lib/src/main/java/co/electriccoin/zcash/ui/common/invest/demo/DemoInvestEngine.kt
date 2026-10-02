@@ -24,7 +24,9 @@ import co.electriccoin.zcash.ui.common.model.SwapQuote
 import co.electriccoin.zcash.ui.common.model.ZashiAccount
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
@@ -98,6 +100,9 @@ internal class DemoInvestEngine(
     val trades: StateFlow<Map<String, Trade>> = _trades.asStateFlow()
 
     private val nextId = AtomicInteger(1)
+
+    /** Trades still stepping, so a reset can stop them before they put shares back. */
+    private val running = mutableSetOf<Job>()
 
     override val pendingTrades: Flow<List<PendingTrade>?> =
         _trades.map { all ->
@@ -175,7 +180,7 @@ internal class DemoInvestEngine(
         val assetId = prepared.asset.assetId
         startTrade(address, Trade(assetId, buy = BuyProgress.SendingZec(address)))
         val outcome = controls.outcome.value
-        scope.launch {
+        launchTrade {
             step(address) { it.copy(buy = BuyProgress.PaymentReceived(address, incomplete = false)) }
             step(address) { it.copy(buy = BuyProgress.Buying(address)) }
             delay(stepMillis)
@@ -213,6 +218,7 @@ internal class DemoInvestEngine(
 
     /** Clears holdings and trades, as on a fresh install; the country and setup stay. */
     fun reset() {
+        synchronized(running) { running.toList() }.forEach { it.cancel() }
         units.value = emptyMap()
         _trades.value = emptyMap()
         _holdings.value = null
@@ -225,6 +231,14 @@ internal class DemoInvestEngine(
     fun heldUnits(assetId: String): BigDecimal = units.value[assetId] ?: BigDecimal.ZERO
 
     fun newAddress(prefix: String): String = "$prefix-${nextId.getAndIncrement()}"
+
+    /** Runs a trade's steps until they finish or [reset] cancels them. */
+    fun launchTrade(steps: suspend () -> Unit) {
+        val job = scope.launch(start = CoroutineStart.LAZY) { steps() }
+        synchronized(running) { running += job }
+        job.invokeOnCompletion { synchronized(running) { running -= job } }
+        job.start()
+    }
 
     fun startTrade(
         address: String,

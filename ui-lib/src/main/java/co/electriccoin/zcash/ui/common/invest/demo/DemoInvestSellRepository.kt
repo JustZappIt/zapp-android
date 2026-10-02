@@ -8,16 +8,12 @@ import co.electriccoin.zcash.ui.common.invest.model.SellProgress
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSellRepository
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.transformWhile
-import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.math.RoundingMode
 import kotlin.time.Clock
@@ -32,7 +28,6 @@ internal class DemoInvestSellRepository(
     private val controls: InvestDemoControls,
     private val clock: Clock = Clock.System,
     private val stepMillis: Long = DemoInvestEngine.STEP_MS,
-    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : InvestSellRepository {
     override val pendingSells: Flow<List<String>> =
         engine.pendingTrades.map { list -> list.orEmpty().filter { it.isSale }.map { it.depositAddress } }
@@ -89,7 +84,7 @@ internal class DemoInvestSellRepository(
         val assetId = prepared.asset.assetId
         engine.startTrade(address, DemoInvestEngine.Trade(assetId, sell = SellProgress.Authorised(address)))
         val outcome = controls.outcome.value
-        scope.launch {
+        engine.launchTrade {
             engine.step(address) { it.copy(sell = SellProgress.Selling(address)) }
             delay(stepMillis)
             val final =

@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import java.math.BigDecimal
@@ -188,6 +189,21 @@ class DemoInvestEngineTest {
             assertIs<SellEstimate.NothingHeld>(demo.sells.estimateSell(NVIDIA, SellAmount.All))
         }
 
+    @Test
+    fun `reset stops trades in flight, so a buy finishing later doesn't bring shares back`() =
+        runTest {
+            val demo = demo()
+            val address = demo.buy()
+            advanceTimeBy(DemoInvestEngine.STEP_MS + 1)
+
+            demo.engine.reset()
+            advanceUntilIdle()
+
+            assertNull(demo.engine.holdings.value)
+            assertNull(demo.engine.trades.value[address])
+            assertIs<SellEstimate.NothingHeld>(demo.sells.estimateSell(NVIDIA, SellAmount.All))
+        }
+
     private class Demo(
         val engine: DemoInvestEngine,
         val sells: DemoInvestSellRepository,
@@ -209,7 +225,7 @@ class DemoInvestEngineTest {
             }
         val clock = virtualClock()
         val engine = DemoInvestEngine(accounts, swap, settingsRepo, controls, clock, scope = backgroundScope)
-        val sells = DemoInvestSellRepository(engine, controls, clock, scope = backgroundScope)
+        val sells = DemoInvestSellRepository(engine, controls, clock)
         return Demo(engine, sells, controls, settingsRepo)
     }
 
