@@ -213,6 +213,19 @@ androidComponents {
             )
         )
         variant.buildConfigFields?.put(
+            "IS_INVEST_ENABLED",
+            BuildConfigField(
+                type = "boolean",
+                value =
+                    (
+                        project.property("ZAPP_INVEST_ENABLED").toString().toBoolean() ||
+                            variant.buildType == "debug" ||
+                            variant.productFlavors.any { it.second == DistributionDimension.INTERNAL.value }
+                    ).toString(),
+                comment = "Whether Invest (tokenised stocks held privately) is offered"
+            )
+        )
+        variant.buildConfigFields?.put(
             "P2P_SCREENING_API_URL",
             BuildConfigField(
                 type = "String",
@@ -282,6 +295,14 @@ androidComponents {
                 type = "String",
                 value = "\"${project.property("NTFY_BASE_URL")?.toString().orEmpty()}\"",
                 comment = "Self-hosted ntfy base URL for the embedded push doorbell"
+            )
+        )
+        variant.buildConfigFields?.put(
+            "NEAR_PARTNER_JWT",
+            BuildConfigField(
+                type = "String",
+                value = "\"${project.property("ZAPP_NEAR_PARTNER_JWT")?.toString().orEmpty()}\"",
+                comment = "1Click partner JWT; blank when this build has none"
             )
         )
         variant.buildConfigFields?.put(
