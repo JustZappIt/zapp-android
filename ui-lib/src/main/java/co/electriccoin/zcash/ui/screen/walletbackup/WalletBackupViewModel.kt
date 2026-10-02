@@ -190,7 +190,7 @@ class WalletBackupViewModel(
 
     private fun onWalletBackupSavedClick() =
         viewModelScope.launch {
-            onUserSavedWalletBackup()
+            onUserSavedWalletBackup(args.returnTarget)
         }
 
     private fun onRevealClick() =

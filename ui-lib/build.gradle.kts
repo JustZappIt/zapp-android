@@ -60,6 +60,7 @@ android {
                     "src/main/res/ui/gift",
                     "src/main/res/ui/home",
                     "src/main/res/ui/insufficient_funds",
+                    "src/main/res/ui/invest",
                     "src/main/res/ui/choose_server",
                     "src/main/res/ui/integrations",
                     "src/main/res/ui/ironwood",
@@ -223,6 +224,18 @@ androidComponents {
                             variant.productFlavors.any { it.second == DistributionDimension.INTERNAL.value }
                     ).toString(),
                 comment = "Whether Invest (tokenised stocks held privately) is offered"
+            )
+        )
+        variant.buildConfigFields?.put(
+            "IS_INVEST_DEMO",
+            BuildConfigField(
+                type = "boolean",
+                value =
+                    (
+                        project.property("ZAPP_INVEST_DEMO").toString().toBoolean() &&
+                            variant.buildType == "debug"
+                    ).toString(),
+                comment = "Debug-only: Invest runs on the scripted demo engine, with no network and no ZEC sent"
             )
         )
         variant.buildConfigFields?.put(
