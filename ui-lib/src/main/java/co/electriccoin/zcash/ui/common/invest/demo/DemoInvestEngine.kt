@@ -186,9 +186,16 @@ internal class DemoInvestEngine(
         check(settings.get().isAvailable) { "Buying isn't available in the country of residence" }
         val address = prepared.quote.depositAddress.address
         val assetId = prepared.asset.assetId
-        startTrade(address, Trade(assetId, buy = BuyProgress.SendingZec(address)))
-        // The ZEC leaves the wallet when the buy is sent, as it does for real.
-        wallet.spend(prepared.zecIn + DemoWallet.NETWORK_FEE_ZEC)
+        // The ZEC leaves the wallet when the buy is sent, as it does for real; checked again here, since another
+        // buy may have spent it while this one's price was held.
+        val cost = prepared.zecIn + DemoWallet.NETWORK_FEE_ZEC
+        check(wallet.trySpend(cost)) { "Not enough ZEC for this buy" }
+        try {
+            startTrade(address, Trade(assetId, buy = BuyProgress.SendingZec(address)))
+        } catch (e: IllegalStateException) {
+            wallet.receive(cost)
+            throw e
+        }
         val outcome = controls.outcome.value
         launchTrade {
             step(address) { it.copy(buy = BuyProgress.PaymentReceived(address, incomplete = false)) }

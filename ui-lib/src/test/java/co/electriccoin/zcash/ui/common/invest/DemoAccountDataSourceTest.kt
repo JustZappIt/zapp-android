@@ -20,6 +20,7 @@ import java.math.BigDecimal
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class DemoAccountDataSourceTest {
     @Test
@@ -33,7 +34,7 @@ class DemoAccountDataSourceTest {
             assertEquals(DemoWallet.START, account.spendableShieldedBalance)
             assertEquals(Zatoshi(0), account.totalTransparentBalance)
 
-            wallet.spend(BigDecimal("2.0001"))
+            assertTrue(wallet.trySpend(BigDecimal("2.0001")))
             assertEquals(Zatoshi(699_990_000L), source.selectedAccount.first()!!.spendableShieldedBalance)
             wallet.receive(BigDecimal("1.5"))
             assertEquals(Zatoshi(849_990_000L), source.getZashiAccount().totalBalance)

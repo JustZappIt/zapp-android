@@ -246,6 +246,40 @@ class DemoInvestEngineTest {
             assertEquals(DemoWallet.START, demo.wallet.balance.value)
         }
 
+    @Test
+    fun `two buys held at once can't spend the same ZEC`() =
+        runTest {
+            val demo = demo()
+            val tesla = InvestAssets.curated.first { it.ticker == "TSLA" }
+            // $300 at $50 a ZEC is 6 ZEC each: both fit 9 ZEC when prepared, only one when paid.
+            val first = demo.engine.prepareBuy(NVIDIA, BigDecimal(300))
+            val second = demo.engine.prepareBuy(tesla, BigDecimal(300))
+
+            demo.engine.executeBuy(first)
+            assertFailsWith<IllegalStateException> { demo.engine.executeBuy(second) }
+
+            assertEquals(Zatoshi(299_990_000L), demo.wallet.balance.value)
+            assertEquals(
+                listOf(NVIDIA.assetId),
+                demo.engine.pendingTrades
+                    .first()!!
+                    .map { it.assetId }
+            )
+        }
+
+    @Test
+    fun `a buy refused for a stock already trading gives its ZEC back`() =
+        runTest {
+            val demo = demo()
+            val first = demo.engine.prepareBuy(NVIDIA, BigDecimal(100))
+            val second = demo.engine.prepareBuy(NVIDIA, BigDecimal(100))
+
+            demo.engine.executeBuy(first)
+            assertFailsWith<IllegalStateException> { demo.engine.executeBuy(second) }
+
+            assertEquals(Zatoshi(699_990_000L), demo.wallet.balance.value)
+        }
+
     private class Demo(
         val engine: DemoInvestEngine,
         val sells: DemoInvestSellRepository,

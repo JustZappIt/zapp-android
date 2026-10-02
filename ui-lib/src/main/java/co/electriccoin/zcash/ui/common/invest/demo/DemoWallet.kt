@@ -4,7 +4,6 @@ import cash.z.ecc.android.sdk.model.Zatoshi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -17,9 +16,23 @@ class DemoWallet {
     private val _balance = MutableStateFlow(START)
     val balance: StateFlow<Zatoshi> = _balance.asStateFlow()
 
-    fun spend(zec: BigDecimal) = _balance.update { Zatoshi((it.value - zec.toZats()).coerceAtLeast(0)) }
+    /** Takes [zec] if the balance covers it, in one step, so two buys can't both spend the same ZEC. */
+    fun trySpend(zec: BigDecimal): Boolean {
+        val zats = zec.toZats()
+        while (true) {
+            val current = _balance.value
+            if (current.value < zats) return false
+            if (_balance.compareAndSet(current, Zatoshi(current.value - zats))) return true
+        }
+    }
 
-    fun receive(zec: BigDecimal) = _balance.update { Zatoshi(it.value + zec.toZats()) }
+    fun receive(zec: BigDecimal) {
+        val zats = zec.toZats()
+        while (true) {
+            val current = _balance.value
+            if (_balance.compareAndSet(current, Zatoshi(current.value + zats))) return
+        }
+    }
 
     fun reset() {
         _balance.value = START
