@@ -72,7 +72,7 @@ interface SwapRelayer {
 
     suspend fun refundPayout(payout: SwapPayout): Sent
 
-    suspend fun rescue(payout: SwapPayout): Sent
+    suspend fun rescue(payout: SwapRescue): Sent
 }
 
 /** The maker over HTTP, on a client that never retries: quotes are single-use, and a timed-out accept may open. */
@@ -161,7 +161,7 @@ class RelayerClient(
     override suspend fun refundPayout(payout: SwapPayout) =
         send("/v1/reverse/refund-payout", payout, SwapPayout.serializer())
 
-    override suspend fun rescue(payout: SwapPayout) = send("/v1/reverse/rescue", payout, SwapPayout.serializer())
+    override suspend fun rescue(payout: SwapRescue) = send("/v1/reverse/rescue", payout, SwapRescue.serializer())
 
     private suspend fun <T> send(
         path: String,

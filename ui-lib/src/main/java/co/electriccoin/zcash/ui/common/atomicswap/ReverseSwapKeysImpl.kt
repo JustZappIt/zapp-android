@@ -63,7 +63,9 @@ class ReverseSwapKeysImpl(
 
     override suspend fun signRescue(
         record: ReverseSwapRecord,
-        terms: RelayerTerms
+        terms: RelayerTerms,
+        nonce: Long,
+        deadline: Long,
     ): ByteArray =
         keys.withKey(record.index, record.railgunKeys) { key, railgun ->
             ReverseAtomicSwap.signRefundRescue(
@@ -73,6 +75,8 @@ class ReverseSwapKeysImpl(
                 record.swapId.bytes,
                 terms.relayer.bytes,
                 terms.fee.micros,
+                nonce,
+                deadline,
             )
         }
 

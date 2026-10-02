@@ -373,7 +373,7 @@ class ReverseSwapRefundTest : ReverseSwapDriverFixtures() {
             assertEquals(1, h.rescueCalls)
             assertEquals(1, h.record.index, "the preview stays the active conversion")
             assertEquals(ReversePhase.QUOTED, h.record.phase)
-            assertNotNull(h.kept(0).payout)
+            assertNotNull(h.kept(0).rescue)
         }
 
     @Test

@@ -61,6 +61,17 @@ data class SwapPayout(
     val signature: String,
 )
 
+/** A single approval to rescue returned funds, consumed by the contract and bounded in time. */
+@Serializable
+data class SwapRescue(
+    val swapId: SwapId,
+    val note: SwapNote,
+    val fee: Usdc6,
+    val nonce: Long,
+    val deadline: Long,
+    val signature: String,
+)
+
 /** A share revealed under a held lock, with the payout that follows it. */
 @Serializable
 data class SwapReveal(

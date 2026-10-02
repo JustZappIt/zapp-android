@@ -28,7 +28,9 @@ interface ReverseSwapKeys {
 
     suspend fun signRescue(
         record: ReverseSwapRecord,
-        terms: RelayerTerms
+        terms: RelayerTerms,
+        nonce: Long,
+        deadline: Long,
     ): ByteArray
 }
 
@@ -41,6 +43,9 @@ interface ReverseSwapChain {
 
     /** What a refund Railgun sent back holds in the swap's vault. */
     suspend fun vaultBalance(id: SwapId): Usdc6
+
+    /** Null for a legacy deployment that cannot consume rescue authorizations. */
+    suspend fun rescueNonce(id: SwapId): Long?
 }
 
 /** Funding a reverse swap's escrow from the private balance. */

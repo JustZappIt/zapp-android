@@ -101,7 +101,7 @@ class JointAccountsTest {
             coEvery { synchronizer.getTransactions(joint.accountUuid) } returns
                 flowOf(listOf(sent(expiry = SCANNED + 40)))
 
-            val sweep = checkNotNull(jointAccounts.sweep(joint) { error("signed a second sweep") })
+            val sweep = checkNotNull(jointAccounts.sweep(joint) { _, _ -> error("signed a second sweep") })
 
             assertEquals(ZcashTransaction(ZcashTxId.parse(TX), "0102", SCANNED + 40), sweep.transaction)
             assertEquals(190_000, sweep.receivedZat)
@@ -118,7 +118,7 @@ class JointAccountsTest {
             coEvery { synchronizer.getTransactions(joint.accountUuid) } returns flowOf(listOf(sent(expiry = SCANNED)))
             every { synchronizer.walletBalances } returns balances(joint, available = 200_000, pending = 50_000)
 
-            assertNull(jointAccounts.sweep(joint) { error("signed with notes pending") })
+            assertNull(jointAccounts.sweep(joint) { _, _ -> error("signed with notes pending") })
 
             every { synchronizer.walletBalances } returns balances(joint, available = 250_000, pending = 0)
             coEvery { synchronizer.proposeTransfer(joint, HOME, Zatoshi(240_000), any()) } returns proposal(10_000)
@@ -137,14 +137,17 @@ class JointAccountsTest {
 
             val sweep =
                 checkNotNull(
-                    jointAccounts.sweep(joint) { redacted ->
+                    jointAccounts.sweep(joint) { pczt, intent ->
+                        assertEquals(HOME, intent.recipient)
+                        assertEquals(1, intent.minimumReceivedZat)
+                        assertEquals(249_999, intent.maximumFeeZat)
                         signatures++
-                        redacted + 5
+                        pczt + 5
                     }
                 )
 
             assertEquals(1, signatures)
-            assertContentEquals(byteArrayOf(3, 5), signedPczt.captured.toByteArray())
+            assertContentEquals(byteArrayOf(1, 5), signedPczt.captured.toByteArray())
             assertEquals(ZcashTransaction(ZcashTxId.parse("cd".repeat(32)), "04", SCANNED + 40), sweep.transaction)
             assertEquals(240_000, sweep.receivedZat)
             assertEquals(10_000, sweep.feeZat)

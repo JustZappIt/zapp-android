@@ -29,7 +29,7 @@ internal class ReverseSwapRefunds(
 
     /** Whether a refund Railgun sent back to its vault holds more than a rescue's relayer fee. */
     suspend fun canRescue(record: ReverseSwapRecord): Boolean =
-        record.phase == ReversePhase.REFUNDED && rescueTerms(record) != null
+        record.phase == ReversePhase.REFUNDED && chain.rescueNonce(record.swapId) != null && rescueTerms(record) != null
 
     /** One try at shielding a returned refund again. The swap stays finished, so it never holds up another. */
     suspend fun rescue(
@@ -37,10 +37,22 @@ internal class ReverseSwapRefunds(
         outbox: ReverseOutbox,
     ) {
         check(record.phase == ReversePhase.REFUNDED) { "only a refunded conversion is rescued" }
+        val nonce = checkNotNull(chain.rescueNonce(record.swapId)) { "this deployment cannot consume rescue approvals" }
         val terms = rescueTerms(record) ?: return
-        val payout = payout(record, terms, reverseKeys.signRescue(record, terms))
-        store.update(record.copy(payout = payout))
-        outbox.send { relayer.rescue(payout) }
+        val now = freshHead(verifier.state(record).now, nowSeconds())
+        check(now <= Long.MAX_VALUE - SIGNATURE_TTL_SECONDS) { "invalid chain time" }
+        val deadline = now + SIGNATURE_TTL_SECONDS
+        val rescue =
+            SwapRescue(
+                record.swapId,
+                keys.payoutNote(record.index, record.railgunKeys).wire(),
+                terms.fee,
+                nonce,
+                deadline,
+                reverseKeys.signRescue(record, terms, nonce, deadline).hex(),
+            )
+        store.update(record.copy(rescue = rescue))
+        outbox.send { relayer.rescue(rescue) }
     }
 
     suspend fun advance(
@@ -81,6 +93,7 @@ internal class ReverseSwapRefunds(
     ) {
         if (!mayTakeLock(escrow.refundLockUntil, escrow.claimLockUntil, observed.now, observed.lockDuration)) return
         check(SIGNATURE_TTL_SECONDS < observed.lockDuration) { "the lock is too short to sign for" }
+        check(observed.now <= Long.MAX_VALUE - SIGNATURE_TTL_SECONDS) { "invalid chain time" }
         val deadline = observed.now + SIGNATURE_TTL_SECONDS
         val authorization =
             record.refundLock?.takeIf { it.deadline >= observed.now }
@@ -96,9 +109,24 @@ internal class ReverseSwapRefunds(
     ) {
         val fresh = verifier.state(record)
         val escrow = fresh.swap?.takeIf { it.stage == SwapStage.OPEN || it.stage == SwapStage.READY } ?: return
-        if (escrow.refundLockUntil <= freshHead(fresh.now, nowSeconds()) + REVEAL_MARGIN_SECONDS) return
+        val observedNow = freshHead(fresh.now, nowSeconds())
+        val safe =
+            escrow.refundLockUntil > observedNow &&
+                escrow.refundLockUntil - observedNow > REVEAL_MARGIN_SECONDS
+        if (!safe) return
         sendPayout(record, ReversePhase.REFUNDING, outbox) {
-            relayer.refund(SwapReveal(record.swapId, keys.claimSecret(record.index).hex(), it))
+            val reveal = SwapReveal(record.swapId, keys.claimSecret(record.index).hex(), it)
+            val current = verifier.state(record)
+            val locked =
+                current.swap?.takeIf { swap ->
+                    swap.stage == SwapStage.OPEN || swap.stage == SwapStage.READY
+                }
+            val now = freshHead(current.now, nowSeconds())
+            if (locked != null && locked.refundLockUntil > now &&
+                locked.refundLockUntil - now > REVEAL_MARGIN_SECONDS
+            ) {
+                relayer.refund(reveal)
+            }
         }
     }
 
@@ -110,7 +138,11 @@ internal class ReverseSwapRefunds(
         send: suspend (SwapPayout) -> Unit,
     ) {
         val terms = verifier.relayerTerms(record)
-        val payout = payout(record, terms, reverseKeys.signPayout(record, terms))
+        val payout = record.payout ?: payout(record, terms, reverseKeys.signPayout(record, terms))
+        val expectedNote = keys.payoutNote(record.index, record.railgunKeys).wire()
+        check(payout.swapId == record.swapId && payout.note == expectedNote) {
+            "the saved refund payout is for another swap"
+        }
         store.keep(record, record.copy(payout = payout, phase = phase))
         outbox.send { send(payout) }
     }

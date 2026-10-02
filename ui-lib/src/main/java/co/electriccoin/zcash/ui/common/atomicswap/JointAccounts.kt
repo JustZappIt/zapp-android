@@ -23,6 +23,7 @@ import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import xyz.justzappit.atomicswap.AtomicSwap
+import xyz.justzappit.atomicswap.SweepIntent
 import xyz.justzappit.offramp.atomicswap.SwapShare
 import xyz.justzappit.offramp.atomicswap.ZcashTransaction
 import xyz.justzappit.offramp.atomicswap.ZcashTransactionStatus
@@ -76,11 +77,12 @@ class JointAccounts(
     /** [account]'s whole balance home, the sweep made before or one [sign] signs; null until all is spendable. */
     suspend fun sweep(
         account: Account,
-        sign: suspend (redactedPczt: ByteArray) -> ByteArray,
+        maximumFeeZat: Long = MAX_SWEEP_FEE_ZAT,
+        sign: suspend (pczt: ByteArray, intent: SweepIntent) -> ByteArray,
     ): JointSweep? {
         val synchronizer = transactions.synced()
         return earlierSweep(synchronizer, account)
-            ?: synchronizer.settled(account)?.let { build(synchronizer, account, it, sign) }
+            ?: synchronizer.settled(account)?.let { build(synchronizer, account, it, maximumFeeZat, sign) }
     }
 
     /**
@@ -142,13 +144,22 @@ class JointAccounts(
         synchronizer: Synchronizer,
         account: Account,
         balance: Long,
-        sign: suspend (ByteArray) -> ByteArray,
+        maximumFeeZat: Long,
+        sign: suspend (ByteArray, SweepIntent) -> ByteArray,
     ): JointSweep {
-        val sweep = proposal(synchronizer, account, balance)
+        val home =
+            accounts
+                .getZashiAccount()
+                .unified.address.address
+        val feeLimit = minOf(maximumFeeZat, MAX_SWEEP_FEE_ZAT, balance - 1)
+        require(feeLimit >= ZIP317_MIN_FEE_ZAT) { "the sweep fee is not authorized" }
+        val intent = SweepIntent(home, balance - feeLimit, feeLimit)
+        val sweep = proposal(synchronizer, account, balance, home)
+        require(sweep.feeZat <= feeLimit) { "the sweep exceeds its fee authorization" }
         val pczt = synchronizer.createPcztFromProposal(account.accountUuid, sweep.proposal)
+        // The local signer needs the note values and randomness to verify transaction intent.
+        val signed = sign(pczt.clonePczt().toByteArray(), intent)
         val withProofs = synchronizer.addProofsToPczt(pczt.clonePczt())
-        val redacted = synchronizer.redactPcztForSigner(pczt.clonePczt())
-        val signed = sign(redacted.toByteArray())
         val created = synchronizer.broadcaster.createTransactionFromPczt(withProofs, Pczt(signed)).single()
         return JointSweep(created.kept(), balance - sweep.feeZat, sweep.feeZat)
     }
@@ -157,10 +168,9 @@ class JointAccounts(
         synchronizer: Synchronizer,
         account: Account,
         balance: Long,
-    ): SweepProposal<Proposal> {
-        val zashi = accounts.getZashiAccount()
-        val home = zashi.unified.address.address
-        return proposeSweep(balance) { amount ->
+        home: String,
+    ): SweepProposal<Proposal> =
+        proposeSweep(balance) { amount ->
             try {
                 val proposal = synchronizer.proposeTransfer(account, home, Zatoshi(amount))
                 SweepProposal(proposal, proposal.totalFeeRequired().value, proposal.transactionCount())
@@ -170,7 +180,6 @@ class JointAccounts(
                 if (e.isInsufficientFunds()) null else throw e
             }
         }
-    }
 }
 
 /** What a sweep needs of a proposal. */
@@ -222,3 +231,4 @@ private const val ZIP317_GRACE_ACTIONS = 2
 /** ZIP 317's fee for the fewest actions any transaction pays for: the least a deposit or a sweep costs. */
 internal const val ZIP317_MIN_FEE_ZAT = ZIP317_MARGINAL_FEE * ZIP317_GRACE_ACTIONS
 private const val MAX_SWEEP_PROPOSALS = 64
+private const val MAX_SWEEP_FEE_ZAT = ZIP317_MARGINAL_FEE * MAX_SWEEP_PROPOSALS

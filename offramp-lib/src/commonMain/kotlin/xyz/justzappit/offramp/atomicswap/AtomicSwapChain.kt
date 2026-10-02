@@ -8,6 +8,7 @@ import xyz.justzappit.evm.abi.AbiBytes32
 import xyz.justzappit.evm.abi.AbiDecoder
 import xyz.justzappit.evm.abi.AbiEncoder
 import xyz.justzappit.evm.abi.keccak256
+import xyz.justzappit.evm.math.toNonNegativeLongExact
 import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.rpc.RpcException
 import xyz.justzappit.evm.rpc.TransactionStatus
@@ -19,6 +20,7 @@ import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.offramp.p2p.Usdc6
 
 /** [deployment]'s contract and Railgun's proxy over JSON-RPC, read for swaps either way. */
+@Suppress("TooManyFunctions")
 class AtomicSwapChain(
     private val rpc: BaseRpcClient,
     private val deployment: SwapDeployment,
@@ -48,7 +50,7 @@ class AtomicSwapChain(
     override suspend fun lockDuration(): Long =
         lockDuration ?: abiWords(rpc.ethCall(deployment.contract, LOCK_DURATION_CALL), 1)
             .uint(0)
-            .toLong()
+            .toNonNegativeLongExact()
             .also { lockDuration = it }
 
     // The contract keys a spent share by its owner and the share, hashed as a swap id is.
@@ -65,7 +67,8 @@ class AtomicSwapChain(
         rpc.requireChain(deployment)
         val head = rpc.head()
         val confirmed = deployment.confirmedNumber(head)
-        val around = head.number - (head.timestamp - since) / SECONDS_PER_BLOCK
+        val elapsed = head.timestamp - since.coerceIn(0, head.timestamp)
+        val around = head.number - elapsed / SECONDS_PER_BLOCK
         val earliest = (around - LOG_WINDOW_BLOCKS).coerceIn(0, confirmed)
         var to = confirmed
         while (to >= earliest) {
@@ -81,7 +84,7 @@ class AtomicSwapChain(
                         !it.removed && it.address.equals(deployment.contract.lowercaseHex, ignoreCase = true) &&
                             it.topics.size == 2 && it.topics[0].equals(PAID_OUT_TOPIC, ignoreCase = true) &&
                             it.topics[1].equals(id.hex, ignoreCase = true) &&
-                            hexToBigInteger(it.blockNumber).toLong() in from..to
+                            hexToBigInteger(it.blockNumber).toNonNegativeLongExact() in from..to
                     }
             if (log != null) {
                 val words = abiWords(log.data.hexToBytes(), 2)
@@ -101,7 +104,7 @@ class AtomicSwapChain(
         return ReverseChainState(
             swap = decodeSwap(rpc.call(deployment.contract, GET_SWAP, id, confirmed)),
             refundNote = NoteCommitment.of(funding.word(0)),
-            fundingBlock = funding.uint(1).toLong(),
+            fundingBlock = funding.uint(1).toNonNegativeLongExact(),
             block = head.number,
             now = head.timestamp,
             lockDuration = lockDuration(),
@@ -116,6 +119,14 @@ class AtomicSwapChain(
         val balance = AbiEncoder.encodeFunctionCall("balanceOf(address)", listOf(AbiAddress(vault)))
         return Usdc6(abiWords(rpc.ethCall(deployment.token, balance), 1).uint(0))
     }
+
+    override suspend fun rescueNonce(id: SwapId): Long? =
+        try {
+            rpc.requireChain(deployment)
+            abiWords(rpc.call(deployment.contract, "rescueNonces(bytes32)", id), 1).uint(0).toNonNegativeLongExact()
+        } catch (_: RpcException.ExecutionReverted) {
+            null
+        }
 
     companion object {
         private const val GET_SWAP = "getSwap(bytes32)"
@@ -138,15 +149,15 @@ class AtomicSwapChain(
                     ?: throw AtomicSwapBlockedException(AtomicSwapBlock.CHAIN_UNREADABLE, "unknown swap stage $raw")
             return OnChainSwap(
                 maker = words.address(Word.MAKER),
-                t0 = words.uint(Word.T0).toLong(),
+                t0 = words.uint(Word.T0).toNonNegativeLongExact(),
                 stage = stage,
                 paidOut = words.uint8(Word.PAID_OUT) != 0,
                 user = words.address(Word.USER),
-                t1 = words.uint(Word.T1).toLong(),
+                t1 = words.uint(Word.T1).toNonNegativeLongExact(),
                 token = words.address(Word.TOKEN),
-                claimLockUntil = words.uint(Word.CLAIM_LOCK_UNTIL).toLong(),
+                claimLockUntil = words.uint(Word.CLAIM_LOCK_UNTIL).toNonNegativeLongExact(),
                 amount = Usdc6(words.uint(Word.AMOUNT)),
-                refundLockUntil = words.uint(Word.REFUND_LOCK_UNTIL).toLong(),
+                refundLockUntil = words.uint(Word.REFUND_LOCK_UNTIL).toNonNegativeLongExact(),
                 makerShare = SwapShare.of(words.word(Word.MAKER_X) + words.word(Word.MAKER_Y)),
                 userShare = SwapShare.of(words.word(Word.USER_X) + words.word(Word.USER_Y)),
                 secret = words.word(Word.SECRET),
@@ -183,7 +194,12 @@ private class Head(
 )
 
 private suspend fun BaseRpcClient.head(): Head =
-    ethGetBlockByNumber().let { Head(hexToBigInteger(it.number).toLong(), hexToBigInteger(it.timestamp).toLong()) }
+    ethGetBlockByNumber().let {
+        Head(
+            hexToBigInteger(it.number).toNonNegativeLongExact(),
+            hexToBigInteger(it.timestamp).toNonNegativeLongExact(),
+        )
+    }
 
 private suspend fun BaseRpcClient.requireChain(deployment: SwapDeployment) {
     if (ethChainId() != deployment.chainId) {

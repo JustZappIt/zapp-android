@@ -3,6 +3,7 @@
 
 package co.electriccoin.zcash.ui.screen.privateusd.progress
 
+import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -25,6 +26,7 @@ internal data class PrivateUsdProgressState(
     val onBack: () -> Unit,
     /** False while a step the user authorized runs. */
     val isBackEnabled: Boolean = true,
+    val pinVerify: PinVerifyState? = null,
 )
 
 internal data class PrivateUsdResultState(

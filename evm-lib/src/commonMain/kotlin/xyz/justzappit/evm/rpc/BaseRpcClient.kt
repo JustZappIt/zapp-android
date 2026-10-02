@@ -29,6 +29,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import xyz.justzappit.evm.abi.Selector4
 import xyz.justzappit.evm.abi.SolidityErrors
+import xyz.justzappit.evm.math.toNonNegativeLongExact
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.evm.types.Gas
@@ -51,7 +52,7 @@ class BaseRpcClient(
         }
 
     suspend fun ethChainId(): ChainId =
-        ChainId(hexToBigInteger(rpcCall("eth_chainId", emptyJsonArray).jsonPrimitive.content).toLong())
+        ChainId(hexToBigInteger(rpcCall("eth_chainId", emptyJsonArray).jsonPrimitive.content).toNonNegativeLongExact())
 
     suspend fun ethGasPrice(): Wei =
         Wei(hexToBigInteger(rpcCall("eth_gasPrice", emptyJsonArray).jsonPrimitive.content))

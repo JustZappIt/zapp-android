@@ -15,11 +15,14 @@ import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.common.privateusd.ObserveLocalCurrencyUseCase
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
+import co.electriccoin.zcash.ui.common.security.PinVerifyState
+import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.common.usecase.NavigateBackToPayUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdArgs
+import co.electriccoin.zcash.ui.screen.privateusd.authenticateSpend
 import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
 import co.electriccoin.zcash.ui.screen.privateusd.epochSeconds
 import co.electriccoin.zcash.ui.screen.privateusd.message
@@ -36,7 +39,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
+import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
 import xyz.justzappit.offramp.atomicswap.AtomicSwapWait
+import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
@@ -47,6 +52,7 @@ class PrivateUsdProgressVM(
     observeLocalCurrency: ObserveLocalCurrencyUseCase,
     private val navigationRouter: NavigationRouter,
     private val navigateBackToPay: NavigateBackToPayUseCase,
+    private val auth: SecretAuthGate,
 ) : ViewModel() {
     private val steps = PrivateUsdProgressSteps(atomicSwapRepository.requireDeployment())
     private val callOff = MutableStateFlow(CallOff())
@@ -57,7 +63,7 @@ class PrivateUsdProgressVM(
             balanceRepository.observe(),
             epochSeconds(TICK),
             observeLocalCurrency(),
-            callOff,
+            combine(callOff, auth.pinPrompt) { action, pin -> action.copy(pin = pin) },
             ::createState
         ).stateIn(
             scope = viewModelScope,
@@ -85,16 +91,22 @@ class PrivateUsdProgressVM(
         callOff: CallOff,
     ): PrivateUsdProgressState {
         val record = swap.record
+        val needsApproval = record != null && !record.finished && record.relayerFee == null && record.payout == null
         val isSlowToOpen =
             swap.wait?.reason == AtomicSwapWait.OPENING && record != null && now - record.acceptedAt > SLOW_OPEN_SECONDS
         return PrivateUsdProgressState(
             amounts = record?.let { steps.amounts(it, currency) },
             result = record?.let { steps.result(it, balance, currency) },
             steps = steps.of(swap, balance),
-            note = steps.note(swap, now, isSlowToOpen).takeIf { swap.isUnderWay },
+            note =
+                if (needsApproval) {
+                    stringRes(R.string.convert_payout_fee_missing)
+                } else {
+                    steps.note(swap, now, isSlowToOpen).takeIf { swap.isUnderWay }
+                },
             problem =
                 swap.problem
-                    ?.takeIf { swap.isUnderWay }
+                    ?.takeIf { swap.isUnderWay && !needsApproval }
                     ?.let { PrivateUsdProblemState(it.message(), onRetry = atomicSwapRepository::retryNow) },
             error = callOff.error,
             callOff =
@@ -104,29 +116,46 @@ class PrivateUsdProgressVM(
                     isLoading = callOff.isBusy,
                     onClick = ::onCallOff,
                 ).takeIf { isSlowToOpen && swap.problem == null },
-            showsBackgroundNote = swap.isUnderWay,
-            primaryButton =
-                when (record?.outcome) {
-                    null -> {
-                        null
-                    }
-
-                    AtomicSwapOutcome.Paid -> {
-                        ButtonState(stringRes(R.string.convert_result_view_balance)) {
-                            navigationRouter.replaceAll(PrivateUsdArgs)
-                        }
-                    }
-
-                    is AtomicSwapOutcome.Refunded, is AtomicSwapOutcome.NothingSent -> {
-                        ButtonState(stringRes(R.string.convert_result_try_again)) {
-                            navigationRouter.replace(PrivateUsdConvertArgs)
-                        }
-                    }
-                },
+            showsBackgroundNote = swap.isUnderWay && !needsApproval,
+            primaryButton = primaryButton(record, needsApproval, callOff),
             info = steps.info,
             onBack = navigateBackToPay::invoke,
+            isBackEnabled = !callOff.isBusy,
+            pinVerify = callOff.pin,
         )
     }
+
+    private fun primaryButton(record: AtomicSwapRecord?, needsApproval: Boolean, callOff: CallOff): ButtonState? =
+        when (record?.outcome) {
+            null -> {
+                record?.takeIf { needsApproval }?.let {
+                    val fee = callOff.fee.takeIf { callOff.feeRecord == record }
+                    ButtonState(
+                        text =
+                            if (fee == null) {
+                                stringRes(R.string.convert_payout_fee_review)
+                            } else {
+                                stringRes(R.string.convert_payout_fee_approve, fee.toDisplayString())
+                            },
+                        isEnabled = !callOff.isBusy,
+                        isLoading = callOff.isBusy,
+                        onClick = { onPayoutFee(it, fee) },
+                    )
+                }
+            }
+
+            AtomicSwapOutcome.Paid -> {
+                ButtonState(stringRes(R.string.convert_result_view_balance)) {
+                    navigationRouter.replaceAll(PrivateUsdArgs)
+                }
+            }
+
+            is AtomicSwapOutcome.Refunded, is AtomicSwapOutcome.NothingSent -> {
+                ButtonState(stringRes(R.string.convert_result_try_again)) {
+                    navigationRouter.replace(PrivateUsdConvertArgs)
+                }
+            }
+        }
 
     // A forward conversion is what this screen shows: without one, the reverse one under way or a new one.
     private suspend fun leaveIfNothingToShow() {
@@ -135,6 +164,25 @@ class PrivateUsdProgressVM(
             !navigationRouter.showConversionUnderWay(atomicSwapRepository, reverseSwapRepository)
         ) {
             navigationRouter.replace(PrivateUsdConvertArgs)
+        }
+    }
+
+    private fun onPayoutFee(record: AtomicSwapRecord, fee: Usdc6?) {
+        if (callOff.value.isBusy) return
+        callOff.value = CallOff(isBusy = true)
+        viewModelScope.launch {
+            val result =
+                runConversionStep("payout fee approval failed") {
+                    if (fee == null) {
+                        callOff.value = CallOff(feeRecord = record, fee = atomicSwapRepository.payoutFee(record.index))
+                    } else {
+                        if (auth.authenticateSpend()) atomicSwapRepository.approvePayoutFee(record, fee)
+                        callOff.value = CallOff()
+                    }
+                }
+            result.exceptionOrNull()?.let {
+                callOff.value = CallOff(error = it.toFailure().message(R.string.convert_payout_fee_failed))
+            }
         }
     }
 
@@ -154,6 +202,9 @@ class PrivateUsdProgressVM(
     private data class CallOff(
         val isBusy: Boolean = false,
         val error: StringResource? = null,
+        val feeRecord: AtomicSwapRecord? = null,
+        val fee: Usdc6? = null,
+        val pin: PinVerifyState? = null,
     )
 
     private companion object {

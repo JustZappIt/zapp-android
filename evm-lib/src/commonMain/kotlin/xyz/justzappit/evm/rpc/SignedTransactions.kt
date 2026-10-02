@@ -4,6 +4,7 @@
 package xyz.justzappit.evm.rpc
 
 import xyz.justzappit.evm.abi.keccak256
+import xyz.justzappit.evm.math.toNonNegativeLongExact
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.evm.util.hexToBigInteger
 import xyz.justzappit.evm.util.hexToBytes
@@ -29,10 +30,12 @@ suspend fun BaseRpcClient.transactionStatus(
     txHash: TxHash,
     confirmations: Long,
 ): TransactionStatus {
+    require(confirmations > 0) { "confirmation depth must be positive" }
     val receipt = ethGetTransactionReceipt(txHash) ?: return waitingOrUnknown(txHash)
-    val head = hexToBigInteger(ethGetBlockByNumber().number).toLong()
+    val head = hexToBigInteger(ethGetBlockByNumber().number).toNonNegativeLongExact()
+    val included = hexToBigInteger(receipt.blockNumber).toNonNegativeLongExact()
     return when {
-        head - hexToBigInteger(receipt.blockNumber).toLong() + 1 < confirmations -> TransactionStatus.PENDING
+        included > head || head - included < confirmations - 1 -> TransactionStatus.PENDING
         hexToBigInteger(receipt.status).signum() == 0 -> TransactionStatus.REVERTED
         else -> TransactionStatus.CONFIRMED
     }

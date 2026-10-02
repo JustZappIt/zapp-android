@@ -47,8 +47,9 @@ internal fun mayTakeLock(
     now: Long,
     lockDuration: Long,
 ): Boolean {
+    require(own >= 0 && other >= 0 && now >= 0 && lockDuration > 0)
     val isHeld = now < own || now < other
-    val isTheirTurn = own > other && now < own + lockDuration
+    val isTheirTurn = own > other && (now < own || now - own < lockDuration)
     return !isHeld && !isTheirTurn
 }
 

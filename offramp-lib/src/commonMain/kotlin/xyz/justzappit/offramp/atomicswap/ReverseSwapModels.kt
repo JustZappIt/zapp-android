@@ -132,6 +132,7 @@ data class ReverseSwapRecord(
     val cancelRequested: Boolean = false,
     val refundLock: SwapAuthorization? = null,
     val payout: SwapPayout? = null,
+    val rescue: SwapRescue? = null,
     /** Only ever set by earlier builds, whose rescue retried in the background. */
     val rescuePending: Boolean = false,
     val receive: ReverseReceiveTransaction? = null,

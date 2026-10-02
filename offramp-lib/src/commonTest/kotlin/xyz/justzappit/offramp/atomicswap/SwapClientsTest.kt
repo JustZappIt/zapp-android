@@ -142,6 +142,9 @@ class SwapClientsTest {
             val services = Services { respond("""{"transactions":[]}""") }
             val note = """{"npk":"$WORD","encryptedBundle":["$WORD"],"shieldKey":"$WORD"}"""
             val payout = """{"swapId":"${SWAP_ID.hex}","note":$note,"fee":"20000","signature":"$SIGNATURE"}"""
+            val rescue =
+                """{"swapId":"${SWAP_ID.hex}","note":$note,"fee":"20000",""" +
+                    """"nonce":0,"deadline":1000,"signature":"$SIGNATURE"}"""
             val authorization = """{"swapId":"${SWAP_ID.hex}","deadline":100,"signature":"$SIGNATURE"}"""
             val reveal = """{"swapId":"${SWAP_ID.hex}","secret":"$WORD","payout":$payout}"""
 
@@ -152,7 +155,7 @@ class SwapClientsTest {
             services.relayer.lockRefund(AUTHORIZATION)
             services.relayer.refund(REVEAL)
             services.relayer.refundPayout(PAYOUT)
-            services.relayer.rescue(PAYOUT)
+            services.relayer.rescue(SwapRescue(SWAP_ID, PAYOUT.note, PAYOUT.fee, 0, 1000, SIGNATURE))
 
             assertEquals(
                 listOf(
@@ -163,7 +166,7 @@ class SwapClientsTest {
                     "/relayer/v1/reverse/lock-refund" to authorization,
                     "/relayer/v1/reverse/refund" to reveal,
                     "/relayer/v1/reverse/refund-payout" to payout,
-                    "/relayer/v1/reverse/rescue" to payout,
+                    "/relayer/v1/reverse/rescue" to rescue,
                 ),
                 services.paths.zip(services.bodies),
             )

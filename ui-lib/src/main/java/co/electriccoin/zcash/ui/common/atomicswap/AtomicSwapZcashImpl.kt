@@ -72,8 +72,8 @@ class AtomicSwapZcashImpl(
     ): ZcashTransaction? {
         val account = jointAccounts.import(index, makerShare, birthday)
         return jointAccounts
-            .sweep(account) { redacted ->
-                keys.withKey(index) { AtomicSwap.signRefund(it, makerShare.bytes, makerSecret, redacted) }
+            .sweep(account) { pczt, intent ->
+                keys.withKey(index) { AtomicSwap.signRefund(it, makerShare.bytes, makerSecret, pczt, intent) }
             }?.transaction
     }
 

@@ -253,6 +253,38 @@ class AtomicSwapChainTest {
             node.close()
         }
 
+    @Test
+    fun oversizedSwapTimestampsNeverWrapIntoValidLocks() {
+        val oversized = byteArrayOf(1) + ByteArray(8)
+        for (word in listOf(1, 5, 7, 9)) {
+            val data = swapWords(stage = 1)
+            oversized.copyInto(data, word * 32 + 32 - oversized.size)
+            assertFailsWith<IllegalArgumentException> { AtomicSwapChain.decodeSwap(data) }
+        }
+    }
+
+    @Test
+    fun oversizedRpcHeadDurationAndFundingBlockAreRejected() =
+        runTest {
+            val node = Node()
+            for (field in listOf("number", "timestamp")) {
+                node.head =
+                    if (field == "number") {
+                        """{"number":"0x10000000000000001","timestamp":"0x1"}"""
+                    } else {
+                        """{"number":"0x1","timestamp":"0x10000000000000001"}"""
+                    }
+                assertFailsWith<IllegalArgumentException> { node.chain.now() }
+            }
+            node.head = HEAD_BLOCK
+            node.overrideWords = ByteArray(23) + byteArrayOf(1) + ByteArray(8)
+            assertFailsWith<IllegalArgumentException> { node.chain.lockDuration() }
+            node.overrideCall = REVERSE_FUNDING
+            node.overrideWords = filled(0x06) + checkNotNull(node.overrideWords)
+            assertFailsWith<IllegalArgumentException> { node.chain.read(SwapId.of(filled(0x5c))) }
+            node.close()
+        }
+
     /** A JSON-RPC node that answers what the reader asks, and remembers how it was asked. */
     private class Node(
         chainId: Long = 11_155_111,
@@ -261,6 +293,9 @@ class AtomicSwapChainTest {
         val logFilters = mutableListOf<JsonObject>()
         var logs = "[${payoutLog()}]"
         private val calls = mutableListOf<Pair<String, String>>()
+        var head = HEAD_BLOCK
+        var overrideWords: ByteArray? = null
+        var overrideCall = LOCK_DURATION
         var known = false
         var receipt: Pair<Long, String>? = null
         private val engine =
@@ -271,7 +306,7 @@ class AtomicSwapChainTest {
                 val result =
                     when (payload["method"]!!.jsonPrimitive.content) {
                         "eth_chainId" -> "\"0x${chainId.toString(16)}\""
-                        "eth_getBlockByNumber" -> HEAD_BLOCK
+                        "eth_getBlockByNumber" -> head
                         "eth_call" -> call(params)
                         "eth_getLogs" -> logs.also { logFilters += params[0].jsonObject }
                         "eth_getTransactionReceipt" -> receiptJson()
@@ -308,7 +343,7 @@ class AtomicSwapChainTest {
                     selector(BALANCE_OF) -> uint(900_000)
                     else -> error("unexpected call $selector")
                 }
-            return "\"0x${words.toHex()}\""
+            return "\"0x${(overrideWords?.takeIf { selector == selector(overrideCall) } ?: words).toHex()}\""
         }
 
         private fun receiptJson(): String =

@@ -24,6 +24,8 @@ import kotlin.test.assertFailsWith
 class SignedTransactionsTest {
     private val methods = mutableListOf<String>()
     private var sendAnswer = """"$HASH""""
+    private var headNumber = "0x${HEAD.toString(16)}"
+    private var receiptBlock: String? = null
     private var known = false
     private var receipt: Pair<Long, String>? = null
 
@@ -44,7 +46,7 @@ class SignedTransactionsTest {
                             "eth_sendRawTransaction" -> sendAnswer
                             "eth_getTransactionByHash" -> if (known) """{"hash":"$HASH"}""" else "null"
                             "eth_getTransactionReceipt" -> receiptJson()
-                            "eth_getBlockByNumber" -> """{"number":"0x${HEAD.toString(16)}","timestamp":"0x1"}"""
+                            "eth_getBlockByNumber" -> """{"number":"$headNumber","timestamp":"0x1"}"""
                             else -> error("unexpected $method")
                         }
                     val content =
@@ -115,9 +117,32 @@ class SignedTransactionsTest {
             assertEquals(TransactionStatus.REVERTED, rpc.transactionStatus(hash, confirmations = 2))
         }
 
+    @Test
+    fun `oversized block numbers cannot manufacture confirmations`() =
+        runTest {
+            receipt = HEAD - 1 to "0x1"
+            receiptBlock = "0x100000000000003e7"
+            assertFailsWith<IllegalArgumentException> { rpc.transactionStatus(TxHash.fromHex(HASH), 2) }
+            receiptBlock = null
+            headNumber = "0x100000000000003e8"
+            assertFailsWith<IllegalArgumentException> { rpc.transactionStatus(TxHash.fromHex(HASH), 2) }
+        }
+
+    @Test
+    fun `maximum representable height and confirmation boundary do not overflow`() =
+        runTest {
+            headNumber = "0x7fffffffffffffff"
+            receipt = Long.MAX_VALUE to "0x1"
+            assertEquals(TransactionStatus.CONFIRMED, rpc.transactionStatus(TxHash.fromHex(HASH), 1))
+            assertEquals(TransactionStatus.PENDING, rpc.transactionStatus(TxHash.fromHex(HASH), 2))
+            assertFailsWith<IllegalArgumentException> { rpc.transactionStatus(TxHash.fromHex(HASH), 0) }
+        }
+
     private fun receiptJson(): String =
         receipt?.let { (block, status) ->
-            """{"transactionHash":"$HASH","blockNumber":"0x${block.toString(16)}","status":"$status","gasUsed":"0x1"}"""
+            """{"transactionHash":"$HASH","blockNumber":"${receiptBlock ?: "0x${block.toString(
+                16
+            )}"}","status":"$status","gasUsed":"0x1"}"""
         } ?: "null"
 
     private companion object {

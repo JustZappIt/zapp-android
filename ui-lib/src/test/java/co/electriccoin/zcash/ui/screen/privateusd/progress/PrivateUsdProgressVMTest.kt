@@ -16,6 +16,7 @@ import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.common.privateusd.ObserveLocalCurrencyUseCase
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
+import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
@@ -46,6 +47,7 @@ import xyz.justzappit.offramp.atomicswap.AtomicSwapStep
 import xyz.justzappit.offramp.atomicswap.AtomicSwapWait
 import xyz.justzappit.offramp.atomicswap.SwapDeposit
 import xyz.justzappit.offramp.atomicswap.ZcashTxId
+import xyz.justzappit.offramp.p2p.Usdc6
 import java.io.IOException
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -68,6 +70,7 @@ class PrivateUsdProgressVMTest {
         }
     private val reverse = mockk<ReverseSwapRepository> { coEvery { isUnderWay() } returns false }
     private val navigation = mockk<NavigationRouter>(relaxed = true)
+    private val auth = mockk<SecretAuthGate>(relaxed = true) { every { pinPrompt } returns MutableStateFlow(null) }
     private lateinit var vm: PrivateUsdProgressVM
 
     @After
@@ -155,6 +158,30 @@ class PrivateUsdProgressVMTest {
             verify { navigation.replace(PrivateUsdConvertArgs) }
         }
 
+    @Test
+    fun `legacy payout fee is shown and requires successful authentication`() =
+        runTest {
+            val legacy = record().copy(relayerFee = null)
+            swap.value = AtomicSwapState(legacy)
+            val fee = Usdc6.ofMicros(20_000)
+            coEvery { swaps.payoutFee(legacy.index) } returns fee
+            coEvery { auth.authenticate(any(), any()) } returns false
+            start()
+            assertNotNull(vm.state.value.primaryButton).onClick()
+            assertEquals(
+                stringRes(R.string.convert_payout_fee_approve, fee.toDisplayString()),
+                vm.state.value.primaryButton
+                    ?.text
+            )
+            coVerify(exactly = 0) { swaps.approvePayoutFee(any(), any()) }
+            assertNotNull(vm.state.value.primaryButton).onClick()
+            coVerify(exactly = 0) { swaps.approvePayoutFee(any(), any()) }
+            coEvery { auth.authenticate(any(), any()) } returns true
+            assertNotNull(vm.state.value.primaryButton).onClick()
+            assertNotNull(vm.state.value.primaryButton).onClick()
+            coVerify(exactly = 1) { swaps.approvePayoutFee(legacy, fee) }
+        }
+
     private fun TestScope.start() {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val balances =
@@ -164,7 +191,8 @@ class PrivateUsdProgressVMTest {
             }
         val currency = mockk<ObserveLocalCurrencyUseCase>()
         every { currency() } returns flowOf(LocalCurrency.DOLLAR)
-        vm = PrivateUsdProgressVM(swaps, reverse, balances, currency, navigation, mockk(relaxed = true))
+        vm =
+            PrivateUsdProgressVM(swaps, reverse, balances, currency, navigation, mockk(relaxed = true), auth)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
     }
 
@@ -179,7 +207,10 @@ class PrivateUsdProgressVMTest {
     )
 
     private fun record(acceptedAt: Long = now) =
-        toUsd(index = 7, at = acceptedAt, outcome = null).copy(maxTotalZat = TOTAL_ZAT)
+        toUsd(index = 7, at = acceptedAt, outcome = null).copy(
+            maxTotalZat = TOTAL_ZAT,
+            relayerFee = Usdc6.ofMicros(20_000),
+        )
 
     private companion object {
         const val TOTAL_ZAT = 212_021L

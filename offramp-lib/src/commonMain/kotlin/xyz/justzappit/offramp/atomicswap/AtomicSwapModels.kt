@@ -57,6 +57,7 @@ data class AtomicSwapRecord(
     val maxTotalZat: Long? = null,
     /** The relayer's fee the offer named: the most a payout may pay. Null on swaps from before it was kept. */
     val relayerFee: Usdc6? = null,
+    val payout: SwapPayout? = null,
     val railgunKeys: RailgunKeySource = RailgunKeySource.ZCASH_SEED,
 ) {
     val outcome: AtomicSwapOutcome? get() = end?.outcome
@@ -203,6 +204,7 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
         val deposit: ZcashTransaction? = null,
         val sweep: ZcashTransaction? = null,
         val relayerFee: Usdc6? = null,
+        val payout: SwapPayout? = null,
         val railgunKeys: RailgunKeySource = RailgunKeySource.ZCASH_SEED,
     ) {
         // Every build sets the outcome and its time together, and a deposit's id with its bytes.
@@ -226,6 +228,7 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
                 payoutTx = payoutTx,
                 maxTotalZat = maxTotalZat,
                 relayerFee = relayerFee,
+                payout = payout,
                 railgunKeys = railgunKeys,
             )
 
@@ -247,6 +250,7 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
                     deposit = record.deposit.transaction,
                     sweep = record.sweep,
                     relayerFee = record.relayerFee,
+                    payout = record.payout,
                     railgunKeys = record.railgunKeys,
                 )
         }

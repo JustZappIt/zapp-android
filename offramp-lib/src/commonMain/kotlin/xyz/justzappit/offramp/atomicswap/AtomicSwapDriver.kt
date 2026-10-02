@@ -30,7 +30,8 @@ class AtomicSwapDriver(
     private val nowSeconds: () -> Long = { Clock.System.now().epochSeconds },
 ) {
     private val ending = AtomicSwapEnding(store, nowSeconds)
-    private val claim = AtomicSwapClaim(deployment, relayer, chain, keys, nowSeconds)
+    private val claim = AtomicSwapClaim(deployment, relayer, chain, keys, store, nowSeconds)
+    val payoutFees = AtomicSwapFeeApproval(claim, store)
     private val deposits = AtomicSwapDeposits(deployment, depositTerms, chain, keys, zcash, store, ending)
 
     // Checked once: every quote is checked against the deployment as well.
@@ -261,7 +262,7 @@ class AtomicSwapDriver(
 }
 
 /** What reaches Railgun of [amount]: the relayer's fee comes off first, then Railgun's shield fee. */
-private fun payoutAfterFees(
+internal fun payoutAfterFees(
     amount: Usdc6,
     relayerFee: Usdc6
 ): Usdc6 {
@@ -292,6 +293,7 @@ internal class AtomicSwapClaim(
     private val relayer: SwapRelayer,
     private val chain: AtomicSwapChainReader,
     private val keys: AtomicSwapKeys,
+    private val store: AtomicSwapStore,
     private val nowSeconds: () -> Long,
 ) {
     /** Reveals `z` under a held claim lock once Railgun would take the payout at the quoted fee, then pays out. */
@@ -299,7 +301,7 @@ internal class AtomicSwapClaim(
         record: AtomicSwapRecord,
         swap: OnChainSwap
     ) {
-        val payout = payout(record, swap, record.relayerFee ?: deployment.maxRelayerFee)
+        val payout = payout(record, swap)
         requireRailgunOpen(swap)
         holdClaimLock(record, swap)
         // Key derivation may suspend too. Read the lock and the clock again after every preparatory step.
@@ -315,7 +317,7 @@ internal class AtomicSwapClaim(
         record: AtomicSwapRecord,
         swap: OnChainSwap
     ) {
-        val payout = payout(record, swap, record.relayerFee ?: deployment.maxRelayerFee)
+        val payout = payout(record, swap)
         requireRailgunOpen(swap)
         relayer.payout(payout)
         chain.caughtUp(record.swapId) { it.stage == SwapStage.CLAIMED && it.paidOut }
@@ -332,10 +334,35 @@ internal class AtomicSwapClaim(
     private suspend fun payout(
         record: AtomicSwapRecord,
         swap: OnChainSwap,
-        limit: Usdc6,
     ): SwapPayout {
-        val fee = relayer.terms().checkedFee(deployment, swap.amount, minOf(limit, deployment.maxRelayerFee))
-        val note = keys.payoutNote(record.index, record.railgunKeys)
+        val current = checkNotNull(store.active()?.takeIf { it.index == record.index && !it.finished })
+        val note = keys.payoutNote(current.index, current.railgunKeys)
+        val saved = current.payout
+        if (saved != null) {
+            check(saved.swapId == current.swapId && saved.note == note.wire()) {
+                "the saved payout is for another swap"
+            }
+        }
+        val limit = current.relayerFee
+        val fee =
+            when {
+                limit != null -> {
+                    relayer.terms().checkedFee(deployment, swap.amount, minOf(limit, deployment.maxRelayerFee))
+                }
+
+                saved != null -> {
+                    RelayerTerms(deployment.relayer, deployment.chainId, deployment.contract, saved.fee)
+                        .checkedFee(deployment, swap.amount)
+                }
+
+                else -> {
+                    throw AtomicSwapBlockedException(
+                        AtomicSwapBlock.RELAYER_FEE,
+                        "review and approve the payout fee first",
+                    )
+                }
+            }
+        if (saved?.fee == fee) return saved
         val signature =
             keys.signPayout(
                 record.index,
@@ -345,7 +372,9 @@ internal class AtomicSwapClaim(
                 deployment.relayer,
                 fee,
             )
-        return SwapPayout(record.swapId, note.wire(), fee, signature.hex())
+        return SwapPayout(record.swapId, note.wire(), fee, signature.hex()).also {
+            store.save(current.copy(payout = it))
+        }
     }
 
     // A reveal must land before the lock lapses, or the maker's next turn knows both halves; and no lock is asked
@@ -355,7 +384,7 @@ internal class AtomicSwapClaim(
         swap: OnChainSwap
     ) {
         val now = freshHead(chain.now(), nowSeconds())
-        if (swap.claimLockUntil > now + REVEAL_MARGIN_SECONDS) return
+        if (swap.claimLockUntil > now && swap.claimLockUntil - now > REVEAL_MARGIN_SECONDS) return
         val lockDuration = chain.lockDuration()
         if (!mayTakeLock(swap.claimLockUntil, swap.refundLockUntil, now, lockDuration)) {
             throw AtomicSwapBlockedException(
@@ -364,6 +393,7 @@ internal class AtomicSwapClaim(
             )
         }
         check(SIGNATURE_TTL_SECONDS < lockDuration) { "the lock is too short to sign for" }
+        check(now <= Long.MAX_VALUE - SIGNATURE_TTL_SECONDS) { "invalid chain time" }
         val deadline = now + SIGNATURE_TTL_SECONDS
         val signature =
             keys.signLockClaim(record.index, record.quote.chainId, deployment.contract, record.swapId, deadline)
@@ -379,7 +409,7 @@ internal class AtomicSwapClaim(
         val now = freshHead(chain.now(), nowSeconds())
         val unsafe =
             (fresh.stage != SwapStage.OPEN && fresh.stage != SwapStage.READY) ||
-                fresh.claimLockUntil <= now + REVEAL_MARGIN_SECONDS
+                fresh.claimLockUntil <= now || fresh.claimLockUntil - now <= REVEAL_MARGIN_SECONDS
         when {
             !matches -> AtomicSwapBlock.MISMATCH
             unsafe -> AtomicSwapBlock.CLAIM_LOCK_LAPSING

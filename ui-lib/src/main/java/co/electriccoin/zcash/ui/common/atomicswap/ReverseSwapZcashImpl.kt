@@ -36,9 +36,12 @@ class ReverseSwapZcashImpl(
         makerSecret: ByteArray
     ): ReverseReceiveTransaction? =
         jointAccounts
-            .sweep(account(record)) { redacted ->
+            .sweep(
+                account(record),
+                checkNotNull(record.receiveEstimate) { "the sweep needs its reviewed fee" }.feeZat,
+            ) { pczt, intent ->
                 keys.withKey(record.index) {
-                    ReverseAtomicSwap.signReceive(it, record.quote.terms.makerShare.bytes, makerSecret, redacted)
+                    ReverseAtomicSwap.signReceive(it, record.quote.terms.makerShare.bytes, makerSecret, pczt, intent)
                 }
             }?.let { sweep ->
                 val transaction = sweep.transaction

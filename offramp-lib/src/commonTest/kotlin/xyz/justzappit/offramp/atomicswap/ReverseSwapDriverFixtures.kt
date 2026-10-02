@@ -55,6 +55,10 @@ abstract class ReverseSwapDriverFixtures {
         var paidIn = 0L
         var depositConfirmations = 10
         var sweepFee = 10_000L
+        var beforePayout: () -> Unit = {}
+        var beforeSecret: () -> Unit = {}
+        var beforeUpdate: () -> Unit = {}
+        var rescueNonce: Long? = 0L
         var refundUntil = 0L
         var claimUntil = 0L
         var paidOut = false
@@ -128,6 +132,8 @@ abstract class ReverseSwapDriverFixtures {
 
         override suspend fun fundingStatus(transaction: TxHash) = fundingState
 
+        override suspend fun rescueNonce(id: SwapId) = rescueNonce
+
         override suspend fun vaultBalance(id: SwapId) = vault
 
         override suspend fun active() = saved
@@ -135,12 +141,14 @@ abstract class ReverseSwapDriverFixtures {
         override suspend fun find(index: Int) = saved?.takeIf { it.index == index } ?: earlier[index]
 
         override suspend fun save(record: ReverseSwapRecord) {
+            beforeUpdate()
             saved?.let { earlier[it.index] = it }
             saved = record
             saves++
         }
 
         override suspend fun update(record: ReverseSwapRecord) {
+            beforeUpdate()
             if (saved?.index == record.index) saved = record else earlier[record.index] = record
         }
 
@@ -197,7 +205,7 @@ abstract class ReverseSwapDriverFixtures {
             return Sent(emptyList())
         }
 
-        override suspend fun rescue(payout: SwapPayout): Sent {
+        override suspend fun rescue(payout: SwapRescue): Sent {
             rescueCalls++
             check(!interruptPayout)
             return Sent(emptyList())
@@ -222,11 +230,17 @@ abstract class ReverseSwapDriverFixtures {
         override suspend fun signLockRefund(record: ReverseSwapRecord, deadline: Long) = ByteArray(65)
 
         override suspend fun signPayout(record: ReverseSwapRecord, terms: RelayerTerms): ByteArray {
+            beforePayout()
             payoutSignatures++
             return ByteArray(65)
         }
 
-        override suspend fun signRescue(record: ReverseSwapRecord, terms: RelayerTerms): ByteArray {
+        override suspend fun signRescue(
+            record: ReverseSwapRecord,
+            terms: RelayerTerms,
+            nonce: Long,
+            deadline: Long,
+        ): ByteArray {
             rescueSignatures++
             railgunKeys += record.railgunKeys
             return ByteArray(65)
@@ -308,7 +322,7 @@ abstract class ReverseSwapDriverFixtures {
 
                 override suspend fun depositAddress(index: Int, makerShare: SwapShare) = "utest"
 
-                override suspend fun claimSecret(index: Int) = ByteArray(32)
+                override suspend fun claimSecret(index: Int) = ByteArray(32).also { beforeSecret() }
 
                 override suspend fun signLockClaim(
                     index: Int,

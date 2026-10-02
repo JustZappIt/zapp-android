@@ -314,4 +314,8 @@
     <string name="reverse_refund_requested_after_ready">Refund requested. If settlement does not finish, Zapp can start returning your funds after %1$s. Settlement may still finish before then.</string>
     <string name="reverse_settlement_refund_limit">Settlement is authorized. A refund can only proceed after %1$s if settlement has not completed.</string>
     <string name="reverse_refund_unavailable">This conversion has already settled and can no longer be refunded. Zapp will finish moving your ZEC to your wallet.</string>
+    <string name="convert_payout_fee_missing">This conversion has no saved fee approval. Review the payout fee to continue.</string>
+    <string name="convert_payout_fee_review">Review payout fee</string>
+    <string name="convert_payout_fee_approve">Approve %1$s USD fee and continue</string>
+    <string name="convert_payout_fee_failed">The payout fee could not be approved. Review the current fee and try again.</string>
 </resources>
