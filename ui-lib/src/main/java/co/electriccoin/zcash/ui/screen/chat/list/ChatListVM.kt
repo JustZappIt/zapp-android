@@ -221,9 +221,8 @@ class ChatListVM(
     ): ChatListState {
         val contactsByPublicKey = contacts.byPublicKey()
         // Pin the aggregate "Zapp Support" row above the timestamp-sorted list.
-        // [isSupportConversation] handles the side-asymmetry: user device requires the
-        // support agent's key in participantIds; the support agent's device falls back
-        // to the displayName prefix because its own key is excluded from the participant list.
+        // Tickets require the support prefix. User devices also require the agent's key;
+        // the agent's own key is excluded from its participant list.
         val supportConvs =
             conversations
                 ?.filter { conv ->
