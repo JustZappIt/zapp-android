@@ -150,7 +150,7 @@ class AtomicSwapSessions(
         const val CLOSED = -1L
 
         // Forward swaps keep the deployment they were accepted on, found again from their quote.
-        private val KNOWN = listOf(AtomicSwapTestnet.deployment, AtomicSwapTestnet.legacy)
+        private val KNOWN = listOf(AtomicSwapTestnet.deployment, AtomicSwapTestnet.retiredHosted, AtomicSwapTestnet.legacy)
 
         fun deploymentFor(record: AtomicSwapRecord): AtomicSwapDeployment =
             checkNotNull(

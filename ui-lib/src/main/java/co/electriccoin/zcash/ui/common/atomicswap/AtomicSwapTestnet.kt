@@ -36,7 +36,7 @@ object AtomicSwapTestnet {
                     relayerUrl = Url("https://zecswap-testnet.pepeman931.workers.dev/relayer"),
                     rpcUrl = Sepolia.RPC_URL,
                     chainId = Sepolia.CHAIN_ID,
-                    contract = Address.parse("0xbd9a37f47a988aefc4d80395727f41feb698e225"),
+                    contract = Address.parse("0xa067d2e46f7cea71f4e4fc862b6444ecc1450afc"),
                     token = Sepolia.TEST_USD,
                     railgunProxy = Sepolia.RAILGUN_PROXY,
                     maker = Address.parse("0x2bac02b5032e9092493814c705f156b49e288922"),
@@ -52,6 +52,12 @@ object AtomicSwapTestnet {
             minAmount = Usdc6.ofMicros(MIN_AMOUNT),
             maxAmount = Usdc6.ofMicros(MAX_AMOUNT),
             screeningTime = 1.minutes,
+        )
+
+    /** Retired hosted contract; saved records retain their original domain. */
+    val retiredHosted =
+        deployment.copy(
+            swap = deployment.swap.copy(contract = Address.parse("0xbd9a37f47a988aefc4d80395727f41feb698e225")),
         )
 
     /** The first, local deployment: forward swaps accepted on it keep it. */

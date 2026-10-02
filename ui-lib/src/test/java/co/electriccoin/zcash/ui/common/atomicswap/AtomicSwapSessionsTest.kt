@@ -19,6 +19,8 @@ class AtomicSwapSessionsTest {
         val original = AtomicSwapTestnet.legacy
         assertEquals(original, AtomicSwapSessions.deploymentFor(record(original)))
         assertEquals(Url("http://127.0.0.1:8787"), AtomicSwapSessions.deploymentFor(record(original)).swap.makerUrl)
+        val retired = AtomicSwapTestnet.retiredHosted
+        assertEquals(retired, AtomicSwapSessions.deploymentFor(record(retired)))
         val current = AtomicSwapTestnet.deployment
         assertEquals(current, AtomicSwapSessions.deploymentFor(record(current)))
     }
@@ -45,7 +47,7 @@ class AtomicSwapSessionsTest {
         val current = AtomicSwapTestnet.deployment.swap
         assertEquals(CURRENT, storeJson.encodeToString(SwapDeployment.serializer(), current))
         assertEquals(
-            current.copy(escrowConfirmations = 3, zcashConfirmations = 3),
+            AtomicSwapTestnet.retiredHosted.swap.copy(escrowConfirmations = 3, zcashConfirmations = 3),
             storeJson.decodeFromString(SwapDeployment.serializer(), KEPT),
         )
     }
@@ -68,6 +70,9 @@ class AtomicSwapSessionsTest {
                 """"railgun":"0xecfcf3b4ec647c4ca6d49108b311b7a7c9543fea",""" +
                 """"maker":"0x2bac02b5032e9092493814c705f156b49e288922",""" +
                 """"relayer":"0xd9633572041886fa7584a2e12f36c8c7f1126412","maxRefundFee":"100000"}"""
-        val CURRENT = KEPT.removeSuffix("}") + ""","confirmations":2,"zcashConfirmations":2}"""
+        val CURRENT =
+            KEPT
+                .replace("0xbd9a37f47a988aefc4d80395727f41feb698e225", "0xa067d2e46f7cea71f4e4fc862b6444ecc1450afc")
+                .removeSuffix("}") + ""","confirmations":2,"zcashConfirmations":2}"""
     }
 }
