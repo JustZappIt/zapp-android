@@ -4,6 +4,7 @@ import android.os.SystemClock
 import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.common.invest.demo.DemoInvestEngine
 import co.electriccoin.zcash.ui.common.invest.demo.DemoInvestSellRepository
+import co.electriccoin.zcash.ui.common.invest.demo.DemoWallet
 import co.electriccoin.zcash.ui.common.invest.demo.InvestDemoControls
 import co.electriccoin.zcash.ui.common.invest.provider.IntentsSaltProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
@@ -50,12 +51,14 @@ val investModule =
         single { InvestTradeGuard(buys = get(), sells = get()) }
         if (BuildConfig.IS_INVEST_DEMO) {
             single { InvestDemoControls() }
+            single { DemoWallet() }
             single {
                 DemoInvestEngine(
                     accountDataSource = get(),
                     swapRepository = get(),
                     settings = get(),
                     controls = get(),
+                    wallet = get(),
                 )
             } binds arrayOf(InvestRepository::class, InvestSwapAssetSource::class, InvestTradeFollower::class)
             single<InvestSellRepository> { DemoInvestSellRepository(engine = get(), controls = get()) }

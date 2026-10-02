@@ -29,7 +29,8 @@ internal fun InvestDemoControlsView(state: InvestDemoControlsState) {
         InvestNotice(
             body =
                 "This build runs Invest on a demo engine. Prices, trades and holdings are simulated on this " +
-                    "phone: nothing is bought or sold, no ZEC is sent, and holdings clear when the app closes.",
+                    "phone, and the wallet shows a pretend 9 ZEC that buys spend and sales pay into. Nothing is " +
+                    "bought or sold, no real ZEC moves, and everything resets when the app closes.",
         )
         Spacer(Modifier.height(INVEST_GAP_LG.dp))
         ZappSectionLabel(text = "Next buy or sale ends")
@@ -59,7 +60,7 @@ internal fun InvestDemoControlsView(state: InvestDemoControlsState) {
         )
         Spacer(Modifier.height(INVEST_GAP_LG.dp))
         ZappButton(
-            text = "Clear demo holdings and trades",
+            text = "Reset the demo",
             variant = ZappButtonVariant.Secondary,
             modifier = Modifier.fillMaxWidth(),
             onClick = state.onReset,
@@ -67,7 +68,7 @@ internal fun InvestDemoControlsView(state: InvestDemoControlsState) {
         if (state.isReset) {
             Spacer(Modifier.height(INVEST_GAP_SM.dp))
             BasicText(
-                text = "Cleared. Your country and setup are kept.",
+                text = "Back to 9 ZEC with no holdings or trades. Your country and setup are kept.",
                 style = ZappTheme.typography.caption.copy(color = c.textMuted),
             )
         }

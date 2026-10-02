@@ -50,9 +50,10 @@ import kotlin.time.Duration.Companion.minutes
 
 /**
  * The demo build's Invest engine (`ZAPP_INVEST_DEMO`, debug builds only): prices, quotes, buys, sales and holdings
- * are all simulated on the phone. Nothing reaches 1Click, no key is derived and no ZEC is sent, so the whole flow can
- * be walked through on an emulator with an empty wallet. A trade steps through its states a few seconds apart and
- * ends the way [InvestDemoControls] says. Holdings last until the app is closed.
+ * are all simulated on the phone. Nothing reaches 1Click, no key is derived and no real ZEC moves, so the whole flow
+ * can be walked through on an emulator. Buys and sales move [DemoWallet]'s pretend balance, which starts at 9 ZEC.
+ * A trade steps through its states a few seconds apart and ends the way [InvestDemoControls] says. Holdings last
+ * until the app is closed.
  *
  * The rules the screens rely on still hold: the $40 minimum, one trade per stock at a time, buying refused where
  * the saved country doesn't allow it, and a trade that needs attention stays pending until dismissed.
@@ -63,6 +64,7 @@ internal class DemoInvestEngine(
     private val swapRepository: SwapRepository,
     private val settings: InvestSettingsRepository,
     private val controls: InvestDemoControls,
+    private val wallet: DemoWallet,
     private val clock: Clock = Clock.System,
     private val stepMillis: Long = STEP_MS,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
@@ -144,7 +146,12 @@ internal class DemoInvestEngine(
 
             else -> {
                 val quote = buyQuote(asset, usdAmount)
-                BuyEstimate.Priced(quote.zecIn, quote.unitsOut, quote.usdOut, quote.feesUsd, BUY_ETA_S, REFUND_FEE_ZEC)
+                val spendable = spendableZec()
+                if (quote.zecIn + DemoWallet.NETWORK_FEE_ZEC > spendable) {
+                    BuyEstimate.InsufficientZec(spendable)
+                } else {
+                    with(quote) { BuyEstimate.Priced(zecIn, unitsOut, usdOut, feesUsd, BUY_ETA_S, REFUND_FEE_ZEC) }
+                }
             }
         }
     }
@@ -159,6 +166,7 @@ internal class DemoInvestEngine(
         delay(LOAD_MS)
         if (!controls.hasLiquidity.value) throw InvestApiException.NoPrice(null)
         val quote = buyQuote(asset, usdAmount)
+        check(quote.zecIn + DemoWallet.NETWORK_FEE_ZEC <= spendableZec()) { "Not enough ZEC for this buy" }
         return PreparedBuy(
             asset = asset,
             zecIn = quote.zecIn,
@@ -179,6 +187,8 @@ internal class DemoInvestEngine(
         val address = prepared.quote.depositAddress.address
         val assetId = prepared.asset.assetId
         startTrade(address, Trade(assetId, buy = BuyProgress.SendingZec(address)))
+        // The ZEC leaves the wallet when the buy is sent, as it does for real.
+        wallet.spend(prepared.zecIn + DemoWallet.NETWORK_FEE_ZEC)
         val outcome = controls.outcome.value
         launchTrade {
             step(address) { it.copy(buy = BuyProgress.PaymentReceived(address, incomplete = false)) }
@@ -192,6 +202,7 @@ internal class DemoInvestEngine(
                 }
             // Held before the final state shows, as the real engine refreshes holdings before it emits.
             if (final is BuyProgress.Held) addUnits(assetId, prepared.unitsOutExpected)
+            if (final is BuyProgress.Refunded) wallet.receive(prepared.zecIn - REFUND_FEE_ZEC)
             finish(address) { it.copy(buy = final) }
         }
         return address
@@ -219,12 +230,16 @@ internal class DemoInvestEngine(
     /** Clears holdings and trades, as on a fresh install; the country and setup stay. */
     fun reset() {
         synchronized(running) { running.toList() }.forEach { it.cancel() }
+        wallet.reset()
         units.value = emptyMap()
         _trades.value = emptyMap()
         _holdings.value = null
     }
 
     // ----- shared with DemoInvestSellRepository -----
+
+    /** A completed sale's ZEC arriving in the wallet. */
+    fun payOut(zec: BigDecimal) = wallet.receive(zec)
 
     fun hasTrade(assetId: String): Boolean = _trades.value.values.any { it.assetId == assetId && it.isPending }
 
@@ -287,6 +302,13 @@ internal class DemoInvestEngine(
         swapRepository.assets.value.zecAsset
             ?.usdPrice
             ?.takeIf { it.signum() > 0 } ?: DEMO_ZEC_USD
+
+    private suspend fun spendableZec(): BigDecimal =
+        accountDataSource
+            .getSelectedAccount()
+            .spendableShieldedBalance.value
+            .toBigDecimal()
+            .movePointLeft(ZEC_SCALE)
 
     private fun publishHoldings() {
         val items =

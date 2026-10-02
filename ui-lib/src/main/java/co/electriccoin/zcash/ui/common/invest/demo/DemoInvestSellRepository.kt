@@ -20,8 +20,8 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 
 /**
- * Selling in the demo build, on [DemoInvestEngine]'s holdings: no intent is generated or signed, and the ZEC a
- * completed sale reports is never actually sent to the wallet.
+ * Selling in the demo build, on [DemoInvestEngine]'s holdings: no intent is generated or signed, and a completed
+ * sale's ZEC lands in [DemoWallet]'s pretend balance, not the real wallet.
  */
 internal class DemoInvestSellRepository(
     private val engine: DemoInvestEngine,
@@ -93,7 +93,10 @@ internal class DemoInvestSellRepository(
                     InvestDemoOutcome.REFUNDED -> SellProgress.ReturnedToAccount(address)
                     InvestDemoOutcome.NEEDS_ATTENTION -> SellProgress.NeedsAttention(address, reference = address)
                 }
-            if (final is SellProgress.Sent) engine.addUnits(assetId, prepared.units.negate())
+            if (final is SellProgress.Sent) {
+                engine.addUnits(assetId, prepared.units.negate())
+                engine.payOut(prepared.zecOutExpected)
+            }
             engine.finish(address) { it.copy(sell = final) }
         }
         return address

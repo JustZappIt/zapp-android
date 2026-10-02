@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.di
 
+import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSourceImpl
 import co.electriccoin.zcash.ui.common.datasource.ExchangeRateDataSource
@@ -18,6 +19,7 @@ import co.electriccoin.zcash.ui.common.datasource.WalletSnapshotDataSource
 import co.electriccoin.zcash.ui.common.datasource.WalletSnapshotDataSourceImpl
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSource
 import co.electriccoin.zcash.ui.common.datasource.ZashiSpendingKeyDataSourceImpl
+import co.electriccoin.zcash.ui.common.invest.demo.DemoAccountDataSource
 import co.electriccoin.zcash.ui.common.pricing.datasource.PricingEngineDataSource
 import co.electriccoin.zcash.ui.common.pricing.datasource.PricingEngineDataSourceImpl
 import org.koin.core.module.dsl.singleOf
@@ -26,7 +28,13 @@ import org.koin.dsl.module
 
 val dataSourceModule =
     module {
-        singleOf(::AccountDataSourceImpl) bind AccountDataSource::class
+        if (BuildConfig.IS_INVEST_DEMO) {
+            // The Invest demo build shows a pretend balance that its buys and sales move.
+            singleOf(::AccountDataSourceImpl)
+            single<AccountDataSource> { DemoAccountDataSource(real = get<AccountDataSourceImpl>(), wallet = get()) }
+        } else {
+            singleOf(::AccountDataSourceImpl) bind AccountDataSource::class
+        }
         singleOf(::ZashiSpendingKeyDataSourceImpl) bind ZashiSpendingKeyDataSource::class
         singleOf(::ProposalDataSourceImpl) bind ProposalDataSource::class
         singleOf(::GiftClaimDataSourceImpl) bind GiftClaimDataSource::class

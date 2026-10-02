@@ -1,8 +1,10 @@
 package co.electriccoin.zcash.ui.common.invest
 
+import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.invest.demo.DemoInvestEngine
 import co.electriccoin.zcash.ui.common.invest.demo.DemoInvestSellRepository
+import co.electriccoin.zcash.ui.common.invest.demo.DemoWallet
 import co.electriccoin.zcash.ui.common.invest.demo.InvestDemoControls
 import co.electriccoin.zcash.ui.common.invest.demo.InvestDemoOutcome
 import co.electriccoin.zcash.ui.common.invest.model.BuyEstimate
@@ -204,29 +206,72 @@ class DemoInvestEngineTest {
             assertIs<SellEstimate.NothingHeld>(demo.sells.estimateSell(NVIDIA, SellAmount.All))
         }
 
+    @Test
+    fun `the wallet starts at 9 ZEC, a buy spends its ZEC and fee, and a sale pays back in`() =
+        runTest {
+            val demo = demo()
+            assertEquals(Zatoshi(900_000_000L), demo.wallet.balance.value)
+
+            demo.engine.observeBuy(demo.buy()).toList()
+            // $100 at $50 a ZEC is 2 ZEC, plus the 0.0001 network fee.
+            assertEquals(Zatoshi(699_990_000L), demo.wallet.balance.value)
+
+            val sale = demo.sells.prepareSell(NVIDIA, SellAmount.All)
+            demo.sells.observeSell(demo.sells.executeSell(sale)).toList()
+            assertEquals(699_990_000L + sale.zecOutExpected.movePointRight(8).toLong(), demo.wallet.balance.value.value)
+        }
+
+    @Test
+    fun `a refunded buy returns its ZEC less the refund fee`() =
+        runTest {
+            val demo = demo()
+            demo.controls.setOutcome(InvestDemoOutcome.REFUNDED)
+
+            demo.engine.observeBuy(demo.buy()).toList()
+
+            // 9 - 2.0001 + (2 - 0.00032)
+            assertEquals(Zatoshi(899_958_000L), demo.wallet.balance.value)
+        }
+
+    @Test
+    fun `more than the wallet holds says not enough ZEC, and reset refills it`() =
+        runTest {
+            val demo = demo()
+
+            assertIs<BuyEstimate.InsufficientZec>(demo.engine.estimateBuy(NVIDIA, BigDecimal(1_000)))
+            assertFailsWith<IllegalStateException> { demo.engine.prepareBuy(NVIDIA, BigDecimal(1_000)) }
+
+            demo.engine.observeBuy(demo.buy()).toList()
+            demo.engine.reset()
+            assertEquals(DemoWallet.START, demo.wallet.balance.value)
+        }
+
     private class Demo(
         val engine: DemoInvestEngine,
         val sells: DemoInvestSellRepository,
         val controls: InvestDemoControls,
         val settings: FakeInvestSettingsRepository,
+        val wallet: DemoWallet,
     ) {
         suspend fun buy(): String = engine.executeBuy(engine.prepareBuy(NVIDIA, BigDecimal(100)))
     }
 
     private fun TestScope.demo(settings: InvestSettings = INVEST_READY): Demo {
         val controls = InvestDemoControls()
+        val wallet = DemoWallet()
         val settingsRepo = FakeInvestSettingsRepository(settings)
-        val accounts =
-            mockk<AccountDataSource>().also { coEvery { it.getSelectedAccount() } returns mockk<ZashiAccount>() }
+        val account =
+            mockk<ZashiAccount>().also { every { it.spendableShieldedBalance } answers { wallet.balance.value } }
+        val accounts = mockk<AccountDataSource>().also { coEvery { it.getSelectedAccount() } returns account }
         val zec = mockk<SwapAsset>(relaxed = true).also { every { it.usdPrice } returns BigDecimal(50) }
         val swap =
             mockk<SwapRepository>().also {
                 every { it.assets } returns MutableStateFlow(SwapAssetsData(zecAsset = zec))
             }
         val clock = virtualClock()
-        val engine = DemoInvestEngine(accounts, swap, settingsRepo, controls, clock, scope = backgroundScope)
+        val engine = DemoInvestEngine(accounts, swap, settingsRepo, controls, wallet, clock, scope = backgroundScope)
         val sells = DemoInvestSellRepository(engine, controls, clock)
-        return Demo(engine, sells, controls, settingsRepo)
+        return Demo(engine, sells, controls, settingsRepo, wallet)
     }
 
     private companion object {
