@@ -14,6 +14,7 @@ import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.invest.model.PreparedBuy
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollower
 import co.electriccoin.zcash.ui.common.provider.BridgeAuthorizationCancelledException
 import co.electriccoin.zcash.ui.common.repository.BiometricsCancelledException
@@ -27,8 +28,10 @@ import co.electriccoin.zcash.ui.screen.invest.common.ExecuteFailure
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
+import co.electriccoin.zcash.ui.screen.invest.common.InvestTradeInProgressState
 import co.electriccoin.zcash.ui.screen.invest.common.TradeBlock
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
+import co.electriccoin.zcash.ui.screen.invest.common.sellOnlyNotice
 import co.electriccoin.zcash.ui.screen.invest.common.toInvestMessage
 import co.electriccoin.zcash.ui.screen.invest.common.toState
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
@@ -58,11 +61,14 @@ import kotlin.time.toJavaInstant
  * Confirming hands the quote to the repository, which runs the existing authenticated send. After a failure the
  * engine is asked first whether it recorded the buy: if so, ZEC may have gone out, so its progress screen opens and
  * nothing offers to pay again. Only an unrecorded failure is read as nothing sent (see [ExecuteFailure]).
+ *
+ * Where the saved country doesn't allow buying (sell-only), Review stays off and the sell-only note shows instead.
  */
 @Suppress("TooManyFunctions")
 internal class InvestBuyVM(
     args: InvestBuyArgs,
     private val investRepository: InvestRepository,
+    settingsRepository: InvestSettingsRepository,
     accountDataSource: AccountDataSource,
     swapRepository: SwapRepository,
     currencyProvider: InvestCurrencyProvider,
@@ -114,6 +120,17 @@ internal class InvestBuyVM(
             .map { TradeBlock.of(it, asset) }
             .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    /** Null while buying is allowed; until the settings are read, buying waits too. */
+    private val notOffered =
+        settingsRepository.settings
+            .map { settings ->
+                if (settings.isAvailable) null else NotOffered(settings.sellOnlyNotice(navigationRouter))
+            }.stateIn(viewModelScope, SharingStarted.Eagerly, NotOffered(null))
+
+    private data class NotOffered(
+        val notice: InvestTradeInProgressState?,
+    )
+
     init {
         // collectLatest cancels the previous block, so the leading delay is the debounce: one quote per pause.
         // The currency is part of the key, so a new exchange rate re-asks for the same typed amount.
@@ -136,11 +153,13 @@ internal class InvestBuyVM(
         combine(
             amount,
             quote,
-            combine(isRetrying, isPreparing, tradeBlock, ::Triple),
+            combine(isRetrying, isPreparing, tradeBlock, notOffered) { retrying, preparing, block, notHere ->
+                Flags(retrying, preparing, block, notHere)
+            },
             combine(spendableZec, zecUsd, ::Wallet),
             currency,
-        ) { amt, current, (retrying, preparing, block), wallet, money ->
-            buildState(amt, current, Flags(retrying, preparing, block), wallet, money)
+        ) { amt, current, flags, wallet, money ->
+            buildState(amt, current, flags, wallet, money)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
@@ -148,7 +167,7 @@ internal class InvestBuyVM(
                 buildState(
                     amount.value,
                     quote.value,
-                    Flags(retrying = false, preparing = false, block = null),
+                    Flags(retrying = false, preparing = false, block = null, notOffered = notOffered.value),
                     Wallet(spendableZec.value, zecUsd.value),
                     currency.value,
                 ),
@@ -163,6 +182,7 @@ internal class InvestBuyVM(
         val retrying: Boolean,
         val preparing: Boolean,
         val block: TradeBlock?,
+        val notOffered: NotOffered?,
     )
 
     val reviewState: StateFlow<InvestReviewState?> =
@@ -233,11 +253,16 @@ internal class InvestBuyVM(
             primaryButton =
                 ButtonState(
                     text = stringRes(R.string.invest_buy_review),
-                    isEnabled = estimate is BuyEstimate.Priced && !flags.preparing && flags.block == null,
+                    isEnabled =
+                        estimate is BuyEstimate.Priced &&
+                            !flags.preparing &&
+                            flags.block == null &&
+                            flags.notOffered == null,
                     onClick = ::onReview,
                 ),
             isPreparing = flags.preparing,
             tradeInProgress = flags.block?.toState(asset, navigationRouter),
+            sellOnly = flags.notOffered?.notice,
             onBack = navigationRouter::back,
         )
     }
@@ -299,7 +324,7 @@ internal class InvestBuyVM(
     private fun onReview() {
         val usd = amount.value.amount?.let(::usdOf) ?: return
         // Set before launching, so a second tap while the first is still preparing does nothing.
-        if (isPreparing.value || tradeBlock.value != null) return
+        if (isPreparing.value || tradeBlock.value != null || notOffered.value != null) return
         isPreparing.update { true }
         viewModelScope.launch {
             investCatching { investRepository.prepareBuy(asset, usd) }

@@ -11,6 +11,8 @@ internal data class InvestHomeState(
     val torBanner: InvestTorBannerState?,
     /** "Prices can be patchy": outside US regular weekday hours only. */
     val marketBanner: StringResource?,
+    /** Sell-only: "Invest isn't available in Canada. You can still sell what you hold.", linking to Settings. */
+    val sellOnly: InvestTradeInProgressState? = null,
     /** Buys and sales not yet final (stuck ones until dismissed); each names its stock and opens its progress. */
     val pendingTrades: List<InvestPendingTradeRow>,
     /** Set when the trade records can't be read: nothing can be bought or sold, and support is the way out. */
@@ -60,5 +62,6 @@ internal data class InvestStockRowState(
     /** "per share", "last price" or "No price right now". */
     val caption: StringResource?,
     val isPriced: Boolean,
-    val onClick: () -> Unit,
+    /** Opens the buy screen; null in sell-only mode. */
+    val onClick: (() -> Unit)?,
 )

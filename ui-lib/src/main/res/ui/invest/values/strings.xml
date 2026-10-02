@@ -198,4 +198,18 @@
     <string name="invest_sell_zec_with_value">≈ %1$s (%2$s)</string>
     <string name="invest_home_pending_buy_title_unknown">Buy in progress</string>
     <string name="invest_sell_zec_at_least_with_value">%1$s (≈ %2$s)</string>
+    <string name="invest_settings_title">Invest</string>
+    <string name="invest_settings_row_subtitle">Country of residence</string>
+    <string name="invest_settings_country_none">Not set</string>
+    <string name="invest_settings_status_none">Choose where you live to use Invest.</string>
+    <string name="invest_settings_status_available">You can buy and sell.</string>
+    <string name="invest_sell_only_banner">Invest isn\'t available in %1$s. You can still sell what you hold.</string>
+    <string name="invest_sell_only_change">Change country</string>
+    <string name="invest_change_body">Choose the country where you live now. Your answer stays on this phone only.</string>
+    <string name="invest_change_save">Save</string>
+    <string name="invest_change_confirm_title">Stop buying stocks?</string>
+    <string name="invest_change_confirm_body_prohibited">Invest isn\'t available to people who live in %1$s. If you save it, buying stops. You can still sell what you hold.</string>
+    <string name="invest_change_confirm_body_restricted">In %1$s, Invest is only for qualified or professional investors. If you save it, buying stops. You can still sell what you hold.</string>
+    <string name="invest_change_confirm_save">Save country</string>
+    <string name="invest_change_confirm_cancel">Cancel</string>
 </resources>

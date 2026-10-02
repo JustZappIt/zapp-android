@@ -198,4 +198,18 @@
     <string name="invest_sell_zec_with_value">≈ %1$s (%2$s)</string>
     <string name="invest_home_pending_buy_title_unknown">Pembelian sedang diproses</string>
     <string name="invest_sell_zec_at_least_with_value">%1$s (≈ %2$s)</string>
+    <string name="invest_settings_title">Investasi</string>
+    <string name="invest_settings_row_subtitle">Negara tempat tinggal</string>
+    <string name="invest_settings_country_none">Belum dipilih</string>
+    <string name="invest_settings_status_none">Pilih tempat Anda tinggal untuk memakai Investasi.</string>
+    <string name="invest_settings_status_available">Anda bisa membeli dan menjual.</string>
+    <string name="invest_sell_only_banner">Investasi tidak tersedia di %1$s. Anda tetap bisa menjual yang Anda miliki.</string>
+    <string name="invest_sell_only_change">Ubah negara</string>
+    <string name="invest_change_body">Pilih negara tempat Anda tinggal sekarang. Jawaban Anda hanya disimpan di ponsel ini.</string>
+    <string name="invest_change_save">Simpan</string>
+    <string name="invest_change_confirm_title">Berhenti membeli saham?</string>
+    <string name="invest_change_confirm_body_prohibited">Investasi tidak tersedia bagi orang yang tinggal di %1$s. Jika Anda menyimpannya, pembelian berhenti. Anda tetap bisa menjual yang Anda miliki.</string>
+    <string name="invest_change_confirm_body_restricted">Di %1$s, Investasi hanya untuk investor yang memenuhi syarat atau profesional. Jika Anda menyimpannya, pembelian berhenti. Anda tetap bisa menjual yang Anda miliki.</string>
+    <string name="invest_change_confirm_save">Simpan negara</string>
+    <string name="invest_change_confirm_cancel">Batal</string>
 </resources>

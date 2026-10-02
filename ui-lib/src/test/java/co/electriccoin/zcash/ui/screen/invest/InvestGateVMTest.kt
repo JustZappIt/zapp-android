@@ -174,6 +174,115 @@ class InvestGateVMTest {
             assertFalse(state.primaryButton.isEnabled)
         }
 
+    @Test
+    fun `changing to a country where buying is offered saves and goes back without asking`() =
+        runTest {
+            val fixture = fixture(hint = null, settings = INVEST_SELL_ONLY, isChange = true)
+
+            val initial = fixture.state()
+            assertEquals("Canada", initial.countryName)
+            assertEquals(R.string.invest_change_save, initial.primaryButton.text.resId())
+            initial.onChangeCountry()
+            advanceUntilIdle()
+            fixture.vm.state.value.picker!!
+                .items
+                .first { it.code == "ID" }
+                .onClick()
+            advanceUntilIdle()
+            fixture.vm.state.value.attestation!!
+                .onClick()
+            advanceUntilIdle()
+            fixture.vm.state.value.primaryButton
+                .onClick()
+            advanceUntilIdle()
+
+            assertNull(fixture.vm.state.value.confirmation)
+            assertEquals(listOf("ID" to false), fixture.settings.residenceCalls)
+            verify { fixture.router.back() }
+        }
+
+    @Test
+    fun `changing to a prohibited country asks first, and cancelling keeps the saved country`() =
+        runTest {
+            val fixture = fixture(hint = null, settings = INVEST_READY, isChange = true)
+            fixture.pick("US")
+
+            fixture.vm.state.value.primaryButton
+                .onClick()
+            advanceUntilIdle()
+            val confirmation = assertNotNull(fixture.vm.state.value.confirmation)
+            assertEquals(R.string.invest_change_confirm_body_prohibited, confirmation.message.resId())
+
+            confirmation.secondaryButton!!.onClick()
+            advanceUntilIdle()
+            assertNull(fixture.vm.state.value.confirmation)
+            assertTrue(fixture.settings.residenceCalls.isEmpty())
+            verify(exactly = 0) { fixture.router.back() }
+        }
+
+    @Test
+    fun `confirming a prohibited country saves it and goes back`() =
+        runTest {
+            val fixture = fixture(hint = null, settings = INVEST_READY, isChange = true)
+            fixture.pick("CA")
+
+            fixture.vm.state.value.primaryButton
+                .onClick()
+            advanceUntilIdle()
+            fixture.vm.state.value.confirmation!!
+                .primaryButton
+                .onClick()
+            advanceUntilIdle()
+
+            assertEquals(listOf("CA" to false), fixture.settings.residenceCalls)
+            assertTrue(fixture.settings.settings.value.setupComplete)
+            verify { fixture.router.back() }
+        }
+
+    @Test
+    fun `a restricted country asks the qualified-investor question again and confirms without it`() =
+        runTest {
+            val fixture = fixture(hint = null, settings = INVEST_READY, isChange = true)
+            fixture.pick("DE")
+            assertFalse(assertNotNull(fixture.vm.state.value.qualifiedInvestor).isChecked)
+            fixture.vm.state.value.attestation!!
+                .onClick()
+            advanceUntilIdle()
+
+            fixture.vm.state.value.primaryButton
+                .onClick()
+            advanceUntilIdle()
+            val confirmation = assertNotNull(fixture.vm.state.value.confirmation)
+            assertEquals(R.string.invest_change_confirm_body_restricted, confirmation.message.resId())
+            assertTrue(fixture.settings.residenceCalls.isEmpty())
+
+            fixture.vm.state.value.qualifiedInvestor!!
+                .onClick()
+            confirmation.onBack()
+            advanceUntilIdle()
+            fixture.vm.state.value.primaryButton
+                .onClick()
+            advanceUntilIdle()
+
+            assertNull(fixture.vm.state.value.confirmation)
+            assertEquals(listOf("DE" to true), fixture.settings.residenceCalls)
+            verify { fixture.router.back() }
+        }
+
+    @Test
+    fun `back from the change screen leaves the saved country alone`() =
+        runTest {
+            val fixture = fixture(hint = null, settings = INVEST_READY, isChange = true)
+            fixture.pick("US")
+
+            fixture.vm.state.value
+                .onBack()
+            advanceUntilIdle()
+
+            assertTrue(fixture.settings.residenceCalls.isEmpty())
+            verify { fixture.router.back() }
+        }
+
     private class Fixture(
         val vm: InvestGateVM,
         val settings: FakeInvestSettingsRepository,
@@ -185,16 +294,27 @@ class InvestGateVMTest {
             scope.advanceUntilIdle()
             return vm.state.value
         }
+
+        fun pick(code: String) {
+            state().onChangeCountry()
+            scope.advanceUntilIdle()
+            vm.state.value.picker!!
+                .items
+                .first { it.code == code }
+                .onClick()
+            scope.advanceUntilIdle()
+        }
     }
 
     private fun TestScope.fixture(
         hint: ResidenceHint?,
         settings: InvestSettings = InvestSettings(),
+        isChange: Boolean = false,
     ): Fixture {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val settingsRepo = FakeInvestSettingsRepository(settings)
         val router = mockk<NavigationRouter>(relaxed = true)
-        val vm = InvestGateVM(settingsRepo, { hint }, router)
+        val vm = InvestGateVM(settingsRepo, { hint }, router, isChange)
         return Fixture(vm, settingsRepo, router, this)
     }
 

@@ -8,10 +8,12 @@ import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.invest.model.InvestMarket
 import co.electriccoin.zcash.ui.common.invest.model.MarketAsset
 import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSettings
 import co.electriccoin.zcash.ui.common.usecase.IsTorEnabledUseCase
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyArgs
+import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
 import co.electriccoin.zcash.ui.screen.invest.common.InvestSession
 import co.electriccoin.zcash.ui.screen.invest.common.UsMarketHours
 import co.electriccoin.zcash.ui.screen.invest.home.InvestHomeState
@@ -19,6 +21,7 @@ import co.electriccoin.zcash.ui.screen.invest.home.InvestHomeVM
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
 import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellArgs
 import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressArgs
+import co.electriccoin.zcash.ui.screen.invest.settings.InvestSettingsArgs
 import co.electriccoin.zcash.ui.screen.tor.settings.TorSettingsArgs
 import io.mockk.every
 import io.mockk.mockk
@@ -147,7 +150,8 @@ class InvestHomeVMTest {
             state.groups[0]
                 .rows
                 .first()
-                .onClick()
+                .onClick!!
+                .invoke()
 
             verify { fixture.router.forward(InvestProgressArgs(depositAddress = "t1pending", assetId = NVIDIA.assetId)) }
             verify { fixture.router.forward(InvestSellProgressArgs(depositAddress = "0xsale", assetId = TESLA.assetId)) }
@@ -230,6 +234,40 @@ class InvestHomeVMTest {
             verify(exactly = 2) { fixture.router.forward(InvestSellProgressArgs("0xsale", NVIDIA.assetId)) }
         }
 
+    @Test
+    fun `sell-only names the country, links to Settings, takes the stocks off sale and keeps Sell`() =
+        runTest {
+            val fixture = fixture(settings = INVEST_SELL_ONLY)
+            fixture.repo.market.value = market(nvdaPrice = BigDecimal("224.46"))
+            fixture.repo.holdings.value = HOLDINGS
+
+            val state = fixture.state()
+
+            val note = assertNotNull(state.sellOnly)
+            assertEquals(stringRes(R.string.invest_sell_only_banner, InvestFormat.countryName("CA")), note.text)
+            note.onOpen()
+            verify { fixture.router.forward(InvestSettingsArgs) }
+            assertTrue(state.groups.flatMap { it.rows }.all { it.onClick == null })
+            val sell =
+                assertNotNull(
+                    state.summary!!
+                        .rows
+                        .single()
+                        .onSell
+                )
+            sell()
+            verify { fixture.router.forward(InvestSellArgs(NVIDIA.assetId)) }
+        }
+
+    @Test
+    fun `where buying is offered there is no sell-only note and every stock opens its buy`() =
+        runTest {
+            val state = fixture().state()
+
+            assertNull(state.sellOnly)
+            assertTrue(state.groups.flatMap { it.rows }.all { it.onClick != null })
+        }
+
     private inner class Fixture(
         val vm: InvestHomeVM,
         val repo: FakeInvestRepository,
@@ -251,13 +289,24 @@ class InvestHomeVMTest {
     private fun TestScope.fixture(
         torOn: Boolean = true,
         nowMillis: Long = START_MILLIS,
+        settings: InvestSettings = INVEST_READY,
     ): Fixture {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val repo = FakeInvestRepository()
         val router = mockk<NavigationRouter>(relaxed = true)
         val tor = mockk<IsTorEnabledUseCase>().also { every { it.observe() } returns MutableStateFlow(torOn) }
         val clock = virtualClock(kotlin.time.Instant.fromEpochMilliseconds(nowMillis))
-        val vm = InvestHomeVM(repo, tor, USD_CURRENCY, follower, session, router, clock)
+        val vm =
+            InvestHomeVM(
+                repo,
+                FakeInvestSettingsRepository(settings),
+                tor,
+                USD_CURRENCY,
+                follower,
+                session,
+                router,
+                clock,
+            )
         return Fixture(vm, repo, router, this)
     }
 

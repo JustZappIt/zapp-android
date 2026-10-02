@@ -13,6 +13,8 @@ import co.electriccoin.zcash.ui.common.invest.model.InvestMarket
 import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import co.electriccoin.zcash.ui.common.invest.model.TradingSchedule
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSettings
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollower
 import co.electriccoin.zcash.ui.common.usecase.IsTorEnabledUseCase
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -25,6 +27,7 @@ import co.electriccoin.zcash.ui.screen.invest.common.InvestSession
 import co.electriccoin.zcash.ui.screen.invest.common.UsMarketHours
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
 import co.electriccoin.zcash.ui.screen.invest.common.progressRoute
+import co.electriccoin.zcash.ui.screen.invest.common.sellOnlyNotice
 import co.electriccoin.zcash.ui.screen.invest.common.toInvestMessage
 import co.electriccoin.zcash.ui.screen.invest.common.unreadableRecordsState
 import co.electriccoin.zcash.ui.screen.invest.section.HoldingTrade
@@ -46,10 +49,14 @@ import kotlin.time.toJavaInstant
 /**
  * I3: the holdings summary, the curated stocks in their two groups, and the two banners (Tor off, US market
  * closed). Tapping a stock opens the buy amount screen; there is no search or stock detail in this version.
+ *
+ * Sell-only (the saved country no longer allows buying): a note names the country and links to Settings › Invest,
+ * the stocks can't be tapped, and Sell works as usual.
  */
 @Suppress("TooManyFunctions")
 internal class InvestHomeVM(
     private val investRepository: InvestRepository,
+    settingsRepository: InvestSettingsRepository,
     isTorEnabled: IsTorEnabledUseCase,
     currencyProvider: InvestCurrencyProvider,
     private val tradeFollower: InvestTradeFollower,
@@ -82,13 +89,15 @@ internal class InvestHomeVM(
             investRepository.holdings,
             investRepository.pendingTrades,
             combine(isTorEnabled.observe(), session.isTorBannerDismissed) { torOn, dismissed -> torOn || dismissed },
-            combine(status, currency) { current, _ -> current },
-        ) { market, holdings, trades, hideTorBanner, current ->
-            buildState(market, holdings, trades, hideTorBanner, current)
+            combine(status, currency, settingsRepository.settings) { current, _, settings -> current to settings },
+        ) { market, holdings, trades, hideTorBanner, (current, settings) ->
+            buildState(market, holdings, trades, hideTorBanner, current, settings)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-            initialValue = buildState(null, null, emptyList(), hideTorBanner = true, current = Status()),
+            // Until the settings are read, nothing offers a buy.
+            initialValue =
+                buildState(null, null, emptyList(), hideTorBanner = true, current = Status(), InvestSettings()),
         )
 
     private fun buildState(
@@ -97,6 +106,7 @@ internal class InvestHomeVM(
         trades: List<PendingTrade>?,
         hideTorBanner: Boolean,
         current: Status,
+        settings: InvestSettings,
     ): InvestHomeState {
         val trading = trades.orEmpty().associateBy { it.assetId }
         market?.assets?.forEach { asset -> asset.usdPrice?.let { lastPrices[asset.asset.assetId] = it } }
@@ -119,9 +129,11 @@ internal class InvestHomeVM(
                     val reopens = InvestFormat.localDayTime(UsMarketHours.nextRegularOpen(now))
                     stringRes(R.string.invest_home_market_banner, reopens)
                 },
+            sellOnly = settings.sellOnlyNotice(navigationRouter),
             pendingTrades = trades.orEmpty().map(::pendingRow),
             recordsUnreadable = if (trades == null) unreadableRecordsState(navigationRouter) else null,
-            groups = groupsOf(market, weekdaysOpen = UsMarketHours.isWeekdayWindowOpen(now)),
+            groups =
+                groupsOf(market, weekdaysOpen = UsMarketHours.isWeekdayWindowOpen(now), canBuy = settings.isAvailable),
             marketError = current.marketError.takeIf { market == null },
             onRetryMarket = ::onRetryMarket,
             onBack = navigationRouter::back,
@@ -168,11 +180,12 @@ internal class InvestHomeVM(
     private fun groupsOf(
         market: InvestMarket?,
         weekdaysOpen: Boolean,
+        canBuy: Boolean,
     ): List<InvestStockGroupState> {
         // The repository already drops curated assets 1Click no longer lists; before the first load, show all.
         val prices = market?.assets?.associate { it.asset.assetId to it.usdPrice }
         val assets = market?.assets?.map { it.asset } ?: InvestAssets.curated
-        val rows = assets.map { stockRow(it, prices?.get(it.assetId), isLoaded = market != null) }
+        val rows = assets.map { stockRow(it, prices?.get(it.assetId), isLoaded = market != null, canBuy = canBuy) }
         return listOf(
             InvestStockGroupState(
                 title = stringRes(R.string.invest_home_group_always),
@@ -191,6 +204,7 @@ internal class InvestHomeVM(
         asset: InvestAsset,
         price: BigDecimal?,
         isLoaded: Boolean,
+        canBuy: Boolean,
     ): InvestStockRowState {
         val last = lastPrices[asset.assetId]
         return InvestStockRowState(
@@ -207,7 +221,7 @@ internal class InvestHomeVM(
                     else -> stringRes(R.string.invest_no_price_short)
                 },
             isPriced = price != null,
-            onClick = { onStockClick(asset) },
+            onClick = { onStockClick(asset) }.takeIf { canBuy },
         )
     }
 

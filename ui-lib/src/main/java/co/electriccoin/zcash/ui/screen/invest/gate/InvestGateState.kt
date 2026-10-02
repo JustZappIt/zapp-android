@@ -1,9 +1,12 @@
 package co.electriccoin.zcash.ui.screen.invest.gate
 
 import co.electriccoin.zcash.ui.design.component.ButtonState
+import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationState
 import co.electriccoin.zcash.ui.design.util.StringResource
 
 internal data class InvestGateState(
+    /** Why we ask (first time), or that the answer stays on the phone (a change from Settings). */
+    val body: StringResource,
     /** The chosen country's name in the phone's language; null until one is suggested or picked. */
     val countryName: String?,
     /** "We suggested Indonesia from your SIM…", shown while the suggestion stands. */
@@ -18,6 +21,8 @@ internal data class InvestGateState(
     val onChangeCountry: () -> Unit,
     /** Non-null while the country list is open over the gate. */
     val picker: CountryPickerState?,
+    /** "Buying stops" before a country change that leaves the user unable to buy; Settings only. */
+    val confirmation: ZappConfirmationState? = null,
     val onBack: () -> Unit,
 )
 

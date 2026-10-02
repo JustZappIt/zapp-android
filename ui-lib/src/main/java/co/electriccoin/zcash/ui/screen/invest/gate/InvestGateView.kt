@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBackButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationBottomSheet
 import co.electriccoin.zcash.ui.design.component.zapp.ZappInputField
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRowDivider
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
@@ -67,7 +68,7 @@ internal fun InvestGateView(state: InvestGateState) {
             isPrimaryLoading = state.isSaving,
         ) {
             BasicText(
-                text = stringResource(R.string.invest_gate_body),
+                text = state.body.getValue(),
                 style = ZappTheme.typography.body.copy(color = c.textMuted),
             )
             Spacer(Modifier.height(INVEST_GAP_LG.dp))
@@ -89,6 +90,7 @@ internal fun InvestGateView(state: InvestGateState) {
         }
         state.picker?.let { CountryPicker(it) }
     }
+    ZappConfirmationBottomSheet(state.confirmation)
 }
 
 @Composable
@@ -191,6 +193,7 @@ private fun PreviewGateRestricted() {
     ZcashTheme {
         InvestGateView(
             InvestGateState(
+                body = stringRes("Tokenised stocks are only offered in some countries."),
                 countryName = "Germany",
                 suggestion = stringRes("We suggested Germany from your SIM."),
                 attestation =
@@ -220,6 +223,7 @@ private fun PreviewPicker() {
     ZcashTheme {
         InvestGateView(
             InvestGateState(
+                body = stringRes("Tokenised stocks are only offered in some countries."),
                 countryName = "Indonesia",
                 suggestion = null,
                 attestation = null,

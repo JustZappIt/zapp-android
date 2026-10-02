@@ -198,4 +198,18 @@
     <string name="invest_sell_zec_with_value">≈ %1$s (%2$s)</string>
     <string name="invest_home_pending_buy_title_unknown">Compra en curso</string>
     <string name="invest_sell_zec_at_least_with_value">%1$s (≈ %2$s)</string>
+    <string name="invest_settings_title">Invertir</string>
+    <string name="invest_settings_row_subtitle">País de residencia</string>
+    <string name="invest_settings_country_none">Sin elegir</string>
+    <string name="invest_settings_status_none">Elige dónde vives para usar Invertir.</string>
+    <string name="invest_settings_status_available">Puedes comprar y vender.</string>
+    <string name="invest_sell_only_banner">Invertir no está disponible en %1$s. Aún puedes vender lo que tienes.</string>
+    <string name="invest_sell_only_change">Cambiar país</string>
+    <string name="invest_change_body">Elige el país donde vives ahora. Tu respuesta se guarda solo en este teléfono.</string>
+    <string name="invest_change_save">Guardar</string>
+    <string name="invest_change_confirm_title">¿Dejar de comprar acciones?</string>
+    <string name="invest_change_confirm_body_prohibited">Invertir no está disponible para personas que viven en %1$s. Si lo guardas, ya no podrás comprar. Aún puedes vender lo que tienes.</string>
+    <string name="invest_change_confirm_body_restricted">En %1$s, Invertir es solo para inversores cualificados o profesionales. Si lo guardas, ya no podrás comprar. Aún puedes vender lo que tienes.</string>
+    <string name="invest_change_confirm_save">Guardar país</string>
+    <string name="invest_change_confirm_cancel">Cancelar</string>
 </resources>

@@ -59,6 +59,14 @@ internal object InvestFormat {
     /** Two letters for the monogram avatar: the ticker's first two ("NV", "AP"), never a logo. */
     fun monogram(ticker: String): String = ticker.take(2).uppercase()
 
+    /** "Germany" for "DE", in the phone's language. */
+    fun countryName(code: String): String =
+        Locale
+            .Builder()
+            .setRegion(code)
+            .build()
+            .getDisplayCountry(Locale.getDefault())
+
     private const val DAY_TIME_PATTERN = "EEE HH:mm"
     private const val UNIT_SCALE = 4
     private const val ZEC_SCALE = 5

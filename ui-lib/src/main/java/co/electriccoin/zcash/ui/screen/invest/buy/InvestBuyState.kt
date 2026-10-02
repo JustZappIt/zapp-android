@@ -29,6 +29,8 @@ internal data class InvestBuyState(
     val isPreparing: Boolean,
     /** A buy or sale of this stock is still pending, so Review is off; links to it. */
     val tradeInProgress: InvestTradeInProgressState?,
+    /** Buying isn't offered in the saved country: Review is off, and this links to Settings › Invest. */
+    val sellOnly: InvestTradeInProgressState? = null,
     val onBack: () -> Unit,
 )
 

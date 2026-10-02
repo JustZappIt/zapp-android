@@ -25,14 +25,15 @@ class NavigateToInvestUseCase(
         fun routeFor(settings: InvestSettings): Any {
             val country = settings.countryCode ?: return InvestGateArgs
             return when {
+                // Set up already: home, which is sell-only if the country no longer allows buying.
+                settings.setupComplete -> InvestHomeArgs
+
                 settings.eligibility == InvestEligibility.PROHIBITED -> InvestUnavailableArgs(country)
 
                 // A restricted country without the attestation goes back to the gate, where it can be given.
                 !settings.isAvailable -> InvestGateArgs
 
-                !settings.setupComplete -> InvestIntroArgs
-
-                else -> InvestHomeArgs
+                else -> InvestIntroArgs
             }
         }
     }

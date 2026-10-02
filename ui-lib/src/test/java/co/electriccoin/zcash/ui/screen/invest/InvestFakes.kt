@@ -167,6 +167,12 @@ internal fun preparedBuy(
         },
 )
 
+/** Set up in a country where buying is offered. */
+internal val INVEST_READY = InvestSettings(countryCode = "ID", setupComplete = true)
+
+/** Set up, then moved to Canada: sell-only. */
+internal val INVEST_SELL_ONLY = InvestSettings(countryCode = "CA", setupComplete = true)
+
 internal val USD_CURRENCY = InvestCurrencyProvider { flowOf(InvestCurrency.USD) }
 
 // 1 USD = 0.92 EUR, for checking that money shows in the user's currency.

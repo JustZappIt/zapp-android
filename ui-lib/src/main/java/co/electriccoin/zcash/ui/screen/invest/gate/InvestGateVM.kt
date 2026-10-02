@@ -7,8 +7,10 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.invest.model.InvestEligibility
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSettings
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepository
 import co.electriccoin.zcash.ui.design.component.ButtonState
+import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationState
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.NavigateToInvestUseCase
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
@@ -27,12 +29,17 @@ import java.util.Locale
  * I1: where the user lives, asked once and kept on this phone. A prohibited country goes straight to the
  * not-available screen; a restricted one also asks for the qualified-investor attestation, and without it the user
  * sees the same screen. Whatever is confirmed is saved, so Invest is hidden from PAY for a prohibited country.
+ *
+ * With [isChange] it is Settings › Invest's country change instead: saving goes back, and a country where the user
+ * can't buy (prohibited, or restricted without the attestation) is confirmed first, since buying stops there. Backing
+ * out at any point leaves the saved country as it was.
  */
 @Suppress("TooManyFunctions")
 internal class InvestGateVM(
     private val settingsRepository: InvestSettingsRepository,
     private val hintProvider: ResidenceHintProvider,
     private val navigationRouter: NavigationRouter,
+    private val isChange: Boolean = false,
 ) : ViewModel() {
     private data class Form(
         val countryCode: String? = null,
@@ -43,6 +50,8 @@ internal class InvestGateVM(
         val query: String = "",
         val isSaving: Boolean = false,
         val failed: Boolean = false,
+        /** The "buying stops" confirmation is up (country change only). */
+        val isConfirming: Boolean = false,
     )
 
     private val form = MutableStateFlow(Form())
@@ -88,13 +97,8 @@ internal class InvestGateVM(
         val code = form.countryCode
         val name = code?.let(::displayName)
         val eligibility = code?.let(InvestEligibility::of)
-        val canContinue =
-            when (eligibility) {
-                null -> false
-                InvestEligibility.PROHIBITED -> true
-                else -> form.attested
-            }
         return InvestGateState(
+            body = stringRes(if (isChange) R.string.invest_change_body else R.string.invest_gate_body),
             countryName = name,
             suggestion =
                 form.hintSource?.let { source ->
@@ -115,17 +119,43 @@ internal class InvestGateVM(
                 },
             primaryButton =
                 ButtonState(
-                    text = stringRes(R.string.invest_gate_continue),
-                    isEnabled = canContinue && !form.isSaving,
+                    text = stringRes(if (isChange) R.string.invest_change_save else R.string.invest_gate_continue),
+                    isEnabled = canContinue(eligibility, form) && !form.isSaving,
                     onClick = ::onContinue,
                 ),
             isSaving = form.isSaving,
             errorText = if (form.failed) stringRes(R.string.invest_error_generic) else null,
             onChangeCountry = ::onOpenPicker,
             picker = if (form.isPickerOpen) pickerState(form) else null,
+            confirmation = if (form.isConfirming && code != null) confirmation(code, name.orEmpty()) else null,
             onBack = ::onBack,
         )
     }
+
+    private fun canContinue(
+        eligibility: InvestEligibility?,
+        form: Form,
+    ) = when (eligibility) {
+        null -> false
+        InvestEligibility.PROHIBITED -> true
+        else -> form.attested
+    }
+
+    private fun confirmation(
+        code: String,
+        name: String,
+    ) = ZappConfirmationState(
+        title = stringRes(R.string.invest_change_confirm_title),
+        message =
+            if (InvestEligibility.of(code) == InvestEligibility.PROHIBITED) {
+                stringRes(R.string.invest_change_confirm_body_prohibited, name)
+            } else {
+                stringRes(R.string.invest_change_confirm_body_restricted, name)
+            },
+        primaryButton = ButtonState(stringRes(R.string.invest_change_confirm_save), onClick = ::onConfirmSave),
+        secondaryButton = ButtonState(stringRes(R.string.invest_change_confirm_cancel), onClick = ::onCancelConfirm),
+        onBack = ::onCancelConfirm,
+    )
 
     private fun pickerState(form: Form): CountryPickerState {
         val query = form.query.trim()
@@ -176,15 +206,42 @@ internal class InvestGateVM(
         }
 
     private fun onBack() {
-        if (form.value.isPickerOpen) onClosePicker() else navigationRouter.back()
+        when {
+            form.value.isConfirming -> onCancelConfirm()
+            form.value.isPickerOpen -> onClosePicker()
+            else -> navigationRouter.back()
+        }
+    }
+
+    private fun onCancelConfirm() = form.update { it.copy(isConfirming = false) }
+
+    private fun onConfirmSave() {
+        form.update { it.copy(isConfirming = false) }
+        save()
     }
 
     private fun onContinue() {
         val current = form.value
         val code = current.countryCode ?: return
         if (current.isSaving) return
-        val eligibility = InvestEligibility.of(code)
-        val qualified = eligibility == InvestEligibility.RESTRICTED && current.qualified
+        val next = InvestSettings(countryCode = code, qualifiedInvestor = qualifiedFor(code, current))
+        if (isChange && !next.isAvailable) {
+            form.update { it.copy(isConfirming = true) }
+        } else {
+            save()
+        }
+    }
+
+    private fun qualifiedFor(
+        code: String,
+        current: Form,
+    ) = InvestEligibility.of(code) == InvestEligibility.RESTRICTED && current.qualified
+
+    private fun save() {
+        val current = form.value
+        val code = current.countryCode ?: return
+        if (current.isSaving) return
+        val qualified = qualifiedFor(code, current)
         form.update { it.copy(isSaving = true, failed = false) }
         viewModelScope.launch {
             investCatching {
@@ -192,7 +249,11 @@ internal class InvestGateVM(
                 settingsRepository.get()
             }.onSuccess { saved ->
                 form.update { it.copy(isSaving = false) }
-                navigationRouter.replace(NavigateToInvestUseCase.routeFor(saved).let(::unavailableFor))
+                if (isChange) {
+                    navigationRouter.back()
+                } else {
+                    navigationRouter.replace(NavigateToInvestUseCase.routeFor(saved).let(::unavailableFor))
+                }
             }.onFailure { e ->
                 Twig.warn(e) { "InvestGateVM: saving residence failed" }
                 form.update { it.copy(isSaving = false, failed = true) }

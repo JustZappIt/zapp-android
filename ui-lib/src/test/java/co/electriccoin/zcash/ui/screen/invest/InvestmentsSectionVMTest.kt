@@ -5,6 +5,7 @@ import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.invest.model.Holding
 import co.electriccoin.zcash.ui.common.invest.model.Holdings
 import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
+import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettings
 import co.electriccoin.zcash.ui.common.model.WalletAccount
@@ -14,6 +15,7 @@ import co.electriccoin.zcash.ui.screen.invest.home.InvestHomeArgs
 import co.electriccoin.zcash.ui.screen.invest.section.InvestPayState
 import co.electriccoin.zcash.ui.screen.invest.section.InvestmentsSectionState
 import co.electriccoin.zcash.ui.screen.invest.section.InvestmentsSectionVM
+import co.electriccoin.zcash.ui.screen.invest.settings.InvestSettingsArgs
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -180,6 +182,68 @@ class InvestmentsSectionVMTest {
             assertEquals(0, follower.followers)
         }
 
+    @Test
+    fun `sell-only keeps showing what is held, refreshes it, and leads to Invest home`() =
+        runTest {
+            val fixture = fixture(settings = INVEST_SELL_ONLY)
+            fixture.repo.holdings.value = HOLDINGS
+
+            val state = fixture.state()
+            val section = assertIs<InvestmentsSectionState.Holdings>(state.section)
+
+            assertEquals(1, fixture.repo.refreshHoldingsCalls)
+            assertTrue(state.isSpeedDialActionVisible)
+            section.onHeaderClick()
+            advanceUntilIdle()
+            verify { fixture.router.forward(InvestHomeArgs) }
+        }
+
+    @Test
+    fun `sell-only with nothing held and nothing pending hides Invest`() =
+        runTest {
+            val fixture = fixture(settings = INVEST_SELL_ONLY)
+            fixture.repo.holdings.value = HOLDINGS.copy(items = emptyList(), totalUsd = null)
+
+            assertEquals(InvestPayState.HIDDEN, fixture.state())
+        }
+
+    @Test
+    fun `sell-only with nothing held but a trade pending still shows the block`() =
+        runTest {
+            val fixture = fixture(settings = INVEST_SELL_ONLY)
+            fixture.repo.holdings.value = HOLDINGS.copy(items = emptyList(), totalUsd = null)
+            fixture.repo.pendingTrades.value =
+                listOf(PendingTrade("t1pending", InvestAssets.curated.first().assetId, isSale = false))
+
+            assertIs<InvestmentsSectionState.Holdings>(fixture.state().section)
+        }
+
+    @Test
+    fun `restricted without the attestation after setup is sell-only too`() =
+        runTest {
+            val fixture = fixture(settings = InvestSettings(countryCode = "DE", setupComplete = true))
+            fixture.repo.holdings.value = HOLDINGS
+
+            assertIs<InvestmentsSectionState.Holdings>(fixture.state().section)
+        }
+
+    @Test
+    fun `the Settings row shows for the phone's own account and opens Settings › Invest`() =
+        runTest {
+            val fixture = fixture(settings = InvestSettings())
+
+            assertTrue(fixture.settingsRow())
+            fixture.vm.onSettingsClick()
+            verify { fixture.router.forward(InvestSettingsArgs) }
+        }
+
+    @Test
+    fun `the Settings row hides for a Keystone account and when the build has no Invest`() =
+        runTest {
+            assertFalse(fixture(settings = READY, accountSupported = false).settingsRow())
+            assertFalse(fixture(isEnabled = false, settings = READY).settingsRow())
+        }
+
     private val follower = FakeInvestTradeFollower()
 
     private class Fixture(
@@ -192,6 +256,14 @@ class InvestmentsSectionVMTest {
             scope.backgroundScope.launch(UnconfinedTestDispatcher(scope.testScheduler)) { vm.state.collect {} }
             scope.advanceUntilIdle()
             return vm.state.value
+        }
+
+        fun settingsRow(): Boolean {
+            scope.backgroundScope.launch(UnconfinedTestDispatcher(scope.testScheduler)) {
+                vm.isSettingsRowVisible.collect {}
+            }
+            scope.advanceUntilIdle()
+            return vm.isSettingsRowVisible.value
         }
     }
 
@@ -212,6 +284,7 @@ class InvestmentsSectionVMTest {
                 currencyProvider = USD_CURRENCY,
                 tradeFollower = follower,
                 navigateToInvest = NavigateToInvestUseCase(settingsRepo, router),
+                navigationRouter = router,
                 isInvestEnabled = isEnabled,
             )
         return Fixture(vm, repo, router, this)

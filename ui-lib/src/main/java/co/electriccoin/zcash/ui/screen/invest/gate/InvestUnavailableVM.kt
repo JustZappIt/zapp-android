@@ -16,7 +16,7 @@ internal data class InvestUnavailableState(
 
 /**
  * The answer is saved, so Invest stays out of PAY; "Change country" re-opens the gate for a user who picked the
- * wrong one (Settings › Invest, where the plan puts that, is not built yet).
+ * wrong one. Settings › Invest changes it later too.
  */
 internal class InvestUnavailableVM(
     args: InvestUnavailableArgs,

@@ -8,6 +8,7 @@ import co.electriccoin.zcash.ui.common.invest.model.BuyEstimate
 import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSettings
 import co.electriccoin.zcash.ui.common.model.SwapAsset
 import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.provider.BridgeAuthorizationCancelledException
@@ -23,8 +24,10 @@ import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyVM
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestReviewState
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
+import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
 import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressArgs
+import co.electriccoin.zcash.ui.screen.invest.settings.InvestSettingsArgs
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -570,6 +573,36 @@ class InvestBuyVMTest {
             assertNotNull(fixture.vm.state.value.noPrice)
         }
 
+    @Test
+    fun `where buying isn't offered, Review stays off and the sell-only note links to Settings`() =
+        runTest {
+            val fixture = fixture(settings = INVEST_SELL_ONLY)
+            fixture.repo.onEstimate = { _, _ -> PRICED }
+
+            fixture.type("100")
+            advanceUntilIdle()
+            val state = fixture.vm.state.value
+            assertNotNull(state.ledger)
+            assertFalse(state.primaryButton.isEnabled)
+            val note = assertNotNull(state.sellOnly)
+            assertEquals(stringRes(R.string.invest_sell_only_banner, InvestFormat.countryName("CA")), note.text)
+
+            state.primaryButton.onClick()
+            advanceUntilIdle()
+            assertTrue(fixture.repo.prepareCalls.isEmpty())
+            note.onOpen()
+            verify { fixture.router.forward(InvestSettingsArgs) }
+        }
+
+    @Test
+    fun `where buying is offered there is no sell-only note`() =
+        runTest {
+            assertNull(
+                fixture()
+                    .vm.state.value.sellOnly
+            )
+        }
+
     private inner class Fixture(
         val vm: InvestBuyVM,
         val repo: FakeInvestRepository,
@@ -607,6 +640,7 @@ class InvestBuyVMTest {
     private fun TestScope.fixture(
         currency: InvestCurrencyProvider = USD_CURRENCY,
         clock: Clock = virtualClock(),
+        settings: InvestSettings = INVEST_READY,
     ): Fixture {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val repo = FakeInvestRepository()
@@ -631,6 +665,7 @@ class InvestBuyVMTest {
             InvestBuyVM(
                 args = InvestBuyArgs(NVIDIA.assetId),
                 investRepository = repo,
+                settingsRepository = FakeInvestSettingsRepository(settings),
                 accountDataSource = accounts,
                 swapRepository = swap,
                 currencyProvider = currency,

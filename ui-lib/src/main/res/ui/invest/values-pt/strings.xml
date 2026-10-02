@@ -198,4 +198,18 @@
     <string name="invest_sell_zec_with_value">≈ %1$s (%2$s)</string>
     <string name="invest_home_pending_buy_title_unknown">Compra em andamento</string>
     <string name="invest_sell_zec_at_least_with_value">%1$s (≈ %2$s)</string>
+    <string name="invest_settings_title">Investir</string>
+    <string name="invest_settings_row_subtitle">País de residência</string>
+    <string name="invest_settings_country_none">Não definido</string>
+    <string name="invest_settings_status_none">Escolha onde você mora para usar o Investir.</string>
+    <string name="invest_settings_status_available">Você pode comprar e vender.</string>
+    <string name="invest_sell_only_banner">O Investir não está disponível em %1$s. Você ainda pode vender o que tem.</string>
+    <string name="invest_sell_only_change">Alterar país</string>
+    <string name="invest_change_body">Escolha o país onde você mora agora. Sua resposta fica só neste celular.</string>
+    <string name="invest_change_save">Salvar</string>
+    <string name="invest_change_confirm_title">Parar de comprar ações?</string>
+    <string name="invest_change_confirm_body_prohibited">O Investir não está disponível para quem mora em %1$s. Se você salvar, as compras param. Você ainda pode vender o que tem.</string>
+    <string name="invest_change_confirm_body_restricted">Em %1$s, o Investir é só para investidores qualificados ou profissionais. Se você salvar, as compras param. Você ainda pode vender o que tem.</string>
+    <string name="invest_change_confirm_save">Salvar país</string>
+    <string name="invest_change_confirm_cancel">Cancelar</string>
 </resources>

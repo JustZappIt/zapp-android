@@ -114,6 +114,7 @@ import co.electriccoin.zcash.ui.screen.integrations.IntegrationsArgs
 import co.electriccoin.zcash.ui.screen.integrations.IntegrationsScreen
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyArgs
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyScreen
+import co.electriccoin.zcash.ui.screen.invest.gate.InvestChangeCountryArgs
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestGateArgs
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestGateScreen
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestUnavailableArgs
@@ -130,6 +131,8 @@ import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellArgs
 import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellScreen
 import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressArgs
 import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressScreen
+import co.electriccoin.zcash.ui.screen.invest.settings.InvestSettingsArgs
+import co.electriccoin.zcash.ui.screen.invest.settings.InvestSettingsScreen
 import co.electriccoin.zcash.ui.screen.ironwood.IronwoodAnnouncementArgs
 import co.electriccoin.zcash.ui.screen.ironwood.IronwoodAnnouncementScreen
 import co.electriccoin.zcash.ui.screen.keepopen.KeepOpenArgs
@@ -418,6 +421,8 @@ fun NavGraphBuilder.walletNavGraph(
         composable<BridgeToBaseArgs> { BridgeToBaseScreen(it.toRoute()) }
         composable<ScanUpiArgs> { ScanUpiScreen(it.toRoute()) }
         composable<InvestGateArgs> { InvestGateScreen() }
+        composable<InvestChangeCountryArgs> { InvestGateScreen(isChange = true) }
+        composable<InvestSettingsArgs> { InvestSettingsScreen() }
         composable<InvestUnavailableArgs> { InvestUnavailableScreen(it.toRoute()) }
         composable<InvestIntroArgs> { InvestIntroScreen() }
         composable<InvestHomeArgs> { InvestHomeScreen() }

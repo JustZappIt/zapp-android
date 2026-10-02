@@ -73,6 +73,10 @@ internal fun InvestBuyView(state: InvestBuyState) {
         Spacer(Modifier.height(INVEST_GAP_MD.dp))
         Presets(state.presets)
         Spacer(Modifier.height(INVEST_GAP_LG.dp))
+        state.sellOnly?.let {
+            InvestTradeInProgressNotice(it)
+            Spacer(Modifier.height(INVEST_GAP_MD.dp))
+        }
         state.tradeInProgress?.let {
             InvestTradeInProgressNotice(it)
             Spacer(Modifier.height(INVEST_GAP_MD.dp))

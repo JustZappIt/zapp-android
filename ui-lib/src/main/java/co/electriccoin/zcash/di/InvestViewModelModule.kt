@@ -20,6 +20,7 @@ import co.electriccoin.zcash.ui.screen.invest.section.InvestmentsSectionVM
 import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellArgs
 import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellVM
 import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressVM
+import co.electriccoin.zcash.ui.screen.invest.settings.InvestSettingsVM
 import co.electriccoin.zcash.ui.screen.walletbackup.WalletBackupReturnRoutes
 import co.electriccoin.zcash.ui.screen.walletbackup.WalletBackupReturnTarget
 import org.koin.android.ext.koin.androidContext
@@ -57,15 +58,25 @@ val investViewModelModule =
                 currencyProvider = get(),
                 tradeFollower = get(),
                 navigateToInvest = get(),
+                navigationRouter = get(),
                 isInvestEnabled = BuildConfig.IS_INVEST_ENABLED,
             )
         }
-        viewModelOf(::InvestGateVM)
+        // The same gate serves first setup and Settings › Invest's country change.
+        viewModel { (isChange: Boolean) ->
+            InvestGateVM(
+                settingsRepository = get(),
+                hintProvider = get(),
+                navigationRouter = get(),
+                isChange = isChange,
+            )
+        }
         viewModelOf(::InvestUnavailableVM)
         viewModelOf(::InvestIntroVM)
         viewModel {
             InvestHomeVM(
                 investRepository = get(),
+                settingsRepository = get(),
                 isTorEnabled = get(),
                 currencyProvider = get(),
                 tradeFollower = get(),
@@ -78,6 +89,7 @@ val investViewModelModule =
             InvestBuyVM(
                 args = args,
                 investRepository = get(),
+                settingsRepository = get(),
                 accountDataSource = get(),
                 swapRepository = get(),
                 currencyProvider = get(),
@@ -101,4 +113,5 @@ val investViewModelModule =
             )
         }
         viewModelOf(::InvestSellProgressVM)
+        viewModelOf(::InvestSettingsVM)
     }

@@ -50,6 +50,10 @@ internal fun InvestHomeView(state: InvestHomeState) {
             SummaryCard(it)
             Spacer(Modifier.height(INVEST_GAP_LG.dp))
         }
+        state.sellOnly?.let {
+            InvestTradeInProgressNotice(it)
+            Spacer(Modifier.height(INVEST_GAP_MD.dp))
+        }
         state.recordsUnreadable?.let {
             InvestTradeInProgressNotice(it)
             Spacer(Modifier.height(INVEST_GAP_MD.dp))
