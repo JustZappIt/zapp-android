@@ -5,6 +5,7 @@ import co.electriccoin.zcash.ui.common.invest.model.BuyProgress
 import co.electriccoin.zcash.ui.common.invest.model.Holdings
 import co.electriccoin.zcash.ui.common.invest.model.InvestAsset
 import co.electriccoin.zcash.ui.common.invest.model.InvestMarket
+import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import co.electriccoin.zcash.ui.common.invest.model.PreparedBuy
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +25,12 @@ interface InvestRepository {
 
     /** Buys that were sent but haven't finished, including ones from before the app was last closed. */
     val pendingBuys: Flow<List<String>>
+
+    /**
+     * Every buy and sale not yet final, by stock, stuck ones included until dismissed. A stock with one can't
+     * be bought or sold. Null when the records can't be read: then nothing can be traded.
+     */
+    val pendingTrades: Flow<List<PendingTrade>?>
 
     suspend fun refreshMarket()
 

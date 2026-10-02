@@ -12,15 +12,20 @@ import co.electriccoin.zcash.ui.common.invest.model.BuyProgress
 import co.electriccoin.zcash.ui.common.invest.model.GenerateIntentRequest
 import co.electriccoin.zcash.ui.common.invest.model.GenerateIntentResponse
 import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
+import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentRequest
 import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentResponse
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpoint
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProvider
+import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepositoryImpl
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSettings
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepository
+import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeGuard
 import co.electriccoin.zcash.ui.common.model.DynamicSwapAsset
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.SwapAsset
@@ -73,6 +78,8 @@ class InvestRepositoryImplTest {
     private val api = FakeApi()
     private val wallet = FakeWallet()
     private val checkpoints = FakeCheckpoints()
+    private var residence = InvestSettings(countryCode = "AE", setupComplete = true)
+    private val sellCheckpoints = MutableStateFlow<List<InvestBuyCheckpoint>>(emptyList())
     private val session = mockk<PrivateAccountSession>()
     private val keys = PrivateAccountKeyProvider(SeedPhraseSource { TEST_MNEMONIC.toCharArray() })
     private var currentAccount: WalletAccount = mockk<ZashiAccount>()
@@ -90,6 +97,16 @@ class InvestRepositoryImplTest {
                     coEvery { getSynchronizer() } returns mockk { coEvery { validateAddress(any()) } returns AddressType.Transparent }
                 },
             checkpoints = checkpoints,
+            settings = mockk<InvestSettingsRepository> { coEvery { get() } answers { residence } },
+            trades =
+                InvestTradeGuard(
+                    buys = checkpoints,
+                    sells =
+                        mockk<InvestSellCheckpointStorageProvider> {
+                            every { observe() } returns
+                                sellCheckpoints
+                        }
+                ),
             now = { now },
             pollIntervalMillis = 1,
         )
@@ -203,11 +220,21 @@ class InvestRepositoryImplTest {
     fun `a failure that may follow a broadcast keeps the buy to resume`() =
         runTest {
             val prepared = repository.prepareBuy(nvda, BigDecimal(100))
+            api.depositAddress = "t1seconddeposit"
+            val second = repository.prepareBuy(nvda, BigDecimal(100))
             wallet.sendFailure = IllegalStateException("ZEC bridge deposit did not succeed: Partial")
 
             assertFailsWith<IllegalStateException> { repository.executeBuy(prepared) }
 
             assertEquals(listOf(DEPOSIT), checkpoints.items.value.map { it.depositAddress })
+
+            // Its outcome is unknown, so the same stock can't be paid for again until it settles, not even
+            // with another quote prepared before it failed.
+            wallet.sendFailure = null
+            wallet.checkpointsAtSend = null
+            assertFailsWith<IllegalStateException> { repository.prepareBuy(nvda, BigDecimal(100)) }
+            assertFailsWith<IllegalStateException> { repository.executeBuy(second) }
+            assertNull(wallet.checkpointsAtSend)
         }
 
     @Test
@@ -219,6 +246,45 @@ class InvestRepositoryImplTest {
 
             assertFailsWith<IllegalStateException> { repository.executeBuy(prepared) }
             assertNull(wallet.checkpointsAtSend)
+        }
+
+    @Test
+    fun `a stock being sold can't be bought until the sale is final`() =
+        runTest {
+            val prepared = repository.prepareBuy(nvda, BigDecimal(100))
+            sellCheckpoints.value = listOf(InvestBuyCheckpoint("sell-deposit", nvda.assetId, 0))
+
+            assertFailsWith<IllegalStateException> { repository.prepareBuy(nvda, BigDecimal(100)) }
+            assertFailsWith<IllegalStateException> { repository.executeBuy(prepared) }
+            assertNull(wallet.checkpointsAtSend)
+            assertTrue(checkpoints.items.value.isEmpty())
+        }
+
+    @Test
+    fun `pending trades list buys and sales by stock`() =
+        runTest {
+            repository.executeBuy(repository.prepareBuy(nvda, BigDecimal(100)))
+            sellCheckpoints.value = listOf(InvestBuyCheckpoint("sell-deposit", "nep141:other", 0))
+
+            assertEquals(
+                listOf(PendingTrade(DEPOSIT, nvda.assetId, isSale = false), PendingTrade("sell-deposit", "nep141:other", isSale = true)),
+                repository.pendingTrades.first(),
+            )
+        }
+
+    @Test
+    fun `after moving where Invest isn't offered, buying stops`() =
+        runTest {
+            val prepared = repository.prepareBuy(nvda, BigDecimal(100))
+            residence = residence.copy(countryCode = "CA")
+
+            assertFailsWith<IllegalStateException> { repository.prepareBuy(nvda, BigDecimal(100)) }
+            assertFailsWith<IllegalStateException> { repository.executeBuy(prepared) }
+            assertNull(wallet.checkpointsAtSend)
+
+            // A restricted country is fine once the user has attested to being a qualified investor.
+            residence = InvestSettings(countryCode = "SG", qualifiedInvestor = true, setupComplete = true)
+            repository.prepareBuy(nvda, BigDecimal(100))
         }
 
     @Test
@@ -453,6 +519,7 @@ class InvestRepositoryImplTest {
         var amountInOverride: BigDecimal? = null
         var usdIn: BigDecimal? = null
         var deadline: Instant? = null
+        var depositAddress = DEPOSIT
         val statuses = ArrayDeque<SwapStatusResponseDto?>()
 
         var tokenLoads = 0
@@ -479,7 +546,7 @@ class InvestRepositoryImplTest {
                 quoteRequest = echoTamper(request),
                 quote =
                     QuoteDetails(
-                        depositAddress = if (request.dry) null else DEPOSIT,
+                        depositAddress = if (request.dry) null else depositAddress,
                         amountIn = amountInOverride ?: request.amount,
                         amountInFormatted = request.amount.movePointLeft(8),
                         amountInUsd = usdIn ?: request.amount.movePointLeft(8).multiply(BigDecimal("1543.62")),

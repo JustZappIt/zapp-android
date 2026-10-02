@@ -12,6 +12,7 @@ import co.electriccoin.zcash.ui.common.invest.model.InvestAsset
 import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.invest.model.InvestMarket
 import co.electriccoin.zcash.ui.common.invest.model.MarketAsset
+import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import co.electriccoin.zcash.ui.common.invest.model.PreparedBuy
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
@@ -76,6 +77,8 @@ internal class InvestRepositoryImpl(
     private val swapAssetProvider: SwapAssetProvider,
     private val synchronizerProvider: SynchronizerProvider,
     private val checkpoints: InvestBuyCheckpointStorageProvider,
+    private val trades: InvestTradeGuard,
+    private val settings: InvestSettingsRepository,
     private val now: () -> Instant = { Clock.System.now() },
     private val pollIntervalMillis: Long = DEFAULT_POLL_INTERVAL_MS,
 ) : InvestRepository,
@@ -100,7 +103,9 @@ internal class InvestRepositoryImpl(
 
     override val holdings: StateFlow<Holdings?> = _holdings.asStateFlow()
 
-    override val pendingBuys: Flow<List<String>> = checkpoints.observe().map { list -> list.map { it.depositAddress } }
+    override val pendingTrades: Flow<List<PendingTrade>?> = trades.pendingTrades
+    override val pendingBuys: Flow<List<String>> =
+        pendingTrades.map { list -> list.orEmpty().filterNot { it.isSale }.map { it.depositAddress } }
 
     override suspend fun refreshMarket() {
         loadCatalog()
@@ -176,6 +181,8 @@ internal class InvestRepositoryImpl(
     ): PreparedBuy {
         require(usdAmount >= InvestRepository.MINIMUM_USD) { "Below the Invest minimum" }
         check(isAccountSupported()) { "Invest isn't available for this account" }
+        check(settings.get().isAvailable) { NOT_AVAILABLE_HERE }
+        check(!trades.hasTrade(asset.assetId)) { TRADE_IN_FLIGHT }
         // The ZEC amount comes from this price, so it is never more than a minute old here.
         val catalog = catalogNoOlderThan(CATALOG_MAX_AGE)
         val destinationAsset = requireNotNull(catalog.swapAssets[asset.assetId]) { "1Click no longer lists this stock" }
@@ -244,6 +251,8 @@ internal class InvestRepositoryImpl(
     override suspend fun executeBuy(prepared: PreparedBuy): String {
         check(now() < prepared.expiresAt) { "The price is no longer held; prepare the buy again" }
         check(isAccountSupported()) { "Invest isn't available for this account" }
+        // Selling stays open wherever the user now lives, so holdings are never trapped; buying doesn't.
+        check(settings.get().isAvailable) { NOT_AVAILABLE_HERE }
         val depositAddress = prepared.quote.depositAddress.address
         payingMutex.withLock {
             check(depositAddress !in paying) { "This buy is already being paid" }
@@ -254,8 +263,13 @@ internal class InvestRepositoryImpl(
         }
         try {
             // Persisted BEFORE any ZEC moves: a crash after sending must resume polling this deposit address,
-            // never prepare and pay for a second buy.
-            checkpoints.add(InvestBuyCheckpoint(depositAddress, prepared.asset.assetId, now().toEpochMilliseconds()))
+            // never prepare and pay for a second buy. No other trade of the stock may be pending: one whose
+            // outcome is unknown must settle before the same stock is paid for again.
+            trades.withLock {
+                val assetId = prepared.asset.assetId
+                check(!trades.hasTrade(assetId)) { TRADE_IN_FLIGHT }
+                checkpoints.add(InvestBuyCheckpoint(depositAddress, assetId, now().toEpochMilliseconds()))
+            }
             try {
                 wallet.sendZecDeposit(prepared.quote)
             } catch (e: BridgeAuthorizationCancelledException) {
@@ -458,6 +472,8 @@ internal class InvestRepositoryImpl(
     private fun Long.toZec(): BigDecimal = BigDecimal(this).movePointLeft(ZEC_DECIMALS)
 
     private companion object {
+        const val NOT_AVAILABLE_HERE = "Buying isn't available in the country of residence"
+        const val TRADE_IN_FLIGHT = "A buy or sale of this stock is still in progress"
         const val ZEC_ASSET_ID = "nep141:zec.omft.near"
         const val ZEC_DECIMALS = 8
         const val SLIPPAGE_BPS = 100
@@ -480,9 +496,4 @@ internal class InvestRepositoryImpl(
         val EXPIRY_GRACE = 30.minutes
         val DEPOSIT_DEADLINE = 2.hours
     }
-}
-
-/** Swap assets for the curated stocks, for code that resolves a buy's swap record (status, activity). */
-interface InvestSwapAssetSource {
-    suspend fun investSwapAssets(): List<SwapAsset>
 }

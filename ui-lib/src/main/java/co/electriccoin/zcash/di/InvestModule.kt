@@ -5,15 +5,22 @@ import co.electriccoin.zcash.ui.common.invest.provider.IntentsSaltProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProviderImpl
+import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProvider
+import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProviderImpl
 import co.electriccoin.zcash.ui.common.invest.provider.InvestServerClock
 import co.electriccoin.zcash.ui.common.invest.provider.KtorInvestApiProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepositoryImpl
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSellRepository
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSellRepositoryImpl
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepositoryImpl
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSwapAssetSource
+import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollower
+import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollowerImpl
+import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeGuard
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
 import org.koin.dsl.binds
@@ -28,7 +35,25 @@ val investModule =
         single { IntentsSaltProvider(httpClientProvider = get(), serverClock = get()) }
         singleOf(::PrivateAccountKeyProvider)
         singleOf(::InvestSettingsRepositoryImpl) bind InvestSettingsRepository::class
-        singleOf(::InvestBuyCheckpointStorageProviderImpl) bind InvestBuyCheckpointStorageProvider::class
+        // Not singleOf: its defaulted prefKey would be asked of Koin as a String.
+        single { InvestBuyCheckpointStorageProviderImpl(encryptedPreferenceProvider = get()) } bind
+            InvestBuyCheckpointStorageProvider::class
+        singleOf(::InvestSellCheckpointStorageProviderImpl) bind InvestSellCheckpointStorageProvider::class
+        single { InvestTradeGuard(buys = get(), sells = get()) }
+        single {
+            InvestSellRepositoryImpl(
+                api = get(),
+                session = get(),
+                keys = get(),
+                wallet = get(),
+                investRepository = get(),
+                swapAssets = get(),
+                biometricRepository = get(),
+                checkpoints = get(),
+                trades = get(),
+                now = get<InvestServerClock>().let { clock -> { Instant.fromEpochMilliseconds(clock.nowMillis()) } },
+            )
+        } bind InvestSellRepository::class
         single {
             InvestRepositoryImpl(
                 api = get(),
@@ -39,9 +64,12 @@ val investModule =
                 swapAssetProvider = get(),
                 synchronizerProvider = get(),
                 checkpoints = get(),
+                trades = get(),
+                settings = get(),
                 now = get<InvestServerClock>().let { clock -> { Instant.fromEpochMilliseconds(clock.nowMillis()) } },
             )
         } binds arrayOf(InvestRepository::class, InvestSwapAssetSource::class)
+        single<InvestTradeFollower> { InvestTradeFollowerImpl(buys = get(), sells = get()) }
         single {
             PrivateAccountSession(
                 api = get(),

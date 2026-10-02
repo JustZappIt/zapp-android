@@ -17,6 +17,14 @@ data class InvestBuyCheckpoint(
     val depositAddress: String,
     val assetId: String,
     val createdAtMillis: Long,
+    /** For a sell: when the signed intent stops being executable. */
+    val intentDeadlineMillis: Long? = null,
+    /** For a sell: the base units being sold. */
+    val baseUnits: String? = null,
+    /** For a sell: the private balance of this stock just before submitting, to tell whether the sale ran. */
+    val heldBeforeBaseUnits: String? = null,
+    /** For a sell: 1Click's hash of the submitted intent, the best reference for support. */
+    val intentHash: String? = null,
 ) {
     init {
         require(depositAddress.isNotBlank()) { "depositAddress must not be blank" }
@@ -33,8 +41,9 @@ interface InvestBuyCheckpointStorageProvider {
 
 internal class InvestBuyCheckpointStorageProviderImpl(
     encryptedPreferenceProvider: EncryptedPreferenceProvider,
+    prefKey: String = BUY_PREF_KEY,
 ) : InvestBuyCheckpointStorageProvider {
-    private val store = EncryptedJsonStore(encryptedPreferenceProvider, PREF_KEY, Checkpoints.serializer())
+    private val store = EncryptedJsonStore(encryptedPreferenceProvider, prefKey, Checkpoints.serializer())
     private val mutex = Mutex()
 
     override fun observe(): Flow<List<InvestBuyCheckpoint>> = store.observe().map { it?.items.orEmpty() }
@@ -63,7 +72,19 @@ internal class InvestBuyCheckpointStorageProviderImpl(
         val items: List<InvestBuyCheckpoint>,
     )
 
-    private companion object {
-        const val PREF_KEY = "invest_buy_checkpoints_v1"
+    internal companion object {
+        const val BUY_PREF_KEY = "invest_buy_checkpoints_v1"
+        const val SELL_PREF_KEY = "invest_sell_checkpoints_v1"
     }
 }
+
+/** Sells in flight: the same record, kept apart from buys. */
+interface InvestSellCheckpointStorageProvider : InvestBuyCheckpointStorageProvider
+
+internal class InvestSellCheckpointStorageProviderImpl(
+    encryptedPreferenceProvider: EncryptedPreferenceProvider,
+) : InvestSellCheckpointStorageProvider,
+    InvestBuyCheckpointStorageProvider by InvestBuyCheckpointStorageProviderImpl(
+        encryptedPreferenceProvider,
+        InvestBuyCheckpointStorageProviderImpl.SELL_PREF_KEY,
+    )
