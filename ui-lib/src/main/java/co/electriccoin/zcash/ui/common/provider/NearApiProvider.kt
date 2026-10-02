@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.common.provider
 
+import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.common.model.near.ErrorDto
 import co.electriccoin.zcash.ui.common.model.near.NearTokenDto
 import co.electriccoin.zcash.ui.common.model.near.QuoteRequest
@@ -102,7 +103,11 @@ class KtorNearApiProvider(
         }
 }
 
-// The 1Click partner JWT (partner_id "zapp"). Shared with Invest's Tor-only client; still in source
-// until it moves to local.properties.
-internal const val NEAR_PARTNER_AUTHORIZATION =
-    "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjIwMjUtMDEtMTItdjEifQ.eyJ2IjoxLCJrZXlfdHlwZSI6ImRpc3RyaWJ1dGlvbl9jaGFubmVsIiwicGFydG5lcl9pZCI6InphcHAiLCJpYXQiOjE3NzgxNTU1ODQsImV4cCI6MTgwOTY5MTU4NH0.R7Nk8UI0ZI-q4h0nFHjij8-zZBIzHkeKAGHtySUX8FL3GLsDm53hnqoiGArQqcj2Iwf-x9fcg0GSV8-WAnlFTakQh6RBke91cU7CemIcqbffzw98wqiSw6iDGZxpbLDwUN7dD_6PNPhp4ZUWfiwmi7U6VcpARqqc2KJAiCn2GbZF6E_dQ-uNBFi7T4Paw641E-mKSrSDvn2OCUQbQLF3iY8_JyLMfbf8kCQPq8-MPv93nvMXieogeu5c6Z9PmZfWCKEfuMbCpjBHEe9BDD8_S9CcuzQCOLtdHkXEbmT4QQ7nBVAY-DMpYVGgOs1mzCK4xmW8frtStYBn194C-DK6yA"
+/**
+ * The 1Click partner JWT (partner_id "zapp"), as an Authorization header value, or null when this build has
+ * none. Set ZAPP_NEAR_PARTNER_JWT in local.properties (or ORG_GRADLE_PROJECT_ZAPP_NEAR_PARTNER_JWT); it is
+ * never committed. Without it the requests go out with no partner header, so 1Click doesn't attribute them
+ * to Zapp; release builds must set it.
+ */
+internal val NEAR_PARTNER_AUTHORIZATION: String? =
+    BuildConfig.NEAR_PARTNER_JWT.takeIf { it.isNotBlank() }?.let { "Bearer $it" }
