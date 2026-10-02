@@ -23,6 +23,8 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendHistory
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendLog
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendRecord
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendStatus
 import co.electriccoin.zcash.ui.common.privateusd.privateUsdToken
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
@@ -233,6 +235,10 @@ class PrivateUsdVMTest {
                 activityMapper = PrivateUsdActivityMapper(),
                 navigateBackToPay = mockk(relaxed = true),
                 navigationRouter = navigation,
+                spendGuard =
+                    mockk<PrivateUsdSpendGuard> {
+                        every { state } returns MutableStateFlow(PrivateUsdSpendStatus.AVAILABLE)
+                    },
             )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
     }

@@ -80,6 +80,9 @@ internal fun PrivateUsdBalances.headline(currency: LocalCurrency): StringResourc
 internal fun PrivateUsdBalanceState.placeholder(): StringResource =
     stringRes(if (isRefreshing) R.string.private_usd_home_loading else R.string.private_usd_home_unknown)
 
+internal val PrivateUsdBalanceState.isLoading: Boolean
+    get() = balances == null && (!refreshFailed || isRefreshing)
+
 /** What of [token] can be spent, in [currency], or what stands in for it until that's known. */
 internal fun PrivateUsdBalanceState.availableText(
     token: PrivateUsdToken,

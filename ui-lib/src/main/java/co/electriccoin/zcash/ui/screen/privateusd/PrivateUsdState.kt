@@ -28,6 +28,8 @@ internal data class PrivateUsdState(
     val convertButton: ButtonState,
     val onRefresh: () -> Unit,
     val onBack: () -> Unit,
+    val refundsButton: ButtonState? = null,
+    val spendingNote: StringResource? = null,
 )
 
 internal data class PrivateUsdConversionBannerState(

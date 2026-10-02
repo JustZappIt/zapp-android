@@ -57,6 +57,17 @@ class ReverseSwapStoreImplTest {
         }
 
     @Test
+    fun `older refunded conversions survive activity retention so their vaults remain recoverable`() =
+        runTest {
+            val store = ReverseSwapStoreImpl(InMemoryPreferenceProvider().encrypted())
+            store.save(toZec(0, ReversePhase.REFUNDED))
+            repeat(105) { store.save(toZec(it + 1, ReversePhase.COMPLETE)) }
+
+            assertEquals(ReversePhase.REFUNDED, store.find(0)?.phase)
+            assertEquals(101, store.observeHistory.first().size)
+        }
+
+    @Test
     fun `previews an earlier build kept in history go on the next save`() =
         runTest {
             val preferences = InMemoryPreferenceProvider()

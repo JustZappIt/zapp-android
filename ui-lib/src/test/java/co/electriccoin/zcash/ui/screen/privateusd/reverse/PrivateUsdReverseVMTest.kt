@@ -21,6 +21,8 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdAsset
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalances
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendStatus
 import co.electriccoin.zcash.ui.common.privateusd.privateUsdToken
 import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
@@ -33,6 +35,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -62,6 +65,7 @@ import java.math.BigInteger
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -80,6 +84,7 @@ class PrivateUsdReverseVMTest {
             coEvery { authenticate(any(), any()) } returns true
         }
     private val currency = MutableStateFlow(LocalCurrency.DOLLAR)
+    private val spending = MutableStateFlow(PrivateUsdSpendStatus.AVAILABLE)
     private val swaps =
         mockk<AtomicSwapRepository>(relaxed = true) { every { deployment } returns AtomicSwapTestnet.deployment }
     private val navigation = mockk<NavigationRouter>(relaxed = true)
@@ -140,6 +145,28 @@ class PrivateUsdReverseVMTest {
         }
 
     @Test
+    fun `funding the current conversion shows progress without an earlier payment error`() =
+        runTest {
+            conversion.value = ReverseSwapState(record(ReversePhase.AWAITING_FUNDING))
+            val funded = CompletableDeferred<Unit>()
+            coEvery { repository.fund(any()) } coAnswers {
+                spending.value = PrivateUsdSpendStatus.CONVERTING
+                funded.await()
+            }
+            start()
+
+            checkNotNull(vm.state.value.primary).onClick()
+            assertTrue(checkNotNull(vm.state.value.primary).isLoading)
+            assertNull(vm.state.value.error)
+            spending.value = PrivateUsdSpendStatus.SENDING
+            assertNull(vm.state.value.error)
+
+            funded.complete(Unit)
+            runCurrent()
+            coVerify(exactly = 1) { repository.fund(any()) }
+        }
+
+    @Test
     fun `an approval that fails shows on the progress screen`() =
         runTest {
             conversion.value = ReverseSwapState(record(ReversePhase.AWAITING_READY))
@@ -187,7 +214,7 @@ class PrivateUsdReverseVMTest {
         }
 
     @Test
-    fun `a refund that can be recovered offers to`() =
+    fun `a refunded conversion opens the refund history without waiting for a network check`() =
         runTest {
             conversion.value = ReverseSwapState(record(ReversePhase.REFUNDED))
             kept.value = listOf(record(ReversePhase.REFUNDED))
@@ -195,7 +222,7 @@ class PrivateUsdReverseVMTest {
             start()
 
             assertEquals(
-                stringRes(R.string.reverse_rescue),
+                stringRes(R.string.refunds_view),
                 vm.state.value.progress
                     ?.callOff
                     ?.text
@@ -245,6 +272,10 @@ class PrivateUsdReverseVMTest {
                 balanceRepository = balances,
                 observeLocalCurrency = localCurrency,
                 accountDataSource = accounts,
+                spendGuard =
+                    mockk<PrivateUsdSpendGuard> {
+                        every { state } returns spending
+                    },
             )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
     }

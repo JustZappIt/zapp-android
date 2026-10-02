@@ -111,8 +111,8 @@ internal enum class ReverseStepKind { LOOK_UP, AUTHORIZED }
 
 internal data class ReverseConversion(
     val swap: ReverseSwapState,
-    /** The latest refunded conversion whose payout can be recovered now, if any. */
-    val rescuable: Int?,
+    /** At least one earlier refunded conversion can be opened from the history. */
+    val hasRefunds: Boolean,
     /** Whether the quote shown has run out. */
     val isExpired: Boolean,
 )

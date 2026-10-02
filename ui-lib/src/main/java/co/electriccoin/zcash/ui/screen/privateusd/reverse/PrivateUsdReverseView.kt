@@ -59,7 +59,7 @@ internal fun PrivateUsdReverseView(
                 Review(review)
             } else {
                 Amount(state, onSwitchDirection.takeIf { state.canSwitchDirection })
-                state.rescue?.let { RescueButton(it) }
+                state.refunds?.let { RefundsButton(it) }
             }
         }
     }
@@ -80,6 +80,10 @@ private fun Amount(
         currencySymbol = state.currencySymbol,
         zecAvailable = state.zecAvailable,
         usdAvailable = state.usdAvailable,
+        isZecBalanceLoading = state.isZecBalanceLoading,
+        isUsdBalanceLoading = state.isUsdBalanceLoading,
+        usdBalanceError = state.usdBalanceError,
+        onRefreshBalance = state.onRefreshBalance,
         onMax = state.onMax,
         onSwitchDirection = onSwitchDirection,
     )
@@ -104,7 +108,7 @@ private fun Review(review: PrivateUsdReverseReviewState) {
 }
 
 @Composable
-private fun RescueButton(button: ButtonState) {
+private fun RefundsButton(button: ButtonState) {
     ZappButton(
         text = button.text.getValue(),
         enabled = button.isEnabled,
@@ -185,7 +189,7 @@ private fun previewState() =
         canSwitchDirection = true,
         review = null,
         progress = null,
-        rescue = null,
+        refunds = null,
         error = null,
         info = PrivateUsdInfo(title = stringRes("Private USD → ZEC")),
         primary = ButtonState(stringRes("Review")),

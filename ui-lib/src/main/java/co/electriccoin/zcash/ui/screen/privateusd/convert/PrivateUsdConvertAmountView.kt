@@ -5,8 +5,11 @@ package co.electriccoin.zcash.ui.screen.privateusd.convert
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import co.electriccoin.zcash.ui.R
@@ -15,6 +18,7 @@ import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappFieldBalance
 import co.electriccoin.zcash.ui.design.component.zapp.ZappFieldBalanceAction
 import co.electriccoin.zcash.ui.design.component.zapp.ZappOfframpHeroAmountField
+import co.electriccoin.zcash.ui.design.component.zapp.ZappRefreshButton
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.getValue
@@ -32,7 +36,13 @@ internal fun PrivateUsdConvertAmountView(
     usdAvailable: StringResource,
     onMax: (() -> Unit)?,
     onSwitchDirection: (() -> Unit)?,
+    isZecBalanceLoading: Boolean = false,
+    isUsdBalanceLoading: Boolean = false,
+    usdBalanceError: StringResource? = null,
+    onRefreshBalance: () -> Unit = {},
 ) {
+    fun loading(asset: ConvertAsset) = if (asset == ConvertAsset.ZEC) isZecBalanceLoading else isUsdBalanceLoading
+
     fun available(asset: ConvertAsset) =
         when (asset) {
             ConvertAsset.ZEC -> zecAvailable
@@ -46,6 +56,7 @@ internal fun PrivateUsdConvertAmountView(
         note = note.getValue(),
         isInvalid = isInvalid,
         onMax = onMax,
+        isLoading = loading(direction.from),
     )
     PrivateUsdDirectionToggle(onClick = onSwitchDirection)
     AssetAmount(
@@ -56,7 +67,28 @@ internal fun PrivateUsdConvertAmountView(
         note = stringResource(R.string.convert_estimated_amount),
         isInvalid = false,
         onMax = null,
+        isLoading = loading(direction.to),
     )
+    if (isUsdBalanceLoading) {
+        BasicText(
+            text = stringResource(R.string.private_usd_first_load),
+            style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.textMuted)
+        )
+    } else if (usdBalanceError != null) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicText(
+                text = usdBalanceError.getValue(),
+                modifier = Modifier.weight(1f),
+                style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.danger)
+            )
+            ZappRefreshButton(
+                false,
+                stringResource(R.string.private_usd_refresh),
+                stringResource(R.string.private_usd_updating),
+                onRefreshBalance
+            )
+        }
+    }
 }
 
 @Composable
@@ -68,6 +100,7 @@ private fun AssetAmount(
     note: String,
     isInvalid: Boolean,
     onMax: (() -> Unit)?,
+    isLoading: Boolean,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.md)) {
         BasicText(
@@ -84,7 +117,14 @@ private fun AssetAmount(
             balance =
                 ZappFieldBalance(
                     label = stringResource(R.string.private_usd_row_available),
-                    amount = available?.getValue() ?: stringResource(R.string.private_usd_home_loading),
+                    amount =
+                        if (isLoading) {
+                            stringResource(R.string.private_usd_home_loading)
+                        } else {
+                            available?.getValue()
+                                ?: stringResource(R.string.private_usd_home_unknown)
+                        },
+                    isLoading = isLoading,
                     action =
                         onMax?.let {
                             ZappFieldBalanceAction(

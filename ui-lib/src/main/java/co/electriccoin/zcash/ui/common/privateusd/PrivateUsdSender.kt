@@ -54,6 +54,9 @@ sealed interface PrivateUsdSendOutcome {
 
     /** Nothing left the wallet. */
     data object NotSent : PrivateUsdSendOutcome
+
+    /** An earlier payment is unresolved; no additional transaction was created. */
+    data object Busy : PrivateUsdSendOutcome
 }
 
 /** Sends from the Railgun balance. */
@@ -77,6 +80,7 @@ class TestnetGasAccountSender(
     private val sendLog: PrivateUsdSendLog,
     private val scope: CoroutineScope,
     private val clock: Clock,
+    private val spendGuard: PrivateUsdSpendGuard,
 ) : PrivateUsdSender {
     private val settlement = PrivateUsdSendSettlement(transactions, sendLog)
 
@@ -89,7 +93,7 @@ class TestnetGasAccountSender(
         }
 
     override suspend fun send(request: PrivateUsdSendRequest): PrivateUsdSendOutcome =
-        scope.async { sendNow(request) }.await()
+        scope.async { spendGuard.send { sendNow(request) } }.await()
 
     override fun reconcile() {
         scope.launch { settlement.settleAll() }
@@ -214,6 +218,7 @@ class PrivateUsdSenders(
     railgunWalletRepository: RailgunWalletRepository,
     transactions: GasAccountTransactions,
     sendLog: PrivateUsdSendLog,
+    spendGuard: PrivateUsdSpendGuard,
 ) {
     val current: PrivateUsdSender? =
         when (railgunWalletRepository.state.value.network) {
@@ -224,6 +229,7 @@ class PrivateUsdSenders(
                     sendLog = sendLog,
                     scope = backgroundScope("Private USD sends"),
                     clock = Clock.System,
+                    spendGuard = spendGuard,
                 )
             }
 

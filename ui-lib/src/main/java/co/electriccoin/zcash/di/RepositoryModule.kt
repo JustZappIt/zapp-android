@@ -11,6 +11,7 @@ import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceReposit
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepositoryImpl
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepositoryImpl
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
 import co.electriccoin.zcash.ui.common.provider.IdentityVerificationStorageProvider
 import co.electriccoin.zcash.ui.common.provider.OrderRecipientUpiStorageProvider
 import co.electriccoin.zcash.ui.common.provider.RelayIdentityStorageProvider
@@ -132,6 +133,7 @@ val repositoryModule =
                 forward = get(),
                 scheduler = get(),
                 notifier = get(),
+                spendGuard = get(),
             )
         }
         single<AtomicSwapRepository> {
@@ -143,6 +145,7 @@ val repositoryModule =
                 zcash = get(),
                 scheduler = get(),
                 notifier = get(),
+                spendGuard = get(),
             )
         }
         single<PrivateUsdBalanceRepository> {
@@ -157,6 +160,7 @@ val repositoryModule =
                 clock = Clock.System,
             )
         }
+        single { PrivateUsdSpendGuard(get(), get(), get(), backgroundScope("Private USD spending")) }
         singleOf(::LinkPreviewRepository)
         singleOf(::HistoricalPriceRepositoryImpl) bind HistoricalPriceRepository::class
         single<BaseBalanceRepository> {

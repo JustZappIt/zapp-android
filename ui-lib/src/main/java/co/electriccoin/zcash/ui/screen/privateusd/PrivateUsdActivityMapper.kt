@@ -38,6 +38,7 @@ class PrivateUsdActivityMapper {
         currency: LocalCurrency,
         onOpenConversion: (PrivateUsdConversion) -> Unit,
         onOpenUrl: (String) -> Unit,
+        onOpenRefunds: () -> Unit = {},
     ): PrivateUsdActivityState? {
         val date = dateTime(data.timestamp)
         return when (data) {
@@ -50,7 +51,7 @@ class PrivateUsdActivityMapper {
             is PrivateUsdActivityData.ToZec -> {
                 val underWay =
                     (conversion as? PrivateUsdConversion.ToZec)?.takeIf { it.record.index == data.record.index }
-                toZec(data.record, date, deployment, currency, underWay, onOpenConversion, onOpenUrl)
+                toZec(data.record, date, deployment, currency, underWay, onOpenConversion, onOpenUrl, onOpenRefunds)
             }
 
             is PrivateUsdActivityData.Sent -> {
@@ -153,6 +154,7 @@ class PrivateUsdActivityMapper {
         underWay: PrivateUsdConversion.ToZec?,
         onOpenConversion: (PrivateUsdConversion) -> Unit,
         onOpenUrl: (String) -> Unit,
+        onOpenRefunds: () -> Unit,
     ): PrivateUsdActivityState? {
         val paid = moved(dollarToken(deployment, record.quote.terms.token), record.debit.micros)
         val funding = record.funding?.let { deployment.explorerTxUrl + it.txId.hex }
@@ -196,8 +198,8 @@ class PrivateUsdActivityMapper {
                                     .inPreviousWallet(record.railgunKeys),
                             amount = null,
                             local = null,
-                            onClick = null,
-                            onClickLabel = null,
+                            onClick = onOpenRefunds,
+                            onClickLabel = stringRes(R.string.refunds_view),
                         )
                     }
 

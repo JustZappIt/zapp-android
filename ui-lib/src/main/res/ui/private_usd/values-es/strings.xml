@@ -220,4 +220,20 @@
     <string name="private_usd_send_done_title_withdraw">Retirado</string>
     <string name="private_usd_send_done_body">Se enviaron %1$s a %2$s.</string>
     <string name="private_usd_send_view_tx">Ver en Etherscan</string>
+    <string name="private_usd_checking_payments">Comprobando pagos pendientes…</string>
+    <string name="private_usd_payment_pending">Hay un pago anterior pendiente. Podrás enviar o convertir de nuevo cuando se confirme.</string>
+    <string name="private_usd_conversion_pending">Hay una conversión en curso. Podrás enviar cuando termine.</string>
+    <string name="refunds_title">Reembolsos</string>
+    <string name="refunds_view">Ver reembolsos</string>
+    <string name="refunds_subtitle">Reembolsos de conversiones anteriores</string>
+    <string name="refunds_info">Si un reembolso no pudo llegar a tu saldo privado, recupéralo aquí. La revisión de Railgun puede retrasar su disponibilidad.</string>
+    <string name="refunds_original_amount">Importe original de la conversión</string>
+    <string name="refunds_empty">Todavía no hay conversiones reembolsadas.</string>
+    <string name="refunds_checking">Comprobando reembolsos…</string>
+    <string name="refunds_available">Puedes recuperar este reembolso.</string>
+    <string name="refunds_no_recovery">No hay fondos que recuperar ahora. Es posible que tu reembolso siga pasando por la revisión de Railgun.</string>
+    <string name="refunds_recover">Recuperar reembolso</string>
+    <string name="refunds_recovering">Recuperando tu reembolso…</string>
+    <string name="refunds_check_failed">No se pudo comprobar este reembolso. Actualiza para volver a intentarlo.</string>
+    <string name="refunds_recover_failed">No se pudo recuperar este reembolso. Vuelve a intentarlo.</string>
 </resources>

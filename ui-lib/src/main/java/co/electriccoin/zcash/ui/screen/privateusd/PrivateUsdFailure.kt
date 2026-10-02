@@ -7,6 +7,7 @@ import androidx.annotation.StringRes
 import cash.z.ecc.android.sdk.exception.SdkException
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendBlockedException
 import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -35,6 +36,7 @@ internal enum class PrivateUsdFailure(
     DEPOSIT_UNCONFIRMED(R.string.reverse_error_unconfirmed),
     FUNDING_COST_CHANGED(R.string.reverse_error_cost_changed),
     TOO_LATE(R.string.reverse_error_too_late),
+    PAYMENT_PENDING(R.string.private_usd_payment_pending),
 
     /** Another conversion is under way: its screen is the place to be. */
     SWAP_UNDER_WAY(null),
@@ -47,6 +49,7 @@ internal enum class PrivateUsdFailure(
 
 internal fun Throwable.toFailure(): PrivateUsdFailure =
     when (this) {
+        is PrivateUsdSpendBlockedException -> PrivateUsdFailure.PAYMENT_PENDING
         is ZecInputQuoteException -> PrivateUsdFailure.NO_QUOTE_FITS
         is AtomicSwapBlockedException -> reason.toFailure()
         is AtomicSwapHttpException -> service.toFailure()

@@ -33,6 +33,10 @@ internal data class PrivateUsdConvertState(
     val isBackEnabled: Boolean,
     val pinVerify: PinVerifyState?,
     val onBack: () -> Unit,
+    val isZecBalanceLoading: Boolean = false,
+    val isUsdBalanceLoading: Boolean = false,
+    val usdBalanceError: StringResource? = null,
+    val onRefreshBalance: () -> Unit = {},
 )
 
 internal data class PrivateUsdQuoteState(

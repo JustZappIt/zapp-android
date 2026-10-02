@@ -130,6 +130,8 @@ import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
 import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertScreen
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressScreen
+import co.electriccoin.zcash.ui.screen.privateusd.refunds.PrivateUsdRefundsArgs
+import co.electriccoin.zcash.ui.screen.privateusd.refunds.PrivateUsdRefundsScreen
 import co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseArgs
 import co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseScreen
 import co.electriccoin.zcash.ui.screen.privateusd.send.PrivateUsdSendArgs
@@ -442,6 +444,7 @@ fun NavGraphBuilder.walletNavGraph(
         composable<DebugRailgunArgs> { DebugRailgunScreen() }
         composable<DebugAtomicSwapArgs> { DebugAtomicSwapScreen() }
         composable<PrivateUsdArgs> { PrivateUsdScreen() }
+        composable<PrivateUsdRefundsArgs> { PrivateUsdRefundsScreen() }
         composable<PrivateUsdReverseArgs> { PrivateUsdReverseScreen() }
         composable<PrivateUsdConvertArgs> { PrivateUsdConvertScreen() }
         composable<PrivateUsdProgressArgs> { PrivateUsdProgressScreen() }

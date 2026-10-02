@@ -74,6 +74,20 @@ private fun Overview(state: PrivateUsdState) {
         }
         if (state.assets.isNotEmpty()) Assets(state.assets)
         Sending(state.sending)
+        state.spendingNote?.let {
+            BasicText(
+                text = it.getValue(),
+                style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.textMuted),
+            )
+        }
+        state.refundsButton?.let { button ->
+            ZappButton(
+                text = button.text.getValue(),
+                variant = ZappButtonVariant.Secondary,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = button.onClick
+            )
+        }
     }
 }
 

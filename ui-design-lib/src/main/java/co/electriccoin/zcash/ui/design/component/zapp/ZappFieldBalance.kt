@@ -5,6 +5,7 @@ data class ZappFieldBalance(
     val amount: String,
     /** Makes the balance a button. */
     val action: ZappFieldBalanceAction? = null,
+    val isLoading: Boolean = false,
 )
 
 /** What tapping a [ZappFieldBalance] does, and the words a screen reader offers for it. */

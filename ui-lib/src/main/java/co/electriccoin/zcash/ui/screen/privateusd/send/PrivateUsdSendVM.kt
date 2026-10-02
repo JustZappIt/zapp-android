@@ -16,6 +16,8 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendOutcome
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendRequest
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendStatus
 import co.electriccoin.zcash.ui.common.privateusd.basisPoints
 import co.electriccoin.zcash.ui.common.privateusd.exactTokenAmount
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
@@ -26,11 +28,13 @@ import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.component.TextFieldState
+import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.ExternalUrl
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
 import co.electriccoin.zcash.ui.screen.privateusd.authenticateSpend
+import co.electriccoin.zcash.ui.screen.privateusd.message
 import co.electriccoin.zcash.ui.screen.privateusd.runConversionStep
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +61,7 @@ class PrivateUsdSendVM(
     observeLocalCurrency: ObserveLocalCurrencyUseCase,
     private val secretAuthGate: SecretAuthGate,
     private val navigationRouter: NavigationRouter,
+    private val spendGuard: PrivateUsdSpendGuard,
 ) : ViewModel() {
     private val sender = checkNotNull(senders.current) { "no sending in this build" }
     private val explorerTxUrl = atomicSwapRepository.deployment?.explorerTxUrl
@@ -67,7 +72,9 @@ class PrivateUsdSendVM(
         combine(
             form,
             balanceRepository.observe().onEach(::pinToken),
-            railgunWalletRepository.state.map { RailgunProgress(it.proof?.progress, it.fees) }.distinctUntilChanged(),
+            combine(railgunWalletRepository.state, spendGuard.state) { wallet, spending ->
+                RailgunProgress(wallet.proof?.progress, wallet.fees, spending)
+            }.distinctUntilChanged(),
             observeLocalCurrency(),
             secretAuthGate.pinPrompt,
             ::createState,
@@ -78,7 +85,7 @@ class PrivateUsdSendVM(
                 createState(
                     form.value,
                     balanceRepository.state.value,
-                    RailgunProgress(null, railgunWalletRepository.state.value.fees),
+                    RailgunProgress(null, railgunWalletRepository.state.value.fees, spendGuard.state.value),
                     LocalCurrency.DOLLAR,
                     null,
                 ),
@@ -96,7 +103,7 @@ class PrivateUsdSendVM(
         val asset = assets.firstOrNull { it.token == token }
         val amountError = form.amountError(asset)
         val request = form.reviewedRequest ?: asset?.let(form::request)
-        val canSend = form.canSend(request, balance)
+        val canSend = form.canSend(request, balance) && railgun.spending.canSend
         return PrivateUsdSendState(
             phase = form.phase,
             mode = form.mode,
@@ -138,12 +145,9 @@ class PrivateUsdSendVM(
             review = request?.let(form::review),
             proofProgress = railgun.proof?.takeIf { form.phase == PrivateUsdSendPhase.SENDING },
             done = form.done(explorerTxUrl) { navigationRouter.forward(ExternalUrl(it)) },
-            error = form.error ?: form.reviewError(balance),
+            error = sendError(form, balance, railgun.spending),
             info = info(form.mode, form.cost?.feeBasisPoints ?: railgun.fees?.unshieldBasisPoints),
-            primaryButton =
-                primaryButton(form, request, canSend).let {
-                    it.copy(isEnabled = it.isEnabled && !form.isBusy, isLoading = it.isLoading || form.isBusy)
-                },
+            primaryButton = primaryButton(form, request, canSend, railgun.spending),
             onBack = ::onBack,
             isBusy = form.isBusy,
             isBackEnabled = form.phase == PrivateUsdSendPhase.FORM || !form.isBusy,
@@ -160,6 +164,7 @@ class PrivateUsdSendVM(
         form: PrivateUsdSendForm,
         request: PrivateUsdSendRequest?,
         canSend: Boolean,
+        spending: PrivateUsdSpendStatus,
     ): ButtonState =
         when (form.phase) {
             PrivateUsdSendPhase.FORM -> {
@@ -183,9 +188,23 @@ class PrivateUsdSendVM(
             PrivateUsdSendPhase.DONE -> {
                 ButtonState(stringRes(R.string.convert_result_done), onClick = navigationRouter::back)
             }
+        }.let {
+            it.copy(
+                isEnabled = it.isEnabled && !form.isBusy && (form.phase !in EDITABLE_PHASES || spending.canSend),
+                isLoading = it.isLoading || form.isBusy,
+            )
         }
 
+    private fun sendError(
+        form: PrivateUsdSendForm,
+        balance: PrivateUsdBalanceState,
+        spending: PrivateUsdSpendStatus,
+    ): StringResource? =
+        form.error ?: form.reviewError(balance)
+            ?: spending.message().takeIf { form.phase in EDITABLE_PHASES && !form.isBusy }
+
     private fun onReview(request: PrivateUsdSendRequest) {
+        if (!spendGuard.state.value.canSend) return
         val current = form.value
         if (current.isBusy || current.phase != PrivateUsdSendPhase.FORM ||
             !current.canSend(request, balanceRepository.state.value)
@@ -213,7 +232,8 @@ class PrivateUsdSendVM(
     private fun onConfirm() {
         val current = form.value
         val request = current.reviewedRequest ?: return
-        if (current.isBusy || current.phase != PrivateUsdSendPhase.REVIEW ||
+        val canConfirm = spendGuard.state.value.canSend && !current.isBusy
+        if (!canConfirm || current.phase != PrivateUsdSendPhase.REVIEW ||
             !current.canSend(request, balanceRepository.state.value)
         ) {
             return
@@ -223,10 +243,18 @@ class PrivateUsdSendVM(
             try {
                 if (authorize()) {
                     form.update { it.copy(phase = PrivateUsdSendPhase.SENDING) }
-                    val outcome = sender.send(request)
+                    val outcome =
+                        runConversionStep(
+                            "the send didn't start"
+                        ) { sender.send(request) }.getOrDefault(PrivateUsdSendOutcome.NotSent)
                     // Anything signed may be out there: it never goes back to review, where it could be paid again.
                     form.update {
-                        if (outcome == PrivateUsdSendOutcome.NotSent) {
+                        if (outcome == PrivateUsdSendOutcome.Busy) {
+                            it.copy(
+                                phase = PrivateUsdSendPhase.REVIEW,
+                                error = stringRes(R.string.private_usd_payment_pending),
+                            )
+                        } else if (outcome == PrivateUsdSendOutcome.NotSent) {
                             it.notSent()
                         } else {
                             it.copy(phase = PrivateUsdSendPhase.DONE, outcome = outcome)
@@ -278,6 +306,7 @@ class PrivateUsdSendVM(
     }
 
     private companion object {
+        val EDITABLE_PHASES = setOf(PrivateUsdSendPhase.FORM, PrivateUsdSendPhase.REVIEW)
         val SEND_INFO =
             PrivateUsdInfo(
                 title = stringRes(R.string.private_usd_send_info_title),
@@ -322,4 +351,5 @@ class PrivateUsdSendVM(
 private data class RailgunProgress(
     val proof: Float?,
     val fees: RailgunFees?,
+    val spending: PrivateUsdSpendStatus,
 )

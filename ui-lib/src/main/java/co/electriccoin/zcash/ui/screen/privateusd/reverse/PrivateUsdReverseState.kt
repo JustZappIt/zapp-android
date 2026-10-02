@@ -29,8 +29,8 @@ internal data class PrivateUsdReverseState(
     val review: PrivateUsdReverseReviewState?,
     /** Set once it's going ahead, under way or over. */
     val progress: PrivateUsdProgressState?,
-    /** Recovers the refund of an earlier conversion, while one can be. */
-    val rescue: ButtonState?,
+    /** Opens every refunded conversion, including earlier ones. */
+    val refunds: ButtonState?,
     val error: StringResource?,
     val info: PrivateUsdInfo,
     /** Null while the conversion goes on by itself. */
@@ -38,6 +38,10 @@ internal data class PrivateUsdReverseState(
     val isBackEnabled: Boolean,
     val pinVerify: PinVerifyState?,
     val onBack: () -> Unit,
+    val isZecBalanceLoading: Boolean = false,
+    val isUsdBalanceLoading: Boolean = false,
+    val usdBalanceError: StringResource? = null,
+    val onRefreshBalance: () -> Unit = {},
 )
 
 internal data class PrivateUsdReverseReviewState(

@@ -8,6 +8,7 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployment
 import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendStatus
 import co.electriccoin.zcash.ui.common.privateusd.basisPoints
 import co.electriccoin.zcash.ui.common.privateusd.privateUsdToken
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
@@ -94,6 +95,7 @@ internal data class ConvertHoldings(
     val spendable: Zatoshi?,
     val balance: PrivateUsdBalanceState,
     val currency: LocalCurrency,
+    val spending: PrivateUsdSpendStatus = PrivateUsdSpendStatus.AVAILABLE,
 )
 
 /** What a deployment's conversions cost and bring, in the user's currency. */

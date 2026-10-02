@@ -16,6 +16,7 @@ import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.common.privateusd.ObserveLocalCurrencyUseCase
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
@@ -29,15 +30,16 @@ import co.electriccoin.zcash.ui.screen.privateusd.TYPING_DEBOUNCE
 import co.electriccoin.zcash.ui.screen.privateusd.authenticateSpend
 import co.electriccoin.zcash.ui.screen.privateusd.convert.ConvertHoldings
 import co.electriccoin.zcash.ui.screen.privateusd.epochSeconds
+import co.electriccoin.zcash.ui.screen.privateusd.isLoading
 import co.electriccoin.zcash.ui.screen.privateusd.message
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProblemState
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressState
 import co.electriccoin.zcash.ui.screen.privateusd.quoteFailure
+import co.electriccoin.zcash.ui.screen.privateusd.refunds.PrivateUsdRefundsArgs
 import co.electriccoin.zcash.ui.screen.privateusd.requireDeployment
 import co.electriccoin.zcash.ui.screen.privateusd.runConversionStep
 import co.electriccoin.zcash.ui.screen.privateusd.toFailure
 import co.electriccoin.zcash.ui.screen.privateusd.zecField
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -47,8 +49,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
@@ -74,6 +74,7 @@ class PrivateUsdReverseVM(
     private val balanceRepository: PrivateUsdBalanceRepository,
     observeLocalCurrency: ObserveLocalCurrencyUseCase,
     accountDataSource: AccountDataSource,
+    private val spendGuard: PrivateUsdSpendGuard,
 ) : ViewModel() {
     private val terms = PrivateUsdReverseTerms(atomicSwapRepository.requireDeployment())
     private val mapper = PrivateUsdReverseMapper(terms, Actions())
@@ -81,21 +82,8 @@ class PrivateUsdReverseVM(
     private var quoteJob: Job? = null
     private var stepJob: Job? = null
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private val rescuable: Flow<Int?> =
-        repository.history
-            .map { history -> history.lastOrNull { it.phase == ReversePhase.REFUNDED }?.index }
-            .distinctUntilChanged()
-            .flatMapLatest { index ->
-                flow {
-                    emit(null)
-                    while (index != null) {
-                        val check = runConversionStep("no refund recovery check") { repository.canRescue(index) }
-                        emit(index.takeIf { check.getOrDefault(false) })
-                        delay(RESCUE_CHECK)
-                    }
-                }
-            }
+    private val hasRefunds: Flow<Boolean> =
+        repository.history.map { history -> history.any { it.phase == ReversePhase.REFUNDED } }.distinctUntilChanged()
 
     // Looks each second for a quote that ran out, and replaces it; it emits only when that changes.
     private val quoteExpiry: Flow<Boolean> =
@@ -106,12 +94,13 @@ class PrivateUsdReverseVM(
 
     internal val state: StateFlow<PrivateUsdReverseState> =
         combine(
-            combine(repository.state, rescuable, quoteExpiry, ::ReverseConversion),
+            combine(repository.state, hasRefunds, quoteExpiry, ::ReverseConversion),
             form,
             combine(
                 accountDataSource.zashiAccount.map { it?.spendableShieldedBalance },
                 balanceRepository.observe(),
                 observeLocalCurrency(),
+                spendGuard.state,
                 ::ConvertHoldings,
             ),
             secretAuthGate.pinPrompt,
@@ -121,9 +110,14 @@ class PrivateUsdReverseVM(
                 started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
                 initialValue =
                     createState(
-                        ReverseConversion(repository.state.value, rescuable = null, isExpired = false),
+                        ReverseConversion(repository.state.value, hasRefunds = false, isExpired = false),
                         form.value,
-                        ConvertHoldings(null, balanceRepository.state.value, LocalCurrency.DOLLAR),
+                        ConvertHoldings(
+                            null,
+                            balanceRepository.state.value,
+                            LocalCurrency.DOLLAR,
+                            spendGuard.state.value,
+                        ),
                         null,
                     ),
             )
@@ -153,7 +147,7 @@ class PrivateUsdReverseVM(
         val currency = form.currency ?: holdings.currency
         val record = form.shown(conversion.swap.record)
         val available = terms.spendable(holdings.balance)
-        val canPay = form.canPay(record, available, conversion.isExpired)
+        val canPay = form.canPay(record, available, conversion.isExpired) && holdings.spending.canStartConversion
         val primary = mapper.primary(record, form, canPay, conversion.isExpired)
         val review =
             record
@@ -178,17 +172,37 @@ class PrivateUsdReverseVM(
                 record
                     ?.takeIf { it.phase != ReversePhase.QUOTED }
                     ?.let { mapper.progress(it, conversion, form, currency, primary) },
-            rescue =
-                conversion.rescuable
-                    ?.takeIf { record?.underWay != true && review == null && form.canAct }
-                    ?.let(mapper::rescue),
-            error = form.message(record, available, conversion.isExpired),
+            refunds = refundsButton(conversion, record, form, review != null),
+            error =
+                form.message(record, available, conversion.isExpired)
+                    ?: holdings.spending.message().takeUnless {
+                        holdings.spending.canStartConversion || !form.canAct
+                    },
             info = terms.info(currency),
             primary = primary,
             isBackEnabled = form.isBackEnabled,
             pinVerify = pin,
             onBack = ::onBack,
+            isZecBalanceLoading = holdings.spendable == null,
+            isUsdBalanceLoading = holdings.balance.isLoading,
+            usdBalanceError =
+                stringRes(R.string.private_usd_load_failed).takeIf {
+                    holdings.balance.refreshFailed &&
+                        holdings.balance.balances == null
+                },
+            onRefreshBalance = { balanceRepository.refresh() },
         )
+    }
+
+    private fun refundsButton(
+        conversion: ReverseConversion,
+        record: ReverseSwapRecord?,
+        form: ReverseForm,
+        isReviewing: Boolean,
+    ): ButtonState? {
+        if (!conversion.hasRefunds || !form.canAct) return null
+        return ButtonState(stringRes(R.string.refunds_view), onClick = Actions()::refunds)
+            .takeIf { record?.underWay != true && !isReviewing }
     }
 
     private fun onAmountChange(
@@ -260,6 +274,7 @@ class PrivateUsdReverseVM(
     }
 
     private fun onReview() {
+        if (!spendGuard.state.value.canStartConversion) return
         val current = form.value
         val record = current.shown(repository.state.value.record)
         val available = terms.spendable(balanceRepository.state.value)
@@ -331,8 +346,7 @@ class PrivateUsdReverseVM(
         override fun cancel(index: Int) =
             runStep(ReverseStepKind.AUTHORIZED, R.string.convert_call_off_failed) { repository.cancel(index) }
 
-        override fun rescue(index: Int) =
-            runStep(ReverseStepKind.AUTHORIZED, R.string.reverse_error_rescue) { repository.rescue(index) }
+        override fun refunds() = navigationRouter.forward(PrivateUsdRefundsArgs)
 
         override fun newQuote() {
             form.update { it.copy(step = ReverseStep.Typing, stale = null, error = null) }
@@ -345,7 +359,6 @@ class PrivateUsdReverseVM(
     }
 
     private companion object {
-        val RESCUE_CHECK = 15.seconds
         val EDITABLE = setOf(ReverseStep.Typing, ReverseStep.Quoting)
     }
 }

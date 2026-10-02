@@ -6,7 +6,6 @@ package co.electriccoin.zcash.ui.common.privateusd
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.provider.EncryptedJsonStore
-import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -104,6 +103,11 @@ class PrivateUsdSendLog(
 
     suspend fun unconfirmed(): List<PrivateUsdSendRecord> = lock.withLock { read().sends.filterNot { it.confirmed } }
 
+    /** Unlike the activity list, an unreadable log must keep further spending blocked. */
+    val observeUnsettled: Flow<Boolean> = store.observe().map { it?.isUnsettled == true }
+
+    suspend fun hasUnsettled(): Boolean = lock.withLock { read().isUnsettled }
+
     suspend fun begin(send: PrivateUsdPendingSend) {
         live += send.id
         change { it.copy(pending = it.pending + send) }
@@ -152,23 +156,22 @@ class PrivateUsdSendLog(
         lock.withLock {
             val log = read()
             val changed = update(log.copy(pending = log.pending.filter { it.id in live }))
-            store.set(changed.copy(sends = changed.sends.takeLast(MAX_SENDS)))
+            val retained =
+                changed.sends.filterNot { it.confirmed } +
+                    changed.sends.filter { it.confirmed }.takeLast(MAX_SENDS)
+            store.set(changed.copy(sends = retained.sortedBy { it.sentAt }))
         }
 
-    // What can't be read can't be shown either, and mustn't stop sends: it starts over.
-    private suspend fun read(): Log =
-        try {
-            store.get() ?: Log()
-        } catch (e: StoreCorruptedException) {
-            Twig.warn(e) { "Private USD: the send log was unreadable, and starts over" }
-            Log()
-        }
+    // This is also the recovery checkpoint: a failed read must never replace signed transactions.
+    private suspend fun read(): Log = store.get() ?: Log()
 
     @Serializable
     private data class Log(
         val sends: List<PrivateUsdSendRecord> = emptyList(),
         val pending: List<PrivateUsdPendingSend> = emptyList(),
     )
+
+    private val Log.isUnsettled: Boolean get() = sends.any { !it.confirmed } || pending.any { it.id in live }
 
     private companion object {
         const val PREF_KEY = "private_usd_sends_v1"

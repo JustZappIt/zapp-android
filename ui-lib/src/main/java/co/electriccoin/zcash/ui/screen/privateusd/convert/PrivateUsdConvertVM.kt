@@ -14,6 +14,7 @@ import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.common.privateusd.ObserveLocalCurrencyUseCase
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
 import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.common.usecase.NavigateBackToPayUseCase
@@ -26,7 +27,9 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.TYPING_DEBOUNCE
 import co.electriccoin.zcash.ui.screen.privateusd.authenticateSpend
 import co.electriccoin.zcash.ui.screen.privateusd.epochSeconds
+import co.electriccoin.zcash.ui.screen.privateusd.isLoading
 import co.electriccoin.zcash.ui.screen.privateusd.isPositive
+import co.electriccoin.zcash.ui.screen.privateusd.message
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
 import co.electriccoin.zcash.ui.screen.privateusd.quoteFailure
 import co.electriccoin.zcash.ui.screen.privateusd.requireDeployment
@@ -58,8 +61,9 @@ class PrivateUsdConvertVM(
     private val navigationRouter: NavigationRouter,
     private val navigateBackToPay: NavigateBackToPayUseCase,
     accountDataSource: AccountDataSource,
-    balanceRepository: PrivateUsdBalanceRepository,
+    private val balanceRepository: PrivateUsdBalanceRepository,
     observeLocalCurrency: ObserveLocalCurrencyUseCase,
+    private val spendGuard: PrivateUsdSpendGuard,
 ) : ViewModel() {
     private val deployment = atomicSwapRepository.requireDeployment()
     private val terms = PrivateUsdConvertTerms(deployment)
@@ -72,11 +76,18 @@ class PrivateUsdConvertVM(
             accountDataSource.zashiAccount.map { it?.spendableShieldedBalance },
             balanceRepository.observe(),
             observeLocalCurrency(),
+            spendGuard.state,
             ::ConvertHoldings,
         ).stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-            initialValue = ConvertHoldings(null, balanceRepository.state.value, LocalCurrency.DOLLAR),
+            initialValue =
+                ConvertHoldings(
+                    null,
+                    balanceRepository.state.value,
+                    LocalCurrency.DOLLAR,
+                    spendGuard.state.value,
+                ),
         )
 
     internal val state: StateFlow<PrivateUsdConvertState> =
@@ -125,13 +136,28 @@ class PrivateUsdConvertVM(
                     ?.let { available -> { requestQuote(fillsAmount = true) { zecQuotes.maximum(available.value) } } },
             quote = ready?.let { terms.quote(it, form.phase, now, holdings.currency) },
             isQuoting = form.quote == ConvertQuote.Loading,
-            message = form.message(spendable, now),
+            message =
+                form.message(spendable, now)
+                    ?: holdings.spending.message().takeUnless {
+                        holdings.spending.canStartConversion || form.isConfirming
+                    },
             canSwitchDirection = !form.isConfirming,
             info = terms.info(form.phase),
-            primaryButton = primaryButton(form, form.canGoOn(spendable, now), form.isExpired(now)),
+            primaryButton =
+                primaryButton(form, form.canGoOn(spendable, now), form.isExpired(now)).let {
+                    it.copy(isEnabled = it.isEnabled && holdings.spending.canStartConversion)
+                },
             isBackEnabled = !form.isConfirming,
             pinVerify = pin,
             onBack = ::onBack,
+            isZecBalanceLoading = spendable == null,
+            isUsdBalanceLoading = holdings.balance.isLoading,
+            usdBalanceError =
+                stringRes(R.string.private_usd_load_failed).takeIf {
+                    holdings.balance.refreshFailed &&
+                        holdings.balance.balances == null
+                },
+            onRefreshBalance = { balanceRepository.refresh() },
         )
     }
 
@@ -208,7 +234,9 @@ class PrivateUsdConvertVM(
     }
 
     private fun onReview() {
-        if (form.value.phase == PrivateUsdConvertPhase.AMOUNT && form.value.canGoOn(holdings.value.spendable, now())) {
+        if (spendGuard.state.value.canStartConversion && form.value.phase == PrivateUsdConvertPhase.AMOUNT &&
+            form.value.canGoOn(holdings.value.spendable, now())
+        ) {
             form.update { it.copy(phase = PrivateUsdConvertPhase.REVIEW, error = null) }
         }
     }
@@ -217,7 +245,12 @@ class PrivateUsdConvertVM(
         val current = form.value
         val ready = current.ready ?: return
         val onReview = current.phase == PrivateUsdConvertPhase.REVIEW
-        if (!onReview || current.isConfirming || !current.canGoOn(holdings.value.spendable, now())) return
+        val canConfirm = spendGuard.state.value.canStartConversion && !current.isConfirming
+        if (!onReview || !canConfirm ||
+            !current.canGoOn(holdings.value.spendable, now())
+        ) {
+            return
+        }
         form.update { it.copy(isConfirming = true, error = null) }
         viewModelScope.launch {
             try {

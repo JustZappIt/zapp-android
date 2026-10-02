@@ -19,6 +19,8 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalances
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdConversion
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendStatus
 import co.electriccoin.zcash.ui.common.privateusd.dollars
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
 import co.electriccoin.zcash.ui.common.usecase.NavigateBackToPayUseCase
@@ -28,6 +30,7 @@ import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.ExternalUrl
 import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
+import co.electriccoin.zcash.ui.screen.privateusd.refunds.PrivateUsdRefundsArgs
 import co.electriccoin.zcash.ui.screen.privateusd.send.PrivateUsdSendArgs
 import co.electriccoin.zcash.ui.screen.privateusd.send.PrivateUsdSendMode
 import kotlinx.coroutines.flow.SharingStarted
@@ -47,6 +50,7 @@ class PrivateUsdVM(
     private val activityMapper: PrivateUsdActivityMapper,
     private val navigateBackToPay: NavigateBackToPayUseCase,
     private val navigationRouter: NavigationRouter,
+    private val spendGuard: PrivateUsdSpendGuard,
 ) : ViewModel() {
     private val deployment = atomicSwapRepository.requireDeployment()
 
@@ -56,11 +60,19 @@ class PrivateUsdVM(
             observeConversion(),
             observeActivity(),
             observeLocalCurrency(),
+            spendGuard.state,
             ::createState,
         ).stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-            initialValue = createState(balanceRepository.state.value, null, emptyList(), LocalCurrency.DOLLAR),
+            initialValue =
+                createState(
+                    balanceRepository.state.value,
+                    null,
+                    emptyList(),
+                    LocalCurrency.DOLLAR,
+                    spendGuard.state.value,
+                ),
         )
 
     init {
@@ -73,6 +85,7 @@ class PrivateUsdVM(
         conversion: PrivateUsdConversion?,
         activity: List<PrivateUsdActivityData>,
         currency: LocalCurrency,
+        spending: PrivateUsdSpendStatus,
     ): PrivateUsdState {
         val balances = balance.balances
         return PrivateUsdState(
@@ -90,7 +103,7 @@ class PrivateUsdVM(
             sending =
                 PrivateUsdSendingState(
                     isEnabled =
-                        senders.current != null &&
+                        senders.current != null && spending.canSend &&
                             balances?.assets?.any { it.token.isDollar && it.available.signum() > 0 } == true,
                     onSend = { navigationRouter.forward(PrivateUsdSendArgs(PrivateUsdSendMode.PRIVATE)) },
                     onWithdraw = { navigationRouter.forward(PrivateUsdSendArgs(PrivateUsdSendMode.WITHDRAW)) },
@@ -104,19 +117,27 @@ class PrivateUsdVM(
                         currency = currency,
                         onOpenConversion = ::onOpenConversion,
                         onOpenUrl = { url -> navigationRouter.forward(ExternalUrl(url)) },
+                        onOpenRefunds = ::onOpenRefunds,
                     )
                 },
             info = info(currency),
             convertButton =
-                ButtonState(stringRes(R.string.private_usd_action_convert)) {
+                ButtonState(
+                    stringRes(R.string.private_usd_action_convert),
+                    isEnabled = conversion != null || spending.canStartConversion,
+                ) {
                     navigationRouter.forward(conversion?.progressArgs ?: PrivateUsdConvertArgs)
                 },
             onRefresh = { balanceRepository.refresh() },
             onBack = navigateBackToPay::invoke,
+            refundsButton = ButtonState(stringRes(R.string.refunds_title), onClick = ::onOpenRefunds),
+            spendingNote = spending.message(),
         )
     }
 
     private fun onOpenConversion(conversion: PrivateUsdConversion) = navigationRouter.forward(conversion.progressArgs)
+
+    private fun onOpenRefunds() = navigationRouter.forward(PrivateUsdRefundsArgs)
 
     private fun status(balance: PrivateUsdBalanceState): StringResource? =
         when {

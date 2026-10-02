@@ -293,4 +293,20 @@
     <string name="private_usd_switch_currency">Switch balance currency</string>
     <string name="private_usd_info_send">Send — transfer private USD to another Railgun address. The recipient receives it privately.</string>
     <string name="private_usd_info_withdraw">Withdraw — move private USD to a public Ethereum address. The destination and amount are visible on Ethereum.</string>
+    <string name="private_usd_checking_payments">Checking pending payments…</string>
+    <string name="private_usd_payment_pending">A previous payment is still pending. You can send or convert again once it is confirmed.</string>
+    <string name="private_usd_conversion_pending">A conversion is in progress. Sending will be available when it finishes.</string>
+    <string name="refunds_title">Refunds</string>
+    <string name="refunds_view">View refunds</string>
+    <string name="refunds_subtitle">Refunds from earlier conversions</string>
+    <string name="refunds_info">If a refund could not enter your private balance, recover it here. Railgun screening may delay availability.</string>
+    <string name="refunds_original_amount">Original conversion amount</string>
+    <string name="refunds_empty">No refunded conversions yet.</string>
+    <string name="refunds_checking">Checking refunds…</string>
+    <string name="refunds_available">This refund can be recovered.</string>
+    <string name="refunds_no_recovery">No recovery available right now. Your refund may still be going through Railgun screening.</string>
+    <string name="refunds_recover">Recover refund</string>
+    <string name="refunds_recovering">Recovering your refund…</string>
+    <string name="refunds_check_failed">Couldn\'t check this refund. Refresh to try again.</string>
+    <string name="refunds_recover_failed">Couldn\'t recover this refund. Try again.</string>
 </resources>

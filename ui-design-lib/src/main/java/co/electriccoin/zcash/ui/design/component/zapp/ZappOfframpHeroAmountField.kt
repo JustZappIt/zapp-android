@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -127,7 +128,7 @@ fun ZappOfframpHeroAmountField(
                 },
             )
             balance?.let {
-                val action = it.action
+                val action = it.action.takeUnless { _ -> it.isLoading }
                 Column(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.Center,
@@ -153,16 +154,28 @@ fun ZappOfframpHeroAmountField(
                         style = ZappTheme.typography.caption.copy(color = c.textSubtle, textAlign = TextAlign.End),
                         maxLines = 1,
                     )
-                    BasicText(
-                        text = it.amount,
-                        style =
-                            ZappTheme.typography.caption.copy(
-                                color = if (action != null) c.accentText else c.textMuted,
-                                fontWeight = if (action != null) FontWeight.SemiBold else FontWeight.Medium,
-                                textAlign = TextAlign.End,
-                            ),
-                        maxLines = 1,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.xs)
+                    ) {
+                        if (it.isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(ZappTheme.spacing.md),
+                                color = c.accent,
+                                strokeWidth = 1.dp,
+                            )
+                        }
+                        BasicText(
+                            text = it.amount,
+                            style =
+                                ZappTheme.typography.caption.copy(
+                                    color = if (action != null) c.accentText else c.textMuted,
+                                    fontWeight = if (action != null) FontWeight.SemiBold else FontWeight.Medium,
+                                    textAlign = TextAlign.End,
+                                ),
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }

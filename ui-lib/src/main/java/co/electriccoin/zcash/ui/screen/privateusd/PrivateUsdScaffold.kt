@@ -102,10 +102,11 @@ internal fun PrivateUsdLazyScaffold(
     subtitle: String,
     info: PrivateUsdInfo,
     onBack: () -> Unit,
-    primaryButton: ButtonState,
+    primaryButton: ButtonState? = null,
+    isBackEnabled: Boolean = true,
     content: LazyListScope.() -> Unit,
 ) {
-    PrivateUsdFrame(title, subtitle, info, onBack, PrivateUsdLayout.STANDARD, primaryButton, isBackEnabled = true) {
+    PrivateUsdFrame(title, subtitle, info, onBack, PrivateUsdLayout.STANDARD, primaryButton, isBackEnabled) {
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             contentPadding = PaddingValues(vertical = ZappTheme.spacing.xl),

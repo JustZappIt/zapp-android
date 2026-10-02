@@ -58,7 +58,15 @@ class ReverseSwapStoreImpl(
     override suspend fun save(record: ReverseSwapRecord) =
         lock.withLock {
             val earlier = (store.get() ?: State()).history.filterNot { it.index == record.index || it.isDraft }
-            val history = (earlier + listOfNotNull(record.takeUnless { it.isDraft })).takeLast(MAX_HISTORY)
+            val all = earlier + listOfNotNull(record.takeUnless { it.isDraft })
+            // Refunded conversions may still hold vault funds. Keep their recovery records beyond the activity limit.
+            val recent =
+                all
+                    .filterNot { it.phase == ReversePhase.REFUNDED }
+                    .takeLast(MAX_HISTORY)
+                    .map { it.index }
+                    .toSet()
+            val history = all.filter { it.phase == ReversePhase.REFUNDED || it.index in recent }
             store.set(State(record, history))
         }
 

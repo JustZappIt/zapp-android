@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.common.atomicswap
 
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -61,6 +62,7 @@ internal class ReverseSwapRepositoryImpl(
     private val forward: AtomicSwapRecords,
     scheduler: AtomicSwapScheduler,
     notifier: AtomicSwapNotifier,
+    private val spendGuard: PrivateUsdSpendGuard,
     scope: CoroutineScope = swapScope(),
     private val runner: SwapConversionRunner<ReverseSwapRecord> =
         SwapConversionRunner(
@@ -96,7 +98,7 @@ internal class ReverseSwapRepositoryImpl(
     override suspend fun fund(index: Int) =
         resumingAfter {
             val driver = driverFor(index)
-            sessions.acceptanceLock.withLock { driver.goAhead(index) }
+            spendGuard.startConversion { sessions.acceptanceLock.withLock { driver.goAhead(index) } }
             driver.fund(index)
         }
 

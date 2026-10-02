@@ -139,7 +139,7 @@ internal data class PrivateUsdSendForm(
             when (outcome) {
                 is PrivateUsdSendOutcome.Sent -> outcome.txHash
                 is PrivateUsdSendOutcome.Unconfirmed -> outcome.txHash
-                PrivateUsdSendOutcome.NotSent, null -> null
+                PrivateUsdSendOutcome.NotSent, PrivateUsdSendOutcome.Busy, null -> null
             }
         if (request == null || txHash == null) return null
         return PrivateUsdSendDoneState(

@@ -16,6 +16,8 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendCost
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendOutcome
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSender
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendStatus
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletState
@@ -57,6 +59,7 @@ import kotlin.test.assertTrue
 class PrivateUsdSendVMTest {
     private val token = PrivateUsdTokens.of(RailgunNetwork.SEPOLIA).first { it.isDollar }
     private val balance = MutableStateFlow(balance(AVAILABLE))
+    private val spending = MutableStateFlow(PrivateUsdSpendStatus.AVAILABLE)
     private val sender = mockk<PrivateUsdSender>()
     private val pin = MutableStateFlow<PinVerifyState?>(null)
     private val auth =
@@ -92,7 +95,10 @@ class PrivateUsdSendVMTest {
                 swaps,
                 rates,
                 auth,
-                mockk(relaxed = true)
+                mockk(relaxed = true),
+                mockk<PrivateUsdSpendGuard> {
+                    every { state } returns spending
+                }
             )
     }
 
@@ -101,6 +107,27 @@ class PrivateUsdSendVMTest {
         vm.viewModelScope.cancel()
         Dispatchers.resetMain()
     }
+
+    @Test
+    fun `an unresolved payment disables confirmation even through a previously captured callback`() =
+        runTest {
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
+            review()
+            val confirm = vm.state.value.primaryButton.onClick
+
+            spending.value = PrivateUsdSpendStatus.SENDING
+            assertFalse(vm.state.value.primaryButton.isEnabled)
+            assertNotNull(vm.state.value.error)
+            confirm()
+            coVerify(exactly = 0) { auth.authenticate(any(), any()) }
+            coVerify(exactly = 0) { sender.send(any()) }
+
+            spending.value = PrivateUsdSpendStatus.AVAILABLE
+            assertTrue(vm.state.value.primaryButton.isEnabled)
+            assertNull(vm.state.value.error)
+            confirm()
+            coVerify(exactly = 1) { sender.send(any()) }
+        }
 
     @Test
     fun `repeated confirmation taps authorize and send only once`() =

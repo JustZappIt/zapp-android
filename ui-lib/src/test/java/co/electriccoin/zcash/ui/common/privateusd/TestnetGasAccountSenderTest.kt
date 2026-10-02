@@ -3,9 +3,12 @@
 
 package co.electriccoin.zcash.ui.common.privateusd
 
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapStoreImpl
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapStoreImpl
 import co.electriccoin.zcash.ui.common.provider.InMemoryPreferenceProvider
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -119,6 +122,35 @@ class TestnetGasAccountSenderTest {
         }
 
     @Test
+    fun `an unresolved send blocks another before proof generation even with a new sender`() =
+        runTest {
+            signsThen { GasAccountDelivery.UNCONFIRMED }
+            val first = sender()
+            assertEquals(PrivateUsdSendOutcome.Unconfirmed(TX_HASH), first.send(WITHDRAWAL))
+
+            assertEquals(PrivateUsdSendOutcome.Busy, sender().send(WITHDRAWAL))
+            coVerify(exactly = 1) { wallet.sign(any()) }
+        }
+
+    @Test
+    fun `two callers cannot generate overlapping proofs`() =
+        runTest {
+            val complete = CompletableDeferred<Unit>()
+            signsThen {
+                complete.await()
+                GasAccountDelivery.CONFIRMED
+            }
+            val sender = sender()
+            val first = launch { sender.send(WITHDRAWAL) }
+            runCurrent()
+
+            assertEquals(PrivateUsdSendOutcome.Busy, sender.send(WITHDRAWAL))
+            coVerify(exactly = 1) { wallet.sign(any()) }
+            complete.complete(Unit)
+            first.join()
+        }
+
+    @Test
     fun `only a withdrawal pays railgun's unshield fee`() =
         runTest {
             coEvery { wallet.fees() } returns RailgunFees(shieldBasisPoints = 25, unshieldBasisPoints = 25)
@@ -127,7 +159,17 @@ class TestnetGasAccountSenderTest {
             assertEquals(PrivateUsdSendCost(BigInteger.ZERO, 0), sender().cost(WITHDRAWAL.copy(to = PRIVATE)))
         }
 
-    private fun TestScope.sender() = TestnetGasAccountSender(wallet, transactions, log, backgroundScope, CLOCK)
+    private fun TestScope.sender(): TestnetGasAccountSender {
+        val preferences = InMemoryPreferenceProvider().encrypted()
+        val guard =
+            PrivateUsdSpendGuard(
+                log,
+                AtomicSwapStoreImpl(preferences),
+                ReverseSwapStoreImpl(preferences),
+                backgroundScope,
+            )
+        return TestnetGasAccountSender(wallet, transactions, log, backgroundScope, CLOCK, guard)
+    }
 
     private fun signsThen(delivery: suspend () -> GasAccountDelivery) {
         coEvery { wallet.sign(any()) } returns SIGNED

@@ -6,6 +6,7 @@ package co.electriccoin.zcash.ui.common.atomicswap
 import cash.z.ecc.android.sdk.exception.SdkException
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
@@ -78,6 +79,7 @@ internal class AtomicSwapRepositoryImpl(
     private val zcash: AtomicSwapZcashInfo,
     private val scheduler: AtomicSwapScheduler,
     notifier: AtomicSwapNotifier,
+    private val spendGuard: PrivateUsdSpendGuard,
     scope: CoroutineScope = swapScope(),
     private val driverLock: Mutex = Mutex(),
     private val payouts: AtomicSwapPayouts = AtomicSwapPayouts(sessions, store, scope),
@@ -122,9 +124,11 @@ internal class AtomicSwapRepositoryImpl(
     override suspend fun accept(offer: AtomicSwapOffer): AtomicSwapRecord {
         val session = sessions.session
         try {
-            return sessions.acceptanceLock.withLock {
-                reverse.requireNotUnderWay()
-                driverLock.withLock { sessions.forward(checkNotNull(deployment), session).accept(offer) }
+            return spendGuard.startConversion {
+                sessions.acceptanceLock.withLock {
+                    reverse.requireNotUnderWay()
+                    driverLock.withLock { sessions.forward(checkNotNull(deployment), session).accept(offer) }
+                }
             }
         } finally {
             // An accept cut short may still have opened the swap: the loop finds out, unless the wallet was reset.

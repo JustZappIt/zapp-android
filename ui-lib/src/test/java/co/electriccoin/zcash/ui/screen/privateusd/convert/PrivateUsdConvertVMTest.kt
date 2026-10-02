@@ -18,6 +18,9 @@ import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.common.privateusd.ObserveLocalCurrencyUseCase
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalances
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendStatus
 import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
 import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
@@ -58,6 +61,7 @@ import java.io.IOException
 import java.math.BigDecimal
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
@@ -80,6 +84,8 @@ class PrivateUsdConvertVMTest {
     private val navigation = mockk<NavigationRouter>(relaxed = true)
     private val spendable = MutableStateFlow(Zatoshi(ONE_ZEC))
     private val currency = MutableStateFlow(LocalCurrency.DOLLAR)
+    private val privateBalance = MutableStateFlow(PrivateUsdBalanceState())
+    private val spending = MutableStateFlow(PrivateUsdSpendStatus.AVAILABLE)
     private lateinit var vm: PrivateUsdConvertVM
 
     @After
@@ -236,6 +242,49 @@ class PrivateUsdConvertVMTest {
         }
 
     @Test
+    fun `the conversion being accepted shows progress without an earlier payment error`() =
+        runTest {
+            start()
+            type("0.5")
+            vm.state.value.primaryButton
+                .onClick()
+            val accepted = CompletableDeferred<Unit>()
+            coEvery { swaps.accept(any()) } coAnswers {
+                spending.value = PrivateUsdSpendStatus.CONVERTING
+                accepted.await()
+                mockk(relaxed = true)
+            }
+
+            vm.state.value.primaryButton
+                .onClick()
+            assertTrue(vm.state.value.primaryButton.isLoading)
+            assertFalse(vm.state.value.primaryButton.isEnabled)
+            assertNull(vm.state.value.message)
+            spending.value = PrivateUsdSpendStatus.SENDING
+            assertNull(vm.state.value.message)
+
+            accepted.complete(Unit)
+            runCurrent()
+            coVerify(exactly = 1) { swaps.accept(any()) }
+            verify { navigation.replace(PrivateUsdProgressArgs) }
+        }
+
+    @Test
+    fun `an earlier unresolved send still blocks starting a conversion`() =
+        runTest {
+            start()
+            type("0.5")
+            val review = vm.state.value.primaryButton.onClick
+            spending.value = PrivateUsdSpendStatus.SENDING
+
+            assertFalse(vm.state.value.primaryButton.isEnabled)
+            assertEquals(stringRes(R.string.private_usd_payment_pending), vm.state.value.message)
+            review()
+            assertEquals(PrivateUsdConvertPhase.AMOUNT, vm.state.value.phase)
+            coVerify(exactly = 0) { swaps.accept(any()) }
+        }
+
+    @Test
     fun `nothing is accepted until the app lock says so`() =
         runTest {
             start()
@@ -258,6 +307,28 @@ class PrivateUsdConvertVMTest {
             verify { navigation.replace(PrivateUsdProgressArgs) }
         }
 
+    @Test
+    fun `unknown balances load visibly while cached balances stay visible during refresh`() =
+        runTest {
+            start()
+            assertTrue(vm.state.value.isUsdBalanceLoading)
+            privateBalance.value =
+                PrivateUsdBalanceState(balances = PrivateUsdBalances(emptyList()), isRefreshing = true)
+            assertFalse(vm.state.value.isUsdBalanceLoading)
+            assertNotNull(vm.state.value.usdAvailable)
+        }
+
+    @Test
+    fun `a failed first balance load stops loading and offers an error`() =
+        runTest {
+            start()
+            privateBalance.value = PrivateUsdBalanceState(refreshFailed = true)
+            assertFalse(vm.state.value.isUsdBalanceLoading)
+            assertEquals(stringRes(R.string.private_usd_load_failed), vm.state.value.usdBalanceError)
+            privateBalance.value = privateBalance.value.copy(isRefreshing = true)
+            assertTrue(vm.state.value.isUsdBalanceLoading)
+        }
+
     private fun TestScope.start() {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val accounts =
@@ -267,8 +338,8 @@ class PrivateUsdConvertVMTest {
             }
         val balances =
             mockk<PrivateUsdBalanceRepository> {
-                every { state } returns MutableStateFlow(PrivateUsdBalanceState())
-                every { observe() } returns MutableStateFlow(PrivateUsdBalanceState())
+                every { state } returns privateBalance
+                every { observe() } returns privateBalance
             }
         val localCurrency = mockk<ObserveLocalCurrencyUseCase>()
         every { localCurrency() } returns currency
@@ -280,6 +351,10 @@ class PrivateUsdConvertVMTest {
                 navigationRouter = navigation,
                 navigateBackToPay = mockk(relaxed = true),
                 accountDataSource = accounts,
+                spendGuard =
+                    mockk<PrivateUsdSpendGuard> {
+                        every { state } returns spending
+                    },
                 balanceRepository = balances,
                 observeLocalCurrency = localCurrency,
             )

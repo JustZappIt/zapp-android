@@ -23,7 +23,7 @@ enum class GasAccountDelivery {
     /** Sent, or maybe sent, and not in a block yet: it may still land, so it's kept to send again. */
     UNCONFIRMED,
 
-    /** Refused, reverted, or overtaken by another transaction of the gas account: nothing moved. */
+    /** Reverted on chain: nothing moved. */
     FAILED,
 }
 
@@ -40,7 +40,7 @@ class GasAccountTransactions(
         return withTimeoutOrNull(CONFIRM_TIMEOUT) { awaitBlock(txHash) } ?: GasAccountDelivery.UNCONFIRMED
     }
 
-    /** One the node lost is sent again while [nonce] is free, and failed once a mined transaction took it. */
+    /** One the node lost is sent again while [nonce] is free; only its receipt settles it. */
     suspend fun reconcile(
         raw: String,
         txHash: TxHash,
@@ -52,7 +52,7 @@ class GasAccountTransactions(
         val status = rpc.statusOf(txHash)
         return when {
             status != TransactionStatus.UNKNOWN -> status.delivery()
-            isNonceTaken -> GasAccountDelivery.FAILED
+            isNonceTaken -> GasAccountDelivery.UNCONFIRMED
             else -> send(raw, txHash) ?: GasAccountDelivery.UNCONFIRMED
         }
     }
@@ -60,7 +60,7 @@ class GasAccountTransactions(
     /** Where a send an earlier build logged without its transaction stands; it can't be sent again. */
     suspend fun statusOf(txHash: TxHash): GasAccountDelivery = rpc.statusOf(txHash).delivery()
 
-    // Null once the node has it; a refusal the node gave while not knowing it means it never will.
+    // A node's error is not proof of rejection: another node may already have accepted the transaction.
     private suspend fun send(
         raw: String,
         txHash: TxHash
@@ -75,8 +75,8 @@ class GasAccountTransactions(
             Twig.warn(e) { "Private USD: $txHash wasn't taken yet" }
             GasAccountDelivery.UNCONFIRMED
         } catch (e: RpcException) {
-            Twig.warn(e) { "Private USD: $txHash was refused" }
-            GasAccountDelivery.FAILED
+            Twig.warn(e) { "Private USD: $txHash's broadcast is unresolved" }
+            GasAccountDelivery.UNCONFIRMED
         }
 
     private suspend fun awaitBlock(txHash: TxHash): GasAccountDelivery {

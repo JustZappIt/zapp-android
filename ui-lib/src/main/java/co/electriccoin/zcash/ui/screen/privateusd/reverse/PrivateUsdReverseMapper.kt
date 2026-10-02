@@ -29,7 +29,7 @@ internal interface PrivateUsdReverseActions {
 
     fun cancel(index: Int)
 
-    fun rescue(index: Int)
+    fun refunds()
 
     fun newQuote()
 
@@ -91,7 +91,7 @@ internal class PrivateUsdReverseMapper(
             record = record,
             paid = terms.format(record.debit, currency),
             received = stringRes(Zatoshi(record.receivedZat())),
-            callOff = callOff(record, form, conversion.rescuable),
+            callOff = callOff(record, form, conversion.hasRefunds),
             problem =
                 conversion.swap.problem
                     ?.takeIf { record.underWay }
@@ -103,8 +103,6 @@ internal class PrivateUsdReverseMapper(
             isBackEnabled = form.isBackEnabled,
             onBack = actions::back,
         )
-
-    fun rescue(index: Int) = ButtonState(stringRes(R.string.reverse_rescue)) { actions.rescue(index) }
 
     private fun preview(
         record: ReverseSwapRecord?,
@@ -161,7 +159,7 @@ internal class PrivateUsdReverseMapper(
     private fun callOff(
         record: ReverseSwapRecord,
         form: ReverseForm,
-        rescuable: Int?,
+        hasRefunds: Boolean,
     ): ButtonState? =
         when {
             !form.canAct -> {
@@ -172,8 +170,8 @@ internal class PrivateUsdReverseMapper(
                 ButtonState(stringRes(R.string.reverse_cancel)) { actions.cancel(record.index) }
             }
 
-            record.status == ReverseSwapStatus.Over(ReverseSwapResult.REFUNDED) && rescuable == record.index -> {
-                rescue(record.index)
+            record.status == ReverseSwapStatus.Over(ReverseSwapResult.REFUNDED) && hasRefunds -> {
+                ButtonState(stringRes(R.string.refunds_view), onClick = actions::refunds)
             }
 
             else -> {

@@ -68,6 +68,10 @@ private fun Amount(
         currencySymbol = state.currencySymbol,
         zecAvailable = state.zecAvailable,
         usdAvailable = state.usdAvailable,
+        isZecBalanceLoading = state.isZecBalanceLoading,
+        isUsdBalanceLoading = state.isUsdBalanceLoading,
+        usdBalanceError = state.usdBalanceError,
+        onRefreshBalance = state.onRefreshBalance,
         onMax = state.onMax,
         onSwitchDirection = onSwitchDirection,
     )
