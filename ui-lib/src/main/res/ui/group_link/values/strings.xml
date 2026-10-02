@@ -34,7 +34,7 @@
     <string name="group_link_qr_content_description">QR code for the invite link</string>
     <string name="group_link_reset">Reset link</string>
     <string name="group_link_reset_title">Reset this link?</string>
-    <string name="group_link_reset_body">The old link will stop working. Anyone who has it will need the new one.</string>
+    <string name="group_link_reset_body">The old link will stop working. Anyone who has it will need the new one. Resetting more than four times clears older pending requests.</string>
     <string name="group_link_reset_confirm">Reset</string>
     <string name="group_link_cancel">Cancel</string>
     <string name="group_link_turn_off">Turn off link</string>

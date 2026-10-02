@@ -28,7 +28,7 @@ env:
   # are unavailable. The mirror's history is squashed, so this commit id is its own
   # and will not match one in the repository it is published from. Keep it in step
   # with .zapp-deps; verify_composite_build fails when the two disagree.
-  ZAPP_MESSAGING_REF: 1d914e08721cc81cc617ba44f4965e5c2a475c24
+  ZAPP_MESSAGING_REF: 58f3cc72792d5efe663ebb4fd397f845dfcec2ac
   BARE_KIT_REF: 15a3569f3d704de7151761051c8d9cc2e299414f
 
 jobs:

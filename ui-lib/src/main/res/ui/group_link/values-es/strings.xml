@@ -34,7 +34,7 @@
     <string name="group_link_qr_content_description">Código QR del enlace de invitación</string>
     <string name="group_link_reset">Restablecer enlace</string>
     <string name="group_link_reset_title">¿Restablecer este enlace?</string>
-    <string name="group_link_reset_body">El enlace anterior dejará de funcionar. Quien lo tenga necesitará el nuevo.</string>
+    <string name="group_link_reset_body">El enlace anterior dejará de funcionar. Quien lo tenga necesitará el nuevo. Restablecerlo más de cuatro veces elimina las solicitudes pendientes más antiguas.</string>
     <string name="group_link_reset_confirm">Restablecer</string>
     <string name="group_link_cancel">Cancelar</string>
     <string name="group_link_turn_off">Desactivar enlace</string>

@@ -8,8 +8,6 @@ import androidx.lifecycle.viewModelScope
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.common.CopyFeedback
-import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShareGroupLinkUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
@@ -43,7 +41,6 @@ class GroupLinkVM(
     private val groupLinks: GroupLinkRepository,
     private val conversations: ChatConversationsRepository,
     private val contacts: ChatContactsRepository,
-    private val copyToClipboard: CopyToClipboardUseCase,
     private val shareGroupLink: ShareGroupLinkUseCase,
     private val navigationRouter: NavigationRouter,
     private val now: () -> Long = System::currentTimeMillis,
@@ -51,7 +48,6 @@ class GroupLinkVM(
     private val info = MutableStateFlow<ZMGroupLinkInfo?>(null)
     private val ui = MutableStateFlow(GroupLinkUi())
     private val requests = MutableStateFlow<List<ZMGroupJoinApprovalRequest>>(emptyList())
-    private val copyFeedback = CopyFeedback(viewModelScope)
 
     private val waiting: Flow<List<PendingRequest>> =
         combine(requests, contacts.contacts) { pending, saved ->
@@ -64,15 +60,14 @@ class GroupLinkVM(
         combine(
             info,
             ui,
-            copyFeedback.copiedValue,
             conversations.conversation(args.conversationId),
             waiting,
-        ) { link, ui, copied, conversation, pending ->
-            createState(link, ui, copied, conversation, pending)
+        ) { link, ui, conversation, pending ->
+            createState(link, ui, conversation, pending)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-            initialValue = createState(null, GroupLinkUi(), null, null, emptyList()),
+            initialValue = createState(null, GroupLinkUi(), null, emptyList()),
         )
 
     init {
@@ -113,6 +108,7 @@ class GroupLinkVM(
                 .onSuccess {
                     info.value = it
                     ui.update { current -> current.copy(isBusy = false) }
+                    loadRequests()
                 }.onFailure {
                     ui.update { current -> current.copy(isBusy = false, failed = true) }
                 }
@@ -183,11 +179,6 @@ class GroupLinkVM(
         }
     }
 
-    private fun onCopyClick(link: String) {
-        copyToClipboard(link, isSensitive = true)
-        copyFeedback.mark(link)
-    }
-
     private fun onShareClick(link: String) {
         if (!shareGroupLink(link)) ui.update { it.copy(failed = true) }
     }
@@ -203,7 +194,6 @@ class GroupLinkVM(
     private fun createState(
         link: ZMGroupLinkInfo?,
         ui: GroupLinkUi,
-        copied: String?,
         conversation: ChatConversation?,
         pending: List<PendingRequest>,
     ): GroupLinkState {
@@ -231,7 +221,7 @@ class GroupLinkVM(
             isLoading = link == null && !ui.failed,
             card =
                 link?.link?.takeIf { isActive }?.let { value ->
-                    GroupLinkCardState(link = value, isCopied = copied == value, onCopyClick = { onCopyClick(value) })
+                    GroupLinkCardState(link = value)
                 },
             warning = stringRes(R.string.group_link_warning).takeIf { isActive },
             historyNote = stringRes(R.string.group_link_history_note).takeIf { link != null },
@@ -244,6 +234,10 @@ class GroupLinkVM(
             picker = ui.picker?.let { picker(it, link) },
             confirmation = if (ui.isConfirmingReset) resetConfirmation() else null,
             onBack = ::onBack,
+            share =
+                link?.link?.takeIf { isActive }?.let { value ->
+                    action(R.string.group_link_share, ZappButtonVariant.Primary, !ui.isBusy) { onShareClick(value) }
+                },
         )
     }
 
@@ -293,7 +287,6 @@ class GroupLinkVM(
         val value = link.link
         return if (link.state == ZMGroupLinkState.ACTIVE && value != null) {
             listOf(
-                action(R.string.group_link_share, ZappButtonVariant.Primary, enabled) { onShareClick(value) },
                 action(R.string.group_link_reset, ZappButtonVariant.Ghost, enabled, ::onResetClick),
                 action(R.string.group_link_turn_off, ZappButtonVariant.Ghost, enabled, ::onTurnOffClick),
             )
@@ -397,11 +390,6 @@ class GroupLinkVM(
     private fun pickedExpiry(expiresAt: Long?): Long? {
         val remaining = expiresAt?.minus(now()) ?: return null
         return EXPIRY_CHOICES.filterNotNull().firstOrNull { remaining in 1..it * DAY_MS } ?: NO_PRESET
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        copyFeedback.cancel()
     }
 
     private data class PendingRequest(

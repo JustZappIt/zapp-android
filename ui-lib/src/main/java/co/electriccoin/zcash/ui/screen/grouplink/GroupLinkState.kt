@@ -23,12 +23,11 @@ data class GroupLinkState(
     val picker: GroupLinkPickerState?,
     val confirmation: ZappConfirmationState?,
     val onBack: () -> Unit,
+    val share: GroupLinkActionState? = null,
 )
 
 data class GroupLinkCardState(
     val link: String,
-    val isCopied: Boolean,
-    val onCopyClick: () -> Unit,
 )
 
 data class GroupLinkActionState(

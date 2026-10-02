@@ -5,7 +5,6 @@ package co.electriccoin.zcash.ui.screen.grouplink
 
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShareGroupLinkUseCase
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.screen.chat.model.ChatContact
@@ -58,7 +57,6 @@ class GroupLinkVMTest {
         mockk<ChatContactsRepository>(relaxed = true) {
             every { contacts } returns savedContacts
         }
-    private val copyToClipboard = mockk<CopyToClipboardUseCase>(relaxed = true)
     private val share = mockk<ShareGroupLinkUseCase>(relaxed = true)
     private val router = mockk<NavigationRouter>(relaxed = true)
 
@@ -70,7 +68,6 @@ class GroupLinkVMTest {
                 groupLinks = groupLinks,
                 conversations = conversations,
                 contacts = contacts,
-                copyToClipboard = copyToClipboard,
                 shareGroupLink = share,
                 navigationRouter = router,
                 now = { NOW },
@@ -101,7 +98,6 @@ class GroupLinkVMTest {
             )
             assertEquals(
                 listOf(
-                    R.string.group_link_share,
                     R.string.group_link_reset,
                     R.string.group_link_turn_off,
                 ),
@@ -333,25 +329,10 @@ class GroupLinkVMTest {
         }
 
     @Test
-    fun `copying hands the clipboard a sensitive value and marks the card`() =
-        runTest {
-            val vm = open()
-            vm.state.value.card!!
-                .onCopyClick()
-            runCurrent()
-            verify { copyToClipboard(LINK, isSensitive = true) }
-            assertTrue(
-                vm.state.value.card!!
-                    .isCopied
-            )
-        }
-
-    @Test
     fun `sharing opens the sheet with the link alone`() =
         runTest {
             val vm = open()
-            vm.state.value.actions
-                .first { it.text.res() == R.string.group_link_share }
+            vm.state.value.share!!
                 .onClick()
             verify { share(LINK) }
         }

@@ -25,8 +25,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
@@ -51,7 +49,6 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappCompactButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationBottomSheet
-import co.electriccoin.zcash.ui.design.component.zapp.ZappCopyIconButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappGroupHeader
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRow
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRowDivider
@@ -59,7 +56,6 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSelectionRow
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStatusChip
 import co.electriccoin.zcash.ui.design.component.zapp.ZappToggle
-import co.electriccoin.zcash.ui.design.component.zapp.ZappValueCard
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
@@ -103,7 +99,7 @@ internal fun GroupLinkView(
                 )
             }
 
-            state.card?.let { LinkCard(it) }
+            state.card?.let { LinkQrCode(it, Modifier.align(Alignment.CenterHorizontally)) }
             state.warning?.let { Note(text = it.getValue(), style = t.body, color = c.text) }
             state.historyNote?.let { Note(text = it.getValue(), style = t.caption, color = c.textMuted) }
             state.notice?.let { Note(text = it.getValue(), style = t.caption, color = c.textMuted) }
@@ -129,7 +125,7 @@ internal fun GroupLinkView(
             Spacer(Modifier.height(8.dp))
         }
 
-        ZappBottomActionBar(onBack = state.onBack)
+        GroupLinkActions(state)
     }
 
     state.picker?.let { PickerSheet(it) }
@@ -137,39 +133,37 @@ internal fun GroupLinkView(
 }
 
 @Composable
-private fun LinkCard(card: GroupLinkCardState) {
-    val copyLabel = stringResource(R.string.group_link_copy)
-    ZappValueCard(
-        value = card.link,
-        leading = { LinkQrCode(card) },
-        trailing = {
-            ZappCopyIconButton(
-                isCopied = card.isCopied,
-                contentDescription = copyLabel,
-                onClick = card.onCopyClick,
-            )
-        },
+private fun GroupLinkActions(state: GroupLinkState) {
+    ZappBottomActionBar(
+        onBack = state.onBack,
+        primaryAction =
+            state.share?.let { action ->
+                {
+                    ZappButton(
+                        text = action.text.getValue(),
+                        enabled = action.isEnabled,
+                        modifier = Modifier.weight(1f).padding(start = ZappTheme.spacing.lg),
+                        onClick = action.onClick,
+                    )
+                }
+            },
     )
 }
 
 @Composable
-private fun LinkQrCode(card: GroupLinkCardState) {
+private fun LinkQrCode(
+    card: GroupLinkCardState,
+    modifier: Modifier = Modifier,
+) {
     ZashiQr(
         state =
             QrState(
                 qrData = card.link,
                 contentDescription = stringRes(R.string.group_link_qr_content_description),
             ),
-        modifier = Modifier.semantics { role = Role.Button },
-        qrSize = 72.dp,
+        modifier = modifier.semantics { role = Role.Button },
+        qrSize = 240.dp,
         contentPadding = PaddingValues(0.dp),
-        fullscreenAction = {
-            ZappButton(
-                text = stringResource(R.string.group_link_copy),
-                leadingIcon = Icons.Default.ContentCopy,
-                onClick = card.onCopyClick,
-            )
-        },
     )
 }
 
@@ -307,17 +301,13 @@ private fun GroupLinkPreview() =
                     card =
                         GroupLinkCardState(
                             link = "https://join.justzappit.xyz/g/v1/AQEAAAAAAAAAAAAAAAAAAAAAAAAA",
-                            isCopied = false,
-                            onCopyClick = {},
                         ),
                     warning = stringRes(R.string.group_link_warning),
                     historyNote = stringRes(R.string.group_link_history_note),
                     notice = null,
                     error = null,
-                    actions =
-                        listOf(
-                            GroupLinkActionState(stringRes(R.string.group_link_share), ZappButtonVariant.Primary) {},
-                        ),
+                    actions = emptyList(),
+                    share = GroupLinkActionState(stringRes(R.string.group_link_share), ZappButtonVariant.Primary) {},
                     requests =
                         listOf(
                             GroupLinkRequestState(

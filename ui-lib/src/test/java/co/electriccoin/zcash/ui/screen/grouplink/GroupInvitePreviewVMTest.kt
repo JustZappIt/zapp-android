@@ -216,6 +216,25 @@ class GroupInvitePreviewVMTest {
             assertTrue(groupLinks.joins == 0)
         }
 
+    @Test
+    fun `a removed member can request to rejoin when the SDK no longer reports joined`() =
+        runTest {
+            // The SDK filters completed requests whose conversation is no longer live.
+            groupLinks.status = emptyList()
+            groupLinks.joinResult = requested()
+            val vm = open()
+            assertEquals(
+                R.string.group_invite_title_named,
+                vm.title(),
+                "a removed member should get the Join group preview",
+            )
+            assertNotNull(store.newest(), "keep the bearer link so a fresh join can be sent")
+            vm.state.value.primary!!
+                .onClick()
+            advanceUntilIdle()
+            assertEquals(1, groupLinks.joins)
+        }
+
     private class FakeGroupLinks : GroupJoinRepository {
         val updates = MutableSharedFlow<ZMGroupJoinUpdate>()
         var inspection = ZMGroupLinkInspection(ZMGroupLinkInspectStatus.OK, nameHint = "Hiking Crew", linkId = LINK_ID)
