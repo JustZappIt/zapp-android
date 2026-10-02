@@ -17,6 +17,7 @@ import xyz.justzappit.offramp.atomicswap.AtomicSwapBlock
 import xyz.justzappit.offramp.atomicswap.AtomicSwapBlockedException
 import xyz.justzappit.offramp.atomicswap.AtomicSwapHttpException
 import xyz.justzappit.offramp.atomicswap.AtomicSwapService
+import xyz.justzappit.offramp.atomicswap.ReverseRefundUnavailableException
 import java.io.IOException
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -37,6 +38,7 @@ internal enum class PrivateUsdFailure(
     FUNDING_COST_CHANGED(R.string.reverse_error_cost_changed),
     TOO_LATE(R.string.reverse_error_too_late),
     PAYMENT_PENDING(R.string.private_usd_payment_pending),
+    REFUND_UNAVAILABLE(R.string.reverse_refund_unavailable),
 
     /** Another conversion is under way: its screen is the place to be. */
     SWAP_UNDER_WAY(null),
@@ -49,6 +51,7 @@ internal enum class PrivateUsdFailure(
 
 internal fun Throwable.toFailure(): PrivateUsdFailure =
     when (this) {
+        is ReverseRefundUnavailableException -> PrivateUsdFailure.REFUND_UNAVAILABLE
         is PrivateUsdSpendBlockedException -> PrivateUsdFailure.PAYMENT_PENDING
         is ZecInputQuoteException -> PrivateUsdFailure.NO_QUOTE_FITS
         is AtomicSwapBlockedException -> reason.toFailure()

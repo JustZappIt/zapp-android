@@ -58,12 +58,14 @@ import xyz.justzappit.offramp.atomicswap.AtomicSwapBlockedException
 import xyz.justzappit.offramp.atomicswap.JointAccountId
 import xyz.justzappit.offramp.atomicswap.ReversePhase
 import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
+import xyz.justzappit.offramp.atomicswap.SwapAuthorization
 import xyz.justzappit.offramp.p2p.Usdc6
 import java.io.IOException
 import java.math.BigDecimal
 import java.math.BigInteger
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
@@ -164,6 +166,162 @@ class PrivateUsdReverseVMTest {
             funded.complete(Unit)
             runCurrent()
             coVerify(exactly = 1) { repository.fund(any()) }
+        }
+
+    @Test
+    fun `a refund can interrupt funding proof once its authorization is complete`() =
+        runTest {
+            conversion.value = ReverseSwapState(record(ReversePhase.AWAITING_FUNDING))
+            val funding = CompletableDeferred<Unit>()
+            val stopped = CompletableDeferred<Unit>()
+            coEvery { repository.fund(any()) } coAnswers {
+                try {
+                    funding.await()
+                } finally {
+                    stopped.complete(Unit)
+                }
+            }
+            coEvery { repository.cancel(any()) } coAnswers {
+                conversion.value =
+                    ReverseSwapState(record(ReversePhase.REFUND_WAIT).copy(cancelRequested = true))
+            }
+            start()
+            checkNotNull(vm.state.value.primary).onClick()
+            val cancel =
+                checkNotNull(
+                    vm.state.value.progress
+                        ?.callOff
+                ).onClick
+            val authorized = CompletableDeferred<Boolean>()
+            coEvery { auth.authenticate(any(), any()) } coAnswers { authorized.await() }
+
+            cancel()
+            cancel()
+            assertTrue(
+                checkNotNull(
+                    vm.state.value.progress
+                        ?.callOff
+                ).isLoading
+            )
+            assertFalse(
+                checkNotNull(
+                    vm.state.value.progress
+                        ?.callOff
+                ).isEnabled
+            )
+            coVerify(exactly = 0) { repository.cancel(any()) }
+            authorized.complete(true)
+            runCurrent()
+
+            coVerify(exactly = 1) { repository.cancel(3) }
+            assertTrue(stopped.isCompleted)
+            assertNull(vm.state.value.error)
+            assertNull(
+                vm.state.value.progress
+                    ?.callOff
+            )
+            assertEquals(
+                stringRes(R.string.reverse_refund_requested),
+                vm.state.value.progress
+                    ?.note
+            )
+            assertTrue(vm.state.value.isBackEnabled)
+        }
+
+    @Test
+    fun `refund is not exposed while the funding authorization itself is pending`() =
+        runTest {
+            conversion.value = ReverseSwapState(record(ReversePhase.AWAITING_FUNDING))
+            val authorized = CompletableDeferred<Boolean>()
+            coEvery { auth.authenticate(any(), any()) } coAnswers { authorized.await() }
+            start()
+
+            checkNotNull(vm.state.value.primary).onClick()
+            assertNull(
+                vm.state.value.progress
+                    ?.callOff
+            )
+            authorized.complete(false)
+            runCurrent()
+            assertNotNull(
+                vm.state.value.progress
+                    ?.callOff
+            )
+            coVerify(exactly = 0) { repository.fund(any()) }
+        }
+
+    @Test
+    fun `a recorded refund request stays acknowledged when its first network attempt fails`() =
+        runTest {
+            conversion.value = ReverseSwapState(record(ReversePhase.RECEIVING_ZEC))
+            coEvery { repository.cancel(any()) } coAnswers {
+                conversion.value =
+                    ReverseSwapState(record(ReversePhase.REFUND_WAIT).copy(cancelRequested = true))
+                throw IOException("offline after recording the refund request")
+            }
+            start()
+
+            checkNotNull(
+                vm.state.value.progress
+                    ?.callOff
+            ).onClick()
+            runCurrent()
+            assertNull(vm.state.value.error)
+            assertNull(
+                vm.state.value.progress
+                    ?.callOff
+            )
+            assertEquals(
+                stringRes(R.string.reverse_refund_requested),
+                vm.state.value.progress
+                    ?.note
+            )
+            coVerify(exactly = 1) { repository.cancel(3) }
+        }
+
+    @Test
+    fun `a previously visible refund callback cannot silently request a refund after settlement`() =
+        runTest {
+            conversion.value = ReverseSwapState(record(ReversePhase.RECEIVING_ZEC))
+            start()
+            val cancel =
+                checkNotNull(
+                    vm.state.value.progress
+                        ?.callOff
+                ).onClick
+            conversion.value = ReverseSwapState(record(ReversePhase.RECEIVING))
+
+            assertNull(
+                vm.state.value.progress
+                    ?.callOff
+            )
+            cancel()
+            assertEquals(stringRes(R.string.reverse_refund_unavailable), vm.state.value.error)
+            coVerify(exactly = 0) { auth.authenticate(any(), any()) }
+            coVerify(exactly = 0) { repository.cancel(any()) }
+        }
+
+    @Test
+    fun `a requested refund after authorization explains its deadline instead of offering another request`() =
+        runTest {
+            conversion.value =
+                ReverseSwapState(
+                    record(ReversePhase.REFUND_WAIT).copy(
+                        ready = mockk<SwapAuthorization>(),
+                        cancelRequested = true,
+                    )
+                )
+            start()
+
+            assertNull(
+                vm.state.value.progress
+                    ?.callOff
+            )
+            assertNotNull(
+                vm.state.value.progress
+                    ?.note
+            )
+            assertEquals(ReversePhase.REFUND_WAIT, conversion.value.record?.phase)
         }
 
     @Test

@@ -3,13 +3,14 @@
 
 package xyz.justzappit.offramp.atomicswap
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import xyz.justzappit.evm.rpc.TransactionStatus
 import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.time.Clock
 
-/** Its lock covers reading, deciding on and saving a record, never the network, so a cancel never waits behind it. */
+/** Serializes record changes; funding proofs and transaction submission run outside the lock. */
 class ReverseSwapDriver(
     private val deployment: SwapDeployment,
     private val maker: SwapMaker,
@@ -150,12 +151,25 @@ class ReverseSwapDriver(
         val isCalledOff =
             lock.withLock {
                 val record = records.current(index)
-                if (!record.finished) {
-                    store.keep(record, record.copy(cancelRequested = true, phase = ReversePhase.REFUND_WAIT))
+                record.requireRefundPossible()
+                if (!record.finished && !record.cancelRequested) {
+                    val phase =
+                        if (record.phase == ReversePhase.REFUNDING || record.phase == ReversePhase.REFUND_PAYOUT) {
+                            record.phase
+                        } else {
+                            ReversePhase.REFUND_WAIT
+                        }
+                    store.keep(record, record.copy(cancelRequested = true, phase = phase))
                 }
                 !record.finished
             }
-        if (isCalledOff) advance()
+        if (isCalledOff) {
+            val result = runCatching { advance() }
+            val error = result.exceptionOrNull()
+            if (error is CancellationException) throw error
+            records.kept(index).requireRefundPossible()
+            result.getOrThrow()
+        }
     }
 
     /** Recovers the refund of conversion [index], whichever conversion is active now. */
@@ -307,7 +321,9 @@ internal class ReverseSwapStages(
             }
 
             escrow.stage == SwapStage.CLAIMED -> {
-                receiving.receive(record, escrow.secret, outbox)
+                val settled = record.copy(phase = ReversePhase.RECEIVING)
+                store.keep(record, settled)
+                receiving.receive(settled, escrow.secret, outbox)
             }
 
             refunds.isDue(record, observed) -> {
@@ -514,3 +530,9 @@ internal class ReverseSwapEnding(
 
 /** How long past its funding deadline a reverse swap waits for its escrow before it's called off. */
 internal const val FUNDING_SETTLED_AFTER_SECONDS = 10 * 60L
+
+class ReverseRefundUnavailableException : IllegalStateException("the conversion has already settled")
+
+private fun ReverseSwapRecord.requireRefundPossible() {
+    if (isSettled) throw ReverseRefundUnavailableException()
+}

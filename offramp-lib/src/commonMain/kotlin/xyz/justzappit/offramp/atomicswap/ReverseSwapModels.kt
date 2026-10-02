@@ -145,14 +145,35 @@ data class ReverseSwapRecord(
 
     val finished: Boolean get() = phase in FINISHED
 
+    /** Settlement was observed on Ethereum, even if preparing the ZEC transfer has not succeeded yet. */
+    val isSettled: Boolean get() = phase == ReversePhase.RECEIVING || phase == ReversePhase.COMPLETE || receive != null
+
     val status: ReverseSwapStatus
         get() =
             when (phase) {
-                ReversePhase.QUOTED -> ReverseSwapStatus.Previewed
-                ReversePhase.COMPLETE -> ReverseSwapStatus.Over(ReverseSwapResult.RECEIVED)
-                ReversePhase.REFUNDED -> ReverseSwapStatus.Over(ReverseSwapResult.REFUNDED)
-                ReversePhase.CANCELLED -> ReverseSwapStatus.Over(ReverseSwapResult.CANCELLED)
-                else -> ReverseSwapStatus.UnderWay(phase, awaiting(), cancellable = !cancelRequested && receive == null)
+                ReversePhase.QUOTED -> {
+                    ReverseSwapStatus.Previewed
+                }
+
+                ReversePhase.COMPLETE -> {
+                    ReverseSwapStatus.Over(ReverseSwapResult.RECEIVED)
+                }
+
+                ReversePhase.REFUNDED -> {
+                    ReverseSwapStatus.Over(ReverseSwapResult.REFUNDED)
+                }
+
+                ReversePhase.CANCELLED -> {
+                    ReverseSwapStatus.Over(ReverseSwapResult.CANCELLED)
+                }
+
+                else -> {
+                    ReverseSwapStatus.UnderWay(
+                        phase,
+                        awaiting(),
+                        cancellable = !cancelRequested && !isSettled && phase !in REFUND_IN_PROGRESS,
+                    )
+                }
             }
 
     /** What paying for it takes from the private balance, or took. */
@@ -206,3 +227,4 @@ internal fun ReverseQuote.requireWellFormed() {
 internal const val MAX_READY_WAIT = 24 * 60 * 60L
 
 private val FINISHED = setOf(ReversePhase.COMPLETE, ReversePhase.REFUNDED, ReversePhase.CANCELLED)
+private val REFUND_IN_PROGRESS = setOf(ReversePhase.REFUNDING, ReversePhase.REFUND_PAYOUT)

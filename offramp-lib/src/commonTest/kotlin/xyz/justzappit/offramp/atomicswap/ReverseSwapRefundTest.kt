@@ -21,6 +21,81 @@ import kotlin.test.assertTrue
 
 class ReverseSwapRefundTest : ReverseSwapDriverFixtures() {
     @Test
+    fun settlementStopsRefundsBeforeTheZecTransferCanBePrepared() =
+        runTest {
+            val h = Harness()
+            h.prepared()
+            h.funded()
+            h.escrow = h.swap(SwapStage.CLAIMED)
+            h.interruptReceive = true
+
+            assertFailsWith<IllegalStateException> { h.driver.advance() }
+            assertEquals(ReversePhase.RECEIVING, h.record.phase)
+            assertTrue(h.record.isSettled)
+            assertNull(h.record.receive)
+            assertFalse(checkNotNull(h.record.status as? ReverseSwapStatus.UnderWay).cancellable)
+            assertFailsWith<ReverseRefundUnavailableException> { h.driver.cancel(0) }
+            assertFalse(h.record.cancelRequested)
+            assertEquals(0, h.lockCalls)
+
+            h.interruptReceive = false
+            h.driver.advance()
+            assertNotNull(h.record.receive)
+        }
+
+    @Test
+    fun aRefundClickRacingSettlementReportsThatSettlementWon() =
+        runTest {
+            val h = Harness()
+            h.prepared()
+            h.funded()
+            h.escrow = h.swap(SwapStage.CLAIMED)
+
+            assertFailsWith<ReverseRefundUnavailableException> { h.driver.cancel(0) }
+            assertEquals(ReversePhase.RECEIVING, h.record.phase)
+            assertNotNull(h.record.receive)
+            assertEquals(0, h.lockCalls)
+            assertEquals(0, h.refundCalls)
+        }
+
+    @Test
+    fun aRefundClickRacingSettlementAndTransferFailureStillReportsSettlement() =
+        runTest {
+            val h = Harness()
+            h.prepared()
+            h.funded()
+            h.escrow = h.swap(SwapStage.CLAIMED)
+            h.interruptReceive = true
+
+            assertFailsWith<ReverseRefundUnavailableException> { h.driver.cancel(0) }
+            assertEquals(ReversePhase.RECEIVING, h.record.phase)
+            assertNull(h.record.receive)
+            assertEquals(0, h.lockCalls)
+        }
+
+    @Test
+    fun refundButtonsStopAtSettlementAndWhileARefundIsBeingPaid() =
+        runTest {
+            val h = Harness()
+            h.prepared()
+            val allowed =
+                setOf(
+                    ReversePhase.ACCEPTING,
+                    ReversePhase.AWAITING_FUNDING,
+                    ReversePhase.SENDING_USDC,
+                    ReversePhase.CONFIRMING_ESCROW,
+                    ReversePhase.RECEIVING_ZEC,
+                    ReversePhase.AWAITING_READY,
+                    ReversePhase.SETTLING,
+                    ReversePhase.REFUND_WAIT,
+                )
+            for (phase in ReversePhase.entries) {
+                val status = h.record.copy(phase = phase).status as? ReverseSwapStatus.UnderWay
+                assertEquals(phase in allowed, status?.cancellable == true, phase.name)
+            }
+        }
+
+    @Test
     fun refundPayoutFailureAndRescueCanResumeWithoutFundingAgain() =
         runTest {
             val h = Harness()

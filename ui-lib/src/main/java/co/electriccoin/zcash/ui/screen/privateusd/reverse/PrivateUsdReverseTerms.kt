@@ -36,14 +36,21 @@ internal data class ReverseForm(
     /** An amount no fresh quote came for; it's asked for again once the amount changes. */
     val stale: Usdc6? = null,
     val error: StringResource? = null,
+    val isCancelling: Boolean = false,
 ) {
     val isActing: Boolean get() = step is ReverseStep.Acting
 
     /** A step the user starts can run now: none is running, and no quote is loading. */
-    val canAct: Boolean get() = !isActing && step != ReverseStep.Quoting
+    val canAct: Boolean get() = !isActing && !isCancelling && step != ReverseStep.Quoting
+
+    val canCancelFunding: Boolean
+        get() = (step as? ReverseStep.Acting)?.let { it.isFunding && it.isAuthorized } == true
+
+    val canRequestRefund: Boolean get() = !isCancelling && (canAct || canCancelFunding)
 
     /** Back waits only for a step the user authorized. */
-    val isBackEnabled: Boolean get() = (step as? ReverseStep.Acting)?.kind != ReverseStepKind.AUTHORIZED
+    val isBackEnabled: Boolean
+        get() = !isCancelling && (step as? ReverseStep.Acting)?.kind != ReverseStepKind.AUTHORIZED
 
     /** On the review, or running the conversion it authorized. */
     val isReviewing: Boolean
@@ -79,7 +86,7 @@ internal data class ReverseForm(
         available: BigInteger?
     ): Boolean = isShort(record, available) || (amount.isPositive && requested == null)
 
-    fun canSwitchDirection(record: ReverseSwapRecord?): Boolean = !isActing && record?.underWay != true
+    fun canSwitchDirection(record: ReverseSwapRecord?): Boolean = !isActing && !isCancelling && record?.underWay != true
 
     /** Why it can't go on, most pressing first. */
     fun message(
@@ -103,6 +110,8 @@ internal sealed interface ReverseStep {
     data class Acting(
         val from: ReverseStep,
         val kind: ReverseStepKind,
+        val isFunding: Boolean = false,
+        val isAuthorized: Boolean = false,
     ) : ReverseStep
 }
 

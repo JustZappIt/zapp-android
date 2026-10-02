@@ -243,7 +243,7 @@
     <string name="reverse_intro">Approve sending Private USD first. After your wallet independently confirms the full ZEC deposit, approve settlement to receive shielded ZEC.</string>
     <string name="reverse_ready">Authorize settlement</string>
     <string name="reverse_new">New conversion</string>
-    <string name="reverse_cancel">Cancel / request private refund</string>
+    <string name="reverse_cancel">Cancel conversion</string>
     <string name="reverse_rescue">Recover refund</string>
     <string name="reverse_accepting">Preparing your receiving account</string>
     <string name="reverse_review">Review and authorize your payment</string>
@@ -253,7 +253,7 @@
     <string name="reverse_ready_explanation">The full ZEC deposit is confirmed. Authorize settlement to release your Private USD and move ZEC to your shielded wallet.</string>
     <string name="reverse_settling">Waiting for settlement</string>
     <string name="reverse_sweeping">Moving ZEC to your shielded wallet</string>
-    <string name="reverse_refund_wait">Refund waiting for its deadline or lock. You can request a refund now; it will proceed when allowed.</string>
+    <string name="reverse_refund_wait">Waiting until a refund can proceed. Zapp will retry automatically.</string>
     <string name="reverse_refunding">Securing your private refund</string>
     <string name="reverse_payout">Returning your Private USD to Railgun</string>
     <string name="reverse_complete">ZEC received in your shielded wallet</string>
@@ -309,4 +309,9 @@
     <string name="refunds_recovering">Recovering your refund…</string>
     <string name="refunds_check_failed">Couldn\'t check this refund. Refresh to try again.</string>
     <string name="refunds_recover_failed">Couldn\'t recover this refund. Try again.</string>
+    <string name="reverse_request_refund">Request private refund</string>
+    <string name="reverse_refund_requested">Refund requested. Zapp will continue automatically when your refund is available.</string>
+    <string name="reverse_refund_requested_after_ready">Refund requested. If settlement does not finish, Zapp can start returning your funds after %1$s. Settlement may still finish before then.</string>
+    <string name="reverse_settlement_refund_limit">Settlement is authorized. A refund can only proceed after %1$s if settlement has not completed.</string>
+    <string name="reverse_refund_unavailable">This conversion has already settled and can no longer be refunded. Zapp will finish moving your ZEC to your wallet.</string>
 </resources>

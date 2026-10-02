@@ -4,7 +4,7 @@
     <string name="reverse_intro">Primero autoriza el envío de USD privado. Cuando tu billetera confirme de forma independiente el depósito completo de ZEC, autoriza la liquidación para recibir ZEC protegido.</string>
     <string name="reverse_ready">Autorizar liquidación</string>
     <string name="reverse_new">Nueva conversión</string>
-    <string name="reverse_cancel">Cancelar / solicitar reembolso privado</string>
+    <string name="reverse_cancel">Cancelar conversión</string>
     <string name="reverse_rescue">Recuperar reembolso</string>
     <string name="reverse_accepting">Preparando tu cuenta receptora</string>
     <string name="reverse_review">Revisa y autoriza tu pago</string>
@@ -14,7 +14,7 @@
     <string name="reverse_ready_explanation">El depósito completo de ZEC está confirmado. Autoriza la liquidación para liberar tus USD privados y mover ZEC a tu billetera protegida.</string>
     <string name="reverse_settling">Esperando la liquidación</string>
     <string name="reverse_sweeping">Moviendo ZEC a tu billetera protegida</string>
-    <string name="reverse_refund_wait">El reembolso espera su plazo o bloqueo. Puedes solicitarlo ahora; se realizará cuando esté permitido.</string>
+    <string name="reverse_refund_wait">Esperando hasta que el reembolso pueda continuar. Zapp lo reintentará automáticamente.</string>
     <string name="reverse_refunding">Asegurando tu reembolso privado</string>
     <string name="reverse_payout">Devolviendo tus USD privados a Railgun</string>
     <string name="reverse_complete">ZEC recibido en tu billetera protegida</string>
@@ -236,4 +236,9 @@
     <string name="refunds_recovering">Recuperando tu reembolso…</string>
     <string name="refunds_check_failed">No se pudo comprobar este reembolso. Actualiza para volver a intentarlo.</string>
     <string name="refunds_recover_failed">No se pudo recuperar este reembolso. Vuelve a intentarlo.</string>
+    <string name="reverse_request_refund">Solicitar reembolso privado</string>
+    <string name="reverse_refund_requested">Reembolso solicitado. Zapp continuará automáticamente cuando tu reembolso esté disponible.</string>
+    <string name="reverse_refund_requested_after_ready">Reembolso solicitado. Si la liquidación no termina, Zapp puede empezar a devolver tus fondos después de %1$s. La liquidación aún puede completarse antes.</string>
+    <string name="reverse_settlement_refund_limit">La liquidación está autorizada. El reembolso solo puede continuar después de %1$s si la liquidación no se ha completado.</string>
+    <string name="reverse_refund_unavailable">Esta conversión ya se ha liquidado y no se puede reembolsar. Zapp terminará de mover tus ZEC a tu cartera.</string>
 </resources>

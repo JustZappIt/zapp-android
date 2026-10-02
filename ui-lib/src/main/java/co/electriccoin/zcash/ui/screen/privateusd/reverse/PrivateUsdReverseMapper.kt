@@ -12,6 +12,7 @@ import co.electriccoin.zcash.ui.screen.privateusd.message
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProblemState
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressState
 import xyz.justzappit.offramp.atomicswap.ReverseApproval
+import xyz.justzappit.offramp.atomicswap.ReversePhase
 import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
 import xyz.justzappit.offramp.atomicswap.ReverseSwapResult
 import xyz.justzappit.offramp.atomicswap.ReverseSwapStatus
@@ -63,7 +64,10 @@ internal class PrivateUsdReverseMapper(
                 underWay(record, canPay)
             }
         }?.let { button ->
-            button.copy(isEnabled = button.isEnabled && !form.isActing, isLoading = button.isLoading || form.isActing)
+            button.copy(
+                isEnabled = button.isEnabled && !form.isActing && !form.isCancelling,
+                isLoading = button.isLoading || form.isActing,
+            )
         }
 
     fun review(
@@ -162,20 +166,31 @@ internal class PrivateUsdReverseMapper(
         hasRefunds: Boolean,
     ): ButtonState? =
         when {
-            !form.canAct -> {
-                null
+            form.isCancelling -> {
+                ButtonState(stringRes(refundAction(record)), isEnabled = false, isLoading = true)
             }
 
-            (record.status as? ReverseSwapStatus.UnderWay)?.cancellable == true -> {
-                ButtonState(stringRes(R.string.reverse_cancel)) { actions.cancel(record.index) }
+            (record.status as? ReverseSwapStatus.UnderWay)?.cancellable == true && form.canRequestRefund -> {
+                ButtonState(stringRes(refundAction(record))) { actions.cancel(record.index) }
             }
 
-            record.status == ReverseSwapStatus.Over(ReverseSwapResult.REFUNDED) && hasRefunds -> {
+            form.canAct && record.status == ReverseSwapStatus.Over(ReverseSwapResult.REFUNDED) && hasRefunds -> {
                 ButtonState(stringRes(R.string.refunds_view), onClick = actions::refunds)
             }
 
             else -> {
                 null
+            }
+        }
+
+    private fun refundAction(record: ReverseSwapRecord): Int =
+        when (record.phase) {
+            ReversePhase.ACCEPTING, ReversePhase.AWAITING_FUNDING -> {
+                if (record.funding == null) R.string.reverse_cancel else R.string.reverse_request_refund
+            }
+
+            else -> {
+                R.string.reverse_request_refund
             }
         }
 }

@@ -13,6 +13,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
+import co.electriccoin.zcash.ui.screen.privateusd.dateTime
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProblemState
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressState
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdResultState
@@ -21,6 +22,7 @@ import xyz.justzappit.offramp.atomicswap.ReversePhase
 import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
 import xyz.justzappit.offramp.atomicswap.ReverseSwapResult
 import xyz.justzappit.offramp.atomicswap.ReverseSwapStatus
+import kotlin.time.Instant
 
 /** What a reverse conversion's progress screen shows, from the moment it's paid for. */
 internal fun reverseProgress(
@@ -46,7 +48,7 @@ internal fun reverseProgress(
             ).takeUnless { ended == ReverseSwapResult.REFUNDED || ended == ReverseSwapResult.CANCELLED },
         result = ended?.let { resultOf(record.phase, it, received) },
         steps = reverseSteps(record.phase, record.receiveConfirmations, zcashWait),
-        note = stringRes(R.string.reverse_ready_explanation).takeIf { record.phase == ReversePhase.AWAITING_READY },
+        note = refundNote(record),
         problem = problem,
         error = error,
         callOff = callOff,
@@ -57,6 +59,35 @@ internal fun reverseProgress(
         isBackEnabled = isBackEnabled,
     )
 }
+
+private fun refundNote(record: ReverseSwapRecord): StringResource? =
+    when {
+        record.cancelRequested && record.underWay && !record.isSettled -> {
+            if (record.ready == null) {
+                stringRes(R.string.reverse_refund_requested)
+            } else {
+                stringRes(
+                    R.string.reverse_refund_requested_after_ready,
+                    dateTime(Instant.fromEpochSeconds(record.quote.refundAfter)),
+                )
+            }
+        }
+
+        record.phase == ReversePhase.SETTLING -> {
+            stringRes(
+                R.string.reverse_settlement_refund_limit,
+                dateTime(Instant.fromEpochSeconds(record.quote.refundAfter)),
+            )
+        }
+
+        record.phase == ReversePhase.AWAITING_READY -> {
+            stringRes(R.string.reverse_ready_explanation)
+        }
+
+        else -> {
+            null
+        }
+    }
 
 private fun resultOf(
     phase: ReversePhase,

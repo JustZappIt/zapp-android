@@ -24,6 +24,7 @@ import co.electriccoin.zcash.ui.common.usecase.NavigateBackToPayUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
+import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.TYPING_DEBOUNCE
@@ -81,6 +82,8 @@ class PrivateUsdReverseVM(
     private val form = MutableStateFlow(ReverseForm())
     private var quoteJob: Job? = null
     private var stepJob: Job? = null
+    private val refundRequest =
+        PrivateUsdReverseRefundRequest(form, repository, secretAuthGate, viewModelScope) { stepJob }
 
     private val hasRefunds: Flow<Boolean> =
         repository.history.map { history -> history.any { it.phase == ReversePhase.REFUNDED } }.distinctUntilChanged()
@@ -313,20 +316,31 @@ class PrivateUsdReverseVM(
     private fun runStep(
         kind: ReverseStepKind,
         @StringRes otherwise: Int,
+        isFunding: Boolean = false,
         step: suspend () -> Unit,
     ) {
         val from = form.value.step
         if (!form.value.canAct) return
-        form.update { it.copy(step = ReverseStep.Acting(from, kind), error = null) }
+        form.update { it.copy(step = ReverseStep.Acting(from, kind, isFunding = isFunding), error = null) }
         stepJob =
             viewModelScope.launch {
-                val error =
-                    runConversionStep("a reverse conversion step didn't go ahead") {
-                        if (kind == ReverseStepKind.LOOK_UP || secretAuthGate.authenticateSpend()) step()
-                    }.exceptionOrNull()
-                        ?.toFailure()
-                        ?.message(otherwise)
-                form.update { if (it.step is ReverseStep.Acting) it.copy(step = from, error = error) else it }
+                var error: StringResource? = null
+                try {
+                    error =
+                        runConversionStep("a reverse conversion step didn't go ahead") {
+                            if (kind == ReverseStepKind.LOOK_UP || secretAuthGate.authenticateSpend()) {
+                                form.update {
+                                    val acting = it.step as? ReverseStep.Acting
+                                    if (acting == null) it else it.copy(step = acting.copy(isAuthorized = true))
+                                }
+                                step()
+                            }
+                        }.exceptionOrNull()?.toFailure()?.message(otherwise)
+                } finally {
+                    form.update {
+                        if (it.step is ReverseStep.Acting) it.copy(step = from, error = it.error ?: error) else it
+                    }
+                }
             }
     }
 
@@ -335,16 +349,17 @@ class PrivateUsdReverseVM(
 
         // Nothing commits before this: accepting the quote, importing its account and paying for it are one step.
         override fun convert(index: Int) =
-            runStep(ReverseStepKind.AUTHORIZED, R.string.convert_start_failed) { repository.fund(index) }
+            runStep(ReverseStepKind.AUTHORIZED, R.string.convert_start_failed, isFunding = true) {
+                repository.fund(index)
+            }
 
         override fun fund(index: Int) =
-            runStep(ReverseStepKind.AUTHORIZED, R.string.reverse_error) { repository.fund(index) }
+            runStep(ReverseStepKind.AUTHORIZED, R.string.reverse_error, isFunding = true) { repository.fund(index) }
 
         override fun ready(index: Int) =
             runStep(ReverseStepKind.AUTHORIZED, R.string.reverse_error) { repository.ready(index) }
 
-        override fun cancel(index: Int) =
-            runStep(ReverseStepKind.AUTHORIZED, R.string.convert_call_off_failed) { repository.cancel(index) }
+        override fun cancel(index: Int) = refundRequest.request(index)
 
         override fun refunds() = navigationRouter.forward(PrivateUsdRefundsArgs)
 

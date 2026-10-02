@@ -77,6 +77,7 @@ abstract class ReverseSwapDriverFixtures {
         var payoutSignatures = 0
         var interruptFunding = false
         var interruptPayout = false
+        var interruptReceive = false
         var proofValid = true
         var proving: CompletableDeferred<Unit>? = null
         var vault = Usdc6.ofMicros(900_000)
@@ -261,6 +262,7 @@ abstract class ReverseSwapDriverFixtures {
             makerSecret: ByteArray,
         ): ReverseReceiveTransaction {
             receivePrepares++
+            check(!interruptReceive) { "Zcash transfer preparation unavailable" }
             return ReverseReceiveTransaction(ZcashTxId.parse("09".repeat(32)), "abcd", 300, DEPOSIT - 10_000, 10_000)
         }
 
