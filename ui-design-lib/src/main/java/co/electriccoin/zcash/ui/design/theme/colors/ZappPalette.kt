@@ -120,6 +120,13 @@ object ZappNavBar {
     const val FAB_BOTTOM_PADDING_DP = 80
 
     /**
+     * Extra bottom clearance for a list scrolling under a FAB: the 56dp FAB plus a 16dp gap.
+     * Add it to the FAB's own bottom padding so the last row can scroll clear of the button:
+     *   PaddingValues(bottom = navBottom + FAB_BOTTOM_PADDING_DP.dp + FAB_LIST_CLEARANCE_DP.dp)
+     */
+    const val FAB_LIST_CLEARANCE_DP = 72
+
+    /**
      * Bottom margin for floating buttons (FAB / back) on pushed sub-screens,
      * where the pill nav bar is absent — [FAB_BOTTOM_PADDING_DP] there would
      * strand the buttons 80dp above the thumb zone.

@@ -54,6 +54,12 @@ internal fun ChatListView(
     modifier: Modifier = Modifier,
 ) {
     val c = ZappTheme.colors
+    val floatingBottom =
+        if (showBackButton) {
+            ZappNavBar.PUSHED_FLOATING_MARGIN_DP.dp
+        } else {
+            ZappNavBar.FAB_BOTTOM_PADDING_DP.dp
+        }
 
     Box(
         modifier =
@@ -76,12 +82,14 @@ internal fun ChatListView(
                 else -> {
                     val navBarBottom =
                         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                    // Clear the FAB, not just the nav pill, so the last conversation can scroll
+                    // out from under the button.
                     LazyColumn(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         contentPadding =
                             PaddingValues(
                                 top = 4.dp,
-                                bottom = navBarBottom + ZappNavBar.CLEARANCE_DP.dp,
+                                bottom = navBarBottom + floatingBottom + ZappNavBar.FAB_LIST_CLEARANCE_DP.dp,
                             ),
                     ) {
                         item(key = "support_row") {
@@ -105,12 +113,6 @@ internal fun ChatListView(
             }
         }
 
-        val floatingBottom =
-            if (showBackButton) {
-                ZappNavBar.PUSHED_FLOATING_MARGIN_DP.dp
-            } else {
-                ZappNavBar.FAB_BOTTOM_PADDING_DP.dp
-            }
         ZappFab(
             icon = Icons.AutoMirrored.Filled.Chat,
             contentDescription = state.newConversationContentDescription.getValue(),
