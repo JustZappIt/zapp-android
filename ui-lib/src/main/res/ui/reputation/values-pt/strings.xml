@@ -69,6 +69,27 @@
     <string name="increase_reputation_error_gas">Não podemos cobrir a taxa de rede agora. Tente de novo daqui a pouco.</string>
     <string name="increase_reputation_error_network">Não conseguimos contatar a rede. Tente de novo em instantes.</string>
 
+    <string name="increase_reputation_identity_group">VERIFIQUE VOCÊ MESMO</string>
+    <string name="increase_reputation_identity_footer">Feita pela p2p.me no seu navegador. A Zapp nunca vê seu rosto nem seu passaporte.</string>
+    <string name="increase_reputation_identity_liveness">Verificação por selfie</string>
+    <string name="increase_reputation_identity_liveness_subtitle">Uma selfie curta em vídeo. Não precisa de documento</string>
+    <string name="increase_reputation_identity_passport">Passaporte</string>
+    <string name="increase_reputation_identity_passport_subtitle">Escaneie seu passaporte e depois tire uma selfie</string>
+    <string name="increase_reputation_identity_step_open">Abrir a verificação</string>
+    <string name="increase_reputation_identity_step_verify">Conclua no seu navegador</string>
+    <string name="increase_reputation_identity_ready">%1$s abre no seu navegador. Conclua o processo por lá e você volta para cá.</string>
+    <string name="increase_reputation_identity_waiting">Aguardando a verificação…</string>
+    <string name="increase_reputation_identity_waiting_help">Deixe o navegador trazer você de volta à Zapp ao terminar. Se voltar por conta própria, o resultado se perde.</string>
+    <string name="increase_reputation_identity_done">Verificação concluída: %1$s</string>
+    <string name="increase_reputation_identity_open">Abrir no navegador</string>
+    <string name="increase_reputation_identity_error_unavailable">Esta verificação não está disponível agora. Tente mais tarde.</string>
+    <string name="increase_reputation_identity_error_not_passed">A verificação não foi aprovada. Tente de novo com boa luz e o rosto bem visível.</string>
+    <string name="increase_reputation_identity_error_already_claimed">Este rosto ou passaporte já está verificado em outra carteira.</string>
+    <string name="increase_reputation_identity_error_already_verified">Esta carteira já concluiu esta verificação.</string>
+    <string name="increase_reputation_identity_error_expired">Essa verificação expirou. Comece de novo.</string>
+    <string name="increase_reputation_identity_error_rejected">A exchange não conseguiu aceitar essa verificação. Comece de novo.</string>
+    <string name="increase_reputation_identity_error_no_return">A verificação não voltou para a Zapp. Se você concluiu, comece de novo e deixe o navegador trazer você de volta.</string>
+
     <string name="increase_reputation_info_title">Como funciona a verificação</string>
     <string name="increase_reputation_info_step_pick">Escolha uma conta que você já tem.</string>
     <string name="increase_reputation_info_step_open">A Zapp abre o Reclaim, um app separado que faz a checagem. Instale se ainda não tiver — é gratuito.</string>

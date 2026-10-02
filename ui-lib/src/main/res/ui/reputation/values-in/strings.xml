@@ -69,6 +69,27 @@
     <string name="increase_reputation_error_gas">Kami tidak dapat menanggung biaya jaringan saat ini. Coba lagi beberapa saat lagi.</string>
     <string name="increase_reputation_error_network">Kami tidak dapat menghubungi jaringan. Coba lagi sebentar.</string>
 
+    <string name="increase_reputation_identity_group">VERIFIKASI DIRI ANDA</string>
+    <string name="increase_reputation_identity_footer">Dijalankan oleh p2p.me di browser Anda. Zapp tidak pernah melihat wajah atau paspor Anda.</string>
+    <string name="increase_reputation_identity_liveness">Cek selfie</string>
+    <string name="increase_reputation_identity_liveness_subtitle">Video selfie singkat. Tanpa kartu identitas</string>
+    <string name="increase_reputation_identity_passport">Paspor</string>
+    <string name="increase_reputation_identity_passport_subtitle">Pindai paspor Anda, lalu ambil selfie</string>
+    <string name="increase_reputation_identity_step_open">Buka pengecekan</string>
+    <string name="increase_reputation_identity_step_verify">Selesaikan di browser Anda</string>
+    <string name="increase_reputation_identity_ready">%1$s terbuka di browser Anda. Selesaikan di sana dan Anda akan dibawa kembali ke sini.</string>
+    <string name="increase_reputation_identity_waiting">Menunggu pengecekan…</string>
+    <string name="increase_reputation_identity_waiting_help">Biarkan browser membawa Anda kembali ke Zapp setelah selesai. Jika Anda kembali sendiri, hasilnya hilang.</string>
+    <string name="increase_reputation_identity_done">%1$s selesai</string>
+    <string name="increase_reputation_identity_open">Buka di browser</string>
+    <string name="increase_reputation_identity_error_unavailable">Pengecekan ini sedang tidak tersedia. Coba lagi nanti.</string>
+    <string name="increase_reputation_identity_error_not_passed">Pengecekan tidak lolos. Coba lagi dengan cahaya yang cukup dan wajah terlihat jelas.</string>
+    <string name="increase_reputation_identity_error_already_claimed">Wajah atau paspor ini sudah terverifikasi di dompet lain.</string>
+    <string name="increase_reputation_identity_error_already_verified">Dompet ini sudah menyelesaikan pengecekan ini.</string>
+    <string name="increase_reputation_identity_error_expired">Pengecekan itu kedaluwarsa. Mulai lagi.</string>
+    <string name="increase_reputation_identity_error_rejected">Bursa tidak dapat menerima pengecekan itu. Mulai lagi.</string>
+    <string name="increase_reputation_identity_error_no_return">Pengecekan tidak kembali ke Zapp. Jika sudah selesai, mulai lagi dan biarkan browser membawa Anda kembali.</string>
+
     <string name="increase_reputation_info_title">Cara kerja verifikasi</string>
     <string name="increase_reputation_info_step_pick">Pilih akun yang sudah Anda miliki.</string>
     <string name="increase_reputation_info_step_open">Zapp membuka Reclaim, aplikasi terpisah yang melakukan pemeriksaan. Pasang jika Anda belum punya — aplikasinya gratis.</string>

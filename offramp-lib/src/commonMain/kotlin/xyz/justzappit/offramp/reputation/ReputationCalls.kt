@@ -11,12 +11,14 @@ import xyz.justzappit.evm.abi.AbiDecoder
 import xyz.justzappit.evm.abi.AbiEncoder
 import xyz.justzappit.evm.abi.AbiString
 import xyz.justzappit.evm.abi.AbiTuple
+import xyz.justzappit.evm.abi.AbiUint
 import xyz.justzappit.evm.abi.AbiUint32
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.evm.math.div
 import xyz.justzappit.evm.math.times
 import xyz.justzappit.evm.types.Address
+import xyz.justzappit.offramp.identity.IdentityAttestation
 import xyz.justzappit.offramp.p2p.CurrencyCode
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.reclaim.OnChainProof
@@ -141,6 +143,24 @@ object ReputationCalls {
             ),
         )
 
+    fun identityVerifiedCalldata(check: IdentityCheck, user: Address): ByteArray =
+        AbiEncoder.encodeFunctionCall(check.verifiedSignature, listOf(AbiAddress(user)))
+
+    fun identityRpAwardCalldata(check: IdentityCheck): ByteArray =
+        AbiEncoder.encodeFunctionCall(check.rpGetterSignature, emptyList())
+
+    /** `(bytes32 nullifier, uint256 limit, uint256 expiry, bytes signature)`, the same for both checks. */
+    fun submitIdentityAttestationCalldata(check: IdentityCheck, attestation: IdentityAttestation): ByteArray =
+        AbiEncoder.encodeFunctionCall(
+            check.submitSignature,
+            listOf(
+                AbiBytes32(attestation.nullifier),
+                AbiUint(attestation.limit),
+                AbiUint(attestation.expiry),
+                AbiBytes(attestation.signature),
+            ),
+        )
+
     // ---- Diamond ----
 
     fun userTxLimitCalldata(user: Address, currency: CurrencyCode): ByteArray =
@@ -195,6 +215,8 @@ object ReputationCalls {
 
     fun decodeUint(returnData: ByteArray): BigInteger =
         AbiDecoder(returnData).also { it.requireWords(1) }.uint(0)
+
+    fun decodeBool(returnData: ByteArray): Boolean = decodeUint(returnData).signum() != 0
 
     fun decodeRpPerUsdcLimit(returnData: ByteArray): RpPerUsdcLimit {
         val decoder = AbiDecoder(returnData).also { it.requireWords(RATIONAL_WORDS) }
