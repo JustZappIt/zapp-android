@@ -117,6 +117,7 @@ tasks {
             "RECLAIM_APP_SECRET" to "",
             // Invest ships dark in store and foss releases until it is turned on deliberately.
             "ZAPP_INVEST_ENABLED" to "false",
+            "ZAPP_INVEST_DEMO" to "false",
 
             "ZCASH_FLEXA_KEY" to "",
             "ZCASH_CMC_KEY" to "",

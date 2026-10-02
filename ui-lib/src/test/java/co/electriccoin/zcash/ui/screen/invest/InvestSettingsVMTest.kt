@@ -4,6 +4,7 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSettings
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.invest.demo.InvestDemoControlsArgs
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestChangeCountryArgs
 import co.electriccoin.zcash.ui.screen.invest.settings.InvestSettingsState
 import co.electriccoin.zcash.ui.screen.invest.settings.InvestSettingsVM
@@ -25,6 +26,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class InvestSettingsVMTest {
@@ -97,6 +99,16 @@ class InvestSettingsVMTest {
             assertEquals(stringRes("Canada"), assertNotNull(fixture.vm.state.value).country)
         }
 
+    @Test
+    fun `the demo build adds Demo controls, other builds don't`() =
+        runTest {
+            val demo = fixture(INVEST_READY, isDemo = true)
+            demo.state().onDemoControlsClick!!.invoke()
+            verify { demo.router.forward(InvestDemoControlsArgs) }
+
+            assertNull(fixture(INVEST_READY).state().onDemoControlsClick)
+        }
+
     private class Fixture(
         val vm: InvestSettingsVM,
         val settings: FakeInvestSettingsRepository,
@@ -110,10 +122,13 @@ class InvestSettingsVMTest {
         }
     }
 
-    private fun TestScope.fixture(settings: InvestSettings): Fixture {
+    private fun TestScope.fixture(
+        settings: InvestSettings,
+        isDemo: Boolean = false,
+    ): Fixture {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val repo = FakeInvestSettingsRepository(settings)
         val router = mockk<NavigationRouter>(relaxed = true)
-        return Fixture(InvestSettingsVM(repo, router), repo, router, this)
+        return Fixture(InvestSettingsVM(repo, router, isDemo), repo, router, this)
     }
 }

@@ -227,6 +227,18 @@ androidComponents {
             )
         )
         variant.buildConfigFields?.put(
+            "IS_INVEST_DEMO",
+            BuildConfigField(
+                type = "boolean",
+                value =
+                    (
+                        project.property("ZAPP_INVEST_DEMO").toString().toBoolean() &&
+                            variant.buildType == "debug"
+                    ).toString(),
+                comment = "Debug-only: Invest runs on the scripted demo engine, with no network and no ZEC sent"
+            )
+        )
+        variant.buildConfigFields?.put(
             "P2P_SCREENING_API_URL",
             BuildConfigField(
                 type = "String",

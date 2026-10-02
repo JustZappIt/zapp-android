@@ -15,6 +15,7 @@ import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_LG
 import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_SM
 import co.electriccoin.zcash.ui.screen.invest.common.InvestScreenFrame
 
@@ -38,6 +39,13 @@ internal fun InvestSettingsView(
             text = state.status.getValue(),
             style = ZappTheme.typography.caption.copy(color = c.textMuted),
         )
+        state.onDemoControlsClick?.let { onClick ->
+            Spacer(Modifier.height(INVEST_GAP_LG.dp))
+            // Demo builds only, so English only.
+            ZappBorderedCard(padding = 0.dp) {
+                ZappRow(title = "Demo controls", subtitle = "How the next trade ends, prices, reset", onClick = onClick)
+            }
+        }
     }
 }
 

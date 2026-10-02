@@ -7,6 +7,7 @@ import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyVM
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProviderImpl
 import co.electriccoin.zcash.ui.screen.invest.common.InvestSession
+import co.electriccoin.zcash.ui.screen.invest.demo.InvestDemoControlsVM
 import co.electriccoin.zcash.ui.screen.invest.gate.AndroidResidenceHintProvider
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestGateVM
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestUnavailableVM
@@ -113,5 +114,8 @@ val investViewModelModule =
             )
         }
         viewModelOf(::InvestSellProgressVM)
-        viewModelOf(::InvestSettingsVM)
+        viewModel {
+            InvestSettingsVM(settingsRepository = get(), navigationRouter = get(), isDemo = BuildConfig.IS_INVEST_DEMO)
+        }
+        if (BuildConfig.IS_INVEST_DEMO) viewModelOf(::InvestDemoControlsVM)
     }

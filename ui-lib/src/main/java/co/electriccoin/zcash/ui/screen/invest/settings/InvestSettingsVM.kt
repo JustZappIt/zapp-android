@@ -10,6 +10,7 @@ import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepositor
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
+import co.electriccoin.zcash.ui.screen.invest.demo.InvestDemoControlsArgs
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestChangeCountryArgs
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +24,8 @@ internal data class InvestSettingsState(
     /** What that country means for Invest: buy and sell, sell only, or nothing until a country is chosen. */
     val status: StringResource,
     val onCountryClick: () -> Unit,
+    /** Demo builds only: how the demo engine's trades end. */
+    val onDemoControlsClick: (() -> Unit)? = null,
 )
 
 /**
@@ -32,6 +35,7 @@ internal data class InvestSettingsState(
 internal class InvestSettingsVM(
     settingsRepository: InvestSettingsRepository,
     private val navigationRouter: NavigationRouter,
+    private val isDemo: Boolean = false,
 ) : ViewModel() {
     /** Null until the saved settings are read. */
     val state: StateFlow<InvestSettingsState?> =
@@ -50,6 +54,7 @@ internal class InvestSettingsVM(
                     else -> stringRes(R.string.invest_sell_only_banner, name)
                 },
             onCountryClick = { navigationRouter.forward(InvestChangeCountryArgs) },
+            onDemoControlsClick = { navigationRouter.forward(InvestDemoControlsArgs) }.takeIf { isDemo },
         )
     }
 

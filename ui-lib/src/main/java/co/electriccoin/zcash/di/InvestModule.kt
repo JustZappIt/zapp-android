@@ -1,6 +1,10 @@
 package co.electriccoin.zcash.di
 
 import android.os.SystemClock
+import co.electriccoin.zcash.ui.BuildConfig
+import co.electriccoin.zcash.ui.common.invest.demo.DemoInvestEngine
+import co.electriccoin.zcash.ui.common.invest.demo.DemoInvestSellRepository
+import co.electriccoin.zcash.ui.common.invest.demo.InvestDemoControls
 import co.electriccoin.zcash.ui.common.invest.provider.IntentsSaltProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProvider
@@ -22,12 +26,16 @@ import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollower
 import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollowerImpl
 import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeGuard
 import org.koin.core.module.dsl.singleOf
+import org.koin.core.scope.Scope
 import org.koin.dsl.bind
 import org.koin.dsl.binds
 import org.koin.dsl.module
 import kotlin.time.Instant
 
-/** Invest's data layer. Its network calls follow the user's Tor setting. */
+/**
+ * Invest's data layer. Its network calls follow the user's Tor setting. A debug build made with `ZAPP_INVEST_DEMO`
+ * binds the demo engine in place of the real one, so nothing reaches 1Click and no ZEC is sent.
+ */
 val investModule =
     module {
         single { InvestServerClock() }
@@ -40,36 +48,49 @@ val investModule =
             InvestBuyCheckpointStorageProvider::class
         singleOf(::InvestSellCheckpointStorageProviderImpl) bind InvestSellCheckpointStorageProvider::class
         single { InvestTradeGuard(buys = get(), sells = get()) }
-        single {
-            InvestSellRepositoryImpl(
-                api = get(),
-                session = get(),
-                keys = get(),
-                wallet = get(),
-                investRepository = get(),
-                swapAssets = get(),
-                biometricRepository = get(),
-                checkpoints = get(),
-                trades = get(),
-                now = get<InvestServerClock>().let { clock -> { Instant.fromEpochMilliseconds(clock.nowMillis()) } },
-            )
-        } bind InvestSellRepository::class
-        single {
-            InvestRepositoryImpl(
-                api = get(),
-                session = get(),
-                keys = get(),
-                wallet = get(),
-                accountDataSource = get(),
-                swapAssetProvider = get(),
-                synchronizerProvider = get(),
-                checkpoints = get(),
-                trades = get(),
-                settings = get(),
-                now = get<InvestServerClock>().let { clock -> { Instant.fromEpochMilliseconds(clock.nowMillis()) } },
-            )
-        } binds arrayOf(InvestRepository::class, InvestSwapAssetSource::class)
-        single<InvestTradeFollower> { InvestTradeFollowerImpl(buys = get(), sells = get()) }
+        if (BuildConfig.IS_INVEST_DEMO) {
+            single { InvestDemoControls() }
+            single {
+                DemoInvestEngine(
+                    accountDataSource = get(),
+                    swapRepository = get(),
+                    settings = get(),
+                    controls = get(),
+                )
+            } binds arrayOf(InvestRepository::class, InvestSwapAssetSource::class, InvestTradeFollower::class)
+            single<InvestSellRepository> { DemoInvestSellRepository(engine = get(), controls = get()) }
+        } else {
+            single {
+                InvestSellRepositoryImpl(
+                    api = get(),
+                    session = get(),
+                    keys = get(),
+                    wallet = get(),
+                    investRepository = get(),
+                    swapAssets = get(),
+                    biometricRepository = get(),
+                    checkpoints = get(),
+                    trades = get(),
+                    now = serverNow(),
+                )
+            } bind InvestSellRepository::class
+            single {
+                InvestRepositoryImpl(
+                    api = get(),
+                    session = get(),
+                    keys = get(),
+                    wallet = get(),
+                    accountDataSource = get(),
+                    swapAssetProvider = get(),
+                    synchronizerProvider = get(),
+                    checkpoints = get(),
+                    trades = get(),
+                    settings = get(),
+                    now = serverNow(),
+                )
+            } binds arrayOf(InvestRepository::class, InvestSwapAssetSource::class)
+            single<InvestTradeFollower> { InvestTradeFollowerImpl(buys = get(), sells = get()) }
+        }
         single {
             PrivateAccountSession(
                 api = get(),
@@ -80,3 +101,9 @@ val investModule =
             )
         }
     }
+
+// The engine's clock: 1Click's time once it has been seen, the phone's until then.
+private fun Scope.serverNow(): () -> Instant {
+    val clock = get<InvestServerClock>()
+    return { Instant.fromEpochMilliseconds(clock.nowMillis()) }
+}
