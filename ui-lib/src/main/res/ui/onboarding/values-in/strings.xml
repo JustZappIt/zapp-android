@@ -59,7 +59,7 @@
     <string name="onboarding_msg_intro_title">Buat\nidentitas\npesan Anda</string>
     <string name="onboarding_msg_intro_sub">Identitas Anda adalah nama pengguna yang didukung frasa pemulihan dompet Anda, satu frasa memulihkan dompet dan identitas pesan Anda di perangkat mana pun. Riwayat pesan disimpan secara lokal dan tidak dapat dipulihkan.</string>
     <string name="onboarding_msg_intro_bullet_username_label">Pilih nama pengguna</string>
-    <string name="onboarding_msg_intro_bullet_username_sub">Cara teman menemukan dan mengirim pesan kepada Anda</string>
+    <string name="onboarding_msg_intro_bullet_username_sub">Cara Anda tampil bagi orang lain</string>
     <string name="onboarding_msg_intro_bullet_phrase_label">Satu frasa pemulihan</string>
     <string name="onboarding_msg_intro_bullet_phrase_sub">Frasa 24 kata dompet Anda juga memulihkan identitas pesan Anda.</string>
 
