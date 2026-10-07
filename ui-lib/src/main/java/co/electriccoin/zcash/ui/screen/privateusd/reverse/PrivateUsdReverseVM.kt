@@ -193,6 +193,7 @@ class PrivateUsdReverseVM(
                     holdings.balance.refreshFailed &&
                         holdings.balance.balances == null
                 },
+            isUsdBalanceRefreshing = holdings.balance.isRefreshing,
             onRefreshBalance = { balanceRepository.refresh() },
         )
     }

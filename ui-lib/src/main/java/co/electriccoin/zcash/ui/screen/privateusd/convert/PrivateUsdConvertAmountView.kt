@@ -39,9 +39,12 @@ internal fun PrivateUsdConvertAmountView(
     isZecBalanceLoading: Boolean = false,
     isUsdBalanceLoading: Boolean = false,
     usdBalanceError: StringResource? = null,
+    isUsdBalanceRefreshing: Boolean = false,
     onRefreshBalance: () -> Unit = {},
 ) {
     fun loading(asset: ConvertAsset) = if (asset == ConvertAsset.ZEC) isZecBalanceLoading else isUsdBalanceLoading
+
+    fun refresh(asset: ConvertAsset) = onRefreshBalance.takeIf { asset == ConvertAsset.PRIVATE_USD }
 
     fun available(asset: ConvertAsset) =
         when (asset) {
@@ -57,6 +60,8 @@ internal fun PrivateUsdConvertAmountView(
         isInvalid = isInvalid,
         onMax = onMax,
         isLoading = loading(direction.from),
+        onRefresh = refresh(direction.from),
+        isRefreshing = isUsdBalanceRefreshing,
     )
     PrivateUsdDirectionToggle(onClick = onSwitchDirection)
     AssetAmount(
@@ -67,6 +72,8 @@ internal fun PrivateUsdConvertAmountView(
         note = stringResource(R.string.convert_estimated_amount),
         isInvalid = false,
         onMax = null,
+        onRefresh = refresh(direction.to),
+        isRefreshing = isUsdBalanceRefreshing,
         isLoading = loading(direction.to),
     )
     if (isUsdBalanceLoading) {
@@ -75,19 +82,10 @@ internal fun PrivateUsdConvertAmountView(
             style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.textMuted)
         )
     } else if (usdBalanceError != null) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            BasicText(
-                text = usdBalanceError.getValue(),
-                modifier = Modifier.weight(1f),
-                style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.danger)
-            )
-            ZappRefreshButton(
-                false,
-                stringResource(R.string.private_usd_refresh),
-                stringResource(R.string.private_usd_updating),
-                onRefreshBalance
-            )
-        }
+        BasicText(
+            text = usdBalanceError.getValue(),
+            style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.danger)
+        )
     }
 }
 
@@ -101,12 +99,25 @@ private fun AssetAmount(
     isInvalid: Boolean,
     onMax: (() -> Unit)?,
     isLoading: Boolean,
+    onRefresh: (() -> Unit)?,
+    isRefreshing: Boolean,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.md)) {
-        BasicText(
-            text = stringResource(asset.label),
-            style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.textMuted),
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicText(
+                text = stringResource(asset.label),
+                modifier = Modifier.weight(1f),
+                style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.textMuted),
+            )
+            onRefresh?.let {
+                ZappRefreshButton(
+                    isRefreshing = isRefreshing,
+                    contentDescription = stringResource(R.string.private_usd_refresh),
+                    refreshingDescription = stringResource(R.string.private_usd_updating),
+                    onClick = it,
+                )
+            }
+        }
         ZappOfframpHeroAmountField(
             symbol = if (asset == ConvertAsset.PRIVATE_USD) currencySymbol else "",
             leadingIcon = painterResource(asset.icon),

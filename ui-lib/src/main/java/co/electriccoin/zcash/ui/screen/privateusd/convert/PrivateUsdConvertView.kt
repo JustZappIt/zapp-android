@@ -71,6 +71,7 @@ private fun Amount(
         isZecBalanceLoading = state.isZecBalanceLoading,
         isUsdBalanceLoading = state.isUsdBalanceLoading,
         usdBalanceError = state.usdBalanceError,
+        isUsdBalanceRefreshing = state.isUsdBalanceRefreshing,
         onRefreshBalance = state.onRefreshBalance,
         onMax = state.onMax,
         onSwitchDirection = onSwitchDirection,

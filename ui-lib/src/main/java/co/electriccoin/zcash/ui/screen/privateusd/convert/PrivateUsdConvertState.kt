@@ -36,6 +36,7 @@ internal data class PrivateUsdConvertState(
     val isZecBalanceLoading: Boolean = false,
     val isUsdBalanceLoading: Boolean = false,
     val usdBalanceError: StringResource? = null,
+    val isUsdBalanceRefreshing: Boolean = false,
     val onRefreshBalance: () -> Unit = {},
 )
 
