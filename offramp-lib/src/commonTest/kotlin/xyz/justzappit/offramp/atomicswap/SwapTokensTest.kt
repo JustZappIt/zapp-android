@@ -5,13 +5,16 @@ package xyz.justzappit.offramp.atomicswap
 
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.request.HttpResponseData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
+import kotlinx.io.IOException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -20,53 +23,134 @@ import kotlin.io.encoding.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class SwapTokensTest {
     @Test
-    fun anAcceptAskedForATokenGoesOnceMoreWithOneThatSurvivesARestartAndIsNeverSentTwice() =
+    fun aRefusedAcceptsTokenPaysForTheNextAndOneTheMakerKeptUnansweredGivesWayToTheNext() =
         runTest {
-            val store = Store()
-            val issuer = Issuer(left = 2)
-            val maker = Maker(PINNED_ISSUER)
+            val device = Device()
+            val maker = Maker(device)
 
-            assertEquals(ACCEPTED, maker.client(tokens(store, issuer)).accept(QUOTE_ID, ACCEPTANCE))
-            assertEquals(1, issuer.batches, "a short batch: the issuer had two of three left")
-            assertEquals(1, store.state.held.size)
+            maker.refused += quote(1)
+            assertFailsWith<AtomicSwapHttpException.Refused> { maker.client().accept(quote(1), swap(1), ACCEPTANCE) }
+            maker.client().accept(quote(2), swap(2), ACCEPTANCE)
+            maker.losesAnswer = true
+            val lost = maker.client()
+            assertFailsWith<AtomicSwapHttpException.Unreachable> { lost.accept(quote(3), swap(3), ACCEPTANCE) }
+            maker.client().accept(quote(4), swap(4), ACCEPTANCE)
 
-            assertEquals(ACCEPTED, maker.client(tokens(store, issuer)).accept(QUOTE_ID, ACCEPTANCE))
-            assertEquals(1, issuer.batches, "the token kept across the restart pays")
-            val spent = maker.authorizations.filterNotNull()
-            assertEquals(listOf(null, spent[0], null, spent[1]), maker.authorizations)
-            assertEquals(2, spent.toSet().size)
-
-            val tomorrow = maker.client(tokens(store, issuer))
-            val exhausted = assertFailsWith<AtomicSwapBlockedException> { tomorrow.accept(QUOTE_ID, ACCEPTANCE) }
-            assertEquals(AtomicSwapBlock.TOKENS_EXHAUSTED, exhausted.reason)
-            assertEquals(1, issuer.batches, "a spent day isn't asked again")
+            val sent = maker.paid.map { it.token }
+            assertEquals(sent[0], sent[1], "the refused accept's token paid for the next")
+            assertEquals(sent[2], sent[3], "the token whose answer was lost went first")
+            assertNotEquals(sent[3], sent[4], "the maker refused it, and the next one paid")
+            assertEquals(listOf(400, 200, 200, 401, 200), maker.paid.map { it.status })
+            assertEquals(1, device.issuer.batches)
+            assertTrue(maker.paid.all { it.request != null } && maker.unpaid.none { "tokenRequest" in it })
+            val asked = device.state.returns.map { it.swapId }
+            assertEquals((1..4).map { swap(it) }, asked, "the request sent with the token the maker refused is dropped")
         }
 
     @Test
-    fun aChallengeForAnotherIssuerFetchesNothingAndASpentDaySaysSo() =
+    fun aTokenHandedBackIsSpentOnlyOnceTheIssuersAreGoneAndAtOnceThen() =
         runTest {
-            val issuer = Issuer(left = 0)
+            val device = Device(left = 2)
+            val maker = Maker(device)
+            val client = maker.client()
 
-            val elsewhere = Maker("elsewhere").client(tokens(Store(), issuer))
-            val refused = assertFailsWith<AtomicSwapBlockedException> { elsewhere.accept(QUOTE_ID, ACCEPTANCE) }
-            assertEquals(AtomicSwapBlock.TOKENS_REFUSED, refused.reason)
-            assertEquals(0, issuer.requests)
+            client.acceptReverse(quote(1), swap(1), ACCEPTANCE)
+            client.collectReverseToken(swap(1))
+            maker.paidIn += swap(1)
+            client.collectReverseToken(swap(1))
+            client.collectReverseToken(swap(1))
+            assertEquals(2, maker.statusReads, "read until the token came back, and not after")
+            val returned = device.state.held.single { it.tokenKey == RETURN_KEY }
+            assertEquals(maker.paid[0].request, returned.token, "the maker's signature finalized the accept's request")
 
-            val store = Store()
-            val spent = Maker(PINNED_ISSUER).client(tokens(store, issuer))
-            val exhausted = assertFailsWith<AtomicSwapBlockedException> { spent.accept(QUOTE_ID, ACCEPTANCE) }
-            assertEquals(AtomicSwapBlock.TOKENS_EXHAUSTED, exhausted.reason)
-            assertTrue(store.state.held.isEmpty())
+            client.accept(quote(2), swap(2), ACCEPTANCE)
+            client.accept(quote(3), swap(3), ACCEPTANCE)
+            assertEquals(listOf(ISSUER_KEY, ISSUER_KEY, RETURN_KEY), maker.paid.map { it.key }, "the issuer's go first")
+            assertEquals(returned.token, maker.paid[2].token)
+            val none = assertFailsWith<AtomicSwapBlockedException> { client.accept(quote(4), swap(4), ACCEPTANCE) }
+            assertEquals(AtomicSwapBlock.TOKENS_EXHAUSTED, none.reason)
+
+            maker.paidIn += swap(2)
+            client.collectToken(swap(2))
+            client.accept(quote(4), swap(4), ACCEPTANCE)
+            assertEquals(RETURN_KEY, maker.paid.last().key, "a token handed back pays as soon as it's held")
+            assertEquals(1, device.issuer.batches)
         }
 
-    private fun tokens(
-        store: Store,
-        issuer: Issuer
-    ) = SwapTokens(ISSUER, { HttpClient(issuer.engine) }, Crypto(), { ByteArray(32) { 1 } }, store, { NOW })
+    @Test
+    fun nothingFromAnEarlierDayIsSentAndOnlyTodaysChallengeIsTaken() =
+        runTest {
+            val device = Device(left = 7)
+            device.now = NOW - SECONDS_PER_DAY
+            val maker = Maker(device)
+            val client = maker.client()
+            client.accept(quote(1), swap(1), ACCEPTANCE)
+            maker.paidIn += swap(1)
+            client.collectToken(swap(1))
+            maker.refused += quote(2)
+            assertFailsWith<AtomicSwapHttpException.Refused> { client.accept(quote(2), swap(2), ACCEPTANCE) }
+            client.accept(quote(3), swap(3), ACCEPTANCE)
+            maker.paidIn += swap(3)
+
+            device.now = NOW
+            client.collectToken(swap(3))
+            device.tokens().prefetch()
+            assertTrue(device.state.run { held.all { it.day == TODAY } && returns.isEmpty() })
+            client.accept(quote(4), swap(4), ACCEPTANCE)
+            assertEquals(listOf(200, 400, 200, 200), maker.paid.map { it.status }, "no token of yesterday's was sent")
+            assertEquals(TODAY, maker.paid.last().day)
+            assertEquals(1, maker.statusReads, "yesterday's request for its token back was dropped unread")
+            assertEquals(2, device.issuer.batches)
+
+            maker.day = TODAY + 2
+            val tomorrow = assertFailsWith<AtomicSwapBlockedException> { client.accept(quote(5), swap(5), ACCEPTANCE) }
+            maker.day = null
+            maker.issuer = "elsewhere"
+            val elsewhere = assertFailsWith<AtomicSwapBlockedException> { client.accept(quote(5), swap(5), ACCEPTANCE) }
+            assertEquals(AtomicSwapBlock.TOKENS_REFUSED, tomorrow.reason)
+            assertEquals(AtomicSwapBlock.TOKENS_REFUSED, elsewhere.reason)
+            assertEquals(4, maker.paid.size)
+
+            maker.issuer = PINNED_ISSUER
+            maker.day = TODAY + 1
+            device.now = (TODAY + 1) * SECONDS_PER_DAY - 5 * 60
+            client.accept(quote(6), swap(6), ACCEPTANCE)
+            assertEquals(TODAY + 1, maker.paid.last().day, "the maker's day turned minutes before ours")
+        }
+
+    @Test
+    fun aMakerThatTakesNoTokensIsAcceptedWithoutOneOrARequestForOne() =
+        runTest {
+            val device = Device()
+            val maker = Maker(device, takesTokens = false)
+
+            maker.client().acceptReverse(quote(1), swap(1), ACCEPTANCE)
+            maker.client().accept(quote(2), swap(2), ACCEPTANCE)
+
+            assertEquals(2, maker.unpaid.size)
+            assertTrue(maker.unpaid.none { "tokenRequest" in it } && maker.paid.isEmpty())
+            assertEquals(0, device.issuer.requests)
+        }
+
+    /** One install: its clock, its kept tokens, and the issuer's allowance for it. */
+    private class Device(
+        left: Int = 3,
+    ) {
+        var now = NOW
+        val issuer = Issuer(left)
+        private val store = Store()
+        private val crypto = Crypto()
+
+        val state: SwapTokenState get() = store.state
+
+        fun tokens() =
+            SwapTokens(ISSUER, { HttpClient(issuer.engine) }, crypto, { ByteArray(32) { 1 } }, store, { now })
+    }
 
     private class Store : SwapTokenStore {
         var state = SwapTokenState()
@@ -90,7 +174,7 @@ class SwapTokensTest {
                 when (request.url.encodedPath) {
                     "/issuer/v1/token-key" -> {
                         respond(
-                            """{"issuer":"$PINNED_ISSUER","tokenKey":"$PINNED_KEY","tokensPerDay":3}""",
+                            """{"issuer":"$PINNED_ISSUER","tokenKey":"$ISSUER_KEY","tokensPerDay":3}""",
                             headers = JSON_HEADERS,
                         )
                     }
@@ -116,76 +200,185 @@ class SwapTokensTest {
             }
     }
 
-    /** Asks for a token under [issuer]'s name until a request carries one. */
+    /**
+     * zecSwap's maker, with `[tokens]` unless not [takesTokens]: it asks an accept for a token on its day, keeps the
+     * token only once it takes the quote, wants a request for it back, and signs that request once the swap is paid in.
+     */
     private class Maker(
-        private val issuer: String,
+        private val device: Device,
+        private val takesTokens: Boolean = true,
     ) {
-        val authorizations = mutableListOf<String?>()
+        val refused = mutableSetOf<String>()
+        val paidIn = mutableSetOf<SwapId>()
+        var losesAnswer = false
+        var day: Long? = null
+        var issuer = PINNED_ISSUER
+        val paid = mutableListOf<Paid>()
+        val unpaid = mutableListOf<String>()
+        var statusReads = 0
+        private val spent = mutableSetOf<String>()
+        private val requests = mutableMapOf<String, String>()
         private val http =
             HttpClient(
                 MockEngine { request ->
-                    val authorization = request.headers[HttpHeaders.Authorization]
-                    authorizations += authorization
-                    if (authorization == null) {
-                        respond(
-                            """{"code":"tokenRequired","error":"this request takes a token"}""",
-                            HttpStatusCode.Unauthorized,
-                            headersOf(
-                                HttpHeaders.WWWAuthenticate,
-                                "PrivateToken challenge=\"${base64Url.encode(issuer.encodeToByteArray())}\", " +
-                                    "token-key=\"$PINNED_KEY\"",
-                            ),
-                        )
+                    val path = request.url.encodedPath
+                    if (path.endsWith("/accept")) {
+                        val body = (request.body as TextContent).text
+                        val token = request.headers[HttpHeaders.Authorization]?.substringAfter('"')?.removeSuffix("\"")
+                        accept(path.removeSuffix("/accept").substringAfterLast('/'), body, token)
                     } else {
-                        respond(
-                            """{"swapId":"${ACCEPTED.swapId}","t0":${ACCEPTED.t0},"t1":${ACCEPTED.t1}}""",
-                            headers = JSON_HEADERS,
-                        )
+                        statusReads++
+                        val id = path.substringAfterLast('/')
+                        val signed = requests[id]?.takeIf { SwapId.parse(id) in paidIn }
+                        val tokenReturn = signed?.let { "\"$it\"" }
+                        respond("""{"swapId":"$id","tokenReturn":$tokenReturn}""", headers = JSON_HEADERS)
                     }
                 }
             )
 
-        fun client(tokens: SwapTokenSource) = MakerClient(http, Url("https://maker"), tokens)
+        fun client() = MakerClient(http, Url("https://maker"), device.tokens())
+
+        private fun MockRequestHandleScope.accept(
+            quote: String,
+            body: String,
+            token: String?,
+        ): HttpResponseData {
+            if (token == null) unpaid += body
+            val fields = Json.parseToJsonElement(body).jsonObject
+            val request = fields["tokenRequest"]?.jsonPrimitive?.content
+            val status = answer(quote, request, token)
+            if (token != null) paid += Paid(token, request, status.value)
+            return when (status) {
+                HttpStatusCode.Unauthorized -> {
+                    val asked = "PrivateToken challenge=\"${base64Url.encode(challenge())}\", token-key=\"$ISSUER_KEY\""
+                    respond("""{"code":"tokenRequired"}""", status, headersOf(HttpHeaders.WWWAuthenticate, asked))
+                }
+
+                HttpStatusCode.BadRequest -> {
+                    respond("""{"code":"rejected","error":"refused"}""", status)
+                }
+
+                else -> {
+                    token?.let { spent += it }
+                    request?.let { requests[quote] = it }
+                    if (losesAnswer) {
+                        losesAnswer = false
+                        throw IOException("the answer was lost")
+                    }
+                    respond("""{"swapId":"$quote","t0":1790003600,"t1":1790007200}""", headers = JSON_HEADERS)
+                }
+            }
+        }
+
+        // A token is held only if it's good on the maker's day and unspent; an accept refused before the quote is
+        // taken, for a refused quote or a request for the token back that's missing or not wanted, leaves it unspent.
+        private fun answer(
+            quote: String,
+            request: String?,
+            token: String?,
+        ): HttpStatusCode {
+            val isHeld =
+                token != null &&
+                    token !in spent &&
+                    token.parts()[1] in setOf(ISSUER_KEY, RETURN_KEY) &&
+                    token.challenge().contentEquals(challenge())
+            return when {
+                takesTokens && !isHeld -> HttpStatusCode.Unauthorized
+                quote in refused || takesTokens != (request != null) -> HttpStatusCode.BadRequest
+                else -> HttpStatusCode.OK
+            }
+        }
+
+        private fun challenge() = challenge(issuer, day ?: (device.now / SECONDS_PER_DAY))
     }
 
-    /** RFC 9578's math is zecSwap's to test: here a challenge names its issuer, and a token is its request signed. */
+    /** A paid accept as the maker saw it: the token, base64url, the request for one back, and the answer. */
+    private class Paid(
+        val token: String,
+        val request: String?,
+        val status: Int,
+    ) {
+        val key: String get() = token.parts()[1]
+        val day: Long get() = dayOf(token.challenge())
+    }
+
+    /** RFC 9578's math is zecSwap's to test: here a request names its key and challenge, and signing leaves it be. */
     private class Crypto : PrivacyPassClient {
-        private var next: Byte = 0
+        private var next = 0
 
         override fun challenge(header: String): TokenChallenge {
             val (challenge, key) = Regex("\"([^\"]*)\"").findAll(header).map { it.groupValues[1] }.toList()
             val bytes = base64Url.decode(challenge)
-            return TokenChallenge(bytes, bytes.decodeToString(), base64Url.decode(key))
+            return TokenChallenge(bytes, bytes.copyOfRange(4, 4 + bytes[3]).decodeToString(), base64Url.decode(key))
         }
 
         override fun blind(
             challenge: ByteArray,
             tokenKey: ByteArray
-        ) = ByteArray(BLINDED) { next }.let { BlindedToken(it, it).also { next++ } }
+        ): BlindedToken {
+            val request = "${next++}|${base64Url.encode(tokenKey)}|${base64Url.encode(challenge)}".encodeToByteArray()
+            return BlindedToken(request, request)
+        }
 
         override fun finalize(
             pending: ByteArray,
             tokenKey: ByteArray,
             blindSignature: ByteArray
         ): ByteArray {
-            check(pending.contentEquals(blindSignature)) { "a signature for another request" }
-            return pending
+            val key = pending.decodeToString().split('|')[1]
+            return pending.takeIf { it.contentEquals(blindSignature) && key == base64Url.encode(tokenKey) } ?: refuse()
         }
+
+        // As libzecswap's refusal reaches the app.
+        private fun refuse(): Nothing =
+            throw AtomicSwapBlockedException(AtomicSwapBlock.TOKENS_REFUSED, "a signature for another request")
 
         override fun authorization(token: ByteArray) = "PrivateToken token=\"${base64Url.encode(token)}\""
     }
 
     private companion object {
         const val NOW = 1_790_000_000L
-        const val BLINDED = 256
+        const val SECONDS_PER_DAY = 86_400L
+        const val TODAY = NOW / SECONDS_PER_DAY
         const val PINNED_ISSUER = "issuer.test"
-        const val QUOTE_ID = "0x2222222222222222222222222222222222222222222222222222222222222222"
         val base64Url = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
-        val PINNED_KEY = base64Url.encode("a fake token key".encodeToByteArray())
+        val ISSUER_KEY = base64Url.encode("a fake token key".encodeToByteArray())
+        val RETURN_KEY = base64Url.encode("a fake return key".encodeToByteArray())
         val ISSUER =
-            SwapTokenIssuer(Url("https://tokens/issuer"), PINNED_ISSUER, PINNED_KEY, TokenAttestation.INSECURE_TEST)
-        val ACCEPTED = SwapAccepted(SwapId.of(ByteArray(32) { 3 }), 1_790_003_600, 1_790_007_200)
+            SwapTokenIssuer(
+                Url("https://tokens/issuer"),
+                PINNED_ISSUER,
+                ISSUER_KEY,
+                TokenAttestation.INSECURE_TEST,
+                RETURN_KEY,
+            )
         val ACCEPTANCE = SwapAcceptance("0x" + "0c".repeat(64), "0x" + "04".repeat(64), "0x" + "05".repeat(64))
         val JSON_HEADERS = headersOf(HttpHeaders.ContentType, "application/json")
+
+        fun swap(n: Int) = SwapId.of(ByteArray(32) { n.toByte() })
+
+        fun quote(n: Int) = swap(n).hex
+
+        val HeldToken.day get() = dayOf(base64Url.decode(challenge))
+
+        fun String.parts() = base64Url.decode(this).decodeToString().split('|')
+
+        fun String.challenge() = base64Url.decode(parts()[2])
+
+        /** RFC 9577's challenge, dated as zecSwap's makers date theirs. */
+        fun challenge(
+            issuer: String,
+            day: Long
+        ): ByteArray {
+            val name = issuer.encodeToByteArray()
+            val dated = ByteArray(24) + ByteArray(8) { (day ushr 8 * (7 - it)).toByte() }
+            val origin = byteArrayOf(0, 5) + "maker".encodeToByteArray()
+            return byteArrayOf(0, 2, 0, name.size.toByte()) + name + byteArrayOf(32) + dated + origin
+        }
+
+        fun dayOf(challenge: ByteArray): Long {
+            val at = 5 + challenge[3] + 24
+            return challenge.copyOfRange(at, at + 8).fold(0L) { day, byte -> day shl 8 or (byte.toLong() and 0xff) }
+        }
     }
 }

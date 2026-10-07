@@ -168,11 +168,14 @@ abstract class ReverseSwapDriverFixtures {
 
         override suspend fun acceptReverse(
             quoteId: String,
+            swapId: SwapId,
             acceptance: SwapAcceptance,
         ): SwapAccepted {
             accepts++
             return SwapAccepted(record.swapId, record.quote.readyDeadline, record.quote.refundAfter)
         }
+
+        override suspend fun collectReverseToken(swapId: SwapId) = Unit
 
         override suspend fun quote(
             amount: Usdc6,
@@ -182,8 +185,11 @@ abstract class ReverseSwapDriverFixtures {
 
         override suspend fun accept(
             quoteId: String,
+            swapId: SwapId,
             acceptance: SwapAcceptance,
         ) = error("forward only")
+
+        override suspend fun collectToken(swapId: SwapId) = error("forward only")
 
         override suspend fun terms() = RelayerTerms(relayer, ChainId(11_155_111), CONTRACT, Usdc6.ofMicros(100_000))
 

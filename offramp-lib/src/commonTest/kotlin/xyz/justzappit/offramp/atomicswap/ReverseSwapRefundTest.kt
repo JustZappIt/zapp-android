@@ -455,13 +455,16 @@ class ReverseSwapRefundTest : ReverseSwapDriverFixtures() {
         }
 
     @Test
-    fun aMakerOnAnotherZcashNetworkIsNeverQuoted() =
+    fun aMakerOnAnotherZcashNetworkOrReturningTokensUnderAKeyNotPinnedIsNeverQuoted() =
         runTest {
             val h = Harness()
             h.info = h.info.copy(zcashNetwork = SwapZcashNetwork.MAINNET)
 
             val refused = assertFailsWith<AtomicSwapBlockedException> { h.driver.quote(AMOUNT) }
             assertEquals(AtomicSwapBlock.WRONG_DEPLOYMENT, refused.reason)
+            h.info = h.info.copy(zcashNetwork = SwapZcashNetwork.TESTNET, tokenReturnKey = "a key no build pins")
+            val marking = assertFailsWith<AtomicSwapBlockedException> { h.driver.quote(AMOUNT) }
+            assertEquals(AtomicSwapBlock.TOKENS_REFUSED, marking.reason)
             assertEquals(0, h.nextIndex)
         }
 

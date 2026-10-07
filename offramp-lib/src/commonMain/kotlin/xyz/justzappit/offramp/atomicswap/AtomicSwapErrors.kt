@@ -128,7 +128,7 @@ enum class AtomicSwapBlock {
     /** This device's tokens for the UTC day are spent, so no maker accepts another conversion before 00:00 UTC. */
     TOKENS_EXHAUSTED,
 
-    /** The issuer refused this device, or the maker asked for tokens the pinned issuer doesn't sign. */
+    /** The issuer refused this device, or the maker named a key, issuer or day this build takes no tokens for. */
     TOKENS_REFUSED,
 
     /** No token could be fetched now: the issuer is unreachable or its answer doesn't read. */

@@ -85,7 +85,7 @@ class AtomicSwapDriver(
         store.save(record)
         val accepted =
             try {
-                maker.accept(quote.quoteId, acceptance.wire())
+                maker.accept(quote.quoteId, record.swapId, acceptance.wire())
             } catch (e: AtomicSwapHttpException.Refused) {
                 return ending.conclude(record, AtomicSwapOutcome.NothingSent(refusal(e) ?: throw e))
             } catch (e: AtomicSwapBlockedException) {
@@ -109,11 +109,15 @@ class AtomicSwapDriver(
     ): AtomicSwapStep {
         val end = record.end
         val terms = if (end == null) keys.terms(record, deployment) else null
-        return when {
-            end != null -> AtomicSwapStep.Finished(end.outcome)
-            terms == null -> notOnChain(record, isAnswered = false)
-            else -> step(record, terms, onActivity)
-        }
+        val step =
+            when {
+                end != null -> AtomicSwapStep.Finished(end.outcome)
+                terms == null -> notOnChain(record, isAnswered = false)
+                else -> step(record, terms, onActivity)
+            }
+        // The maker hands the accept's token back once it sees the deposit.
+        if (end == null && record.deposit != SwapDeposit.NotStarted) maker.collectToken(record.swapId)
+        return step
     }
 
     /** Drops a swap that never reached the chain, such as one whose accept failed. */

@@ -114,6 +114,8 @@ class ReverseSwapDriver(
                 ?.let { stages.advance(it, deposit?.takeIf { _ -> it.index == snapshot.index }, outbox) }
         }
         store.active()?.takeIf { it.isAccepting }?.let { accepted(it.index) }
+        // The maker hands the accept's token back once the escrow is funded.
+        if (snapshot.funding != null) maker.collectReverseToken(snapshot.swapId)
         return store.active()
     }
 
@@ -395,7 +397,7 @@ internal class ReverseSwapOpening(
     private suspend fun requireAccepted(record: ReverseSwapRecord) {
         val accepted =
             try {
-                maker.acceptReverse(record.quote.terms.quoteId, record.acceptance)
+                maker.acceptReverse(record.quote.terms.quoteId, record.swapId, record.acceptance)
             } catch (e: AtomicSwapHttpException.Refused) {
                 throw e.code?.let(::lastWord) ?: e
             }

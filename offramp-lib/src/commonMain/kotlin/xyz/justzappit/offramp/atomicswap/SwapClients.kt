@@ -37,9 +37,10 @@ interface SwapMaker {
         payoutNote: NoteCommitment
     ): SwapQuote
 
-    /** The swap the maker opened for [quoteId], and the deadlines it picked. */
+    /** The swap the maker opened for [quoteId], [swapId] if it took our share, and the deadlines it picked. */
     suspend fun accept(
         quoteId: String,
+        swapId: SwapId,
         acceptance: SwapAcceptance
     ): SwapAccepted
 
@@ -52,8 +53,15 @@ interface SwapMaker {
 
     suspend fun acceptReverse(
         quoteId: String,
+        swapId: SwapId,
         acceptance: SwapAcceptance
     ): SwapAccepted
+
+    /** Holds the token forward swap [swapId]'s accept paid with, if handed back; a failed read is tried again later. */
+    suspend fun collectToken(swapId: SwapId)
+
+    /** As [collectToken], for a reverse swap. */
+    suspend fun collectReverseToken(swapId: SwapId)
 }
 
 /** A relayer, which sends the transactions of a user with no account on the chain, each with its swap's terms. */
@@ -105,7 +113,7 @@ interface SwapRelayer {
 
 /**
  * The maker over HTTP, on a client that never retries: quotes are single-use, and a timed-out accept may open. An
- * accept the maker asks a token for goes once more with one from [tokens].
+ * accept the maker asks a token for goes again with one from [tokens], which the swap hands back once paid into.
  */
 class MakerClient(
     http: HttpClient,
@@ -131,15 +139,9 @@ class MakerClient(
 
     override suspend fun accept(
         quoteId: String,
+        swapId: SwapId,
         acceptance: SwapAcceptance
-    ): SwapAccepted =
-        service.post(
-            "/v1/quote/$quoteId/accept",
-            acceptance,
-            SwapAcceptance.serializer(),
-            SwapAccepted.serializer(),
-            tokens = tokens,
-        )
+    ): SwapAccepted = service.accept("/v1/quote/$quoteId/accept", swapId, acceptance, tokens)
 
     override suspend fun quoteReverse(
         amount: Usdc6,
@@ -156,15 +158,29 @@ class MakerClient(
 
     override suspend fun acceptReverse(
         quoteId: String,
+        swapId: SwapId,
         acceptance: SwapAcceptance
-    ): SwapAccepted =
-        service.post(
-            "/v1/reverse/quote/$quoteId/accept",
-            acceptance,
-            SwapAcceptance.serializer(),
-            SwapAccepted.serializer(),
-            tokens = tokens,
-        )
+    ): SwapAccepted = service.accept("/v1/reverse/quote/$quoteId/accept", swapId, acceptance, tokens)
+
+    override suspend fun collectToken(swapId: SwapId) = collect(swapId, "/v1/swaps/${swapId.hex}")
+
+    override suspend fun collectReverseToken(swapId: SwapId) = collect(swapId, "/v1/reverse/swaps/${swapId.hex}")
+
+    // Read only while a token is awaited back, and again at the swap's next step if the maker didn't answer: everything
+    // else about the swap is read from the chain.
+    private suspend fun collect(
+        swapId: SwapId,
+        path: String
+    ) {
+        if (!tokens.awaitsReturn(swapId)) return
+        val status =
+            try {
+                service.get(path, MakerSwapStatus.serializer())
+            } catch (_: AtomicSwapHttpException) {
+                return
+            }
+        tokens.collect(swapId, status.tokenReturn)
+    }
 
     // The maker counts a quote's amount in `u32` token base units.
     private fun Usdc6.units(): Long {
@@ -248,26 +264,43 @@ internal class SwapService(
         check: (T) -> Unit = {},
     ): T = read(exchange { http.get(url(path)) { quick() } }, answer, check)
 
-    /** A request that [tokens] pay for, if the service asks: then it goes once more with one, and never again. */
     suspend fun <B, T> post(
         path: String,
         body: B,
         request: KSerializer<B>,
         answer: KSerializer<T>,
         isQuick: Boolean = false,
-        tokens: SwapTokenSource? = null,
         check: (T) -> Unit = {},
-    ): T {
-        val payload = json.encodeToString(request, body)
-        val first = deliver(path, payload, isQuick, authorization = null)
-        val challenge = first.challenge
-        val settled =
-            if (tokens != null && challenge != null && first.status == HttpStatusCode.Unauthorized) {
-                deliver(path, payload, isQuick, tokens.spend(challenge))
-            } else {
-                first
-            }
-        return read(settled, answer, check)
+    ): T = read(deliver(path, json.encodeToString(request, body), isQuick, authorization = null), answer, check)
+
+    /**
+     * An accept, which the maker may ask a token for: then it goes again with one from [tokens] and a request for it
+     * back, and with the next token while the maker refuses the one sent, [PAID_ATTEMPTS] times at most.
+     */
+    suspend fun accept(
+        path: String,
+        swapId: SwapId,
+        acceptance: SwapAcceptance,
+        tokens: SwapTokenSource,
+    ): SwapAccepted {
+        val unpaid = json.encodeToString(SwapAcceptance.serializer(), acceptance)
+        var answer = deliver(path, unpaid, isQuick = false, authorization = null)
+        var paid = 0
+        while (paid < PAID_ATTEMPTS && answer.status == HttpStatusCode.Unauthorized) {
+            val challenge = answer.challenge ?: break
+            val payment = tokens.pay(swapId, challenge)
+            val body = json.encodeToString(SwapAcceptance.serializer(), acceptance.copy(tokenRequest = payment.request))
+            answer =
+                try {
+                    deliver(path, body, isQuick = false, payment.authorization)
+                } catch (e: AtomicSwapHttpException.Unreachable) {
+                    tokens.settle(payment, status = null)
+                    throw e
+                }
+            tokens.settle(payment, answer.status)
+            paid++
+        }
+        return read(answer, SwapAccepted.serializer()) {}
     }
 
     private suspend fun deliver(
@@ -342,6 +375,7 @@ internal class SwapService(
 
     private companion object {
         const val ERROR_EXCERPT = 200
+        const val PAID_ATTEMPTS = 3
         val QUICK_TIMEOUT = 20.seconds
         val json =
             Json {

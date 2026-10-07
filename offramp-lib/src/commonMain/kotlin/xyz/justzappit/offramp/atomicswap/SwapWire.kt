@@ -34,6 +34,8 @@ data class SwapAcceptance(
     val userShare: String,
     val userProof: String,
     val viewingKeys: String,
+    /** On an accept a token pays for only: the blinded request for it back, base64url. */
+    val tokenRequest: String? = null,
 )
 
 /** A lock or `ready` the swap's own key signed, for a relayer to send. */
@@ -108,6 +110,14 @@ data class MakerInfo(
     val token: Address,
     val zcashNetwork: SwapZcashNetwork,
     val reverseEnabled: Boolean,
+    /** The key accepts' tokens come back under, base64url SPKI; none where accepts take no tokens. */
+    val tokenReturnKey: String? = null,
+)
+
+/** A maker's status of a swap either way, as far as the app reads it: its accept's token, once handed back. */
+@Serializable
+internal class MakerSwapStatus(
+    val tokenReturn: String? = null,
 )
 
 /** The transactions a relayer request sent, in order. */

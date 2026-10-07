@@ -49,7 +49,10 @@ class SwapClientsTest {
             var answer = """{"error":"quote expired"}"""
             val services = Services { respond(answer, HttpStatusCode.NotFound) }
 
-            val coded = assertFailsWith<AtomicSwapHttpException.Refused> { services.maker.accept(QUOTE_ID, ACCEPTANCE) }
+            val coded =
+                assertFailsWith<AtomicSwapHttpException.Refused> {
+                    services.maker.accept(QUOTE_ID, SWAP_ID, ACCEPTANCE)
+                }
             assertEquals(404, coded.status)
             assertNull(coded.code)
             assertTrue("quote expired" in coded.message.orEmpty())
@@ -247,7 +250,7 @@ class SwapClientsTest {
             val other = SwapId.of(ByteArray(32) { 7 })
             val services = Services { respond("""{"swapId":"${other.hex}","t0":1790003600,"t1":1790007200}""") }
 
-            val accepted = services.maker.acceptReverse(QUOTE_ID, ACCEPTANCE)
+            val accepted = services.maker.acceptReverse(QUOTE_ID, SWAP_ID, ACCEPTANCE)
             assertEquals(SwapAccepted(other, 1_790_003_600, 1_790_007_200), accepted)
             assertEquals(listOf("/maker/v1/reverse/quote/$QUOTE_ID/accept"), services.paths)
             assertEquals(

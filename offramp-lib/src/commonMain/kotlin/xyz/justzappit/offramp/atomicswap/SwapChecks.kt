@@ -20,6 +20,11 @@ internal fun MakerInfo.requireServing(
     if (!serves || (reverse && !reverseEnabled)) {
         throw AtomicSwapBlockedException(AtomicSwapBlock.WRONG_DEPLOYMENT, "the maker serves another deployment")
     }
+    // A return key shown to only some devices would mark the tokens they get back.
+    val returnKey = tokenReturnKey
+    if (returnKey != null && returnKey != deployment.tokenIssuer?.returnKey) {
+        throw AtomicSwapBlockedException(AtomicSwapBlock.TOKENS_REFUSED, "the maker returns tokens under another key")
+    }
 }
 
 /** The fee these terms ask, once they're [deployment]'s own relayer's, not its maker's, and within [limit]. */
