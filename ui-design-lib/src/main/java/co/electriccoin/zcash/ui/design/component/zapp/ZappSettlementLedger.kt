@@ -31,7 +31,7 @@ data class ZappSettlementLedgerRow(
     val label: String,
     val value: String,
     val isDanger: Boolean = false,
-    /** Keeps the value on one line: it shrinks to caption size first, then ends in an ellipsis. */
+    /** Keeps the value on one line: it shrinks to chip size first, then ends in an ellipsis. */
     val isSingleLine: Boolean = false,
 )
 
@@ -102,7 +102,7 @@ private fun Value(row: ZappSettlementLedgerRow) {
     BasicText(
         text = row.value,
         style =
-            ZappTheme.typography.body.copy(
+            ZappTheme.typography.caption.copy(
                 color = if (row.isDanger) ZappTheme.colors.danger else ZappTheme.colors.text,
                 fontWeight = FontWeight.Medium,
             ),
@@ -115,7 +115,7 @@ private fun RowScope.SingleLineValue(row: ZappSettlementLedgerRow) {
     BasicText(
         text = row.value,
         style =
-            ZappTheme.typography.body.copy(
+            ZappTheme.typography.caption.copy(
                 color = if (row.isDanger) ZappTheme.colors.danger else ZappTheme.colors.text,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.End,
@@ -125,8 +125,8 @@ private fun RowScope.SingleLineValue(row: ZappSettlementLedgerRow) {
         maxLines = 1,
         autoSize =
             TextAutoSize.StepBased(
-                minFontSize = ZappTheme.typography.caption.fontSize,
-                maxFontSize = ZappTheme.typography.body.fontSize,
+                minFontSize = ZappTheme.typography.chip.fontSize,
+                maxFontSize = ZappTheme.typography.caption.fontSize,
             ),
     )
 }
