@@ -40,7 +40,6 @@ import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepository
 import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.PeerCashOutRepository
 import co.electriccoin.zcash.ui.common.repository.PeerCashOutRepositoryImpl
-import co.electriccoin.zcash.ui.common.repository.RailgunWalletDebug
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
@@ -124,7 +123,7 @@ val repositoryModule =
                 zcashNetworkProvider = get(),
                 scope = backgroundScope("Railgun"),
             )
-        } binds arrayOf(RailgunWalletRepository::class, RailgunWalletDebug::class)
+        } bind RailgunWalletRepository::class
         single<ReverseSwapRepository> {
             ReverseSwapRepositoryImpl(
                 deployments = get(),

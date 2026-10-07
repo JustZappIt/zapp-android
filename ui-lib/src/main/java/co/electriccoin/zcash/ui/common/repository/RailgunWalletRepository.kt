@@ -20,7 +20,6 @@ import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunBalances
 import xyz.justzappit.railgun.RailgunEvent
 import xyz.justzappit.railgun.RailgunFees
-import xyz.justzappit.railgun.RailgunGasAccount
 import xyz.justzappit.railgun.RailgunMerkletree
 import xyz.justzappit.railgun.RailgunNetwork
 import xyz.justzappit.railgun.RailgunReverseCost
@@ -33,7 +32,6 @@ import xyz.justzappit.railgun.RailgunTransfer
 import xyz.justzappit.railgun.RailgunWallet
 import xyz.justzappit.railgun.gasAccount
 import xyz.justzappit.railgun.signShield
-import java.math.BigInteger
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -56,15 +54,6 @@ interface RailgunWalletRepository {
 
     /** Stops the engine and deletes what it stored, for a wallet about to be wiped. */
     suspend fun reset()
-}
-
-/** What only a debug build's page answers. */
-interface RailgunWalletDebug {
-    /** Null outside Sepolia, where no gas account stands in for a broadcaster. */
-    suspend fun gasAccount(): RailgunGasAccount?
-
-    /** Signs a shield of [amount] wei of the gas account's ETH into the wallet. Nothing is sent. */
-    suspend fun signShield(amount: BigInteger): RailgunSignedTransaction
 }
 
 /** Balances as a sync of the wallet at [address] found them. */
@@ -94,8 +83,7 @@ class RailgunWalletRepositoryImpl(
     mnemonicProvider: RailgunMnemonicProvider,
     zcashNetworkProvider: ZcashNetworkProvider,
     scope: CoroutineScope,
-) : RailgunWalletRepository,
-    RailgunWalletDebug {
+) : RailgunWalletRepository {
     private val network = if (zcashNetworkProvider() == ZcashNetwork.Testnet) RailgunNetwork.SEPOLIA else null
     private val mutableState =
         MutableStateFlow(
@@ -130,12 +118,6 @@ class RailgunWalletRepositoryImpl(
 
     override suspend fun sign(transfer: RailgunTransfer): RailgunSignedTransaction =
         signing { it.sign(transfer) }
-
-    override suspend fun signShield(amount: BigInteger): RailgunSignedTransaction =
-        signing { it.signShield(amount) }
-
-    override suspend fun gasAccount(): RailgunGasAccount? =
-        withSession { session -> session.gasAccountAddress?.let { session.gasAccount() } }
 
     override suspend fun reverseCost(request: RailgunReverseCostRequest): RailgunReverseCost =
         withSession { it.reverseCost(request) }
