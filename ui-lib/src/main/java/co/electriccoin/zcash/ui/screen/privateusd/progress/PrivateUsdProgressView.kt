@@ -82,12 +82,12 @@ private fun Header(state: PrivateUsdProgressState) {
         ZappSuccessHeader(title = result.title, subtitle = result.body)
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.sm)) {
-            BasicText(
-                text = result?.title?.getValue() ?: stringResource(R.string.convert_progress_title),
-                style = ZappTheme.typography.sectionTitle.copy(color = c.text),
-                modifier = Modifier.semantics { heading() },
-            )
             result?.let {
+                BasicText(
+                    text = it.title.getValue(),
+                    style = ZappTheme.typography.sectionTitle.copy(color = c.text),
+                    modifier = Modifier.semantics { heading() },
+                )
                 BasicText(text = it.body.getValue(), style = ZappTheme.typography.body.copy(color = c.textMuted))
             }
             state.amounts?.let {
