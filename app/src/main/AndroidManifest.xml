@@ -69,6 +69,27 @@
                     android:pathPrefix="/c/"
                     android:scheme="https" />
             </intent-filter>
+            <!--
+              Group invite links, and the landing page's handoff. The host must serve the gift host's
+              assetlinks.json: on Android 11 and older one failing host unverifies every host.
+            -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="join.justzappit.xyz"
+                    android:pathPrefix="/g/"
+                    android:scheme="https" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="g"
+                    android:scheme="xyz.justzappit.zapp" />
+            </intent-filter>
         </activity-alias>
 
         <!-- Enable profiling by benchmark -->

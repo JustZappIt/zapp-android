@@ -10,6 +10,7 @@ data class ChatListState(
     val title: StringResource,
     val isLoading: Boolean,
     val items: List<ChatListItemState>,
+    val waitingJoins: List<ChatListWaitingJoinState>,
     val emptyTitle: StringResource,
     val emptySubtitle: StringResource,
     val newConversationContentDescription: StringResource,
@@ -34,6 +35,14 @@ data class ChatListItemState(
     val unreadCount: Int,
     val onClick: () -> Unit,
     val onLeaveSwipe: () -> Unit,
+)
+
+data class ChatListWaitingJoinState(
+    val linkId: String,
+    val title: StringResource,
+    val subtitle: StringResource,
+    val cancelLabel: StringResource,
+    val onCancel: () -> Unit,
 )
 
 data class ChatListNetworkChipState(

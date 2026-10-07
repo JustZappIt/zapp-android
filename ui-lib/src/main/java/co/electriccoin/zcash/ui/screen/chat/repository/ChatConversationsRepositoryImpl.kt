@@ -235,7 +235,48 @@ class ChatConversationsRepositoryImpl(
         refreshJob = scope.launch { refresh() }
     }
 
+    private fun observeGroupLinkEvents() {
+        scope.launch {
+            sdk.groupJoinRequestReceived.collect { request ->
+                // No name or content, like every Zapp notification.
+                val watching = request.conversationId == activeConversationId.value && isInForeground.value
+                if (notificationsEnabled.value == true && !watching) {
+                    chatNotifier.post(
+                        conversationId = request.conversationId,
+                        conversationName = null,
+                        senderName = null,
+                        content = "",
+                    )
+                }
+            }
+        }
+        scope.launch {
+            // Removal also rekeys the group, so the record is read again rather than patched.
+            sdk.removedFromGroup.collect { refresh() }
+        }
+        scope.launch {
+            sdk.groupRekeyed.collect { refresh() }
+        }
+        scope.launch {
+            sdk.groupLinkMemberJoined.collect { refresh() }
+        }
+        scope.launch {
+            sdk.memberRemoved.collect { (conversationId, removedKey) ->
+                _conversations.update { list ->
+                    list?.map { conv ->
+                        if (conv.id == conversationId) {
+                            conv.copy(participantIds = conv.participantIds.filter { it != removedKey })
+                        } else {
+                            conv
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private fun observeConversationEvents() {
+        observeGroupLinkEvents()
         scope.launch {
             sdk.messageReceived.collect { (conversationId, msg) ->
                 if (chatContactsRepository.isBlocked(msg.senderId)) return@collect
