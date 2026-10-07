@@ -45,6 +45,7 @@ internal fun AtomicSwapProblem.message(): StringResource =
             AtomicSwapProblem.DEPOSIT_UNPAYABLE -> R.string.convert_problem_unpayable
             AtomicSwapProblem.ZCASH_REJECTED -> R.string.convert_problem_rejected
             AtomicSwapProblem.MISMATCH -> R.string.convert_problem_mismatch
+            AtomicSwapProblem.TOKENS_UNREACHABLE -> R.string.convert_problem_tokens
             AtomicSwapProblem.UNEXPECTED -> R.string.convert_problem_unexpected
         }
     )

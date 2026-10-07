@@ -133,6 +133,9 @@ enum class AtomicSwapBlock {
 
     /** No token could be fetched now: the issuer is unreachable or its answer doesn't read. */
     TOKENS_UNAVAILABLE,
+
+    /** Tokens are fetched over Tor only, and Tor is off on this device. */
+    TOKENS_NEED_TOR,
 }
 
 internal val AtomicSwapService.label get() = name.lowercase()

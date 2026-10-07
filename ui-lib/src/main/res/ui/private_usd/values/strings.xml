@@ -93,6 +93,8 @@
     <string name="convert_error_maker">The market maker can\'t be reached right now. Try again in a moment.</string>
     <string name="convert_error_maker_busy" tools:ignore="MissingTranslation">The market maker is busy with other conversions. Try again in a few minutes.</string>
     <string name="convert_error_no_tokens_today" tools:ignore="MissingTranslation">This device has used today\'s conversions. More are available after midnight UTC.</string>
+    <string name="convert_error_tokens_unavailable" tools:ignore="MissingTranslation">Zapp couldn\'t get this conversion\'s token over Tor, so nothing was sent. Try again in a moment.</string>
+    <string name="convert_error_tor_off" tools:ignore="MissingTranslation">Conversions get their token over Tor, which is off. Turn on Tor in Settings, then convert again.</string>
     <string name="convert_error_relayer">The relayer that completes conversions can\'t be reached right now. Try again in a moment.</string>
     <string name="convert_error_generic">Couldn\'t get a quote. Try again in a moment.</string>
     <string name="convert_error_ethereum" tools:ignore="MissingTranslation">Zapp can\'t reach Ethereum right now. Try again in a moment.</string>
@@ -161,6 +163,7 @@
     <string name="convert_problem_turn">The market maker holds the claim for a few minutes. Zapp claims as soon as it\'s your turn.</string>
     <string name="convert_problem_wallet">Your Zcash wallet isn\'t ready. Zapp retries once it has synced.</string>
     <string name="convert_problem_unpayable" tools:ignore="MissingTranslation">Your wallet can\'t pay the deposit right now, for example because the network fee went up. Zapp keeps trying. If it still can\'t pay in time, the swap ends and nothing is sent.</string>
+    <string name="convert_problem_tokens" tools:ignore="MissingTranslation">Zapp can\'t get this conversion\'s token over Tor right now. It keeps trying by itself.</string>
     <string name="convert_problem_unexpected">Something went wrong. Zapp keeps trying by itself.</string>
     <string name="convert_problem_rejected" tools:ignore="MissingTranslation">The Zcash network turned down a transaction of this conversion. Zapp keeps sending it until it goes through or runs out.</string>
     <string name="convert_problem_mismatch" tools:ignore="MissingTranslation">What\'s on the chain doesn\'t match this conversion, so Zapp only brings your funds back.</string>

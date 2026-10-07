@@ -73,6 +73,9 @@ enum class AtomicSwapProblem : SwapHold {
 
     /** What's on the chain isn't what the conversion agreed: nothing more is done with it than bringing funds back. */
     MISMATCH,
+
+    /** No token for the maker's accept can be fetched over Tor now. */
+    TOKENS_UNREACHABLE,
     UNEXPECTED,
 }
 
@@ -443,6 +446,10 @@ internal fun AtomicSwapBlock.hold(): SwapHold =
             AtomicSwapProblem.MISMATCH
         }
 
+        AtomicSwapBlock.TOKENS_UNAVAILABLE -> {
+            AtomicSwapProblem.TOKENS_UNREACHABLE
+        }
+
         AtomicSwapBlock.SWAP_UNDER_WAY,
         AtomicSwapBlock.QUOTE_EXPIRED,
         AtomicSwapBlock.DEADLINE_PASSED,
@@ -453,7 +460,7 @@ internal fun AtomicSwapBlock.hold(): SwapHold =
         AtomicSwapBlock.MAKER_BUSY,
         AtomicSwapBlock.TOKENS_EXHAUSTED,
         AtomicSwapBlock.TOKENS_REFUSED,
-        AtomicSwapBlock.TOKENS_UNAVAILABLE -> {
+        AtomicSwapBlock.TOKENS_NEED_TOR -> {
             AtomicSwapProblem.UNEXPECTED
         }
     }

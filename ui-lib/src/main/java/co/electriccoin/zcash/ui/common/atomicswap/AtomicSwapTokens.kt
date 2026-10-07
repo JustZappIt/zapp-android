@@ -3,6 +3,7 @@
 
 package co.electriccoin.zcash.ui.common.atomicswap
 
+import cash.z.ecc.android.sdk.exception.TorUnavailableException
 import cash.z.ecc.android.sdk.model.ZcashNetwork
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
 import co.electriccoin.zcash.preference.model.entry.PreferenceKey
@@ -11,6 +12,7 @@ import co.electriccoin.zcash.ui.common.provider.EncryptedJsonStore
 import co.electriccoin.zcash.ui.common.provider.HttpClientProvider
 import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
 import co.electriccoin.zcash.ui.common.provider.ZcashNetworkProvider
+import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -33,7 +35,7 @@ import xyz.justzappit.offramp.atomicswap.TokenAttestation
 import xyz.justzappit.offramp.atomicswap.TokenChallenge
 import java.security.SecureRandom
 
-/** The makers' Privacy Pass tokens, one supply per pinned issuer, fetched over Tor whatever the user's setting. */
+/** The makers' Privacy Pass tokens, one supply per pinned issuer, fetched over Tor only. */
 class AtomicSwapTokens(
     private val deployments: AtomicSwapDeployments,
     private val httpClientProvider: HttpClientProvider,
@@ -50,8 +52,16 @@ class AtomicSwapTokens(
                     when (issuer.attestation) {
                         TokenAttestation.INSECURE_TEST -> insecureTest
                     }
-                SwapTokens(issuer, httpClientProvider::createTor, PrivacyPassTokens, attestation, store)
+                SwapTokens(issuer, ::torClient, PrivacyPassTokens, attestation, store)
             }
+        }
+
+    // The SDK offers a Tor client only while Tor or exchange rates are on.
+    private suspend fun torClient(): HttpClient =
+        try {
+            httpClientProvider.createTor()
+        } catch (e: TorUnavailableException) {
+            throw AtomicSwapBlockedException(AtomicSwapBlock.TOKENS_NEED_TOR, "Tor is off", e)
         }
 
     /** Fetches the current deployment's tokens ahead, as a quote is asked for and as a conversion ends. */

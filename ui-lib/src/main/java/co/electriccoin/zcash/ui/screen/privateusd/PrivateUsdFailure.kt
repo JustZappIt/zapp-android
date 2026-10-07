@@ -42,6 +42,8 @@ internal enum class PrivateUsdFailure(
     REFUND_UNAVAILABLE(R.string.reverse_refund_unavailable),
     MAKER_BUSY(R.string.convert_error_maker_busy),
     NO_TOKENS_TODAY(R.string.convert_error_no_tokens_today),
+    TOKENS_UNAVAILABLE(R.string.convert_error_tokens_unavailable),
+    TOR_OFF(R.string.convert_error_tor_off),
 
     /** Another conversion is under way: its screen is the place to be. */
     SWAP_UNDER_WAY(null),
@@ -109,7 +111,10 @@ private fun AtomicSwapBlock.toFailure() =
 
         AtomicSwapBlock.DEADLINE_PASSED -> PrivateUsdFailure.TOO_LATE
 
-        AtomicSwapBlock.MAKER_BUSY, AtomicSwapBlock.TOKENS_EXHAUSTED -> tryLater()
+        AtomicSwapBlock.MAKER_BUSY,
+        AtomicSwapBlock.TOKENS_EXHAUSTED,
+        AtomicSwapBlock.TOKENS_UNAVAILABLE,
+        AtomicSwapBlock.TOKENS_NEED_TOR -> tryLater()
 
         AtomicSwapBlock.WRONG_DEPLOYMENT,
         AtomicSwapBlock.RAILGUN_CLOSED,
@@ -117,10 +122,14 @@ private fun AtomicSwapBlock.toFailure() =
         AtomicSwapBlock.MISMATCH,
         AtomicSwapBlock.ZCASH_REJECTED,
         AtomicSwapBlock.INDICES_IN_USE,
-        AtomicSwapBlock.TOKENS_REFUSED,
-        AtomicSwapBlock.TOKENS_UNAVAILABLE -> PrivateUsdFailure.OTHER
+        AtomicSwapBlock.TOKENS_REFUSED -> PrivateUsdFailure.OTHER
     }
 
-// Neither is a failure of the conversion: it can go ahead later, once the maker or this device's allowance has room.
+// None is a failure of the conversion: it can go ahead later, once the maker, this device's allowance or Tor allows.
 private fun AtomicSwapBlock.tryLater() =
-    if (this == AtomicSwapBlock.MAKER_BUSY) PrivateUsdFailure.MAKER_BUSY else PrivateUsdFailure.NO_TOKENS_TODAY
+    when (this) {
+        AtomicSwapBlock.MAKER_BUSY -> PrivateUsdFailure.MAKER_BUSY
+        AtomicSwapBlock.TOKENS_UNAVAILABLE -> PrivateUsdFailure.TOKENS_UNAVAILABLE
+        AtomicSwapBlock.TOKENS_NEED_TOR -> PrivateUsdFailure.TOR_OFF
+        else -> PrivateUsdFailure.NO_TOKENS_TODAY
+    }

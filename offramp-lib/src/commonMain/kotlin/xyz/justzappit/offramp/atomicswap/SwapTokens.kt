@@ -15,9 +15,9 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.io.IOException
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -324,13 +324,6 @@ class SwapTokens(
             )
 
         fun String.isOnOrAfter(day: Long) = decoded()?.challengeDay()?.let { it >= day } == true
-
-        fun String.decoded(): ByteArray? =
-            try {
-                base64Url.decode(this)
-            } catch (_: IllegalArgumentException) {
-                null
-            }
     }
 }
 
@@ -349,7 +342,7 @@ internal class SwapTokenIssuance(
         challenge: String,
         day: Long,
     ): SwapTokenState {
-        val client = http()
+        val client = route()
         val signed =
             try {
                 val perDay = published(client).tokensPerDay.coerceIn(1, MAX_BATCH)
@@ -361,7 +354,7 @@ internal class SwapTokenIssuance(
         val (requests, signatures) = signed
         val tokens =
             requests.zip(signatures) { request, signature ->
-                val token = crypto.finalize(request.pending, tokenKey, base64Url.decode(signature))
+                val token = crypto.finalize(request.pending, tokenKey, signature)
                 HeldToken(challenge, issuer.tokenKey, base64Url.encode(token))
             }
         // The issuer signs only what the day has left: a short batch, or none, spent it.
@@ -383,7 +376,7 @@ internal class SwapTokenIssuance(
     private suspend fun issued(
         client: HttpClient,
         requests: List<BlindedToken>,
-    ): List<String> {
+    ): List<ByteArray> {
         val body =
             TokenRequests(base64Url.encode(attestation.attestation()), requests.map { base64Url.encode(it.blinded) })
         val answer =
@@ -397,13 +390,30 @@ internal class SwapTokenIssuance(
         if (answer.status == HttpStatusCode.TooManyRequests) return emptyList()
         val signatures = decoded(answer, TokenResponses.serializer()).blindSignatures
         if (signatures.size !in 1..requests.size) throw unavailable("the issuer signed ${signatures.size} tokens")
-        return signatures
+        return signatures.map { it.decoded() ?: throw unavailable("the token issuer's answer doesn't read") }
     }
+
+    private suspend fun route(): HttpClient =
+        try {
+            http()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            // Tor that won't start fails with a plain Exception; Tor that's off is already a blocked step.
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            throw e as? AtomicSwapBlockedException ?: unavailable("no route to the token issuer", e)
+        }
 
     private suspend fun exchange(request: suspend () -> HttpResponse): IssuerAnswer =
         try {
             request().let { IssuerAnswer(it.status, it.bodyAsText()) }
-        } catch (e: IOException) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            // Tor's client fails with RuntimeExceptions, not IOExceptions.
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
             throw unavailable("the token issuer is unreachable", e)
         }
 
@@ -516,6 +526,13 @@ private fun ByteArray.number(
 ): Long = copyOfRange(from, from + bytes).fold(0L) { n, byte -> n shl Byte.SIZE_BITS or (byte.toLong() and BYTE_MASK) }
 
 private val base64Url = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
+
+private fun String.decoded(): ByteArray? =
+    try {
+        base64Url.decode(this)
+    } catch (_: IllegalArgumentException) {
+        null
+    }
 
 private fun exhausted() =
     AtomicSwapBlockedException(AtomicSwapBlock.TOKENS_EXHAUSTED, "this device's tokens for today are spent")
