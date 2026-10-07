@@ -157,7 +157,8 @@ class AtomicSwapSessions(
         /** The session of no wallet: work begun in it runs nowhere. */
         const val CLOSED = -1L
 
-        // Forward swaps keep the deployment they were accepted on, found again from their quote.
+        // Forward swaps keep the deployment they were accepted on, found again from their quote. Indices are checked
+        // against these alone: a contract users swapped on stays, or a restored wallet reuses secrets published there.
         private val KNOWN = listOf(AtomicSwapTestnet.deployment)
 
         fun deploymentFor(record: AtomicSwapRecord): AtomicSwapDeployment =
