@@ -93,13 +93,14 @@ internal class PrivateUsdProgressSteps(
         now: Long,
         isSlowToOpen: Boolean
     ): StringResource? {
-        // Enough confirmations and still no word from the maker: the app claims by itself at t0.
+        // Enough confirmations and no word from the maker, so no payout signed: the app claims by itself at t0.
         val silentUntil =
             swap.wait
                 ?.t0
                 ?.takeIf {
                     swap.wait.reason == AtomicSwapWait.CONFIRMING &&
-                        (swap.confirmations ?: 0) >= deployment.makerConfirmations
+                        (swap.confirmations ?: 0) >= deployment.makerConfirmations &&
+                        swap.record?.payout == null
                 }?.takeIf { it > now && swap.problem == null }
         return when {
             swap.resuming -> stringRes(R.string.convert_resuming)

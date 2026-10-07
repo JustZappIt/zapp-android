@@ -46,6 +46,9 @@ import xyz.justzappit.evm.rpc.RpcException
 import xyz.justzappit.offramp.atomicswap.AtomicSwapStep
 import xyz.justzappit.offramp.atomicswap.AtomicSwapWait
 import xyz.justzappit.offramp.atomicswap.SwapDeposit
+import xyz.justzappit.offramp.atomicswap.SwapId
+import xyz.justzappit.offramp.atomicswap.SwapNote
+import xyz.justzappit.offramp.atomicswap.SwapPayout
 import xyz.justzappit.offramp.atomicswap.ZcashTxId
 import xyz.justzappit.offramp.p2p.Usdc6
 import java.io.IOException
@@ -92,7 +95,7 @@ class PrivateUsdProgressVMTest {
         }
 
     @Test
-    fun `the claim-by-itself note shows only while its time is ahead and nothing's wrong`() =
+    fun `the claim-by-itself note shows only while its time is ahead, nothing's wrong and no claim began`() =
         runTest {
             swap.value = confirming(t0 = now + 600)
             start()
@@ -103,6 +106,9 @@ class PrivateUsdProgressVMTest {
             assertNull(vm.state.value.note)
 
             swap.value = confirming(t0 = now - 60)
+            assertNull(vm.state.value.note)
+
+            swap.value = confirming(payout = PAYOUT)
             assertNull(vm.state.value.note)
         }
 
@@ -198,9 +204,10 @@ class PrivateUsdProgressVMTest {
 
     private fun confirming(
         t0: Long = now + 600,
-        problem: AtomicSwapProblem? = null
+        problem: AtomicSwapProblem? = null,
+        payout: SwapPayout? = null,
     ) = AtomicSwapState(
-        record = record().copy(deposit = SwapDeposit.Recorded(ZcashTxId.parse("aa".repeat(32)))),
+        record = record().copy(deposit = SwapDeposit.Recorded(ZcashTxId.parse("aa".repeat(32))), payout = payout),
         wait = AtomicSwapStep.Waiting(AtomicSwapWait.CONFIRMING, t0 = t0, t1 = t0 + 600),
         problem = problem,
         confirmations = AtomicSwapTestnet.deployment.makerConfirmations,
@@ -214,5 +221,12 @@ class PrivateUsdProgressVMTest {
 
     private companion object {
         const val TOTAL_ZAT = 212_021L
+        val PAYOUT =
+            SwapPayout(
+                SwapId.of(ByteArray(32) { 7 }),
+                SwapNote("0x01", emptyList(), "0x02"),
+                Usdc6.ofMicros(20_000),
+                "0x03"
+            )
     }
 }
