@@ -41,6 +41,9 @@ interface ReverseSwapRepository : SwapConversionLifecycle {
     /** A verified quote for [requested], kept as a preview until the user goes ahead with it. */
     suspend fun quote(requested: Usdc6): ReverseSwapRecord
 
+    /** What the relayer adds to a funding for its gas, in the escrow token. */
+    suspend fun fundingFee(): Usdc6
+
     /** Goes ahead with the previewed quote: the maker accepts it, then its escrow is paid. Nothing commits before. */
     suspend fun fund(index: Int)
 
@@ -94,6 +97,8 @@ internal class ReverseSwapRepositoryImpl(
         }
         return sessions.reverse(checkNotNull(deployment).swap).quote(requested)
     }
+
+    override suspend fun fundingFee(): Usdc6 = sessions.reverseFunding(checkNotNull(deployment).swap).fee()
 
     override suspend fun fund(index: Int) =
         resumingAfter {

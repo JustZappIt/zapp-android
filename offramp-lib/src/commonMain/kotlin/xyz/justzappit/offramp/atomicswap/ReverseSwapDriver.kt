@@ -29,7 +29,8 @@ class ReverseSwapDriver(
     private val records = DeploymentRecords(deployment, store, forward)
     private val verifier = ReverseSwapVerifier(deployment, chain, keys, relayer)
     private val ending = ReverseSwapEnding(store, zcash)
-    private val opening = ReverseSwapOpening(maker, chain, zcash, funding, store, ending)
+    private val submission = ReverseFundingSubmission(funding, store, lock)
+    private val opening = ReverseSwapOpening(maker, chain, zcash, submission::submit, store, ending)
     private val receiving = ReverseSwapReceiving(deployment, zcash, store, ending)
     private val refunds = ReverseSwapRefunds(relayer, chain, keys, reverseKeys, store, verifier, ending, nowSeconds)
     private val approvals = ReverseSwapApprovals(records, verifier, reverseKeys, store)
@@ -131,7 +132,7 @@ class ReverseSwapDriver(
             check(records.current(index) == record) { "the conversion changed while its payment was being prepared" }
             store.save(record.copy(funding = transaction, phase = ReversePhase.SENDING_USDC))
         }
-        funding.submit(transaction)
+        submission.submit(record, transaction)
     }
 
     /** Only the second foreground authorization calls this; a restart never authorizes `ready`. */
@@ -364,7 +365,7 @@ internal class ReverseSwapOpening(
     private val maker: SwapMaker,
     private val chain: ReverseSwapChain,
     private val zcash: ReverseSwapZcash,
-    private val funding: ReverseSwapFunding,
+    private val submitFunding: suspend (ReverseSwapRecord, ReverseFundingTransaction) -> Unit,
     private val store: ReverseSwapStore,
     private val ending: ReverseSwapEnding,
 ) {
@@ -411,7 +412,7 @@ internal class ReverseSwapOpening(
         observed: ReverseChainState,
         outbox: ReverseOutbox,
     ) {
-        val status = chain.fundingStatus(transaction.txId)
+        val status = transaction.txId?.let { chain.fundingStatus(it) } ?: TransactionStatus.UNKNOWN
         when {
             status == TransactionStatus.REVERTED ||
                 observed.now > record.quote.fundingDeadline + FUNDING_SETTLED_AFTER_SECONDS -> {
@@ -423,8 +424,8 @@ internal class ReverseSwapOpening(
             }
 
             // A funding the node never saw is not sent again once the user called the conversion off.
-            !record.cancelRequested -> {
-                outbox.send { funding.submit(transaction) }
+            !record.cancelRequested && observed.now < record.quote.fundingDeadline -> {
+                outbox.send { submitFunding(record, transaction) }
             }
         }
     }

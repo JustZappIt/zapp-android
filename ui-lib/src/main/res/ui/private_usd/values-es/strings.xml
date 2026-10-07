@@ -245,4 +245,5 @@
     <string name="convert_payout_fee_review">Revisar comisión de pago</string>
     <string name="convert_payout_fee_approve">Aprobar comisión de %1$s USD y continuar</string>
     <string name="convert_payout_fee_failed">No se pudo aprobar la comisión de pago. Revisa la comisión actual e inténtalo de nuevo.</string>
+    <string name="reverse_error_funding_unavailable">La conversión a ZEC no está disponible temporalmente. Inténtalo de nuevo más tarde.</string>
 </resources>

@@ -37,9 +37,11 @@ forward swaps.
    the joint account is imported from the quote-time birthday. Then Railgun builds one Relay Adapt
    transaction that unshields, approves exactly the escrow, and calls `openReverse`. Its cost must
    equal the reviewed cost: a different one is kept and shown, and nothing is paid until the user
-   converts again or cancels. The signed bytes are checked against their hash and kept before the
-   first broadcast. After that they're only sent again unchanged, and only while the node doesn't
-   know the hash.
+   converts again or cancels. The exact proved calldata is kept before sending it to the relayer's
+   `POST /v1/reverse/fund`. The relayer simulates, estimates gas and signs the Ethereum envelope.
+   Android saves the returned hash and waits for the confirmed escrow on chain. A response timeout
+   keeps the same proof: the driver checks the escrow first and only resubmits unchanged calldata
+   while the node doesn't know its hash and the funding deadline has not passed.
 4. **Ready**, the second foreground authorization. It's allowed only when the whole deposit is
    spendable in the joint account, the escrow is open without a refund lock, and the signature's
    two-minute lifetime ends before the ready deadline. The background sends a kept `ready` again
@@ -49,6 +51,28 @@ forward swaps.
    It's rebuilt only once proven expired, meaning the wallet has scanned past its expiry height
    without finding it. The deployment's Zcash confirmations complete the conversion, as they do a
    forward refund's sweep, and the joint account is forgotten.
+
+## Sponsored Sepolia funding
+
+New funding requires `GET /v1/terms` to advertise `reverseFunding` for the pinned chain, escrow,
+relayer, maker, token and legacy V2 Relay Adapt address (`Sepolia.RELAY_ADAPT`). Android checks
+these before proving, and refuses terms without a `fee`. The proof uses public-wallet mode, so
+`requireSuccess` is bound to true, with no Railgun broadcaster fee note. The cross-contract calls
+approve the exact escrow amount, open the signed reverse quote, and transfer the advertised `fee`
+in the escrow token to the relayer's address; leftover ERC20 dust is shielded back into the user's
+private wallet. The unshield covers escrow plus fee after Railgun's unshield fee, the review shows
+the fee as the broadcast fee, and Max leaves room for it. The relayer is paid only if the escrow
+opens, which its simulation checks before it spends gas.
+
+Only `{swapId, chainId, to, data, value:"0"}` leaves the phone. Spending keys stay in the Railgun
+wallet. The relayer supplies Sepolia ETH and enforces its advertised gas and calldata limits;
+the phone gas account and Pimlico are not used for new reverse funding. Missing sponsorship
+blocks the conversion. Existing records with signed funding bytes retain their original
+submission path so an update can still reconcile them.
+
+An empty funding response means the service found a matching escrow, not that Android has
+confirmed funding. The driver independently verifies the escrow's contents and confirmations
+before continuing. A service response alone never authorizes Ready.
 
 ## Refunds and cancellation
 

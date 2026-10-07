@@ -36,6 +36,7 @@ internal enum class PrivateUsdFailure(
     STORE_UNREADABLE(R.string.convert_error_store),
     DEPOSIT_UNCONFIRMED(R.string.reverse_error_unconfirmed),
     FUNDING_COST_CHANGED(R.string.reverse_error_cost_changed),
+    FUNDING_UNAVAILABLE(R.string.reverse_error_funding_unavailable),
     TOO_LATE(R.string.reverse_error_too_late),
     PAYMENT_PENDING(R.string.private_usd_payment_pending),
     REFUND_UNAVAILABLE(R.string.reverse_refund_unavailable),
@@ -101,6 +102,8 @@ private fun AtomicSwapBlock.toFailure() =
         AtomicSwapBlock.DEPOSIT_UNCONFIRMED -> PrivateUsdFailure.DEPOSIT_UNCONFIRMED
 
         AtomicSwapBlock.FUNDING_COST_CHANGED -> PrivateUsdFailure.FUNDING_COST_CHANGED
+
+        AtomicSwapBlock.FUNDING_UNAVAILABLE -> PrivateUsdFailure.FUNDING_UNAVAILABLE
 
         AtomicSwapBlock.DEADLINE_PASSED -> PrivateUsdFailure.TOO_LATE
 

@@ -273,6 +273,7 @@
     <string name="reverse_error_rescue" tools:ignore="MissingTranslation">Couldn\'t recover the refund. Try again in a moment.</string>
     <string name="reverse_error_unconfirmed" tools:ignore="MissingTranslation">The market maker\'s ZEC isn\'t confirmed yet. Try again in a few minutes.</string>
     <string name="reverse_error_cost_changed" tools:ignore="MissingTranslation">Railgun\'s fees changed, so nothing was paid. The new total shows above: convert again to pay it, or cancel.</string>
+    <string name="reverse_error_funding_unavailable">Conversion to ZEC is temporarily unavailable. Please try again later.</string>
     <string name="reverse_error_too_late" tools:ignore="MissingTranslation">It\'s too late for this step, so the conversion ends by itself. Anything you paid comes back.</string>
     <string name="convert_asset_zec">ZEC</string>
     <string name="convert_swap_direction">Swap conversion direction</string>

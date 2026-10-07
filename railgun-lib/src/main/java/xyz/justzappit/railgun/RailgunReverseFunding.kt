@@ -5,7 +5,6 @@ package xyz.justzappit.railgun
 
 import kotlinx.serialization.Serializable
 import xyz.justzappit.evm.types.Address
-import xyz.justzappit.evm.types.TxHash
 import java.math.BigInteger
 
 @Serializable
@@ -13,6 +12,9 @@ data class RailgunReverseCostRequest(
     @Serializable(with = DecimalSerializer::class)
     val amount: BigInteger,
     val railgun: Address,
+    /** Paid to the relayer from what is unshielded, on top of [amount]. */
+    @Serializable(with = DecimalSerializer::class)
+    val fee: BigInteger,
 )
 
 @Serializable
@@ -28,6 +30,9 @@ data class RailgunReverseRequest(
     val railgun: Address,
     val token: Address,
     val calls: List<RailgunContractCall>,
+    val relayAdapt: Address,
+    @Serializable(with = DecimalSerializer::class)
+    val fee: BigInteger,
 )
 
 @Serializable
@@ -40,9 +45,11 @@ data class RailgunReverseCost(
 
 @Serializable
 data class RailgunReverseTransaction(
-    val raw: String,
-    val txId: TxHash,
+    val to: Address,
+    val data: String,
+    @Serializable(with = DecimalSerializer::class)
+    val value: BigInteger,
     val cost: RailgunReverseCost,
 ) {
-    override fun toString() = "RailgunReverseTransaction(txId=$txId)"
+    override fun toString() = "RailgunReverseTransaction(to=$to)"
 }

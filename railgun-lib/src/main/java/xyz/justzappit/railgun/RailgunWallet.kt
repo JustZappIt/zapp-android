@@ -155,7 +155,9 @@ class RailgunSession internal constructor(
                 request,
                 RailgunReverseRequest.serializer(),
                 RailgunReverseTransaction.serializer(),
-            ).also { requireHashOf(it.raw, it.txId) }
+            ).also {
+                require(it.to == request.relayAdapt && it.value.signum() == 0) { "unexpected funding destination" }
+            }
 
     internal suspend fun <P> signed(
         method: RailgunMethod,

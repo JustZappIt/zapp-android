@@ -58,6 +58,8 @@ interface SwapMaker {
 interface SwapRelayer {
     suspend fun terms(): RelayerTerms
 
+    suspend fun fundReverse(request: ReverseFundingRequest): Sent
+
     suspend fun lockClaim(authorization: SwapAuthorization): Sent
 
     suspend fun claim(reveal: SwapReveal): Sent
@@ -143,32 +145,39 @@ class RelayerClient(
     override suspend fun terms(): RelayerTerms =
         service.get("/v1/terms", RelayerTerms.serializer()) { it.requireWellFormed() }
 
+    override suspend fun fundReverse(request: ReverseFundingRequest): Sent =
+        service.post("/v1/reverse/fund", request, ReverseFundingRequest.serializer(), Sent.serializer()) {
+            require(it.transactions.size <= 1) { "funding returned multiple transactions" }
+        }
+
     override suspend fun lockClaim(authorization: SwapAuthorization) =
-        send("/v1/lock-claim", authorization, SwapAuthorization.serializer())
+        service.send("/v1/lock-claim", authorization, SwapAuthorization.serializer())
 
-    override suspend fun claim(reveal: SwapReveal) = send("/v1/claim", reveal, SwapReveal.serializer())
+    override suspend fun claim(reveal: SwapReveal) = service.send("/v1/claim", reveal, SwapReveal.serializer())
 
-    override suspend fun payout(payout: SwapPayout) = send("/v1/payout", payout, SwapPayout.serializer())
+    override suspend fun payout(payout: SwapPayout) = service.send("/v1/payout", payout, SwapPayout.serializer())
 
     override suspend fun ready(authorization: SwapAuthorization) =
-        send("/v1/reverse/ready", authorization, SwapAuthorization.serializer())
+        service.send("/v1/reverse/ready", authorization, SwapAuthorization.serializer())
 
     override suspend fun lockRefund(authorization: SwapAuthorization) =
-        send("/v1/reverse/lock-refund", authorization, SwapAuthorization.serializer())
+        service.send("/v1/reverse/lock-refund", authorization, SwapAuthorization.serializer())
 
-    override suspend fun refund(reveal: SwapReveal) = send("/v1/reverse/refund", reveal, SwapReveal.serializer())
+    override suspend fun refund(reveal: SwapReveal) =
+        service.send("/v1/reverse/refund", reveal, SwapReveal.serializer())
 
     override suspend fun refundPayout(payout: SwapPayout) =
-        send("/v1/reverse/refund-payout", payout, SwapPayout.serializer())
+        service.send("/v1/reverse/refund-payout", payout, SwapPayout.serializer())
 
-    override suspend fun rescue(payout: SwapRescue) = send("/v1/reverse/rescue", payout, SwapRescue.serializer())
-
-    private suspend fun <T> send(
-        path: String,
-        request: T,
-        serializer: KSerializer<T>
-    ): Sent = service.post(path, request, serializer, Sent.serializer())
+    override suspend fun rescue(payout: SwapRescue) =
+        service.send("/v1/reverse/rescue", payout, SwapRescue.serializer())
 }
+
+private suspend fun <T> SwapService.send(
+    path: String,
+    request: T,
+    serializer: KSerializer<T>
+): Sent = post(path, request, serializer, Sent.serializer())
 
 /** One swap service over HTTP, whose failures are all [AtomicSwapHttpException]s naming it. */
 internal class SwapService(

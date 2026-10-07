@@ -11,15 +11,17 @@ import xyz.justzappit.evm.abi.AbiTuple
 import xyz.justzappit.evm.abi.AbiUint
 import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.evm.types.Address
+import xyz.justzappit.offramp.p2p.Usdc6
 
-/** The calls a reverse swap's funding makes from Railgun: approve exactly the escrow, then open it. */
+/** The calls a reverse swap's funding makes from Railgun: approve exactly the escrow, open it, then pay the relayer. */
 object ReverseFundingCalls {
     private const val OPEN_REVERSE =
         "openReverse((address,address,address,uint128,uint256[2],uint256[2],uint64,uint64,bytes32,uint64),bytes)"
 
     fun encode(
         record: ReverseSwapRecord,
-        signature: ByteArray
+        signature: ByteArray,
+        fee: Usdc6,
     ): List<Pair<Address, ByteArray>> {
         require(signature.size == SWAP_SIGNATURE_BYTES) { "a signature is $SWAP_SIGNATURE_BYTES bytes" }
         val quote = record.quote
@@ -37,7 +39,12 @@ object ReverseFundingCalls {
             )
         val terms = AbiTuple(parties + shares + deadlines)
         val open = AbiEncoder.encodeFunctionCall(OPEN_REVERSE, listOf(terms, AbiBytes(signature)))
-        return listOf(quote.terms.token to approval, quote.terms.contract to open)
+        val payment =
+            AbiEncoder.encodeFunctionCall(
+                "transfer(address,uint256)",
+                listOf(AbiAddress(record.deployment.relayer), AbiUint(fee.micros)),
+            )
+        return listOf(quote.terms.token to approval, quote.terms.contract to open, quote.terms.token to payment)
     }
 
     /** A share's `uint256[2]`: its x and y words. */

@@ -27,6 +27,7 @@ object Sepolia {
     val RPC_URL = Url(RailgunEndpoints.SEPOLIA_RPC_URL)
     const val EXPLORER_TX_URL = "https://sepolia.etherscan.io/tx/"
     val RAILGUN_PROXY = Address.parse("0xeCFCf3b4eC647c4Ca6D49108b311b7a7C9543fea")
+    val RELAY_ADAPT = Address.parse("0x7e3d929EbD5bDC84d02Bd3205c777578f33A214D")
 
     // The testnet maker's token has no decimals() or symbol(); it stands in for USDC.
     val TEST_USD = Address.parse("0x5764D0044bef5AA839E0dDafE2073421101B9Ed8")

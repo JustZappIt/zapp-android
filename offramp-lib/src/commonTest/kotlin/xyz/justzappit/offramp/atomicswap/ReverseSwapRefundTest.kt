@@ -338,8 +338,9 @@ class ReverseSwapRefundTest : ReverseSwapDriverFixtures() {
         runTest {
             val h = Harness()
             h.prepared()
-            val calls = ReverseFundingCalls.encode(h.record, ByteArray(65))
-            assertEquals(listOf(TOKEN, CONTRACT), calls.map { it.first })
+            val fee = Usdc6.ofMicros(250_000)
+            val calls = ReverseFundingCalls.encode(h.record, ByteArray(65), fee)
+            assertEquals(listOf(TOKEN, CONTRACT, TOKEN), calls.map { it.first })
             val approval = AbiDecoder(calls[0].second.drop(4).toByteArray())
             assertEquals(CONTRACT, approval.address(0))
             assertEquals(AMOUNT.micros, approval.uint(1))
@@ -349,6 +350,9 @@ class ReverseSwapRefundTest : ReverseSwapDriverFixtures() {
             assertEquals(TOKEN, open.address(2))
             assertEquals(AMOUNT.micros, open.uint(3))
             assertTrue(open.word(10).contentEquals(NOTE.bytes))
+            val payment = AbiDecoder(calls[2].second.drop(4).toByteArray())
+            assertEquals(h.record.deployment.relayer, payment.address(0))
+            assertEquals(fee.micros, payment.uint(1))
         }
 
     @Test
@@ -411,7 +415,7 @@ class ReverseSwapRefundTest : ReverseSwapDriverFixtures() {
 
             assertEquals(1, h.accepts)
             assertEquals(ACCOUNT, h.record.account)
-            assertEquals(ReversePhase.SENDING_USDC, h.record.phase)
+            assertEquals(ReversePhase.CONFIRMING_ESCROW, h.record.phase)
             assertEquals(1, h.submissions.size)
         }
 

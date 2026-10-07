@@ -52,13 +52,20 @@ data class ReverseFundingCost(
     val broadcasterFee: Usdc6?,
 )
 
-/** The signed funding transaction, kept before it is first sent so it can be sent again unchanged. */
+/** Funding kept before submission: proved calldata, or the signed transaction older builds prepared. */
 @Serializable
 data class ReverseFundingTransaction(
-    val raw: String,
-    val txId: TxHash,
+    val raw: String? = null,
+    val txId: TxHash? = null,
     val cost: ReverseFundingCost,
+    val request: ReverseFundingRequest? = null,
 ) {
+    init {
+        require((raw != null && txId != null && request == null) || (raw == null && request != null)) {
+            "funding must retain its proved request or signed transaction"
+        }
+    }
+
     override fun toString() = "ReverseFundingTransaction(txId=$txId)"
 }
 

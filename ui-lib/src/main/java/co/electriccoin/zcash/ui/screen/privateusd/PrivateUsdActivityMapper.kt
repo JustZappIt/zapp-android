@@ -157,7 +157,7 @@ class PrivateUsdActivityMapper {
         onOpenRefunds: () -> Unit,
     ): PrivateUsdActivityState? {
         val paid = moved(dollarToken(deployment, record.quote.terms.token), record.debit.micros)
-        val funding = record.funding?.let { deployment.explorerTxUrl + it.txId.hex }
+        val funding = record.funding?.txId?.let { deployment.explorerTxUrl + it.hex }
         val converting =
             PrivateUsdActivityState(
                 key = "to-zec-${record.index}",

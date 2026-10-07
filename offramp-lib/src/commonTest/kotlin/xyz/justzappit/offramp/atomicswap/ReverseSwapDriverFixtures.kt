@@ -80,6 +80,9 @@ abstract class ReverseSwapDriverFixtures {
         var forgets = 0
         var payoutSignatures = 0
         var interruptFunding = false
+        var sponsoredFunding = false
+        var submittedFundingHash: TxHash? = null
+        var submitting: CompletableDeferred<TxHash?>? = null
         var interruptPayout = false
         var interruptReceive = false
         var proofValid = true
@@ -246,21 +249,34 @@ abstract class ReverseSwapDriverFixtures {
             return ByteArray(65)
         }
 
+        override suspend fun fee() = Usdc6.ofMicros(250_000)
+
         override suspend fun cost(escrow: Usdc6) =
-            ReverseFundingCost(Usdc6.ofMicros(1_002_506), Usdc6.ofMicros(2_506), null)
+            ReverseFundingCost(Usdc6.ofMicros(1_252_506), Usdc6.ofMicros(2_506), fee())
 
         override suspend fun prepare(record: ReverseSwapRecord, signature: ByteArray): ReverseFundingTransaction {
             assertNotNull(record.account)
             prepares++
             proving?.await()
+            if (sponsoredFunding) {
+                return ReverseFundingTransaction(
+                    cost = cost(AMOUNT),
+                    request =
+                        ReverseFundingRequest(record.swapId, record.deployment.chainId, CONTRACT, "0x12345678", "0"),
+                )
+            }
             return ReverseFundingTransaction("0x1234", TxHash.fromHex(hex(32, 8)), cost(AMOUNT))
         }
 
-        override suspend fun submit(transaction: ReverseFundingTransaction) {
+        override suspend fun submit(transaction: ReverseFundingTransaction): TxHash? {
             assertEquals(record.funding, transaction)
             submissions.add(transaction)
             check(!interruptFunding)
+            submitting?.let { return it.await() }
+            return submittedFundingHash ?: transaction.txId
         }
+
+        override suspend fun fundReverse(request: ReverseFundingRequest) = Sent(emptyList())
 
         override suspend fun chainHeight() = 100L
 

@@ -50,6 +50,9 @@ interface ReverseSwapChain {
 
 /** Funding a reverse swap's escrow from the private balance. */
 interface ReverseSwapFunding {
+    /** What the relayer takes from a funding, in the escrow token, for paying its gas. */
+    suspend fun fee(): Usdc6
+
     suspend fun cost(escrow: Usdc6): ReverseFundingCost
 
     suspend fun prepare(
@@ -57,7 +60,8 @@ interface ReverseSwapFunding {
         signature: ByteArray
     ): ReverseFundingTransaction
 
-    suspend fun submit(transaction: ReverseFundingTransaction)
+    /** A submitted hash, or null if matching escrow already exists; neither is confirmation. */
+    suspend fun submit(transaction: ReverseFundingTransaction): TxHash?
 }
 
 /** What both directions ask of the Zcash wallet. */

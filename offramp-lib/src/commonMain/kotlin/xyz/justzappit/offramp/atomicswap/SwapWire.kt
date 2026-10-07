@@ -86,6 +86,7 @@ data class RelayerTerms(
     val chainId: ChainId,
     val contract: Address,
     val fee: Usdc6,
+    val reverseFunding: ReverseFundingTerms? = null,
 )
 
 /** The Zcash network a maker takes deposits on. */

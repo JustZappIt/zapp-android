@@ -147,7 +147,12 @@ class SwapClientsTest {
                     """"nonce":0,"deadline":1000,"signature":"$SIGNATURE"}"""
             val authorization = """{"swapId":"${SWAP_ID.hex}","deadline":100,"signature":"$SIGNATURE"}"""
             val reveal = """{"swapId":"${SWAP_ID.hex}","secret":"$WORD","payout":$payout}"""
+            val funding =
+                """{"swapId":"${SWAP_ID.hex}","chainId":11155111,"to":"$ADDRESS","data":"0x12345678","value":"0"}"""
 
+            services.relayer.fundReverse(
+                ReverseFundingRequest(SWAP_ID, ChainId.ETHEREUM_SEPOLIA, Address.parse(ADDRESS), "0x12345678", "0")
+            )
             services.relayer.lockClaim(AUTHORIZATION)
             services.relayer.claim(REVEAL)
             services.relayer.payout(PAYOUT)
@@ -159,6 +164,7 @@ class SwapClientsTest {
 
             assertEquals(
                 listOf(
+                    "/relayer/v1/reverse/fund" to funding,
                     "/relayer/v1/lock-claim" to authorization,
                     "/relayer/v1/claim" to reveal,
                     "/relayer/v1/payout" to payout,
@@ -170,6 +176,37 @@ class SwapClientsTest {
                 ),
                 services.paths.zip(services.bodies),
             )
+            services.close()
+        }
+
+    @Test
+    fun relayerTermsDiscoverSponsorshipWithoutBreakingOlderServices() =
+        runTest {
+            var sponsorship = ""
+            val services =
+                Services {
+                    respond(
+                        """{"relayer":"$ADDRESS","chainId":11155111,"contract":"$ADDRESS","fee":"20000"$sponsorship}"""
+                    )
+                }
+            assertNull(services.relayer.terms().reverseFunding)
+            sponsorship =
+                ""","reverseFunding":{"relayAdapt":"$ADDRESS","token":"$ADDRESS","maker":"$ADDRESS",""" +
+                """"maxGasLimit":4000000,"maxGasPriceWei":"20000000000","maxCalldataBytes":65536,"fee":"250000"}"""
+            val funding = services.relayer.terms().reverseFunding
+            assertEquals("20000000000", funding?.maxGasPriceWei)
+            assertEquals(Usdc6.ofMicros(250_000), funding?.fee)
+            services.close()
+        }
+
+    @Test
+    fun timedOutFundingIsNotRetriedByTheHttpClient() =
+        runTest {
+            val services = Services { throw IOException("response lost") }
+            val request =
+                ReverseFundingRequest(SWAP_ID, ChainId.ETHEREUM_SEPOLIA, Address.parse(ADDRESS), "0x12345678", "0")
+            assertFailsWith<AtomicSwapHttpException.Unreachable> { services.relayer.fundReverse(request) }
+            assertEquals(listOf("/relayer/v1/reverse/fund"), services.paths)
             services.close()
         }
 

@@ -102,6 +102,9 @@ enum class AtomicSwapBlock {
     /** Funding would now take more from the private balance than the review showed. */
     FUNDING_COST_CHANGED,
 
+    /** This deployment has no supported gas sponsorship for new reverse funding. */
+    FUNDING_UNAVAILABLE,
+
     /** The wallet can't pay the deposit in one transaction within what the user authorized. */
     DEPOSIT_UNPAYABLE,
 

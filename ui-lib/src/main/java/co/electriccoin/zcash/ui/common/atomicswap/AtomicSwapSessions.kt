@@ -19,6 +19,7 @@ import xyz.justzappit.offramp.atomicswap.AtomicSwapZcash
 import xyz.justzappit.offramp.atomicswap.MakerClient
 import xyz.justzappit.offramp.atomicswap.RelayerClient
 import xyz.justzappit.offramp.atomicswap.ReverseSwapDriver
+import xyz.justzappit.offramp.atomicswap.ReverseSwapFunding
 import xyz.justzappit.offramp.atomicswap.ReverseSwapKeys
 import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
 import xyz.justzappit.offramp.atomicswap.ReverseSwapStore
@@ -71,6 +72,9 @@ class AtomicSwapSessions(
         session: Long = this.session,
     ): ReverseSwapDriver = open(session).deployment(deployment).reverse
 
+    /** How reverse swaps on [deployment] pay their escrow from the private balance. */
+    fun reverseFunding(deployment: SwapDeployment): ReverseSwapFunding = open().deployment(deployment).funding
+
     /** Closes the session once what its drivers write lands, runs [wipe], then opens the next. */
     suspend fun reset(wipe: suspend () -> Unit) {
         val closed = synchronized(this) { current.also { current = null } }
@@ -110,6 +114,7 @@ class AtomicSwapSessions(
         private val relayer = RelayerClient(http, deployment.relayerUrl)
         private val forwardDrivers = mutableMapOf<ZcashDepositTerms, AtomicSwapDriver>()
         val chain = AtomicSwapChain(rpc, deployment)
+        val funding = ReverseSwapFundingImpl(wallet, rpc, deployment, relayer)
 
         val reverse: ReverseSwapDriver by lazy {
             ReverseSwapDriver(
@@ -120,7 +125,7 @@ class AtomicSwapSessions(
                 keys = keys,
                 reverseKeys = reverseKeys,
                 zcash = reverseZcash,
-                funding = ReverseSwapFundingImpl(wallet, rpc, deployment),
+                funding = funding,
                 indices = session.indices,
                 forward = session.writes.forward,
                 store = session.writes.reverse,
@@ -150,7 +155,8 @@ class AtomicSwapSessions(
         const val CLOSED = -1L
 
         // Forward swaps keep the deployment they were accepted on, found again from their quote.
-        private val KNOWN = listOf(AtomicSwapTestnet.deployment, AtomicSwapTestnet.retiredHosted, AtomicSwapTestnet.legacy)
+        private val KNOWN =
+            listOf(AtomicSwapTestnet.deployment, AtomicSwapTestnet.retiredHosted, AtomicSwapTestnet.legacy)
 
         fun deploymentFor(record: AtomicSwapRecord): AtomicSwapDeployment =
             checkNotNull(

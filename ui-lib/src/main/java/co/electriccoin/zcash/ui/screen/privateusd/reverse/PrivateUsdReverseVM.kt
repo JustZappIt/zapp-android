@@ -240,8 +240,9 @@ class PrivateUsdReverseVM(
         currency: LocalCurrency
     ) = runStep(ReverseStepKind.LOOK_UP, R.string.reverse_error_max) {
         val unshieldFee = railgunWalletRepository.fees().unshieldFee(balance)
+        val relayerFee = repository.fundingFee().micros
         form.update { it.copy(step = ReverseStep.Typing) }
-        onAmountChange(terms.maximum(balance - unshieldFee, currency), currency)
+        onAmountChange(terms.maximum((balance - unshieldFee - relayerFee).max(BigInteger.ZERO), currency), currency)
     }
 
     // A quote that ran out while its amount shows is replaced, once: one that doesn't come isn't asked for again.
