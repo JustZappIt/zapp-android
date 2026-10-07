@@ -324,7 +324,7 @@ internal fun isArriving(
     return payoutUnseen || (balance.balances?.arriving?.signum() ?: 0) > 0
 }
 
-private suspend fun RailgunMnemonicProvider.addressOrNull(): RailgunAddress? =
+internal suspend fun RailgunMnemonicProvider.addressOrNull(): RailgunAddress? =
     try {
         address()
     } catch (e: CancellationException) {

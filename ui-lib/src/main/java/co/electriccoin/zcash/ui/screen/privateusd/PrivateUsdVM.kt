@@ -21,8 +21,11 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdConversion
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendStatus
+import co.electriccoin.zcash.ui.common.privateusd.addressOrNull
 import co.electriccoin.zcash.ui.common.privateusd.dollars
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
+import co.electriccoin.zcash.ui.common.provider.RailgunMnemonicProvider
+import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateBackToPayUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -38,6 +41,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
 class PrivateUsdVM(
@@ -51,6 +55,8 @@ class PrivateUsdVM(
     private val navigateBackToPay: NavigateBackToPayUseCase,
     private val navigationRouter: NavigationRouter,
     private val spendGuard: PrivateUsdSpendGuard,
+    private val railgunMnemonicProvider: RailgunMnemonicProvider,
+    private val copyToClipboard: CopyToClipboardUseCase,
 ) : ViewModel() {
     private val deployment = atomicSwapRepository.requireDeployment()
 
@@ -130,6 +136,7 @@ class PrivateUsdVM(
                 },
             onRefresh = { balanceRepository.refresh() },
             onBack = navigateBackToPay::invoke,
+            onCopyAddress = ::onCopyAddress,
             refundsButton = ButtonState(stringRes(R.string.refunds_title), onClick = ::onOpenRefunds),
             spendingNote = spending.message(),
         )
@@ -209,18 +216,28 @@ class PrivateUsdVM(
         }
     }
 
+    // A 0zk address is shared to be paid: it says nothing of the balance.
+    private fun onCopyAddress() {
+        viewModelScope.launch {
+            railgunMnemonicProvider.addressOrNull()?.let { copyToClipboard(it.value, isSensitive = false) }
+        }
+    }
+
     private fun info(currency: LocalCurrency) =
         PrivateUsdInfo(
             title = stringRes(R.string.private_usd_info_title),
             steps =
                 listOf(
                     stringRes(R.string.private_usd_info_step_convert),
-                    stringRes(R.string.private_usd_info_step_screen, deployment.screeningTime.about()),
+                    stringRes(R.string.private_usd_info_receive),
                     stringRes(R.string.private_usd_info_send),
                     stringRes(R.string.private_usd_info_withdraw),
+                    stringRes(R.string.private_usd_info_refunds),
                 ),
             notes =
                 listOfNotNull(
+                    stringRes(R.string.private_usd_info_step_screen, deployment.screeningTime.about()),
+                    stringRes(R.string.private_usd_info_switch_currency).takeUnless { currency.isDollar },
                     stringRes(R.string.private_usd_info_note_private),
                     stringRes(R.string.private_usd_info_note_currency).takeUnless { currency.isDollar },
                 ),

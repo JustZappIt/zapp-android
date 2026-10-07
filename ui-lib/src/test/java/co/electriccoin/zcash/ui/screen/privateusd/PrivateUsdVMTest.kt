@@ -221,6 +221,8 @@ class PrivateUsdVMTest {
                     },
                 atomicSwapRepository = swaps,
                 senders = mockk<PrivateUsdSenders> { every { current } returns mockk() },
+                railgunMnemonicProvider = mockk(relaxed = true),
+                copyToClipboard = mockk(relaxed = true),
                 observeConversion = ObservePrivateUsdConversionUseCase(swaps, reverseSwaps),
                 observeActivity =
                     ObservePrivateUsdActivityUseCase(

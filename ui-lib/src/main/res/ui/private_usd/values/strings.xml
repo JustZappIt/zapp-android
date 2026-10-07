@@ -50,6 +50,10 @@
     <string name="private_usd_info_step_screen">Railgun screens new funds for %1$s before they can be spent.</string>
     <string name="private_usd_info_note_private">Nobody else can see your balance, or who you pay.</string>
     <string name="private_usd_info_note_currency">Amounts show in the currency you picked under You, at today\'s rate.</string>
+    <string name="private_usd_info_receive" tools:ignore="MissingTranslation">Receive — copy your private address with the button beside your balance and share it. Anyone with a Railgun wallet can send you private USD there.</string>
+    <string name="private_usd_info_refunds" tools:ignore="MissingTranslation">Refunds — recover a refund that couldn\'t enter your private balance.</string>
+    <string name="private_usd_info_switch_currency" tools:ignore="MissingTranslation">Tap your balance to switch between your currency and dollars.</string>
+    <string name="private_usd_copy_address" tools:ignore="MissingTranslation">Copy your private USD address</string>
 
     <!-- Private USD activity -->
     <string name="private_usd_activity_title">Activity</string>

@@ -17,8 +17,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -35,6 +37,7 @@ import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
+import co.electriccoin.zcash.ui.design.component.zapp.ZappCopyIconButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRefreshButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRowDivider
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
@@ -44,6 +47,8 @@ import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
+import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.seconds
 
 @Composable
 internal fun PrivateUsdView(state: PrivateUsdState) {
@@ -97,43 +102,60 @@ private fun Total(state: PrivateUsdState) {
     var usdFirst by rememberSaveable { mutableStateOf(false) }
     val primary = if (usdFirst && state.usdHeadline != null) state.usdHeadline else state.headline
     val secondary = if (usdFirst && state.usdHeadline != null) state.headline else state.usdHeadline
+    var isCopied by remember { mutableStateOf(false) }
+    LaunchedEffect(isCopied) {
+        if (isCopied) {
+            delay(2.seconds)
+            isCopied = false
+        }
+    }
     Column {
-        Row(
-            modifier =
-                Modifier.fillMaxWidth().then(
-                    if (state.usdHeadline != null) {
-                        Modifier.clickable(
-                            role = Role.Button,
-                            onClickLabel = stringResource(R.string.private_usd_switch_currency),
-                        ) { usdFirst = !usdFirst }
-                    } else {
-                        Modifier
-                    }
-                ),
-            horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.md),
-        ) {
-            BasicText(
-                text = primary.getValue(),
-                style =
-                    ZappTheme.typography.balanceDisplay.copy(
-                        color = if (state.isHeadlineKnown) c.text else c.textSubtle,
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier =
+                    Modifier.weight(1f).then(
+                        if (state.usdHeadline != null) {
+                            Modifier.clickable(
+                                role = Role.Button,
+                                onClickLabel = stringResource(R.string.private_usd_switch_currency),
+                            ) { usdFirst = !usdFirst }
+                        } else {
+                            Modifier
+                        }
                     ),
-                modifier = Modifier.weight(1f).alignByBaseline(),
-                maxLines = 1,
-                autoSize =
-                    TextAutoSize.StepBased(
-                        minFontSize = ZappTheme.typography.displaySecondary.fontSize,
-                        maxFontSize = ZappTheme.typography.balanceDisplay.fontSize,
-                    ),
-            )
-            secondary?.let {
+                horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.sm),
+            ) {
                 BasicText(
-                    text = it.getValue(),
-                    style = ZappTheme.typography.caption.copy(color = c.textMuted),
-                    modifier = Modifier.alignByBaseline(),
+                    text = primary.getValue(),
+                    style =
+                        ZappTheme.typography.balanceDisplay.copy(
+                            color = if (state.isHeadlineKnown) c.text else c.textSubtle,
+                        ),
+                    modifier = Modifier.weight(1f, fill = false).alignByBaseline(),
                     maxLines = 1,
+                    autoSize =
+                        TextAutoSize.StepBased(
+                            minFontSize = ZappTheme.typography.displaySecondary.fontSize,
+                            maxFontSize = ZappTheme.typography.balanceDisplay.fontSize,
+                        ),
                 )
+                secondary?.let {
+                    BasicText(
+                        text = it.getValue(),
+                        style = ZappTheme.typography.caption.copy(color = c.textMuted),
+                        modifier = Modifier.alignByBaseline(),
+                        maxLines = 1,
+                    )
+                }
             }
+            ZappCopyIconButton(
+                isCopied = isCopied,
+                contentDescription = stringResource(R.string.private_usd_copy_address),
+                onClick = {
+                    state.onCopyAddress()
+                    isCopied = true
+                },
+            )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             BasicText(
