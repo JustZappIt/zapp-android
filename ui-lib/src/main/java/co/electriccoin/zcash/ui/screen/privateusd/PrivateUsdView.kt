@@ -37,7 +37,8 @@ import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
-import co.electriccoin.zcash.ui.design.component.zapp.ZappCopyIconButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappCompactButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappCopyableAddress
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRefreshButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRowDivider
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
@@ -60,7 +61,7 @@ internal fun PrivateUsdView(state: PrivateUsdState) {
         primaryButton = state.convertButton,
     ) {
         item { Overview(state) }
-        activity(state.activity)
+        activity(state.activity, state.refundsButton)
     }
 }
 
@@ -78,19 +79,11 @@ private fun Overview(state: PrivateUsdState) {
             Buckets(state.rows)
         }
         if (state.assets.isNotEmpty()) Assets(state.assets)
-        Sending(state.sending)
+        Sending(state.sending, state.receiveAddress, state.onCopyAddress)
         state.spendingNote?.let {
             BasicText(
                 text = it.getValue(),
                 style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.textMuted),
-            )
-        }
-        state.refundsButton?.let { button ->
-            ZappButton(
-                text = button.text.getValue(),
-                variant = ZappButtonVariant.Secondary,
-                modifier = Modifier.fillMaxWidth(),
-                onClick = button.onClick
             )
         }
     }
@@ -102,13 +95,6 @@ private fun Total(state: PrivateUsdState) {
     var usdFirst by rememberSaveable { mutableStateOf(false) }
     val primary = if (usdFirst && state.usdHeadline != null) state.usdHeadline else state.headline
     val secondary = if (usdFirst && state.usdHeadline != null) state.headline else state.usdHeadline
-    var isCopied by remember { mutableStateOf(false) }
-    LaunchedEffect(isCopied) {
-        if (isCopied) {
-            delay(2.seconds)
-            isCopied = false
-        }
-    }
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Row(
@@ -148,14 +134,6 @@ private fun Total(state: PrivateUsdState) {
                     )
                 }
             }
-            ZappCopyIconButton(
-                isCopied = isCopied,
-                contentDescription = stringResource(R.string.private_usd_copy_address),
-                onClick = {
-                    state.onCopyAddress()
-                    isCopied = true
-                },
-            )
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             BasicText(
@@ -215,19 +193,27 @@ private fun Assets(assets: List<PrivateUsdAssetState>) {
     }
 }
 
-private fun LazyListScope.activity(activity: List<PrivateUsdActivityState>) {
+private fun LazyListScope.activity(
+    activity: List<PrivateUsdActivityState>,
+    refunds: ButtonState?,
+) {
     item {
-        ZappSectionLabel(
-            text = stringResource(R.string.private_usd_activity_title),
+        Row(
             modifier =
-                Modifier
-                    .padding(
-                        start = ZappTheme.spacing.gutter,
-                        end = ZappTheme.spacing.gutter,
-                        top = ZappTheme.spacing.xl2,
-                        bottom = ZappTheme.spacing.md,
-                    ).semantics { heading() },
-        )
+                Modifier.padding(
+                    start = ZappTheme.spacing.gutter,
+                    end = ZappTheme.spacing.gutter,
+                    top = ZappTheme.spacing.xl2,
+                    bottom = ZappTheme.spacing.md,
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ZappSectionLabel(
+                text = stringResource(R.string.private_usd_activity_title),
+                modifier = Modifier.weight(1f).semantics { heading() },
+            )
+            refunds?.let { ZappCompactButton(text = it.text.getValue(), onClick = it.onClick) }
+        }
     }
     if (activity.isEmpty()) {
         item {
@@ -316,24 +302,50 @@ private fun Empty() {
 }
 
 @Composable
-private fun Sending(sending: PrivateUsdSendingState) {
-    Row(horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.lg)) {
-        ZappButton(
-            text = stringResource(R.string.private_usd_action_send),
-            leadingIcon = Icons.AutoMirrored.Filled.Send,
-            variant = ZappButtonVariant.Secondary,
-            enabled = sending.isEnabled,
-            modifier = Modifier.weight(1f),
-            onClick = sending.onSend,
-        )
-        ZappButton(
-            text = stringResource(R.string.private_usd_action_withdraw),
-            leadingIcon = Icons.AutoMirrored.Filled.CallMade,
-            variant = ZappButtonVariant.Secondary,
-            enabled = sending.isEnabled,
-            modifier = Modifier.weight(1f),
-            onClick = sending.onWithdraw,
-        )
+private fun Sending(
+    sending: PrivateUsdSendingState,
+    receiveAddress: String?,
+    onCopyAddress: () -> Unit,
+) {
+    var isCopied by remember { mutableStateOf(false) }
+    LaunchedEffect(isCopied) {
+        if (isCopied) {
+            delay(2.seconds)
+            isCopied = false
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.lg)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.lg)) {
+            ZappButton(
+                text = stringResource(R.string.private_usd_action_send),
+                leadingIcon = Icons.AutoMirrored.Filled.Send,
+                variant = ZappButtonVariant.Secondary,
+                enabled = sending.isEnabled,
+                modifier = Modifier.weight(1f),
+                onClick = sending.onSend,
+            )
+            ZappButton(
+                text = stringResource(R.string.private_usd_action_withdraw),
+                leadingIcon = Icons.AutoMirrored.Filled.CallMade,
+                variant = ZappButtonVariant.Secondary,
+                enabled = sending.isEnabled,
+                modifier = Modifier.weight(1f),
+                onClick = sending.onWithdraw,
+            )
+        }
+        receiveAddress?.let {
+            ZappCopyableAddress(
+                label = stringResource(R.string.private_usd_receive_address),
+                address = it,
+                copyContentDescription = stringResource(R.string.private_usd_copy_address),
+                onCopy = {
+                    onCopyAddress()
+                    isCopied = true
+                },
+                isCopied = isCopied,
+                maxLines = ADDRESS_LINES,
+            )
+        }
     }
 }
 
@@ -391,3 +403,6 @@ private fun PrivateUsdPreview() =
                 ),
         )
     }
+
+// A 0zk address runs to about 127 characters: five lines hold it on a narrow phone.
+private const val ADDRESS_LINES = 5

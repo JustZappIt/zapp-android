@@ -40,8 +40,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
 class PrivateUsdVM(
@@ -60,20 +60,26 @@ class PrivateUsdVM(
 ) : ViewModel() {
     private val deployment = atomicSwapRepository.requireDeployment()
 
+    // A 0zk address is shared to be paid: it says nothing of the balance.
+    private val receiveAddress =
+        railgunMnemonicProvider.walletChanges.map { railgunMnemonicProvider.addressOrNull()?.value }
+
     internal val state: StateFlow<PrivateUsdState> =
         combine(
-            balanceRepository.observe(),
+            combine(balanceRepository.observe(), receiveAddress, ::Pair),
             observeConversion(),
             observeActivity(),
             observeLocalCurrency(),
             spendGuard.state,
-            ::createState,
-        ).stateIn(
+        ) { (balance, address), conversion, activity, currency, spending ->
+            createState(balance, address, conversion, activity, currency, spending)
+        }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
             initialValue =
                 createState(
                     balanceRepository.state.value,
+                    null,
                     null,
                     emptyList(),
                     LocalCurrency.DOLLAR,
@@ -88,6 +94,7 @@ class PrivateUsdVM(
 
     private fun createState(
         balance: PrivateUsdBalanceState,
+        address: String?,
         conversion: PrivateUsdConversion?,
         activity: List<PrivateUsdActivityData>,
         currency: LocalCurrency,
@@ -136,7 +143,8 @@ class PrivateUsdVM(
                 },
             onRefresh = { balanceRepository.refresh() },
             onBack = navigateBackToPay::invoke,
-            onCopyAddress = ::onCopyAddress,
+            receiveAddress = address,
+            onCopyAddress = { address?.let { copyToClipboard(it, isSensitive = false) } },
             refundsButton = ButtonState(stringRes(R.string.refunds_title), onClick = ::onOpenRefunds),
             spendingNote = spending.message(),
         )
@@ -213,13 +221,6 @@ class PrivateUsdVM(
             }
         } else {
             emptyList()
-        }
-    }
-
-    // A 0zk address is shared to be paid: it says nothing of the balance.
-    private fun onCopyAddress() {
-        viewModelScope.launch {
-            railgunMnemonicProvider.addressOrNull()?.let { copyToClipboard(it.value, isSensitive = false) }
         }
     }
 

@@ -32,6 +32,7 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
 import co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseArgs
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -221,7 +222,11 @@ class PrivateUsdVMTest {
                     },
                 atomicSwapRepository = swaps,
                 senders = mockk<PrivateUsdSenders> { every { current } returns mockk() },
-                railgunMnemonicProvider = mockk(relaxed = true),
+                railgunMnemonicProvider =
+                    mockk {
+                        every { walletChanges } returns flowOf(Unit)
+                        coEvery { address() } throws IllegalStateException("no Railgun wallet here")
+                    },
                 copyToClipboard = mockk(relaxed = true),
                 observeConversion = ObservePrivateUsdConversionUseCase(swaps, reverseSwaps),
                 observeActivity =
