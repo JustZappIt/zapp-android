@@ -26,6 +26,7 @@ object Sepolia {
     val CHAIN_ID = ChainId.ETHEREUM_SEPOLIA
     val RPC_URL = Url(RailgunEndpoints.SEPOLIA_RPC_URL)
     const val EXPLORER_TX_URL = "https://sepolia.etherscan.io/tx/"
+    const val RAILSCAN_TX_URL = "https://railscan.io/sepolia/tx/"
     val RAILGUN_PROXY = Address.parse("0xeCFCf3b4eC647c4Ca6D49108b311b7a7C9543fea")
     val RELAY_ADAPT = Address.parse("0x7e3d929EbD5bDC84d02Bd3205c777578f33A214D")
 

@@ -72,6 +72,7 @@ object AtomicSwapTestnet {
             deposits = ZcashDepositTerms(MIN_SECONDS_TO_T0),
             railgunNetwork = RailgunNetwork.SEPOLIA,
             explorerTxUrl = Sepolia.EXPLORER_TX_URL,
+            railscanTxUrl = Sepolia.RAILSCAN_TX_URL,
             minAmount = Usdc6.ofMicros(MIN_AMOUNT),
             maxAmount = Usdc6.ofMicros(MAX_AMOUNT),
             screeningTime = 1.minutes,

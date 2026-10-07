@@ -200,6 +200,14 @@ private fun Done(state: PrivateUsdSendState) {
                 onClick = it,
             )
         }
+        done.onViewOnRailscan?.let {
+            ZappButton(
+                text = stringResource(R.string.private_usd_send_view_railscan),
+                variant = ZappButtonVariant.Ghost,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = it,
+            )
+        }
     }
 }
 

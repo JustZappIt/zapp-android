@@ -243,6 +243,7 @@
     <string name="private_usd_send_done_title_withdraw">Withdrawn</string>
     <string name="private_usd_send_done_body">%1$s went to %2$s.</string>
     <string name="private_usd_send_view_tx">View on Etherscan</string>
+    <string name="private_usd_send_view_railscan" tools:ignore="MissingTranslation">View on Railscan</string>
     <string name="private_usd_send_not_sent" tools:ignore="MissingTranslation">Nothing was sent. Try again in a moment.</string>
     <string name="private_usd_send_unconfirmed" tools:ignore="MissingTranslation">It isn\'t in a block yet. Check your activity before sending again.</string>
     <string name="reverse_title">Private USD → ZEC</string>

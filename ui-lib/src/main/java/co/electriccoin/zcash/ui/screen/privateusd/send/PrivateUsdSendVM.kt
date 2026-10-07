@@ -65,6 +65,7 @@ class PrivateUsdSendVM(
 ) : ViewModel() {
     private val sender = checkNotNull(senders.current) { "no sending in this build" }
     private val explorerTxUrl = atomicSwapRepository.deployment?.explorerTxUrl
+    private val railscanTxUrl = atomicSwapRepository.deployment?.railscanTxUrl
     private val form = MutableStateFlow(PrivateUsdSendForm(mode = args.mode))
     private var reviewJob: Job? = null
 
@@ -144,7 +145,7 @@ class PrivateUsdSendVM(
                 ) { recipient -> updateForm { it.copy(recipient = recipient) } },
             review = request?.let(form::review),
             proofProgress = railgun.proof?.takeIf { form.phase == PrivateUsdSendPhase.SENDING },
-            done = form.done(explorerTxUrl) { navigationRouter.forward(ExternalUrl(it)) },
+            done = form.done(explorerTxUrl, railscanTxUrl) { navigationRouter.forward(ExternalUrl(it)) },
             error = sendError(form, balance, railgun.spending),
             info = info(form.mode, form.cost?.feeBasisPoints ?: railgun.fees?.unshieldBasisPoints),
             primaryButton = primaryButton(form, request, canSend, railgun.spending),

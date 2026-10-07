@@ -19,6 +19,8 @@ data class AtomicSwapDeployment(
     val deposits: ZcashDepositTerms,
     val railgunNetwork: RailgunNetwork,
     val explorerTxUrl: String,
+    /** Railscan, Railgun's explorer, on the same chain. */
+    val railscanTxUrl: String,
     val minAmount: Usdc6,
     val maxAmount: Usdc6,
     /** How long Railgun screens a payout before it can be spent. */

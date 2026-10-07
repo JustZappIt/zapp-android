@@ -97,4 +97,5 @@ internal data class PrivateUsdSendDoneState(
     val onViewTransaction: (() -> Unit)?,
     /** Set while the send isn't in a block yet. */
     val note: StringResource?,
+    val onViewOnRailscan: (() -> Unit)? = null,
 )

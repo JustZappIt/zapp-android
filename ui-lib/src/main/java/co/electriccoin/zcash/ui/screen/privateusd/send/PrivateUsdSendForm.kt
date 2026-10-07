@@ -132,6 +132,7 @@ internal data class PrivateUsdSendForm(
 
     fun done(
         explorerTxUrl: String?,
+        railscanTxUrl: String?,
         onOpenUrl: (String) -> Unit
     ): PrivateUsdSendDoneState? {
         val request = reviewedRequest
@@ -153,6 +154,7 @@ internal data class PrivateUsdSendForm(
             note =
                 stringRes(R.string.private_usd_send_unconfirmed)
                     .takeIf { outcome is PrivateUsdSendOutcome.Unconfirmed },
+            onViewOnRailscan = railscanTxUrl?.let { url -> { onOpenUrl(url + txHash.hex) } },
         )
     }
 
