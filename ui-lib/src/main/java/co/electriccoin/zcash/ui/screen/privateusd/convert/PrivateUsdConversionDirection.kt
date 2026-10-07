@@ -26,9 +26,11 @@ import co.electriccoin.zcash.ui.design.R as DesignR
 internal enum class ConvertAsset(
     @param:StringRes val label: Int,
     @param:DrawableRes val icon: Int,
+    /** Marks the token as Railgun's private kind. */
+    @param:DrawableRes val badge: Int? = null,
 ) {
     ZEC(R.string.convert_asset_zec, DesignR.drawable.ic_token_zec),
-    PRIVATE_USD(R.string.private_usd_title, DesignR.drawable.ic_token_usdc),
+    PRIVATE_USD(R.string.private_usd_title, DesignR.drawable.ic_token_usdc, R.drawable.ic_private_usd_badge),
 }
 
 internal enum class PrivateUsdConversionDirection(

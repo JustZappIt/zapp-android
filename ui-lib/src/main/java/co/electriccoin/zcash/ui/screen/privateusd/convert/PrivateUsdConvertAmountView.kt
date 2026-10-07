@@ -121,6 +121,7 @@ private fun AssetAmount(
         ZappOfframpHeroAmountField(
             symbol = if (asset == ConvertAsset.PRIVATE_USD) currencySymbol else "",
             leadingIcon = painterResource(asset.icon),
+            leadingIconBadge = asset.badge?.let { painterResource(it) },
             shrinksLongAmounts = true,
             state = amount,
             secondaryText = note,

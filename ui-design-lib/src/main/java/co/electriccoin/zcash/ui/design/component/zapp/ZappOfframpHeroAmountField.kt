@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -43,6 +44,8 @@ fun ZappOfframpHeroAmountField(
     isError: Boolean = false,
     flag: Painter? = null,
     leadingIcon: Painter? = null,
+    /** Drawn over [leadingIcon]'s bottom-right corner. */
+    leadingIconBadge: Painter? = null,
     /** Steps an amount longer than eight characters down a size, for a field sharing its row with an icon. */
     shrinksLongAmounts: Boolean = false,
 ) {
@@ -60,11 +63,7 @@ fun ZappOfframpHeroAmountField(
     Column(modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             leadingIcon?.let {
-                Image(
-                    painter = it,
-                    contentDescription = null,
-                    modifier = Modifier.size(ZappTheme.spacing.xl4),
-                )
+                LeadingIcon(it, leadingIconBadge)
                 Spacer(Modifier.width(ZappTheme.spacing.lg))
             }
             flag?.let {
@@ -192,6 +191,27 @@ fun ZappOfframpHeroAmountField(
                 text = it,
                 style = ZappTheme.typography.body.copy(color = c.textMuted),
                 modifier = Modifier.padding(start = 2.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LeadingIcon(
+    icon: Painter,
+    badge: Painter?,
+) {
+    Box(Modifier.size(ZappTheme.spacing.xl4)) {
+        Image(painter = icon, contentDescription = null, modifier = Modifier.size(ZappTheme.spacing.xl4))
+        badge?.let {
+            Image(
+                painter = it,
+                contentDescription = null,
+                modifier =
+                    Modifier
+                        .size(14.dp)
+                        .align(Alignment.BottomEnd)
+                        .offset(x = 2.dp, y = 2.dp),
             )
         }
     }
