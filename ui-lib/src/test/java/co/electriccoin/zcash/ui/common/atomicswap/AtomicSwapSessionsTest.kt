@@ -9,6 +9,7 @@ import org.junit.Test
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
 import xyz.justzappit.offramp.atomicswap.SwapDeployment
+import xyz.justzappit.offramp.atomicswap.SwapTokenIssuer
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
@@ -34,14 +35,16 @@ class AtomicSwapSessionsTest {
     }
 
     @Test
-    fun `the hosted testnet is written with its confirmations, and records kept before still read as they were`() {
+    fun `the hosted testnet is written with its confirmations and issuer, and records kept before read as they were`() {
         val current = AtomicSwapTestnet.deployment.swap
-        assertEquals(CURRENT, storeJson.encodeToString(SwapDeployment.serializer(), current))
+        val issuer = checkNotNull(current.tokenIssuer)
+        assertEquals(current(issuer), storeJson.encodeToString(SwapDeployment.serializer(), current))
         assertEquals(
             current.copy(
                 contract = Address.parse("0xbd9a37f47a988aefc4d80395727f41feb698e225"),
                 escrowConfirmations = 3,
                 zcashConfirmations = 3,
+                tokenIssuer = null,
             ),
             storeJson.decodeFromString(SwapDeployment.serializer(), KEPT),
         )
@@ -65,9 +68,13 @@ class AtomicSwapSessionsTest {
                 """"railgun":"0xecfcf3b4ec647c4ca6d49108b311b7a7c9543fea",""" +
                 """"maker":"0x2bac02b5032e9092493814c705f156b49e288922",""" +
                 """"relayer":"0xd9633572041886fa7584a2e12f36c8c7f1126412","maxRefundFee":"100000"}"""
-        val CURRENT =
+
+        fun current(issuer: SwapTokenIssuer) =
             KEPT
                 .replace("0xbd9a37f47a988aefc4d80395727f41feb698e225", "0xd75efc6a157cc0a95f66962da86ddf35d9f2617c")
-                .removeSuffix("}") + ""","confirmations":2,"zcashConfirmations":2}"""
+                .removeSuffix("}") + ""","confirmations":2,"zcashConfirmations":2,""" +
+                """"tokenIssuer":{"url":"https://zecswap-testnet.pepeman931.workers.dev/issuer",""" +
+                """"name":"zecswap-testnet-issuer","tokenKey":"${issuer.tokenKey}","attestation":"insecure-test",""" +
+                """"returnKey":"${issuer.returnKey}"}}"""
     }
 }
