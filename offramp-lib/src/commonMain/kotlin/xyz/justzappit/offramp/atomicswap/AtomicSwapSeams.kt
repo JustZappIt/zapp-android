@@ -125,10 +125,16 @@ interface AtomicSwapStore {
 /** Reads of the settlement chain a forward swap needs. */
 interface AtomicSwapChainReader {
     /** Latest state, including swaps too recent to act on: used to avoid reusing keys or abandoning an open. */
-    suspend fun swap(id: SwapId): OnChainSwap?
+    suspend fun swap(id: SwapId): SwapState?
 
-    /** State at the deployment's confirmation depth; only this state authorizes deposits, reveals and completion. */
-    suspend fun confirmedSwap(id: SwapId): OnChainSwap?
+    /**
+     * The swap [terms] describe at the deployment's confirmation depth; only this authorizes deposits, reveals and
+     * completion. One under [id] that opened with other terms is [AtomicSwapBlock.MISMATCH].
+     */
+    suspend fun confirmedSwap(
+        id: SwapId,
+        terms: SwapTerms
+    ): OnChainSwap?
 
     /** The confirmed payout event, searched from around [since] (unix seconds) through the confirmed head. */
     suspend fun confirmedPayout(

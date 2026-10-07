@@ -37,6 +37,8 @@ data class SwapDeployment(
     val zcashNetwork: SwapZcashNetwork = SwapZcashNetwork.TESTNET,
     /** Confirmations the maker waits for before it counts a deposit; a sweep home waits as long before it's done. */
     val zcashConfirmations: Int = DEFAULT_ZCASH_CONFIRMATIONS,
+    /** Where the maker's accepts get their Privacy Pass tokens; none pinned refuses a maker that asks for one. */
+    val tokenIssuer: SwapTokenIssuer? = null,
 )
 
 /** How a forward swap's maker times its deposit. */

@@ -130,10 +130,59 @@ internal data class ReverseQuoteRequest(
     val refundNote: NoteCommitment,
 )
 
+/** The swap a maker opened for an accepted quote, with the deadlines it picked: the last of its terms. */
 @Serializable
-internal data class Accepted(
-    val swapId: SwapId
+data class SwapAccepted(
+    val swapId: SwapId,
+    val t0: Long,
+    val t1: Long,
 )
+
+// What a relayer is sent: the swap's own request, with the terms the contract checks it against, in zecSwap's order.
+@Serializable
+internal class AuthorizationRequest(
+    val swapId: SwapId,
+    val terms: SwapTerms,
+    val deadline: Long,
+    val signature: String,
+)
+
+@Serializable
+internal class PayoutRequest(
+    val swapId: SwapId,
+    val terms: SwapTerms,
+    val note: SwapNote,
+    val fee: Usdc6,
+    val signature: String,
+)
+
+@Serializable
+internal class RevealRequest(
+    val swapId: SwapId,
+    val terms: SwapTerms,
+    val secret: String,
+    val payout: PayoutRequest,
+)
+
+@Serializable
+internal class RescueRequest(
+    val swapId: SwapId,
+    val terms: SwapTerms,
+    val note: SwapNote,
+    val fee: Usdc6,
+    val nonce: Long,
+    val deadline: Long,
+    val signature: String,
+)
+
+internal fun SwapAuthorization.request(terms: SwapTerms) = AuthorizationRequest(swapId, terms, deadline, signature)
+
+internal fun SwapPayout.request(terms: SwapTerms) = PayoutRequest(swapId, terms, note, fee, signature)
+
+internal fun SwapReveal.request(terms: SwapTerms) = RevealRequest(swapId, terms, secret, payout.request(terms))
+
+internal fun SwapRescue.request(terms: SwapTerms) =
+    RescueRequest(swapId, terms, note, fee, nonce, deadline, signature)
 
 internal fun SwapQuote.requireWellFormed() {
     fixedHex(quoteId, SWAP_WORD_BYTES)

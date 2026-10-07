@@ -84,12 +84,14 @@ internal class AtomicSwapRepositoryImpl(
     private val scheduler: AtomicSwapScheduler,
     notifier: AtomicSwapNotifier,
     private val spendGuard: PrivateUsdSpendGuard,
+    private val tokens: AtomicSwapTokens,
     scope: CoroutineScope = swapScope(),
     private val driverLock: Mutex = Mutex(),
     private val payouts: AtomicSwapPayouts = AtomicSwapPayouts(sessions, store, scope),
     private val runner: SwapConversionRunner<AtomicSwapRecord> =
         SwapConversionRunner(
-            conversions = AtomicSwapConversions(sessions, driverLock, store, zcash, scheduler, notifier, payouts),
+            conversions =
+                AtomicSwapConversions(sessions, driverLock, store, zcash, scheduler, notifier, payouts, tokens),
             scheduler = scheduler,
             notifier = notifier,
             scope = scope,
@@ -120,6 +122,7 @@ internal class AtomicSwapRepositoryImpl(
         }
 
     override suspend fun quote(requested: Usdc6): AtomicSwapQuote {
+        tokens.prefetch()
         reverse.requireNotUnderWay()
         val offer = driverLock.withLock { sessions.forward(checkNotNull(deployment)).quote(requested) }
         return AtomicSwapQuote(offer, zcash.depositFee(offer))
@@ -178,6 +181,7 @@ internal class AtomicSwapConversions(
     private val scheduler: AtomicSwapScheduler,
     private val notifier: AtomicSwapNotifier,
     private val payouts: AtomicSwapPayouts,
+    private val tokens: AtomicSwapTokens,
 ) : SwapConversions<AtomicSwapRecord> {
     private var wakesFor: Pair<Long, Long>? = null
 
@@ -208,6 +212,7 @@ internal class AtomicSwapConversions(
         return when (step) {
             is AtomicSwapStep.Finished -> {
                 announce(step.outcome)
+                tokens.prefetch()
                 SwapLoopStep.Over
             }
 

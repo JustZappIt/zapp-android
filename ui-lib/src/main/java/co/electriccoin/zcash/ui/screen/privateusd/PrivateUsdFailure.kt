@@ -40,6 +40,8 @@ internal enum class PrivateUsdFailure(
     TOO_LATE(R.string.reverse_error_too_late),
     PAYMENT_PENDING(R.string.private_usd_payment_pending),
     REFUND_UNAVAILABLE(R.string.reverse_refund_unavailable),
+    MAKER_BUSY(R.string.convert_error_maker_busy),
+    NO_TOKENS_TODAY(R.string.convert_error_no_tokens_today),
 
     /** Another conversion is under way: its screen is the place to be. */
     SWAP_UNDER_WAY(null),
@@ -107,10 +109,18 @@ private fun AtomicSwapBlock.toFailure() =
 
         AtomicSwapBlock.DEADLINE_PASSED -> PrivateUsdFailure.TOO_LATE
 
+        AtomicSwapBlock.MAKER_BUSY, AtomicSwapBlock.TOKENS_EXHAUSTED -> tryLater()
+
         AtomicSwapBlock.WRONG_DEPLOYMENT,
         AtomicSwapBlock.RAILGUN_CLOSED,
         AtomicSwapBlock.CLAIM_LOCK_LAPSING,
         AtomicSwapBlock.MISMATCH,
         AtomicSwapBlock.ZCASH_REJECTED,
-        AtomicSwapBlock.INDICES_IN_USE -> PrivateUsdFailure.OTHER
+        AtomicSwapBlock.INDICES_IN_USE,
+        AtomicSwapBlock.TOKENS_REFUSED,
+        AtomicSwapBlock.TOKENS_UNAVAILABLE -> PrivateUsdFailure.OTHER
     }
+
+// Neither is a failure of the conversion: it can go ahead later, once the maker or this device's allowance has room.
+private fun AtomicSwapBlock.tryLater() =
+    if (this == AtomicSwapBlock.MAKER_BUSY) PrivateUsdFailure.MAKER_BUSY else PrivateUsdFailure.NO_TOKENS_TODAY

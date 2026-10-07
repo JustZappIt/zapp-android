@@ -22,10 +22,10 @@ internal class ReverseSwapVerifier(
             keys.payoutNote(record.index, record.railgunKeys).commitment,
         )
         requireMatch(
-            record.swapId == SwapId.of(record.quote.user, record.quote.terms.makerShare) &&
+            record.swapId == ReverseSwapId.of(record.quote.user, record.quote.terms.makerShare) &&
                 record.userShare == keys.userShare(record.index),
         ) { "the conversion's ids aren't its keys'" }
-        val state = chain.read(record.swapId)
+        val state = chain.read(record.swapId, record.terms)
         if (state.swap != null) {
             verifyEscrow(record, state)
             if (state.block - state.fundingBlock + 1 < deployment.escrowConfirmations) {
@@ -61,29 +61,15 @@ internal class ReverseSwapVerifier(
             }
         }
 
-        // Its roles are the forward swap's turned round: our key opens it, and the maker's is its user.
+        // The chain read checked its terms against their hash; the refund note and the funding block are kept apart.
         fun verifyEscrow(
             record: ReverseSwapRecord,
             state: ReverseChainState
         ) {
-            val swap = checkNotNull(state.swap)
-            val quote = record.quote
-            requireMatch(
-                swap.maker == quote.user &&
-                    swap.user == quote.terms.maker &&
-                    swap.makerShare == record.userShare &&
-                    swap.userShare == quote.terms.makerShare &&
-                    swap.token == quote.terms.token &&
-                    swap.amount == quote.terms.amount &&
-                    swap.t0 == quote.readyDeadline &&
-                    swap.t1 == quote.refundAfter &&
-                    swap.payoutNote == EMPTY_NOTE &&
-                    state.refundNote == quote.refundNote &&
-                    state.fundingBlock in 1..state.block,
-            ) { "the escrow isn't the one this conversion opened" }
+            requireMatch(state.refundNote == record.quote.refundNote && state.fundingBlock in 1..state.block) {
+                "the escrow isn't the one this conversion opened"
+            }
         }
-
-        private val EMPTY_NOTE = NoteCommitment.of(ByteArray(SWAP_WORD_BYTES))
 
         private fun requireMatch(
             matches: Boolean,

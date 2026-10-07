@@ -30,7 +30,7 @@ env:
   # with .zapp-deps; verify_composite_build fails when the two disagree.
   ZAPP_MESSAGING_REF: bc5090a89965f1704af368f1867333e753361e13
   BARE_KIT_REF: 15a3569f3d704de7151761051c8d9cc2e299414f
-  ZECSWAP_REF: 9f2da32280369cf005f24c897b79cb64849e5fc6
+  ZECSWAP_REF: 8a5fb915e2154aaa415ebf589752d6cd397836d0
 
 jobs:
   validate_gradle_wrapper:

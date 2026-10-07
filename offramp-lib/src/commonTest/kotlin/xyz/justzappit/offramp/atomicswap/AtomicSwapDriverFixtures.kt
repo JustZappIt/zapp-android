@@ -65,7 +65,7 @@ abstract class AtomicSwapDriverFixtures {
 
                         path.endsWith("/accept") -> {
                             chain.opened = true
-                            """{"swapId":"$acceptedSwapId"}"""
+                            """{"swapId":"$acceptedSwapId","t0":${chain.t0},"t1":${chain.t0 + 300}}"""
                         }
 
                         path == "/v1/terms" -> {
@@ -147,14 +147,20 @@ abstract class AtomicSwapDriverFixtures {
         var payoutNote = NOTE_COMMITMENT
         var secret = ByteArray(32)
         var railgunAccepts = true
-        var confirmed: (() -> OnChainSwap?)? = null
+        var confirmed: (() -> SwapState?)? = null
+
+        /** What the swap on chain opened with, from what the maker answered the accept with. */
+        var tamper: (SwapTerms) -> SwapTerms = { it }
         var payoutVisible = true
         var payoutHash = TxHash.fromHex(hash(0))
         var payoutFee = Usdc6.ofMicros(20_000)
 
-        override suspend fun confirmedSwap(id: SwapId): OnChainSwap? {
-            confirmed?.let { return it() }
-            return swap(id)
+        override suspend fun confirmedSwap(
+            id: SwapId,
+            terms: SwapTerms
+        ): OnChainSwap? {
+            val state = confirmed.let { if (it != null) it() else swap(id) }
+            return state?.verified(terms)
         }
 
         override suspend fun confirmedPayout(
@@ -163,7 +169,9 @@ abstract class AtomicSwapDriverFixtures {
         ): SwapPayoutEvidence? =
             SwapPayoutEvidence(payoutHash, RELAYER, payoutFee).takeIf { paidOut && payoutVisible && id == SWAP_ID }
 
-        override suspend fun swap(id: SwapId): OnChainSwap? =
+        override suspend fun swap(id: SwapId): SwapState? = onChain(id)?.let { it.state(tamper(it.terms)) }
+
+        private fun onChain(id: SwapId): OnChainSwap? =
             OnChainSwap(
                 maker = MAKER,
                 t0 = t0,
@@ -393,3 +401,7 @@ abstract class AtomicSwapDriverFixtures {
         fun transaction(name: String) = ZcashTransaction(txId(name), "00", 4_200_040)
     }
 }
+
+/** What the contract keeps of [this] swap, opened with [terms]. */
+internal fun OnChainSwap.state(terms: SwapTerms = this.terms) =
+    SwapState(terms.hash(), stage, paidOut, claimLockUntil, refundLockUntil, secret)

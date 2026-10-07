@@ -4,7 +4,6 @@
 package co.electriccoin.zcash.ui.common.atomicswap
 
 import co.electriccoin.zcash.ui.screen.privateusd.toUsd
-import io.ktor.http.Url
 import kotlinx.serialization.json.Json
 import org.junit.Test
 import xyz.justzappit.evm.types.Address
@@ -15,12 +14,7 @@ import kotlin.test.assertFailsWith
 
 class AtomicSwapSessionsTest {
     @Test
-    fun oldPendingSwapsKeepTheirOriginalContractAndServices() {
-        val original = AtomicSwapTestnet.legacy
-        assertEquals(original, AtomicSwapSessions.deploymentFor(record(original)))
-        assertEquals(Url("http://127.0.0.1:8787"), AtomicSwapSessions.deploymentFor(record(original)).swap.makerUrl)
-        val retired = AtomicSwapTestnet.retiredHosted
-        assertEquals(retired, AtomicSwapSessions.deploymentFor(record(retired)))
+    fun pendingSwapsKeepTheirContractAndServices() {
         val current = AtomicSwapTestnet.deployment
         assertEquals(current, AtomicSwapSessions.deploymentFor(record(current)))
     }
@@ -30,14 +24,11 @@ class AtomicSwapSessionsTest {
         val current = AtomicSwapTestnet.deployment.swap
         assertEquals(Address.parse("0x2bac02b5032e9092493814c705f156b49e288922"), current.maker)
         assertEquals(Address.parse("0xd9633572041886fa7584a2e12f36c8c7f1126412"), current.relayer)
-        val legacy = AtomicSwapTestnet.legacy.swap
-        assertEquals(Address.parse("0x09eD1F966745Be18C711C346242c0974DAd7c3e5"), legacy.maker)
-        assertEquals(Address.parse("0x507d1d152025e9F6DA7Bc03B358acc247f07b4eB"), legacy.relayer)
     }
 
     @Test
     fun unknownDeploymentsAreNeverMappedToTheCurrentContract() {
-        val old = record(AtomicSwapTestnet.legacy)
+        val old = record(AtomicSwapTestnet.deployment)
         val elsewhere = old.copy(quote = old.quote.copy(contract = Address.parse("0x" + "01".repeat(20))))
         assertFailsWith<IllegalStateException> { AtomicSwapSessions.deploymentFor(elsewhere) }
     }
@@ -47,7 +38,11 @@ class AtomicSwapSessionsTest {
         val current = AtomicSwapTestnet.deployment.swap
         assertEquals(CURRENT, storeJson.encodeToString(SwapDeployment.serializer(), current))
         assertEquals(
-            AtomicSwapTestnet.retiredHosted.swap.copy(escrowConfirmations = 3, zcashConfirmations = 3),
+            current.copy(
+                contract = Address.parse("0xbd9a37f47a988aefc4d80395727f41feb698e225"),
+                escrowConfirmations = 3,
+                zcashConfirmations = 3,
+            ),
             storeJson.decodeFromString(SwapDeployment.serializer(), KEPT),
         )
     }
@@ -72,7 +67,7 @@ class AtomicSwapSessionsTest {
                 """"relayer":"0xd9633572041886fa7584a2e12f36c8c7f1126412","maxRefundFee":"100000"}"""
         val CURRENT =
             KEPT
-                .replace("0xbd9a37f47a988aefc4d80395727f41feb698e225", "0xa067d2e46f7cea71f4e4fc862b6444ecc1450afc")
+                .replace("0xbd9a37f47a988aefc4d80395727f41feb698e225", "0xd75efc6a157cc0a95f66962da86ddf35d9f2617c")
                 .removeSuffix("}") + ""","confirmations":2,"zcashConfirmations":2}"""
     }
 }

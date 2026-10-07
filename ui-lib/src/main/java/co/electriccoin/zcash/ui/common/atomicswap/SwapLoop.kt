@@ -449,7 +449,11 @@ internal fun AtomicSwapBlock.hold(): SwapHold =
         AtomicSwapBlock.FUNDING_COST_CHANGED,
         AtomicSwapBlock.FUNDING_UNAVAILABLE,
         AtomicSwapBlock.UNDER_WAY_ON_CHAIN,
-        AtomicSwapBlock.INDICES_IN_USE -> {
+        AtomicSwapBlock.INDICES_IN_USE,
+        AtomicSwapBlock.MAKER_BUSY,
+        AtomicSwapBlock.TOKENS_EXHAUSTED,
+        AtomicSwapBlock.TOKENS_REFUSED,
+        AtomicSwapBlock.TOKENS_UNAVAILABLE -> {
             AtomicSwapProblem.UNEXPECTED
         }
     }

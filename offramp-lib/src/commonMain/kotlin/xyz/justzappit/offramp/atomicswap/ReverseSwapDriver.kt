@@ -26,11 +26,14 @@ class ReverseSwapDriver(
     private val nowSeconds: () -> Long = { Clock.System.now().epochSeconds },
 ) {
     private val lock = Mutex()
+
+    // A token pays for each accept, so only one is ever in flight.
+    private val accepting = Mutex()
     private val records = DeploymentRecords(deployment, store, forward)
     private val verifier = ReverseSwapVerifier(deployment, chain, keys, relayer)
     private val ending = ReverseSwapEnding(store, zcash)
     private val submission = ReverseFundingSubmission(funding, store, lock)
-    private val opening = ReverseSwapOpening(maker, chain, zcash, submission::submit, store, ending)
+    private val opening = ReverseSwapOpening(maker, chain, submission::submit, store, ending, lock)
     private val receiving = ReverseSwapReceiving(deployment, zcash, store, ending)
     private val refunds = ReverseSwapRefunds(relayer, chain, keys, reverseKeys, store, verifier, ending, nowSeconds)
     private val approvals = ReverseSwapApprovals(records, verifier, reverseKeys, store)
@@ -66,8 +69,8 @@ class ReverseSwapDriver(
                 quote.terms.makerShare,
                 fixedHex(quote.terms.makerProof, SWAP_SHARE_BYTES),
             )
-        val id = SwapId.of(user, quote.terms.makerShare)
-        requireTimeToGoAhead(quote, chain.read(id).now)
+        val id = ReverseSwapId.of(user, quote.terms.makerShare)
+        requireTimeToGoAhead(quote, chain.read(id, SwapTerms.reverse(quote, acceptance.userShare)).now)
         val record =
             ReverseSwapRecord(
                 index = index,
@@ -145,7 +148,7 @@ class ReverseSwapDriver(
         }
         val estimate = receiving.estimate(snapshot)
         val authorized = lock.withLock { approvals.authorizeReady(index, estimate) }
-        relayer.ready(authorized)
+        relayer.ready(authorized, snapshot.terms)
     }
 
     suspend fun cancel(index: Int) {
@@ -186,14 +189,17 @@ class ReverseSwapDriver(
         return result
     }
 
-    /** [index] accepted by the maker and its joint account imported. Both hold if done twice, so neither is locked. */
-    private suspend fun accepted(index: Int) {
-        val snapshot = records.current(index)
-        requireGoingAhead(snapshot)
-        if (snapshot.account != null) return
-        val account = opening.acceptAndImport(snapshot)
-        lock.withLock { opening.keepAccepted(records.current(index), account) }
-    }
+    /** [index] accepted by the maker, once, and its joint account imported, which holds if done twice. */
+    private suspend fun accepted(index: Int) =
+        accepting.withLock {
+            val snapshot = records.current(index)
+            requireGoingAhead(snapshot)
+            if (snapshot.account == null) {
+                if (!snapshot.makerAccepted) opening.accept(snapshot)
+                val account = zcash.importAccount(snapshot)
+                lock.withLock { opening.keepAccepted(records.current(index), account) }
+            }
+        }
 
     internal companion object {
         // Where the maker's ZEC is expected in the joint account, so each look syncs it.
@@ -338,7 +344,7 @@ internal class ReverseSwapStages(
             // A `ready` the user signed is sent again while it holds, and never signed again after.
             ready != null -> {
                 val lapsed = observed.now > ready.deadline
-                if (!lapsed && escrow.refundLockUntil == 0L) outbox.send { relayer.ready(ready) }
+                if (!lapsed && escrow.refundLockUntil == 0L) outbox.send { relayer.ready(ready, record.terms) }
                 store.keep(record, record.copy(phase = if (lapsed) ReversePhase.REFUND_WAIT else ReversePhase.SETTLING))
             }
 
@@ -364,18 +370,43 @@ internal class ReverseOutbox {
 internal class ReverseSwapOpening(
     private val maker: SwapMaker,
     private val chain: ReverseSwapChain,
-    private val zcash: ReverseSwapZcash,
     private val submitFunding: suspend (ReverseSwapRecord, ReverseFundingTransaction) -> Unit,
     private val store: ReverseSwapStore,
     private val ending: ReverseSwapEnding,
+    private val lock: Mutex,
 ) {
-    /** Accepts [record]'s quote, which the maker takes again for the same keys, and imports its joint account. */
-    suspend fun acceptAndImport(record: ReverseSwapRecord): JointAccountId {
-        if (maker.acceptReverse(record.quote.terms.quoteId, record.acceptance) != record.swapId) {
+    /**
+     * The maker's acceptance of [record]'s quote, kept so that it's never asked for again: a token pays for each. A
+     * refusal another try wouldn't change ends the conversion, before anything is paid.
+     */
+    suspend fun accept(record: ReverseSwapRecord) {
+        try {
+            requireAccepted(record)
+        } catch (e: AtomicSwapBlockedException) {
+            if (e.reason in ENDS_ACCEPTANCE) {
+                lock.withLock { kept(record)?.let { ending.finish(it, ReversePhase.CANCELLED) } }
+            }
+            throw e
+        }
+        lock.withLock { kept(record)?.let { store.keep(it, it.copy(makerAccepted = true)) } }
+    }
+
+    // The maker takes the same keys again, on the quote's deadlines.
+    private suspend fun requireAccepted(record: ReverseSwapRecord) {
+        val accepted =
+            try {
+                maker.acceptReverse(record.quote.terms.quoteId, record.acceptance)
+            } catch (e: AtomicSwapHttpException.Refused) {
+                throw e.code?.let(::lastWord) ?: e
+            }
+        val quote = record.quote
+        val opened = accepted.swapId == record.swapId
+        if (!opened || accepted.t0 != quote.readyDeadline || accepted.t1 != quote.refundAfter) {
             throw AtomicSwapBlockedException(AtomicSwapBlock.MISMATCH, "the maker opened another swap")
         }
-        return zcash.importAccount(record)
     }
+
+    private suspend fun kept(record: ReverseSwapRecord) = store.active()?.takeIf { it.index == record.index }
 
     /** Keeps the accepted joint account with [record], which then waits for its funding if nothing else changed. */
     suspend fun keepAccepted(
@@ -528,6 +559,43 @@ internal class ReverseSwapEnding(
         zcash.forget(record)
     }
 }
+
+private val ENDS_ACCEPTANCE =
+    setOf(
+        AtomicSwapBlock.MISMATCH,
+        AtomicSwapBlock.MAKER_BUSY,
+        AtomicSwapBlock.QUOTE_EXPIRED,
+        AtomicSwapBlock.TOKENS_EXHAUSTED,
+        AtomicSwapBlock.TOKENS_REFUSED,
+    )
+
+// The maker's refusals that no other try would change; an internal error may have accepted, so it's tried again.
+private fun lastWord(code: SwapErrorCode): AtomicSwapBlockedException? =
+    when (code) {
+        SwapErrorCode.UNAVAILABLE, SwapErrorCode.WATCHTOWER_UNAVAILABLE -> {
+            AtomicSwapBlockedException(AtomicSwapBlock.MAKER_BUSY, "the maker takes no more conversions for now")
+        }
+
+        SwapErrorCode.UNKNOWN_QUOTE -> {
+            AtomicSwapBlockedException(AtomicSwapBlock.QUOTE_EXPIRED, "the maker no longer has the quote")
+        }
+
+        SwapErrorCode.TOKEN_REQUIRED -> {
+            AtomicSwapBlockedException(AtomicSwapBlock.TOKENS_REFUSED, "the maker turned down the token")
+        }
+
+        SwapErrorCode.REJECTED,
+        SwapErrorCode.INVALID_REQUEST,
+        SwapErrorCode.UNKNOWN_SWAP,
+        SwapErrorCode.NOT_FOUND,
+        SwapErrorCode.METHOD_NOT_ALLOWED -> {
+            AtomicSwapBlockedException(AtomicSwapBlock.MISMATCH, "the maker refused the quote's acceptance")
+        }
+
+        SwapErrorCode.INTERNAL -> {
+            null
+        }
+    }
 
 /** How long past its funding deadline a reverse swap waits for its escrow before it's called off. */
 internal const val FUNDING_SETTLED_AFTER_SECONDS = 10 * 60L

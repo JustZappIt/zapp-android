@@ -148,7 +148,12 @@ data class ReverseSwapRecord(
     val railgunKeys: RailgunKeySource = RailgunKeySource.ZCASH_SEED,
     /** Unix seconds on this device's clock when the user went ahead; null on records from before it was kept. */
     val acceptedAt: Long? = null,
+    /** The maker took the quote: a token paid for that, and it's never asked again. */
+    val makerAccepted: Boolean = false,
 ) {
+    /** What `openReverse` stores of its escrow, as the quote and our share give it. */
+    val terms: SwapTerms get() = SwapTerms.reverse(quote, userShare)
+
     val underWay: Boolean get() = phase != ReversePhase.QUOTED && !finished
 
     val finished: Boolean get() = phase in FINISHED

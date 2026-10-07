@@ -15,7 +15,7 @@ import xyz.justzappit.offramp.p2p.Usdc6
 
 enum class SwapStage { OPEN, READY, CLAIMED, REFUNDED }
 
-/** `getSwap(id)` as the contract returns it. */
+/** A swap on the chain: the terms this wallet expects, once the contract's hash of them matches, and its state. */
 class OnChainSwap(
     val maker: Address,
     val t0: Long,
@@ -34,7 +34,42 @@ class OnChainSwap(
     val secret: ByteArray,
     /** All zero for a reverse swap, whose refund note the contract keeps apart. */
     val payoutNote: NoteCommitment,
-)
+) {
+    val terms: SwapTerms get() = SwapTerms(maker, token, amount, makerShare, userShare, user, t0, t1, payoutNote)
+}
+
+/** `getSwap(id)`: what the contract keeps of a swap besides its terms, which it holds only as [termsHash]. */
+class SwapState(
+    val termsHash: ByteArray,
+    val stage: SwapStage,
+    val paidOut: Boolean,
+    val claimLockUntil: Long,
+    val refundLockUntil: Long,
+    val secret: ByteArray,
+) {
+    /** The swap [terms] describe, once they hash to [termsHash]: the chain shows nothing else of them. */
+    fun verified(terms: SwapTerms): OnChainSwap {
+        if (!termsHash.contentEquals(terms.hash())) {
+            throw AtomicSwapBlockedException(AtomicSwapBlock.MISMATCH, "the swap on chain opened with other terms")
+        }
+        return OnChainSwap(
+            maker = terms.maker,
+            t0 = terms.t0,
+            stage = stage,
+            paidOut = paidOut,
+            user = terms.user,
+            t1 = terms.t1,
+            token = terms.token,
+            claimLockUntil = claimLockUntil,
+            amount = terms.amount,
+            refundLockUntil = refundLockUntil,
+            makerShare = terms.makerKey,
+            userShare = terms.userKey,
+            secret = secret,
+            payoutNote = terms.payoutNote,
+        )
+    }
+}
 
 /** What the app keeps about a swap it accepted. Its keys derive from the seed and [index] again. */
 @Serializable(with = AtomicSwapRecordSerializer::class)
@@ -59,6 +94,9 @@ data class AtomicSwapRecord(
     val relayerFee: Usdc6? = null,
     val payout: SwapPayout? = null,
     val railgunKeys: RailgunKeySource = RailgunKeySource.ZCASH_SEED,
+    /** The deadlines the maker opened with, from its acceptance; with the quote and our keys, the swap's terms. */
+    val t0: Long? = null,
+    val t1: Long? = null,
 ) {
     val outcome: AtomicSwapOutcome? get() = end?.outcome
 
@@ -206,6 +244,8 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
         val relayerFee: Usdc6? = null,
         val payout: SwapPayout? = null,
         val railgunKeys: RailgunKeySource = RailgunKeySource.ZCASH_SEED,
+        val t0: Long? = null,
+        val t1: Long? = null,
     ) {
         // Every build sets the outcome and its time together, and a deposit's id with its bytes.
         fun record() =
@@ -230,6 +270,8 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
                 relayerFee = relayerFee,
                 payout = payout,
                 railgunKeys = railgunKeys,
+                t0 = t0,
+                t1 = t1,
             )
 
         companion object {
@@ -252,6 +294,8 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
                     relayerFee = record.relayerFee,
                     payout = record.payout,
                     railgunKeys = record.railgunKeys,
+                    t0 = record.t0,
+                    t1 = record.t1,
                 )
         }
     }

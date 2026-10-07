@@ -29,7 +29,7 @@ object ReverseFundingCalls {
         val approval =
             AbiEncoder.encodeFunctionCall("approve(address,uint256)", listOf(AbiAddress(quote.terms.contract), amount))
         val parties = listOf(quote.terms.maker, quote.user, quote.terms.token).map(::AbiAddress) + amount
-        val shares = words(quote.terms.makerShare) + words(record.userShare)
+        val shares = quote.terms.makerShare.words() + record.userShare.words()
         val deadlines =
             listOf(
                 AbiUint(bigIntegerValueOf(quote.readyDeadline)),
@@ -45,14 +45,5 @@ object ReverseFundingCalls {
                 listOf(AbiAddress(record.deployment.relayer), AbiUint(fee.micros)),
             )
         return listOf(quote.terms.token to approval, quote.terms.contract to open, quote.terms.token to payment)
-    }
-
-    /** A share's `uint256[2]`: its x and y words. */
-    private fun words(share: SwapShare): List<AbiBytes32> {
-        val bytes = share.bytes
-        return listOf(
-            AbiBytes32(bytes.copyOfRange(0, SWAP_WORD_BYTES)),
-            AbiBytes32(bytes.copyOfRange(SWAP_WORD_BYTES, SWAP_SHARE_BYTES)),
-        )
     }
 }

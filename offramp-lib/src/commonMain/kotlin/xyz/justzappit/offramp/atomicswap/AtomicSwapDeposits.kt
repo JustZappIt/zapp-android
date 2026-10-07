@@ -97,7 +97,7 @@ internal class AtomicSwapDeposits(
         val now = chain.now()
         return when {
             swap.refundLockUntil != 0L -> NothingSentCause.MAKER_CANCELLED
-            swap.t0 > now + MAX_SECONDS_TO_T0 -> NothingSentCause.MISMATCH
+            swap.t1 <= swap.t0 || swap.t0 > now + MAX_SECONDS_TO_T0 -> NothingSentCause.MISMATCH
             swap.t0 < now + terms.minSecondsToT0 -> NothingSentCause.DEPOSIT_WINDOW_MISSED
             else -> null
         }

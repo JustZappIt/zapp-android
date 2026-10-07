@@ -11,6 +11,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import xyz.justzappit.evm.abi.AbiAddress
+import xyz.justzappit.evm.abi.AbiBool
 import xyz.justzappit.evm.abi.AbiBytes32
 import xyz.justzappit.evm.abi.AbiEncoder
 import xyz.justzappit.evm.abi.keccak256
@@ -61,15 +62,21 @@ value class SwapId private constructor(
         fun of(
             maker: Address,
             userShare: SwapShare
-        ): SwapId {
-            val share = userShare.bytes
-            val x = AbiBytes32(share.copyOfRange(0, SWAP_WORD_BYTES))
-            val y = AbiBytes32(share.copyOfRange(SWAP_WORD_BYTES, SWAP_SHARE_BYTES))
-            return of(keccak256(AbiEncoder.encode(listOf(AbiAddress(maker), x, y))))
-        }
+        ): SwapId = of(keccak256(AbiEncoder.encode(listOf(AbiAddress(maker)) + userShare.words())))
     }
 
     internal object Serializer : HexSerializer<SwapId>("SwapId", ::parse, SwapId::hex)
+}
+
+/** A reverse escrow's id, `keccak256(abi.encode(user, makerShare, true))`, never a forward swap's [SwapId.of]. */
+object ReverseSwapId {
+    fun of(
+        user: Address,
+        makerShare: SwapShare
+    ): SwapId {
+        val words = listOf(AbiAddress(user)) + makerShare.words() + AbiBool(true)
+        return SwapId.of(keccak256(AbiEncoder.encode(words)))
+    }
 }
 
 /** A public share `x ‖ y` on the Pallas curve, 64 bytes, written `0x` and lowercase. */
@@ -92,6 +99,15 @@ value class SwapShare private constructor(
     }
 
     internal object Serializer : HexSerializer<SwapShare>("SwapShare", ::parse, SwapShare::hex)
+}
+
+/** A share as the contract's `uint256[2]`: its x and y words. */
+internal fun SwapShare.words(): List<AbiBytes32> {
+    val share = bytes
+    return listOf(
+        AbiBytes32(share.copyOfRange(0, SWAP_WORD_BYTES)),
+        AbiBytes32(share.copyOfRange(SWAP_WORD_BYTES, SWAP_SHARE_BYTES)),
+    )
 }
 
 /** What a Railgun note commits to, 32 bytes, written `0x` and lowercase: the note a payout or refund shields to. */

@@ -24,7 +24,6 @@ object AtomicSwapTestnet {
 
     // In the token's base units; the hosted services start above the most a relayer may keep.
     private const val MIN_AMOUNT = 110_000L
-    private const val LEGACY_MIN_AMOUNT = 30_000L
     private const val MAX_AMOUNT = 20_000_000L
 
     /** The hosted testnet, which new conversions either way go to. */
@@ -36,7 +35,7 @@ object AtomicSwapTestnet {
                     relayerUrl = Url("https://zecswap-testnet.pepeman931.workers.dev/relayer"),
                     rpcUrl = Sepolia.RPC_URL,
                     chainId = Sepolia.CHAIN_ID,
-                    contract = Address.parse("0xa067d2e46f7cea71f4e4fc862b6444ecc1450afc"),
+                    contract = Address.parse("0xD75Efc6a157CC0A95f66962DA86DDf35d9F2617c"),
                     token = Sepolia.TEST_USD,
                     railgunProxy = Sepolia.RAILGUN_PROXY,
                     maker = Address.parse("0x2bac02b5032e9092493814c705f156b49e288922"),
@@ -52,25 +51,5 @@ object AtomicSwapTestnet {
             minAmount = Usdc6.ofMicros(MIN_AMOUNT),
             maxAmount = Usdc6.ofMicros(MAX_AMOUNT),
             screeningTime = 1.minutes,
-        )
-
-    /** Retired hosted contract; saved records retain their original domain. */
-    val retiredHosted =
-        deployment.copy(
-            swap = deployment.swap.copy(contract = Address.parse("0xbd9a37f47a988aefc4d80395727f41feb698e225")),
-        )
-
-    /** The first, local deployment: forward swaps accepted on it keep it. */
-    val legacy =
-        deployment.copy(
-            swap =
-                deployment.swap.copy(
-                    makerUrl = Url("http://127.0.0.1:8787"),
-                    relayerUrl = Url("http://127.0.0.1:8788"),
-                    contract = Address.parse("0x32CE55D00E6184c385E44e6b20b76d3a8407E809"),
-                    maker = Address.parse("0x09eD1F966745Be18C711C346242c0974DAd7c3e5"),
-                    relayer = Address.parse("0x507d1d152025e9F6DA7Bc03B358acc247f07b4eB"),
-                ),
-            minAmount = Usdc6.ofMicros(LEGACY_MIN_AMOUNT),
         )
 }

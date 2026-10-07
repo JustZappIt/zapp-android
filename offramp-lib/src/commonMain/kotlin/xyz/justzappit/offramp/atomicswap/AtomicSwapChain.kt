@@ -29,11 +29,14 @@ class AtomicSwapChain(
     // Immutable in the contract, so it is read once.
     private var lockDuration: Long? = null
 
-    override suspend fun swap(id: SwapId): OnChainSwap? = decodeSwap(rpc.call(deployment.contract, GET_SWAP, id))
+    override suspend fun swap(id: SwapId): SwapState? = decodeState(rpc.call(deployment.contract, GET_SWAP, id))
 
-    override suspend fun confirmedSwap(id: SwapId): OnChainSwap? {
+    override suspend fun confirmedSwap(
+        id: SwapId,
+        terms: SwapTerms
+    ): OnChainSwap? {
         rpc.requireChain(deployment)
-        return decodeSwap(rpc.call(deployment.contract, GET_SWAP, id, deployment.confirmedTag(rpc.head())))
+        return decodeSwap(rpc.call(deployment.contract, GET_SWAP, id, deployment.confirmedTag(rpc.head())), terms)
     }
 
     override suspend fun now(): Long = rpc.head().timestamp
@@ -96,13 +99,16 @@ class AtomicSwapChain(
     }
 
     // Read far enough behind the head that the escrow has its confirmations.
-    override suspend fun read(id: SwapId): ReverseChainState {
+    override suspend fun read(
+        id: SwapId,
+        terms: SwapTerms
+    ): ReverseChainState {
         rpc.requireChain(deployment)
         val head = rpc.head()
         val confirmed = deployment.confirmedTag(head)
         val funding = abiWords(rpc.call(deployment.contract, REVERSE_FUNDING, id, confirmed), 2)
         return ReverseChainState(
-            swap = decodeSwap(rpc.call(deployment.contract, GET_SWAP, id, confirmed)),
+            swap = decodeSwap(rpc.call(deployment.contract, GET_SWAP, id, confirmed), terms),
             refundNote = NoteCommitment.of(funding.word(0)),
             fundingBlock = funding.uint(1).toNonNegativeLongExact(),
             block = head.number,
@@ -138,53 +144,44 @@ class AtomicSwapChain(
         private val PAID_OUT_TOPIC = keccak256("PaidOut(bytes32,address,uint256)".encodeToByteArray()).hex()
         private val LOCK_DURATION_CALL = AbiEncoder.encodeFunctionCall("LOCK_DURATION()", emptyList())
 
-        /** The 16 words `getSwap` returns, or null for a swap that isn't open (stage 0). */
-        fun decodeSwap(data: ByteArray): OnChainSwap? {
+        /** `getSwap`'s six words, or null for no swap (stage 0); another length is another ABI's contract. */
+        fun decodeState(data: ByteArray): SwapState? {
             val words = abiWords(data, Word.COUNT)
+            if (data.size != Word.COUNT * AbiDecoder.WORD) {
+                throw AtomicSwapBlockedException(AtomicSwapBlock.WRONG_DEPLOYMENT, "getSwap gave ${data.size} bytes")
+            }
             val raw = words.uint8(Word.STAGE)
             // Stage 0 is None; 1 to 4 follow SwapStage's order.
             if (raw == 0) return null
             val stage =
                 SwapStage.entries.getOrNull(raw - 1)
                     ?: throw AtomicSwapBlockedException(AtomicSwapBlock.CHAIN_UNREADABLE, "unknown swap stage $raw")
-            return OnChainSwap(
-                maker = words.address(Word.MAKER),
-                t0 = words.uint(Word.T0).toNonNegativeLongExact(),
+            return SwapState(
+                termsHash = words.word(Word.TERMS_HASH),
                 stage = stage,
                 paidOut = words.uint8(Word.PAID_OUT) != 0,
-                user = words.address(Word.USER),
-                t1 = words.uint(Word.T1).toNonNegativeLongExact(),
-                token = words.address(Word.TOKEN),
                 claimLockUntil = words.uint(Word.CLAIM_LOCK_UNTIL).toNonNegativeLongExact(),
-                amount = Usdc6(words.uint(Word.AMOUNT)),
                 refundLockUntil = words.uint(Word.REFUND_LOCK_UNTIL).toNonNegativeLongExact(),
-                makerShare = SwapShare.of(words.word(Word.MAKER_X) + words.word(Word.MAKER_Y)),
-                userShare = SwapShare.of(words.word(Word.USER_X) + words.word(Word.USER_Y)),
                 secret = words.word(Word.SECRET),
-                payoutNote = NoteCommitment.of(words.word(Word.PAYOUT_NOTE)),
             )
         }
+
+        /** The swap [terms] describe, once `getSwap` holds their hash; null for no swap. */
+        fun decodeSwap(
+            data: ByteArray,
+            terms: SwapTerms
+        ): OnChainSwap? = decodeState(data)?.verified(terms)
     }
 
     /** `getSwap`'s static struct, word by word. */
     private object Word {
-        const val MAKER = 0
-        const val T0 = 1
-        const val STAGE = 2
-        const val PAID_OUT = 3
-        const val USER = 4
-        const val T1 = 5
-        const val TOKEN = 6
-        const val CLAIM_LOCK_UNTIL = 7
-        const val AMOUNT = 8
-        const val REFUND_LOCK_UNTIL = 9
-        const val MAKER_X = 10
-        const val MAKER_Y = 11
-        const val USER_X = 12
-        const val USER_Y = 13
-        const val SECRET = 14
-        const val PAYOUT_NOTE = 15
-        const val COUNT = 16
+        const val TERMS_HASH = 0
+        const val STAGE = 1
+        const val PAID_OUT = 2
+        const val CLAIM_LOCK_UNTIL = 3
+        const val REFUND_LOCK_UNTIL = 4
+        const val SECRET = 5
+        const val COUNT = 6
     }
 }
 

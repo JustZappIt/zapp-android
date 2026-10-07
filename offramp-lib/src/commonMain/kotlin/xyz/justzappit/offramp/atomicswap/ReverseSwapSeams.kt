@@ -36,7 +36,11 @@ interface ReverseSwapKeys {
 
 /** Reads of the settlement chain a reverse swap needs, [ReverseSwapChain.read] far enough behind the head. */
 interface ReverseSwapChain {
-    suspend fun read(id: SwapId): ReverseChainState
+    /** The escrow under [id] as [terms] describe it; one that opened with other terms is [AtomicSwapBlock.MISMATCH]. */
+    suspend fun read(
+        id: SwapId,
+        terms: SwapTerms
+    ): ReverseChainState
 
     /** The funding transaction as the node sees it, confirmed once its escrow would count. */
     suspend fun fundingStatus(transaction: TxHash): TransactionStatus

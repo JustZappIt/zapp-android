@@ -52,7 +52,7 @@ internal class ReverseSwapRefunds(
                 reverseKeys.signRescue(record, terms, nonce, deadline).hex(),
             )
         store.update(record.copy(rescue = rescue))
-        outbox.send { relayer.rescue(rescue) }
+        outbox.send { relayer.rescue(rescue, record.terms) }
     }
 
     suspend fun advance(
@@ -67,7 +67,7 @@ internal class ReverseSwapRefunds(
             }
 
             escrow.stage == SwapStage.REFUNDED -> {
-                sendPayout(record, ReversePhase.REFUND_PAYOUT, outbox) { relayer.refundPayout(it) }
+                sendPayout(record, ReversePhase.REFUND_PAYOUT, outbox) { relayer.refundPayout(it, record.terms) }
             }
 
             escrow.stage == SwapStage.READY && observed.now < escrow.t1 -> {
@@ -99,7 +99,7 @@ internal class ReverseSwapRefunds(
             record.refundLock?.takeIf { it.deadline >= observed.now }
                 ?: SwapAuthorization(record.swapId, deadline, reverseKeys.signLockRefund(record, deadline).hex())
         store.keep(record, record.copy(refundLock = authorization, phase = ReversePhase.REFUNDING))
-        outbox.send { relayer.lockRefund(authorization) }
+        outbox.send { relayer.lockRefund(authorization, record.terms) }
     }
 
     // Never sends the secret on the strength of a relayer response, an old lock observation or a lagging head.
@@ -125,7 +125,7 @@ internal class ReverseSwapRefunds(
             if (locked != null && locked.refundLockUntil > now &&
                 locked.refundLockUntil - now > REVEAL_MARGIN_SECONDS
             ) {
-                relayer.refund(reveal)
+                relayer.refund(reveal, record.terms)
             }
         }
     }

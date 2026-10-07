@@ -33,7 +33,7 @@ class SwapClientsTest {
 
             val failure =
                 assertFailsWith<AtomicSwapHttpException.Refused> {
-                    services.relayer.ready(SwapAuthorization(SWAP_ID, 100, "0x" + "01".repeat(65)))
+                    services.relayer.ready(SwapAuthorization(SWAP_ID, 100, "0x" + "01".repeat(65)), TERMS)
                 }
 
             assertEquals(SwapErrorCode.REJECTED, failure.code)
@@ -132,47 +132,40 @@ class SwapClientsTest {
             answer = """{"relayer":"$ADDRESS","chainId":11155111,"contract":"$ADDRESS","fee":"-1"}"""
             assertFailsWith<AtomicSwapHttpException.Unreadable> { services.relayer.terms() }
             answer = """{"transactions":["0xpay"]}"""
-            assertFailsWith<AtomicSwapHttpException.Unreadable> { services.relayer.refund(REVEAL) }
+            assertFailsWith<AtomicSwapHttpException.Unreadable> { services.relayer.refund(REVEAL, TERMS) }
             services.close()
         }
 
     @Test
-    fun requestsGoOutAsTheServicesTakeThem() =
+    fun requestsGoOutAsZecSwapsSerdeWritesThem() =
         runTest {
             val services = Services { respond("""{"transactions":[]}""") }
-            val note = """{"npk":"$WORD","encryptedBundle":["$WORD"],"shieldKey":"$WORD"}"""
-            val payout = """{"swapId":"${SWAP_ID.hex}","note":$note,"fee":"20000","signature":"$SIGNATURE"}"""
-            val rescue =
-                """{"swapId":"${SWAP_ID.hex}","note":$note,"fee":"20000",""" +
-                    """"nonce":0,"deadline":1000,"signature":"$SIGNATURE"}"""
-            val authorization = """{"swapId":"${SWAP_ID.hex}","deadline":100,"signature":"$SIGNATURE"}"""
-            val reveal = """{"swapId":"${SWAP_ID.hex}","secret":"$WORD","payout":$payout}"""
             val funding =
                 """{"swapId":"${SWAP_ID.hex}","chainId":11155111,"to":"$ADDRESS","data":"0x12345678","value":"0"}"""
 
             services.relayer.fundReverse(
                 ReverseFundingRequest(SWAP_ID, ChainId.ETHEREUM_SEPOLIA, Address.parse(ADDRESS), "0x12345678", "0")
             )
-            services.relayer.lockClaim(AUTHORIZATION)
-            services.relayer.claim(REVEAL)
-            services.relayer.payout(PAYOUT)
-            services.relayer.ready(AUTHORIZATION)
-            services.relayer.lockRefund(AUTHORIZATION)
-            services.relayer.refund(REVEAL)
-            services.relayer.refundPayout(PAYOUT)
-            services.relayer.rescue(SwapRescue(SWAP_ID, PAYOUT.note, PAYOUT.fee, 0, 1000, SIGNATURE))
+            services.relayer.lockClaim(AUTHORIZATION, TERMS)
+            services.relayer.claim(REVEAL, TERMS)
+            services.relayer.payout(PAYOUT, TERMS)
+            services.relayer.ready(AUTHORIZATION, TERMS)
+            services.relayer.lockRefund(AUTHORIZATION, TERMS)
+            services.relayer.refund(REVEAL, TERMS)
+            services.relayer.refundPayout(PAYOUT, TERMS)
+            services.relayer.rescue(SwapRescue(SWAP_ID, PAYOUT.note, PAYOUT.fee, 0, 1000, SIGNATURE), TERMS)
 
             assertEquals(
                 listOf(
                     "/relayer/v1/reverse/fund" to funding,
-                    "/relayer/v1/lock-claim" to authorization,
-                    "/relayer/v1/claim" to reveal,
-                    "/relayer/v1/payout" to payout,
-                    "/relayer/v1/reverse/ready" to authorization,
-                    "/relayer/v1/reverse/lock-refund" to authorization,
-                    "/relayer/v1/reverse/refund" to reveal,
-                    "/relayer/v1/reverse/refund-payout" to payout,
-                    "/relayer/v1/reverse/rescue" to rescue,
+                    "/relayer/v1/lock-claim" to ZecSwapWireSamples.AUTHORIZATION,
+                    "/relayer/v1/claim" to ZecSwapWireSamples.REVEAL,
+                    "/relayer/v1/payout" to ZecSwapWireSamples.PAYOUT,
+                    "/relayer/v1/reverse/ready" to ZecSwapWireSamples.AUTHORIZATION,
+                    "/relayer/v1/reverse/lock-refund" to ZecSwapWireSamples.AUTHORIZATION,
+                    "/relayer/v1/reverse/refund" to ZecSwapWireSamples.REVEAL,
+                    "/relayer/v1/reverse/refund-payout" to ZecSwapWireSamples.PAYOUT,
+                    "/relayer/v1/reverse/rescue" to ZecSwapWireSamples.RESCUE,
                 ),
                 services.paths.zip(services.bodies),
             )
@@ -252,9 +245,10 @@ class SwapClientsTest {
     fun anAcceptAnsweredWithAnotherSwapComesBackAsIt() =
         runTest {
             val other = SwapId.of(ByteArray(32) { 7 })
-            val services = Services { respond("""{"swapId":"${other.hex}"}""") }
+            val services = Services { respond("""{"swapId":"${other.hex}","t0":1790003600,"t1":1790007200}""") }
 
-            assertEquals(other, services.maker.acceptReverse(QUOTE_ID, ACCEPTANCE))
+            val accepted = services.maker.acceptReverse(QUOTE_ID, ACCEPTANCE)
+            assertEquals(SwapAccepted(other, 1_790_003_600, 1_790_007_200), accepted)
             assertEquals(listOf("/maker/v1/reverse/quote/$QUOTE_ID/accept"), services.paths)
             assertEquals(
                 """{"userShare":"${ACCEPTANCE.userShare}","userProof":"${ACCEPTANCE.userProof}",""" +
@@ -295,7 +289,8 @@ class SwapClientsTest {
         val SWAP_ID = SwapId.of(ByteArray(32) { 1 })
         val ACCEPTANCE = SwapAcceptance("0x" + "0c".repeat(64), "0x" + "04".repeat(64), "0x" + "05".repeat(64))
         val AUTHORIZATION = SwapAuthorization(SWAP_ID, 100, SIGNATURE)
-        val PAYOUT = SwapPayout(SWAP_ID, SwapNote(WORD, listOf(WORD), WORD), Usdc6.ofMicros(20_000), SIGNATURE)
+        val PAYOUT = SwapPayout(SWAP_ID, SwapNote(WORD, List(3) { WORD }, WORD), Usdc6.ofMicros(20_000), SIGNATURE)
+        val TERMS = ZecSwapVectors.PAYS_RAILGUN
         val REVEAL = SwapReveal(SWAP_ID, WORD, PAYOUT)
     }
 }

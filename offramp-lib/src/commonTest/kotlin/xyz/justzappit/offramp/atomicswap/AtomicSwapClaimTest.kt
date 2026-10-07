@@ -374,24 +374,6 @@ class AtomicSwapClaimTest : AtomicSwapDriverFixtures() {
         }
 
     @Test
-    fun aMismatchedSwapAfterTheDepositStillSweepsItsRefundHome() =
-        runTest {
-            val h = Harness()
-            val record = h.minedDeposit()
-            h.chain.payoutNote = NoteCommitment.of(ByteArray(32) { 6 })
-            h.chain.stage = SwapStage.REFUNDED
-
-            assertEquals(AtomicSwapStep.Waiting(AtomicSwapWait.REFUNDING), h.driver.advance(record))
-            h.zcash.status[txId("sweep1")] = ZcashTransactionStatus.Mined(3)
-
-            assertEquals(
-                AtomicSwapStep.Finished(AtomicSwapOutcome.Refunded(txId("sweep1"), RefundCause.MAKER_CANCELLED)),
-                h.driver.advance(h.store.record!!),
-            )
-            assertEquals(1, h.zcash.forgotten)
-        }
-
-    @Test
     fun theMakersTurnAfterOurClaimLockLapsedIsWaitedOutWithoutAskingTheRelayer() =
         runTest {
             val h = Harness()

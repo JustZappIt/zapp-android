@@ -5,6 +5,9 @@ package xyz.justzappit.offramp.atomicswap
 
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.test.runTest
+import xyz.justzappit.evm.math.bigIntegerOne
+import xyz.justzappit.evm.math.plus
+import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.test.Test
@@ -255,7 +258,7 @@ class AtomicSwapDriverTest : AtomicSwapDriverFixtures() {
             assertEquals(SwapDeposit.NotStarted, h.store.record!!.deposit)
 
             h.zcash.unpayable = false
-            h.chain.t0 = NOW + 60
+            h.chain.now = h.chain.t0 - 60
             assertEquals(
                 AtomicSwapStep.Finished(AtomicSwapOutcome.NothingSent(NothingSentCause.DEPOSIT_WINDOW_MISSED)),
                 h.driver.advance(h.store.record!!),
@@ -288,7 +291,7 @@ class AtomicSwapDriverTest : AtomicSwapDriverFixtures() {
             assertEquals(txId("deposit2"), h.store.depositTxId)
 
             h.zcash.status[txId("deposit2")] = ZcashTransactionStatus.Expired
-            h.chain.t0 = NOW + 60
+            h.chain.now = h.chain.t0 - 60
             assertEquals(
                 AtomicSwapStep.Finished(AtomicSwapOutcome.NothingSent(NothingSentCause.DEPOSIT_WINDOW_MISSED)),
                 h.driver.advance(h.store.record!!),
@@ -314,8 +317,8 @@ class AtomicSwapDriverTest : AtomicSwapDriverFixtures() {
     fun nothingIsDepositedWhenT0IsTooFarOut() =
         runTest {
             val h = Harness()
-            val record = h.accepted()
             h.chain.t0 = NOW + 3 * 60 * 60
+            val record = h.accepted()
 
             assertEquals(
                 AtomicSwapStep.Finished(AtomicSwapOutcome.NothingSent(NothingSentCause.MISMATCH)),
@@ -328,8 +331,8 @@ class AtomicSwapDriverTest : AtomicSwapDriverFixtures() {
     fun nothingIsDepositedWhenT0IsTooSoon() =
         runTest {
             val h = Harness()
-            val record = h.accepted()
             h.chain.t0 = NOW + 60
+            val record = h.accepted()
 
             assertEquals(
                 AtomicSwapStep.Finished(AtomicSwapOutcome.NothingSent(NothingSentCause.DEPOSIT_WINDOW_MISSED)),
@@ -357,7 +360,7 @@ class AtomicSwapDriverTest : AtomicSwapDriverFixtures() {
         runTest {
             val h = Harness()
             val record = h.accepted().copy(deposit = SwapDeposit.Started)
-            h.chain.t0 = NOW + 60
+            h.chain.now = h.chain.t0 - 60
 
             assertEquals(
                 AtomicSwapStep.Finished(AtomicSwapOutcome.NothingSent(NothingSentCause.DEPOSIT_WINDOW_MISSED)),
@@ -377,6 +380,36 @@ class AtomicSwapDriverTest : AtomicSwapDriverFixtures() {
         }
 
     @Test
+    fun nothingIsDepositedIntoASwapWhoseTermsAreOffByOneInAnyWord() =
+        runTest {
+            val tampers =
+                listOf<(SwapTerms) -> SwapTerms>(
+                    { it.copy(maker = it.maker.plusOne()) },
+                    { it.copy(token = it.token.plusOne()) },
+                    { it.copy(amount = Usdc6(it.amount.micros + bigIntegerOne)) },
+                    { it.copy(makerKey = it.makerKey.plusOne(word = 0)) },
+                    { it.copy(makerKey = it.makerKey.plusOne(word = 1)) },
+                    { it.copy(userKey = it.userKey.plusOne(word = 0)) },
+                    { it.copy(userKey = it.userKey.plusOne(word = 1)) },
+                    { it.copy(user = it.user.plusOne()) },
+                    { it.copy(t0 = it.t0 + 1) },
+                    { it.copy(t1 = it.t1 + 1) },
+                    { it.copy(payoutNote = NoteCommitment.of(it.payoutNote.bytes.plusOne())) },
+                )
+            for (tamper in tampers) {
+                val h = Harness()
+                val record = h.accepted()
+                h.chain.tamper = tamper
+
+                assertEquals(
+                    AtomicSwapStep.Finished(AtomicSwapOutcome.NothingSent(NothingSentCause.MISMATCH)),
+                    h.driver.advance(record),
+                )
+                assertTrue(h.zcash.deposits.isEmpty())
+            }
+        }
+
+    @Test
     fun aSilentMakerIsClaimedFromOnceT0Passes() =
         runTest {
             val h = Harness()
@@ -388,3 +421,9 @@ class AtomicSwapDriverTest : AtomicSwapDriverFixtures() {
             assertTrue("/v1/claim" in h.paths)
         }
 }
+
+private fun ByteArray.plusOne(at: Int = lastIndex) = copyOf().also { it[at] = (it[at] + 1).toByte() }
+
+private fun Address.plusOne() = Address.fromBytes(bytes.plusOne())
+
+private fun SwapShare.plusOne(word: Int) = SwapShare.of(bytes.plusOne(word * SWAP_WORD_BYTES + SWAP_WORD_BYTES - 1))

@@ -39,6 +39,7 @@ class AtomicSwapSessions(
     private val reverseZcash: ReverseSwapZcash,
     private val reverseStore: ReverseSwapStore,
     private val wallet: RailgunWalletRepository,
+    private val tokens: AtomicSwapTokens,
 ) {
     // Guarded by `this`; none while a reset wipes the wallet's records.
     private var current: Session? = Session(number = 0)
@@ -110,7 +111,9 @@ class AtomicSwapSessions(
         private val session: Session,
     ) {
         private val rpc = BaseRpcClient(RpcHttpClient.create(), deployment.rpcUrl.toString())
-        private val maker = MakerClient(http, deployment.makerUrl)
+        private val maker =
+            deployment.tokenIssuer?.let { MakerClient(http, deployment.makerUrl, tokens.source(it)) }
+                ?: MakerClient(http, deployment.makerUrl)
         private val relayer = RelayerClient(http, deployment.relayerUrl)
         private val forwardDrivers = mutableMapOf<ZcashDepositTerms, AtomicSwapDriver>()
         val chain = AtomicSwapChain(rpc, deployment)
@@ -155,8 +158,7 @@ class AtomicSwapSessions(
         const val CLOSED = -1L
 
         // Forward swaps keep the deployment they were accepted on, found again from their quote.
-        private val KNOWN =
-            listOf(AtomicSwapTestnet.deployment, AtomicSwapTestnet.retiredHosted, AtomicSwapTestnet.legacy)
+        private val KNOWN = listOf(AtomicSwapTestnet.deployment)
 
         fun deploymentFor(record: AtomicSwapRecord): AtomicSwapDeployment =
             checkNotNull(

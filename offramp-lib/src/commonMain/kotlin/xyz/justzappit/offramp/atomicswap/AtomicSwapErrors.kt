@@ -60,7 +60,11 @@ enum class SwapErrorCode {
     NOT_FOUND,
 
     @SerialName("methodNotAllowed")
-    METHOD_NOT_ALLOWED;
+    METHOD_NOT_ALLOWED,
+
+    /** Spend a token from the issuer the `WWW-Authenticate` challenge names. */
+    @SerialName("tokenRequired")
+    TOKEN_REQUIRED;
 
     companion object {
         /** The code a service named, or null for one this build doesn't know. */
@@ -73,7 +77,8 @@ enum class SwapErrorCode {
 class AtomicSwapBlockedException(
     val reason: AtomicSwapBlock,
     message: String,
-) : IllegalStateException(message)
+    cause: Throwable? = null,
+) : IllegalStateException(message, cause)
 
 enum class AtomicSwapBlock {
     SWAP_UNDER_WAY,
@@ -116,6 +121,18 @@ enum class AtomicSwapBlock {
 
     /** Every index looked at in one go was already used on a known contract; the next look goes on from there. */
     INDICES_IN_USE,
+
+    /** The maker takes no more conversions for now: one started later may go ahead. */
+    MAKER_BUSY,
+
+    /** This device's tokens for the UTC day are spent, so no maker accepts another conversion before 00:00 UTC. */
+    TOKENS_EXHAUSTED,
+
+    /** The issuer refused this device, or the maker asked for tokens the pinned issuer doesn't sign. */
+    TOKENS_REFUSED,
+
+    /** No token could be fetched now: the issuer is unreachable or its answer doesn't read. */
+    TOKENS_UNAVAILABLE,
 }
 
 internal val AtomicSwapService.label get() = name.lowercase()

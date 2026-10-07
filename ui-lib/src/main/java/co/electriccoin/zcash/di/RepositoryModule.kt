@@ -133,6 +133,7 @@ val repositoryModule =
                 scheduler = get(),
                 notifier = get(),
                 spendGuard = get(),
+                tokens = get(),
             )
         }
         single<AtomicSwapRepository> {
@@ -145,6 +146,7 @@ val repositoryModule =
                 scheduler = get(),
                 notifier = get(),
                 spendGuard = get(),
+                tokens = get(),
             )
         }
         single<PrivateUsdBalanceRepository> {

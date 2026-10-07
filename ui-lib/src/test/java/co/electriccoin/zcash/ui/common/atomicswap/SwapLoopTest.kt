@@ -189,8 +189,11 @@ class SwapLoopTest {
                     every { forward(any<AtomicSwapRecord>(), any()) } returns driver
                 }
             val zcash = mockk<AtomicSwapZcashInfo>(relaxed = true)
-            val loop =
-                loop(AtomicSwapConversions(sessions, Mutex(), store, zcash, scheduler, notifier, mockk(relaxed = true)))
+            val payouts = mockk<AtomicSwapPayouts>(relaxed = true)
+            val tokens = mockk<AtomicSwapTokens>(relaxed = true)
+            val conversions =
+                AtomicSwapConversions(sessions, Mutex(), store, zcash, scheduler, notifier, payouts, tokens)
+            val loop = loop(conversions)
 
             loop.start(resuming = false)
             runCurrent()
@@ -217,7 +220,7 @@ class SwapLoopTest {
             val store = ReverseRecords(toZec(index = 1, ReversePhase.RECEIVING_ZEC))
             val driver = mockk<ReverseSwapDriver>()
             coEvery { driver.advance() } throws RpcException.TransportError("eth_call", IOException("offline"))
-            val loop = loop(ReverseSwapConversions(sessions(driver), store, notifier))
+            val loop = loop(ReverseSwapConversions(sessions(driver), store, notifier, mockk(relaxed = true)))
 
             loop.start(resuming = false)
             advanceTimeBy(PERSISTED)
@@ -235,7 +238,7 @@ class SwapLoopTest {
             val store = ReverseRecords(toZec(index = 1, ReversePhase.RECEIVING_ZEC))
             val driver = mockk<ReverseSwapDriver>()
             coEvery { driver.advance() } answers { store.moveTo(ReversePhase.AWAITING_READY) }
-            val loop = loop(ReverseSwapConversions(sessions(driver), store, notifier))
+            val loop = loop(ReverseSwapConversions(sessions(driver), store, notifier, mockk(relaxed = true)))
 
             loop.start(resuming = false)
             runCurrent()
@@ -258,7 +261,7 @@ class SwapLoopTest {
             val store = ReverseRecords(toZec(index = 1, ReversePhase.RECEIVING))
             val driver = mockk<ReverseSwapDriver>()
             coEvery { driver.advance() } answers { store.moveTo(ReversePhase.COMPLETE) }
-            val loop = loop(ReverseSwapConversions(sessions(driver), store, notifier))
+            val loop = loop(ReverseSwapConversions(sessions(driver), store, notifier, mockk(relaxed = true)))
 
             loop.start(resuming = false)
             runCurrent()
@@ -273,7 +276,7 @@ class SwapLoopTest {
             val store = ReverseRecords(toZec(index = 1, ReversePhase.SETTLING))
             val driver = mockk<ReverseSwapDriver>()
             coEvery { driver.advance() } throws UnsupportedOperationException("a bug") andThen store.record
-            val loop = loop(ReverseSwapConversions(sessions(driver), store, notifier))
+            val loop = loop(ReverseSwapConversions(sessions(driver), store, notifier, mockk(relaxed = true)))
 
             loop.start(resuming = false)
             runCurrent()

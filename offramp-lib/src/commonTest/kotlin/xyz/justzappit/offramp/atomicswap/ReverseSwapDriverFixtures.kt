@@ -131,7 +131,10 @@ abstract class ReverseSwapDriverFixtures {
 
         fun state() = ReverseChainState(escrow?.let { swap(it.stage) }, refundNote, 10, block, now, 600)
 
-        override suspend fun read(id: SwapId) = state()
+        override suspend fun read(
+            id: SwapId,
+            terms: SwapTerms
+        ) = state().let { it.copy(swap = it.swap?.state()?.verified(terms)) }
 
         override suspend fun fundingStatus(transaction: TxHash) = fundingState
 
@@ -166,9 +169,9 @@ abstract class ReverseSwapDriverFixtures {
         override suspend fun acceptReverse(
             quoteId: String,
             acceptance: SwapAcceptance,
-        ): SwapId {
+        ): SwapAccepted {
             accepts++
-            return record.swapId
+            return SwapAccepted(record.swapId, record.quote.readyDeadline, record.quote.refundAfter)
         }
 
         override suspend fun quote(
@@ -184,41 +187,65 @@ abstract class ReverseSwapDriverFixtures {
 
         override suspend fun terms() = RelayerTerms(relayer, ChainId(11_155_111), CONTRACT, Usdc6.ofMicros(100_000))
 
-        override suspend fun ready(authorization: SwapAuthorization): Sent {
+        override suspend fun ready(
+            authorization: SwapAuthorization,
+            terms: SwapTerms
+        ): Sent {
             assertEquals(record.ready, authorization)
             readyCalls++
             return Sent(emptyList())
         }
 
-        override suspend fun lockRefund(authorization: SwapAuthorization): Sent {
+        override suspend fun lockRefund(
+            authorization: SwapAuthorization,
+            terms: SwapTerms
+        ): Sent {
             assertEquals(record.refundLock, authorization)
             lockCalls++
             return Sent(emptyList())
         }
 
-        override suspend fun refund(reveal: SwapReveal): Sent {
+        override suspend fun refund(
+            reveal: SwapReveal,
+            terms: SwapTerms
+        ): Sent {
             assertEquals(record.payout, reveal.payout)
             refundCalls++
             return Sent(emptyList())
         }
 
-        override suspend fun refundPayout(payout: SwapPayout): Sent {
+        override suspend fun refundPayout(
+            payout: SwapPayout,
+            terms: SwapTerms
+        ): Sent {
             payoutCalls++
             check(!interruptPayout)
             return Sent(emptyList())
         }
 
-        override suspend fun rescue(payout: SwapRescue): Sent {
+        override suspend fun rescue(
+            rescue: SwapRescue,
+            terms: SwapTerms
+        ): Sent {
             rescueCalls++
             check(!interruptPayout)
             return Sent(emptyList())
         }
 
-        override suspend fun lockClaim(authorization: SwapAuthorization) = error("forward only")
+        override suspend fun lockClaim(
+            authorization: SwapAuthorization,
+            terms: SwapTerms
+        ) = error("forward only")
 
-        override suspend fun claim(reveal: SwapReveal) = error("forward only")
+        override suspend fun claim(
+            reveal: SwapReveal,
+            terms: SwapTerms
+        ) = error("forward only")
 
-        override suspend fun payout(payout: SwapPayout) = error("forward only")
+        override suspend fun payout(
+            payout: SwapPayout,
+            terms: SwapTerms
+        ) = error("forward only")
 
         override suspend fun signOpen(record: ReverseSwapRecord): ByteArray {
             railgunKeys += record.railgunKeys

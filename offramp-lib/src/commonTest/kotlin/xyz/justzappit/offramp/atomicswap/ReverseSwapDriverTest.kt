@@ -192,12 +192,7 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
                     ByteArray(32),
                     EMPTY_NOTE,
                 )
-            assertFailsWith<IllegalStateException> {
-                ReverseSwapVerifier.verifyEscrow(
-                    h.record,
-                    good.copy(swap = forwardRoles)
-                )
-            }
+            assertFailsWith<IllegalStateException> { forwardRoles.state().verified(h.record.terms) }
             assertFailsWith<IllegalStateException> {
                 ReverseSwapVerifier.verifyEscrow(h.record, good.copy(refundNote = EMPTY_NOTE))
             }

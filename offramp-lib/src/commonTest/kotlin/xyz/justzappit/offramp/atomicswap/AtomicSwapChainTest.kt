@@ -35,53 +35,46 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class AtomicSwapChainTest {
     @Test
-    fun swapIdMatchesZecSwapsVector() {
-        val maker = Address.parse("0x09eD1F966745Be18C711C346242c0974DAd7c3e5")
-        val userShare =
-            SwapShare.parse(
-                "0x0b42629d5b3f787aba7ccde87574c13f6db6b8fccb7c5cfeb3f4e4081c756461" +
-                    "311662156525fcaa692aeef5d2362c2a9ab2083cd6d968c618aec72617aa925a"
-            )
-        assertEquals(
-            "0x297f1ca9d44ff7136dbddb0720ecadc040229e22c03ad0f9e4c648212bfc7b66",
-            SwapId.of(maker, userShare).hex,
-        )
+    fun idsAndTermsHashMatchZecSwapsVectors() {
+        assertEquals(ZecSwapVectors.SWAP_ID, SwapId.of(ZecSwapVectors.MAKER, ZecSwapVectors.USER_SHARE).hex)
+        val reverse = ReverseSwapId.of(ZecSwapVectors.AUTH, ZecSwapVectors.MAKER_SHARE)
+        assertEquals(ZecSwapVectors.REVERSE_SWAP_ID, reverse.hex)
+        assertNotEquals(SwapId.of(ZecSwapVectors.AUTH, ZecSwapVectors.MAKER_SHARE), reverse)
+        assertEquals(ZecSwapVectors.PAYS_ACCOUNT_HASH, ZecSwapVectors.PAYS_ACCOUNT.hash().hex())
+        assertEquals(ZecSwapVectors.PAYS_RAILGUN_HASH, ZecSwapVectors.PAYS_RAILGUN.hash().hex())
+        assertEquals(ZecSwapVectors.REVERSE_HASH, ZecSwapVectors.REVERSE.hash().hex())
     }
 
     @Test
-    fun decodesGetSwapsSixteenWords() {
-        val swap = AtomicSwapChain.decodeSwap(swapWords(stage = 2))!!
-        assertEquals(Address.parse("0x09eD1F966745Be18C711C346242c0974DAd7c3e5"), swap.maker)
-        assertEquals(1_790_000_000, swap.t0)
+    fun aSwapIsReadFromGetSwapsSixWordsAsTheTermsItsHashShows() {
+        val swap = AtomicSwapChain.decodeSwap(swapWords(stage = 2), TERMS)!!
+        assertEquals(TERMS, swap.terms)
         assertEquals(SwapStage.READY, swap.stage)
         assertTrue(swap.paidOut)
-        assertEquals(Address.parse("0x4444444444444444444444444444444444444444"), swap.user)
-        assertEquals(1_790_000_300, swap.t1)
         assertEquals(1_789_999_000, swap.claimLockUntil)
-        assertEquals(Usdc6.ofMicros(1_000_000), swap.amount)
-        assertEquals(SwapShare.of(filled(0x0a) + filled(0x0b)), swap.makerShare)
-        assertEquals(SwapShare.of(filled(0x0c) + filled(0x0d)), swap.userShare)
+        assertEquals(1_790_000_100, swap.refundLockUntil)
         assertContentEquals(filled(0x0e), swap.secret)
-        assertEquals(NoteCommitment.of(filled(0x0f)), swap.payoutNote)
+        assertNull(AtomicSwapChain.decodeSwap(ByteArray(6 * 32), TERMS))
     }
 
     @Test
-    fun aSwapThatIsNotOpenDecodesToNull() {
-        assertNull(AtomicSwapChain.decodeSwap(ByteArray(16 * 32)))
-    }
-
-    @Test
-    fun aShortOrUnknownAnswerIsUnreadable() {
-        val short = assertFailsWith<AtomicSwapBlockedException> { AtomicSwapChain.decodeSwap(ByteArray(15 * 32)) }
-        assertEquals(AtomicSwapBlock.CHAIN_UNREADABLE, short.reason)
-        val stage = ByteArray(16 * 32).also { it[3 * 32 - 1] = 9 }
-        val unknown = assertFailsWith<AtomicSwapBlockedException> { AtomicSwapChain.decodeSwap(stage) }
-        assertEquals(AtomicSwapBlock.CHAIN_UNREADABLE, unknown.reason)
+    fun otherTermsAnotherAbiOrAnUnreadableAnswerAreRefused() {
+        val refused =
+            listOf(
+                AtomicSwapBlock.MISMATCH to { AtomicSwapChain.decodeSwap(swapWords(2), TERMS.copy(t1 = TERMS.t1 + 1)) },
+                AtomicSwapBlock.WRONG_DEPLOYMENT to { AtomicSwapChain.decodeSwap(ByteArray(16 * 32), TERMS) },
+                AtomicSwapBlock.CHAIN_UNREADABLE to { AtomicSwapChain.decodeSwap(ByteArray(5 * 32), TERMS) },
+                AtomicSwapBlock.CHAIN_UNREADABLE to { AtomicSwapChain.decodeSwap(swapWords(stage = 9), TERMS) },
+            )
+        for ((reason, read) in refused) {
+            assertEquals(reason, assertFailsWith<AtomicSwapBlockedException> { read() }.reason)
+        }
     }
 
     @Test
@@ -161,7 +154,7 @@ class AtomicSwapChainTest {
             val node = Node(confirmations = 5)
             val id = SwapId.of(filled(0x5c))
 
-            node.chain.confirmedSwap(id)
+            node.chain.confirmedSwap(id, TERMS)
             node.chain.swap(id)
 
             assertEquals(listOf("0x" + (LATEST - 4).toString(16), "latest"), node.callTags(GET_SWAP))
@@ -174,7 +167,7 @@ class AtomicSwapChainTest {
             val node = Node(chainId = 1)
             val id = SwapId.of(filled(0x5c))
 
-            val swap = assertFailsWith<AtomicSwapBlockedException> { node.chain.confirmedSwap(id) }
+            val swap = assertFailsWith<AtomicSwapBlockedException> { node.chain.confirmedSwap(id, TERMS) }
             val payout = assertFailsWith<AtomicSwapBlockedException> { node.chain.confirmedPayout(id, NOW) }
 
             assertEquals(AtomicSwapBlock.WRONG_DEPLOYMENT, swap.reason)
@@ -189,7 +182,7 @@ class AtomicSwapChainTest {
         runTest {
             val node = Node()
 
-            val state = node.chain.read(SwapId.of(filled(0x5c)))
+            val state = node.chain.read(SwapId.of(filled(0x5c)), TERMS)
 
             val confirmed = "0x" + (LATEST - 3 + 1).toString(16)
             assertEquals(listOf(confirmed, confirmed), node.callTags(GET_SWAP) + node.callTags(REVERSE_FUNDING))
@@ -207,8 +200,8 @@ class AtomicSwapChainTest {
         runTest {
             val node = Node()
 
-            node.chain.read(SwapId.of(filled(0x5c)))
-            node.chain.read(SwapId.of(filled(0x5c)))
+            node.chain.read(SwapId.of(filled(0x5c)), TERMS)
+            node.chain.read(SwapId.of(filled(0x5c)), TERMS)
 
             assertEquals(600, node.chain.lockDuration())
             assertEquals(1, node.callTags(LOCK_DURATION).size)
@@ -220,7 +213,8 @@ class AtomicSwapChainTest {
         runTest {
             val node = Node(chainId = 1)
 
-            val refused = assertFailsWith<AtomicSwapBlockedException> { node.chain.read(SwapId.of(filled(0x5c))) }
+            val refused =
+                assertFailsWith<AtomicSwapBlockedException> { node.chain.read(SwapId.of(filled(0x5c)), TERMS) }
             assertEquals(AtomicSwapBlock.WRONG_DEPLOYMENT, refused.reason)
             assertTrue(node.callTags(GET_SWAP).isEmpty())
             node.close()
@@ -256,10 +250,10 @@ class AtomicSwapChainTest {
     @Test
     fun oversizedSwapTimestampsNeverWrapIntoValidLocks() {
         val oversized = byteArrayOf(1) + ByteArray(8)
-        for (word in listOf(1, 5, 7, 9)) {
+        for (word in listOf(3, 4)) {
             val data = swapWords(stage = 1)
             oversized.copyInto(data, word * 32 + 32 - oversized.size)
-            assertFailsWith<IllegalArgumentException> { AtomicSwapChain.decodeSwap(data) }
+            assertFailsWith<IllegalArgumentException> { AtomicSwapChain.decodeSwap(data, TERMS) }
         }
     }
 
@@ -281,7 +275,7 @@ class AtomicSwapChainTest {
             assertFailsWith<IllegalArgumentException> { node.chain.lockDuration() }
             node.overrideCall = REVERSE_FUNDING
             node.overrideWords = filled(0x06) + checkNotNull(node.overrideWords)
-            assertFailsWith<IllegalArgumentException> { node.chain.read(SwapId.of(filled(0x5c))) }
+            assertFailsWith<IllegalArgumentException> { node.chain.read(SwapId.of(filled(0x5c)), TERMS) }
             node.close()
         }
 
@@ -391,25 +385,11 @@ class AtomicSwapChainTest {
             """{"address":"$contract","topics":["$topic","$id"],"data":"$data","removed":$removed,""" +
                 """"blockNumber":"0x${block.toString(16)}","transactionHash":"$PAYOUT_TX","logIndex":"0x0"}"""
 
+        val TERMS = ZecSwapVectors.PAYS_RAILGUN
+
         fun swapWords(stage: Int) =
-            listOf(
-                address("09eD1F966745Be18C711C346242c0974DAd7c3e5"),
-                uint(1_790_000_000),
-                uint(stage.toLong()),
-                uint(1),
-                address("4444444444444444444444444444444444444444"),
-                uint(1_790_000_300),
-                address("5764D0044bef5AA839E0dDafE2073421101B9Ed8"),
-                uint(1_789_999_000),
-                uint(1_000_000),
-                uint(0),
-                filled(0x0a),
-                filled(0x0b),
-                filled(0x0c),
-                filled(0x0d),
-                filled(0x0e),
-                filled(0x0f),
-            ).reduce(ByteArray::plus)
+            listOf(TERMS.hash(), uint(stage.toLong()), uint(1), uint(1_789_999_000), uint(1_790_000_100), filled(0x0e))
+                .reduce(ByteArray::plus)
 
         fun uint(value: Long) = bigIntegerValueOf(value).toByteArray().let { ByteArray(32 - it.size) + it }
 

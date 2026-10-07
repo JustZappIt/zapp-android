@@ -66,10 +66,11 @@ internal class ReverseSwapRepositoryImpl(
     scheduler: AtomicSwapScheduler,
     notifier: AtomicSwapNotifier,
     private val spendGuard: PrivateUsdSpendGuard,
+    private val tokens: AtomicSwapTokens,
     scope: CoroutineScope = swapScope(),
     private val runner: SwapConversionRunner<ReverseSwapRecord> =
         SwapConversionRunner(
-            conversions = ReverseSwapConversions(sessions, store, notifier),
+            conversions = ReverseSwapConversions(sessions, store, notifier, tokens),
             scheduler = scheduler,
             notifier = notifier,
             scope = scope,
@@ -92,6 +93,7 @@ internal class ReverseSwapRepositoryImpl(
         }
 
     override suspend fun quote(requested: Usdc6): ReverseSwapRecord {
+        tokens.prefetch()
         if (forward.underWay() != null) {
             throw AtomicSwapBlockedException(AtomicSwapBlock.SWAP_UNDER_WAY, "a conversion to private USD is under way")
         }
@@ -135,6 +137,7 @@ internal class ReverseSwapConversions(
     private val sessions: AtomicSwapSessions,
     private val store: ReverseSwapRecords,
     private val notifier: AtomicSwapNotifier,
+    private val tokens: AtomicSwapTokens,
 ) : SwapConversions<ReverseSwapRecord> {
     override val direction = SwapDirection.REVERSE
 
@@ -163,6 +166,7 @@ internal class ReverseSwapConversions(
 
             after.finished -> {
                 notifier.finished(direction, R.string.reverse_title, after.phase.label())
+                tokens.prefetch()
                 SwapLoopStep.Over
             }
 
