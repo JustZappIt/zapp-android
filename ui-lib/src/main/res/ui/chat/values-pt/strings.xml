@@ -437,4 +437,10 @@
     <string name="chat_push_service_channel_name">Entrega de mensagens em segundo plano</string>
     <string name="chat_push_service_title">Zapp</string>
     <string name="chat_push_service_body">A entrega em segundo plano está ativada</string>
+    <string name="chat_send_zec_no_address_title">Ainda sem endereço de carteira</string>
+    <string name="chat_send_zec_no_address_message">%1$s ainda não compartilhou um endereço de carteira neste chat. Peça ou digite um você mesmo.</string>
+    <string name="chat_send_zec_no_address_message_unnamed">Esta pessoa ainda não compartilhou um endereço de carteira neste chat. Peça ou digite um você mesmo.</string>
+    <string name="chat_send_zec_ask_for_address">Pedir o endereço</string>
+    <string name="chat_send_zec_enter_address">Digitar um endereço</string>
+    <string name="chat_send_zec_address_request_text">Pode me passar o endereço da sua carteira para eu te enviar ZEC? Toque em + e escolha Compartilhar endereço.</string>
 </resources>

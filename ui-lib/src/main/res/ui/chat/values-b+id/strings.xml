@@ -437,4 +437,10 @@
     <string name="chat_push_service_channel_name">Pengiriman pesan latar belakang</string>
     <string name="chat_push_service_title">Zapp</string>
     <string name="chat_push_service_body">Pengiriman latar belakang aktif</string>
+    <string name="chat_send_zec_no_address_title">Belum ada alamat dompet</string>
+    <string name="chat_send_zec_no_address_message">%1$s belum membagikan alamat dompet di obrolan ini. Mintalah, atau masukkan sendiri.</string>
+    <string name="chat_send_zec_no_address_message_unnamed">Orang ini belum membagikan alamat dompet di obrolan ini. Mintalah, atau masukkan sendiri.</string>
+    <string name="chat_send_zec_ask_for_address">Minta alamatnya</string>
+    <string name="chat_send_zec_enter_address">Masukkan alamat</string>
+    <string name="chat_send_zec_address_request_text">Bisa bagikan alamat dompetmu supaya aku bisa mengirim ZEC? Ketuk + lalu pilih Bagikan Alamat.</string>
 </resources>

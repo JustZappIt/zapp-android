@@ -88,6 +88,7 @@ class SubmitProposalUseCase(
                     // receipt, and leaving the latch set would attach the *next* unrelated
                     // Zashi send's receipt to this conversation/request.
                     chatSendContext.consume()
+                    chatSendContext.markSubmitted(null)
                     // Always reaches the sign screen; `forward` keeps a waiting caller on the stack.
                     if (keystoneProposalRepository.signReturnRoute != null) {
                         navigationRouter.forward(SignKeystoneTransactionArgs)
@@ -116,6 +117,7 @@ class SubmitProposalUseCase(
 
     private fun submitZashiProposal(proposal: TransactionProposal) {
         val pendingChatContext = chatSendContext.consume()
+        chatSendContext.markSubmitted(pendingChatContext?.conversationId)
         scope.launch {
             try {
                 val result = zashiProposalRepository.submit()

@@ -38,6 +38,8 @@ import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.common.wallet.ZecFiatRate
 import co.electriccoin.zcash.ui.common.wallet.toZecFiatRate
 import co.electriccoin.zcash.ui.common.wallet.zecFiatRate
+import co.electriccoin.zcash.ui.design.component.ButtonState
+import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.preference.StandardPreferenceKeys
@@ -188,6 +190,10 @@ class ChatRoomVM(
     private val messageInput = MutableStateFlow("")
     private val replyingTo = MutableStateFlow<ChatMessage?>(null)
     private val showAttachmentSheet = MutableStateFlow(false)
+
+    /** Shown when Send ZEC has no address for a direct-chat peer: ask them, or type one in. */
+    private val _addressRequestSheet = MutableStateFlow<ZappConfirmationState?>(null)
+    val addressRequestSheet: StateFlow<ZappConfirmationState?> = _addressRequestSheet.asStateFlow()
     private val showMediaSheet = MutableStateFlow(false)
     private val splitSheetParams = MutableStateFlow<SplitSheetParams?>(null)
     private val showNetworkSheet = MutableStateFlow(false)
@@ -1138,12 +1144,58 @@ class ChatRoomVM(
     private fun onSendZecClick() {
         showAttachmentSheet.value = false
         viewModelScope.launch {
-            // Prefer the address the peer shared in this chat; fall back to their saved
-            // address-book row so Send ZEC prefills for saved contacts too.
+            // Prefer the address the peer shared in this chat (an address card, or the address
+            // on a payment request they sent); fall back to their saved address-book row.
             val peerAddress = resolvePeerWalletAddress() ?: resolveSavedContactAddress()
-            chatSendContext.set(conversationId)
-            navigationRouter.forward(UnifiedSendArgs(recipientAddress = peerAddress))
+            if (peerAddress == null && conversation.value?.type == ConversationType.DIRECT) {
+                _addressRequestSheet.value = addressRequestSheet()
+            } else {
+                openSend(peerAddress)
+            }
         }
+    }
+
+    private fun openSend(recipientAddress: String?) {
+        chatSendContext.set(conversationId)
+        navigationRouter.forward(UnifiedSendArgs(recipientAddress = recipientAddress))
+    }
+
+    private suspend fun addressRequestSheet(): ZappConfirmationState {
+        val dismiss = { _addressRequestSheet.value = null }
+        // The name the chat header shows, so the sheet never says a key prefix the header has
+        // already replaced with the peer's profile name.
+        val name =
+            conversation.value
+                ?.resolveDisplayName(getChatContacts().byPublicKey())
+                ?.takeIf { it.isNotBlank() }
+        return ZappConfirmationState(
+            title = stringRes(R.string.chat_send_zec_no_address_title),
+            message =
+                if (name != null) {
+                    stringRes(R.string.chat_send_zec_no_address_message, name)
+                } else {
+                    stringRes(R.string.chat_send_zec_no_address_message_unnamed)
+                },
+            primaryButton =
+                ButtonState(
+                    text = stringRes(R.string.chat_send_zec_ask_for_address),
+                    onClick = {
+                        dismiss()
+                        viewModelScope.launch {
+                            sendTextMessage(application.getString(R.string.chat_send_zec_address_request_text))
+                        }
+                    },
+                ),
+            secondaryButton =
+                ButtonState(
+                    text = stringRes(R.string.chat_send_zec_enter_address),
+                    onClick = {
+                        dismiss()
+                        openSend(null)
+                    },
+                ),
+            onBack = dismiss,
+        )
     }
 
     private suspend fun resolveSavedContactAddress(): String? {
@@ -1569,11 +1621,25 @@ class ChatRoomVM(
             }
     }
 
-    private fun resolvePeerWalletAddress(): String? =
-        messages.value
-            .lastOrNull { msg ->
-                msg.contentType == MimeTypes.WALLET_ADDRESS && !msg.isFromMe
-            }?.content
+    private fun resolvePeerWalletAddress(): String? {
+        // In a group, only an address card names who it belongs to plainly enough to prefill.
+        val isDirect = conversation.value?.type == ConversationType.DIRECT
+        return messages.value
+            .asReversed()
+            .asSequence()
+            .filter { !it.isFromMe }
+            .mapNotNull { msg ->
+                when {
+                    msg.contentType == MimeTypes.WALLET_ADDRESS -> msg.content
+                    isDirect && msg.contentType == MimeTypes.PAYMENT_REQUEST -> requesterAddressOf(msg)
+                    else -> null
+                }
+            }.firstOrNull { it.isNotBlank() }
+    }
+
+    private fun requesterAddressOf(message: ChatMessage): String? =
+        runCatching { JSONObject(message.content).optString("requesterAddress", "") }
+            .getOrNull()
             ?.takeIf { it.isNotBlank() }
 
     companion object {
