@@ -9,7 +9,6 @@ import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.atomicswap.SwapDeployment
 import xyz.justzappit.offramp.atomicswap.SwapTokenIssuer
 import xyz.justzappit.offramp.atomicswap.SwapZcashNetwork
-import xyz.justzappit.offramp.atomicswap.TokenAttestation
 import xyz.justzappit.offramp.atomicswap.ZcashDepositTerms
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.railgun.RailgunNetwork
@@ -65,7 +64,6 @@ object AtomicSwapTestnet {
                             url = Url("https://zecswap-testnet.pepeman931.workers.dev/issuer"),
                             name = "zecswap-testnet-issuer",
                             tokenKey = ISSUER_KEY,
-                            attestation = TokenAttestation.INSECURE_TEST,
                             returnKey = RETURN_KEY,
                         ),
                 ),

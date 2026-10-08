@@ -74,7 +74,7 @@ class AtomicSwapSessionsTest {
                 .replace("0xbd9a37f47a988aefc4d80395727f41feb698e225", "0xd75efc6a157cc0a95f66962da86ddf35d9f2617c")
                 .removeSuffix("}") + ""","confirmations":2,"zcashConfirmations":2,""" +
                 """"tokenIssuer":{"url":"https://zecswap-testnet.pepeman931.workers.dev/issuer",""" +
-                """"name":"zecswap-testnet-issuer","tokenKey":"${issuer.tokenKey}","attestation":"insecure-test",""" +
+                """"name":"zecswap-testnet-issuer","tokenKey":"${issuer.tokenKey}",""" +
                 """"returnKey":"${issuer.returnKey}"}}"""
     }
 }

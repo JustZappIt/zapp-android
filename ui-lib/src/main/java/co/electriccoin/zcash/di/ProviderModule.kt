@@ -12,7 +12,6 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapStoreImpl
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapTokens
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapZcashImpl
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapZcashInfo
-import co.electriccoin.zcash.ui.common.atomicswap.InsecureTestAttestation
 import co.electriccoin.zcash.ui.common.atomicswap.JointAccounts
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapKeysImpl
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRecords
@@ -554,8 +553,7 @@ val providerModule =
             )
         }
         singleOf(::SwapTokenStoreImpl) bind SwapTokenStore::class
-        singleOf(::InsecureTestAttestation)
-        single { AtomicSwapTokens(get(), get(), get(), get()) }
+        single { AtomicSwapTokens(get(), get(), get()) }
         // No retries: a quote is single-use and an accept or claim that timed out may have landed.
         // Minutes of timeout, since an accept waits for the maker's `open` and a relayer for a receipt.
         single(named(ATOMIC_SWAP_HTTP)) {

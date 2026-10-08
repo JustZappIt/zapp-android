@@ -3,6 +3,8 @@
 
 package xyz.justzappit.offramp.atomicswap
 
+import dev.whyoleg.cryptography.CryptographyProvider
+import dev.whyoleg.cryptography.algorithms.SHA256
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.expectSuccess
 import io.ktor.client.request.get
@@ -19,7 +21,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.io.encoding.Base64
@@ -29,26 +30,53 @@ import kotlin.time.Clock
 @Serializable
 data class SwapTokenIssuer(
     val url: Url,
-    /** The name its token challenges give it. */
+    /** The name its token challenges give it, and this install's key is made for. */
     val name: String,
     /** Its RFC 9578 token key, base64url SPKI: a challenge for any other, or a publication of one, is refused. */
     val tokenKey: String,
-    val attestation: TokenAttestation,
     /** The key the maker hands tokens back under, base64url SPKI: a maker whose `/v1/info` shows another is refused. */
     val returnKey: String,
 )
 
-/** How this build shows the issuer it's a genuine install. */
-@Serializable
-enum class TokenAttestation {
-    /** Bytes the issuer takes for a device's id unchecked: until an install can be attested, it limits nothing. */
-    @SerialName("insecure-test")
-    INSECURE_TEST,
+/** How this install proves to the token issuer, and to no one else, that it's genuine: zecSwap's `Attest`. */
+fun interface DeviceAttestation {
+    /** Gets ready to attest ahead of the first fetch, which waits for a maker's challenge. */
+    suspend fun prepare() = Unit
+
+    /** This install's attestation of a request carrying [blinded], for the issuer's [challenge], as given. */
+    suspend fun attest(
+        challenge: String,
+        blinded: List<ByteArray>
+    ): KeyAttestation
 }
 
-/** What vouches for this device to the token issuer, and to no one else. */
-fun interface DeviceAttestation {
-    suspend fun attestation(): ByteArray
+/** An install's key, attested by the phone's secure hardware up to Google's root, signing the request it comes with. */
+@Serializable
+class KeyAttestation(
+    /** The issuer's challenge, base64url, as given. */
+    val challenge: String,
+    /** The key's certificate chain, leaf first, each DER, base64url. */
+    val chain: List<String>,
+    /** `SHA256withECDSA` by the key over [signedMessage], DER, base64url. */
+    val signature: String,
+) {
+    override fun toString() = "KeyAttestation"
+
+    companion object {
+        private val CONTEXT = "zecswap-issuer-v1".encodeToByteArray()
+
+        /** The attestation challenge of a key that counts at the issuer named [issuer], and at no other. */
+        fun keyChallenge(issuer: String): ByteArray = sha256(CONTEXT + issuer.encodeToByteArray())
+
+        /**
+         * What a request's signature covers: the issuer's [challenge], decoded, and the request's [blinded] messages in
+         * the order sent.
+         */
+        fun signedMessage(
+            challenge: ByteArray,
+            blinded: List<ByteArray>
+        ): ByteArray = CONTEXT + challenge + sha256(blinded.fold(ByteArray(0), ByteArray::plus))
+    }
 }
 
 /** RFC 9578's client side (token type 0x0002), as zecSwap's native library computes it. */
@@ -169,7 +197,7 @@ class SwapTokens(
     private val issuer: SwapTokenIssuer,
     http: suspend () -> HttpClient,
     private val crypto: PrivacyPassClient,
-    attestation: DeviceAttestation,
+    private val attestation: DeviceAttestation,
     private val store: SwapTokenStore,
     private val nowSeconds: () -> Long = { Clock.System.now().epochSeconds },
 ) : SwapTokenSource {
@@ -253,7 +281,8 @@ class SwapTokens(
     }
 
     /** Tokens for today's challenge, fetched well before one is spent: the last a maker sent, moved to today. */
-    suspend fun prefetch() =
+    suspend fun prefetch() {
+        attestation.prepare()
         lock.withLock {
             val today = day(nowSeconds())
             val state = store.load().since(earliestDay(nowSeconds()))
@@ -266,6 +295,7 @@ class SwapTokens(
                 store.save(issuance.fetched(current, asked, today))
             }
         }
+    }
 
     // A challenge naming another issuer or key would mark this device's tokens: nothing is fetched or spent for one.
     private fun pinned(challenge: TokenChallenge): ByteArray {
@@ -377,8 +407,8 @@ internal class SwapTokenIssuance(
         client: HttpClient,
         requests: List<BlindedToken>,
     ): List<ByteArray> {
-        val body =
-            TokenRequests(base64Url.encode(attestation.attestation()), requests.map { base64Url.encode(it.blinded) })
+        val blinded = requests.map { it.blinded }
+        val body = TokenRequests(attestation.attest(challenge(client), blinded), blinded.map(base64Url::encode))
         val answer =
             exchange {
                 client.post(issuer.url.path("/v1/tokens")) {
@@ -391,6 +421,14 @@ internal class SwapTokenIssuance(
         val signatures = decoded(answer, TokenResponses.serializer()).blindSignatures
         if (signatures.size !in 1..requests.size) throw unavailable("the issuer signed ${signatures.size} tokens")
         return signatures.map { it.decoded() ?: throw unavailable("the token issuer's answer doesn't read") }
+    }
+
+    // Good for one request, for minutes: asked for right before each.
+    private suspend fun challenge(client: HttpClient): String {
+        val answer = exchange { client.get(issuer.url.path("/v1/challenge")) { expectSuccess = false } }
+        val challenge = decoded(answer, AttestationChallenge.serializer()).challenge
+        if (challenge.decoded()?.size != CHALLENGE_BYTES) throw unavailable("the token issuer's challenge doesn't read")
+        return challenge
     }
 
     private suspend fun route(): HttpClient =
@@ -421,7 +459,7 @@ internal class SwapTokenIssuance(
         answer: IssuerAnswer,
         serializer: KSerializer<T>
     ): T {
-        refusal(answer.status)?.let { throw it }
+        refusal(answer)?.let { throw it }
         return try {
             json.decodeFromString(serializer, answer.body)
         } catch (e: IllegalArgumentException) {
@@ -437,17 +475,26 @@ internal class SwapTokenIssuance(
     private companion object {
         // The most one request may ask the issuer for.
         const val MAX_BATCH = 100
+        const val CHALLENGE_BYTES = 32
         val json = Json { ignoreUnknownKeys = true }
 
         fun Url.path(path: String) = toString().trimEnd('/') + path
 
-        fun refusal(status: HttpStatusCode): AtomicSwapBlockedException? =
-            when {
-                status == HttpStatusCode.TooManyRequests -> exhausted()
-                status == HttpStatusCode.Forbidden -> refused("the issuer refused this device's attestation")
-                !status.isSuccess() -> unavailable("the token issuer answered ${status.value}")
-                else -> null
+        fun refusal(answer: IssuerAnswer): AtomicSwapBlockedException? {
+            if (answer.status.isSuccess()) return null
+            val reason =
+                try {
+                    json.decodeFromString(ServiceError.serializer(), answer.body).error
+                } catch (_: IllegalArgumentException) {
+                    null
+                }
+            val answered = "the token issuer answered ${answer.status.value}" + reason?.let { ": $it" }.orEmpty()
+            return when (answer.status) {
+                HttpStatusCode.TooManyRequests -> exhausted()
+                HttpStatusCode.Forbidden -> refused(answered)
+                else -> unavailable(answered)
             }
+        }
     }
 }
 
@@ -480,8 +527,13 @@ internal class IssuerTokenKey(
 )
 
 @Serializable
+internal class AttestationChallenge(
+    val challenge: String,
+)
+
+@Serializable
 internal class TokenRequests(
-    val attestation: String,
+    val attestation: KeyAttestation,
     val blinded: List<String>,
 )
 
@@ -526,6 +578,12 @@ private fun ByteArray.number(
 ): Long = copyOfRange(from, from + bytes).fold(0L) { n, byte -> n shl Byte.SIZE_BITS or (byte.toLong() and BYTE_MASK) }
 
 private val base64Url = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
+
+private fun sha256(bytes: ByteArray) =
+    CryptographyProvider.Default
+        .get(SHA256)
+        .hasher()
+        .hashBlocking(bytes)
 
 private fun String.decoded(): ByteArray? =
     try {

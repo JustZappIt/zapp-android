@@ -366,13 +366,6 @@ internal class SwapService(
         val challenge: String?,
     )
 
-    // The code stays a string here, so one this build doesn't know still leaves the message readable.
-    @Serializable
-    private class ServiceError(
-        val code: String? = null,
-        val error: String? = null,
-    )
-
     private companion object {
         const val ERROR_EXCERPT = 200
         const val PAID_ATTEMPTS = 3
@@ -384,3 +377,10 @@ internal class SwapService(
             }
     }
 }
+
+// The code stays a string here, so one this build doesn't know still leaves the message readable.
+@Serializable
+internal class ServiceError(
+    val code: String? = null,
+    val error: String? = null,
+)

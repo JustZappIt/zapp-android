@@ -19,6 +19,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import xyz.justzappit.evm.util.toHex
 import kotlin.io.encoding.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -137,6 +138,20 @@ class SwapTokensTest {
             assertEquals(0, device.issuer.requests)
         }
 
+    @Test
+    fun anInstallsKeyAndEachRequestSignWhatZecSwapsIssuerChecks() {
+        assertEquals(
+            "f5cbc5e3281d0519f8ae7efb241c7c10b7d2d52f3bde46703d1ecd0fd5613488",
+            KeyAttestation.keyChallenge("zecswap-testnet-issuer").toHex(),
+        )
+        val blinded = listOf(ByteArray(256) { 1 }, ByteArray(256) { 2 })
+        assertEquals(
+            "7a6563737761702d6973737565722d7631000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f" +
+                "b9a2dbf19e3661e507906ce4b54e4a0280b6743ebc408de670a04603f786d350",
+            KeyAttestation.signedMessage(ByteArray(32) { it.toByte() }, blinded).toHex(),
+        )
+    }
+
     /** One install: its clock, its kept tokens, and the issuer's allowance for it. */
     private class Device(
         left: Int = 3,
@@ -145,11 +160,11 @@ class SwapTokensTest {
         val issuer = Issuer(left)
         private val store = Store()
         private val crypto = Crypto()
+        private val attestation = DeviceAttestation { challenge, _ -> KeyAttestation(challenge, emptyList(), "") }
 
         val state: SwapTokenState get() = store.state
 
-        fun tokens() =
-            SwapTokens(ISSUER, { HttpClient(issuer.engine) }, crypto, { ByteArray(32) { 1 } }, store, { now })
+        fun tokens() = SwapTokens(ISSUER, { HttpClient(issuer.engine) }, crypto, attestation, store, { now })
     }
 
     private class Store : SwapTokenStore {
@@ -177,6 +192,10 @@ class SwapTokensTest {
                             """{"issuer":"$PINNED_ISSUER","tokenKey":"$ISSUER_KEY","tokensPerDay":3}""",
                             headers = JSON_HEADERS,
                         )
+                    }
+
+                    "/issuer/v1/challenge" -> {
+                        respond("""{"challenge":"${base64Url.encode(ByteArray(32))}"}""", headers = JSON_HEADERS)
                     }
 
                     else -> {
@@ -349,7 +368,6 @@ class SwapTokensTest {
                 Url("https://tokens/issuer"),
                 PINNED_ISSUER,
                 ISSUER_KEY,
-                TokenAttestation.INSECURE_TEST,
                 RETURN_KEY,
             )
         val ACCEPTANCE = SwapAcceptance("0x" + "0c".repeat(64), "0x" + "04".repeat(64), "0x" + "05".repeat(64))
