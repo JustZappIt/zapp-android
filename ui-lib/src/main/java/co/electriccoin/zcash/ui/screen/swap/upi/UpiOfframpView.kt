@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.compose.AddFundsPanel
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
@@ -88,6 +89,15 @@ internal fun UpiOfframpView(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = BODY_HORIZONTAL_PADDING.dp, vertical = BODY_VERTICAL_PADDING.dp),
             ) {
+                val addFunds = state.addFunds
+                if (addFunds != null) {
+                    Spacer(modifier = Modifier.height(GAP_LG.dp))
+                    AddFundsPanel(addFunds)
+                    Spacer(modifier = Modifier.weight(1f))
+                    Spacer(modifier = Modifier.height(GAP_LG.dp))
+                    RecentTransactionsRow(onHistoryClick = state.onHistoryClick)
+                    return@Column
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -174,15 +184,21 @@ internal fun UpiOfframpView(
 
         ZappBottomActionBar(
             onBack = onBack,
-            primaryAction = {
-                ZappButton(
-                    text = state.sendButton.text.getValue(),
-                    enabled = state.sendButton.isEnabled,
-                    variant = ZappButtonVariant.Primary,
-                    modifier = Modifier.weight(1f).padding(start = BOTTOM_BAR_GAP.dp),
-                    onClick = state.sendButton.onClick,
-                )
-            },
+            // The empty-wallet panel carries its own Add ZEC button.
+            primaryAction =
+                if (state.addFunds != null) {
+                    null
+                } else {
+                    {
+                        ZappButton(
+                            text = state.sendButton.text.getValue(),
+                            enabled = state.sendButton.isEnabled,
+                            variant = ZappButtonVariant.Primary,
+                            modifier = Modifier.weight(1f).padding(start = BOTTOM_BAR_GAP.dp),
+                            onClick = state.sendButton.onClick,
+                        )
+                    }
+                },
         )
     }
 }

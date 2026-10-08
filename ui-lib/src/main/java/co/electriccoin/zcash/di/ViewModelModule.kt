@@ -229,7 +229,34 @@ val viewModelModule =
         viewModelOf(::SwapAssetPickerVM)
         viewModelOf(::SwapSlippageVM)
         viewModelOf(::SwapVM)
-        viewModelOf(::UnifiedSendVM)
+        // One past viewModelOf's 22-parameter limit, so wired by hand.
+        viewModel { params ->
+            UnifiedSendVM(
+                args = params.get(),
+                getSelectedSwapAsset = get(),
+                getSwapAssetsUseCase = get(),
+                getSlippage = get(),
+                getSelectedWalletAccount = get(),
+                preselectSwapAsset = get(),
+                mapper = get(),
+                swapRepository = get(),
+                cancelSwap = get(),
+                requestSwapQuote = get(),
+                navigateToSwapQuoteIfAvailable = get(),
+                validateAddress = get(),
+                createProposal = get(),
+                observeABContactPicked = get(),
+                prefillSend = get(),
+                observeClearSend = get(),
+                navigateToSelectRecipient = get(),
+                navigateToSelectSwapRecipient = get(),
+                navigateToScanAddress = get(),
+                isABContactHintVisibleUseCase = get(),
+                exchangeRateRepository = get(),
+                navigationRouter = get(),
+                observeFunding = get(),
+            )
+        }
         viewModelOf(::SwapQuoteVM)
         viewModelOf(::ScanGenericAddressVM)
         viewModelOf(::SelectSwapABRecipientVM)

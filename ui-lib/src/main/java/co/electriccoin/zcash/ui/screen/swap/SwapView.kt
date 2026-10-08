@@ -59,6 +59,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.appbar.ZashiMainTopAppBarState
+import co.electriccoin.zcash.ui.common.compose.AddFundsPanel
 import co.electriccoin.zcash.ui.design.component.AssetCardState
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ButtonStyle
@@ -141,6 +142,17 @@ internal fun SwapView(
                 // Balance header
                 SwapBalanceHeader(state)
                 Spacer(modifier = Modifier.height(12.dp))
+
+                // Swapping ZEC out of an empty wallet: say so, and keep the toggle so the user can
+                // still swap another asset in.
+                val addFunds = state.addFunds
+                if (addFunds != null) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    AddFundsPanel(addFunds)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    SwapDirectionToggle(state)
+                    return@Column
+                }
 
                 // "You send" label
                 BasicText(
@@ -344,6 +356,11 @@ private fun ReceivingToRow(state: SwapState) {
 
 @Composable
 private fun SwapBottomBar(state: SwapState) {
+    // The empty-wallet panel carries its own Add ZEC button.
+    if (state.addFunds != null) {
+        ZappBottomActionBar(onBack = state.onBack)
+        return
+    }
     ZappBottomActionBar(
         onBack = state.onBack,
         primaryAction = {

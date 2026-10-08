@@ -8,4 +8,10 @@
     <string name="top_up_from_wallet_subtitle">Receive directly to your shielded address.</string>
     <string name="top_up_add_zec_button">Add ZEC</string>
     <string name="top_up_balance_subtitle">Top up from an exchange or another wallet.</string>
+    <string name="add_funds_panel_title">Your wallet is empty</string>
+    <string name="add_funds_panel_send">Add ZEC before you send. Receive it from another wallet or an exchange.</string>
+    <string name="add_funds_panel_swap">Add ZEC before you swap it. Receive it from another wallet or an exchange.</string>
+    <string name="add_funds_panel_gift">Add ZEC before you fund a Zpacket. Receive it from another wallet or an exchange.</string>
+    <string name="add_funds_panel_pay_merchant">Add ZEC or USDC on Base before you pay. Zapp pays merchants from either.</string>
+    <string name="add_funds_panel_base">Add ZEC before you move funds to Base.</string>
 </resources>

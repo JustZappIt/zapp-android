@@ -8,6 +8,7 @@ import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.compose.AddFundsPanelState
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.provider.BridgeAuthorizationCancelledException
 import co.electriccoin.zcash.ui.common.provider.InsufficientZecForBridgeException
@@ -20,6 +21,8 @@ import co.electriccoin.zcash.ui.common.provider.evaluateBridgeGate
 import co.electriccoin.zcash.ui.common.repository.BaseBalance
 import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepository
 import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
+import co.electriccoin.zcash.ui.common.usecase.Funding
+import co.electriccoin.zcash.ui.common.usecase.ObserveFundingUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
@@ -29,6 +32,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.ellipsizeMiddle
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.topup.TopUpArgs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -76,6 +80,7 @@ internal class BridgeToBaseVM(
     private val accountDataSource: AccountDataSource,
     private val checkpointStorage: OfframpTopUpCheckpointStorageProvider,
     private val keystoneProposalRepository: KeystoneProposalRepository,
+    observeFunding: ObserveFundingUseCase,
 ) : ViewModel() {
     private sealed interface Phase {
         data object Input : Phase
@@ -151,13 +156,24 @@ internal class BridgeToBaseVM(
 
     val state: StateFlow<BridgeToBaseState> =
         combine(
-            inr,
-            phase,
-            priming,
-            accountDataSource.selectedAccount,
-            baseBalance.balance,
-        ) { amt, currentPhase, prime, account, balance ->
-            buildState(amt, currentPhase, prime, account?.spendableShieldedBalance ?: Zatoshi(0), balance)
+            combine(
+                inr,
+                phase,
+                priming,
+                accountDataSource.selectedAccount,
+                baseBalance.balance,
+            ) { amt, currentPhase, prime, account, balance ->
+                buildState(amt, currentPhase, prime, account?.spendableShieldedBalance ?: Zatoshi(0), balance)
+            },
+            observeFunding.zec(),
+        ) { state, funding ->
+            state.copy(
+                addFunds =
+                    AddFundsPanelState(
+                        body = stringRes(R.string.add_funds_panel_base),
+                        onAddFunds = { navigationRouter.forward(TopUpArgs) },
+                    ).takeIf { funding == Funding.EMPTY && state.isInputVisible },
+            )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),

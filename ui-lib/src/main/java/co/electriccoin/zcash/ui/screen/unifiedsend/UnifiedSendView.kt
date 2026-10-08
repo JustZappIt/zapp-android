@@ -60,6 +60,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cash.z.ecc.android.sdk.model.FiatCurrency
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.compose.AddFundsPanel
 import co.electriccoin.zcash.ui.design.animation.shake
 import co.electriccoin.zcash.ui.design.component.AssetCardState
 import co.electriccoin.zcash.ui.design.component.ChipButtonState
@@ -128,6 +129,13 @@ internal fun UnifiedSendView(
                     modifier = Modifier.align(CenterHorizontally),
                 )
                 Spacer(32.dp)
+
+                val addFunds = state.addFunds
+                if (addFunds != null) {
+                    Spacer(16.dp)
+                    AddFundsPanel(addFunds)
+                    return@Column
+                }
 
                 // ── Sentence: "I want to send" ──────────────────────────────
                 SentenceFragment(stringResource(R.string.unified_send_sentence_i_want_to_send))
@@ -207,7 +215,7 @@ internal fun UnifiedSendView(
             }
         }
 
-        if (state.infoFooter != null) {
+        if (state.infoFooter != null && state.addFunds == null) {
             Text(
                 text = state.infoFooter.getValue(),
                 style = ZappTheme.typography.caption,
@@ -236,8 +244,10 @@ internal fun UnifiedSendView(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                state.slippage?.let { SlippageButton(it) }
-                CtaButton(btn = state.primaryButton, modifier = Modifier.weight(1f))
+                if (state.addFunds == null) {
+                    state.slippage?.let { SlippageButton(it) }
+                    CtaButton(btn = state.primaryButton, modifier = Modifier.weight(1f))
+                }
             }
         }
     }
