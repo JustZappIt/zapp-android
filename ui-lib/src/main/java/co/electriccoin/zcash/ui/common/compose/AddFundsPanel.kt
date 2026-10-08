@@ -23,11 +23,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
-import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 
-/** The "Add ZEC" panel described by [AddFundsPanelState]. */
+/**
+ * The empty-wallet explanation described by [AddFundsPanelState]. Display only: the screen puts
+ * the Add ZEC action in its bottom bar, beside back, where every Zapp screen keeps its primary action.
+ */
 @Composable
 fun AddFundsPanel(
     state: AddFundsPanelState,
@@ -70,12 +72,6 @@ fun AddFundsPanel(
                     color = c.textMuted,
                     textAlign = TextAlign.Center,
                 ),
-        )
-        Spacer(Modifier.height(24.dp))
-        ZappButton(
-            text = stringResource(R.string.top_up_add_zec_button),
-            modifier = Modifier.fillMaxWidth(),
-            onClick = state.onAddFunds,
         )
     }
 }

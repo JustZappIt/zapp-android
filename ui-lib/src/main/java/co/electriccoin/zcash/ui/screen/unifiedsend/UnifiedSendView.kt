@@ -244,7 +244,14 @@ internal fun UnifiedSendView(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (state.addFunds == null) {
+                val addFunds = state.addFunds
+                if (addFunds != null) {
+                    ZappButton(
+                        text = stringResource(R.string.top_up_add_zec_button),
+                        modifier = Modifier.weight(1f),
+                        onClick = addFunds.onAddFunds,
+                    )
+                } else {
                     state.slippage?.let { SlippageButton(it) }
                     CtaButton(btn = state.primaryButton, modifier = Modifier.weight(1f))
                 }

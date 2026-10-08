@@ -356,9 +356,19 @@ private fun ReceivingToRow(state: SwapState) {
 
 @Composable
 private fun SwapBottomBar(state: SwapState) {
-    // The empty-wallet panel carries its own Add ZEC button.
-    if (state.addFunds != null) {
-        ZappBottomActionBar(onBack = state.onBack)
+    // Swapping ZEC out of an empty wallet: the bar's action is Add ZEC.
+    val addFunds = state.addFunds
+    if (addFunds != null) {
+        ZappBottomActionBar(
+            onBack = state.onBack,
+            primaryAction = {
+                ZappButton(
+                    text = stringResource(R.string.top_up_add_zec_button),
+                    modifier = Modifier.weight(1f).padding(start = 12.dp),
+                    onClick = addFunds.onAddFunds,
+                )
+            },
+        )
         return
     }
     ZappBottomActionBar(

@@ -165,9 +165,9 @@ private fun GiftCardBottomBar(state: GiftCardState) {
     val action =
         when (state.stage) {
             GiftCardStage.DETAILS -> {
-                // The empty-wallet panel carries its own Add ZEC button.
-                if (state.addFunds != null) {
-                    null
+                val addFunds = state.addFunds
+                if (addFunds != null) {
+                    GiftCardAction(text = R.string.top_up_add_zec_button, onClick = addFunds.onAddFunds)
                 } else {
                     GiftCardAction(
                         text = R.string.gift_card_continue,

@@ -7,7 +7,8 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 
 /**
  * What a money flow shows in place of its form once [co.electriccoin.zcash.ui.common.usecase.Funding.EMPTY]:
- * why there is nothing to do yet, and the one action that fixes it.
+ * why there is nothing to do yet, and the one action that fixes it ([onAddFunds], which the screen
+ * offers as its bottom-bar primary action).
  */
 data class AddFundsPanelState(
     val body: StringResource,

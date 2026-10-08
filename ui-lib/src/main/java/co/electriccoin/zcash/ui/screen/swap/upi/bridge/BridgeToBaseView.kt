@@ -210,21 +210,21 @@ internal fun BridgeToBaseView(state: BridgeToBaseState) {
 private fun BridgeToBaseBottomBar(state: BridgeToBaseState) {
     ZappBottomActionBar(
         onBack = state.onBack,
-        // The empty-wallet panel carries its own Add ZEC button.
-        primaryAction =
-            if (state.addFunds != null) {
-                null
-            } else {
-                {
-                    ZappButton(
-                        text = state.primaryButton.text.getValue(),
-                        enabled = state.primaryButton.isEnabled,
-                        variant = ZappButtonVariant.Primary,
-                        modifier = Modifier.weight(1f).padding(start = BOTTOM_BAR_GAP.dp),
-                        onClick = state.primaryButton.onClick,
-                    )
-                }
-            },
+        primaryAction = {
+            val addFunds = state.addFunds
+            ZappButton(
+                text =
+                    if (addFunds != null) {
+                        stringResource(R.string.top_up_add_zec_button)
+                    } else {
+                        state.primaryButton.text.getValue()
+                    },
+                enabled = addFunds != null || state.primaryButton.isEnabled,
+                variant = ZappButtonVariant.Primary,
+                modifier = Modifier.weight(1f).padding(start = BOTTOM_BAR_GAP.dp),
+                onClick = addFunds?.onAddFunds ?: state.primaryButton.onClick,
+            )
+        },
     )
 }
 

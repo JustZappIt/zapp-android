@@ -184,21 +184,21 @@ internal fun UpiOfframpView(
 
         ZappBottomActionBar(
             onBack = onBack,
-            // The empty-wallet panel carries its own Add ZEC button.
-            primaryAction =
-                if (state.addFunds != null) {
-                    null
-                } else {
-                    {
-                        ZappButton(
-                            text = state.sendButton.text.getValue(),
-                            enabled = state.sendButton.isEnabled,
-                            variant = ZappButtonVariant.Primary,
-                            modifier = Modifier.weight(1f).padding(start = BOTTOM_BAR_GAP.dp),
-                            onClick = state.sendButton.onClick,
-                        )
-                    }
-                },
+            primaryAction = {
+                val addFunds = state.addFunds
+                ZappButton(
+                    text =
+                        if (addFunds != null) {
+                            stringResource(R.string.top_up_add_zec_button)
+                        } else {
+                            state.sendButton.text.getValue()
+                        },
+                    enabled = addFunds != null || state.sendButton.isEnabled,
+                    variant = ZappButtonVariant.Primary,
+                    modifier = Modifier.weight(1f).padding(start = BOTTOM_BAR_GAP.dp),
+                    onClick = addFunds?.onAddFunds ?: state.sendButton.onClick,
+                )
+            },
         )
     }
 }
