@@ -60,7 +60,7 @@
     <string name="onboarding_msg_intro_title">Crea tu\nidentidad de\nmensajería</string>
     <string name="onboarding_msg_intro_sub">Tu identidad es un nombre de usuario respaldado por la frase de recuperación de tu billetera: una sola frase restaura tu billetera y tu identidad de mensajería en cualquier dispositivo. El historial de mensajes se guarda localmente y no es recuperable.</string>
     <string name="onboarding_msg_intro_bullet_username_label">Elige un nombre de usuario</string>
-    <string name="onboarding_msg_intro_bullet_username_sub">Así te encuentran y te escriben tus amigos</string>
+    <string name="onboarding_msg_intro_bullet_username_sub">Así te ven los demás</string>
     <string name="onboarding_msg_intro_bullet_phrase_label">Una sola frase de recuperación</string>
     <string name="onboarding_msg_intro_bullet_phrase_sub">La frase de 24 palabras de tu billetera también restaura tu identidad de mensajería.</string>
 
