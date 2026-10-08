@@ -6,9 +6,9 @@
     <string name="restore_flow_seed_sub">Ketik frasa pemulihan 24 kata Anda. Ini memulihkan dompet sekaligus identitas perpesanan Anda.</string>
 
     <!-- Restore flow — birthday height -->
-    <string name="restore_flow_birthday_badge">Pulihkan · Tinggi Kelahiran</string>
-    <string name="restore_flow_birthday_title">Tinggi kelahiran\ndompet</string>
-    <string name="restore_flow_birthday_sub">Memasukkan kapan dompet Anda dibuat mempercepat pemulihan. Gunakan tinggi blok atau pilih bulan dan tahun.</string>
+    <string name="restore_flow_birthday_badge">Pulihkan · Kelahiran dompet</string>
+    <string name="restore_flow_birthday_title">Kapan Anda membuat\ndompet ini?</string>
+    <string name="restore_flow_birthday_sub">Memilih kapan dompet Anda dibuat mempercepat pemulihan. Pilih bulan dan tahun, atau masukkan tinggi blok jika Anda tahu.</string>
     <string name="restore_flow_birthday_field_label">TINGGI BLOK</string>
     <string name="restore_flow_birthday_field_hint">Masukkan angka atau biarkan kosong</string>
     <string name="restore_flow_birthday_skip">Lewati: pindai semua</string>
@@ -42,4 +42,6 @@
     <string name="restore_flow_keep_open_bullet_2">Pertimbangkan untuk mengisi daya perangkat Anda: sinkronisasi menghabiskan baterai.</string>
     <string name="restore_flow_keep_open_checkbox">Biarkan layar menyala saat menyinkronkan</string>
     <string name="restore_flow_keep_open_cta">Masuk ke Zapp</string>
+    <string name="restore_flow_birthday_date_estimate">≈ blok %1$s</string>
+    <string name="restore_flow_username_subtitle">Nama pengguna tidak disimpan dalam frasa pemulihan Anda, jadi pilih lagi. Nama lama Anda boleh dipakai. Inilah cara Anda tampil bagi orang yang belum menyimpan Anda sebagai kontak.</string>
 </resources>
