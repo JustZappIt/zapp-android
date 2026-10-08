@@ -147,9 +147,12 @@ class SynchronizerProviderImpl(
     }
 
     /**
-     * A new wallet has been seen to sit on "Connecting" until the app was restarted (not yet
-     * reproduced on demand). Log which part is stuck, and rebuild a stuck engine a bounded number
-     * of times so a slow-but-healthy start can't be reset forever.
+     * An engine that starts without a network (airplane mode, or a dropped emulator/Wi-Fi link
+     * while a new wallet is created) stays at INITIALIZING after the network returns: nothing in
+     * the SDK retries its startup, so the Pay tab sat on "Connecting" until the app was restarted.
+     * Reproduced 2026-10-08 by creating a wallet in airplane mode and turning it off afterwards.
+     * Log which part is stuck, and rebuild a stuck engine a bounded number of times so a
+     * slow-but-healthy start can't be reset forever.
      */
     private fun onSyncStartupStall(state: SyncStartup) {
         when (state) {
