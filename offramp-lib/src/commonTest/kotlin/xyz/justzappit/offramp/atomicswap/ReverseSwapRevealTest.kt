@@ -6,8 +6,6 @@ package xyz.justzappit.offramp.atomicswap
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 
 class ReverseSwapRevealTest : ReverseSwapDriverFixtures() {
@@ -42,21 +40,6 @@ class ReverseSwapRevealTest : ReverseSwapDriverFixtures() {
             h.beforeSecret = { h.escrow = h.swap(SwapStage.CLAIMED) }
             h.driver.advance()
             assertEquals(0, h.refundCalls)
-        }
-
-    @Test
-    fun rescueCannotIssueAnApprovalToALegacyContract() =
-        runTest {
-            val h = Harness()
-            h.prepared()
-            h.escrow = h.swap(SwapStage.REFUNDED)
-            h.paidOut = true
-            h.driver.advance()
-            h.rescueNonce = null
-            assertFalse(h.driver.canRescue(0))
-            assertFailsWith<IllegalStateException> { h.driver.rescue(0) }
-            assertEquals(0, h.rescueSignatures)
-            assertEquals(0, h.rescueCalls)
         }
 
     @Test

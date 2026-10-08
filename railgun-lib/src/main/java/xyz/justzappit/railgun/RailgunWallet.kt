@@ -19,7 +19,6 @@ import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.evm.util.toHex
-import kotlin.time.Duration.Companion.milliseconds
 
 /** Railgun's wallet SDK in a hidden WebView, one engine and wallet per page; `debug` makes the page inspectable. */
 class RailgunWallet(
@@ -89,9 +88,6 @@ class RailgunWallet(
         opened = null
         host.wipe()
     }
-
-    /** Deletes what the page stored before it had an origin of its own: a wallet of the Zcash seed itself. */
-    suspend fun forgetLegacyStorage() = host.forgetLegacyStorage()
 
     private companion object {
         const val ENCRYPTION_KEY_BYTES = 32
@@ -166,13 +162,7 @@ class RailgunSession internal constructor(
     ): RailgunSignedTransaction {
         val signed = page.request(method, params, serializer, SignedResult.serializer())
         requireHashOf(signed.raw, signed.txHash)
-        return RailgunSignedTransaction(
-            signed.raw,
-            signed.txHash,
-            signed.from,
-            signed.nonce,
-            signed.proofMs?.milliseconds,
-        )
+        return RailgunSignedTransaction(signed.raw, signed.txHash, signed.from, signed.nonce)
     }
 
     internal companion object {

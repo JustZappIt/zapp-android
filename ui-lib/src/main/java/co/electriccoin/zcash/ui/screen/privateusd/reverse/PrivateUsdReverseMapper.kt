@@ -79,7 +79,7 @@ internal class PrivateUsdReverseMapper(
             debit = terms.format(cost.debit, currency),
             escrow = terms.format(record.quote.terms.amount, currency),
             railgunFee = terms.format(cost.railgunFee, currency),
-            broadcasterFee = cost.broadcasterFee?.let { terms.format(it, currency) },
+            broadcasterFee = terms.format(cost.broadcasterFee, currency),
             receive = stringRes(Zatoshi(record.receivedZat())),
         )
     }

@@ -12,7 +12,6 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
-import xyz.justzappit.evm.rpc.BaseRpcClient
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.atomicswap.AtomicSwapBlock
 import xyz.justzappit.offramp.atomicswap.AtomicSwapBlockedException
@@ -38,7 +37,6 @@ class ReverseSwapFundingImplTest {
         runTest {
             val wallet = mockk<RailgunWalletRepository>()
             val relayer = mockk<SwapRelayer>()
-            val rpc = mockk<BaseRpcClient>()
             val record = record()
             val proved = RailgunReverseTransaction(Sepolia.RELAY_ADAPT, DATA, BigInteger.ZERO, COST)
             val preparation = slot<RailgunReverseRequest>()
@@ -46,10 +44,9 @@ class ReverseSwapFundingImplTest {
             coEvery { wallet.prepareReverse(capture(preparation)) } returns proved
             val submission = slot<ReverseFundingRequest>()
             coEvery { relayer.fundReverse(capture(submission)) } returns Sent(listOf(HASH))
-            val funding = ReverseSwapFundingImpl(wallet, rpc, DEPLOYMENT, relayer)
+            val funding = ReverseSwapFundingImpl(wallet, DEPLOYMENT, relayer)
 
             val kept = funding.prepare(record, ByteArray(65))
-            assertNull(kept.raw)
             assertNull(kept.txId)
             assertEquals(Sepolia.RELAY_ADAPT, preparation.captured.relayAdapt)
             assertEquals(
@@ -70,7 +67,7 @@ class ReverseSwapFundingImplTest {
         runTest {
             val wallet = mockk<RailgunWalletRepository>()
             val relayer = mockk<SwapRelayer>()
-            val funding = ReverseSwapFundingImpl(wallet, mockk(), DEPLOYMENT, relayer)
+            val funding = ReverseSwapFundingImpl(wallet, DEPLOYMENT, relayer)
             coEvery { relayer.terms() } returns TERMS.copy(reverseFunding = null)
             val unsupported = assertFailsWith<AtomicSwapBlockedException> { funding.cost(Usdc6.ofMicros(1_000_000)) }
             assertEquals(AtomicSwapBlock.FUNDING_UNAVAILABLE, unsupported.reason)

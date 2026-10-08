@@ -52,8 +52,7 @@ class ReverseSwapDriver(
         }
         val index = indices.take()
         val user = keys.authAddress(index)
-        val railgunKeys = RailgunKeySource.BIP85
-        val note = keys.payoutNote(index, railgunKeys).commitment
+        val note = keys.payoutNote(index).commitment
         val quote = maker.quoteReverse(requested, user, note)
         ReverseSwapVerifier.verifyQuote(quote, deployment, user, note)
         if (quote.terms.amount != requested) {
@@ -62,7 +61,6 @@ class ReverseSwapDriver(
         val acceptance =
             keys.accept(
                 index,
-                railgunKeys,
                 deployment.chainId,
                 deployment.contract,
                 fixedHex(quote.terms.quoteId, SWAP_WORD_BYTES),
@@ -82,7 +80,6 @@ class ReverseSwapDriver(
                 birthday = zcash.chainHeight(),
                 phase = ReversePhase.QUOTED,
                 cost = funding.cost(quote.terms.amount),
-                railgunKeys = railgunKeys,
             )
         lock.withLock {
             records.requireNothingUnderWay()

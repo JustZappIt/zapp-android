@@ -31,7 +31,6 @@ class AtomicSwapDriver(
 ) {
     private val ending = AtomicSwapEnding(store, nowSeconds)
     private val claim = AtomicSwapClaim(deployment, relayer, chain, keys, store, nowSeconds)
-    val payoutFees = AtomicSwapFeeApproval(claim, store)
     private val deposits = AtomicSwapDeposits(deployment, depositTerms, chain, keys, zcash, store, ending)
 
     // Checked once: every quote is checked against the deployment as well.
@@ -45,14 +44,13 @@ class AtomicSwapDriver(
             isMakerChecked = true
         }
         val index = indices.take()
-        val railgunKeys = RailgunKeySource.BIP85
-        val quote = maker.quote(requested, keys.authAddress(index), keys.payoutNote(index, railgunKeys).commitment)
+        val quote = maker.quote(requested, keys.authAddress(index), keys.payoutNote(index).commitment)
         if (!deployment.serves(quote)) {
             throw AtomicSwapBlockedException(AtomicSwapBlock.WRONG_DEPLOYMENT, "the quote is for another deployment")
         }
         val relayerFee = claim.relayerFee(quote.amount)
         val receives = payoutAfterFees(quote.amount, relayerFee)
-        return AtomicSwapOffer(index, requested, quote, relayerFee, receives, railgunKeys)
+        return AtomicSwapOffer(index, requested, quote, relayerFee, receives)
     }
 
     /** Accepts [offer], saving the record before the maker sees the share, so an accept cut short is still known. */
@@ -63,7 +61,6 @@ class AtomicSwapDriver(
         val acceptance =
             keys.accept(
                 offer.index,
-                offer.railgunKeys,
                 quote.chainId,
                 deployment.contract,
                 quote.quoteId.hexToBytes(),
@@ -80,7 +77,6 @@ class AtomicSwapDriver(
                 receives = offer.receives,
                 maxTotalZat = offer.maxTotalZat,
                 relayerFee = offer.relayerFee,
-                railgunKeys = offer.railgunKeys,
             )
         store.save(record)
         val accepted =
@@ -309,7 +305,7 @@ internal suspend fun AtomicSwapKeys.terms(
         user = authAddress(record.index),
         t0 = t0,
         t1 = t1,
-        payoutNote = payoutNote(record.index, record.railgunKeys).commitment,
+        payoutNote = payoutNote(record.index).commitment,
     )
 }
 
@@ -362,32 +358,15 @@ internal class AtomicSwapClaim(
         swap: OnChainSwap,
     ): SwapPayout {
         val current = checkNotNull(store.active()?.takeIf { it.index == record.index && !it.finished })
-        val note = keys.payoutNote(current.index, current.railgunKeys)
+        val note = keys.payoutNote(current.index)
         val saved = current.payout
         if (saved != null) {
             check(saved.swapId == current.swapId && saved.note == note.wire()) {
                 "the saved payout is for another swap"
             }
         }
-        val limit = current.relayerFee
         val fee =
-            when {
-                limit != null -> {
-                    relayer.terms().checkedFee(deployment, swap.amount, minOf(limit, deployment.maxRelayerFee))
-                }
-
-                saved != null -> {
-                    RelayerTerms(deployment.relayer, deployment.chainId, deployment.contract, saved.fee)
-                        .checkedFee(deployment, swap.amount)
-                }
-
-                else -> {
-                    throw AtomicSwapBlockedException(
-                        AtomicSwapBlock.RELAYER_FEE,
-                        "review and approve the payout fee first",
-                    )
-                }
-            }
+            relayer.terms().checkedFee(deployment, swap.amount, minOf(current.relayerFee, deployment.maxRelayerFee))
         if (saved?.fee == fee) return saved
         val signature =
             keys.signPayout(

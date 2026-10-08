@@ -57,9 +57,6 @@ class GasAccountTransactions(
         }
     }
 
-    /** Where a send an earlier build logged without its transaction stands; it can't be sent again. */
-    suspend fun statusOf(txHash: TxHash): GasAccountDelivery = rpc.statusOf(txHash).delivery()
-
     // A node's error is not proof of rejection: another node may already have accepted the transaction.
     private suspend fun send(
         raw: String,

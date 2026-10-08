@@ -153,7 +153,7 @@ class TestnetGasAccountSenderTest {
     @Test
     fun `only a withdrawal pays railgun's unshield fee`() =
         runTest {
-            coEvery { wallet.fees() } returns RailgunFees(shieldBasisPoints = 25, unshieldBasisPoints = 25)
+            coEvery { wallet.fees() } returns RailgunFees(unshieldBasisPoints = 25)
 
             assertEquals(PrivateUsdSendCost(BigInteger.valueOf(2_500), 25), sender().cost(WITHDRAWAL))
             assertEquals(PrivateUsdSendCost(BigInteger.ZERO, 0), sender().cost(WITHDRAWAL.copy(to = PRIVATE)))
@@ -185,7 +185,6 @@ class TestnetGasAccountSenderTest {
                 txHash = TX_HASH,
                 from = Address.parse("0x09ed1f966745be18c711c346242c0974dad7c3e5"),
                 nonce = 7,
-                proofDuration = null,
             )
         val CLOCK =
             object : Clock {

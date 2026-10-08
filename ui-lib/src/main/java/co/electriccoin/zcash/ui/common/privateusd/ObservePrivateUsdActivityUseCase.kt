@@ -24,8 +24,8 @@ sealed interface PrivateUsdActivityData {
     data class ToZec(
         val record: ReverseSwapRecord
     ) : PrivateUsdActivityData {
-        // Records from before the time was kept fall back to their quote, which ran out minutes after it.
-        override val timestamp = Instant.fromEpochSeconds(record.acceptedAt ?: record.quote.terms.expiresAt)
+        override val timestamp =
+            Instant.fromEpochSeconds(checkNotNull(record.acceptedAt) { "a kept conversion was accepted" })
     }
 
     data class Sent(

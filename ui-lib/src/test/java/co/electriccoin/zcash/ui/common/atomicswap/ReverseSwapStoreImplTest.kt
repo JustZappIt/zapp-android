@@ -8,13 +8,8 @@ import co.electriccoin.zcash.ui.common.provider.InMemoryPreferenceProvider
 import co.electriccoin.zcash.ui.screen.privateusd.toZec
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.encodeToJsonElement
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.atomicswap.ReversePhase
-import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
 import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -68,22 +63,7 @@ class ReverseSwapStoreImplTest {
         }
 
     @Test
-    fun `previews an earlier build kept in history go on the next save`() =
-        runTest {
-            val preferences = InMemoryPreferenceProvider()
-            val kept =
-                listOf(toZec(0, ReversePhase.QUOTED), toZec(1, ReversePhase.REFUNDED), toZec(2, ReversePhase.QUOTED))
-            val state = JsonObject(mapOf("active" to encode(kept.last()), "history" to JsonArray(kept.map(::encode))))
-            preferences.putString(PreferenceKey(KEY), state.toString())
-            val store = ReverseSwapStoreImpl(preferences.encrypted())
-
-            store.save(toZec(3, ReversePhase.QUOTED))
-
-            assertEquals(listOf(1), store.observeHistory.first().map { it.index })
-        }
-
-    @Test
-    fun `a conversion an earlier build kept reads typed and is written back unchanged`() =
+    fun `a conversion under way reads typed and is written back unchanged`() =
         runTest {
             val preferences = InMemoryPreferenceProvider()
             preferences.putString(PreferenceKey(KEY), KEPT)
@@ -93,14 +73,13 @@ class ReverseSwapStoreImplTest {
             store.save(record)
 
             assertEquals(TxHash.fromHex("0x" + "08".repeat(32)), record.funding?.txId)
-            assertEquals(Usdc6.ofMicros(1_002_506), record.debit)
+            assertEquals(Usdc6.ofMicros(1_252_506), record.debit)
             assertEquals(KEPT, preferences.getString(PreferenceKey(KEY)))
         }
 
-    private fun encode(record: ReverseSwapRecord) = Json.encodeToJsonElement(record)
-
     private companion object {
-        const val KEY = "reverse_swap_v1"
+        const val KEY = "reverse_swap_v2"
+        private const val COST = """{"debit":"1252506","railgunFee":"2506","broadcasterFee":"250000"}"""
         private val RECORD =
             """{"index":4,"deployment":{"makerUrl":"https://zecswap-testnet.pepeman931.workers.dev/maker",""" +
                 """"relayerUrl":"https://zecswap-testnet.pepeman931.workers.dev/relayer",""" +
@@ -120,11 +99,11 @@ class ReverseSwapStoreImplTest {
                 """"swapId":"0x${"08".repeat(32)}","userShare":"0x${"01".repeat(64)}",""" +
                 """"acceptance":{"userShare":"0x${"01".repeat(64)}","userProof":"0x${"03".repeat(64)}",""" +
                 """"viewingKeys":"0x${"04".repeat(64)}"},"birthday":3900000,"account":"${"0a0b".repeat(8)}",""" +
-                """"phase":"CONFIRMING_ESCROW","cost":{"debit":"1002506","railgunFee":"2506"},""" +
-                """"funding":{"raw":"0x02f8","txId":"0x${"08".repeat(32)}",""" +
-                """"cost":{"debit":"1002506","railgunFee":"2506"}}}"""
+                """"phase":"CONFIRMING_ESCROW","cost":$COST,"funding":{"txId":"0x${"08".repeat(32)}","cost":$COST,""" +
+                """"request":{"swapId":"0x${"08".repeat(32)}","chainId":11155111,""" +
+                """"to":"0x${"07".repeat(20)}","data":"0x12345678","value":"0"}},"acceptedAt":1790000100}"""
 
-        /** What the build before the typed records kept for a conversion under way. */
+        /** A conversion under way, as the store keeps it. */
         val KEPT = """{"active":$RECORD,"history":[$RECORD]}"""
     }
 }

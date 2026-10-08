@@ -207,8 +207,6 @@ abstract class AtomicSwapDriverFixtures {
     }
 
     protected class FakeKeys : AtomicSwapKeys {
-        /** Whose Railgun wallet each note and acceptance was for, in order. */
-        val railgunKeys = mutableListOf<RailgunKeySource>()
         val signedFees = mutableListOf<Usdc6>()
         var beforeClaimSecret: () -> Unit = {}
 
@@ -216,26 +214,16 @@ abstract class AtomicSwapDriverFixtures {
 
         override suspend fun authAddress(index: Int) = AUTH
 
-        override suspend fun payoutNote(
-            index: Int,
-            railgunKeys: RailgunKeySource
-        ): PayoutNote {
-            this.railgunKeys += railgunKeys
-            return notes.getValue(railgunKeys)
-        }
+        override suspend fun payoutNote(index: Int) = NOTE
 
         override suspend fun accept(
             index: Int,
-            railgunKeys: RailgunKeySource,
             chainId: ChainId,
             contract: Address,
             quoteId: ByteArray,
             makerShare: SwapShare,
             makerProof: ByteArray,
-        ): UserAcceptance {
-            this.railgunKeys += railgunKeys
-            return UserAcceptance(USER_SHARE, ByteArray(64) { 4 }, ByteArray(64) { 5 })
-        }
+        ) = UserAcceptance(USER_SHARE, ByteArray(64) { 4 }, ByteArray(64) { 5 })
 
         override suspend fun depositAddress(
             index: Int,
@@ -354,11 +342,7 @@ abstract class AtomicSwapDriverFixtures {
         val USER_SHARE = SwapShare.of(filled(64, 0x0c))
         val MAKER_SHARE = SwapShare.of(filled(64, 0x0a))
         val NOTE_COMMITMENT = NoteCommitment.of(filled(32, 0x05))
-        val notes =
-            mapOf(
-                RailgunKeySource.BIP85 to note(npk = 1, commitment = NOTE_COMMITMENT),
-                RailgunKeySource.ZCASH_SEED to note(npk = 0x11, commitment = NoteCommitment.of(filled(32, 0x15))),
-            )
+        val NOTE = note(npk = 1, commitment = NOTE_COMMITMENT)
         val ONE_UNIT = Usdc6.ofMicros(1)
         val SWAP_ID = SwapId.of(MAKER, USER_SHARE)
         val DEPLOYMENT =

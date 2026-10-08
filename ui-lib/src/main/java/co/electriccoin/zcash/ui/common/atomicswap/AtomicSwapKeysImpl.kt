@@ -20,7 +20,6 @@ import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.offramp.atomicswap.AtomicSwapKeys
 import xyz.justzappit.offramp.atomicswap.NoteCommitment
 import xyz.justzappit.offramp.atomicswap.PayoutNote
-import xyz.justzappit.offramp.atomicswap.RailgunKeySource
 import xyz.justzappit.offramp.atomicswap.SwapId
 import xyz.justzappit.offramp.atomicswap.SwapShare
 import xyz.justzappit.offramp.atomicswap.UserAcceptance
@@ -34,18 +33,13 @@ interface SwapKeyring {
         block: (SwapKey) -> T
     ): T
 
-    /** [block] with swap [index]'s key and the Railgun seed [railgunKeys] names. */
-    suspend fun <T> withKey(
+    /** [block] with swap [index]'s key and the Railgun wallet's seed, BIP-85's child of the Zcash seed. */
+    suspend fun <T> withRailgunKey(
         index: Int,
-        railgunKeys: RailgunKeySource,
         block: (SwapKey, RailgunSeed) -> T
     ): T =
         withKey(index) { key ->
-            val railgun =
-                when (railgunKeys) {
-                    RailgunKeySource.ZCASH_SEED -> key.seed.copyOf()
-                    RailgunKeySource.BIP85 -> railgunSeed(key.seed)
-                }
+            val railgun = railgunSeed(key.seed)
             try {
                 block(key, RailgunSeed(railgun))
             } finally {
@@ -67,12 +61,9 @@ class AtomicSwapKeysImpl(
 
     override suspend fun authAddress(index: Int): Address = public(index).address
 
-    override suspend fun payoutNote(
-        index: Int,
-        railgunKeys: RailgunKeySource
-    ): PayoutNote =
-        shown().notes.cached(index to railgunKeys) {
-            withKey(index, railgunKeys) { key, railgun ->
+    override suspend fun payoutNote(index: Int): PayoutNote =
+        shown().notes.cached(index) {
+            withRailgunKey(index) { key, railgun ->
                 val note = AtomicSwap.payoutNote(key, railgun)
                 PayoutNote(note.npk, note.encryptedBundle, note.shieldKey, NoteCommitment.of(note.commitment))
             }
@@ -80,13 +71,12 @@ class AtomicSwapKeysImpl(
 
     override suspend fun accept(
         index: Int,
-        railgunKeys: RailgunKeySource,
         chainId: ChainId,
         contract: Address,
         quoteId: ByteArray,
         makerShare: SwapShare,
         makerProof: ByteArray,
-    ) = withKey(index, railgunKeys) { key, railgun ->
+    ) = withRailgunKey(index) { key, railgun ->
         val acceptance =
             AtomicSwap.accept(key, railgun, domain(chainId, contract), quoteId, makerShare.bytes, makerProof)
         UserAcceptance(SwapShare.of(acceptance.userShare), acceptance.userProof, acceptance.viewingKeys)
@@ -163,7 +153,7 @@ class AtomicSwapKeysImpl(
         val wallet: String
     ) {
         val keys = ConcurrentHashMap<Int, PublicKey>()
-        val notes = ConcurrentHashMap<Pair<Int, RailgunKeySource>, PayoutNote>()
+        val notes = ConcurrentHashMap<Int, PayoutNote>()
         val depositAddresses = ConcurrentHashMap<Pair<Int, SwapShare>, String>()
     }
 

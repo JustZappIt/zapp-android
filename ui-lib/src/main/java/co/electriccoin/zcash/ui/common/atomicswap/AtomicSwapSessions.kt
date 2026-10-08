@@ -117,7 +117,7 @@ class AtomicSwapSessions(
         private val relayer = RelayerClient(http, deployment.relayerUrl)
         private val forwardDrivers = mutableMapOf<ZcashDepositTerms, AtomicSwapDriver>()
         val chain = AtomicSwapChain(rpc, deployment)
-        val funding = ReverseSwapFundingImpl(wallet, rpc, deployment, relayer)
+        val funding = ReverseSwapFundingImpl(wallet, deployment, relayer)
 
         val reverse: ReverseSwapDriver by lazy {
             ReverseSwapDriver(

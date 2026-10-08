@@ -82,7 +82,6 @@ internal class RailgunEngine(
     private suspend fun open(): RailgunSession {
         wallet.session?.let { return it }
         state.update { it.copy(phase = RailgunWalletState.Phase.STARTING) }
-        keyProvider.retireZcashSeedWallet { wallet.forgetLegacyStorage() }
         val expected = mnemonicProvider.address()
         val key = keyProvider.encryptionKey()
         val gasAccountKey = if (network == RailgunNetwork.SEPOLIA) keyProvider.gasAccountKey() else null

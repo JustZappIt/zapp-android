@@ -5,8 +5,6 @@ package co.electriccoin.zcash.ui.common.atomicswap
 
 import co.electriccoin.zcash.ui.common.privateusd.Sepolia
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
-import xyz.justzappit.evm.rpc.BaseRpcClient
-import xyz.justzappit.evm.rpc.sendSignedTransaction
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.evm.util.toHex
 import xyz.justzappit.offramp.atomicswap.ReverseFundingCalls
@@ -28,7 +26,6 @@ import xyz.justzappit.railgun.RailgunReverseRequest
 /** Proves funding locally, paying the pinned relayer its fee for gas; it submits the exact persisted calldata. */
 class ReverseSwapFundingImpl(
     private val wallet: RailgunWalletRepository,
-    private val rpc: BaseRpcClient,
     private val deployment: SwapDeployment,
     private val relayer: SwapRelayer,
 ) : ReverseSwapFunding {
@@ -74,11 +71,6 @@ class ReverseSwapFundingImpl(
 
     override suspend fun submit(transaction: ReverseFundingTransaction): TxHash? {
         val request = transaction.request
-        if (request == null) {
-            val txId = checkNotNull(transaction.txId)
-            rpc.sendSignedTransaction(checkNotNull(transaction.raw), txId)
-            return txId
-        }
         val terms = sponsoredTerms()
         check(request.chainId == deployment.chainId && request.to == terms.relayAdapt) {
             "unexpected funding deployment"

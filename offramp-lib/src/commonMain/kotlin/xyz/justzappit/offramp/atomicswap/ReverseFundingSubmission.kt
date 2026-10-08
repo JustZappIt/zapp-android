@@ -16,10 +16,9 @@ internal class ReverseFundingSubmission(
         record: ReverseSwapRecord,
         transaction: ReverseFundingTransaction,
     ) {
-        transaction.request?.let {
-            check(it.swapId == record.swapId && it.chainId == record.deployment.chainId) {
-                "the saved funding request is for another swap"
-            }
+        val request = transaction.request
+        check(request.swapId == record.swapId && request.chainId == record.deployment.chainId) {
+            "the saved funding request is for another swap"
         }
         val txId = funding.submit(transaction)
         lock.withLock {

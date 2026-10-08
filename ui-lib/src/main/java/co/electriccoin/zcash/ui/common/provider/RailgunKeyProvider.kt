@@ -18,12 +18,6 @@ interface RailgunKeyProvider {
 
     /** The testnet gas account's private key. Losing it loses only the test ETH on it. */
     suspend fun gasAccountKey(): ByteArray
-
-    /**
-     * Runs [forget] once, then drops the key of the wallet the Zcash seed itself opened before the Railgun wallet
-     * had a mnemonic of its own. A [forget] that throws runs again next time.
-     */
-    suspend fun retireZcashSeedWallet(forget: suspend () -> Unit)
 }
 
 class RailgunKeyProviderImpl(
@@ -34,16 +28,6 @@ class RailgunKeyProviderImpl(
     override suspend fun encryptionKey() = getOrCreate(ENCRYPTION_KEY)
 
     override suspend fun gasAccountKey() = getOrCreate(GAS_ACCOUNT_KEY)
-
-    override suspend fun retireZcashSeedWallet(forget: suspend () -> Unit) =
-        lock.withLock {
-            val preferences = encryptedPreferenceProvider()
-            if (!preferences.hasKey(ZCASH_SEED_WALLET_RETIRED)) {
-                forget()
-                preferences.remove(RETIRED_ENCRYPTION_KEY)
-                preferences.putString(ZCASH_SEED_WALLET_RETIRED, true.toString())
-            }
-        }
 
     private suspend fun getOrCreate(key: PreferenceKey): ByteArray =
         lock.withLock {
@@ -56,11 +40,8 @@ class RailgunKeyProviderImpl(
         }
 
     private companion object {
-        // It encrypted a wallet of the Zcash seed itself, since deleted with the page's old origin.
-        val RETIRED_ENCRYPTION_KEY = PreferenceKey("railgun_wallet_encryption_key_v1")
         val ENCRYPTION_KEY = PreferenceKey("railgun_wallet_encryption_key_v2")
         val GAS_ACCOUNT_KEY = PreferenceKey("railgun_testnet_gas_account_key_v1")
-        val ZCASH_SEED_WALLET_RETIRED = PreferenceKey("railgun_zcash_seed_wallet_retired")
         const val KEY_BYTES = 32
     }
 }

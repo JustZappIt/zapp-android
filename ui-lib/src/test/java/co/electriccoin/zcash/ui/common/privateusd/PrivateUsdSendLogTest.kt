@@ -24,9 +24,9 @@ class PrivateUsdSendLogTest {
     private val log = PrivateUsdSendLog(preferences.encrypted())
 
     @Test
-    fun `logs earlier builds wrote still read, sends from before tracking confirmed`() =
+    fun `a confirmed send reads back as the log keeps it`() =
         runTest {
-            preferences.putString(KEY, """{"sends":[$EARLIER_SEND,$UNCONFIRMED_SEND]}""")
+            preferences.putString(KEY, """{"sends":[$CONFIRMED_SEND]}""")
 
             val history = log.observe.first()
 
@@ -38,12 +38,10 @@ class PrivateUsdSendLogTest {
                     to = RailgunDestination.Public(Address.parse("0x1c7f9a756b08753cf8da94d394659134bb8c5539")),
                     sentAt = 1_700_000_000,
                 ),
-                history.sends.first(),
+                history.sends.single(),
             )
-            assertTrue(history.sends.first().confirmed)
-            assertTrue(history.sends.first().withdraw)
-            assertFalse(history.sends.last().confirmed)
-            assertNull(history.sends.last().signed)
+            assertTrue(history.sends.single().confirmed)
+            assertTrue(history.sends.single().withdraw)
             assertEquals(emptyList(), history.pending)
         }
 
@@ -79,7 +77,7 @@ class PrivateUsdSendLogTest {
     @Test
     fun `a send that moved nothing leaves nothing behind`() =
         runTest {
-            preferences.putString(KEY, """{"sends":[$EARLIER_SEND]}""")
+            preferences.putString(KEY, """{"sends":[$CONFIRMED_SEND]}""")
             log.begin(PENDING)
             log.sign(PENDING, SIGNED, at = 20)
 
@@ -94,7 +92,7 @@ class PrivateUsdSendLogTest {
     fun `a send another process left proving never went out, and is dropped`() =
         runTest {
             val stale =
-                """{"id":"old","withdraw":false,"token":"${TOKEN.checksumHex}","amount":"1",""" +
+                """{"id":"old","token":"${TOKEN.checksumHex}","amount":"1",""" +
                     """"to":"${PRIVATE.address.value}","startedAt":1}"""
             preferences.putString(KEY, """{"sends":[],"pending":[$stale]}""")
 
@@ -122,14 +120,9 @@ class PrivateUsdSendLogTest {
                         "e3z53llz8ursderja0juwv5pgnv8x5klmmwkv8q38h9n704h4d4qjyw7n5qk68nx"
                 )
             )
-        val EARLIER_SEND =
-            """{"txHash":"0x${"ab".repeat(32)}","withdraw":true,""" +
-                """"token":"0x5764D0044bef5AA839E0dDafE2073421101B9Ed8",""" +
+        val CONFIRMED_SEND =
+            """{"txHash":"0x${"ab".repeat(32)}","token":"0x5764d0044bef5aa839e0ddafe2073421101b9ed8",""" +
                 """"amount":"1000000","to":"0x1c7f9a756b08753cf8da94d394659134bb8c5539","sentAt":1700000000}"""
-        val UNCONFIRMED_SEND =
-            """{"txHash":"0x${"ef".repeat(32)}","withdraw":false,""" +
-                """"token":"0x5764D0044bef5AA839E0dDafE2073421101B9Ed8",""" +
-                """"amount":"2","to":"${PRIVATE.address.value}","sentAt":1700000100,"confirmed":false}"""
         val PENDING =
             PrivateUsdPendingSend(
                 id = "pending-1",
@@ -144,7 +137,6 @@ class PrivateUsdSendLogTest {
                 txHash = TX_HASH,
                 from = Address.parse("0x09ed1f966745be18c711c346242c0974dad7c3e5"),
                 nonce = 7,
-                proofDuration = null,
             )
     }
 }

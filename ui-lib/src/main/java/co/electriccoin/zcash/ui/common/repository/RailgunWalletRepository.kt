@@ -30,8 +30,6 @@ import xyz.justzappit.railgun.RailgunSession
 import xyz.justzappit.railgun.RailgunSignedTransaction
 import xyz.justzappit.railgun.RailgunTransfer
 import xyz.justzappit.railgun.RailgunWallet
-import xyz.justzappit.railgun.gasAccount
-import xyz.justzappit.railgun.signShield
 import kotlin.time.Clock
 import kotlin.time.Instant
 

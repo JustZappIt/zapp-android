@@ -30,8 +30,8 @@ class RailgunChannelTest {
     @Test
     fun aReplyAnswersItsOwnCall() =
         runTest {
-            val first = async { channel.call(RailgunMethod.GAS_ACCOUNT, EMPTY) }
-            val second = async { channel.call(RailgunMethod.GAS_ACCOUNT, EMPTY) }
+            val first = async { channel.call(RailgunMethod.REVERSE_COST, EMPTY) }
+            val second = async { channel.call(RailgunMethod.REVERSE_COST, EMPTY) }
             runCurrent()
 
             channel.receive("""{"id":${idOf(1)},"result":"second"}""")
@@ -44,12 +44,12 @@ class RailgunChannelTest {
     @Test
     fun aCallWithoutAReplyTimesOutAsAnError() =
         runTest {
-            val call = async { runCatching { channel.call(RailgunMethod.GAS_ACCOUNT, EMPTY) } }
+            val call = async { runCatching { channel.call(RailgunMethod.REVERSE_COST, EMPTY) } }
 
-            advanceTimeBy(RailgunMethod.GAS_ACCOUNT.timeout + 1.seconds)
+            advanceTimeBy(RailgunMethod.REVERSE_COST.timeout + 1.seconds)
 
             val timeout = assertFailsWith<RailgunException.Timeout> { call.await().getOrThrow() }
-            assertEquals("GAS_ACCOUNT timed out", timeout.message)
+            assertEquals("REVERSE_COST timed out", timeout.message)
         }
 
     @Test

@@ -141,60 +141,6 @@ class ReverseSwapRefundTest : ReverseSwapDriverFixtures() {
         }
 
     @Test
-    fun aNewConversionRefundsIntoTheRailgunWalletDerivedFromTheSeed() =
-        runTest {
-            val h = Harness()
-            h.prepared()
-            h.driver.fund(0)
-
-            assertEquals(RailgunKeySource.BIP85, h.record.railgunKeys)
-            assertEquals(setOf(RailgunKeySource.BIP85), h.railgunKeys.toSet())
-        }
-
-    @Test
-    fun aConversionQuotedBeforeTheDerivedWalletKeepsItsRefundNote() =
-        runTest {
-            val h = Harness()
-            h.prepared()
-            h.saved =
-                h.record.copy(
-                    railgunKeys = RailgunKeySource.ZCASH_SEED,
-                    quote = h.record.quote.copy(refundNote = LEGACY_NOTE),
-                )
-            h.refundNote = LEGACY_NOTE
-            h.railgunKeys.clear()
-            h.driver.fund(0)
-            h.funded()
-            h.escrow = h.swap(SwapStage.REFUNDED)
-            h.driver.advance()
-            assertEquals(LEGACY_NOTE.hex, checkNotNull(h.record.payout).note.npk)
-            h.paidOut = true
-            h.driver.advance()
-            h.driver.rescue(0)
-
-            assertEquals(ReversePhase.REFUNDED, h.record.phase)
-            assertEquals(LEGACY_NOTE.hex, checkNotNull(h.record.payout).note.npk)
-            assertEquals(1, h.rescueCalls)
-            assertEquals(setOf(RailgunKeySource.ZCASH_SEED), h.railgunKeys.toSet())
-        }
-
-    @Test
-    fun aRescueLeftPendingByAnEarlierBuildEndsInsteadOfRetrying() =
-        runTest {
-            val h = Harness()
-            h.prepared()
-            h.driver.fund(0)
-            h.funded()
-            h.paidOut = true
-            h.escrow = h.swap(SwapStage.REFUNDED)
-            h.saved = h.record.copy(phase = ReversePhase.REFUND_PAYOUT, rescuePending = true)
-            h.driver.advance()
-            assertEquals(ReversePhase.REFUNDED, h.record.phase)
-            assertFalse(h.record.rescuePending)
-            assertEquals(0, h.rescueCalls)
-        }
-
-    @Test
     fun aFundingTheChainRevertedCancelsAndForgetsTheJointAccount() =
         runTest {
             val h = Harness()

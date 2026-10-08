@@ -196,15 +196,9 @@ private class PrivateUsdSendSettlement(
     }
 
     private suspend fun settle(send: PrivateUsdSendRecord) {
-        val kept = send.signed
         bestEffort("Private USD: ${send.txHash} wasn't settled") {
-            val delivery =
-                if (kept != null) {
-                    transactions.reconcile(kept.raw, send.txHash, kept.from, kept.nonce)
-                } else {
-                    transactions.statusOf(send.txHash)
-                }
-            when (delivery) {
+            val kept = checkNotNull(send.signed) { "an unconfirmed send keeps its transaction" }
+            when (transactions.reconcile(kept.raw, send.txHash, kept.from, kept.nonce)) {
                 GasAccountDelivery.CONFIRMED -> sendLog.confirm(send.txHash)
                 GasAccountDelivery.FAILED -> sendLog.remove(send.txHash)
                 GasAccountDelivery.UNCONFIRMED -> Unit

@@ -24,7 +24,6 @@ class ReverseFundingTest : ReverseSwapDriverFixtures() {
     fun aLateFundingResponseKeepsTheUsersCancellation() =
         runTest {
             val h = Harness()
-            h.sponsoredFunding = true
             h.prepared()
             h.submitting = CompletableDeferred()
             val sending = async { h.driver.fund(0) }
@@ -44,13 +43,10 @@ class ReverseFundingTest : ReverseSwapDriverFixtures() {
     fun sponsoredFundingRetainsProofAcrossTimeoutAndRestartAndSavesTheReturnedHash() =
         runTest {
             val h = Harness()
-            h.sponsoredFunding = true
             h.prepared()
             h.interruptFunding = true
             assertFailsWith<IllegalStateException> { h.driver.fund(0) }
             val kept = assertNotNull(h.record.funding)
-            assertNotNull(kept.request)
-            assertNull(kept.raw)
             assertNull(kept.txId)
 
             h.interruptFunding = false
@@ -68,7 +64,6 @@ class ReverseFundingTest : ReverseSwapDriverFixtures() {
     fun timeoutAfterFundingLandsReconcilesWithoutSubmittingOrProvingAgain() =
         runTest {
             val h = Harness()
-            h.sponsoredFunding = true
             h.prepared()
             h.interruptFunding = true
             assertFailsWith<IllegalStateException> { h.driver.fund(0) }
@@ -84,7 +79,7 @@ class ReverseFundingTest : ReverseSwapDriverFixtures() {
     fun anEmptyFundingResponseDoesNotConfirmEscrowOrAuthorizeReady() =
         runTest {
             val h = Harness()
-            h.sponsoredFunding = true
+            h.submittedFundingHash = null
             h.prepared()
             h.driver.fund(0)
             assertNull(h.record.funding?.txId)
@@ -100,7 +95,7 @@ class ReverseFundingTest : ReverseSwapDriverFixtures() {
     fun fundingIsNeverResubmittedAfterItsDeadline() =
         runTest {
             val h = Harness()
-            h.sponsoredFunding = true
+            h.submittedFundingHash = null
             h.prepared()
             h.driver.fund(0)
             h.now = FUNDING
@@ -144,7 +139,7 @@ class ReverseFundingTest : ReverseSwapDriverFixtures() {
     fun savedSponsoredFundingSurvivesStrictSerializationBeforeAndAfterSubmission() {
         val request =
             ReverseFundingRequest(SwapId.of(ByteArray(32) { 1 }), DEPLOYMENT.chainId, CONTRACT, "0x12345678", "0")
-        val pending = ReverseFundingTransaction(cost = ReverseFundingCost(AMOUNT, AMOUNT, null), request = request)
+        val pending = ReverseFundingTransaction(cost = ReverseFundingCost(AMOUNT, AMOUNT, AMOUNT), request = request)
         for (funding in listOf(pending, pending.copy(txId = TxHash.fromHex(hex(32, 8))))) {
             assertEquals(funding, Json.decodeFromString<ReverseFundingTransaction>(Json.encodeToString(funding)))
         }

@@ -23,7 +23,6 @@ import co.electriccoin.zcash.ui.screen.privateusd.reverse.stageLabel
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
-import xyz.justzappit.offramp.atomicswap.RailgunKeySource
 import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
 import xyz.justzappit.offramp.atomicswap.ReverseSwapResult
 import xyz.justzappit.offramp.atomicswap.ReverseSwapStatus
@@ -100,8 +99,7 @@ class PrivateUsdActivityMapper {
         onOpenConversion: (PrivateUsdConversion) -> Unit,
         onOpenUrl: (String) -> Unit,
     ): PrivateUsdActivityState? {
-        val receives = record.receives ?: record.quote.amount
-        val received = moved(dollarToken(deployment, record.quote.token), receives.micros)
+        val received = moved(dollarToken(deployment, record.quote.token), record.receives.micros)
         val converting =
             PrivateUsdActivityState(
                 key = "to-usd-${record.index}",
@@ -122,7 +120,7 @@ class PrivateUsdActivityMapper {
                 val paid = stringRes(Zatoshi(record.quote.depositZat)).asPrivacySensitive()
                 converting.copy(
                     title = stringRes(R.string.private_usd_activity_converted),
-                    detail = joinDetail(date, paid).inPreviousWallet(record.railgunKeys),
+                    detail = joinDetail(date, paid),
                     tone = PrivateUsdActivityTone.IN,
                     onClick = record.payoutTx?.let { tx -> { onOpenUrl(deployment.explorerTxUrl + tx.hex) } },
                     onClickLabel = record.payoutTx?.let { stringRes(R.string.private_usd_activity_open_transaction) },
@@ -193,9 +191,7 @@ class PrivateUsdActivityMapper {
                     ReverseSwapResult.REFUNDED -> {
                         converting.copy(
                             title = stringRes(R.string.private_usd_activity_refunded),
-                            detail =
-                                joinDetail(date, stringRes(R.string.private_usd_activity_refunded_zec_detail))
-                                    .inPreviousWallet(record.railgunKeys),
+                            detail = joinDetail(date, stringRes(R.string.private_usd_activity_refunded_zec_detail)),
                             amount = null,
                             local = null,
                             onClick = onOpenRefunds,
@@ -235,13 +231,6 @@ class PrivateUsdActivityMapper {
                 onClick = onClick,
                 onClickLabel = onClick?.let { stringRes(R.string.private_usd_activity_open_transaction) },
             )
-        }
-
-    // Paid into the Railgun wallet of the Zcash seed itself, which only Railway opens now.
-    private fun StringResource.inPreviousWallet(railgunKeys: RailgunKeySource): StringResource =
-        when (railgunKeys) {
-            RailgunKeySource.ZCASH_SEED -> joinDetail(this, stringRes(R.string.private_usd_activity_previous_wallet))
-            RailgunKeySource.BIP85 -> this
         }
 
     // Each record in its own token: a conversion kept from an earlier deployment may not be in today's.

@@ -29,8 +29,6 @@ import kotlin.time.Duration.Companion.seconds
 @Serializable
 internal enum class RailgunMethod(
     val timeout: Duration,
-    /** Answered only by an engine started with `debug`. */
-    val isDebug: Boolean = false,
 ) {
     @SerialName("start")
     START(2.minutes),
@@ -41,14 +39,8 @@ internal enum class RailgunMethod(
     @SerialName("setGasAccount")
     SET_GAS_ACCOUNT(30.seconds),
 
-    @SerialName("gasAccount")
-    GAS_ACCOUNT(30.seconds, isDebug = true),
-
     @SerialName("refresh")
     REFRESH(10.minutes),
-
-    @SerialName("shield")
-    SHIELD(2.minutes, isDebug = true),
 
     @SerialName("transfer")
     TRANSFER(10.minutes),
@@ -100,12 +92,6 @@ internal data class WireTokenAmount(
 )
 
 @Serializable
-internal data class ShieldParams(
-    @Serializable(with = DecimalSerializer::class)
-    val amount: BigInteger
-)
-
-@Serializable
 internal data class TransferParams(
     val to: RailgunAddress,
     val token: Address,
@@ -127,7 +113,6 @@ internal data class SignedResult(
     val txHash: TxHash,
     val from: Address,
     val nonce: Long,
-    val proofMs: Long? = null,
 )
 
 internal object RailgunProtocol {

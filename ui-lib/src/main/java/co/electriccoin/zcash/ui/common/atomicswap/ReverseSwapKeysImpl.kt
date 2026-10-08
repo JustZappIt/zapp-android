@@ -13,7 +13,7 @@ class ReverseSwapKeysImpl(
     private val keys: SwapKeyring
 ) : ReverseSwapKeys {
     override suspend fun signOpen(record: ReverseSwapRecord): ByteArray =
-        keys.withKey(record.index, record.railgunKeys) { key, railgun ->
+        keys.withRailgunKey(record.index) { key, railgun ->
             val quote = record.quote
             ReverseAtomicSwap.signOpen(
                 key,
@@ -67,7 +67,7 @@ class ReverseSwapKeysImpl(
         nonce: Long,
         deadline: Long,
     ): ByteArray =
-        keys.withKey(record.index, record.railgunKeys) { key, railgun ->
+        keys.withRailgunKey(record.index) { key, railgun ->
             ReverseAtomicSwap.signRefundRescue(
                 key,
                 railgun,

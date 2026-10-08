@@ -73,7 +73,6 @@
     <string name="private_usd_activity_out">−%1$s</string>
     <string name="private_usd_activity_sending" tools:ignore="MissingTranslation">sending…</string>
     <string name="private_usd_activity_unconfirmed" tools:ignore="MissingTranslation">not in a block yet</string>
-    <string name="private_usd_activity_previous_wallet" tools:ignore="MissingTranslation">in your previous Private USD wallet, which opens in Railway with your ZEC words</string>
     <string name="private_usd_activity_open_conversion" tools:ignore="MissingTranslation">Open conversion</string>
     <string name="private_usd_activity_open_transaction" tools:ignore="MissingTranslation">View transaction</string>
 
@@ -274,7 +273,6 @@
     <string name="reverse_escrow">Escrow value</string>
     <string name="reverse_railgun_fee">Railgun unshield fee</string>
     <string name="reverse_broadcaster_fee">Broadcast fee</string>
-    <string name="reverse_gas_account">Paid separately in Sepolia ETH by your test gas account</string>
     <string name="reverse_total">Total paid</string>
     <string name="reverse_receive_estimate">Estimated ZEC after sweep fee</string>
     <string name="reverse_refund_terms">Before settlement authorization, you can cancel. Afterwards, refunds wait for the contract deadline and lock. The refund fee is at most %1$s, plus Railgun shielding fees. Closing the app never authorizes settlement.</string>
@@ -326,8 +324,4 @@
     <string name="reverse_refund_requested_after_ready">Refund requested. If settlement does not finish, Zapp can start returning your funds after %1$s. Settlement may still finish before then.</string>
     <string name="reverse_settlement_refund_limit">Settlement is authorized. A refund can only proceed after %1$s if settlement has not completed.</string>
     <string name="reverse_refund_unavailable">This conversion has already settled and can no longer be refunded. Zapp will finish moving your ZEC to your wallet.</string>
-    <string name="convert_payout_fee_missing">This conversion has no saved fee approval. Review the payout fee to continue.</string>
-    <string name="convert_payout_fee_review">Review payout fee</string>
-    <string name="convert_payout_fee_approve">Approve %1$s USD fee and continue</string>
-    <string name="convert_payout_fee_failed">The payout fee could not be approved. Review the current fee and try again.</string>
 </resources>

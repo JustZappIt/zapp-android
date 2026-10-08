@@ -13,7 +13,6 @@ import kotlinx.serialization.encoding.Encoder
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
 import java.math.BigInteger
-import kotlin.time.Duration
 
 @Serializable
 enum class RailgunNetwork(
@@ -95,15 +94,11 @@ data class RailgunBalances(
 @Serializable
 data class RailgunGasAccount(
     val address: Address,
-    @Serializable(with = DecimalSerializer::class)
-    val balance: BigInteger,
 )
 
-/** Railgun's fees, in basis points of what is shielded or unshielded. */
+/** Railgun's withdrawal fee, in basis points of what is unshielded. */
 @Serializable
 data class RailgunFees(
-    @SerialName("shield")
-    val shieldBasisPoints: Int,
     @SerialName("unshield")
     val unshieldBasisPoints: Int,
 ) {
@@ -161,7 +156,6 @@ data class RailgunSignedTransaction(
     val txHash: TxHash,
     val from: Address,
     val nonce: Long,
-    val proofDuration: Duration?,
 ) {
     override fun toString() = "RailgunSignedTransaction(txHash=$txHash)"
 }

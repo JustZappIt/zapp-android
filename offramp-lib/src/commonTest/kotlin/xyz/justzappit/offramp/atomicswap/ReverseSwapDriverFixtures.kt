@@ -58,7 +58,7 @@ abstract class ReverseSwapDriverFixtures {
         var beforePayout: () -> Unit = {}
         var beforeSecret: () -> Unit = {}
         var beforeUpdate: () -> Unit = {}
-        var rescueNonce: Long? = 0L
+        var rescueNonce = 0L
         var refundUntil = 0L
         var claimUntil = 0L
         var paidOut = false
@@ -80,8 +80,7 @@ abstract class ReverseSwapDriverFixtures {
         var forgets = 0
         var payoutSignatures = 0
         var interruptFunding = false
-        var sponsoredFunding = false
-        var submittedFundingHash: TxHash? = null
+        var submittedFundingHash: TxHash? = TxHash.fromHex(hex(32, 8))
         var submitting: CompletableDeferred<TxHash?>? = null
         var interruptPayout = false
         var interruptReceive = false
@@ -90,9 +89,6 @@ abstract class ReverseSwapDriverFixtures {
         var vault = Usdc6.ofMicros(900_000)
         var refundNote = NOTE
         val submissions = mutableListOf<ReverseFundingTransaction>()
-
-        /** Whose Railgun wallet each note, acceptance and signature over a note was for. */
-        val railgunKeys = mutableListOf<RailgunKeySource>()
 
         fun restart() {
             saved = Json.decodeFromString(Json.encodeToString(record))
@@ -253,10 +249,7 @@ abstract class ReverseSwapDriverFixtures {
             terms: SwapTerms
         ) = error("forward only")
 
-        override suspend fun signOpen(record: ReverseSwapRecord): ByteArray {
-            railgunKeys += record.railgunKeys
-            return ByteArray(65)
-        }
+        override suspend fun signOpen(record: ReverseSwapRecord) = ByteArray(65)
 
         override suspend fun signReady(record: ReverseSwapRecord, deadline: Long): ByteArray {
             readySignatures++
@@ -278,7 +271,6 @@ abstract class ReverseSwapDriverFixtures {
             deadline: Long,
         ): ByteArray {
             rescueSignatures++
-            railgunKeys += record.railgunKeys
             return ByteArray(65)
         }
 
@@ -291,14 +283,10 @@ abstract class ReverseSwapDriverFixtures {
             assertNotNull(record.account)
             prepares++
             proving?.await()
-            if (sponsoredFunding) {
-                return ReverseFundingTransaction(
-                    cost = cost(AMOUNT),
-                    request =
-                        ReverseFundingRequest(record.swapId, record.deployment.chainId, CONTRACT, "0x12345678", "0"),
-                )
-            }
-            return ReverseFundingTransaction("0x1234", TxHash.fromHex(hex(32, 8)), cost(AMOUNT))
+            return ReverseFundingTransaction(
+                cost = cost(AMOUNT),
+                request = ReverseFundingRequest(record.swapId, record.deployment.chainId, CONTRACT, "0x12345678", "0"),
+            )
         }
 
         override suspend fun submit(transaction: ReverseFundingTransaction): TxHash? {
@@ -346,18 +334,11 @@ abstract class ReverseSwapDriverFixtures {
 
                 override suspend fun authAddress(index: Int) = USER
 
-                override suspend fun payoutNote(
-                    index: Int,
-                    railgunKeys: RailgunKeySource
-                ): PayoutNote {
-                    this@Harness.railgunKeys += railgunKeys
-                    val note = if (railgunKeys == RailgunKeySource.BIP85) NOTE else LEGACY_NOTE
-                    return PayoutNote(note.bytes, List(3) { ByteArray(32) }, ByteArray(32), note)
-                }
+                override suspend fun payoutNote(index: Int) =
+                    PayoutNote(NOTE.bytes, List(3) { ByteArray(32) }, ByteArray(32), NOTE)
 
                 override suspend fun accept(
                     index: Int,
-                    railgunKeys: RailgunKeySource,
                     chainId: ChainId,
                     contract: Address,
                     quoteId: ByteArray,
@@ -365,7 +346,6 @@ abstract class ReverseSwapDriverFixtures {
                     makerProof: ByteArray
                 ): UserAcceptance {
                     check(proofValid)
-                    this@Harness.railgunKeys += railgunKeys
                     return UserAcceptance(USER_SHARE, ByteArray(64), ByteArray(64))
                 }
 
@@ -431,7 +411,7 @@ abstract class ReverseSwapDriverFixtures {
         val CONTRACT = address(4)
         val RELAYER = address(5)
         val NOTE = NoteCommitment.parse(hex(32, 6))
-        val LEGACY_NOTE = NoteCommitment.parse(hex(32, 9))
+        val OTHER_NOTE = NoteCommitment.parse(hex(32, 9))
         val EMPTY_NOTE = NoteCommitment.of(ByteArray(32))
         val MAKER_SHARE = SwapShare.parse(hex(64, 2))
         val USER_SHARE = SwapShare.parse(hex(64, 1))

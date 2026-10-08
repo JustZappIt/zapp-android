@@ -4,7 +4,6 @@
 package co.electriccoin.zcash.ui.common.atomicswap
 
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
-import co.electriccoin.zcash.preference.model.entry.PreferenceKey
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.provider.EncryptedJsonStore
 import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
@@ -13,7 +12,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
 import xyz.justzappit.offramp.atomicswap.AtomicSwapStore
 
@@ -39,7 +37,7 @@ interface AtomicSwapRecords : AtomicSwapStore {
 
 /** Strict: the index counter must never go back, so an unreadable blob fails loudly instead of being replaced. */
 class AtomicSwapStoreImpl(
-    private val encryptedPreferenceProvider: EncryptedPreferenceProvider,
+    encryptedPreferenceProvider: EncryptedPreferenceProvider,
 ) : AtomicSwapRecords {
     private val store = EncryptedJsonStore(encryptedPreferenceProvider, PREF_KEY, State.serializer(), strict = true)
     private val lock = Mutex()
@@ -87,14 +85,7 @@ class AtomicSwapStoreImpl(
 
     override suspend fun clear() = lock.withLock { store.clear() }
 
-    private suspend fun state(): State = store.get() ?: State(nextIndex = legacyNextIndex())
-
-    // The first store's records are dropped, but its counter carries over: an index is never reused.
-    private suspend fun legacyNextIndex(): Int =
-        encryptedPreferenceProvider()
-            .getString(LEGACY_KEY)
-            ?.let { legacyJson.decodeFromString(Legacy.serializer(), it).nextIndex }
-            ?: 0
+    private suspend fun state(): State = store.get() ?: State()
 
     @Serializable
     private data class State(
@@ -103,15 +94,8 @@ class AtomicSwapStoreImpl(
         val history: List<AtomicSwapRecord> = emptyList(),
     )
 
-    @Serializable
-    private data class Legacy(
-        val nextIndex: Int = 0
-    )
-
     private companion object {
-        const val PREF_KEY = "atomicswap_state_v2"
+        const val PREF_KEY = "atomicswap_state_v3"
         const val MAX_HISTORY = 100
-        val LEGACY_KEY = PreferenceKey("atomicswap_state_v1")
-        val legacyJson = Json { ignoreUnknownKeys = true }
     }
 }

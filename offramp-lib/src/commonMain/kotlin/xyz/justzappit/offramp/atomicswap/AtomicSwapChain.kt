@@ -126,13 +126,10 @@ class AtomicSwapChain(
         return Usdc6(abiWords(rpc.ethCall(deployment.token, balance), 1).uint(0))
     }
 
-    override suspend fun rescueNonce(id: SwapId): Long? =
-        try {
-            rpc.requireChain(deployment)
-            abiWords(rpc.call(deployment.contract, "rescueNonces(bytes32)", id), 1).uint(0).toNonNegativeLongExact()
-        } catch (_: RpcException.ExecutionReverted) {
-            null
-        }
+    override suspend fun rescueNonce(id: SwapId): Long {
+        rpc.requireChain(deployment)
+        return abiWords(rpc.call(deployment.contract, "rescueNonces(bytes32)", id), 1).uint(0).toNonNegativeLongExact()
+    }
 
     companion object {
         private const val GET_SWAP = "getSwap(bytes32)"

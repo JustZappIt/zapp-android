@@ -48,8 +48,8 @@ interface ReverseSwapChain {
     /** What a refund Railgun sent back holds in the swap's vault. */
     suspend fun vaultBalance(id: SwapId): Usdc6
 
-    /** Null for a legacy deployment that cannot consume rescue authorizations. */
-    suspend fun rescueNonce(id: SwapId): Long?
+    /** The nonce the swap's next rescue approval must name. */
+    suspend fun rescueNonce(id: SwapId): Long
 }
 
 /** Funding a reverse swap's escrow from the private balance. */

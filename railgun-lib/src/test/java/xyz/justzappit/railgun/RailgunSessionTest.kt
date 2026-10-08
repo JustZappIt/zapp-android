@@ -16,12 +16,11 @@ import java.math.BigInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.time.Duration.Companion.milliseconds
 
 class RailgunSessionTest {
     private val page = FakePage()
     private val session =
-        RailgunSession(page, RailgunNetwork.SEPOLIA, ZERO_K_ADDRESS, RailgunFees(25, 25), gasAccountAddress = null)
+        RailgunSession(page, RailgunNetwork.SEPOLIA, ZERO_K_ADDRESS, RailgunFees(25), gasAccountAddress = null)
 
     @Test
     fun balancesKeepKnownBucketsOnly() =
@@ -58,7 +57,6 @@ class RailgunSessionTest {
             assertEquals(TxHash(keccak256(RAW)), private.txHash)
             assertEquals(GAS_ACCOUNT, private.from)
             assertEquals(7, private.nonce)
-            assertEquals(1_200.milliseconds, private.proofDuration)
         }
 
     @Test
@@ -67,7 +65,9 @@ class RailgunSessionTest {
             page.reply =
                 """{"raw":"0x${RAW.toHex()}","txHash":"0x${"11".repeat(32)}","from":"$GAS","nonce":7,"proofMs":1200}"""
 
-            assertFailsWith<RailgunException.Protocol> { session.signShield(ONE) }
+            assertFailsWith<RailgunException.Protocol> {
+                session.sign(RailgunTransfer(RailgunDestination.Private(ZERO_K_ADDRESS), TOKEN_ADDRESS, ONE))
+            }
         }
 
     @Test
@@ -93,7 +93,7 @@ class RailgunSessionTest {
 
     @Test
     fun theUnshieldFeeRoundsDown() {
-        assertEquals(BigInteger.valueOf(2_499), RailgunFees(25, 25).unshieldFee(BigInteger.valueOf(999_999)))
+        assertEquals(BigInteger.valueOf(2_499), RailgunFees(25).unshieldFee(BigInteger.valueOf(999_999)))
     }
 
     private fun signed(raw: ByteArray) =

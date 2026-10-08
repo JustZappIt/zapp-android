@@ -134,7 +134,7 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
             h.driver.fund(0)
             h.driver.advance()
             assertEquals(1, h.prepares)
-            assertTrue(h.submissions.all { it == saved })
+            assertTrue(h.submissions.all { it.request == saved.request })
         }
 
     @Test
@@ -222,7 +222,7 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
             }
             for (bad in listOf(
                 quote.copy(user = MAKER),
-                quote.copy(refundNote = LEGACY_NOTE),
+                quote.copy(refundNote = OTHER_NOTE),
                 quote.copy(terms = quote.terms.copy(chainId = ChainId(1))),
                 quote.copy(terms = quote.terms.copy(contract = TOKEN)),
                 quote.copy(terms = quote.terms.copy(token = MAKER)),

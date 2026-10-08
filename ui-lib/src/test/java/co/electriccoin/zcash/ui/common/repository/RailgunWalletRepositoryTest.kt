@@ -46,7 +46,7 @@ class RailgunWalletRepositoryTest {
 
     init {
         every { session.address } returns ADDRESS
-        every { session.fees } returns RailgunFees(25, 25)
+        every { session.fees } returns RailgunFees(25)
         every { session.gasAccountAddress } returns null
         coEvery { session.refresh() } returns RailgunBalances(emptyMap())
         coEvery { session.sign(any()) } returns SIGNED
@@ -151,7 +151,6 @@ class RailgunWalletRepositoryTest {
         val keys = mockk<RailgunKeyProvider>()
         coEvery { keys.encryptionKey() } answers { ByteArray(KEY_BYTES) }
         coEvery { keys.gasAccountKey() } answers { ByteArray(KEY_BYTES) }
-        coEvery { keys.retireZcashSeedWallet(any()) } returns Unit
         val mnemonic = mockk<RailgunMnemonicProvider>()
         every { mnemonic.walletChanges } returns walletChanges
         coEvery { mnemonic.address() } returns ADDRESS
@@ -176,7 +175,6 @@ class RailgunWalletRepositoryTest {
                 txHash = TxHash.fromHex("0x" + "cd".repeat(32)),
                 from = Address.parse("0x09ed1f966745be18c711c346242c0974dad7c3e5"),
                 nonce = 7,
-                proofDuration = null,
             )
         val TRANSFER =
             RailgunTransfer(

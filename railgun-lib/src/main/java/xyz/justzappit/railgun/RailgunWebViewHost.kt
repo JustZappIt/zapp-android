@@ -78,11 +78,7 @@ internal class RailgunWebViewHost(
         withContext(Dispatchers.Main) {
             current?.close(RailgunException.Disconnected("wiped"))
             forget(RailgunRequests.PAGE_ORIGIN)
-            forget(RailgunRequests.LEGACY_ORIGIN)
         }
-
-    /** Deletes the page's storage from before it had an origin of its own. */
-    suspend fun forgetLegacyStorage() = withContext(Dispatchers.Main) { forget(RailgunRequests.LEGACY_ORIGIN) }
 
     @SuppressLint("SetJavaScriptEnabled")
     @MainThread
@@ -285,7 +281,6 @@ internal object RailgunRequests {
     const val ASSETS_DIR = "railgun/"
     const val ASSETS_PATH = "/assets/$ASSETS_DIR"
     const val PAGE_URL = "$PAGE_ORIGIN${ASSETS_PATH}index.html"
-    const val LEGACY_ORIGIN = "https://appassets.androidplatform.net"
     private const val HTTPS = "https"
     private const val DEFAULT_PORT = -1
 

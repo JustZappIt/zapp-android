@@ -67,10 +67,6 @@ interface AtomicSwapRepository : SwapConversionLifecycle {
     /** Calls off a swap that never reached the chain. */
     suspend fun abandon()
 
-    suspend fun payoutFee(index: Int): Usdc6
-
-    suspend fun approvePayoutFee(record: AtomicSwapRecord, fee: Usdc6)
-
     /** Looks up, on the chain, the payout of paid swaps kept without one. */
     fun findMissingPayouts()
 }
@@ -151,20 +147,6 @@ internal class AtomicSwapRepositoryImpl(
     override suspend fun abandon() {
         val abandoned = driverLock.withLock { store.underWay()?.let { sessions.forward(it).abandon(it) } }
         if (abandoned != null) runner.loop.settle()
-    }
-
-    override suspend fun payoutFee(index: Int): Usdc6 =
-        driverLock.withLock {
-            val record = checkNotNull(store.underWay()?.takeIf { it.index == index })
-            sessions.forward(record).payoutFees.quote(index)
-        }
-
-    override suspend fun approvePayoutFee(record: AtomicSwapRecord, fee: Usdc6) {
-        driverLock.withLock {
-            check(store.underWay() == record) { "the conversion changed; review its fee again" }
-            sessions.forward(record).payoutFees.approve(record, fee)
-        }
-        retryNow()
     }
 
     override fun findMissingPayouts() {

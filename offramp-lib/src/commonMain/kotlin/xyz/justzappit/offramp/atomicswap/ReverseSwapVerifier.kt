@@ -19,7 +19,7 @@ internal class ReverseSwapVerifier(
             record.quote,
             deployment,
             keys.authAddress(record.index),
-            keys.payoutNote(record.index, record.railgunKeys).commitment,
+            keys.payoutNote(record.index).commitment,
         )
         requireMatch(
             record.swapId == ReverseSwapId.of(record.quote.user, record.quote.terms.makerShare) &&

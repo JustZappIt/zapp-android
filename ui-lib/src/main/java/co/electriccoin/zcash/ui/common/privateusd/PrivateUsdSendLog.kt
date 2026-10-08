@@ -30,7 +30,7 @@ data class PrivateUsdSendRecord(
     val to: RailgunDestination,
     /** Unix seconds. */
     val sentAt: Long,
-    /** False until it's seen in a block; earlier builds logged a send only once it was. */
+    /** False until it's seen in a block. */
     val confirmed: Boolean = true,
     /** What was signed, kept to send again until it's in a block. */
     val signed: PrivateUsdSignedSend? = null,

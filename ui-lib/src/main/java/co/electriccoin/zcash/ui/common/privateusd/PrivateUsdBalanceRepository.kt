@@ -29,7 +29,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
-import xyz.justzappit.offramp.atomicswap.RailgunKeySource
 import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunBalanceBucket
 import xyz.justzappit.railgun.RailgunNetwork
@@ -313,7 +312,6 @@ internal fun isArriving(
 ): Boolean {
     val paidAt =
         swap.record
-            ?.takeIf { it.railgunKeys == RailgunKeySource.BIP85 }
             ?.end
             ?.takeIf { it.outcome == AtomicSwapOutcome.Paid }
             ?.let { Instant.fromEpochSeconds(it.at) }

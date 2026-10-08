@@ -87,14 +87,10 @@ class SwapIndicesTest {
 
         override suspend fun authAddress(index: Int) = auth(index)
 
-        override suspend fun payoutNote(
-            index: Int,
-            railgunKeys: RailgunKeySource
-        ) = error("not needed")
+        override suspend fun payoutNote(index: Int) = error("not needed")
 
         override suspend fun accept(
             index: Int,
-            railgunKeys: RailgunKeySource,
             chainId: ChainId,
             contract: Address,
             quoteId: ByteArray,

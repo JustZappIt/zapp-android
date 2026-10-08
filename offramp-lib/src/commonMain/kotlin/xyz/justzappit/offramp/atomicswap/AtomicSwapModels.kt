@@ -81,8 +81,10 @@ data class AtomicSwapRecord(
     val zcashHeight: Long,
     /** Unix seconds on this device's clock. */
     val acceptedAt: Long,
-    /** Expected net payout, replaced by the confirmed event's net payout at completion; null on older records. */
-    val receives: Usdc6? = null,
+    /** Expected net payout, replaced by the confirmed event's net payout at completion. */
+    val receives: Usdc6,
+    /** The relayer's fee the offer named: the most a payout may pay. */
+    val relayerFee: Usdc6,
     val deposit: SwapDeposit = SwapDeposit.NotStarted,
     /** A refund's sweep home, kept before it is first sent. */
     val sweep: ZcashTransaction? = null,
@@ -90,10 +92,7 @@ data class AtomicSwapRecord(
     /** The Ethereum transaction that shielded the payout. */
     val payoutTx: TxHash? = null,
     val maxTotalZat: Long? = null,
-    /** The relayer's fee the offer named: the most a payout may pay. Null on swaps from before it was kept. */
-    val relayerFee: Usdc6? = null,
     val payout: SwapPayout? = null,
-    val railgunKeys: RailgunKeySource = RailgunKeySource.ZCASH_SEED,
     /** The deadlines the maker opened with, from its acceptance; with the quote and our keys, the swap's terms. */
     val t0: Long? = null,
     val t1: Long? = null,
@@ -120,11 +119,6 @@ sealed interface SwapDeposit {
     ) : SwapDeposit {
         override val txId: ZcashTxId get() = transaction.txId
     }
-
-    /** Sent by a build that kept only its id. */
-    data class Recorded(
-        override val txId: ZcashTxId
-    ) : SwapDeposit
 }
 
 /** How a swap ended, and when on this device's clock. */
@@ -132,16 +126,6 @@ data class SwapEnd(
     val outcome: AtomicSwapOutcome,
     val at: Long,
 )
-
-/** Which seed the Railgun wallet a swap's notes pay is derived from: its payout, or a reverse swap's refund. */
-@Serializable
-enum class RailgunKeySource {
-    /** The Zcash seed itself, which swaps accepted before [BIP85] committed to. */
-    ZCASH_SEED,
-
-    /** The Railgun wallet's own mnemonic, BIP-85's child of the Zcash seed: what every new swap pays. */
-    BIP85,
-}
 
 @Serializable
 sealed interface AtomicSwapOutcome {
@@ -209,11 +193,10 @@ data class AtomicSwapOffer(
     val quote: SwapQuote,
     val relayerFee: Usdc6,
     val receives: Usdc6,
-    val railgunKeys: RailgunKeySource,
     val maxTotalZat: Long? = null,
 )
 
-/** [AtomicSwapRecord] as every build has written it: flat, with the deposit and the end as flags and nullables. */
+/** [AtomicSwapRecord] as the store keeps it: flat, with the deposit and the end as flags and nullables. */
 internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
     override val descriptor: SerialDescriptor = Stored.serializer().descriptor
 
@@ -232,22 +215,19 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
         val swapId: SwapId,
         val zcashHeight: Long,
         val acceptedAt: Long,
-        val receives: Usdc6? = null,
+        val receives: Usdc6,
+        val relayerFee: Usdc6,
         val depositAttempted: Boolean = false,
-        val depositTxId: ZcashTxId? = null,
         val outcome: AtomicSwapOutcome? = null,
         val finishedAt: Long? = null,
         val payoutTx: TxHash? = null,
         val maxTotalZat: Long? = null,
         val deposit: ZcashTransaction? = null,
         val sweep: ZcashTransaction? = null,
-        val relayerFee: Usdc6? = null,
         val payout: SwapPayout? = null,
-        val railgunKeys: RailgunKeySource = RailgunKeySource.ZCASH_SEED,
         val t0: Long? = null,
         val t1: Long? = null,
     ) {
-        // Every build sets the outcome and its time together, and a deposit's id with its bytes.
         fun record() =
             AtomicSwapRecord(
                 index = index,
@@ -256,20 +236,18 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
                 zcashHeight = zcashHeight,
                 acceptedAt = acceptedAt,
                 receives = receives,
+                relayerFee = relayerFee,
                 deposit =
                     when {
                         deposit != null -> SwapDeposit.Kept(deposit)
-                        depositTxId != null -> SwapDeposit.Recorded(depositTxId)
                         depositAttempted -> SwapDeposit.Started
                         else -> SwapDeposit.NotStarted
                     },
                 sweep = sweep,
-                end = outcome?.let { SwapEnd(it, finishedAt ?: acceptedAt) },
+                end = outcome?.let { SwapEnd(it, requireNotNull(finishedAt)) },
                 payoutTx = payoutTx,
                 maxTotalZat = maxTotalZat,
-                relayerFee = relayerFee,
                 payout = payout,
-                railgunKeys = railgunKeys,
                 t0 = t0,
                 t1 = t1,
             )
@@ -283,17 +261,15 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
                     zcashHeight = record.zcashHeight,
                     acceptedAt = record.acceptedAt,
                     receives = record.receives,
+                    relayerFee = record.relayerFee,
                     depositAttempted = record.deposit != SwapDeposit.NotStarted,
-                    depositTxId = record.deposit.txId,
                     outcome = record.end?.outcome,
                     finishedAt = record.end?.at,
                     payoutTx = record.payoutTx,
                     maxTotalZat = record.maxTotalZat,
                     deposit = record.deposit.transaction,
                     sweep = record.sweep,
-                    relayerFee = record.relayerFee,
                     payout = record.payout,
-                    railgunKeys = record.railgunKeys,
                     t0 = record.t0,
                     t1 = record.t1,
                 )

@@ -184,7 +184,6 @@ internal class PrivateUsdReverseTerms(
             steps = listOf(stringRes(R.string.reverse_intro)),
             notes =
                 listOf(
-                    stringRes(R.string.reverse_gas_account),
                     stringRes(R.string.reverse_refund_terms, currency.format(maxRefundFee.toDecimal(token.decimals))),
                 ),
         )

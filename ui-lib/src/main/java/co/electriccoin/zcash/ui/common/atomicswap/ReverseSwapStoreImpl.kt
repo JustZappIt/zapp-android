@@ -33,7 +33,7 @@ interface ReverseSwapRecords : ReverseSwapStore {
 class ReverseSwapStoreImpl(
     preferences: EncryptedPreferenceProvider
 ) : ReverseSwapRecords {
-    private val store = EncryptedJsonStore(preferences, "reverse_swap_v1", State.serializer(), strict = true)
+    private val store = EncryptedJsonStore(preferences, "reverse_swap_v2", State.serializer(), strict = true)
     private val lock = Mutex()
 
     override val observeActive: Flow<ReverseSwapRecord?> = store.observe().map { it?.active }
@@ -57,7 +57,7 @@ class ReverseSwapStoreImpl(
 
     override suspend fun save(record: ReverseSwapRecord) =
         lock.withLock {
-            val earlier = (store.get() ?: State()).history.filterNot { it.index == record.index || it.isDraft }
+            val earlier = (store.get() ?: State()).history.filterNot { it.index == record.index }
             val all = earlier + listOfNotNull(record.takeUnless { it.isDraft })
             // Refunded conversions may still hold vault funds. Keep their recovery records beyond the activity limit.
             val recent =

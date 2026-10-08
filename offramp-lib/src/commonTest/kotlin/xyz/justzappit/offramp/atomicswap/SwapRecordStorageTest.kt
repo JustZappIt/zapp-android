@@ -7,7 +7,6 @@ import io.ktor.http.Url
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.evm.types.TxHash
@@ -22,71 +21,11 @@ import kotlin.test.assertTrue
 /** Records devices keep today must read, and write back the same; the stores decode strictly, as [storeJson] does. */
 class SwapRecordStorageTest {
     @Test
-    fun aForwardRecordFromBeforeDepositsAndSweepsWereKeptStillReads() {
-        val record = storeJson.decodeFromString(AtomicSwapRecord.serializer(), FORWARD)
-
-        assertEquals(3, record.index)
-        assertEquals(SwapDeposit.Recorded(ZcashTxId.parse(TX_HEX)), record.deposit)
-        val refunded = AtomicSwapOutcome.Refunded(ZcashTxId.parse(SWEEP_HEX), RefundCause.MAKER_CANCELLED)
-        assertEquals(refunded, record.outcome)
-        assertEquals(1_000_000L, record.maxTotalZat)
-        assertNull(record.deposit.transaction)
-        assertNull(record.sweep)
-        assertNull(record.relayerFee)
-    }
-
-    @Test
-    fun whatAForwardRecordNowKeepsReadsBack() {
-        val record =
-            storeJson.decodeFromString(AtomicSwapRecord.serializer(), FORWARD).copy(
-                deposit = SwapDeposit.Kept(ZcashTransaction(ZcashTxId.parse(TX_HEX), "0400", 4_200_040)),
-                sweep = ZcashTransaction(ZcashTxId.parse(SWEEP_HEX), "0500", 4_200_140),
-                relayerFee = Usdc6.ofMicros(20_000),
-            )
-        val json = storeJson.encodeToString(AtomicSwapRecord.serializer(), record)
-
-        assertEquals(record, storeJson.decodeFromString(AtomicSwapRecord.serializer(), json))
-        val relayerFee = storeJson.parseToJsonElement(json).jsonObject.getValue("relayerFee")
-        assertEquals("20000", relayerFee.jsonPrimitive.content)
-    }
-
-    @Test
-    fun recordsFromBeforeTheDerivedRailgunWalletPayTheZcashSeedsOwn() {
-        val forward = storeJson.decodeFromString(AtomicSwapRecord.serializer(), FORWARD)
-        val reverse = storeJson.decodeFromString(ReverseSwapRecord.serializer(), REVERSE)
-
-        assertEquals(RailgunKeySource.ZCASH_SEED, forward.railgunKeys)
-        assertEquals(RailgunKeySource.ZCASH_SEED, reverse.railgunKeys)
-    }
-
-    @Test
-    fun aRecordKeepsTheRailgunKeysItPays() {
-        val forward =
-            storeJson
-                .decodeFromString(AtomicSwapRecord.serializer(), FORWARD)
-                .copy(railgunKeys = RailgunKeySource.BIP85)
-        val reverse =
-            storeJson
-                .decodeFromString(ReverseSwapRecord.serializer(), REVERSE)
-                .copy(railgunKeys = RailgunKeySource.BIP85)
-        val forwardJson = storeJson.encodeToString(AtomicSwapRecord.serializer(), forward)
-        val reverseJson = storeJson.encodeToString(ReverseSwapRecord.serializer(), reverse)
-
-        assertEquals(forward, storeJson.decodeFromString(AtomicSwapRecord.serializer(), forwardJson))
-        assertEquals(reverse, storeJson.decodeFromString(ReverseSwapRecord.serializer(), reverseJson))
-        listOf(forwardJson, reverseJson).forEach { json ->
-            val railgunKeys = storeJson.parseToJsonElement(json).jsonObject.getValue("railgunKeys")
-            assertEquals("BIP85", railgunKeys.jsonPrimitive.content)
-        }
-    }
-
-    @Test
-    fun aReverseRecordWithASweepStillReadsAndWritesTheSameShape() {
+    fun aReverseRecordWithASweepReadsAndWritesTheSameShape() {
         val record = storeJson.decodeFromString(ReverseSwapRecord.serializer(), REVERSE)
 
         assertEquals(ReversePhase.RECEIVING, record.phase)
         assertEquals(ZcashTxId.parse("09".repeat(32)), record.receive?.transaction?.txId)
-        assertTrue(record.rescuePending)
         val written = storeJson.parseToJsonElement(storeJson.encodeToString(ReverseSwapRecord.serializer(), record))
         assertEquals(storeJson.parseToJsonElement(REVERSE), written)
         assertFalse("transaction" in written.jsonObject.getValue("receive").jsonObject)
@@ -100,17 +39,17 @@ class SwapRecordStorageTest {
     @Test
     fun aForwardRecordsDepositAndEndReadAsTheirTypedStates() {
         val states = FORWARD_STATES.map(::forward)
-        val (early, started, recorded) = states
-        val (kept, paid) = states.drop(3)
+        val (early, started, kept) = states
+        val paid = states[3]
 
         assertEquals(SwapDeposit.NotStarted, early.deposit)
         assertNull(early.end)
         assertEquals(SwapDeposit.Started, started.deposit)
-        assertEquals(SwapDeposit.Recorded(ZcashTxId.parse(TX_HEX)), recorded.deposit)
         assertEquals(SwapDeposit.Kept(ZcashTransaction(ZcashTxId.parse(TX_HEX), "0400", 4_200_040)), kept.deposit)
         assertEquals(SwapEnd(AtomicSwapOutcome.Paid, 1_790_003_000), paid.end)
         assertEquals(TxHash.fromHex(PAYOUT_TX), paid.payoutTx)
         assertEquals(Usdc6.ofMicros(977_550), paid.receives)
+        assertEquals(Usdc6.ofMicros(20_000), paid.relayerFee)
         assertEquals(Usdc6.ofMicros(1_000_000), paid.quote.amount)
         assertEquals(SWAP_ID, paid.swapId.hex)
     }
@@ -127,8 +66,8 @@ class SwapRecordStorageTest {
         assertEquals(TESTNET, record.deployment)
         assertEquals(Address.parse(USER), record.quote.user)
         assertEquals(TxHash.fromHex(FUNDING_TX), record.funding?.txId)
-        assertEquals(Usdc6.ofMicros(1_002_506), record.cost?.debit)
-        assertNull(record.cost?.broadcasterFee)
+        assertEquals(Usdc6.ofMicros(1_252_506), record.cost?.debit)
+        assertEquals(Usdc6.ofMicros(250_000), record.cost?.broadcasterFee)
         assertEquals(Usdc6.ofMicros(20_000), record.payout?.fee)
         assertEquals(SwapId.parse(SWAP_ID), record.refundLock?.swapId)
         assertEquals(ReversePhase.REFUNDED, record.phase)
@@ -157,7 +96,7 @@ class SwapRecordStorageTest {
         assertEquals(underWay(ReversePhase.REFUND_WAIT, cancellable = false), cancelled.status)
         assertEquals(underWay(ReversePhase.RECEIVING, cancellable = false), sweeping.status)
         assertEquals(ReverseSwapStatus.Over(ReverseSwapResult.REFUNDED), refunded.status)
-        assertEquals(Usdc6.ofMicros(1_002_506), refunded.debit)
+        assertEquals(Usdc6.ofMicros(1_252_506), refunded.debit)
         assertEquals(Usdc6.ofMicros(1_000_000), previewed.copy(cost = null).debit)
     }
 
@@ -288,41 +227,24 @@ class SwapRecordStorageTest {
 
         private val FORWARD_HEAD =
             """{"index":7,"quote":$QUOTE,"swapId":"$SWAP_ID","zcashHeight":4200000,"acceptedAt":1790000000,""" +
-                """"receives":"977550""""
+                """"receives":"977550","relayerFee":"20000""""
 
-        /** A swap as the store keeps it: accepted, depositing, deposited by an earlier build and this one, and paid. */
+        private val DEPOSIT = """"deposit":{"txId":"$TX_HEX","raw":"0400","expiryHeight":4200040}"""
+
+        /** A swap as the store keeps it: accepted, depositing, deposited, paid, refunded and ended unsent. */
         val FORWARD_STATES =
             listOf(
                 "$FORWARD_HEAD}",
                 """$FORWARD_HEAD,"depositAttempted":true,"maxTotalZat":212021}""",
-                """$FORWARD_HEAD,"depositAttempted":true,"depositTxId":"$TX_HEX","maxTotalZat":212021}""",
-                """$FORWARD_HEAD,"depositAttempted":true,"depositTxId":"$TX_HEX","maxTotalZat":212021,""" +
-                    """"deposit":{"txId":"$TX_HEX","raw":"0400","expiryHeight":4200040},"relayerFee":"20000",""" +
-                    """"railgunKeys":"BIP85"}""",
-                """$FORWARD_HEAD,"depositAttempted":true,"depositTxId":"$TX_HEX","outcome":{"type":"paid"},""" +
-                    """"finishedAt":1790003000,"payoutTx":"$PAYOUT_TX","maxTotalZat":212021,""" +
-                    """"deposit":{"txId":"$TX_HEX","raw":"0400","expiryHeight":4200040},"relayerFee":"20000",""" +
-                    """"railgunKeys":"BIP85"}""",
-                """$FORWARD_HEAD,"depositAttempted":true,"depositTxId":"$TX_HEX",""" +
+                """$FORWARD_HEAD,"depositAttempted":true,"maxTotalZat":212021,$DEPOSIT}""",
+                """$FORWARD_HEAD,"depositAttempted":true,"outcome":{"type":"paid"},"finishedAt":1790003000,""" +
+                    """"payoutTx":"$PAYOUT_TX","maxTotalZat":212021,$DEPOSIT}""",
+                """$FORWARD_HEAD,"depositAttempted":true,""" +
                     """"outcome":{"type":"refunded","sweepTxId":"$SWEEP_HEX","cause":"NOT_CLAIMED_IN_TIME"},""" +
-                    """"finishedAt":1790009000,"maxTotalZat":212021,""" +
-                    """"deposit":{"txId":"$TX_HEX","raw":"0400","expiryHeight":4200040},""" +
-                    """"sweep":{"txId":"$SWEEP_HEX","raw":"0500","expiryHeight":4200140},"relayerFee":"20000"}""",
+                    """"finishedAt":1790009000,"maxTotalZat":212021,$DEPOSIT,""" +
+                    """"sweep":{"txId":"$SWEEP_HEX","raw":"0500","expiryHeight":4200140}}""",
                 """$FORWARD_HEAD,"outcome":{"type":"nothing_sent","cause":"QUOTE_EXPIRED"},"finishedAt":1790000001}""",
             )
-
-        val FORWARD =
-            """
-            {"index":3,"quote":{"quoteId":"${hex(32, 0x22)}","maker":"0x2bac02B5032e9092493814c705F156B49E288922",
-             "makerShare":"${hex(64, 0x0a)}","makerProof":"${hex(64, 0x06)}","chainId":11155111,
-             "contract":"0xbd9a37f47a988aefc4d80395727f41feb698e225",
-             "token":"0x5764D0044bef5AA839E0dDafE2073421101B9Ed8",
-             "amount":"1000000","depositZat":202021,"expiresAt":1790000300},
-             "swapId":"${hex(32, 0x5c)}","zcashHeight":4200000,"acceptedAt":1790000000,
-             "receives":"977550","depositAttempted":true,"depositTxId":"${"ab".repeat(32)}",
-             "outcome":{"type":"refunded","sweepTxId":"${"cd".repeat(32)}","cause":"MAKER_CANCELLED"},
-             "finishedAt":1790003000,"maxTotalZat":1000000}
-            """.trimIndent()
 
         val TESTNET =
             SwapDeployment(
@@ -338,7 +260,7 @@ class SwapRecordStorageTest {
                 maxRelayerFee = Usdc6.ofMicros(100_000),
             )
 
-        /** The hosted testnet as every reverse record so far keeps it. */
+        /** The hosted testnet as reverse records keep it. */
         val TESTNET_JSON =
             """{"makerUrl":"https://zecswap-testnet.pepeman931.workers.dev/maker",""" +
                 """"relayerUrl":"https://zecswap-testnet.pepeman931.workers.dev/relayer",""" +
@@ -357,29 +279,29 @@ class SwapRecordStorageTest {
                 """"viewingKeys":"${hex(64, 4)}"},""" +
                 """"birthday":3900000"""
 
-        private const val COST = """{"debit":"1002506","railgunFee":"2506"}"""
-        private val FUNDING = """{"raw":"0x02f8","txId":"$FUNDING_TX","cost":$COST}"""
+        private const val COST = """{"debit":"1252506","railgunFee":"2506","broadcasterFee":"250000"}"""
+        private val REQUEST =
+            """{"swapId":"$SWAP_ID","chainId":11155111,"to":"${hex(20, 7)}","data":"0x12345678","value":"0"}"""
+        private val FUNDING_PENDING = """{"cost":$COST,"request":$REQUEST}"""
+        private val FUNDING = """{"txId":"$FUNDING_TX","cost":$COST,"request":$REQUEST}"""
         private val AUTHORIZATION = """{"swapId":"$SWAP_ID","deadline":1790001000,"signature":"${hex(65, 9)}"}"""
         private val PAYOUT =
             """{"swapId":"$SWAP_ID","note":{"npk":"${hex(32, 0x11)}","encryptedBundle":["${hex(32, 0x12)}",""" +
                 """"${hex(32, 0x13)}","${hex(32, 0x14)}"],"shieldKey":"${hex(32, 0x15)}"},"fee":"20000",""" +
                 """"signature":"${hex(65, 0x16)}"}"""
 
-        /**
-         * A conversion as the store keeps it: previewed, accepted, sent, settling, and refunded, by the build that
-         * started keeping the Railgun keys and when the user went ahead, and by the one before it.
-         */
+        /** A conversion as the store keeps it: previewed, accepted, sent, settling, and refunded. */
         val REVERSE_STATES =
             listOf(
-                """$REVERSE_HEAD,"phase":"QUOTED","cost":$COST,"railgunKeys":"BIP85"}""",
-                """$REVERSE_HEAD,"cost":$COST,"railgunKeys":"BIP85","acceptedAt":1790000100}""",
-                """$REVERSE_HEAD,"account":"$ACCOUNT","phase":"SENDING_USDC","cost":$COST,"funding":$FUNDING}""",
+                """$REVERSE_HEAD,"phase":"QUOTED","cost":$COST}""",
+                """$REVERSE_HEAD,"cost":$COST,"acceptedAt":1790000100}""",
+                """$REVERSE_HEAD,"account":"$ACCOUNT","phase":"SENDING_USDC","cost":$COST,""" +
+                    """"funding":$FUNDING_PENDING,"acceptedAt":1790000100}""",
                 """$REVERSE_HEAD,"account":"$ACCOUNT","phase":"SETTLING","cost":$COST,"funding":$FUNDING,""" +
                     """"ready":$AUTHORIZATION,"receiveEstimate":{"availableZat":100000,"feeZat":10000},""" +
-                    """"railgunKeys":"BIP85","acceptedAt":1790000100}""",
+                    """"acceptedAt":1790000100}""",
                 """$REVERSE_HEAD,"account":"$ACCOUNT","phase":"REFUNDED","cost":$COST,"funding":$FUNDING,""" +
-                    """"cancelRequested":true,"refundLock":$AUTHORIZATION,"payout":$PAYOUT,""" +
-                    """"railgunKeys":"BIP85","acceptedAt":1790000100}""",
+                    """"cancelRequested":true,"refundLock":$AUTHORIZATION,"payout":$PAYOUT,"acceptedAt":1790000100}""",
             )
 
         val REVERSE =
@@ -395,11 +317,12 @@ class SwapRecordStorageTest {
              "swapId":"${hex(32, 8)}","userShare":"${hex(64, 1)}",
              "acceptance":{"userShare":"${hex(64, 1)}","userProof":"${hex(64, 0)}","viewingKeys":"${hex(64, 0)}"},
              "birthday":100,"account":"${"0a".repeat(16)}","phase":"RECEIVING",
-             "cost":{"debit":"1002506","railgunFee":"2506"},
-             "funding":{"raw":"0x1234","txId":"${hex(32, 8)}","cost":{"debit":"1002506","railgunFee":"2506"}},
-             "rescuePending":true,
+             "cost":$COST,
+             "funding":{"txId":"${hex(32, 8)}","cost":$COST,
+              "request":{"swapId":"${hex(32, 8)}","chainId":11155111,"to":"${hex(20, 7)}",
+               "data":"0x12345678","value":"0"}},
              "receive":{"txId":"${"09".repeat(32)}","raw":"abcd","expiryHeight":300,"receivedZat":90000,"feeZat":10000},
-             "receiveEstimate":{"availableZat":100000,"feeZat":10000},"receiveConfirmations":1}
+             "receiveEstimate":{"availableZat":100000,"feeZat":10000},"receiveConfirmations":1,"acceptedAt":1000}
             """.trimIndent()
     }
 }

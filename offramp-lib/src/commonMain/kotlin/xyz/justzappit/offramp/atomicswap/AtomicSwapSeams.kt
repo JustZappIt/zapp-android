@@ -30,15 +30,11 @@ interface AtomicSwapKeys {
     /** The swap's own key, which signs for it and is never funded. */
     suspend fun authAddress(index: Int): Address
 
-    suspend fun payoutNote(
-        index: Int,
-        railgunKeys: RailgunKeySource
-    ): PayoutNote
+    suspend fun payoutNote(index: Int): PayoutNote
 
     /** Throws unless the maker's share proof verifies; proves ours in return, bound to the payout note. */
     suspend fun accept(
         index: Int,
-        railgunKeys: RailgunKeySource,
         chainId: ChainId,
         contract: Address,
         quoteId: ByteArray,

@@ -52,13 +52,6 @@ class ObservePrivateUsdActivityUseCaseTest {
             )
         }
 
-    @Test
-    fun `a conversion back to ZEC from before its time was kept goes by its quote`() {
-        val kept = toZec(index = 1, ReversePhase.COMPLETE, acceptedAt = null)
-
-        assertEquals(kept.quote.terms.expiresAt, PrivateUsdActivityData.ToZec(kept).timestamp.epochSeconds)
-    }
-
     private companion object {
         val TX_HASH = TxHash.fromHex("0x" + "ab".repeat(32))
         val TOKEN = Address.parse("0x5764D0044bef5AA839E0dDafE2073421101B9Ed8")

@@ -100,7 +100,7 @@ private fun Review(review: PrivateUsdReverseReviewState) {
                 ZappSettlementLedgerRow(stringResource(R.string.reverse_railgun_fee), review.railgunFee.getValue()),
                 ZappSettlementLedgerRow(
                     stringResource(R.string.reverse_broadcaster_fee),
-                    review.broadcasterFee?.getValue() ?: stringResource(R.string.reverse_gas_account),
+                    review.broadcasterFee.getValue(),
                 ),
                 ZappSettlementLedgerRow(stringResource(R.string.reverse_total), review.debit.getValue()),
                 ZappSettlementLedgerRow(stringResource(R.string.reverse_receive_estimate), review.receive.getValue()),
@@ -137,7 +137,7 @@ private fun ReviewPreview() =
                             debit = stringRes("₹837.10"),
                             escrow = stringRes("₹835.00"),
                             railgunFee = stringRes("₹2.10"),
-                            broadcasterFee = null,
+                            broadcasterFee = stringRes("₹20.90"),
                             receive = stringRes("0.3176 ZEC"),
                         ),
                     primary = ButtonState(stringRes("Convert")),

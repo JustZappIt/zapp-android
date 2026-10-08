@@ -258,10 +258,7 @@ internal class PrivateUsdProgressSteps(
     private fun received(
         record: AtomicSwapRecord,
         currency: LocalCurrency
-    ): StringResource {
-        val units = record.receives ?: record.quote.amount
-        return currency.format(units.micros.toDecimal(token.decimals))
-    }
+    ): StringResource = currency.format(record.receives.micros.toDecimal(token.decimals))
 
     private companion object {
         val BLOCK_TIME = 75.seconds

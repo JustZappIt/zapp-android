@@ -49,23 +49,16 @@ enum class ReversePhase {
 data class ReverseFundingCost(
     val debit: Usdc6,
     val railgunFee: Usdc6,
-    val broadcasterFee: Usdc6?,
+    val broadcasterFee: Usdc6,
 )
 
-/** Funding kept before submission: proved calldata, or the signed transaction older builds prepared. */
+/** Funding's proved calldata, kept before submission, and the transaction the relayer sent it in. */
 @Serializable
 data class ReverseFundingTransaction(
-    val raw: String? = null,
     val txId: TxHash? = null,
     val cost: ReverseFundingCost,
-    val request: ReverseFundingRequest? = null,
+    val request: ReverseFundingRequest,
 ) {
-    init {
-        require((raw != null && txId != null && request == null) || (raw == null && request != null)) {
-            "funding must retain its proved request or signed transaction"
-        }
-    }
-
     override fun toString() = "ReverseFundingTransaction(txId=$txId)"
 }
 
@@ -140,13 +133,10 @@ data class ReverseSwapRecord(
     val refundLock: SwapAuthorization? = null,
     val payout: SwapPayout? = null,
     val rescue: SwapRescue? = null,
-    /** Only ever set by earlier builds, whose rescue retried in the background. */
-    val rescuePending: Boolean = false,
     val receive: ReverseReceiveTransaction? = null,
     val receiveEstimate: ReverseReceiveEstimate? = null,
     val receiveConfirmations: Long = 0,
-    val railgunKeys: RailgunKeySource = RailgunKeySource.ZCASH_SEED,
-    /** Unix seconds on this device's clock when the user went ahead; null on records from before it was kept. */
+    /** Unix seconds on this device's clock when the user went ahead; null while it's only a preview. */
     val acceptedAt: Long? = null,
     /** The maker took the quote: a token paid for that, and it's never asked again. */
     val makerAccepted: Boolean = false,

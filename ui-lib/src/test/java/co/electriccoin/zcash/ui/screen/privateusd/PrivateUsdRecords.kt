@@ -11,7 +11,6 @@ import xyz.justzappit.offramp.atomicswap.AtomicSwapOffer
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
 import xyz.justzappit.offramp.atomicswap.NoteCommitment
-import xyz.justzappit.offramp.atomicswap.RailgunKeySource
 import xyz.justzappit.offramp.atomicswap.ReverseFundingCost
 import xyz.justzappit.offramp.atomicswap.ReversePhase
 import xyz.justzappit.offramp.atomicswap.ReverseQuote
@@ -36,6 +35,7 @@ internal fun toUsd(
     zcashHeight = 4_200_000,
     acceptedAt = at,
     receives = Usdc6.ofMicros(977_550),
+    relayerFee = Usdc6.ofMicros(20_000),
     end = outcome?.let { SwapEnd(it, at) },
 )
 
@@ -53,7 +53,6 @@ internal fun offer(
     quote = forwardQuote(requested, depositZat, expiresAt),
     relayerFee = Usdc6.ofMicros(20_000),
     receives = Usdc6.ofMicros(receives),
-    railgunKeys = RailgunKeySource.BIP85,
     maxTotalZat = maxTotalZat,
 )
 
@@ -107,7 +106,12 @@ internal fun toZec(
     acceptance = SwapAcceptance(hex(64, 1), hex(64, 0), hex(64, 0)),
     birthday = 100,
     phase = phase,
-    cost = ReverseFundingCost(Usdc6.ofMicros(1_000_000), railgunFee = Usdc6.ofMicros(2_500), broadcasterFee = null),
+    cost =
+        ReverseFundingCost(
+            Usdc6.ofMicros(1_000_000),
+            railgunFee = Usdc6.ofMicros(2_500),
+            broadcasterFee = Usdc6.ofMicros(250_000),
+        ),
     acceptedAt = acceptedAt,
 )
 

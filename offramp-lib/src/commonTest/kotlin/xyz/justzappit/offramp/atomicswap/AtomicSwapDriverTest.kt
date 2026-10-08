@@ -132,33 +132,12 @@ class AtomicSwapDriverTest : AtomicSwapDriverFixtures() {
         }
 
     @Test
-    fun aNewSwapPaysTheRailgunWalletDerivedFromTheSeed() =
+    fun theQuoteNamesTheNoteThePayoutGoesTo() =
         runTest {
             val h = Harness()
-            val record = h.accepted()
+            h.accepted()
 
-            assertEquals(RailgunKeySource.BIP85, record.railgunKeys)
-            assertEquals(
-                listOf(RailgunKeySource.BIP85, RailgunKeySource.BIP85),
-                h.keys.railgunKeys,
-                "the quote's note and the acceptance's proof",
-            )
             assertTrue(h.bodies.getValue("/v1/quote").contains(NOTE_COMMITMENT.hex))
-        }
-
-    @Test
-    fun aSwapAcceptedBeforeTheDerivedWalletIsPaidIntoTheZcashSeedsOwn() =
-        runTest {
-            val h = Harness()
-            val legacy = notes.getValue(RailgunKeySource.ZCASH_SEED)
-            val record = h.depositedRecord().copy(railgunKeys = RailgunKeySource.ZCASH_SEED)
-            h.store.record = record
-            h.chain.payoutNote = legacy.commitment
-            h.chain.stage = SwapStage.CLAIMED
-
-            assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(record))
-            assertTrue(h.bodies.getValue("/v1/payout").contains(legacy.npk.hex()))
-            assertEquals(RailgunKeySource.ZCASH_SEED, h.keys.railgunKeys.last())
         }
 
     @Test

@@ -17,7 +17,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 class RailgunProtocolTest {
     @Test
@@ -89,10 +88,8 @@ class RailgunProtocolTest {
     @Test
     fun thePageAnswersEveryMethod() {
         val page = File("web/src/index.js").readText()
-        val (debug, production) = RailgunMethod.entries.partition { it.isDebug }
 
-        assertEquals(production.map(::wireName).sorted(), handlers(page, "handlers").sorted())
-        assertTrue(handlers(page, "debugHandlers").containsAll(debug.map(::wireName)))
+        assertEquals(RailgunMethod.entries.map(::wireName).sorted(), handlers(page, "handlers").sorted())
     }
 
     private fun wireName(method: RailgunMethod) =

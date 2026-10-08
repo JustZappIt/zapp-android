@@ -15,7 +15,7 @@ const handlers = {
   reverseCost,
   prepareReverse,
 };
-// Only an engine started with `debug` answers these: the app's debug screen, and dev/check.mjs.
+// Only an engine started with `debug` answers these, for dev/check.mjs.
 const debugHandlers = {
   openNewWallet: wallet.openNewWallet,
   gasAccount: transact.gasAccount,

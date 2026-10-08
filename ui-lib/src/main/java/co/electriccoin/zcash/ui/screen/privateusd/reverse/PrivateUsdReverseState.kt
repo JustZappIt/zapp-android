@@ -49,7 +49,6 @@ internal data class PrivateUsdReverseReviewState(
     val debit: StringResource,
     val escrow: StringResource,
     val railgunFee: StringResource,
-    /** Null while a test account pays the broadcast. */
-    val broadcasterFee: StringResource?,
+    val broadcasterFee: StringResource,
     val receive: StringResource,
 )
