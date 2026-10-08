@@ -13,6 +13,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.reputation.offeredPlatforms
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -153,8 +154,7 @@ internal class IncreaseReputationVM(
     }
 
     private fun rows(read: ReputationSummary): List<VerifiableRow> =
-        SocialPlatform.entries
-            .filter { it != SocialPlatform.Binance || !isBinanceHidden() }
+        offeredPlatforms(currency)
             .map { platform ->
                 val isVerified = platform in read.verified
                 VerifiableRow(
@@ -204,13 +204,6 @@ internal class IncreaseReputationVM(
 
     private fun limitGain(gain: Usdc6): StringResource =
         stringRes(R.string.increase_reputation_limit_gain, gain.toDisplayString(stripTrailingZeros = true))
-
-    /**
-     * p2p.me's own client hides Binance in India, so an INR user who tried it would meet a failure
-     * we could have predicted. The corridor is the country signal Zapp actually has — the user is
-     * buying with rupees — and it beats a device locale, which says where the phone was set up.
-     */
-    private fun isBinanceHidden(): Boolean = currency == CurrencyCode.Inr
 
     private fun startRun(platform: SocialPlatform) {
         if (runJob?.isActive == true) return
