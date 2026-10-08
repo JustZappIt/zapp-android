@@ -257,7 +257,7 @@ internal fun EditContactSheet(
                                 contentAlignment = Alignment.Center,
                             ) {
                                 BasicText(
-                                    text = stringResource(R.string.address_book_edit_delete_confirm_no).uppercase(),
+                                    text = stringResource(R.string.address_book_edit_delete_confirm_no),
                                     style =
                                         ZappTheme.typography.button.copy(
                                             color = c.text,

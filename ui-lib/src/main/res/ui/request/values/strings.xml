@@ -4,7 +4,7 @@
     <string name="request_amount_invalid">This transaction amount is invalid</string>
     <string name="request_amount_btn">Next</string>
     <string name="request_memo_btn">Request</string>
-    <string name="request_qr_share_btn">Share QR Code</string>
+    <string name="request_qr_share_btn">Share QR code</string>
     <string name="request_qr_close_btn">Close</string>
     <string name="request_qr_save_btn">Save QR to Photos</string>
     <string name="request_qr_send_in_chat_btn">Send in chat</string>

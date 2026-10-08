@@ -4,7 +4,7 @@
     <string name="request_amount_invalid">Jumlah transaksi ini tidak valid</string>
     <string name="request_amount_btn">Lanjut</string>
     <string name="request_memo_btn">Minta</string>
-    <string name="request_qr_share_btn">Bagikan Kode QR</string>
+    <string name="request_qr_share_btn">Bagikan kode QR</string>
     <string name="request_qr_close_btn">Tutup</string>
     <string name="request_qr_save_btn">Simpan QR ke Foto</string>
     <string name="request_qr_send_in_chat_btn">Kirim di obrolan</string>
