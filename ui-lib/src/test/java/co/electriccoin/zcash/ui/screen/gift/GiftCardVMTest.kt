@@ -15,7 +15,9 @@ import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.FundGiftCardUseCase
+import co.electriccoin.zcash.ui.common.usecase.Funding
 import co.electriccoin.zcash.ui.common.usecase.GiftFundingQuote
+import co.electriccoin.zcash.ui.common.usecase.ObserveFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
@@ -159,6 +161,7 @@ class GiftCardVMTest {
                     },
                 giftCardStorageProvider = storage,
                 navigationRouter = mockk<NavigationRouter>(relaxed = true),
+                observeFunding = mockk<ObserveFundingUseCase> { every { zec() } returns flowOf(Funding.FUNDED) },
             )
 
         fun setStoredCard(card: StoredGiftCard, publish: Boolean) {

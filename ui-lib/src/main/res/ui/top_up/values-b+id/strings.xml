@@ -8,4 +8,10 @@
     <string name="top_up_from_wallet_subtitle">Terima langsung ke alamat terlindungi Anda.</string>
     <string name="top_up_add_zec_button">Tambah ZEC</string>
     <string name="top_up_balance_subtitle">Isi saldo dari bursa atau dompet lain.</string>
+    <string name="add_funds_panel_title">Dompet Anda kosong</string>
+    <string name="add_funds_panel_send">Tambahkan ZEC sebelum mengirim. Terima dari dompet lain atau exchange.</string>
+    <string name="add_funds_panel_swap">Tambahkan ZEC sebelum menukar. Terima dari dompet lain atau exchange.</string>
+    <string name="add_funds_panel_gift">Tambahkan ZEC sebelum mengisi Zpacket. Terima dari dompet lain atau exchange.</string>
+    <string name="add_funds_panel_pay_merchant">Tambahkan ZEC atau USDC di Base sebelum membayar. Zapp membayar merchant dengan salah satunya.</string>
+    <string name="add_funds_panel_base">Tambahkan ZEC sebelum memindahkan dana ke Base.</string>
 </resources>

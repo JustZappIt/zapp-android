@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.screen.swap.upi
 
+import co.electriccoin.zcash.ui.common.compose.AddFundsPanelState
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -20,4 +21,6 @@ internal data class UpiOfframpState(
     val isTopUpNeeded: Boolean = false,
     /** Forgets an in-flight checkpoint locally, without touching the on-chain order. */
     val onDiscardInFlight: (() -> Unit)? = null,
+    /** No ZEC and no USDC on Base, and no order in flight: "Add ZEC" replaces the form. */
+    val addFunds: AddFundsPanelState? = null,
 )
