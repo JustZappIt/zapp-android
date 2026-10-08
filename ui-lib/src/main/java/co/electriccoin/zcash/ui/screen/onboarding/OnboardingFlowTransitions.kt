@@ -22,6 +22,12 @@ internal enum class RestoreStep {
     SEED_ENTRY,
     BIRTHDAY,
     RESTORING,
+
+    /**
+     * No longer entered: asking a user to confirm the phrase they just typed was redundant, so a
+     * restore goes from [RESTORING] straight to [USERNAME]. Kept so a step saved by an older build
+     * still rehydrates; [recoveryTarget] moves it on to [USERNAME].
+     */
     SEED_CONFIRM,
     USERNAME,
     DERIVING,
@@ -104,10 +110,6 @@ internal fun RestoreStep.backAction(hasReadyWallet: Boolean): BackAction<Restore
             BackAction.Go(RestoreStep.SEED_ENTRY)
         }
 
-        RestoreStep.USERNAME -> {
-            BackAction.Go(RestoreStep.SEED_CONFIRM)
-        }
-
         RestoreStep.BIO_SCAN,
         RestoreStep.PIN_SETUP,
         -> {
@@ -116,6 +118,8 @@ internal fun RestoreStep.backAction(hasReadyWallet: Boolean): BackAction<Restore
 
         RestoreStep.RESTORING,
         RestoreStep.SEED_CONFIRM,
+        // The wallet is already restored, so there is nothing to step back to.
+        RestoreStep.USERNAME,
         RestoreStep.DERIVING,
         RestoreStep.SECURE_CHOICE,
         RestoreStep.KEEP_OPEN,
@@ -162,7 +166,7 @@ internal fun RestoreStep.recoveryTarget(
     when {
         secretState == SecretState.LOADING -> null
 
-        this == RestoreStep.SEED_ENTRY && secretState == SecretState.READY -> RestoreStep.SEED_CONFIRM
+        this in RESUMES_AT_USERNAME && secretState == SecretState.READY -> RestoreStep.USERNAME
 
         this == RestoreStep.BIRTHDAY && !hasValidSeed -> RestoreStep.SEED_ENTRY
 
@@ -176,6 +180,12 @@ internal fun RestoreStep.recoveryTarget(
 
         else -> null
     }
+
+/**
+ * Steps that, with a restored wallet already in place, pick up at the username: seed entry (the
+ * restore finished while the process was gone) and the retired seed confirmation.
+ */
+private val RESUMES_AT_USERNAME = setOf(RestoreStep.SEED_ENTRY, RestoreStep.SEED_CONFIRM)
 
 private fun RestoreStep.isCommittedRestoreStep(): Boolean =
     when (this) {

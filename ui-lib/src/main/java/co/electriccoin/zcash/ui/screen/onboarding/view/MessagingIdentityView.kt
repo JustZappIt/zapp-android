@@ -94,6 +94,8 @@ internal fun MessagingPhaseIntro(
 internal fun UsernameEntryScreen(
     onBack: () -> Unit,
     onContinue: (username: String) -> Unit,
+    showBack: Boolean = true,
+    subtitle: String = stringResource(R.string.onboarding_username_subtitle),
 ) {
     var username by rememberSaveable { mutableStateOf("") }
     val isLong = username.length >= UsernameRules.MIN_LENGTH
@@ -107,12 +109,12 @@ internal fun UsernameEntryScreen(
         cta = stringResource(R.string.onboarding_continue),
         ctaEnabled = isValid,
         onCta = { if (isValid) onContinue(username) },
-        showBack = true,
+        showBack = showBack,
         onBack = onBack,
     ) {
         OnbHero(text = stringResource(R.string.onboarding_username_title))
         Spacer(Modifier.height(14.dp))
-        OnbSub(stringResource(R.string.onboarding_username_subtitle))
+        OnbSub(subtitle)
         Spacer(Modifier.height(28.dp))
 
         UsernameField(

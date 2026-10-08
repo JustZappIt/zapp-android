@@ -139,7 +139,8 @@ class ZappRestoreFlowVM(
         _birthdayError.update { null }
     }
 
-    private val _birthdayMode = MutableStateFlow(BirthdayMode.HEIGHT)
+    // Date first: hardly anyone knows their wallet's block height.
+    private val _birthdayMode = MutableStateFlow(BirthdayMode.DATE)
     val birthdayMode: StateFlow<BirthdayMode> = _birthdayMode.asStateFlow()
 
     @Suppress("MagicNumber")
@@ -157,18 +158,22 @@ class ZappRestoreFlowVM(
         _birthdayError.update { null }
     }
 
+    /** The height estimated from the selected month, shown as a hint under the date picker. */
+    private val _dateEstimate = MutableStateFlow<String?>(null)
+    val dateEstimate: StateFlow<String?> = _dateEstimate.asStateFlow()
+
     fun onYearMonthChange(yearMonth: YearMonth) {
         _selectedYearMonth.update { yearMonth }
+        _dateEstimate.update { null }
         _birthdayError.update { null }
     }
 
     /**
-     * Estimate a block height from the selected year/month and write it back to
-     * [birthdayText], then switch to HEIGHT mode so the user sees the populated value
-     * on the same screen and taps Restore manually. Failure surfaces a localized error
-     * on the birthday screen — no auto-advance.
+     * Estimate a block height from the selected year/month, write it to [birthdayText] and show it
+     * as [dateEstimate] while staying on the date, then call [onEstimated] (the restore). Failure
+     * surfaces a localized error on the birthday screen and does not advance.
      */
-    fun estimateFromDate() {
+    fun estimateFromDate(onEstimated: () -> Unit = {}) {
         if (_isEstimating.value) return
         _isEstimating.update { true }
         _birthdayError.update { null }
@@ -188,7 +193,9 @@ class ZappRestoreFlowVM(
                 )
             }.onSuccess { bday ->
                 _birthdayText.update { bday.value.toString() }
-                _birthdayMode.update { BirthdayMode.HEIGHT }
+                _dateEstimate.update { "%,d".format(bday.value) }
+                _isEstimating.update { false }
+                onEstimated()
             }.onFailure { e ->
                 if (e is CancellationException) throw e
                 Twig.warn(e) { "ZappRestoreFlowVM: estimateBirthdayHeight failed" }

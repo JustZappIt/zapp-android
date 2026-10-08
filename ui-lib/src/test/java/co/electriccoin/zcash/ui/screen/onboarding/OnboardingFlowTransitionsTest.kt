@@ -80,6 +80,8 @@ class OnboardingFlowTransitionsTest {
     fun `restore committed and provisioning steps consume back`() {
         assertEquals(BackAction.Consume, RestoreStep.RESTORING.backAction(hasReadyWallet = true))
         assertEquals(BackAction.Consume, RestoreStep.SEED_CONFIRM.backAction(hasReadyWallet = true))
+        // The wallet is restored before the username is asked, so there is nothing to go back to.
+        assertEquals(BackAction.Consume, RestoreStep.USERNAME.backAction(hasReadyWallet = true))
         assertEquals(BackAction.Consume, RestoreStep.DERIVING.backAction(hasReadyWallet = true))
         assertEquals(BackAction.Consume, RestoreStep.SECURE_CHOICE.backAction(hasReadyWallet = true))
         assertEquals(BackAction.Consume, RestoreStep.KEEP_OPEN.backAction(hasReadyWallet = true))
@@ -88,7 +90,6 @@ class OnboardingFlowTransitionsTest {
     @Test
     fun `restore editable steps move to stable predecessors`() {
         assertEquals(BackAction.Go(RestoreStep.SEED_ENTRY), RestoreStep.BIRTHDAY.backAction(hasReadyWallet = false))
-        assertEquals(BackAction.Go(RestoreStep.SEED_CONFIRM), RestoreStep.USERNAME.backAction(hasReadyWallet = true))
         assertEquals(BackAction.Go(RestoreStep.SECURE_CHOICE), RestoreStep.BIO_SCAN.backAction(hasReadyWallet = true))
         assertEquals(BackAction.Go(RestoreStep.SECURE_CHOICE), RestoreStep.PIN_SETUP.backAction(hasReadyWallet = true))
     }
@@ -145,8 +146,9 @@ class OnboardingFlowTransitionsTest {
                 hasRestoreError = false,
             )
         )
+        // A seed-confirm step saved by an older build moves on to the username.
         assertEquals(
-            null,
+            RestoreStep.USERNAME,
             RestoreStep.SEED_CONFIRM.recoveryTarget(
                 secretState = SecretState.READY,
                 hasValidSeed = false,
@@ -182,9 +184,9 @@ class OnboardingFlowTransitionsTest {
     }
 
     @Test
-    fun `ready wallet at restore entry resumes seed confirmation`() {
+    fun `ready wallet at restore entry resumes at the username`() {
         assertEquals(
-            RestoreStep.SEED_CONFIRM,
+            RestoreStep.USERNAME,
             RestoreStep.SEED_ENTRY.recoveryTarget(
                 secretState = SecretState.READY,
                 hasValidSeed = false,
