@@ -99,4 +99,7 @@
     <string name="increase_reputation_info_time">It takes a few minutes, mostly the Reclaim install and sign-in.</string>
     <string name="increase_reputation_info_age">Older accounts only. X, GitHub and Instagram need an account about a year old. A newer one comes back as “criteria not met” — the provider\'s rule, not ours.</string>
     <string name="increase_reputation_info_once">Once per account. The same X account can\'t be verified onto a second wallet — including a wallet you recover from a new seed.</string>
+    <string name="reputation_limit_up_to">Up to $%1$s</string>
+    <string name="reputation_limit_locked_unlock_caption">Verify one account you already own, which takes a few minutes, and you can buy up to $%1$s in one purchase. Nothing is shared with Zapp, and cashing out is never limited.</string>
+    <string name="reputation_swap_instead">Have crypto already? Swap it to ZEC</string>
 </resources>

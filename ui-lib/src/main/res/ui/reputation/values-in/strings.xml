@@ -99,4 +99,7 @@
     <string name="increase_reputation_info_time">Prosesnya beberapa menit, sebagian besar untuk memasang dan masuk ke Reclaim.</string>
     <string name="increase_reputation_info_age">Hanya akun lama. X, GitHub, dan Instagram memerlukan akun berumur sekitar satu tahun. Akun yang lebih baru akan ditolak dengan “kriteria tidak terpenuhi” — itu aturan penyedia, bukan aturan kami.</string>
     <string name="increase_reputation_info_once">Sekali per akun. Akun X yang sama tidak bisa diverifikasi ke dompet kedua — termasuk dompet yang Anda pulihkan dari seed baru.</string>
+    <string name="reputation_limit_up_to">Hingga $%1$s</string>
+    <string name="reputation_limit_locked_unlock_caption">Verifikasi satu akun yang sudah Anda miliki, hanya beberapa menit, dan Anda bisa membeli hingga $%1$s per pembelian. Tidak ada yang dibagikan ke Zapp, dan pencairan tidak pernah dibatasi.</string>
+    <string name="reputation_swap_instead">Sudah punya kripto? Tukar ke ZEC</string>
 </resources>

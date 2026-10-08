@@ -99,4 +99,7 @@
     <string name="increase_reputation_info_time">Tarda unos minutos, sobre todo por instalar Reclaim e iniciar sesión.</string>
     <string name="increase_reputation_info_age">Solo cuentas antiguas. X, GitHub e Instagram necesitan una cuenta de aproximadamente un año. Una más nueva devuelve “no cumple los criterios”: es la regla del proveedor, no nuestra.</string>
     <string name="increase_reputation_info_once">Una vez por cuenta. La misma cuenta de X no se puede verificar en una segunda billetera, ni siquiera en una que recuperes con una frase semilla nueva.</string>
+    <string name="reputation_limit_up_to">Hasta $%1$s</string>
+    <string name="reputation_limit_locked_unlock_caption">Verifica una cuenta que ya tengas, en unos minutos, y podrás comprar hasta $%1$s por compra. No se comparte nada con Zapp y retirar nunca está limitado.</string>
+    <string name="reputation_swap_instead">¿Ya tienes cripto? Cámbiala a ZEC</string>
 </resources>
