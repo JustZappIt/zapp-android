@@ -1200,7 +1200,7 @@ class ChatRoomVM(
         splitSheetParams.value = null
     }
 
-    private fun onCreateSplit(memo: String, shares: List<SplitShareInput>) {
+    private fun onCreateSplit(memo: String, shares: List<SplitShareInput>, typedInFiat: Boolean) {
         splitSheetParams.value = null
         val hasInvalidAmount =
             shares.any { share ->
@@ -1209,7 +1209,7 @@ class ChatRoomVM(
         if (shares.isEmpty() || hasInvalidAmount) {
             return
         }
-        viewModelScope.launch { sendSplitRequests(memo, shares) }
+        viewModelScope.launch { sendSplitRequests(memo, shares, typedInFiat) }
     }
 
     private data class SplitSheetParams(
@@ -1524,14 +1524,18 @@ class ChatRoomVM(
         }
     }
 
-    private suspend fun sendSplitRequests(memo: String, shares: List<SplitShareInput>) {
+    private suspend fun sendSplitRequests(memo: String, shares: List<SplitShareInput>, typedInFiat: Boolean) {
         val requesterAddress = getZashiAccount().unified.address.address
         val splitCount =
             if (conversation.value?.type == ConversationType.GROUP) shares.size + 1 else 1
+        // A fiat amount travels only when the requester typed one. It fixes the card's headline
+        // at that price, so attaching it to an amount typed in ZEC would show the payer a dollar
+        // figure nobody asked for.
         val rate =
             (exchangeRateRepository.state.value as? ExchangeRateState.Data)
                 ?.currencyConversion
                 ?.toZecFiatRate()
+                ?.takeIf { typedInFiat }
         shares.forEach { share ->
             val fiat =
                 rate?.let {

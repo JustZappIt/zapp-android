@@ -137,7 +137,7 @@ data class ChatRoomSplitSheetState(
     val isGroup: Boolean,
     val participants: List<SplitParticipant>,
     val fiatRate: ZecFiatRate?,
-    val onSend: (memo: String, shares: List<SplitShareInput>) -> Unit,
+    val onSend: (memo: String, shares: List<SplitShareInput>, typedInFiat: Boolean) -> Unit,
     val onDismiss: () -> Unit,
 )
 

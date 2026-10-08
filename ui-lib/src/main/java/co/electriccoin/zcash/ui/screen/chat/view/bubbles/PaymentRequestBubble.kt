@@ -105,7 +105,7 @@ internal fun PaymentRequestBubble(
                 text = data.amountLabel,
                 style = ZappTheme.typography.screenTitle.copy(color = c.text),
             )
-            data.zecEquivalentLabel?.let {
+            data.equivalentLabel?.let {
                 Spacer(modifier = Modifier.height(3.dp))
                 BasicText(text = it, style = ZappTheme.typography.body.copy(color = c.textMuted))
             }
@@ -193,9 +193,9 @@ private fun paymentRequestHeadline(isFromMe: Boolean, isMineToPay: Boolean, debt
         }
     }
 
-private data class ParsedPaymentRequest(
+internal data class ParsedPaymentRequest(
     val amountLabel: String,
-    val zecEquivalentLabel: String?,
+    val equivalentLabel: String?,
     val isAmountValid: Boolean,
     val memo: String?,
     val debtorId: String?,
@@ -203,7 +203,7 @@ private data class ParsedPaymentRequest(
     val splitCount: Int,
 )
 
-private fun parsePaymentRequest(
+internal fun parsePaymentRequest(
     content: String,
     liveRate: ZecFiatRate?,
 ): ParsedPaymentRequest {
@@ -212,13 +212,15 @@ private fun parsePaymentRequest(
     val token = paymentRequestToken(parsed)
     val zecLabel = "${formatZecAmount(amount)} $token"
     val (embeddedFiat, liveFiat) = fiatLabels(parsed, amount, liveRate)
+    // An embedded fiat amount means the requester typed a price, so it leads. Otherwise ZEC, the
+    // amount actually asked for, leads and the live conversion sits under it, so the headline
+    // doesn't drift with the rate.
     return ParsedPaymentRequest(
-        amountLabel = embeddedFiat ?: liveFiat ?: zecLabel,
-        zecEquivalentLabel =
+        amountLabel = embeddedFiat ?: zecLabel,
+        equivalentLabel =
             when {
                 embeddedFiat != null -> "≈ $zecLabel"
-                liveFiat != null -> zecLabel
-                else -> null
+                else -> liveFiat
             },
         isAmountValid = amount > 0.0 && amount <= MAX_PAYMENT_REQUEST_ZEC,
         memo = parsed?.optString("memo", "")?.takeIf { it.isNotEmpty() },

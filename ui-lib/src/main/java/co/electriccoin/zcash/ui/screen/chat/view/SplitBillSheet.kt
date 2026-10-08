@@ -146,7 +146,7 @@ internal fun SplitBillSheet(state: ChatRoomSplitSheetState) {
                 text = stringResource(R.string.chat_split_send_button),
                 enabled = canSend,
                 modifier = Modifier.fillMaxWidth(),
-                onClick = { state.onSend(memoText.text.trim(), shares) },
+                onClick = { state.onSend(memoText.text.trim(), shares, isFiat) },
             )
         }
     }
