@@ -183,6 +183,7 @@ class PrivateUsdActivityMapperTest {
 
     private fun send(at: Long) =
         PrivateUsdSendRecord(
+            id = "sent-1",
             txHash = TxHash.fromHex("0x" + "ab".repeat(32)),
             token = TOKEN,
             amount = BigInteger.valueOf(1_000_000),

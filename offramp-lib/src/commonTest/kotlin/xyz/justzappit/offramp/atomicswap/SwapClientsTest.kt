@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.io.IOException
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
+import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -196,6 +197,46 @@ class SwapClientsTest {
         }
 
     @Test
+    fun aRailgunSendGoesOutAsProvedAndEachAnswerSaysWhetherToDropItOrPostItAgain() =
+        runTest {
+            var status = HttpStatusCode.OK
+            var answer = """{"transactions":["$WORD"]}"""
+            val services = Services { respond(answer, status) }
+            val request = RailgunTransactRequest(ChainId.ETHEREUM_SEPOLIA, Address.parse(ADDRESS), "0xd8ae136a", "0")
+            val relayer = services.sends
+
+            assertEquals(RailgunBroadcast.Sent(TxHash.fromHex(WORD)), relayer.transact(request))
+            assertEquals("/relayer/v1/railgun/transact", services.paths.last())
+            val body = """{"chainId":11155111,"to":"$ADDRESS","data":"0xd8ae136a","value":"0"}"""
+            assertEquals(body, services.bodies.last())
+
+            status = HttpStatusCode.Conflict
+            answer = """{"code":"alreadySpent","error":"a note it spends is spent"}"""
+            assertEquals(RailgunBroadcast.Spent(emptyList()), relayer.transact(request))
+            answer = """{"code":"alreadySpent","error":"a note it spends is spent","transactions":["$WORD"]}"""
+            assertEquals(RailgunBroadcast.Spent(listOf(TxHash.fromHex(WORD))), relayer.transact(request))
+            answer = """{"code":"unavailable","error":"busy"}"""
+            assertIs<RailgunBroadcast.Retry>(relayer.transact(request))
+            answer = "not json"
+            for (refusal in listOf(400, 404, 413, 415, 422)) {
+                status = HttpStatusCode.fromValue(refusal)
+                assertIs<RailgunBroadcast.Refused>(relayer.transact(request))
+            }
+            for (unknown in listOf(500, 503)) {
+                status = HttpStatusCode.fromValue(unknown)
+                assertIs<RailgunBroadcast.Retry>(relayer.transact(request))
+            }
+            status = HttpStatusCode.OK
+            answer = """{"transactions":[]}"""
+            assertIs<RailgunBroadcast.Retry>(relayer.transact(request))
+            services.close()
+
+            val lost = Services { throw IOException("response lost") }
+            assertIs<RailgunBroadcast.Retry>(lost.sends.transact(request))
+            lost.close()
+        }
+
+    @Test
     fun timedOutFundingIsNotRetriedByTheHttpClient() =
         runTest {
             val services = Services { throw IOException("response lost") }
@@ -280,6 +321,7 @@ class SwapClientsTest {
             )
         val maker = MakerClient(http, maker)
         val relayer = RelayerClient(http, relayer)
+        val sends = RailgunSendsClient(http, relayer)
 
         fun close() = http.close()
     }

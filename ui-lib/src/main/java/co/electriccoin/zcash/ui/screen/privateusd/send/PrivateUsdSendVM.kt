@@ -16,8 +16,10 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendOutcome
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendRequest
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendsUnavailableException
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendStatus
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
 import co.electriccoin.zcash.ui.common.privateusd.basisPoints
 import co.electriccoin.zcash.ui.common.privateusd.exactTokenAmount
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
@@ -66,7 +68,16 @@ class PrivateUsdSendVM(
     private val sender = checkNotNull(senders.current) { "no sending in this build" }
     private val explorerTxUrl = atomicSwapRepository.deployment?.explorerTxUrl
     private val railscanTxUrl = atomicSwapRepository.deployment?.railscanTxUrl
-    private val form = MutableStateFlow(PrivateUsdSendForm(mode = args.mode))
+    private val form =
+        MutableStateFlow(
+            PrivateUsdSendForm(
+                mode = args.mode,
+                networkFee =
+                    railgunWalletRepository.state.value.network
+                        ?.let { PrivateUsdTokens.find(it, sender.networkFeeToken) }
+                        ?.let { PrivateUsdNetworkFee(it, sender.maxNetworkFee) },
+            )
+        )
     private var reviewJob: Job? = null
 
     internal val state: StateFlow<PrivateUsdSendState> =
@@ -132,7 +143,10 @@ class PrivateUsdSendVM(
                     updateForm {
                         it.copy(
                             token = max.token,
-                            amount = NumberTextFieldInnerState.fromAmount(max.available.toDecimal(max.token.decimals)),
+                            amount =
+                                NumberTextFieldInnerState.fromAmount(
+                                    (it.networkFee?.sendable(max) ?: max.available).toDecimal(max.token.decimals)
+                                ),
                         )
                     }
                 }
@@ -222,7 +236,15 @@ class PrivateUsdSendVM(
                                 it.copy(phase = PrivateUsdSendPhase.REVIEW, cost = cost, reviewedRequest = request)
                             }
                         },
-                        onFailure = { form.update { it.notSent() } },
+                        onFailure = { e ->
+                            val error =
+                                if (e is PrivateUsdSendsUnavailableException) {
+                                    stringRes(R.string.private_usd_send_unavailable)
+                                } else {
+                                    stringRes(R.string.private_usd_send_not_sent)
+                                }
+                            form.update { it.notSent(error) }
+                        },
                     )
                 } finally {
                     form.update { it.copy(isBusy = false) }

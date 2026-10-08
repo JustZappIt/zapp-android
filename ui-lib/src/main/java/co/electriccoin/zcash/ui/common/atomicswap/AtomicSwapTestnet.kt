@@ -3,6 +3,7 @@
 
 package co.electriccoin.zcash.ui.common.atomicswap
 
+import co.electriccoin.zcash.ui.common.privateusd.RailgunSendsPin
 import co.electriccoin.zcash.ui.common.privateusd.Sepolia
 import io.ktor.http.Url
 import xyz.justzappit.evm.types.Address
@@ -11,6 +12,7 @@ import xyz.justzappit.offramp.atomicswap.SwapTokenIssuer
 import xyz.justzappit.offramp.atomicswap.SwapZcashNetwork
 import xyz.justzappit.offramp.atomicswap.ZcashDepositTerms
 import xyz.justzappit.offramp.p2p.Usdc6
+import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunNetwork
 import kotlin.time.Duration.Companion.minutes
 
@@ -26,6 +28,12 @@ object AtomicSwapTestnet {
     // In the token's base units; the hosted services start above the most a relayer may keep.
     private const val MIN_AMOUNT = 110_000L
     private const val MAX_AMOUNT = 20_000_000L
+
+    // The relayer's own 0zk address, which a private send's fee note pays, and the most it may charge.
+    private const val RELAYER_RAILGUN_ADDRESS =
+        "0zk1qy25r4x4qjhtlfe0k9z22jy9psfm83j4k4fgvqs3pmv4he4ytefm8rv7j6fe3z53lltumh8amd66g2axaej92dmjk6mvnuveqtmm" +
+            "wccdm593pft827p4xpwljug"
+    private const val MAX_SEND_FEE = 250_000L
 
     // The hosted issuer's token key and the maker's key for handing tokens back, base64url SPKI.
     private const val ISSUER_KEY =
@@ -74,5 +82,13 @@ object AtomicSwapTestnet {
             minAmount = Usdc6.ofMicros(MIN_AMOUNT),
             maxAmount = Usdc6.ofMicros(MAX_AMOUNT),
             screeningTime = 1.minutes,
+            railgunSends =
+                RailgunSendsPin(
+                    chainId = Sepolia.CHAIN_ID,
+                    railgunProxy = Sepolia.RAILGUN_PROXY,
+                    railgunAddress = RailgunAddress(RELAYER_RAILGUN_ADDRESS),
+                    feeToken = Sepolia.TEST_USD,
+                    maxFee = Usdc6.ofMicros(MAX_SEND_FEE),
+                ),
         )
 }

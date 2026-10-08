@@ -19,6 +19,7 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendStatus
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
+import co.electriccoin.zcash.ui.common.privateusd.Sepolia
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletState
 import co.electriccoin.zcash.ui.common.security.PinVerifyState
@@ -77,7 +78,9 @@ class PrivateUsdSendVMTest {
         every { balanceRepository.observe() } returns balance
         val senders = mockk<PrivateUsdSenders>()
         every { senders.current } returns sender
-        coEvery { sender.cost(any()) } returns PrivateUsdSendCost(BigInteger.ZERO, 0)
+        coEvery { sender.cost(any()) } returns PrivateUsdSendCost(BigInteger.ZERO, 0, BigInteger.ZERO, Sepolia.TEST_USD)
+        every { sender.networkFeeToken } returns Sepolia.TEST_USD
+        every { sender.maxNetworkFee } returns BigInteger.ZERO
         coEvery { sender.send(any()) } returns PrivateUsdSendOutcome.Sent(TX_HASH)
         val wallet = mockk<RailgunWalletRepository>()
         every { wallet.state } returns
@@ -340,7 +343,7 @@ class PrivateUsdSendVMTest {
                 .onClick()
 
             assertFalse(vm.state.value.recipient.isEnabled)
-            priced.complete(PrivateUsdSendCost(BigInteger.ZERO, 0))
+            priced.complete(PrivateUsdSendCost(BigInteger.ZERO, 0, BigInteger.ZERO, Sepolia.TEST_USD))
             assertEquals(PrivateUsdSendPhase.REVIEW, vm.state.value.phase)
         }
 

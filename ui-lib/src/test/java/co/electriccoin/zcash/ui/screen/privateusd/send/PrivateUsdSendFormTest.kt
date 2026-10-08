@@ -99,7 +99,8 @@ class PrivateUsdSendFormTest {
     fun `the review shows every digit, so the fee and what's received add up to what's sent`() {
         val form = form(PrivateUsdSendMode.WITHDRAW, LOWERCASE_0X, BigDecimal.ONE)
         val request = checkNotNull(form.request(asset))
-        val review = checkNotNull(form.copy(cost = PrivateUsdSendCost(BigInteger.valueOf(2_500), 25)).review(request))
+        val cost = PrivateUsdSendCost(BigInteger.valueOf(2_500), 25, BigInteger.ZERO, asset.token.address)
+        val review = checkNotNull(form.copy(cost = cost).review(request))
 
         val sent = review.amount.number()
         val fee = checkNotNull(review.railgunFee).amount.number()

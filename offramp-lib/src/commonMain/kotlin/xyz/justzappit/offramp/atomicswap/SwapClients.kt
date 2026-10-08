@@ -23,6 +23,7 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import xyz.justzappit.evm.types.Address
+import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.time.Duration.Companion.seconds
 
@@ -356,7 +357,8 @@ internal class SwapService(
             }
         val reason = error?.error ?: answer.body.take(ERROR_EXCERPT)
         val code = error?.code?.let(SwapErrorCode::named)
-        return AtomicSwapHttpException.Refused(service, answer.status.value, code, reason)
+        val transactions = error?.transactions.orEmpty().mapNotNull { runCatching { TxHash.fromHex(it) }.getOrNull() }
+        return AtomicSwapHttpException.Refused(service, answer.status.value, code, reason, transactions)
     }
 
     private class Answer(
@@ -383,4 +385,5 @@ internal class SwapService(
 internal class ServiceError(
     val code: String? = null,
     val error: String? = null,
+    val transactions: List<String>? = null,
 )

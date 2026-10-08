@@ -11,7 +11,9 @@ import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunDestination
-import xyz.justzappit.railgun.RailgunSignedTransaction
+import xyz.justzappit.railgun.RailgunNullifiers
+import xyz.justzappit.railgun.RailgunRelayRequest
+import xyz.justzappit.railgun.RailgunRelayedProof
 import java.math.BigInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -32,6 +34,7 @@ class PrivateUsdSendLogTest {
 
             assertEquals(
                 PrivateUsdSendRecord(
+                    id = "sent-1",
                     txHash = TxHash.fromHex("0x" + "ab".repeat(32)),
                     token = TOKEN,
                     amount = BigInteger.valueOf(1_000_000),
@@ -46,32 +49,35 @@ class PrivateUsdSendLogTest {
         }
 
     @Test
-    fun `a send goes from proving, to signed and kept before it goes out, to confirmed`() =
+    fun `a send goes from proving, to kept before it goes out, to confirmed`() =
         runTest {
             log.begin(PENDING)
             assertEquals(listOf(PENDING), log.observe.first().pending)
 
-            log.sign(PENDING, SIGNED, at = 20)
-            val signed = log.observe.first()
-            assertEquals(emptyList(), signed.pending)
-            assertEquals(PENDING.signed(SIGNED, 20), signed.sends.single())
+            log.prove(PENDING, PROOF, at = 20)
+            val kept = log.observe.first()
+            assertEquals(emptyList(), kept.pending)
+            assertEquals(PENDING.proved(PROOF, 20), kept.sends.single())
             assertEquals(
-                SIGNED.raw,
-                signed.sends
+                PROOF.request,
+                kept.sends
                     .single()
-                    .signed
-                    ?.raw
+                    .relay
+                    ?.request
             )
-            assertEquals(signed.sends, log.unconfirmed())
+            assertEquals(kept.sends, log.unconfirmed())
 
-            log.confirm(TX_HASH)
+            log.update(PENDING.id) { it.submitted(TX_HASH, at = 30) }
+            assertEquals(TX_HASH, log.unconfirmed().single().txHash)
+
+            log.update(PENDING.id) { it.landed(TX_HASH) }
             val confirmed =
                 log.observe
                     .first()
                     .sends
                     .single()
             assertTrue(confirmed.confirmed)
-            assertNull(confirmed.signed)
+            assertNull(confirmed.relay)
         }
 
     @Test
@@ -79,12 +85,12 @@ class PrivateUsdSendLogTest {
         runTest {
             preferences.putString(KEY, """{"sends":[$CONFIRMED_SEND]}""")
             log.begin(PENDING)
-            log.sign(PENDING, SIGNED, at = 20)
+            log.prove(PENDING, PROOF, at = 20)
 
-            log.remove(PENDING, TX_HASH)
+            log.remove(PENDING.id)
 
             val history = log.observe.first()
-            assertEquals(listOf(TxHash.fromHex("0x" + "ab".repeat(32))), history.sends.map { it.txHash })
+            assertEquals(listOf("sent-1"), history.sends.map { it.id })
             assertEquals(emptyList(), history.pending)
         }
 
@@ -110,9 +116,10 @@ class PrivateUsdSendLogTest {
         }
 
     private companion object {
-        val KEY = PreferenceKey("private_usd_sends_v1")
+        val KEY = PreferenceKey("private_usd_sends_v2")
         val TX_HASH = TxHash.fromHex("0x" + "cd".repeat(32))
         val TOKEN = Address.parse("0x5764D0044bef5AA839E0dDafE2073421101B9Ed8")
+        val PROXY = Address.parse("0xeCFCf3b4eC647c4Ca6D49108b311b7a7C9543fea")
         val PRIVATE =
             RailgunDestination.Private(
                 RailgunAddress(
@@ -121,7 +128,7 @@ class PrivateUsdSendLogTest {
                 )
             )
         val CONFIRMED_SEND =
-            """{"txHash":"0x${"ab".repeat(32)}","token":"0x5764d0044bef5aa839e0ddafe2073421101b9ed8",""" +
+            """{"id":"sent-1","txHash":"0x${"ab".repeat(32)}","token":"0x5764d0044bef5aa839e0ddafe2073421101b9ed8",""" +
                 """"amount":"1000000","to":"0x1c7f9a756b08753cf8da94d394659134bb8c5539","sentAt":1700000000}"""
         val PENDING =
             PrivateUsdPendingSend(
@@ -131,12 +138,10 @@ class PrivateUsdSendLogTest {
                 to = PRIVATE,
                 startedAt = 10,
             )
-        val SIGNED =
-            RailgunSignedTransaction(
-                raw = "0x02",
-                txHash = TX_HASH,
-                from = Address.parse("0x09ed1f966745be18c711c346242c0974dad7c3e5"),
-                nonce = 7,
+        val PROOF =
+            RailgunRelayedProof(
+                RailgunRelayRequest(11_155_111, PROXY, "0x02", BigInteger.ZERO),
+                listOf(RailgunNullifiers(0, listOf("0x" + "ab".repeat(32)))),
             )
     }
 }

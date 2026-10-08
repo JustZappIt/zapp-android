@@ -17,10 +17,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -34,11 +32,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.ButtonState
+import co.electriccoin.zcash.ui.design.component.zapp.ZappAddressCopyRow
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappCompactButton
-import co.electriccoin.zcash.ui.design.component.zapp.ZappCopyableAddress
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRefreshButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRowDivider
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
@@ -48,8 +46,7 @@ import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
-import kotlinx.coroutines.delay
-import kotlin.time.Duration.Companion.seconds
+import co.electriccoin.zcash.ui.design.util.stringResByAddress
 
 @Composable
 internal fun PrivateUsdView(state: PrivateUsdState) {
@@ -307,13 +304,6 @@ private fun Sending(
     receiveAddress: String?,
     onCopyAddress: () -> Unit,
 ) {
-    var isCopied by remember { mutableStateOf(false) }
-    LaunchedEffect(isCopied) {
-        if (isCopied) {
-            delay(2.seconds)
-            isCopied = false
-        }
-    }
     Column(verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.lg)) {
         Row(horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.lg)) {
             ZappButton(
@@ -334,16 +324,11 @@ private fun Sending(
             )
         }
         receiveAddress?.let {
-            ZappCopyableAddress(
-                label = stringResource(R.string.private_usd_receive_address),
-                address = it,
+            ZappAddressCopyRow(
+                address = stringResByAddress(it),
                 copyContentDescription = stringResource(R.string.private_usd_copy_address),
-                onCopy = {
-                    onCopyAddress()
-                    isCopied = true
-                },
-                isCopied = isCopied,
-                maxLines = ADDRESS_LINES,
+                onCopy = onCopyAddress,
+                label = stringResource(R.string.private_usd_receive_address),
             )
         }
     }
@@ -403,6 +388,3 @@ private fun PrivateUsdPreview() =
                 ),
         )
     }
-
-// A 0zk address runs to about 127 characters: five lines hold it on a narrow phone.
-private const val ADDRESS_LINES = 5

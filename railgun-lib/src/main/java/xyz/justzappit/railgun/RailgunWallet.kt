@@ -14,10 +14,6 @@ import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import xyz.justzappit.evm.abi.keccak256
-import xyz.justzappit.evm.types.Address
-import xyz.justzappit.evm.types.TxHash
-import xyz.justzappit.evm.util.hexToBytes
 import xyz.justzappit.evm.util.toHex
 
 /** Railgun's wallet SDK in a hidden WebView, one engine and wallet per page; `debug` makes the page inspectable. */
@@ -40,7 +36,6 @@ class RailgunWallet(
         network: RailgunNetwork,
         encryptionKey: ByteArray,
         mnemonic: CharArray,
-        gasAccountKey: ByteArray?,
     ): RailgunSession {
         require(encryptionKey.size == ENCRYPTION_KEY_BYTES) { "the key must be $ENCRYPTION_KEY_BYTES bytes" }
         opened = null
@@ -61,16 +56,7 @@ class RailgunWallet(
                     OpenWalletParams.serializer(),
                     OpenWalletResult.serializer(),
                 )
-            val gasAccount =
-                gasAccountKey?.let {
-                    page.request(
-                        RailgunMethod.SET_GAS_ACCOUNT,
-                        SetGasAccountParams("0x${it.toHex()}"),
-                        SetGasAccountParams.serializer(),
-                        RailgunGasAccount.serializer(),
-                    )
-                }
-            session = RailgunSession(page, network, wallet.address, started.fees, gasAccount?.address)
+            session = RailgunSession(page, network, wallet.address, started.fees)
             opened = session
             return session
         } finally {
@@ -100,8 +86,6 @@ class RailgunSession internal constructor(
     val network: RailgunNetwork,
     val address: RailgunAddress,
     val fees: RailgunFees,
-    /** The account that pays gas and sends in place of a broadcaster, on Sepolia. */
-    val gasAccountAddress: Address?,
 ) {
     val isOpen: Boolean get() = page.isOpen
 
@@ -116,25 +100,41 @@ class RailgunSession internal constructor(
             }.toMap()
             .let(::RailgunBalances)
 
-    /** Proves [transfer] and has the gas account sign it; nothing is sent. */
-    suspend fun sign(transfer: RailgunTransfer): RailgunSignedTransaction =
-        when (val to = transfer.to) {
-            is RailgunDestination.Private -> {
-                signed(
-                    RailgunMethod.TRANSFER,
-                    TransferParams(to.address, transfer.token, transfer.amount),
-                    TransferParams.serializer(),
-                )
-            }
+    /** Proves [transfer] for [broadcaster] to send, with its fee note first; nothing is sent. */
+    suspend fun prove(
+        transfer: RailgunTransfer,
+        broadcaster: RailgunBroadcaster,
+    ): RailgunRelayedProof {
+        val fee = BroadcasterParams(broadcaster)
+        val proved =
+            when (val to = transfer.to) {
+                is RailgunDestination.Private -> {
+                    page.request(
+                        RailgunMethod.TRANSFER,
+                        TransferParams(to.address, transfer.token, transfer.amount, fee),
+                        TransferParams.serializer(),
+                        RelayedResult.serializer(),
+                    )
+                }
 
-            is RailgunDestination.Public -> {
-                signed(
-                    RailgunMethod.UNSHIELD,
-                    UnshieldParams(to.address, transfer.token, transfer.amount),
-                    UnshieldParams.serializer(),
-                )
+                is RailgunDestination.Public -> {
+                    page.request(
+                        RailgunMethod.UNSHIELD,
+                        UnshieldParams(to.address, transfer.token, transfer.amount, fee),
+                        UnshieldParams.serializer(),
+                        RelayedResult.serializer(),
+                    )
+                }
             }
+        val isForBroadcaster =
+            proved.chainId == broadcaster.chainId && proved.to == broadcaster.railgunProxy && proved.value.signum() == 0
+        val spendsNotes = proved.spends.isNotEmpty() && proved.spends.all { it.nullifiers.isNotEmpty() }
+        if (!isForBroadcaster || !spendsNotes) {
+            throw RailgunException.Protocol("the page's transaction isn't a transact call for the broadcaster")
         }
+        val request = RailgunRelayRequest(proved.chainId, proved.to, proved.data, proved.value)
+        return RailgunRelayedProof(request, proved.spends)
+    }
 
     suspend fun reverseCost(request: RailgunReverseCostRequest): RailgunReverseCost =
         page.request(
@@ -155,33 +155,9 @@ class RailgunSession internal constructor(
                 require(it.to == request.relayAdapt && it.value.signum() == 0) { "unexpected funding destination" }
             }
 
-    internal suspend fun <P> signed(
-        method: RailgunMethod,
-        params: P,
-        serializer: SerializationStrategy<P>,
-    ): RailgunSignedTransaction {
-        val signed = page.request(method, params, serializer, SignedResult.serializer())
-        requireHashOf(signed.raw, signed.txHash)
-        return RailgunSignedTransaction(signed.raw, signed.txHash, signed.from, signed.nonce)
-    }
-
     internal companion object {
         val EMPTY = JsonObject(emptyMap())
         val BALANCES = MapSerializer(String.serializer(), ListSerializer(WireTokenAmount.serializer()))
-
-        // The hash the app logs must be the hash of what goes out.
-        fun requireHashOf(
-            raw: String,
-            txHash: TxHash
-        ) {
-            val matches =
-                try {
-                    keccak256(raw.hexToBytes()).contentEquals(txHash.bytes)
-                } catch (ignored: IllegalArgumentException) {
-                    false
-                }
-            if (!matches) throw RailgunException.Protocol("the page's transaction and its hash disagree")
-        }
     }
 }
 

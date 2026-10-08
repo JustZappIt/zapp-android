@@ -7,11 +7,9 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import xyz.justzappit.evm.abi.keccak256
 import xyz.justzappit.evm.types.Address
-import xyz.justzappit.evm.types.TxHash
-import xyz.justzappit.evm.util.toHex
 import java.math.BigInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -20,7 +18,7 @@ import kotlin.test.assertFailsWith
 class RailgunSessionTest {
     private val page = FakePage()
     private val session =
-        RailgunSession(page, RailgunNetwork.SEPOLIA, ZERO_K_ADDRESS, RailgunFees(25), gasAccountAddress = null)
+        RailgunSession(page, RailgunNetwork.SEPOLIA, ZERO_K_ADDRESS, RailgunFees(25))
 
     @Test
     fun balancesKeepKnownBucketsOnly() =
@@ -43,40 +41,43 @@ class RailgunSessionTest {
         }
 
     @Test
-    fun theDestinationPicksTheCall() =
+    fun theDestinationPicksTheCallAndTheBroadcasterGetsItsFee() =
         runTest {
-            page.reply = signed(RAW)
+            page.reply = relayed()
 
-            val private = session.sign(RailgunTransfer(RailgunDestination.Private(ZERO_K_ADDRESS), TOKEN_ADDRESS, ONE))
+            val private = session.prove(transfer(RailgunDestination.Private(ZERO_K_ADDRESS)), BROADCASTER)
             assertEquals(RailgunMethod.TRANSFER, page.method)
             assertEquals(ZERO_K, page.params("to"))
-            session.sign(RailgunTransfer(RailgunDestination.Public(TOKEN_ADDRESS), TOKEN_ADDRESS, ONE))
+            assertEquals("250000", page.broadcaster("fee"))
+            assertEquals(ZERO_K, page.broadcaster("railgunAddress"))
+            session.prove(transfer(RailgunDestination.Public(TOKEN_ADDRESS)), BROADCASTER)
             assertEquals(RailgunMethod.UNSHIELD, page.method)
             assertEquals(TOKEN_ADDRESS.checksumHex, page.params("to"))
 
-            assertEquals(TxHash(keccak256(RAW)), private.txHash)
-            assertEquals(GAS_ACCOUNT, private.from)
-            assertEquals(7, private.nonce)
+            assertEquals(RailgunRelayRequest(CHAIN_ID, PROXY_ADDRESS, DATA, BigInteger.ZERO), private.request)
+            assertEquals(listOf(RailgunNullifiers(0, listOf(NULLIFIER))), private.spends)
         }
 
     @Test
-    fun aHashThatIsNotTheTransactionsIsRefused() =
+    fun aTransactionThatIsNotATransactCallForTheBroadcasterIsRefused() =
         runTest {
-            page.reply =
-                """{"raw":"0x${RAW.toHex()}","txHash":"0x${"11".repeat(32)}","from":"$GAS","nonce":7,"proofMs":1200}"""
-
-            assertFailsWith<RailgunException.Protocol> {
-                session.sign(RailgunTransfer(RailgunDestination.Private(ZERO_K_ADDRESS), TOKEN_ADDRESS, ONE))
+            val replies =
+                listOf(relayed(to = TOKEN), relayed(chainId = 1), relayed(value = "1"), relayed(spends = "[]"))
+            for (reply in replies) {
+                page.reply = reply
+                assertFailsWith<RailgunException.Protocol> {
+                    session.prove(transfer(RailgunDestination.Private(ZERO_K_ADDRESS)), BROADCASTER)
+                }
             }
         }
 
     @Test
     fun aResultItCannotReadIsAProtocolFailure() =
         runTest {
-            page.reply = """{"raw":"0x${RAW.toHex()}","txHash":"0x${keccak256(RAW).toHex()}"}"""
+            page.reply = """{"chainId":$CHAIN_ID,"to":"$PROXY"}"""
 
             assertFailsWith<RailgunException.Protocol> {
-                session.sign(RailgunTransfer(RailgunDestination.Private(ZERO_K_ADDRESS), TOKEN_ADDRESS, ONE))
+                session.prove(transfer(RailgunDestination.Private(ZERO_K_ADDRESS)), BROADCASTER)
             }
         }
 
@@ -96,8 +97,14 @@ class RailgunSessionTest {
         assertEquals(BigInteger.valueOf(2_499), RailgunFees(25).unshieldFee(BigInteger.valueOf(999_999)))
     }
 
-    private fun signed(raw: ByteArray) =
-        """{"raw":"0x${raw.toHex()}","txHash":"0x${keccak256(raw).toHex()}","from":"$GAS","nonce":7,"proofMs":1200}"""
+    private fun transfer(to: RailgunDestination) = RailgunTransfer(to, TOKEN_ADDRESS, ONE)
+
+    private fun relayed(
+        to: String = PROXY,
+        chainId: Long = CHAIN_ID,
+        value: String = "0",
+        spends: String = """[{"tree":0,"nullifiers":["$NULLIFIER"]}]""",
+    ) = """{"chainId":$chainId,"to":"$to","data":"$DATA","value":"$value","spends":$spends,"proofMs":1200}"""
 
     private class FakePage : RailgunPage {
         var reply = "null"
@@ -118,6 +125,14 @@ class RailgunSessionTest {
         override suspend fun close() = Unit
 
         fun params(name: String): String? = (sent as? JsonObject)?.get(name)?.jsonPrimitive?.content
+
+        fun broadcaster(name: String): String? =
+            (sent as? JsonObject)
+                ?.get("broadcaster")
+                ?.jsonObject
+                ?.get(name)
+                ?.jsonPrimitive
+                ?.content
     }
 
     private companion object {
@@ -128,8 +143,19 @@ class RailgunSessionTest {
         const val TOKEN = "0x5764d0044bef5aa839e0ddafe2073421101b9ed8"
         val TOKEN_ADDRESS = Address.parse(TOKEN)
         val ONE: BigInteger = BigInteger.ONE
-        val RAW = byteArrayOf(2, 1, 3)
-        const val GAS = "0x90c670d5752546412b56b5372d2b720b6bbefae6"
-        val GAS_ACCOUNT = Address.parse(GAS)
+        const val CHAIN_ID = 11_155_111L
+        const val PROXY = "0xeCFCf3b4eC647c4Ca6D49108b311b7a7C9543fea"
+        val PROXY_ADDRESS = Address.parse(PROXY)
+        const val DATA = "0xd8ae136a00"
+        val NULLIFIER = "0x" + "ab".repeat(32)
+        val BROADCASTER =
+            RailgunBroadcaster(
+                chainId = CHAIN_ID,
+                railgunProxy = PROXY_ADDRESS,
+                railgunAddress = ZERO_K_ADDRESS,
+                feeToken = TOKEN_ADDRESS,
+                fee = BigInteger.valueOf(250_000),
+                maxGasPrice = BigInteger.valueOf(20_000_000_000),
+            )
     }
 }

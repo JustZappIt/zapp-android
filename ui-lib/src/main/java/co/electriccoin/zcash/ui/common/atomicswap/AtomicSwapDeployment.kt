@@ -4,6 +4,7 @@
 package co.electriccoin.zcash.ui.common.atomicswap
 
 import cash.z.ecc.android.sdk.model.ZcashNetwork
+import co.electriccoin.zcash.ui.common.privateusd.RailgunSendsPin
 import co.electriccoin.zcash.ui.common.provider.ZcashNetworkProvider
 import xyz.justzappit.offramp.atomicswap.SwapDeployment
 import xyz.justzappit.offramp.atomicswap.ZcashDepositTerms
@@ -25,6 +26,8 @@ data class AtomicSwapDeployment(
     val maxAmount: Usdc6,
     /** How long Railgun screens a payout before it can be spent. */
     val screeningTime: Duration,
+    /** The relayer's terms for private sends this app accepts; none sends nothing. */
+    val railgunSends: RailgunSendsPin? = null,
 ) {
     /** Zcash confirmations the maker waits for before it marks a deposit ready. */
     val makerConfirmations: Int get() = swap.zcashConfirmations

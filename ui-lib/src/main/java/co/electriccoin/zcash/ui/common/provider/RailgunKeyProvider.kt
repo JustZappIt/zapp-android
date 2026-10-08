@@ -15,9 +15,6 @@ import java.security.SecureRandom
 interface RailgunKeyProvider {
     /** Encrypts the wallet in the WebView's storage; losing it costs a rescan, never funds. */
     suspend fun encryptionKey(): ByteArray
-
-    /** The testnet gas account's private key. Losing it loses only the test ETH on it. */
-    suspend fun gasAccountKey(): ByteArray
 }
 
 class RailgunKeyProviderImpl(
@@ -26,8 +23,6 @@ class RailgunKeyProviderImpl(
     private val lock = Mutex()
 
     override suspend fun encryptionKey() = getOrCreate(ENCRYPTION_KEY)
-
-    override suspend fun gasAccountKey() = getOrCreate(GAS_ACCOUNT_KEY)
 
     private suspend fun getOrCreate(key: PreferenceKey): ByteArray =
         lock.withLock {
@@ -41,7 +36,6 @@ class RailgunKeyProviderImpl(
 
     private companion object {
         val ENCRYPTION_KEY = PreferenceKey("railgun_wallet_encryption_key_v2")
-        val GAS_ACCOUNT_KEY = PreferenceKey("railgun_testnet_gas_account_key_v1")
         const val KEY_BYTES = 32
     }
 }

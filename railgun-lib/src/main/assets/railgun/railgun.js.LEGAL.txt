@@ -33,16 +33,9 @@ snarkjs/build/browser.esm.js:
 @noble/curves/abstract/weierstrass.js:
 @noble/curves/_shortw_utils.js:
 @noble/curves/secp256k1.js:
-@noble/curves/esm/abstract/utils.js:
-@noble/curves/esm/abstract/modular.js:
-@noble/curves/esm/abstract/curve.js:
-@noble/curves/esm/abstract/weierstrass.js:
-@noble/curves/esm/_shortw_utils.js:
-@noble/curves/esm/secp256k1.js:
   /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 
 aes-js/lib.commonjs/aes.js:
-aes-js/lib.esm/aes.js:
   /*! MIT License. Copyright 2015-2022 Richard Moore <me@ricmoo.com>. See LICENSE.txt. */
 
 axios/dist/browser/axios.cjs:

@@ -18,16 +18,17 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunBalances
+import xyz.justzappit.railgun.RailgunBroadcaster
 import xyz.justzappit.railgun.RailgunEvent
 import xyz.justzappit.railgun.RailgunFees
 import xyz.justzappit.railgun.RailgunMerkletree
 import xyz.justzappit.railgun.RailgunNetwork
+import xyz.justzappit.railgun.RailgunRelayedProof
 import xyz.justzappit.railgun.RailgunReverseCost
 import xyz.justzappit.railgun.RailgunReverseCostRequest
 import xyz.justzappit.railgun.RailgunReverseRequest
 import xyz.justzappit.railgun.RailgunReverseTransaction
 import xyz.justzappit.railgun.RailgunSession
-import xyz.justzappit.railgun.RailgunSignedTransaction
 import xyz.justzappit.railgun.RailgunTransfer
 import xyz.justzappit.railgun.RailgunWallet
 import kotlin.time.Clock
@@ -43,8 +44,11 @@ interface RailgunWalletRepository {
     /** The fees the engine last started with, without waiting on it; else once it starts. */
     suspend fun fees(): RailgunFees
 
-    /** Proves [transfer] and has the gas account sign it. Nothing is sent. */
-    suspend fun sign(transfer: RailgunTransfer): RailgunSignedTransaction
+    /** Proves [transfer] for [broadcaster] to send. Nothing is sent. */
+    suspend fun prove(
+        transfer: RailgunTransfer,
+        broadcaster: RailgunBroadcaster
+    ): RailgunRelayedProof
 
     suspend fun reverseCost(request: RailgunReverseCostRequest): RailgunReverseCost
 
@@ -72,7 +76,7 @@ data class RailgunWalletState(
     val proof: RailgunEvent.Proof? = null,
     val error: String? = null,
 ) {
-    enum class Phase { UNAVAILABLE, IDLE, STARTING, SYNCING, SIGNING, READY, FAILED }
+    enum class Phase { UNAVAILABLE, IDLE, STARTING, SYNCING, PROVING, READY, FAILED }
 }
 
 class RailgunWalletRepositoryImpl(
@@ -114,8 +118,10 @@ class RailgunWalletRepositoryImpl(
 
     override suspend fun fees(): RailgunFees = state.value.fees ?: withSession { it.fees }
 
-    override suspend fun sign(transfer: RailgunTransfer): RailgunSignedTransaction =
-        signing { it.sign(transfer) }
+    override suspend fun prove(
+        transfer: RailgunTransfer,
+        broadcaster: RailgunBroadcaster
+    ): RailgunRelayedProof = proving { it.prove(transfer, broadcaster) }
 
     override suspend fun reverseCost(request: RailgunReverseCostRequest): RailgunReverseCost =
         withSession { it.reverseCost(request) }
@@ -135,10 +141,10 @@ class RailgunWalletRepositoryImpl(
         return mutableState.reported { engine.withSession(block) }
     }
 
-    private suspend fun signing(sign: suspend (RailgunSession) -> RailgunSignedTransaction) =
+    private suspend fun proving(prove: suspend (RailgunSession) -> RailgunRelayedProof) =
         withSession { session ->
-            mutableState.update { it.copy(phase = RailgunWalletState.Phase.SIGNING, proof = null) }
-            sign(session).also { mutableState.update { it.copy(phase = RailgunWalletState.Phase.READY) } }
+            mutableState.update { it.copy(phase = RailgunWalletState.Phase.PROVING, proof = null) }
+            prove(session).also { mutableState.update { it.copy(phase = RailgunWalletState.Phase.READY) } }
         }
 }
 

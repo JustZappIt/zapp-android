@@ -4,26 +4,38 @@
 package co.electriccoin.zcash.ui.common.privateusd
 
 import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
 import co.electriccoin.zcash.ui.common.backgroundScope
 import co.electriccoin.zcash.ui.common.bestEffort
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
+import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withTimeoutOrNull
+import xyz.justzappit.evm.rpc.BaseRpcClient
+import xyz.justzappit.evm.rpc.RpcHttpClient
+import xyz.justzappit.evm.rpc.TransactionStatus
+import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
+import xyz.justzappit.offramp.atomicswap.RailgunBroadcast
+import xyz.justzappit.offramp.atomicswap.RailgunSendsClient
 import xyz.justzappit.railgun.RailgunDestination
-import xyz.justzappit.railgun.RailgunNetwork
-import xyz.justzappit.railgun.RailgunSignedTransaction
+import xyz.justzappit.railgun.RailgunRelayRequest
+import xyz.justzappit.railgun.RailgunRelayedProof
 import xyz.justzappit.railgun.RailgunTransfer
 import java.math.BigInteger
 import java.util.UUID
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 data class PrivateUsdSendRequest(
     val token: PrivateUsdToken,
@@ -37,6 +49,9 @@ data class PrivateUsdSendCost(
     /** Railgun's fee on a withdrawal, taken from the amount sent. */
     val railgunFee: BigInteger,
     val feeBasisPoints: Int,
+    /** The broadcaster's fee for sending it, paid from the private balance on top of the amount. */
+    val networkFee: BigInteger,
+    val networkFeeToken: Address,
 ) {
     fun received(amount: BigInteger): BigInteger = amount - railgunFee
 }
@@ -47,9 +62,10 @@ sealed interface PrivateUsdSendOutcome {
         val txHash: TxHash
     ) : PrivateUsdSendOutcome
 
-    /** Handed over but not seen in a block: it may still land, so it must never be sent again. */
+    /** Handed over but not seen in a block: it may still land, so it is never proved again. */
     data class Unconfirmed(
-        val txHash: TxHash
+        /** The broadcaster's transaction, once it named one. */
+        val txHash: TxHash?
     ) : PrivateUsdSendOutcome
 
     /** Nothing left the wallet. */
@@ -63,34 +79,50 @@ sealed interface PrivateUsdSendOutcome {
 interface PrivateUsdSender {
     suspend fun cost(request: PrivateUsdSendRequest): PrivateUsdSendCost
 
+    /** The most a send pays the broadcaster, on top of what it sends, in [networkFeeToken]. */
+    val maxNetworkFee: BigInteger
+
+    val networkFeeToken: Address
+
     /** Runs to its end, and into the send log, even once its caller stops waiting. */
     suspend fun send(request: PrivateUsdSendRequest): PrivateUsdSendOutcome
 
-    /** Settles what the log still holds unconfirmed: confirmed, failed, or sent again if the node lost it. */
+    /** Settles what the log still holds unconfirmed: confirmed, dropped, or asked about again. */
     fun reconcile()
 
     /** Stops every send and settlement, and waits until they have, for a wallet about to be wiped. */
     suspend fun reset()
 }
 
-/** Pays gas from a funded Sepolia account, which links each send to that account: testnets only. */
-class TestnetGasAccountSender(
+class PrivateUsdSendsUnavailableException : IllegalStateException("the relayer sends no private payments now")
+
+/** Sends through the deployment's relayer, which pays the gas for a fee note, so no account of the wallet's shows. */
+class RelayedPrivateUsdSender(
     private val railgunWalletRepository: RailgunWalletRepository,
-    private val transactions: GasAccountTransactions,
+    private val relayer: PrivateUsdRelayer,
+    chain: PrivateUsdSendChain,
+    private val pin: RailgunSendsPin,
     private val sendLog: PrivateUsdSendLog,
     private val scope: CoroutineScope,
     private val clock: Clock,
     private val spendGuard: PrivateUsdSpendGuard,
 ) : PrivateUsdSender {
-    private val settlement = PrivateUsdSendSettlement(transactions, sendLog)
+    private val settlement = PrivateUsdSendSettlement(relayer, chain, sendLog, clock)
 
-    override suspend fun cost(request: PrivateUsdSendRequest): PrivateUsdSendCost =
-        if (request.isWithdrawal) {
-            val fees = railgunWalletRepository.fees()
-            PrivateUsdSendCost(fees.unshieldFee(request.amount), fees.unshieldBasisPoints)
-        } else {
-            PrivateUsdSendCost(BigInteger.ZERO, 0)
-        }
+    override suspend fun cost(request: PrivateUsdSendRequest): PrivateUsdSendCost {
+        val broadcaster = relayer.broadcaster() ?: throw PrivateUsdSendsUnavailableException()
+        val fees = if (request.isWithdrawal) railgunWalletRepository.fees() else null
+        return PrivateUsdSendCost(
+            railgunFee = fees?.unshieldFee(request.amount) ?: BigInteger.ZERO,
+            feeBasisPoints = fees?.unshieldBasisPoints ?: 0,
+            networkFee = broadcaster.fee,
+            networkFeeToken = broadcaster.feeToken,
+        )
+    }
+
+    override val maxNetworkFee: BigInteger get() = pin.maxFee.micros
+
+    override val networkFeeToken: Address get() = pin.feeToken
 
     override suspend fun send(request: PrivateUsdSendRequest): PrivateUsdSendOutcome =
         scope.async { spendGuard.send { sendNow(request) } }.await()
@@ -115,75 +147,58 @@ class TestnetGasAccountSender(
                 startedAt = clock.now().epochSeconds,
             )
         noted { sendLog.begin(pending) }
-        val signed = signAndKeep(pending, request) ?: return PrivateUsdSendOutcome.NotSent
-        val outcome = deliver(pending, signed)
+        val proof = proveAndKeep(pending, request) ?: return PrivateUsdSendOutcome.NotSent
+        val outcome = settlement.deliver(pending.id, proof.request)
         // The balance follows the send without the send waiting for it.
         scope.launch { bestEffort("Private USD: no sync after the send") { railgunWalletRepository.sync() } }
         return outcome
     }
 
-    // Null when nothing was signed, or what was couldn't be kept to send again: then nothing goes out.
-    private suspend fun signAndKeep(
+    // Null when nothing was proved, or what was couldn't be kept to post again: then nothing goes out.
+    private suspend fun proveAndKeep(
         pending: PrivateUsdPendingSend,
-        request: PrivateUsdSendRequest
-    ): RailgunSignedTransaction? {
-        val signed =
+        request: PrivateUsdSendRequest,
+    ): RailgunRelayedProof? {
+        val proved =
             runCatching {
+                val broadcaster = relayer.broadcaster() ?: throw PrivateUsdSendsUnavailableException()
                 railgunWalletRepository
-                    .sign(RailgunTransfer(request.to, request.token.address, request.amount))
-                    .also { sendLog.sign(pending, it, clock.now().epochSeconds) }
+                    .prove(RailgunTransfer(request.to, request.token.address, request.amount), broadcaster)
+                    .also { sendLog.prove(pending, it, clock.now().epochSeconds) }
             }
-        signed.exceptionOrNull()?.let { e ->
+        proved.exceptionOrNull()?.let { e ->
             // Only this send's own cancellation stops it; the engine's, in a reset, is a failure.
             if (e is CancellationException) currentCoroutineContext().ensureActive()
             Twig.warn(e) { "Private USD: nothing was sent" }
-            noted { sendLog.remove(pending, null) }
+            noted { sendLog.remove(pending) }
         }
-        return signed.getOrNull()
-    }
-
-    private suspend fun deliver(
-        pending: PrivateUsdPendingSend,
-        signed: RailgunSignedTransaction
-    ): PrivateUsdSendOutcome =
-        when (deliveryOf(signed)) {
-            GasAccountDelivery.CONFIRMED -> {
-                noted { sendLog.confirm(signed.txHash) }
-                PrivateUsdSendOutcome.Sent(signed.txHash)
-            }
-
-            GasAccountDelivery.UNCONFIRMED -> {
-                PrivateUsdSendOutcome.Unconfirmed(signed.txHash)
-            }
-
-            GasAccountDelivery.FAILED -> {
-                noted { sendLog.remove(pending, signed.txHash) }
-                PrivateUsdSendOutcome.NotSent
-            }
-        }
-
-    // Once signed and kept, a send that fails any way may have gone out: settling it later tells.
-    private suspend fun deliveryOf(signed: RailgunSignedTransaction): GasAccountDelivery {
-        val delivery = runCatching { transactions.deliver(signed.raw, signed.txHash) }
-        delivery.exceptionOrNull()?.let { e ->
-            if (e is CancellationException) currentCoroutineContext().ensureActive()
-            Twig.warn(e) { "Private USD: ${signed.txHash} may have been sent" }
-        }
-        return delivery.getOrDefault(GasAccountDelivery.UNCONFIRMED)
-    }
-
-    // The log is a record, not a gate, once a send is signed and kept: what follows goes ahead regardless.
-    private suspend fun noted(block: suspend () -> Unit) {
-        bestEffort("Private USD: the send log wasn't updated", block)
+        return proved.getOrNull()
     }
 }
 
-/** Settles the sends the log still holds unconfirmed, one pass at a time: confirmed, failed, or sent again. */
+/**
+ * Settles the log's unconfirmed sends, one pass at a time. The broadcaster is asked again with the same bytes, which
+ * name the same send; the chain says whether it landed.
+ */
 private class PrivateUsdSendSettlement(
-    private val transactions: GasAccountTransactions,
+    private val relayer: PrivateUsdRelayer,
+    private val chain: PrivateUsdSendChain,
     private val sendLog: PrivateUsdSendLog,
+    private val clock: Clock,
 ) {
     private val lock = Mutex()
+
+    /** Posts [id]'s request and waits a while for its block. */
+    suspend fun deliver(
+        id: String,
+        request: RailgunRelayRequest
+    ): PrivateUsdSendOutcome =
+        when (val answer = post(id, request)) {
+            is RailgunBroadcast.Sent -> landing(id, answer.txHash)
+            is RailgunBroadcast.Refused -> PrivateUsdSendOutcome.NotSent
+            is RailgunBroadcast.Spent -> PrivateUsdSendOutcome.Unconfirmed(answer.transactions.firstOrNull())
+            is RailgunBroadcast.Retry -> PrivateUsdSendOutcome.Unconfirmed(null)
+        }
 
     // A pass asked for while one runs has nothing left to do.
     suspend fun settleAll() {
@@ -195,40 +210,165 @@ private class PrivateUsdSendSettlement(
         }
     }
 
+    private suspend fun landing(
+        id: String,
+        txHash: TxHash
+    ): PrivateUsdSendOutcome =
+        when (withTimeoutOrNull(CONFIRM_TIMEOUT) { awaitBlock(txHash) }) {
+            TransactionStatus.CONFIRMED -> {
+                noted { sendLog.update(id) { it.landed(txHash) } }
+                PrivateUsdSendOutcome.Sent(txHash)
+            }
+
+            TransactionStatus.REVERTED -> {
+                noted { sendLog.remove(id) }
+                PrivateUsdSendOutcome.NotSent
+            }
+
+            else -> {
+                PrivateUsdSendOutcome.Unconfirmed(txHash)
+            }
+        }
+
     private suspend fun settle(send: PrivateUsdSendRecord) {
-        bestEffort("Private USD: ${send.txHash} wasn't settled") {
-            val kept = checkNotNull(send.signed) { "an unconfirmed send keeps its transaction" }
-            when (transactions.reconcile(kept.raw, send.txHash, kept.from, kept.nonce)) {
-                GasAccountDelivery.CONFIRMED -> sendLog.confirm(send.txHash)
-                GasAccountDelivery.FAILED -> sendLog.remove(send.txHash)
-                GasAccountDelivery.UNCONFIRMED -> Unit
+        bestEffort("Private USD: ${send.id} wasn't settled") {
+            val relay = checkNotNull(send.relay) { "an unconfirmed send keeps its request" }
+            val now = clock.now().epochSeconds
+            val spentAt = relay.spentAt
+            when {
+                spentAt != null -> settleSpent(send.id, relay, now - spentAt)
+                send.txHash != null -> settleTransaction(send.id, send.txHash, relay, now)
+                else -> post(send.id, relay.request)
             }
         }
     }
+
+    // A reverted send moved nothing. One still out is asked about again after a while: the same bytes answer with the
+    // transaction now sending them, which is a new one if the first was forgotten.
+    private suspend fun settleTransaction(
+        id: String,
+        txHash: TxHash,
+        relay: PrivateUsdRelay,
+        now: Long
+    ) {
+        when (chain.status(txHash)) {
+            TransactionStatus.CONFIRMED -> {
+                sendLog.update(id) { it.landed(txHash) }
+            }
+
+            TransactionStatus.REVERTED -> {
+                sendLog.remove(id)
+            }
+
+            TransactionStatus.PENDING, TransactionStatus.UNKNOWN -> {
+                if (now - (relay.postedAt ?: 0) >= ASK_AGAIN_AFTER.inWholeSeconds) post(id, relay.request)
+            }
+        }
+    }
+
+    // Its notes are spent, by a transaction of the relayer's it named or by one it doesn't know. One of those that
+    // succeeded means it landed. Otherwise the nullifiers tell: all spent means it landed in some transaction; some
+    // means another proof took part of its notes, and it never can; none means the relayer's transaction is still out,
+    // and the relayer looks again when asked after a while.
+    private suspend fun settleSpent(
+        id: String,
+        relay: PrivateUsdRelay,
+        since: Long
+    ) {
+        val landed = relay.spentIn.firstOrNull { chain.status(it) == TransactionStatus.CONFIRMED }
+        if (landed != null) {
+            sendLog.update(id) { it.landed(landed) }
+        } else {
+            when (chain.spent(relay.spends)) {
+                PrivateUsdNullifiers.ALL -> sendLog.update(id) { it.landed(null) }
+                PrivateUsdNullifiers.SOME -> sendLog.remove(id)
+                PrivateUsdNullifiers.NONE -> if (since >= SPENT_RECHECK_AFTER.inWholeSeconds) post(id, relay.request)
+            }
+        }
+    }
+
+    // What the answer says is logged before it's acted on; a refusal forgets the send, since nothing from it went or
+    // ever will.
+    private suspend fun post(
+        id: String,
+        request: RailgunRelayRequest
+    ): RailgunBroadcast {
+        val answer =
+            runCatching { relayer.send(request) }.getOrElse { e ->
+                if (e is CancellationException) throw e
+                RailgunBroadcast.Retry(e.message.orEmpty())
+            }
+        val now = clock.now().epochSeconds
+        when (answer) {
+            is RailgunBroadcast.Sent -> {
+                noted { sendLog.update(id) { it.submitted(answer.txHash, now) } }
+            }
+
+            is RailgunBroadcast.Refused -> {
+                Twig.warn { "Private USD: the relayer refused a send: ${answer.reason}" }
+                noted { sendLog.remove(id) }
+            }
+
+            is RailgunBroadcast.Spent -> {
+                noted { sendLog.update(id) { it.spent(now, answer.transactions) } }
+            }
+
+            is RailgunBroadcast.Retry -> {
+                Twig.warn { "Private USD: the relayer's answer is unknown: ${answer.reason}" }
+                noted { sendLog.update(id) { it.posted(now) } }
+            }
+        }
+        return answer
+    }
+
+    private suspend fun awaitBlock(txHash: TxHash): TransactionStatus {
+        while (true) {
+            val status = runCatching { chain.status(txHash) }.getOrNull()
+            if (status == TransactionStatus.CONFIRMED || status == TransactionStatus.REVERTED) return status
+            delay(CONFIRM_POLL)
+        }
+    }
+
+    private companion object {
+        val CONFIRM_TIMEOUT = 2.minutes
+        val CONFIRM_POLL = 4.seconds
+        val ASK_AGAIN_AFTER = 3.minutes
+        val SPENT_RECHECK_AFTER = 15.minutes
+    }
 }
 
-/** The sender this build has; none until broadcasters exist for its network. */
+// The log is a record, not a gate, once a send is proved and kept: what follows goes ahead regardless.
+private suspend fun noted(block: suspend () -> Unit) {
+    bestEffort("Private USD: the send log wasn't updated", block)
+}
+
+/** The sender this build has: its deployment's relayer, where the deployment pins one for sends. */
 class PrivateUsdSenders(
     railgunWalletRepository: RailgunWalletRepository,
-    transactions: GasAccountTransactions,
+    deployments: AtomicSwapDeployments,
+    http: HttpClient,
     sendLog: PrivateUsdSendLog,
     spendGuard: PrivateUsdSpendGuard,
 ) {
     val current: PrivateUsdSender? =
-        when (railgunWalletRepository.state.value.network) {
-            RailgunNetwork.SEPOLIA -> {
-                TestnetGasAccountSender(
-                    railgunWalletRepository = railgunWalletRepository,
-                    transactions = transactions,
-                    sendLog = sendLog,
-                    scope = backgroundScope("Private USD sends"),
-                    clock = Clock.System,
-                    spendGuard = spendGuard,
-                )
+        deployments.current
+            ?.takeIf { it.railgunNetwork == railgunWalletRepository.state.value.network }
+            ?.let { deployment ->
+                deployment.railgunSends?.let { pin ->
+                    RelayedPrivateUsdSender(
+                        railgunWalletRepository = railgunWalletRepository,
+                        relayer = PrivateUsdRelayer(RailgunSendsClient(http, deployment.swap.relayerUrl), pin),
+                        chain =
+                            PrivateUsdSendChain(
+                                BaseRpcClient(RpcHttpClient.create(), deployment.swap.rpcUrl.toString()),
+                                pin.railgunProxy,
+                            ),
+                        pin = pin,
+                        sendLog = sendLog,
+                        scope = backgroundScope("Private USD sends"),
+                        clock = Clock.System,
+                        spendGuard = spendGuard,
+                    )
+                }
             }
-
-            RailgunNetwork.MAINNET, null -> {
-                null
-            }
-        }
 }

@@ -24,6 +24,16 @@ import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunDestination
 import java.math.BigInteger
 
+/** The most the broadcaster may charge for a send, in the token it's paid in. */
+internal data class PrivateUsdNetworkFee(
+    val token: PrivateUsdToken,
+    val max: BigInteger,
+) {
+    /** The most of [asset] a send can take, leaving this fee where it's paid in the same token. */
+    fun sendable(asset: PrivateUsdAsset): BigInteger =
+        if (asset.token == token) (asset.available - max).max(BigInteger.ZERO) else asset.available
+}
+
 internal data class PrivateUsdSendForm(
     val mode: PrivateUsdSendMode,
     val phase: PrivateUsdSendPhase = PrivateUsdSendPhase.FORM,
@@ -36,6 +46,8 @@ internal data class PrivateUsdSendForm(
     val isBusy: Boolean = false,
     val outcome: PrivateUsdSendOutcome? = null,
     val error: StringResource? = null,
+    /** The most the broadcaster may charge, which a send of its token leaves in the balance. */
+    val networkFee: PrivateUsdNetworkFee? = null,
 ) {
     /** The dollars there are to send, and the one this form is pinned to even once none of it is left. */
     fun assets(balance: PrivateUsdBalanceState): List<PrivateUsdAsset> {
@@ -50,15 +62,16 @@ internal data class PrivateUsdSendForm(
     fun units(token: PrivateUsdToken): BigInteger? = amount.amount?.toBaseUnitsExact(token.decimals)
 
     /** Back to where it was, since nothing left the wallet. */
-    fun notSent(): PrivateUsdSendForm =
+    fun notSent(error: StringResource = stringRes(R.string.private_usd_send_not_sent)): PrivateUsdSendForm =
         copy(
             phase = if (reviewedRequest == null) PrivateUsdSendPhase.FORM else PrivateUsdSendPhase.REVIEW,
-            error = stringRes(R.string.private_usd_send_not_sent),
+            error = error,
         )
 
     /** The send this form describes, once it's complete, valid and more than nothing. */
     fun request(asset: PrivateUsdAsset): PrivateUsdSendRequest? {
-        val units = units(asset.token)?.takeIf { it.signum() > 0 && it <= asset.available }
+        val sendable = networkFee?.sendable(asset) ?: asset.available
+        val units = units(asset.token)?.takeIf { it.signum() > 0 && it <= sendable }
         val to = destination(mode, recipient)
         return if (units != null && to != null) PrivateUsdSendRequest(asset.token, units, to) else null
     }
@@ -81,10 +94,23 @@ internal data class PrivateUsdSendForm(
         if (asset == null || amount.amount == null) return null
         val units = units(asset.token)
         val decimals = asset.token.decimals
+        val fee = networkFee?.takeIf { it.token == asset.token }
         return when {
-            units == null -> stringResByQuantity(R.plurals.private_usd_send_too_precise, decimals)
-            units > asset.available -> stringRes(R.string.private_usd_send_too_much)
-            else -> null
+            units == null -> {
+                stringResByQuantity(R.plurals.private_usd_send_too_precise, decimals)
+            }
+
+            units > asset.available -> {
+                stringRes(R.string.private_usd_send_too_much)
+            }
+
+            fee != null && units > fee.sendable(asset) -> {
+                stringRes(R.string.private_usd_send_leave_network_fee, exactTokenAmount(fee.max, fee.token))
+            }
+
+            else -> {
+                null
+            }
         }
     }
 
@@ -125,6 +151,13 @@ internal data class PrivateUsdSendForm(
                             amount = exactTokenAmount(fee, request.token),
                         )
                     },
+                networkFee =
+                    it.networkFee.takeIf { fee -> fee.signum() > 0 }?.let { fee ->
+                        PrivateUsdSendFee(
+                            label = stringRes(R.string.convert_network_fee),
+                            amount = exactTokenAmount(fee, networkFee?.token ?: request.token),
+                        )
+                    },
                 receives = exactTokenAmount(it.received(request.amount), request.token),
                 to = request.to.text,
             )
@@ -142,7 +175,7 @@ internal data class PrivateUsdSendForm(
                 is PrivateUsdSendOutcome.Unconfirmed -> outcome.txHash
                 PrivateUsdSendOutcome.NotSent, PrivateUsdSendOutcome.Busy, null -> null
             }
-        if (request == null || txHash == null) return null
+        if (request == null || (txHash == null && outcome !is PrivateUsdSendOutcome.Unconfirmed)) return null
         return PrivateUsdSendDoneState(
             body =
                 stringRes(
@@ -150,11 +183,11 @@ internal data class PrivateUsdSendForm(
                     exactTokenAmount(request.amount, request.token),
                     request.to.text.ellipsizeAddress(),
                 ),
-            onViewTransaction = explorerTxUrl?.let { url -> { onOpenUrl(url + txHash.hex) } },
+            onViewTransaction = txHash?.let { hash -> explorerTxUrl?.let { url -> { onOpenUrl(url + hash.hex) } } },
             note =
                 stringRes(R.string.private_usd_send_unconfirmed)
                     .takeIf { outcome is PrivateUsdSendOutcome.Unconfirmed },
-            onViewOnRailscan = railscanTxUrl?.let { url -> { onOpenUrl(url + txHash.hex) } },
+            onViewOnRailscan = txHash?.let { hash -> railscanTxUrl?.let { url -> { onOpenUrl(url + hash.hex) } } },
         )
     }
 

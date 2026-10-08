@@ -1,43 +1,24 @@
-// A funded gas account signs and sends in place of a broadcaster, linking each transaction to it: testnets only.
-import { EVMGasType, NETWORK_CONFIG, NetworkName, getEVMGasTypeForTransaction } from '@railgun-community/shared-models';
+// Proves sends and withdrawals for a broadcaster to send: it pays their gas for a fee note to its own 0zk address, so
+// no public account of the wallet's appears on chain. The page sends nothing.
+import { NETWORK_CONFIG, getEVMGasTypeForTransaction } from '@railgun-community/shared-models';
 import {
-  gasEstimateForShieldBaseToken,
-  gasEstimateForUnprovenTransfer,
-  gasEstimateForUnprovenUnshield,
   generateTransferProof,
   generateUnshieldProof,
   getFallbackProviderForNetwork,
-  getShieldPrivateKeySignatureMessage,
   populateProvedTransfer,
   populateProvedUnshield,
-  populateShieldBaseToken,
 } from '@railgun-community/wallet';
-import { Wallet, keccak256 } from 'ethers';
+import { ABIRailgunSmartWallet } from '@railgun-community/engine';
+import { Interface, getAddress } from 'ethers';
 import { badRequest } from './errors.js';
 import { TXID_VERSION, session } from './wallet.js';
 
-const SEND_WITH_PUBLIC_WALLET = true;
+const SEND_WITH_PUBLIC_WALLET = false;
+// Only copied into the populated transaction: the broadcaster sets its own gas.
+const GAS_ESTIMATE = 1_000_000n;
+const RAILGUN = new Interface(ABIRailgunSmartWallet);
 
-let gasWallet;
 let spends = Promise.resolve();
-
-export function requireGasWallet() {
-  if (gasWallet === undefined) throw badRequest('no gas account is set');
-  return gasWallet;
-}
-
-export async function setGasAccount({ privateKey }) {
-  const { network } = session();
-  if (network !== NetworkName.EthereumSepolia) throw badRequest('a gas account is for testnets only');
-  gasWallet = new Wallet(privateKey, getFallbackProviderForNetwork(network));
-  return gasAccount();
-}
-
-export async function gasAccount() {
-  const account = requireGasWallet();
-  const balance = await account.provider.getBalance(account.address);
-  return { address: account.address, balance: balance.toString() };
-}
 
 /** One spend at a time, so none proves over the notes another is spending. */
 export function spend(action) {
@@ -46,84 +27,72 @@ export function spend(action) {
   return result;
 }
 
-/** Wraps `amount` wei of the gas account's ETH and shields it to `to`, the open wallet by default. */
-export const shield = ({ amount, to }) =>
-  spend(async () => {
-    const { network, address } = session();
-    const recipient = to ?? address;
-    const account = requireGasWallet();
-    const shieldPrivateKey = keccak256(await account.signMessage(getShieldPrivateKeySignatureMessage()));
-    const wrapped = { tokenAddress: NETWORK_CONFIG[network].baseToken.wrappedAddress, amount: BigInt(amount) };
-    const { gasEstimate } = await gasEstimateForShieldBaseToken(
-      TXID_VERSION, network, recipient, shieldPrivateKey, wrapped, account.address,
-    );
-    const { transaction } = await populateShieldBaseToken(
-      TXID_VERSION, network, recipient, shieldPrivateKey, wrapped, await gasDetails(gasEstimate),
-    );
-    return sign(transaction);
-  });
-
-export const transfer = ({ to, token, amount }, emit) =>
+/** Proves a private send of `amount` of `token` to `to`, with `broadcaster`'s fee note first. */
+export const transfer = ({ to, token, amount, broadcaster }, emit) =>
   spend(async () => {
     const { network, walletId, encryptionKey } = session();
     const recipients = [{ tokenAddress: token, amount: BigInt(amount), recipientAddress: to }];
-    const { gasEstimate } = await gasEstimateForUnprovenTransfer(
-      TXID_VERSION, network, walletId, encryptionKey, undefined, recipients, [], await gasDetails(0n), undefined,
-      SEND_WITH_PUBLIC_WALLET,
-    );
+    const { fee, minGasPrice, gasDetails } = await relaying(network, broadcaster);
     const proofMs = await timed(() =>
       generateTransferProof(
-        TXID_VERSION, network, walletId, encryptionKey, false, undefined, recipients, [], undefined,
-        SEND_WITH_PUBLIC_WALLET, undefined, progress(emit),
+        TXID_VERSION, network, walletId, encryptionKey, false, undefined, recipients, [], fee, SEND_WITH_PUBLIC_WALLET,
+        minGasPrice, progress(emit),
       ),
     );
     const { transaction } = await populateProvedTransfer(
-      TXID_VERSION, network, walletId, false, undefined, recipients, [], undefined, SEND_WITH_PUBLIC_WALLET, undefined,
-      await gasDetails(gasEstimate),
+      TXID_VERSION, network, walletId, false, undefined, recipients, [], fee, SEND_WITH_PUBLIC_WALLET, minGasPrice,
+      gasDetails,
     );
-    return { ...(await sign(transaction)), proofMs };
+    return { ...relayed(transaction, broadcaster), proofMs };
   });
 
-/** Withdraws to the public address `to`. */
-export const unshield = ({ to, token, amount }, emit) =>
+/** Proves a withdrawal to the public address `to`, with `broadcaster`'s fee note first. */
+export const unshield = ({ to, token, amount, broadcaster }, emit) =>
   spend(async () => {
     const { network, walletId, encryptionKey } = session();
     const recipients = [{ tokenAddress: token, amount: BigInt(amount), recipientAddress: to }];
-    const { gasEstimate } = await gasEstimateForUnprovenUnshield(
-      TXID_VERSION, network, walletId, encryptionKey, recipients, [], await gasDetails(0n), undefined,
-      SEND_WITH_PUBLIC_WALLET,
-    );
+    const { fee, minGasPrice, gasDetails } = await relaying(network, broadcaster);
     const proofMs = await timed(() =>
       generateUnshieldProof(
-        TXID_VERSION, network, walletId, encryptionKey, recipients, [], undefined, SEND_WITH_PUBLIC_WALLET, undefined,
+        TXID_VERSION, network, walletId, encryptionKey, recipients, [], fee, SEND_WITH_PUBLIC_WALLET, minGasPrice,
         progress(emit),
       ),
     );
     const { transaction } = await populateProvedUnshield(
-      TXID_VERSION, network, walletId, recipients, [], undefined, SEND_WITH_PUBLIC_WALLET, undefined,
-      await gasDetails(gasEstimate),
+      TXID_VERSION, network, walletId, recipients, [], fee, SEND_WITH_PUBLIC_WALLET, minGasPrice, gasDetails,
     );
-    return { ...(await sign(transaction)), proofMs };
+    return { ...relayed(transaction, broadcaster), proofMs };
   });
 
-/**
- * Signs with the gas account and sends nothing: the host keeps the bytes, their hash, and the account's nonce
- * they spend before it sends them itself.
- */
-export async function sign(transaction) {
-  const account = requireGasWallet();
-  const populated = await account.populateTransaction(transaction);
-  const raw = await account.signTransaction(populated);
-  return { raw, txHash: keccak256(raw), from: account.address, nonce: populated.nonce };
+// The proof binds its minimum gas price: the network's now, which the broadcaster pays at least, within its cap.
+async function relaying(network, { chainId, railgunProxy, railgunAddress, token, fee, maxGasPrice }) {
+  const { chain, proxyContract } = NETWORK_CONFIG[network];
+  if (chainId !== chain.id || getAddress(railgunProxy) !== getAddress(proxyContract)) {
+    throw badRequest(`the broadcaster is not for ${network}'s Railgun contract`);
+  }
+  const { gasPrice } = await getFallbackProviderForNetwork(network).getFeeData();
+  if (gasPrice == null || gasPrice > BigInt(maxGasPrice)) {
+    throw new Error("the network's gas price is above the broadcaster's cap");
+  }
+  const evmGasType = getEVMGasTypeForTransaction(network, SEND_WITH_PUBLIC_WALLET);
+  return {
+    fee: { tokenAddress: token, amount: BigInt(fee), recipientAddress: railgunAddress },
+    minGasPrice: gasPrice,
+    gasDetails: { evmGasType, gasEstimate: GAS_ESTIMATE, gasPrice },
+  };
 }
 
-export async function gasDetails(gasEstimate) {
-  const { network } = session();
-  const fees = await requireGasWallet().provider.getFeeData();
-  const evmGasType = getEVMGasTypeForTransaction(network, SEND_WITH_PUBLIC_WALLET);
-  return evmGasType === EVMGasType.Type2
-    ? { evmGasType, gasEstimate, maxFeePerGas: fees.maxFeePerGas, maxPriorityFeePerGas: fees.maxPriorityFeePerGas }
-    : { evmGasType, gasEstimate, gasPrice: fees.gasPrice };
+/** The broadcaster's request as proved, and the nullifiers each of its Railgun transactions spends, to settle it by. */
+function relayed({ to, data, value }, { chainId, railgunProxy }) {
+  if (getAddress(to) !== getAddress(railgunProxy) || (value ?? 0n) !== 0n) {
+    throw badRequest('not a plain transact call');
+  }
+  const [transactions] = RAILGUN.decodeFunctionData('transact', data);
+  const spent = transactions.map(({ nullifiers, boundParams }) => ({
+    tree: Number(boundParams.treeNumber),
+    nullifiers: [...nullifiers],
+  }));
+  return { chainId, to, data, value: '0', spends: spent };
 }
 
 /** The prover counts to 100; the host reads progress from 0 to 1. */

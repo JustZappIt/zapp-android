@@ -89,6 +89,31 @@ data class RelayerTerms(
     val contract: Address,
     val fee: Usdc6,
     val reverseFunding: ReverseFundingTerms? = null,
+    /** Present when the relayer sends wallets' private Railgun sends and withdrawals, as their broadcaster. */
+    val railgunSends: RailgunSendsTerms? = null,
+)
+
+/** How the relayer sends a wallet's Railgun transaction: it pays the gas for a fee note to [railgunAddress]. */
+@Serializable
+data class RailgunSendsTerms(
+    /** The relayer's own 0zk address, which the fee note pays. */
+    val railgunAddress: String,
+    val railgunProxy: Address,
+    val token: Address,
+    val fee: Usdc6,
+    val maxGasLimit: Long,
+    /** In decimal wei: the highest minimum gas price a proof may bind. */
+    val maxGasPriceWei: String,
+    val maxCalldataBytes: Int,
+)
+
+/** A proved Railgun transaction for the relayer to send as it is. */
+@Serializable
+data class RailgunTransactRequest(
+    val chainId: ChainId,
+    val to: Address,
+    val data: String,
+    val value: String,
 )
 
 /** The Zcash network a maker takes deposits on. */

@@ -144,7 +144,8 @@ class PrivateUsdVMTest {
         runTest {
             forwardHistory.value = listOf(toUsd(index = 0, at = 100, AtomicSwapOutcome.Paid))
             reverseHistory.value = listOf(toZec(index = 1, ReversePhase.COMPLETE, acceptedAt = 300))
-            val send = PrivateUsdSendRecord(TX_HASH, TEST_USD, BigInteger.valueOf(1_000_000), TO, sentAt = 200)
+            val send =
+                PrivateUsdSendRecord("s", TEST_USD, BigInteger.valueOf(1_000_000), TO, sentAt = 200, txHash = TX_HASH)
             sends.value = PrivateUsdSendHistory(listOf(send))
             start()
 

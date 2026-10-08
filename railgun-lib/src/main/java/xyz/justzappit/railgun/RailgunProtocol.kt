@@ -19,7 +19,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import xyz.justzappit.evm.types.Address
-import xyz.justzappit.evm.types.TxHash
 import java.math.BigInteger
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
@@ -35,9 +34,6 @@ internal enum class RailgunMethod(
 
     @SerialName("openWallet")
     OPEN_WALLET(1.minutes),
-
-    @SerialName("setGasAccount")
-    SET_GAS_ACCOUNT(30.seconds),
 
     @SerialName("refresh")
     REFRESH(10.minutes),
@@ -80,11 +76,6 @@ internal data class OpenWalletResult(
 )
 
 @Serializable
-internal class SetGasAccountParams(
-    val privateKey: String
-)
-
-@Serializable
 internal data class WireTokenAmount(
     val token: Address,
     @Serializable(with = DecimalSerializer::class)
@@ -97,6 +88,7 @@ internal data class TransferParams(
     val token: Address,
     @Serializable(with = DecimalSerializer::class)
     val amount: BigInteger,
+    val broadcaster: BroadcasterParams,
 )
 
 @Serializable
@@ -105,14 +97,38 @@ internal data class UnshieldParams(
     val token: Address,
     @Serializable(with = DecimalSerializer::class)
     val amount: BigInteger,
+    val broadcaster: BroadcasterParams,
 )
 
 @Serializable
-internal data class SignedResult(
-    val raw: String,
-    val txHash: TxHash,
-    val from: Address,
-    val nonce: Long,
+internal data class BroadcasterParams(
+    val chainId: Long,
+    val railgunProxy: Address,
+    val railgunAddress: RailgunAddress,
+    val token: Address,
+    @Serializable(with = DecimalSerializer::class)
+    val fee: BigInteger,
+    @Serializable(with = DecimalSerializer::class)
+    val maxGasPrice: BigInteger,
+) {
+    constructor(broadcaster: RailgunBroadcaster) : this(
+        chainId = broadcaster.chainId,
+        railgunProxy = broadcaster.railgunProxy,
+        railgunAddress = broadcaster.railgunAddress,
+        token = broadcaster.feeToken,
+        fee = broadcaster.fee,
+        maxGasPrice = broadcaster.maxGasPrice,
+    )
+}
+
+@Serializable
+internal data class RelayedResult(
+    val chainId: Long,
+    val to: Address,
+    val data: String,
+    @Serializable(with = DecimalSerializer::class)
+    val value: BigInteger,
+    val spends: List<RailgunNullifiers>,
 )
 
 internal object RailgunProtocol {

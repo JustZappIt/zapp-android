@@ -27,7 +27,7 @@ class ObservePrivateUsdActivityUseCaseTest {
         runTest {
             val paid = toUsd(index = 0, at = 100, AtomicSwapOutcome.Paid)
             val back = toZec(index = 1, ReversePhase.COMPLETE, acceptedAt = 300)
-            val sent = PrivateUsdSendRecord(TX_HASH, TOKEN, amount = BigInteger.ONE, TO, sentAt = 200)
+            val sent = PrivateUsdSendRecord("s", TOKEN, amount = BigInteger.ONE, TO, sentAt = 200, txHash = TX_HASH)
             val proving = PrivateUsdPendingSend("p", TOKEN, amount = BigInteger.ONE, TO, startedAt = 400)
             val useCase =
                 ObservePrivateUsdActivityUseCase(

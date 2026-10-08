@@ -3,7 +3,6 @@
 
 package co.electriccoin.zcash.ui.common.repository
 
-import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.bestEffort
 import co.electriccoin.zcash.ui.common.provider.RailgunKeyProvider
 import co.electriccoin.zcash.ui.common.provider.RailgunMnemonicProvider
@@ -84,19 +83,16 @@ internal class RailgunEngine(
         state.update { it.copy(phase = RailgunWalletState.Phase.STARTING) }
         val expected = mnemonicProvider.address()
         val key = keyProvider.encryptionKey()
-        val gasAccountKey = if (network == RailgunNetwork.SEPOLIA) keyProvider.gasAccountKey() else null
         val session =
             try {
-                mnemonicProvider.withMnemonic { wallet.open(network, key, it, gasAccountKey) }
+                mnemonicProvider.withMnemonic { wallet.open(network, key, it) }
             } finally {
                 key.fill(0)
-                gasAccountKey?.fill(0)
             }
         if (session.address != expected) {
             wallet.close()
             error("the engine opened ${session.address}, not the Railgun mnemonic's $expected")
         }
-        session.gasAccountAddress?.let { Twig.info { "Railgun gas account: $it" } }
         state.update {
             it.copy(phase = RailgunWalletState.Phase.READY, address = session.address, fees = session.fees)
         }

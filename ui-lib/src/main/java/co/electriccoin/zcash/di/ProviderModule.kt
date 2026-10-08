@@ -22,7 +22,6 @@ import co.electriccoin.zcash.ui.common.atomicswap.SwapTokenStoreImpl
 import co.electriccoin.zcash.ui.common.atomicswap.SwapZcashTransactions
 import co.electriccoin.zcash.ui.common.pricing.provider.HistoricalPriceCacheProvider
 import co.electriccoin.zcash.ui.common.pricing.provider.HistoricalPriceCacheProviderImpl
-import co.electriccoin.zcash.ui.common.privateusd.GasAccountTransactions
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendLog
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
 import co.electriccoin.zcash.ui.common.provider.AndroidOnrampDeviceSignalsProvider
@@ -199,7 +198,6 @@ import xyz.justzappit.offramp.peer.PeerIndexerClient
 import xyz.justzappit.offramp.peer.PeerNetworkConfig
 import xyz.justzappit.offramp.peer.PeerOracleRate
 import xyz.justzappit.offramp.peer.UnavailablePeerCashOutOrchestrator
-import xyz.justzappit.railgun.RailgunEndpoints
 import xyz.justzappit.railgun.RailgunWallet
 import java.util.Locale
 
@@ -569,8 +567,7 @@ val providerModule =
         singleOf(::RailgunMnemonicProviderImpl) bind RailgunMnemonicProvider::class
         singleOf(::AtomicSwapNotifier)
         singleOf(::AtomicSwapScheduler)
-        singleOf(::PrivateUsdSenders)
-        single { GasAccountTransactions(BaseRpcClient(RpcHttpClient.create(), RailgunEndpoints.SEPOLIA_RPC_URL)) }
+        single { PrivateUsdSenders(get(), get(), get(named(ATOMIC_SWAP_HTTP)), get(), get()) }
         singleOf(::PrivateUsdSendLog)
     }
 

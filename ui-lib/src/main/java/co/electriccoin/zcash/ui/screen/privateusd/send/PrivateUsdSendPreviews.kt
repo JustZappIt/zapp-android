@@ -63,6 +63,7 @@ private fun previewState(phase: PrivateUsdSendPhase) =
                 token = "tUSD",
                 amount = stringRes("$1.00"),
                 railgunFee = PrivateUsdSendFee(stringRes("Railgun fee (0.25%)"), stringRes("$0.0025")),
+                networkFee = PrivateUsdSendFee(stringRes("Network fee"), stringRes("$0.25")),
                 receives = stringRes("$0.9975"),
                 to = "0x1c7f9a756b08753cf8da94d394659134bb8c5539",
             ),

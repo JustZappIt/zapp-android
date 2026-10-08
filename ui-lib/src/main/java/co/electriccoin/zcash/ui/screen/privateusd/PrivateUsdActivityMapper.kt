@@ -65,13 +65,13 @@ class PrivateUsdActivityMapper {
                         stringRes(R.string.private_usd_activity_unconfirmed)
                     }
                 outgoing(
-                    key = "sent-${record.txHash}",
+                    key = "sent-${record.id}",
                     withdraw = record.withdraw,
                     token = dollarToken(deployment, record.token),
                     amount = record.amount,
                     detail = joinDetail(date, status),
                     currency = currency,
-                    onClick = { onOpenUrl(deployment.explorerTxUrl + record.txHash.hex) },
+                    onClick = record.txHash?.let { hash -> { onOpenUrl(deployment.explorerTxUrl + hash.hex) } },
                 )
             }
 

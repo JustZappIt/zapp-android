@@ -138,7 +138,6 @@ private fun Recipient(
 
 @Composable
 private fun Review(state: PrivateUsdSendState) {
-    val c = ZappTheme.colors
     Title(state.mode.reviewTitle)
     state.review?.let { review ->
         ZappSettlementLedger(
@@ -147,10 +146,7 @@ private fun Review(state: PrivateUsdSendState) {
                     ZappSettlementLedgerRow(stringResource(R.string.private_usd_send_asset), review.token),
                     ZappSettlementLedgerRow(stringResource(R.string.private_usd_send_amount), review.amount.getValue()),
                     review.railgunFee?.let { ZappSettlementLedgerRow(it.label.getValue(), it.amount.getValue()) },
-                    ZappSettlementLedgerRow(
-                        stringResource(R.string.convert_network_fee),
-                        stringResource(R.string.private_usd_send_review_test_account),
-                    ),
+                    review.networkFee?.let { ZappSettlementLedgerRow(it.label.getValue(), it.amount.getValue()) },
                     ZappSettlementLedgerRow(
                         stringResource(R.string.private_usd_send_review_receives),
                         review.receives.getValue(),
@@ -164,10 +160,6 @@ private fun Review(state: PrivateUsdSendState) {
             value = review.to,
             label = stringResource(R.string.private_usd_send_review_to),
             gutter = 0.dp,
-        )
-        BasicText(
-            text = stringResource(R.string.private_usd_send_review_test_note),
-            style = ZappTheme.typography.caption.copy(color = c.textMuted),
         )
     }
 }

@@ -5,6 +5,7 @@ package xyz.justzappit.offramp.atomicswap
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import xyz.justzappit.evm.types.TxHash
 
 enum class AtomicSwapService { MAKER, RELAYER }
 
@@ -30,6 +31,8 @@ sealed class AtomicSwapHttpException(
         val status: Int,
         val code: SwapErrorCode?,
         reason: String,
+        /** Transactions the refusal names, such as the relayer's own that already spend a send's notes. */
+        val transactions: List<TxHash> = emptyList(),
     ) : AtomicSwapHttpException(service, "${service.label} answered $status: $reason", null)
 }
 
@@ -61,6 +64,10 @@ enum class SwapErrorCode {
 
     @SerialName("methodNotAllowed")
     METHOD_NOT_ALLOWED,
+
+    /** A note the transaction spends is spent on chain, or a transaction the relayer already sent spends it. */
+    @SerialName("alreadySpent")
+    ALREADY_SPENT,
 
     /** Spend a token from the issuer the `WWW-Authenticate` challenge names. */
     @SerialName("tokenRequired")

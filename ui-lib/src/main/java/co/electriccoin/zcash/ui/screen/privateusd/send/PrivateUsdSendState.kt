@@ -83,6 +83,7 @@ internal data class PrivateUsdSendReviewState(
     val token: String,
     val amount: StringResource,
     val railgunFee: PrivateUsdSendFee?,
+    val networkFee: PrivateUsdSendFee?,
     val receives: StringResource,
     val to: String,
 )

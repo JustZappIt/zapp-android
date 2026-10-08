@@ -215,6 +215,7 @@
     <string name="private_usd_send_invalid_0x">That isn\'t an Ethereum address.</string>
     <string name="private_usd_send_zero_address" tools:ignore="MissingTranslation">That\'s the zero address: anything sent there is lost for good.</string>
     <string name="private_usd_send_too_much">More than you have available.</string>
+    <string name="private_usd_send_leave_network_fee" tools:ignore="MissingTranslation">Leave %1$s for the network fee.</string>
     <plurals name="private_usd_send_too_precise" tools:ignore="MissingTranslation">
         <item quantity="one">Use at most %1$d decimal place.</item>
         <item quantity="other">Use at most %1$d decimal places.</item>
@@ -235,10 +236,8 @@
     <string name="private_usd_send_review_title_private">Review send</string>
     <string name="private_usd_send_review_title_withdraw">Review withdrawal</string>
     <string name="private_usd_send_review_railgun_fee">Railgun fee (%1$s%%)</string>
-    <string name="private_usd_send_review_test_account">Paid by Zapp\'s test account</string>
     <string name="private_usd_send_review_receives">They receive</string>
     <string name="private_usd_send_review_to">To</string>
-    <string name="private_usd_send_review_test_note">Testnet only: a Zapp test account pays for this transaction and sends it, which ties it to that account on Ethereum. Real sends will go through Railgun\'s broadcasters.</string>
     <string name="private_usd_send_proving">Proving your transaction</string>
     <string name="private_usd_send_proving_detail">Your phone builds a zero-knowledge proof so nobody can see what you send. This takes a few seconds.</string>
     <string name="private_usd_send_sending">Sending</string>
@@ -248,6 +247,7 @@
     <string name="private_usd_send_view_tx">View on Etherscan</string>
     <string name="private_usd_send_view_railscan" tools:ignore="MissingTranslation">View on Railscan</string>
     <string name="private_usd_send_not_sent" tools:ignore="MissingTranslation">Nothing was sent. Try again in a moment.</string>
+    <string name="private_usd_send_unavailable" tools:ignore="MissingTranslation">Private sends are unavailable right now. Nothing was sent. Try again later.</string>
     <string name="private_usd_send_unconfirmed" tools:ignore="MissingTranslation">It isn\'t in a block yet. Check your activity before sending again.</string>
     <string name="reverse_title">Private USD → ZEC</string>
     <string name="reverse_intro">Approve sending Private USD first. After your wallet independently confirms the full ZEC deposit, approve settlement to receive shielded ZEC.</string>

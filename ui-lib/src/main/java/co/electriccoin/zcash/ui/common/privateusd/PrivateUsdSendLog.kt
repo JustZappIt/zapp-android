@@ -16,36 +16,63 @@ import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.railgun.DecimalSerializer
 import xyz.justzappit.railgun.RailgunDestination
-import xyz.justzappit.railgun.RailgunSignedTransaction
+import xyz.justzappit.railgun.RailgunNullifiers
+import xyz.justzappit.railgun.RailgunRelayRequest
+import xyz.justzappit.railgun.RailgunRelayedProof
 import java.math.BigInteger
 import java.util.concurrent.ConcurrentHashMap
 
 @Serializable
 data class PrivateUsdSendRecord(
-    val txHash: TxHash,
+    val id: String,
     val token: Address,
-    /** Token base units taken from the private balance. */
+    /** Token base units taken from the private balance, the broadcaster's fee aside. */
     @Serializable(with = DecimalSerializer::class)
     val amount: BigInteger,
     val to: RailgunDestination,
     /** Unix seconds. */
     val sentAt: Long,
-    /** False until it's seen in a block. */
+    /** The broadcaster's transaction, once it named one. */
+    val txHash: TxHash? = null,
+    /** False until it's seen in a block, or its nullifiers are. */
     val confirmed: Boolean = true,
-    /** What was signed, kept to send again until it's in a block. */
-    val signed: PrivateUsdSignedSend? = null,
+    /** What the broadcaster is asked to send, kept to ask again until it settles. */
+    val relay: PrivateUsdRelay? = null,
 ) {
     val withdraw: Boolean get() = to is RailgunDestination.Public
+
+    /** The broadcaster sent its request in [txHash]. */
+    fun submitted(
+        txHash: TxHash,
+        at: Long
+    ) = copy(txHash = txHash, relay = relay?.copy(postedAt = at, spentAt = null, spentIn = emptyList()))
+
+    /** Its request went out without an answer that settles anything. */
+    fun posted(at: Long) = copy(relay = relay?.copy(postedAt = at))
+
+    /** The broadcaster answered that a note it spends is spent, by [transactions] of its own where it named any. */
+    fun spent(
+        at: Long,
+        transactions: List<TxHash>
+    ) = copy(relay = relay?.copy(postedAt = at, spentAt = at, spentIn = transactions))
+
+    /** It landed, in [txHash] when that's known. */
+    fun landed(txHash: TxHash?) = copy(confirmed = true, txHash = txHash, relay = null)
 }
 
-/** A signed transaction of the gas account's, as the log keeps it. */
+/** A proved send as the log keeps it until it settles, and when the broadcaster last answered about it. */
 @Serializable
-data class PrivateUsdSignedSend(
-    val raw: String,
-    val from: Address,
-    val nonce: Long,
+data class PrivateUsdRelay(
+    val request: RailgunRelayRequest,
+    val spends: List<RailgunNullifiers>,
+    /** Unix seconds of the last post. */
+    val postedAt: Long? = null,
+    /** Unix seconds of the last answer that a note it spends is spent, which the chain then settles. */
+    val spentAt: Long? = null,
+    /** The broadcaster's own transactions that answer named as spending its notes. */
+    val spentIn: List<TxHash> = emptyList(),
 ) {
-    override fun toString() = "PrivateUsdSignedSend(from=$from, nonce=$nonce)"
+    override fun toString() = "PrivateUsdRelay($request, postedAt=$postedAt, spentAt=$spentAt)"
 }
 
 /** A send still being proved, which nothing has left the wallet for. */
@@ -61,17 +88,17 @@ data class PrivateUsdPendingSend(
 ) {
     val withdraw: Boolean get() = to is RailgunDestination.Public
 
-    fun signed(
-        transaction: RailgunSignedTransaction,
+    fun proved(
+        proof: RailgunRelayedProof,
         at: Long
     ) = PrivateUsdSendRecord(
-        txHash = transaction.txHash,
+        id = id,
         token = token,
         amount = amount,
         to = to,
         sentAt = at,
         confirmed = false,
-        signed = PrivateUsdSignedSend(transaction.raw, transaction.from, transaction.nonce),
+        relay = PrivateUsdRelay(proof.request, proof.spends),
     )
 }
 
@@ -89,7 +116,7 @@ class PrivateUsdSendLog(
     private val store = EncryptedJsonStore(encryptedPreferenceProvider, PREF_KEY, Log.serializer())
     private val lock = Mutex()
 
-    // A send is signed and logged before it goes out, so one an earlier process left pending never did.
+    // A send is proved and logged before it goes out, so one an earlier process left pending never did.
     private val live = ConcurrentHashMap.newKeySet<String>()
 
     val observe: Flow<PrivateUsdSendHistory> =
@@ -113,44 +140,35 @@ class PrivateUsdSendLog(
         change { it.copy(pending = it.pending + send) }
     }
 
-    /** Keeps [transaction] for [send] before it goes out; a send this fails for must not go. */
-    suspend fun sign(
+    /** Keeps [proof] for [send] before it goes out; a send this fails for must not go. */
+    suspend fun prove(
         send: PrivateUsdPendingSend,
-        transaction: RailgunSignedTransaction,
+        proof: RailgunRelayedProof,
         at: Long
     ) {
         live -= send.id
         change { log ->
             log.copy(
-                sends = log.sends + send.signed(transaction, at),
+                sends = log.sends + send.proved(proof, at),
                 pending = log.pending.filter { it.id != send.id },
             )
         }
     }
 
-    suspend fun confirm(txHash: TxHash) =
-        change { log ->
-            log.copy(
-                sends = log.sends.map { if (it.txHash == txHash) it.copy(confirmed = true, signed = null) else it },
-            )
-        }
+    /** Changes [id], if it's still kept. */
+    suspend fun update(
+        id: String,
+        transform: (PrivateUsdSendRecord) -> PrivateUsdSendRecord
+    ) = change { log -> log.copy(sends = log.sends.map { if (it.id == id) transform(it) else it }) }
 
-    /** Forgets [send], and its transaction if one was signed, once nothing moved for it. */
-    suspend fun remove(
-        send: PrivateUsdPendingSend,
-        txHash: TxHash?
-    ) {
+    /** Forgets [send], which nothing was proved for. */
+    suspend fun remove(send: PrivateUsdPendingSend) {
         live -= send.id
-        change { log ->
-            log.copy(
-                sends = log.sends.filterNot { txHash != null && it.txHash == txHash },
-                pending = log.pending.filter { it.id != send.id },
-            )
-        }
+        change { log -> log.copy(pending = log.pending.filter { it.id != send.id }) }
     }
 
-    /** Forgets the transaction [txHash], which moved nothing. */
-    suspend fun remove(txHash: TxHash) = change { log -> log.copy(sends = log.sends.filterNot { it.txHash == txHash }) }
+    /** Forgets [id], which moved nothing. */
+    suspend fun remove(id: String) = change { log -> log.copy(sends = log.sends.filterNot { it.id == id }) }
 
     private suspend fun change(update: (Log) -> Log) =
         lock.withLock {
@@ -162,7 +180,7 @@ class PrivateUsdSendLog(
             store.set(changed.copy(sends = retained.sortedBy { it.sentAt }))
         }
 
-    // This is also the recovery checkpoint: a failed read must never replace signed transactions.
+    // This is also the recovery checkpoint: a failed read must never replace proved requests.
     private suspend fun read(): Log = store.get() ?: Log()
 
     @Serializable
@@ -174,7 +192,7 @@ class PrivateUsdSendLog(
     private val Log.isUnsettled: Boolean get() = sends.any { !it.confirmed } || pending.any { it.id in live }
 
     private companion object {
-        const val PREF_KEY = "private_usd_sends_v1"
+        const val PREF_KEY = "private_usd_sends_v2"
         const val MAX_SENDS = 100
     }
 }

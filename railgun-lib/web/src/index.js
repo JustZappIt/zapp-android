@@ -9,7 +9,6 @@ const handlers = {
   start: wallet.start,
   openWallet: wallet.openWallet,
   refresh: wallet.refresh,
-  setGasAccount: transact.setGasAccount,
   transfer: transact.transfer,
   unshield: transact.unshield,
   reverseCost,
@@ -18,8 +17,6 @@ const handlers = {
 // Only an engine started with `debug` answers these, for dev/check.mjs.
 const debugHandlers = {
   openNewWallet: wallet.openNewWallet,
-  gasAccount: transact.gasAccount,
-  shield: transact.shield,
 };
 
 let port;

@@ -208,10 +208,8 @@
     <string name="private_usd_send_review_title_private">Revisar envío</string>
     <string name="private_usd_send_review_title_withdraw">Revisar retiro</string>
     <string name="private_usd_send_review_railgun_fee">Comisión de Railgun (%1$s%%)</string>
-    <string name="private_usd_send_review_test_account">Pagada por la cuenta de prueba de Zapp</string>
     <string name="private_usd_send_review_receives">Recibe</string>
     <string name="private_usd_send_review_to">Para</string>
-    <string name="private_usd_send_review_test_note">Solo en la red de prueba: una cuenta de prueba de Zapp paga y envía esta transacción, lo que la vincula a esa cuenta en Ethereum. Los envíos reales usarán los transmisores de Railgun.</string>
     <string name="private_usd_send_proving">Generando la prueba de tu transacción</string>
     <string name="private_usd_send_proving_detail">Tu teléfono genera una prueba de conocimiento cero para que nadie pueda ver lo que envías. Esto tarda unos segundos.</string>
     <string name="private_usd_send_sending">Enviando</string>

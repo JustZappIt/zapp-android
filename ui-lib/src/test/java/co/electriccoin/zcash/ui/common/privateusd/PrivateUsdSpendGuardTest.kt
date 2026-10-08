@@ -119,7 +119,7 @@ class PrivateUsdSpendGuardTest {
     fun `an unreadable recovery log prevents new spending without overwriting it`() =
         runTest {
             val preferences = InMemoryPreferenceProvider()
-            val key = PreferenceKey("private_usd_sends_v1")
+            val key = PreferenceKey("private_usd_sends_v2")
             preferences.putString(key, "corrupt")
             val encrypted = preferences.encrypted()
             val guard =

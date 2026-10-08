@@ -11,7 +11,6 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import xyz.justzappit.evm.types.Address
-import xyz.justzappit.evm.types.TxHash
 import java.math.BigInteger
 
 @Serializable
@@ -91,11 +90,6 @@ data class RailgunBalances(
     val byBucket: Map<RailgunBalanceBucket, List<RailgunTokenAmount>>
 )
 
-@Serializable
-data class RailgunGasAccount(
-    val address: Address,
-)
-
 /** Railgun's withdrawal fee, in basis points of what is unshielded. */
 @Serializable
 data class RailgunFees(
@@ -150,15 +144,41 @@ data class RailgunTransfer(
     val amount: BigInteger,
 )
 
-/** Signed by [from], the gas account, with its [nonce], and not sent: its hash is known before anyone can see it. */
-data class RailgunSignedTransaction(
-    val raw: String,
-    val txHash: TxHash,
-    val from: Address,
-    val nonce: Long,
+/** A broadcaster's terms: it sends a Railgun transaction, paying its gas, for a fee note to [railgunAddress]. */
+data class RailgunBroadcaster(
+    val chainId: Long,
+    val railgunProxy: Address,
+    val railgunAddress: RailgunAddress,
+    val feeToken: Address,
+    val fee: BigInteger,
+    /** The most it pays per gas, and so the highest minimum gas price a proof for it may bind. */
+    val maxGasPrice: BigInteger,
+)
+
+/** What a broadcaster is asked to send, as proved: the same bytes name the same send until it settles. */
+@Serializable
+data class RailgunRelayRequest(
+    val chainId: Long,
+    val to: Address,
+    val data: String,
+    @Serializable(with = DecimalSerializer::class)
+    val value: BigInteger,
 ) {
-    override fun toString() = "RailgunSignedTransaction(txHash=$txHash)"
+    override fun toString() = "RailgunRelayRequest(to=$to, ${data.length / 2 - 1} bytes)"
 }
+
+/** The nullifiers one Railgun transaction spends in note tree [tree]: all of them land together or none do. */
+@Serializable
+data class RailgunNullifiers(
+    val tree: Int,
+    val nullifiers: List<String>,
+)
+
+/** A proved send for a broadcaster, and what it spends, to settle it by from the chain. */
+data class RailgunRelayedProof(
+    val request: RailgunRelayRequest,
+    val spends: List<RailgunNullifiers>,
+)
 
 @Serializable
 enum class RailgunMerkletree {

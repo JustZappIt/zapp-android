@@ -1,16 +1,15 @@
 // Drives the built bundle in headless Chrome through the same MessagePort protocol as the app.
 //   npm run check                 syncs a fresh wallet on Sepolia, then reopens it from IndexedDB
-//   npm run check -- --transact   shields, sends privately and withdraws, with the wallet and gas
-//                                 account that RAILGUN_DEV_MNEMONIC and RAILGUN_DEV_GAS_KEY in
-//                                 local.properties name; Chrome keeps dev/.profile between runs
-//   npm run check -- --shield-to <0zk> <eth>   shields from that gas account into another wallet
+//   npm run check -- --transact   sends privately to itself through the relayer, which pays the gas, with
+//                                 the wallet RAILGUN_DEV_MNEMONIC in local.properties names, which must hold
+//                                 the relayer's token; Chrome keeps dev/.profile between runs
 // Mnemonics and keys are never printed. RAILGUN_CHECK_RPC must be a host the page's CSP allows.
 import { createServer } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { JsonRpcProvider, Mnemonic, formatEther, parseEther } from 'ethers';
+import { JsonRpcProvider, Mnemonic } from 'ethers';
 import puppeteer from 'puppeteer-core';
 
 const require = createRequire(import.meta.url);
@@ -20,9 +19,8 @@ const LOCAL_PROPERTIES = path.resolve('../../local.properties');
 const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const RPC_URL = process.env.RAILGUN_CHECK_RPC ?? 'https://ethereum-sepolia-rpc.publicnode.com';
 const POI_NODE = 'https://ppoi.fdi.network/';
-const WETH = '0xfff9976782d46cc05630d1f6ebab18b2324d6b14';
-const SHIELD_AMOUNT = parseEther('0.02');
-const SEND_AMOUNT = parseEther('0.001');
+const RELAYER_URL = process.env.RAILGUN_CHECK_RELAYER ?? 'https://zecswap-testnet.pepeman931.workers.dev/relayer';
+const SEND_AMOUNT = 10_000n;
 const SPENDABLE_POLL_MS = 30_000;
 const SPENDABLE_TIMEOUT_MS = 30 * 60_000;
 const CONFIRM_TIMEOUT_MS = 120_000;
@@ -155,80 +153,78 @@ async function syncCheck(page, url, onEvent) {
   }
 }
 
-/** Signs on the page, then sends and waits for a block from here, as the app sends from outside the page. */
-async function send(call, method, params) {
-  const signed = await call(method, params);
-  const provider = new JsonRpcProvider(RPC_URL);
-  await provider.broadcastTransaction(signed.raw);
-  const receipt = await provider.waitForTransaction(signed.txHash, 2, CONFIRM_TIMEOUT_MS);
-  if (receipt?.status !== 1) throw new Error(`${method} ${signed.txHash} is ${receipt === null ? 'pending' : 'reverted'}`);
-  return signed;
+/** Posts what the page proved to the relayer, as the app does, and waits for its block from here. */
+async function relay({ chainId, to, data, value }) {
+  const response = await fetch(`${RELAYER_URL}/v1/railgun/transact`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ chainId, to, data, value }),
+  });
+  const answer = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(`the relayer answered ${response.status}: ${answer.error ?? answer.code ?? ''}`);
+  const [hash] = answer.transactions;
+  const receipt = await new JsonRpcProvider(RPC_URL).waitForTransaction(hash, 2, CONFIRM_TIMEOUT_MS);
+  if (receipt?.status !== 1) throw new Error(`${hash} is ${receipt === null ? 'pending' : 'reverted'}`);
+  return hash;
 }
 
-const weth = (bucket) => BigInt(bucket?.find(({ token }) => token === WETH)?.amount ?? 0);
+const amountOf = (bucket, token) =>
+  BigInt(bucket?.find((amount) => amount.token.toLowerCase() === token.toLowerCase())?.amount ?? 0);
 const etherscan = (hash) => `https://sepolia.etherscan.io/tx/${hash}`;
-const summary = (balances) =>
-  Object.entries(balances)
-    .filter(([, tokens]) => weth(tokens) > 0n)
-    .map(([bucket, tokens]) => `${bucket} ${formatEther(weth(tokens))}`)
-    .join(', ') || 'none';
 
-async function waitForSpendable(call, amount) {
+async function waitForSpendable(call, token, amount) {
   const deadline = Date.now() + SPENDABLE_TIMEOUT_MS;
   for (;;) {
     const balances = await call('refresh', {});
-    console.log(`  WETH: ${summary(balances)}`);
-    if (weth(balances.Spendable) >= amount) return balances;
+    const held = Object.entries(balances)
+      .filter(([bucket]) => bucket !== 'Spent')
+      .reduce((sum, [, tokens]) => sum + amountOf(tokens, token), 0n);
+    const spendable = amountOf(balances.Spendable, token);
+    console.log(`  ${spendable} of ${held} spendable, ${amount} needed`);
+    if (spendable >= amount) return;
+    if (held < amount) throw new Error(`the dev wallet holds ${held} of ${token}, short of ${amount}`);
     if (Date.now() > deadline) throw new Error('nothing became spendable in time');
     await new Promise((resolve) => setTimeout(resolve, SPENDABLE_POLL_MS));
   }
 }
 
-/** Opens the dev wallet and gas account that local.properties names. */
+/** Opens the dev wallet that local.properties names. */
 async function openDevWallet(page, url, onEvent) {
-  const { RAILGUN_DEV_MNEMONIC: mnemonic, RAILGUN_DEV_GAS_KEY: privateKey } = await localProperties();
-  if (!mnemonic || !privateKey) throw new Error(`set RAILGUN_DEV_MNEMONIC and RAILGUN_DEV_GAS_KEY in ${LOCAL_PROPERTIES}`);
+  const { RAILGUN_DEV_MNEMONIC: mnemonic } = await localProperties();
+  if (!mnemonic) throw new Error(`set RAILGUN_DEV_MNEMONIC in ${LOCAL_PROPERTIES}`);
   // Stable across runs, so the wallet stored in dev/.profile opens again.
   const encryptionKey = createHash('sha256').update(`railgun-check:${mnemonic}`).digest('hex');
 
   const call = await connect(page, url, onEvent);
   await call('start', { network: 'sepolia', rpcUrls: [RPC_URL], poiNodeUrls: [POI_NODE], debug: true });
   const { address } = await call('openWallet', { encryptionKey, mnemonic });
-  const gas = await call('setGasAccount', { privateKey });
-  console.log(`  wallet ${address.slice(0, 16)}…, gas account ${gas.address} holds ${formatEther(gas.balance)} ETH`);
-  return { call, address, gas };
-}
-
-async function shieldTo(page, url, onEvent, to, eth) {
-  const { call } = await openDevWallet(page, url, onEvent);
-  const { txHash } = await send(call, 'shield', { amount: parseEther(eth).toString(), to });
-  console.log(`  shielded ${eth} ETH to ${to.slice(0, 16)}…: ${etherscan(txHash)}`);
+  console.log(`  wallet ${address.slice(0, 16)}…`);
+  return { call, address };
 }
 
 async function transactCheck(page, url, onEvent) {
-  const { call, address, gas } = await openDevWallet(page, url, onEvent);
-
-  let balances = await call('refresh', {});
-  console.log(`  WETH: ${summary(balances)}`);
-  if (weth(balances.Spendable) < 2n * SEND_AMOUNT && weth(balances.ShieldPending) === 0n) {
-    const { txHash } = await send(call, 'shield', { amount: SHIELD_AMOUNT.toString() });
-    console.log(`  shielded ${formatEther(SHIELD_AMOUNT)} ETH: ${etherscan(txHash)}`);
-  }
-  await waitForSpendable(call, 2n * SEND_AMOUNT);
-
-  const sent = await send(call, 'transfer', { to: address, token: WETH, amount: SEND_AMOUNT.toString() });
-  console.log(`  sent ${formatEther(SEND_AMOUNT)} WETH privately to itself, proof ${sent.proofMs} ms: ${etherscan(sent.txHash)}`);
-  await waitForSpendable(call, SEND_AMOUNT);
-
-  const withdrawn = await send(call, 'unshield', { to: gas.address, token: WETH, amount: SEND_AMOUNT.toString() });
-  console.log(`  withdrew ${formatEther(SEND_AMOUNT)} WETH to the gas account, proof ${withdrawn.proofMs} ms: ${etherscan(withdrawn.txHash)}`);
-  balances = await call('refresh', {});
-  console.log(`  WETH: ${summary(balances)}`);
+  const { call, address } = await openDevWallet(page, url, onEvent);
+  const terms = await (await fetch(`${RELAYER_URL}/v1/terms`)).json();
+  const sends = terms.railgunSends;
+  if (!sends) throw new Error(`${RELAYER_URL} sends no Railgun transactions`);
+  await waitForSpendable(call, sends.token, SEND_AMOUNT + BigInt(sends.fee));
+  const broadcaster = {
+    chainId: terms.chainId,
+    railgunProxy: sends.railgunProxy,
+    railgunAddress: sends.railgunAddress,
+    token: sends.token,
+    fee: sends.fee,
+    maxGasPrice: sends.maxGasPriceWei,
+  };
+  const amount = SEND_AMOUNT.toString();
+  const proved = await call('transfer', { to: address, token: sends.token, amount, broadcaster });
+  const notes = proved.spends.reduce((sum, { nullifiers }) => sum + nullifiers.length, 0);
+  console.log(`  proved a private send to itself spending ${notes} note(s), proof ${proved.proofMs} ms`);
+  console.log(`  the relayer sent it: ${etherscan(await relay(proved))}`);
 }
 
 async function main() {
-  const shieldToIndex = process.argv.indexOf('--shield-to');
-  const transact = process.argv.includes('--transact') || shieldToIndex >= 0;
+  const transact = process.argv.includes('--transact');
   const server = await serve();
   const url = `http://127.0.0.1:${server.address().port}/index.html`;
   const browser = await puppeteer.launch({
@@ -246,13 +242,7 @@ async function main() {
       const { event, data } = JSON.parse(json);
       onEvent(event, data);
     });
-    if (shieldToIndex >= 0) {
-      const [to, eth] = process.argv.slice(shieldToIndex + 1);
-      if (!to || !eth) throw new Error('usage: npm run check -- --shield-to <0zk> <eth>');
-      await shieldTo(page, url, onEvent, to, eth);
-    } else {
-      await (transact ? transactCheck(page, url, onEvent) : syncCheck(page, url, onEvent));
-    }
+    await (transact ? transactCheck(page, url, onEvent) : syncCheck(page, url, onEvent));
   } finally {
     await browser.close();
     server.close();
