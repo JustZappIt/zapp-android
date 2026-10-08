@@ -79,6 +79,9 @@ class SynchronizerProviderImpl(
 
     override val error = MutableStateFlow<SynchronizerError?>(null)
 
+    /** How many times [onSyncStartupStall] has rebuilt a stuck engine in this process. */
+    private var syncStartupResets = 0
+
     override val isSeedMismatch: StateFlow<Boolean> = walletCoordinator.isSeedMismatch
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -130,6 +133,51 @@ class SynchronizerProviderImpl(
                             .onFailure { Twig.warn { "MIGRATION_DIAG foreground SYNCED hook: ${it.message}" } }
                     }
                 }
+        }
+        scope.launch {
+            watchSyncStartup(
+                states =
+                    syncStartupStates(
+                        synchronizer = synchronizer,
+                        hasWallet = persistableWalletProvider.persistableWallet.map { it != null },
+                    ),
+                onStall = ::onSyncStartupStall,
+            )
+        }
+    }
+
+    /**
+     * An engine that starts without a network (airplane mode, or a dropped emulator/Wi-Fi link
+     * while a new wallet is created) stays at INITIALIZING after the network returns: nothing in
+     * the SDK retries its startup, so the Pay tab sat on "Connecting" until the app was restarted.
+     * Reproduced 2026-10-08 by creating a wallet in airplane mode and turning it off afterwards.
+     * Log which part is stuck, and rebuild a stuck engine a bounded number of times so a
+     * slow-but-healthy start can't be reset forever.
+     */
+    private fun onSyncStartupStall(state: SyncStartup) {
+        when (state) {
+            is SyncStartup.Starting -> {
+                if (syncStartupResets < MAX_SYNC_STARTUP_RESETS) {
+                    syncStartupResets++
+                    Twig.warn {
+                        "SYNC_STARTUP_DIAG engine stuck at ${state.status}; " +
+                            "resetting ($syncStartupResets/$MAX_SYNC_STARTUP_RESETS)"
+                    }
+                    walletCoordinator.resetSynchronizer()
+                } else {
+                    Twig.warn { "SYNC_STARTUP_DIAG engine still stuck at ${state.status}; reset limit reached" }
+                }
+            }
+
+            // WalletCoordinator.resetSynchronizer() does nothing while no engine exists, so the
+            // only thing to do here is leave a trace for the next report.
+            SyncStartup.AwaitingEngine -> {
+                Twig.warn { "SYNC_STARTUP_DIAG wallet persisted but no engine was built" }
+            }
+
+            SyncStartup.Idle -> {
+                Unit
+            }
         }
     }
 
@@ -183,5 +231,9 @@ class SynchronizerProviderImpl(
         }
 
         return pipeline
+    }
+
+    private companion object {
+        const val MAX_SYNC_STARTUP_RESETS = 2
     }
 }
