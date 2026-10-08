@@ -218,9 +218,9 @@
     <string name="chat_new_conversation_back_content_description">Atrás</string>
     <string name="chat_new_conversation_selected_content_description">Seleccionado</string>
     <string name="chat_new_conversation_remove_participant_content_description_fmt">Quitar a %1$s</string>
-    <string name="chat_new_conversation_start_chat_label">INICIAR CHAT</string>
+    <string name="chat_new_conversation_start_chat_label">Iniciar chat</string>
     <string name="chat_new_conversation_start_chat_content_description">Iniciar chat</string>
-    <string name="chat_new_conversation_scan_qr_label">ESCANEAR CÓDIGO QR</string>
+    <string name="chat_new_conversation_scan_qr_label">Escanear código QR</string>
     <string name="chat_new_conversation_scan_qr_content_description">Escanear código QR</string>
 
     <!-- Contact edit screen -->
@@ -337,22 +337,22 @@
     <string name="chat_contact_copy_messaging_key_content_description">Copiar clave de mensajería</string>
     <string name="chat_contact_copy_wallet_address_content_description">Copiar dirección de billetera</string>
     <string name="chat_contact_add_save_content_description">Agregar contacto</string>
-    <string name="chat_contact_add_save_button">GUARDAR</string>
+    <string name="chat_contact_add_save_button">Guardar</string>
 
     <!-- Chat contacts — edit contact sheet -->
-    <string name="chat_contact_edit_save_changes_button">GUARDAR CAMBIOS</string>
+    <string name="chat_contact_edit_save_changes_button">Guardar cambios</string>
     <string name="chat_contact_edit_save_changes_content_description">Guardar cambios</string>
-    <string name="chat_contact_edit_block_button">BLOQUEAR USUARIO</string>
+    <string name="chat_contact_edit_block_button">Bloquear usuario</string>
     <string name="chat_contact_edit_block_content_description">Bloquear usuario</string>
-    <string name="chat_contact_edit_unblock_button">DESBLOQUEAR USUARIO</string>
+    <string name="chat_contact_edit_unblock_button">Desbloquear usuario</string>
     <string name="chat_contact_edit_unblock_content_description">Desbloquear usuario</string>
-    <string name="chat_contact_edit_delete_contact_button">ELIMINAR CONTACTO</string>
+    <string name="chat_contact_edit_delete_contact_button">Eliminar contacto</string>
     <string name="chat_contact_edit_delete_contact_content_description">Eliminar contacto</string>
     <string name="chat_contact_edit_delete_confirm_title">¿Eliminar contacto?</string>
     <string name="chat_contact_edit_delete_confirm_subtitle">Esto no se puede deshacer.</string>
-    <string name="chat_contact_edit_delete_cancel_button">CANCELAR</string>
+    <string name="chat_contact_edit_delete_cancel_button">Cancelar</string>
     <string name="chat_contact_edit_delete_cancel_content_description">Cancelar eliminación</string>
-    <string name="chat_contact_edit_delete_confirm_button">ELIMINAR</string>
+    <string name="chat_contact_edit_delete_confirm_button">Eliminar</string>
     <string name="chat_contact_edit_delete_confirm_content_description">Confirmar eliminación del contacto</string>
 
     <!-- Chat room — attachment options sheet -->

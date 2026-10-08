@@ -343,7 +343,7 @@ internal fun AddContactSheet(
                 contentAlignment = Alignment.Center,
             ) {
                 BasicText(
-                    text = stringResource(R.string.add_new_contact_primary_btn).uppercase(),
+                    text = stringResource(R.string.add_new_contact_primary_btn),
                     style =
                         ZappTheme.typography.button.copy(
                             color = c.onAccent,

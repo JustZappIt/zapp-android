@@ -21,7 +21,7 @@
     <!-- Bottom dock -->
     <string name="security_settings_back_content_description">Atrás</string>
     <string name="security_settings_save_changes_content_description">Guardar cambios</string>
-    <string name="security_settings_save_changes_button">GUARDAR CAMBIOS</string>
+    <string name="security_settings_save_changes_button">Guardar cambios</string>
 
     <!-- Change-PIN screen -->
     <string name="security_settings_change_pin_confirm_title">Confirma\ntu PIN</string>
