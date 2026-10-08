@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationBottomSheet
 import co.electriccoin.zcash.ui.screen.chat.ChatRoomArgs
 import co.electriccoin.zcash.ui.screen.chat.view.ChatRoomView
 import org.koin.androidx.compose.koinViewModel
@@ -32,4 +33,6 @@ internal fun ChatRoomScreen(args: ChatRoomArgs) {
         onReplyToMessage = viewModel::onReplyToMessage,
         modifier = Modifier.fillMaxSize(),
     )
+    val addressRequestSheet by viewModel.addressRequestSheet.collectAsStateWithLifecycle()
+    ZappConfirmationBottomSheet(state = addressRequestSheet)
 }

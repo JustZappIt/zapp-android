@@ -446,4 +446,10 @@
     <string name="chat_push_service_channel_name">Background message delivery</string>
     <string name="chat_push_service_title">Zapp</string>
     <string name="chat_push_service_body">Background delivery is on</string>
+    <string name="chat_send_zec_no_address_title">No wallet address yet</string>
+    <string name="chat_send_zec_no_address_message">%1$s hasn\'t shared a wallet address in this chat. Ask for it, or enter one yourself.</string>
+    <string name="chat_send_zec_no_address_message_unnamed">They haven\'t shared a wallet address in this chat. Ask for it, or enter one yourself.</string>
+    <string name="chat_send_zec_ask_for_address">Ask for their address</string>
+    <string name="chat_send_zec_enter_address">Enter an address</string>
+    <string name="chat_send_zec_address_request_text">Could you share your wallet address so I can send you ZEC? Tap + and choose Share Address.</string>
 </resources>

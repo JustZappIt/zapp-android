@@ -446,4 +446,10 @@
     <string name="chat_push_service_channel_name">Entrega de mensajes en segundo plano</string>
     <string name="chat_push_service_title">Zapp</string>
     <string name="chat_push_service_body">La entrega en segundo plano está activada</string>
+    <string name="chat_send_zec_no_address_title">Aún no hay dirección de billetera</string>
+    <string name="chat_send_zec_no_address_message">%1$s no ha compartido una dirección de billetera en este chat. Pídesela o escríbela tú.</string>
+    <string name="chat_send_zec_no_address_message_unnamed">Esta persona no ha compartido una dirección de billetera en este chat. Pídesela o escríbela tú.</string>
+    <string name="chat_send_zec_ask_for_address">Pedir su dirección</string>
+    <string name="chat_send_zec_enter_address">Escribir una dirección</string>
+    <string name="chat_send_zec_address_request_text">¿Me compartes tu dirección de billetera para enviarte ZEC? Toca + y elige Compartir dirección.</string>
 </resources>
