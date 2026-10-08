@@ -58,6 +58,7 @@ android {
                     "src/main/res/ui/export_data",
                     "src/main/res/ui/error",
                     "src/main/res/ui/gift",
+                    "src/main/res/ui/group_link",
                     "src/main/res/ui/home",
                     "src/main/res/ui/insufficient_funds",
                     "src/main/res/ui/invest",
@@ -236,6 +237,19 @@ androidComponents {
                             variant.buildType == "debug"
                     ).toString(),
                 comment = "Debug-only: Invest runs on the scripted demo engine, with no network and no ZEC sent"
+            )
+        )
+        variant.buildConfigFields?.put(
+            "IS_GROUP_LINKS_ENABLED",
+            BuildConfigField(
+                type = "boolean",
+                value =
+                    (
+                        project.property("ZAPP_GROUP_LINKS_ENABLED").toString().toBoolean() ||
+                            variant.buildType == "debug" ||
+                            variant.productFlavors.any { it.second == DistributionDimension.INTERNAL.value }
+                    ).toString(),
+                comment = "Whether group invite links are handled and offered"
             )
         )
         variant.buildConfigFields?.put(

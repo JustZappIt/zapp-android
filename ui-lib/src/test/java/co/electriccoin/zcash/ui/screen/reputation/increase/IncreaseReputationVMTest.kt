@@ -1,0 +1,215 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-FileCopyrightText: 2026 The Zapp Contributors
+
+package co.electriccoin.zcash.ui.screen.reputation.increase
+
+import co.electriccoin.zcash.ui.NavigationRouter
+import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.design.util.stringRes
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import xyz.justzappit.evm.hd.EvmKey
+import xyz.justzappit.evm.math.bigIntegerValueOf
+import xyz.justzappit.evm.types.Address
+import xyz.justzappit.offramp.account.OfframpSmartAccount
+import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
+import xyz.justzappit.offramp.identity.IdentityFailure
+import xyz.justzappit.offramp.identity.IdentityStatus
+import xyz.justzappit.offramp.identity.IdentityVerificationDriver
+import xyz.justzappit.offramp.p2p.CurrencyCode
+import xyz.justzappit.offramp.p2p.Usdc6
+import xyz.justzappit.offramp.reclaim.ReclaimVerificationDriver
+import xyz.justzappit.offramp.reputation.IdentityCheck
+import xyz.justzappit.offramp.reputation.ReputationReader
+import xyz.justzappit.offramp.reputation.ReputationSummary
+import xyz.justzappit.offramp.reputation.RpPerUsdcLimit
+import kotlin.test.AfterTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+
+/**
+ * The widget reports back only by redirecting the browser to Zapp. A user who switches back by
+ * hand instead leaves that redirect blocked behind them, and the run it was for would otherwise
+ * wait on the browser step for good.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class IncreaseReputationVMTest {
+    private val navigationRouter = mockk<NavigationRouter>(relaxed = true)
+    private val accountProvider = mockk<SmartOfframpAccountProvider>()
+    private val reputationReader = mockk<ReputationReader>()
+    private val reclaimDriver = mockk<ReclaimVerificationDriver>()
+    private val identityDriver = mockk<IdentityVerificationDriver>()
+    private val returns = IdentityReturnInbox()
+
+    /** What the driver does once the user is away in the widget: wait, or move on by itself. */
+    private var afterVerifying: suspend () -> IdentityStatus? = { awaitCancellation() }
+
+    @AfterTest
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `coming back without the redirect calls the browser step off`() =
+        runTest {
+            val vm = viewModelAwayInTheWidget()
+
+            vm.onScreenVisible()
+            advanceTimeBy(GRACE_MILLIS + 1)
+            runCurrent()
+
+            val run = assertNotNull(vm.state.value.run)
+            assertEquals(VerificationStage.FAILED, run.stage)
+            assertEquals(stringRes(R.string.increase_reputation_identity_error_no_return), run.error)
+        }
+
+    @Test
+    fun `a run that moved on before the grace ran out is left alone`() =
+        runTest {
+            afterVerifying = {
+                delay(REDIRECT_MILLIS)
+                IdentityStatus.Submitting
+            }
+            val vm = viewModelAwayInTheWidget()
+
+            vm.onScreenVisible()
+            advanceTimeBy(GRACE_MILLIS + 1)
+            runCurrent()
+
+            assertEquals(VerificationStage.SUBMITTING, stageOf(vm))
+        }
+
+    @Test
+    fun `cancelling the run drops the pending verdict with it`() =
+        runTest {
+            val vm = viewModelAwayInTheWidget()
+
+            vm.onScreenVisible()
+            assertNotNull(vm.state.value.secondaryAction).onClick()
+            advanceTimeBy(GRACE_MILLIS + 1)
+            runCurrent()
+
+            assertNull(vm.state.value.run)
+            coVerify(exactly = 1) { identityDriver.cancelWaiting(IdentityCheck.Passport, CurrencyCode.Inr) }
+        }
+
+    @Test
+    fun `retry restarts the identity driver instead of merely dismissing the failure`() =
+        runTest {
+            afterVerifying = {
+                delay(REDIRECT_MILLIS)
+                IdentityStatus.Failed(IdentityFailure.Network)
+            }
+            val vm = viewModelAwayInTheWidget()
+            advanceTimeBy(REDIRECT_MILLIS + 1)
+            runCurrent()
+            assertEquals(VerificationStage.FAILED, stageOf(vm))
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            assertNotNull(vm.state.value.primaryAction).onClick()
+            runCurrent()
+            assertEquals(VerificationStage.READY, stageOf(vm))
+            vm.state.value.identityChecks
+                .single()
+                .onClick()
+            verify(exactly = 2) { identityDriver.verify(IdentityCheck.Passport, CurrencyCode.Inr, any(), any()) }
+        }
+
+    @Test
+    fun `screen load resumes a saved identity result without tapping its row`() =
+        runTest {
+            val vm = viewModelAwayInTheWidget(recoverOnLoad = true)
+            assertEquals(VerificationStage.VERIFYING, stageOf(vm))
+            verify(exactly = 1) { identityDriver.verify(IdentityCheck.Passport, CurrencyCode.Inr, any(), any()) }
+        }
+
+    /** A screen whose passport row has been tapped and whose widget the user has opened. */
+    private fun TestScope.viewModelAwayInTheWidget(recoverOnLoad: Boolean = false): IncreaseReputationVM {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        coEvery { accountProvider.resolve() } returns OfframpSmartAccount(mockk<EvmKey>(), Address.parse(WALLET))
+        coEvery { reputationReader.read(any(), any()) } returns summary()
+        coEvery { identityDriver.recoverableCheck(any()) } returns if (recoverOnLoad) IdentityCheck.Passport else null
+        coEvery { identityDriver.cancelWaiting(any(), any()) } returns Unit
+        every { identityDriver.isOffered(any(), any()) } answers { firstArg<IdentityCheck>() == IdentityCheck.Passport }
+        every { identityDriver.verify(IdentityCheck.Passport, any(), any(), any()) } returns
+            flow {
+                emit(IdentityStatus.Preparing)
+                emit(IdentityStatus.Ready(WIDGET_URL))
+                emit(IdentityStatus.Verifying)
+                afterVerifying()?.let { emit(it) }
+                awaitCancellation()
+            }
+
+        val vm =
+            IncreaseReputationVM(
+                args = IncreaseReputationArgs(currency = CurrencyCode.Inr),
+                navigationRouter = navigationRouter,
+                accountProvider = accountProvider,
+                reputationReader = reputationReader,
+                verificationDriver = reclaimDriver,
+                identityDriver = identityDriver,
+                identityReturns = returns,
+            )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
+        runCurrent()
+
+        if (!recoverOnLoad) {
+            vm.state.value.identityChecks
+                .single()
+                .onClick()
+        }
+        runCurrent()
+        assertEquals(VerificationStage.READY, stageOf(vm))
+        // The view opens the browser, then tells the screen it did.
+        assertNotNull(vm.state.value.primaryAction).onClick()
+        runCurrent()
+        assertEquals(VerificationStage.VERIFYING, stageOf(vm))
+        return vm
+    }
+
+    private fun stageOf(vm: IncreaseReputationVM): VerificationStage? {
+        val run = vm.state.value.run
+        return run?.stage
+    }
+
+    private fun summary() =
+        ReputationSummary(
+            currency = CurrencyCode.Inr,
+            points = bigIntegerValueOf(0),
+            isBlacklisted = false,
+            verified = emptySet(),
+            awards = emptyMap(),
+            buyLimit = Usdc6.ofMicros(0),
+            maxBuyLimit = Usdc6.ofMicros(MAX_BUY),
+            rpPerUsdc = RpPerUsdcLimit(bigIntegerValueOf(1), bigIntegerValueOf(1)),
+        )
+
+    private companion object {
+        const val WALLET = "0x111111111111111111111111111111111111baaf"
+        const val WIDGET_URL = "https://passport.example/wizard?s=abc"
+        const val MAX_BUY = 500_000_000L
+
+        /** [IncreaseReputationVM.RETURN_GRACE_MILLIS]. */
+        const val GRACE_MILLIS = 3_000L
+        const val REDIRECT_MILLIS = 500L
+    }
+}
