@@ -45,12 +45,12 @@ class RailgunSessionTest {
         runTest {
             page.reply = relayed()
 
-            val private = session.prove(transfer(RailgunDestination.Private(ZERO_K_ADDRESS)), BROADCASTER)
+            val private = session.prove(transfer(RailgunDestination.Private(ZERO_K_ADDRESS)), BROADCASTER, FEE)
             assertEquals(RailgunMethod.TRANSFER, page.method)
             assertEquals(ZERO_K, page.params("to"))
-            assertEquals("250000", page.broadcaster("fee"))
+            assertEquals("3598677", page.params("fee"))
             assertEquals(ZERO_K, page.broadcaster("railgunAddress"))
-            session.prove(transfer(RailgunDestination.Public(TOKEN_ADDRESS)), BROADCASTER)
+            session.prove(transfer(RailgunDestination.Public(TOKEN_ADDRESS)), BROADCASTER, FEE)
             assertEquals(RailgunMethod.UNSHIELD, page.method)
             assertEquals(TOKEN_ADDRESS.checksumHex, page.params("to"))
 
@@ -66,7 +66,7 @@ class RailgunSessionTest {
             for (reply in replies) {
                 page.reply = reply
                 assertFailsWith<RailgunException.Protocol> {
-                    session.prove(transfer(RailgunDestination.Private(ZERO_K_ADDRESS)), BROADCASTER)
+                    session.prove(transfer(RailgunDestination.Private(ZERO_K_ADDRESS)), BROADCASTER, FEE)
                 }
             }
         }
@@ -77,7 +77,7 @@ class RailgunSessionTest {
             page.reply = """{"chainId":$CHAIN_ID,"to":"$PROXY"}"""
 
             assertFailsWith<RailgunException.Protocol> {
-                session.prove(transfer(RailgunDestination.Private(ZERO_K_ADDRESS)), BROADCASTER)
+                session.prove(transfer(RailgunDestination.Private(ZERO_K_ADDRESS)), BROADCASTER, FEE)
             }
         }
 
@@ -154,8 +154,9 @@ class RailgunSessionTest {
                 railgunProxy = PROXY_ADDRESS,
                 railgunAddress = ZERO_K_ADDRESS,
                 feeToken = TOKEN_ADDRESS,
-                fee = BigInteger.valueOf(250_000),
+                minFee = BigInteger.valueOf(250_000),
                 maxGasPrice = BigInteger.valueOf(20_000_000_000),
             )
+        val FEE: BigInteger = BigInteger.valueOf(3_598_677)
     }
 }

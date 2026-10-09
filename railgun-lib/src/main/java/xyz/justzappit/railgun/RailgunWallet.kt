@@ -15,6 +15,7 @@ import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import xyz.justzappit.evm.util.toHex
+import java.math.BigInteger
 
 /** Railgun's wallet SDK in a hidden WebView, one engine and wallet per page; `debug` makes the page inspectable. */
 class RailgunWallet(
@@ -100,18 +101,32 @@ class RailgunSession internal constructor(
             }.toMap()
             .let(::RailgunBalances)
 
-    /** Proves [transfer] for [broadcaster] to send, with its fee note first; nothing is sent. */
+    /** What [broadcaster] charges to send [transfer], from the SDK's estimate of its gas; nothing is proved. */
+    suspend fun broadcasterFee(
+        transfer: RailgunTransfer,
+        broadcaster: RailgunBroadcaster,
+    ): BigInteger =
+        page
+            .request(
+                RailgunMethod.BROADCASTER_FEE,
+                BroadcasterFeeParams(transfer.to, transfer.token, transfer.amount, BroadcasterParams(broadcaster)),
+                BroadcasterFeeParams.serializer(),
+                BroadcasterFeeResult.serializer(),
+            ).fee
+
+    /** Proves [transfer] for [broadcaster] to send, with a fee note of [fee] first; nothing is sent. */
     suspend fun prove(
         transfer: RailgunTransfer,
         broadcaster: RailgunBroadcaster,
+        fee: BigInteger,
     ): RailgunRelayedProof {
-        val fee = BroadcasterParams(broadcaster)
+        val params = BroadcasterParams(broadcaster)
         val proved =
             when (val to = transfer.to) {
                 is RailgunDestination.Private -> {
                     page.request(
                         RailgunMethod.TRANSFER,
-                        TransferParams(to.address, transfer.token, transfer.amount, fee),
+                        TransferParams(to.address, transfer.token, transfer.amount, fee, params),
                         TransferParams.serializer(),
                         RelayedResult.serializer(),
                     )
@@ -120,7 +135,7 @@ class RailgunSession internal constructor(
                 is RailgunDestination.Public -> {
                     page.request(
                         RailgunMethod.UNSHIELD,
-                        UnshieldParams(to.address, transfer.token, transfer.amount, fee),
+                        UnshieldParams(to.address, transfer.token, transfer.amount, fee, params),
                         UnshieldParams.serializer(),
                         RelayedResult.serializer(),
                     )

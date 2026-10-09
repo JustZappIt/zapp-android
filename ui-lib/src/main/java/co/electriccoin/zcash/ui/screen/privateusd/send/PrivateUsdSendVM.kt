@@ -13,6 +13,7 @@ import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.common.privateusd.ObserveLocalCurrencyUseCase
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendCost
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendOutcome
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendRequest
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
@@ -75,10 +76,18 @@ class PrivateUsdSendVM(
                 networkFee =
                     railgunWalletRepository.state.value.network
                         ?.let { PrivateUsdTokens.find(it, sender.networkFeeToken) }
-                        ?.let { PrivateUsdNetworkFee(it, sender.maxNetworkFee) },
+                        ?.let(::PrivateUsdNetworkFee),
             )
         )
     private var reviewJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            runConversionStep("no minimum send fee") { sender.minNetworkFee() }.onSuccess { fee ->
+                form.update { it.copy(networkFee = it.networkFee?.copy(minimum = fee)) }
+            }
+        }
+    }
 
     internal val state: StateFlow<PrivateUsdSendState> =
         combine(
@@ -231,11 +240,7 @@ class PrivateUsdSendVM(
             viewModelScope.launch {
                 try {
                     runConversionStep("no send cost") { sender.cost(request) }.fold(
-                        onSuccess = { cost ->
-                            form.update {
-                                it.copy(phase = PrivateUsdSendPhase.REVIEW, cost = cost, reviewedRequest = request)
-                            }
-                        },
+                        onSuccess = { cost -> form.update { it.priced(request, cost) } },
                         onFailure = { e ->
                             val error =
                                 if (e is PrivateUsdSendsUnavailableException) {
@@ -255,12 +260,10 @@ class PrivateUsdSendVM(
     private fun onConfirm() {
         val current = form.value
         val request = current.reviewedRequest ?: return
-        val canConfirm = spendGuard.state.value.canSend && !current.isBusy
-        if (!canConfirm || current.phase != PrivateUsdSendPhase.REVIEW ||
-            !current.canSend(request, balanceRepository.state.value)
-        ) {
-            return
-        }
+        val cost = current.cost
+        val canConfirm =
+            spendGuard.state.value.canSend && !current.isBusy && current.phase == PrivateUsdSendPhase.REVIEW
+        if (cost == null || !canConfirm || !current.canSend(request, balanceRepository.state.value)) return
         form.update { it.copy(isBusy = true, error = null) }
         viewModelScope.launch {
             try {
@@ -269,24 +272,54 @@ class PrivateUsdSendVM(
                     val outcome =
                         runConversionStep(
                             "the send didn't start"
-                        ) { sender.send(request) }.getOrDefault(PrivateUsdSendOutcome.NotSent)
+                        ) { sender.send(request, cost) }.getOrDefault(PrivateUsdSendOutcome.NotSent)
                     // Anything signed may be out there: it never goes back to review, where it could be paid again.
                     form.update {
-                        if (outcome == PrivateUsdSendOutcome.Busy) {
-                            it.copy(
-                                phase = PrivateUsdSendPhase.REVIEW,
-                                error = stringRes(R.string.private_usd_payment_pending),
-                            )
-                        } else if (outcome == PrivateUsdSendOutcome.NotSent) {
-                            it.notSent()
-                        } else {
-                            it.copy(phase = PrivateUsdSendPhase.DONE, outcome = outcome)
+                        when (outcome) {
+                            PrivateUsdSendOutcome.Busy -> {
+                                it.copy(
+                                    phase = PrivateUsdSendPhase.REVIEW,
+                                    error = stringRes(R.string.private_usd_payment_pending),
+                                )
+                            }
+
+                            PrivateUsdSendOutcome.NotSent -> {
+                                it.notSent()
+                            }
+
+                            is PrivateUsdSendOutcome.Repriced -> {
+                                val token = it.networkFee?.token ?: request.token
+                                val rose =
+                                    stringRes(
+                                        R.string.private_usd_send_fee_rose,
+                                        exactTokenAmount(outcome.cost.networkFee, token),
+                                    )
+                                it.priced(request, outcome.cost, rose)
+                            }
+
+                            is PrivateUsdSendOutcome.Sent, is PrivateUsdSendOutcome.Unconfirmed -> {
+                                it.copy(phase = PrivateUsdSendPhase.DONE, outcome = outcome)
+                            }
                         }
                     }
                 }
             } finally {
                 form.update { it.copy(isBusy = false) }
             }
+        }
+    }
+
+    // Under review at the relayer's fee, or back on the form while what it sends leaves too little for that fee.
+    private fun PrivateUsdSendForm.priced(
+        request: PrivateUsdSendRequest,
+        cost: PrivateUsdSendCost,
+        error: StringResource? = null,
+    ): PrivateUsdSendForm {
+        val quoted = copy(networkFee = networkFee?.copy(quoted = cost.networkFee), error = error)
+        return if (quoted.canSend(request, balanceRepository.state.value)) {
+            quoted.copy(phase = PrivateUsdSendPhase.REVIEW, cost = cost, reviewedRequest = request)
+        } else {
+            quoted.copy(phase = PrivateUsdSendPhase.FORM, cost = null, reviewedRequest = null)
         }
     }
 

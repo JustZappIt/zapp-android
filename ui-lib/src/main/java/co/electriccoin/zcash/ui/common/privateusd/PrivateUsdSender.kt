@@ -27,6 +27,7 @@ import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.atomicswap.RailgunBroadcast
 import xyz.justzappit.offramp.atomicswap.RailgunSendsClient
+import xyz.justzappit.railgun.RailgunBroadcaster
 import xyz.justzappit.railgun.RailgunDestination
 import xyz.justzappit.railgun.RailgunRelayRequest
 import xyz.justzappit.railgun.RailgunRelayedProof
@@ -52,6 +53,8 @@ data class PrivateUsdSendCost(
     /** The broadcaster's fee for sending it, paid from the private balance on top of the amount. */
     val networkFee: BigInteger,
     val networkFeeToken: Address,
+    /** Until when the relayer holds [networkFee]'s gas rate, in Unix seconds; null when it's the minimum. */
+    val networkFeeExpiresAt: Long? = null,
 ) {
     fun received(amount: BigInteger): BigInteger = amount - railgunFee
 }
@@ -73,19 +76,31 @@ sealed interface PrivateUsdSendOutcome {
 
     /** An earlier payment is unresolved; no additional transaction was created. */
     data object Busy : PrivateUsdSendOutcome
+
+    /** Nothing left the wallet: the relayer now asks [cost]'s higher network fee, which is confirmed first. */
+    data class Repriced(
+        val cost: PrivateUsdSendCost
+    ) : PrivateUsdSendOutcome
 }
 
 /** Sends from the Railgun balance. */
 interface PrivateUsdSender {
+    /** What [request] costs at the network fee the relayer quotes for it now. */
     suspend fun cost(request: PrivateUsdSendRequest): PrivateUsdSendCost
 
-    /** The most a send pays the broadcaster, on top of what it sends, in [networkFeeToken]. */
-    val maxNetworkFee: BigInteger
+    /** The least a send pays the broadcaster, on top of what it sends, in [networkFeeToken]. */
+    suspend fun minNetworkFee(): BigInteger
 
     val networkFeeToken: Address
 
-    /** Runs to its end, and into the send log, even once its caller stops waiting. */
-    suspend fun send(request: PrivateUsdSendRequest): PrivateUsdSendOutcome
+    /**
+     * Sends [request] paying [cost]'s network fee, or a lower one the relayer quotes now; a higher one comes back to be
+     * confirmed. Runs to its end, and into the send log, even once its caller stops waiting.
+     */
+    suspend fun send(
+        request: PrivateUsdSendRequest,
+        cost: PrivateUsdSendCost
+    ): PrivateUsdSendOutcome
 
     /** Settles what the log still holds unconfirmed: confirmed, dropped, or asked about again. */
     fun reconcile()
@@ -99,7 +114,7 @@ class PrivateUsdSendsUnavailableException : IllegalStateException("the relayer s
 /** Sends through the deployment's relayer, which pays the gas for a fee note, so no account of the wallet's shows. */
 class RelayedPrivateUsdSender(
     private val railgunWalletRepository: RailgunWalletRepository,
-    private val relayer: PrivateUsdRelayer,
+    relayer: PrivateUsdRelayer,
     chain: PrivateUsdSendChain,
     private val pin: RailgunSendsPin,
     private val sendLog: PrivateUsdSendLog,
@@ -107,25 +122,19 @@ class RelayedPrivateUsdSender(
     private val clock: Clock,
     private val spendGuard: PrivateUsdSpendGuard,
 ) : PrivateUsdSender {
+    private val pricing = PrivateUsdSendPricing(railgunWalletRepository, relayer, clock)
     private val settlement = PrivateUsdSendSettlement(relayer, chain, sendLog, clock)
 
-    override suspend fun cost(request: PrivateUsdSendRequest): PrivateUsdSendCost {
-        val broadcaster = relayer.broadcaster() ?: throw PrivateUsdSendsUnavailableException()
-        val fees = if (request.isWithdrawal) railgunWalletRepository.fees() else null
-        return PrivateUsdSendCost(
-            railgunFee = fees?.unshieldFee(request.amount) ?: BigInteger.ZERO,
-            feeBasisPoints = fees?.unshieldBasisPoints ?: 0,
-            networkFee = broadcaster.fee,
-            networkFeeToken = broadcaster.feeToken,
-        )
-    }
+    override suspend fun cost(request: PrivateUsdSendRequest): PrivateUsdSendCost = pricing.quote(request).cost
 
-    override val maxNetworkFee: BigInteger get() = pin.maxFee.micros
+    override suspend fun minNetworkFee(): BigInteger = pricing.broadcaster().minFee
 
     override val networkFeeToken: Address get() = pin.feeToken
 
-    override suspend fun send(request: PrivateUsdSendRequest): PrivateUsdSendOutcome =
-        scope.async { spendGuard.send { sendNow(request) } }.await()
+    override suspend fun send(
+        request: PrivateUsdSendRequest,
+        cost: PrivateUsdSendCost
+    ): PrivateUsdSendOutcome = scope.async { spendGuard.send { sendNow(request, cost) } }.await()
 
     override fun reconcile() {
         scope.launch { settlement.settleAll() }
@@ -137,7 +146,23 @@ class RelayedPrivateUsdSender(
         work.children.forEach { it.join() }
     }
 
-    private suspend fun sendNow(request: PrivateUsdSendRequest): PrivateUsdSendOutcome {
+    // Nothing is proved for a fee above the one confirmed.
+    private suspend fun sendNow(
+        request: PrivateUsdSendRequest,
+        confirmed: PrivateUsdSendCost
+    ): PrivateUsdSendOutcome {
+        val quote = attempt("nothing was sent") { pricing.held(request, confirmed) }
+        return when {
+            quote == null -> PrivateUsdSendOutcome.NotSent
+            quote.fee > confirmed.networkFee -> PrivateUsdSendOutcome.Repriced(quote.cost)
+            else -> sendQuoted(request, quote)
+        }
+    }
+
+    private suspend fun sendQuoted(
+        request: PrivateUsdSendRequest,
+        quote: PrivateUsdSendQuote
+    ): PrivateUsdSendOutcome {
         val pending =
             PrivateUsdPendingSend(
                 id = UUID.randomUUID().toString(),
@@ -147,32 +172,97 @@ class RelayedPrivateUsdSender(
                 startedAt = clock.now().epochSeconds,
             )
         noted { sendLog.begin(pending) }
-        val proof = proveAndKeep(pending, request) ?: return PrivateUsdSendOutcome.NotSent
-        val outcome = settlement.deliver(pending.id, proof.request)
+        val proof = proveAndKeep(pending, request, quote) ?: return PrivateUsdSendOutcome.NotSent
+        val outcome = settlement.deliver(pending.id, proof.request) ?: refused(request, quote.fee)
         // The balance follows the send without the send waiting for it.
         scope.launch { bestEffort("Private USD: no sync after the send") { railgunWalletRepository.sync() } }
         return outcome
     }
 
+    // A refusal sent nothing. A fee the relayer now asks above the one proved is the user's to confirm.
+    private suspend fun refused(
+        request: PrivateUsdSendRequest,
+        proved: BigInteger
+    ): PrivateUsdSendOutcome =
+        attempt("no quote after a refusal") { pricing.quote(request) }
+            ?.takeIf { it.fee > proved }
+            ?.let { PrivateUsdSendOutcome.Repriced(it.cost) }
+            ?: PrivateUsdSendOutcome.NotSent
+
     // Null when nothing was proved, or what was couldn't be kept to post again: then nothing goes out.
     private suspend fun proveAndKeep(
         pending: PrivateUsdPendingSend,
         request: PrivateUsdSendRequest,
+        quote: PrivateUsdSendQuote,
     ): RailgunRelayedProof? {
-        val proved =
-            runCatching {
-                val broadcaster = relayer.broadcaster() ?: throw PrivateUsdSendsUnavailableException()
+        val proof =
+            attempt("nothing was sent") {
                 railgunWalletRepository
-                    .prove(RailgunTransfer(request.to, request.token.address, request.amount), broadcaster)
+                    .prove(request.transfer, quote.broadcaster, quote.fee)
                     .also { sendLog.prove(pending, it, clock.now().epochSeconds) }
             }
-        proved.exceptionOrNull()?.let { e ->
-            // Only this send's own cancellation stops it; the engine's, in a reset, is a failure.
-            if (e is CancellationException) currentCoroutineContext().ensureActive()
-            Twig.warn(e) { "Private USD: nothing was sent" }
-            noted { sendLog.remove(pending) }
+        if (proof == null) noted { sendLog.remove(pending) }
+        return proof
+    }
+}
+
+/** A network fee the relayer asks, and the terms it was worked out from, which a proof paying it is made for. */
+private class PrivateUsdSendQuote(
+    val broadcaster: RailgunBroadcaster,
+    val cost: PrivateUsdSendCost,
+) {
+    val fee: BigInteger get() = cost.networkFee
+}
+
+/** Quotes the relayer's fee for a send from its terms now, with the SDK's own estimate of the send's gas. */
+private class PrivateUsdSendPricing(
+    private val railgunWalletRepository: RailgunWalletRepository,
+    private val relayer: PrivateUsdRelayer,
+    private val clock: Clock,
+) {
+    suspend fun broadcaster(): RailgunBroadcaster = relayer.broadcaster() ?: throw PrivateUsdSendsUnavailableException()
+
+    suspend fun quote(request: PrivateUsdSendRequest): PrivateUsdSendQuote = quote(request, broadcaster())
+
+    /** [confirmed] while the relayer will still hold it once a proof is made, and its minimum isn't above it. */
+    suspend fun held(
+        request: PrivateUsdSendRequest,
+        confirmed: PrivateUsdSendCost
+    ): PrivateUsdSendQuote {
+        val broadcaster = broadcaster()
+        val expiresAt = confirmed.networkFeeExpiresAt
+        val isHeld =
+            if (expiresAt == null) {
+                broadcaster.feePerUnitGas == null
+            } else {
+                clock.now().epochSeconds + PROVING_TIME.inWholeSeconds < expiresAt
+            }
+        return if (isHeld && broadcaster.minFee <= confirmed.networkFee) {
+            PrivateUsdSendQuote(broadcaster, confirmed)
+        } else {
+            quote(request, broadcaster)
         }
-        return proved.getOrNull()
+    }
+
+    private suspend fun quote(
+        request: PrivateUsdSendRequest,
+        broadcaster: RailgunBroadcaster
+    ): PrivateUsdSendQuote {
+        val fee = railgunWalletRepository.broadcasterFee(request.transfer, broadcaster)
+        val fees = if (request.isWithdrawal) railgunWalletRepository.fees() else null
+        val cost =
+            PrivateUsdSendCost(
+                railgunFee = fees?.unshieldFee(request.amount) ?: BigInteger.ZERO,
+                feeBasisPoints = fees?.unshieldBasisPoints ?: 0,
+                networkFee = fee,
+                networkFeeToken = broadcaster.feeToken,
+                networkFeeExpiresAt = broadcaster.feeExpiresAt,
+            )
+        return PrivateUsdSendQuote(broadcaster, cost)
+    }
+
+    private companion object {
+        val PROVING_TIME = 2.minutes
     }
 }
 
@@ -188,14 +278,14 @@ private class PrivateUsdSendSettlement(
 ) {
     private val lock = Mutex()
 
-    /** Posts [id]'s request and waits a while for its block. */
+    /** Posts [id]'s request and waits a while for its block; null when the relayer refused it, so nothing went. */
     suspend fun deliver(
         id: String,
         request: RailgunRelayRequest
-    ): PrivateUsdSendOutcome =
+    ): PrivateUsdSendOutcome? =
         when (val answer = post(id, request)) {
             is RailgunBroadcast.Sent -> landing(id, answer.txHash)
-            is RailgunBroadcast.Refused -> PrivateUsdSendOutcome.NotSent
+            is RailgunBroadcast.Refused -> null
             is RailgunBroadcast.Spent -> PrivateUsdSendOutcome.Unconfirmed(answer.transactions.firstOrNull())
             is RailgunBroadcast.Retry -> PrivateUsdSendOutcome.Unconfirmed(null)
         }
@@ -341,6 +431,19 @@ private class PrivateUsdSendSettlement(
 private suspend fun noted(block: suspend () -> Unit) {
     bestEffort("Private USD: the send log wasn't updated", block)
 }
+
+// Only this send's own cancellation stops it; the engine's, in a reset, is a failure.
+private suspend fun <T> attempt(
+    what: String,
+    block: suspend () -> T
+): T? =
+    runCatching { block() }.getOrElse { e ->
+        if (e is CancellationException) currentCoroutineContext().ensureActive()
+        Twig.warn(e) { "Private USD: $what" }
+        null
+    }
+
+private val PrivateUsdSendRequest.transfer: RailgunTransfer get() = RailgunTransfer(to, token.address, amount)
 
 /** The sender this build has: its deployment's relayer, where the deployment pins one for sends. */
 class PrivateUsdSenders(

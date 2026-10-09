@@ -20,6 +20,7 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendStatus
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
 import co.electriccoin.zcash.ui.common.privateusd.Sepolia
+import co.electriccoin.zcash.ui.common.privateusd.exactTokenAmount
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletState
 import co.electriccoin.zcash.ui.common.security.PinVerifyState
@@ -80,8 +81,8 @@ class PrivateUsdSendVMTest {
         every { senders.current } returns sender
         coEvery { sender.cost(any()) } returns PrivateUsdSendCost(BigInteger.ZERO, 0, BigInteger.ZERO, Sepolia.TEST_USD)
         every { sender.networkFeeToken } returns Sepolia.TEST_USD
-        every { sender.maxNetworkFee } returns BigInteger.ZERO
-        coEvery { sender.send(any()) } returns PrivateUsdSendOutcome.Sent(TX_HASH)
+        coEvery { sender.minNetworkFee() } returns BigInteger.ZERO
+        coEvery { sender.send(any(), any()) } returns PrivateUsdSendOutcome.Sent(TX_HASH)
         val wallet = mockk<RailgunWalletRepository>()
         every { wallet.state } returns
             MutableStateFlow(RailgunWalletState(RailgunWalletState.Phase.READY, RailgunNetwork.SEPOLIA))
@@ -123,13 +124,13 @@ class PrivateUsdSendVMTest {
             assertNotNull(vm.state.value.error)
             confirm()
             coVerify(exactly = 0) { auth.authenticate(any(), any()) }
-            coVerify(exactly = 0) { sender.send(any()) }
+            coVerify(exactly = 0) { sender.send(any(), any()) }
 
             spending.value = PrivateUsdSpendStatus.AVAILABLE
             assertTrue(vm.state.value.primaryButton.isEnabled)
             assertNull(vm.state.value.error)
             confirm()
-            coVerify(exactly = 1) { sender.send(any()) }
+            coVerify(exactly = 1) { sender.send(any(), any()) }
         }
 
     @Test
@@ -148,7 +149,7 @@ class PrivateUsdSendVMTest {
             confirm()
 
             coVerify(exactly = 1) { auth.authenticate(any(), any()) }
-            coVerify(exactly = 1) { sender.send(any()) }
+            coVerify(exactly = 1) { sender.send(any(), any()) }
             assertEquals(PrivateUsdSendPhase.DONE, vm.state.value.phase)
         }
 
@@ -168,10 +169,10 @@ class PrivateUsdSendVMTest {
                 .onClick()
 
             assertEquals(prompt, vm.state.value.pinVerify)
-            coVerify(exactly = 0) { sender.send(any()) }
+            coVerify(exactly = 0) { sender.send(any(), any()) }
             entered.complete(true)
             assertNull(vm.state.value.pinVerify)
-            coVerify(exactly = 1) { sender.send(any()) }
+            coVerify(exactly = 1) { sender.send(any(), any()) }
         }
 
     @Test
@@ -179,7 +180,7 @@ class PrivateUsdSendVMTest {
         runTest {
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
             review()
-            coEvery { sender.send(any()) } coAnswers {
+            coEvery { sender.send(any(), any()) } coAnswers {
                 balance.value = balance(BigInteger.ZERO)
                 PrivateUsdSendOutcome.Sent(TX_HASH)
             }
@@ -196,7 +197,7 @@ class PrivateUsdSendVMTest {
         runTest {
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
             review()
-            coEvery { sender.send(any()) } returns PrivateUsdSendOutcome.Unconfirmed(TX_HASH)
+            coEvery { sender.send(any(), any()) } returns PrivateUsdSendOutcome.Unconfirmed(TX_HASH)
 
             vm.state.value.primaryButton
                 .onClick()
@@ -211,7 +212,7 @@ class PrivateUsdSendVMTest {
         runTest {
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
             review()
-            coEvery { sender.send(any()) } returns PrivateUsdSendOutcome.NotSent
+            coEvery { sender.send(any(), any()) } returns PrivateUsdSendOutcome.NotSent
 
             vm.state.value.primaryButton
                 .onClick()
@@ -240,6 +241,34 @@ class PrivateUsdSendVMTest {
         }
 
     @Test
+    fun `a higher fee asked at confirmation comes back to review, and is what's confirmed next`() =
+        runTest {
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
+            balance.value = balance(BigInteger.valueOf(5_000_000))
+            review()
+            val higher = PrivateUsdSendCost(BigInteger.ZERO, 0, BigInteger.valueOf(3_598_677), Sepolia.TEST_USD)
+            coEvery { sender.send(any(), any()) } returns PrivateUsdSendOutcome.Repriced(higher)
+
+            vm.state.value.primaryButton
+                .onClick()
+
+            val fee = exactTokenAmount(higher.networkFee, token)
+            assertEquals(PrivateUsdSendPhase.REVIEW, vm.state.value.phase)
+            assertEquals(
+                fee,
+                vm.state.value.review
+                    ?.networkFee
+                    ?.amount
+            )
+            assertEquals(stringRes(R.string.private_usd_send_fee_rose, fee), vm.state.value.error)
+            coEvery { sender.send(any(), any()) } returns PrivateUsdSendOutcome.Sent(TX_HASH)
+            vm.state.value.primaryButton
+                .onClick()
+            coVerify(exactly = 1) { sender.send(any(), higher) }
+            assertEquals(PrivateUsdSendPhase.DONE, vm.state.value.phase)
+        }
+
+    @Test
     fun `cancelled authorization leaves the review available without sending`() =
         runTest {
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect() }
@@ -251,7 +280,7 @@ class PrivateUsdSendVMTest {
 
             assertEquals(PrivateUsdSendPhase.REVIEW, vm.state.value.phase)
             assertFalse(vm.state.value.isBusy)
-            coVerify(exactly = 0) { sender.send(any()) }
+            coVerify(exactly = 0) { sender.send(any(), any()) }
         }
 
     @Test
@@ -270,7 +299,7 @@ class PrivateUsdSendVMTest {
 
             assertFalse(vm.state.value.primaryButton.isEnabled)
             assertNotNull(vm.state.value.review)
-            coVerify(exactly = 0) { sender.send(any()) }
+            coVerify(exactly = 0) { sender.send(any(), any()) }
         }
 
     @Test

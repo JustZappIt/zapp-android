@@ -24,14 +24,17 @@ import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunDestination
 import java.math.BigInteger
 
-/** The most the broadcaster may charge for a send, in the token it's paid in. */
+/** What a send leaves for the broadcaster's fee, in the token it's paid in: the last quote, else the minimum. */
 internal data class PrivateUsdNetworkFee(
     val token: PrivateUsdToken,
-    val max: BigInteger,
+    val minimum: BigInteger? = null,
+    val quoted: BigInteger? = null,
 ) {
-    /** The most of [asset] a send can take, leaving this fee where it's paid in the same token. */
+    val reserve: BigInteger get() = quoted ?: minimum ?: BigInteger.ZERO
+
+    /** The most of [asset] a send can take, leaving [reserve] where the fee is paid in the same token. */
     fun sendable(asset: PrivateUsdAsset): BigInteger =
-        if (asset.token == token) (asset.available - max).max(BigInteger.ZERO) else asset.available
+        if (asset.token == token) (asset.available - reserve).max(BigInteger.ZERO) else asset.available
 }
 
 internal data class PrivateUsdSendForm(
@@ -46,7 +49,7 @@ internal data class PrivateUsdSendForm(
     val isBusy: Boolean = false,
     val outcome: PrivateUsdSendOutcome? = null,
     val error: StringResource? = null,
-    /** The most the broadcaster may charge, which a send of its token leaves in the balance. */
+    /** What a send of the fee's token leaves in the balance for the broadcaster. */
     val networkFee: PrivateUsdNetworkFee? = null,
 ) {
     /** The dollars there are to send, and the one this form is pinned to even once none of it is left. */
@@ -105,7 +108,7 @@ internal data class PrivateUsdSendForm(
             }
 
             fee != null && units > fee.sendable(asset) -> {
-                stringRes(R.string.private_usd_send_leave_network_fee, exactTokenAmount(fee.max, fee.token))
+                stringRes(R.string.private_usd_send_leave_network_fee, exactTokenAmount(fee.reserve, fee.token))
             }
 
             else -> {
@@ -172,8 +175,14 @@ internal data class PrivateUsdSendForm(
         val txHash =
             when (outcome) {
                 is PrivateUsdSendOutcome.Sent -> outcome.txHash
+
                 is PrivateUsdSendOutcome.Unconfirmed -> outcome.txHash
-                PrivateUsdSendOutcome.NotSent, PrivateUsdSendOutcome.Busy, null -> null
+
+                PrivateUsdSendOutcome.NotSent,
+                PrivateUsdSendOutcome.Busy,
+                is PrivateUsdSendOutcome.Repriced,
+                null,
+                -> null
             }
         if (request == null || (txHash == null && outcome !is PrivateUsdSendOutcome.Unconfirmed)) return null
         return PrivateUsdSendDoneState(

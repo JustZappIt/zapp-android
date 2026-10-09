@@ -44,6 +44,9 @@ internal enum class RailgunMethod(
     @SerialName("unshield")
     UNSHIELD(10.minutes),
 
+    @SerialName("broadcasterFee")
+    BROADCASTER_FEE(2.minutes),
+
     @SerialName("reverseCost")
     REVERSE_COST(30.seconds),
 
@@ -88,6 +91,8 @@ internal data class TransferParams(
     val token: Address,
     @Serializable(with = DecimalSerializer::class)
     val amount: BigInteger,
+    @Serializable(with = DecimalSerializer::class)
+    val fee: BigInteger,
     val broadcaster: BroadcasterParams,
 )
 
@@ -97,7 +102,24 @@ internal data class UnshieldParams(
     val token: Address,
     @Serializable(with = DecimalSerializer::class)
     val amount: BigInteger,
+    @Serializable(with = DecimalSerializer::class)
+    val fee: BigInteger,
     val broadcaster: BroadcasterParams,
+)
+
+@Serializable
+internal data class BroadcasterFeeParams(
+    val to: RailgunDestination,
+    val token: Address,
+    @Serializable(with = DecimalSerializer::class)
+    val amount: BigInteger,
+    val broadcaster: BroadcasterParams,
+)
+
+@Serializable
+internal data class BroadcasterFeeResult(
+    @Serializable(with = DecimalSerializer::class)
+    val fee: BigInteger,
 )
 
 @Serializable
@@ -107,7 +129,9 @@ internal data class BroadcasterParams(
     val railgunAddress: RailgunAddress,
     val token: Address,
     @Serializable(with = DecimalSerializer::class)
-    val fee: BigInteger,
+    val minFee: BigInteger,
+    @Serializable(with = DecimalSerializer::class)
+    val feePerUnitGas: BigInteger?,
     @Serializable(with = DecimalSerializer::class)
     val maxGasPrice: BigInteger,
 ) {
@@ -116,7 +140,8 @@ internal data class BroadcasterParams(
         railgunProxy = broadcaster.railgunProxy,
         railgunAddress = broadcaster.railgunAddress,
         token = broadcaster.feeToken,
-        fee = broadcaster.fee,
+        minFee = broadcaster.minFee,
+        feePerUnitGas = broadcaster.feePerUnitGas,
         maxGasPrice = broadcaster.maxGasPrice,
     )
 }

@@ -29,11 +29,10 @@ object AtomicSwapTestnet {
     private const val MIN_AMOUNT = 110_000L
     private const val MAX_AMOUNT = 20_000_000L
 
-    // The relayer's own 0zk address, which a private send's fee note pays, and the most it may charge.
+    // The relayer's own 0zk address, which a private send's fee note pays.
     private const val RELAYER_RAILGUN_ADDRESS =
         "0zk1qy25r4x4qjhtlfe0k9z22jy9psfm83j4k4fgvqs3pmv4he4ytefm8rv7j6fe3z53lltumh8amd66g2axaej92dmjk6mvnuveqtmm" +
             "wccdm593pft827p4xpwljug"
-    private const val MAX_SEND_FEE = 250_000L
 
     // The hosted issuer's token key and the maker's key for handing tokens back, base64url SPKI.
     private const val ISSUER_KEY =
@@ -88,7 +87,6 @@ object AtomicSwapTestnet {
                     railgunProxy = Sepolia.RAILGUN_PROXY,
                     railgunAddress = RailgunAddress(RELAYER_RAILGUN_ADDRESS),
                     feeToken = Sepolia.TEST_USD,
-                    maxFee = Usdc6.ofMicros(MAX_SEND_FEE),
                 ),
         )
 }

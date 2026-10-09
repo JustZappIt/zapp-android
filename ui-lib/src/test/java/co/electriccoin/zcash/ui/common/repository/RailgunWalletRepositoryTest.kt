@@ -50,7 +50,7 @@ class RailgunWalletRepositoryTest {
         every { session.address } returns ADDRESS
         every { session.fees } returns RailgunFees(25)
         coEvery { session.refresh() } returns RailgunBalances(emptyMap())
-        coEvery { session.prove(any(), any()) } returns PROOF
+        coEvery { session.prove(any(), any(), any()) } returns PROOF
         every { wallet.events } returns MutableSharedFlow()
         every { wallet.session } answers { openSession }
         coEvery { wallet.open(any(), any(), any()) } answers {
@@ -70,7 +70,7 @@ class RailgunWalletRepositoryTest {
             val caller = launch { repository.sync() }
             runCurrent()
             caller.cancel()
-            val next = async { repository.prove(TRANSFER, BROADCASTER) }
+            val next = async { repository.prove(TRANSFER, BROADCASTER, FEE) }
             runCurrent()
             assertFalse(next.isCompleted)
 
@@ -95,16 +95,16 @@ class RailgunWalletRepositoryTest {
     @Test
     fun `a transfer comes back proved, for its sender to keep before it goes out`() =
         runTest {
-            assertEquals(PROOF, repository().prove(TRANSFER, BROADCASTER))
+            assertEquals(PROOF, repository().prove(TRANSFER, BROADCASTER, FEE))
         }
 
     @Test
     fun `a failure while proving throws, and shows on the state`() =
         runTest {
-            coEvery { session.prove(any(), any()) } throws RailgunException.Failed("no spendable notes")
+            coEvery { session.prove(any(), any(), any()) } throws RailgunException.Failed("no spendable notes")
 
             val repository = repository()
-            assertFailsWith<RailgunException.Failed> { repository.prove(TRANSFER, BROADCASTER) }
+            assertFailsWith<RailgunException.Failed> { repository.prove(TRANSFER, BROADCASTER, FEE) }
             assertEquals(RailgunWalletState.Phase.FAILED, repository.state.value.phase)
         }
 
@@ -181,9 +181,10 @@ class RailgunWalletRepositoryTest {
                 railgunProxy = PROXY,
                 railgunAddress = ADDRESS,
                 feeToken = Address.parse("0x5764D0044bef5AA839E0dDafE2073421101B9Ed8"),
-                fee = BigInteger.valueOf(250_000),
+                minFee = BigInteger.valueOf(250_000),
                 maxGasPrice = BigInteger.valueOf(20_000_000_000),
             )
+        val FEE: BigInteger = BigInteger.valueOf(250_000)
         val TRANSFER =
             RailgunTransfer(
                 RailgunDestination.Public(Address.parse("0x09ed1f966745be18c711c346242c0974dad7c3e5")),

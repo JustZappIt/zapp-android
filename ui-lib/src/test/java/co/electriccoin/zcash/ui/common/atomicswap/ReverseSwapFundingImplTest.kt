@@ -59,7 +59,7 @@ class ReverseSwapFundingImplTest {
             assertEquals(kept.request, submission.captured)
             assertEquals(record.swapId, submission.captured.swapId)
             assertEquals("0", submission.captured.value)
-            coVerify(exactly = 0) { wallet.prove(any(), any()) }
+            coVerify(exactly = 0) { wallet.prove(any(), any(), any()) }
         }
 
     @Test

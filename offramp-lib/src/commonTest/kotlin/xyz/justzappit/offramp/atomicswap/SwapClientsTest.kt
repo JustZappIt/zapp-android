@@ -197,6 +197,31 @@ class SwapClientsTest {
         }
 
     @Test
+    fun railgunSendTermsCarryTheGasRateOnlyWhereTheRelayerQuotesOne() =
+        runTest {
+            var rate = ""
+            val services =
+                Services {
+                    respond(
+                        """{"relayer":"$ADDRESS","chainId":11155111,"contract":"$ADDRESS","fee":"20000",""" +
+                            """"railgunSends":{"railgunAddress":"0zk1","railgunProxy":"$ADDRESS",""" +
+                            """"token":"$ADDRESS","fee":"500000"$rate,"maxGasLimit":3000000,""" +
+                            """"maxGasPriceWei":"50000000000","maxCalldataBytes":65536}}"""
+                    )
+                }
+            val fixed = checkNotNull(services.relayer.terms().railgunSends)
+            assertEquals(Usdc6.ofMicros(500_000), fixed.fee)
+            assertNull(fixed.feePerUnitGas)
+            assertNull(fixed.feeExpiresAt)
+
+            rate = ""","feePerUnitGas":"2726271000","feeExpiresAt":1791504000"""
+            val priced = checkNotNull(services.sends.terms().railgunSends)
+            assertEquals("2726271000", priced.feePerUnitGas)
+            assertEquals(1_791_504_000, priced.feeExpiresAt)
+            services.close()
+        }
+
+    @Test
     fun aRailgunSendGoesOutAsProvedAndEachAnswerSaysWhetherToDropItOrPostItAgain() =
         runTest {
             var status = HttpStatusCode.OK

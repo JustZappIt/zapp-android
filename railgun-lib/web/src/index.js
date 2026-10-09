@@ -9,6 +9,7 @@ const handlers = {
   start: wallet.start,
   openWallet: wallet.openWallet,
   refresh: wallet.refresh,
+  broadcasterFee: transact.broadcasterFee,
   transfer: transact.transfer,
   unshield: transact.unshield,
   reverseCost,

@@ -213,11 +213,14 @@ async function transactCheck(page, url, onEvent) {
     railgunProxy: sends.railgunProxy,
     railgunAddress: sends.railgunAddress,
     token: sends.token,
-    fee: sends.fee,
+    minFee: sends.fee,
+    feePerUnitGas: sends.feePerUnitGas,
     maxGasPrice: sends.maxGasPriceWei,
   };
   const amount = SEND_AMOUNT.toString();
-  const proved = await call('transfer', { to: address, token: sends.token, amount, broadcaster });
+  const { fee } = await call('broadcasterFee', { to: address, token: sends.token, amount, broadcaster });
+  console.log(`  the relayer asks a fee of ${fee}, at least ${sends.fee}`);
+  const proved = await call('transfer', { to: address, token: sends.token, amount, fee, broadcaster });
   const notes = proved.spends.reduce((sum, { nullifiers }) => sum + nullifiers.length, 0);
   console.log(`  proved a private send to itself spending ${notes} note(s), proof ${proved.proofMs} ms`);
   console.log(`  the relayer sent it: ${etherscan(await relay(proved))}`);

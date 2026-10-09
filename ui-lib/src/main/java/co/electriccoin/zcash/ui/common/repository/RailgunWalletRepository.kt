@@ -31,6 +31,7 @@ import xyz.justzappit.railgun.RailgunReverseTransaction
 import xyz.justzappit.railgun.RailgunSession
 import xyz.justzappit.railgun.RailgunTransfer
 import xyz.justzappit.railgun.RailgunWallet
+import java.math.BigInteger
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -44,10 +45,17 @@ interface RailgunWalletRepository {
     /** The fees the engine last started with, without waiting on it; else once it starts. */
     suspend fun fees(): RailgunFees
 
-    /** Proves [transfer] for [broadcaster] to send. Nothing is sent. */
-    suspend fun prove(
+    /** What [broadcaster] charges to send [transfer]. Nothing is proved. */
+    suspend fun broadcasterFee(
         transfer: RailgunTransfer,
         broadcaster: RailgunBroadcaster
+    ): BigInteger
+
+    /** Proves [transfer] for [broadcaster] to send, paying it [fee]. Nothing is sent. */
+    suspend fun prove(
+        transfer: RailgunTransfer,
+        broadcaster: RailgunBroadcaster,
+        fee: BigInteger
     ): RailgunRelayedProof
 
     suspend fun reverseCost(request: RailgunReverseCostRequest): RailgunReverseCost
@@ -118,10 +126,16 @@ class RailgunWalletRepositoryImpl(
 
     override suspend fun fees(): RailgunFees = state.value.fees ?: withSession { it.fees }
 
-    override suspend fun prove(
+    override suspend fun broadcasterFee(
         transfer: RailgunTransfer,
         broadcaster: RailgunBroadcaster
-    ): RailgunRelayedProof = proving { it.prove(transfer, broadcaster) }
+    ): BigInteger = withSession { it.broadcasterFee(transfer, broadcaster) }
+
+    override suspend fun prove(
+        transfer: RailgunTransfer,
+        broadcaster: RailgunBroadcaster,
+        fee: BigInteger
+    ): RailgunRelayedProof = proving { it.prove(transfer, broadcaster, fee) }
 
     override suspend fun reverseCost(request: RailgunReverseCostRequest): RailgunReverseCost =
         withSession { it.reverseCost(request) }

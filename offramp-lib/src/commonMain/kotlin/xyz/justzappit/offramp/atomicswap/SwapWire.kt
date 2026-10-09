@@ -100,7 +100,15 @@ data class RailgunSendsTerms(
     val railgunAddress: String,
     val railgunProxy: Address,
     val token: Address,
+    /** The least the fee note carries. */
     val fee: Usdc6,
+    /**
+     * In decimal, where the relayer prices a send's gas: base units of [token] per 10^18 wei of gas cost, its margin
+     * included, as Railgun's broadcasters quote `feePerUnitGas`.
+     */
+    val feePerUnitGas: String? = null,
+    /** Unix seconds until which a proof whose fee was worked out at [feePerUnitGas] is held to that rate. */
+    val feeExpiresAt: Long? = null,
     val maxGasLimit: Long,
     /** In decimal wei: the highest minimum gas price a proof may bind. */
     val maxGasPriceWei: String,

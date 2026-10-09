@@ -248,6 +248,7 @@
     <string name="private_usd_send_view_railscan" tools:ignore="MissingTranslation">View on Railscan</string>
     <string name="private_usd_send_not_sent" tools:ignore="MissingTranslation">Nothing was sent. Try again in a moment.</string>
     <string name="private_usd_send_unavailable" tools:ignore="MissingTranslation">Private sends are unavailable right now. Nothing was sent. Try again later.</string>
+    <string name="private_usd_send_fee_rose" tools:ignore="MissingTranslation">The network fee went up to %1$s. Nothing was sent.</string>
     <string name="private_usd_send_unconfirmed" tools:ignore="MissingTranslation">It isn\'t in a block yet. Check your activity before sending again.</string>
     <string name="reverse_title">Private USD → ZEC</string>
     <string name="reverse_intro">Approve sending Private USD first. After your wallet independently confirms the full ZEC deposit, approve settlement to receive shielded ZEC.</string>

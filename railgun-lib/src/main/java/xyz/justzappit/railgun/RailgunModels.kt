@@ -150,9 +150,14 @@ data class RailgunBroadcaster(
     val railgunProxy: Address,
     val railgunAddress: RailgunAddress,
     val feeToken: Address,
-    val fee: BigInteger,
+    /** The least a fee note carries. */
+    val minFee: BigInteger,
     /** The most it pays per gas, and so the highest minimum gas price a proof for it may bind. */
     val maxGasPrice: BigInteger,
+    /** Where it prices gas: base units of [feeToken] per 10^18 wei of gas cost, as Railgun's broadcasters quote it. */
+    val feePerUnitGas: BigInteger? = null,
+    /** Unix seconds until which a fee worked out at [feePerUnitGas] is held to that rate. */
+    val feeExpiresAt: Long? = null,
 )
 
 /** What a broadcaster is asked to send, as proved: the same bytes name the same send until it settles. */
