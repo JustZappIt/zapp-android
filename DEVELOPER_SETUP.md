@@ -122,6 +122,16 @@ need to regenerate them after changing its JavaScript:
 (cd ../zappMessaging && npm run build:android)
 ```
 
+### Atomic swap dependency
+
+Private USD also requires `../zecSwap/android` (or `zecSwap/android` inside this checkout).
+Clone `https://github.com/JustZappIt/zecSwap.git` into `../zecSwap`, then check out the
+`zecSwap` commit in `.zapp-deps`. The pinned repository includes the Kotlin wrapper and
+prebuilt Android native libraries, so app builds do not require a Rust toolchain.
+
+CI checks out this public repository without an additional token. Keep `ZECSWAP_REF` in
+`.github/workflows/pull-request.yml` in sync with `.zapp-deps` when updating the dependency.
+
 ### 3a. Install bare-kit's npm dependencies
 
 Required once, and after any bare-kit bump. bare-kit's `CMakeLists.txt` does

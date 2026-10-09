@@ -13,6 +13,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import kotlinx.io.IOException
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -28,6 +29,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import xyz.justzappit.evm.abi.Selector4
 import xyz.justzappit.evm.abi.SolidityErrors
+import xyz.justzappit.evm.math.toNonNegativeLongExact
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.evm.types.Gas
@@ -50,7 +52,7 @@ class BaseRpcClient(
         }
 
     suspend fun ethChainId(): ChainId =
-        ChainId(hexToBigInteger(rpcCall("eth_chainId", emptyJsonArray).jsonPrimitive.content).toLong())
+        ChainId(hexToBigInteger(rpcCall("eth_chainId", emptyJsonArray).jsonPrimitive.content).toNonNegativeLongExact())
 
     suspend fun ethGasPrice(): Wei =
         Wei(hexToBigInteger(rpcCall("eth_gasPrice", emptyJsonArray).jsonPrimitive.content))
@@ -140,6 +142,36 @@ class BaseRpcClient(
         if (result.toString() == "null") return null
         return json.decodeFromJsonElement(TransactionReceipt.serializer(), result)
     }
+
+    suspend fun ethGetTransactionByHash(txHash: TxHash): TransactionReference? {
+        val result = rpcCall("eth_getTransactionByHash", buildJsonArray { add(txHash.hex) })
+        if (result == kotlinx.serialization.json.JsonNull) return null
+        return json.decodeFromJsonElement(TransactionReference.serializer(), result).also {
+            check(TxHash.fromHex(it.hash) == txHash) { "transaction hash mismatch" }
+        }
+    }
+
+    /** The logs [address] emitted in the blocks from [fromBlock] to [toBlock] whose topics start with [topics]. */
+    suspend fun ethGetLogs(
+        address: Address,
+        topics: List<String>,
+        fromBlock: Long,
+        toBlock: Long,
+    ): List<EvmLog> =
+        json.decodeFromJsonElement(
+            ListSerializer(EvmLog.serializer()),
+            rpcCall(
+                "eth_getLogs",
+                buildJsonArray {
+                    addJsonObject {
+                        put("address", address.checksumHex)
+                        put("topics", buildJsonArray { topics.forEach { add(it) } })
+                        put("fromBlock", "0x" + fromBlock.toString(HEX_BASE))
+                        put("toBlock", "0x" + toBlock.toString(HEX_BASE))
+                    }
+                },
+            ),
+        )
 
     suspend fun ethGetBlockByNumber(blockTag: String = "latest"): BlockHeader {
         val result =

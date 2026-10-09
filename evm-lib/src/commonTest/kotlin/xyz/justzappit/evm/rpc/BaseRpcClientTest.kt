@@ -163,6 +163,19 @@ class BaseRpcClientTest {
         }
 
     @Test
+    fun `ethGetTransactionByHash verifies known transactions and rejects mismatches`() =
+        runTest {
+            val hash = TxHash.fromHex("0x" + "01".repeat(32))
+            nextResponse = """{"jsonrpc":"2.0","id":1,"result":null}"""
+            assertNull(rpc.ethGetTransactionByHash(hash))
+            nextResponse = """{"jsonrpc":"2.0","id":1,"result":{"hash":"${hash.hex}"}}"""
+            assertEquals(hash.hex, rpc.ethGetTransactionByHash(hash)?.hash)
+            assertFailsWith<IllegalStateException> {
+                rpc.ethGetTransactionByHash(TxHash.fromHex("0x" + "02".repeat(32)))
+            }
+        }
+
+    @Test
     fun `ethGetTransactionReceipt returns null when result is null`() =
         runTest {
             nextResponse = """{"jsonrpc":"2.0","id":1,"result":null}"""
@@ -204,6 +217,32 @@ class BaseRpcClientTest {
             val block = rpc.ethGetBlockByNumber()
             assertEquals("0x100", block.number)
             assertEquals("0x1", block.baseFeePerGas)
+        }
+
+    @Test
+    fun `ethGetLogs sends the range in hex with the topics and parses the logs`() =
+        runTest {
+            nextResponse =
+                """
+                {"jsonrpc":"2.0","id":1,"result":[{
+                  "address":"0x32ce55d00e6184c385e44e6b20b76d3a8407e809",
+                  "topics":["0xf4","0x5c"],
+                  "data":"0x",
+                  "blockNumber":"0xb3cc58",
+                  "transactionHash":"0x7445",
+                  "logIndex":"0x3"
+                }]}
+                """.trimIndent()
+            val contract = Address.parse("0x32CE55D00E6184c385E44e6b20b76d3a8407E809")
+
+            val logs = rpc.ethGetLogs(contract, listOf("0xf4", "0x5c"), fromBlock = 255, toBlock = 4096)
+
+            val params = handledRequests.last()["params"]!!.toString()
+            assertTrue(params.contains(contract.checksumHex))
+            assertTrue(params.contains("\"topics\":[\"0xf4\",\"0x5c\"]"), "got $params")
+            assertTrue(params.contains("\"fromBlock\":\"0xff\""), "got $params")
+            assertTrue(params.contains("\"toBlock\":\"0x1000\""), "got $params")
+            assertEquals("0x7445", logs.single().transactionHash)
         }
 
     @Test

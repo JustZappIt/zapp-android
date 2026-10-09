@@ -34,6 +34,7 @@ import co.electriccoin.zcash.ui.screen.chat.list.ChatListScreen
 import co.electriccoin.zcash.ui.screen.chat.repository.ChatConversationsRepository
 import co.electriccoin.zcash.ui.screen.onboarding.ZappOnboardingFlow
 import co.electriccoin.zcash.ui.screen.onboarding.ZappRestoreFlow
+import co.electriccoin.zcash.ui.screen.tabs.SelectedTabRepository
 import co.electriccoin.zcash.ui.screen.tabs.TabsVM
 import co.electriccoin.zcash.ui.screen.welcome.WelcomeGateVM
 import co.electriccoin.zcash.ui.screen.welcome.view.WelcomeGateView
@@ -113,7 +114,16 @@ internal fun ZappTabsScaffold(
 @Composable
 private fun ZappTabsScaffoldContent() {
     val tabsVM: TabsVM = koinViewModel()
-    var currentTab by rememberSaveable { mutableStateOf(ZappTab.CHATS) }
+    val selectedTabRepository: SelectedTabRepository = koinInject()
+    var shownTab by rememberSaveable { mutableStateOf(ZappTab.DEFAULT) }
+    val requestedTab by selectedTabRepository.requested.collectAsState()
+    val currentTab = requestedTab ?: shownTab
+    LaunchedEffect(requestedTab) {
+        requestedTab?.let {
+            shownTab = it
+            selectedTabRepository.consume(it)
+        }
+    }
     val localCurrency by tabsVM.localCurrency.collectAsState()
     val p2pPaymentMethod by tabsVM.p2pPaymentMethod.collectAsState()
     val hasPeerActivity by tabsVM.hasPeerActivity.collectAsState()
@@ -194,7 +204,7 @@ private fun ZappTabsScaffoldContent() {
                     if (selectedTab == ZappTab.PAY && currentTab != ZappTab.PAY) {
                         BalanceChartReadinessTrace.begin()
                     }
-                    currentTab = selectedTab
+                    shownTab = selectedTab
                 },
                 modifier = Modifier.align(Alignment.BottomCenter)
             )

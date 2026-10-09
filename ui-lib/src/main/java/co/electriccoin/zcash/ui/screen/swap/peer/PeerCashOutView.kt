@@ -26,7 +26,6 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -55,6 +54,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappChipVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappFieldBalance
+import co.electriccoin.zcash.ui.design.component.zapp.ZappInfoButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappInputField
 import co.electriccoin.zcash.ui.design.component.zapp.ZappOfframpHeroAmountField
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
@@ -82,7 +82,12 @@ internal fun PeerCashOutView(state: PeerCashOutState) {
     ) {
         ZappScreenHeader(
             title = state.title.getValue(),
-            right = { InfoAction { showInfo = true } },
+            right = {
+                ZappInfoButton(
+                    contentDescription = stringResource(R.string.peer_offramp_info_content_description),
+                    onClick = { showInfo = true },
+                )
+            },
         )
         Column(
             modifier =
@@ -187,24 +192,6 @@ internal fun PeerCashOutView(state: PeerCashOutState) {
         )
     }
     if (showInfo) PeerCashOutInfoSheet(state.platform) { showInfo = false }
-}
-
-@Composable
-private fun InfoAction(onClick: () -> Unit) {
-    val description = stringResource(R.string.peer_offramp_info_content_description)
-    Box(
-        modifier =
-            Modifier
-                .size(MIN_TOUCH_TARGET.dp)
-                .clickable(onClick = onClick)
-                .semantics {
-                    role = Role.Button
-                    contentDescription = description
-                },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(Icons.Default.Info, contentDescription = null, tint = ZappTheme.colors.text)
-    }
 }
 
 /**

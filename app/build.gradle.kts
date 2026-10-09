@@ -257,6 +257,7 @@ dependencies {
     implementation(projects.featureVoting)
 
     androidTestImplementation(projects.testLib)
+    androidTestImplementation(projects.offrampLib)
 
     androidTestUtil(libs.androidx.test.services) {
         artifact {

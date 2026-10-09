@@ -1,6 +1,7 @@
 package co.electriccoin.zcash.ui.screen.balances.breakdown
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,10 +14,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cash.z.ecc.android.sdk.model.Zatoshi
+import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.Spacer
 import co.electriccoin.zcash.ui.design.component.ZashiScreenModalBottomSheet
@@ -24,6 +29,7 @@ import co.electriccoin.zcash.ui.design.component.rememberScreenModalBottomSheetS
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappModalBottomSheetDragHandle
+import co.electriccoin.zcash.ui.design.component.zapp.ZappRowChevron
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ProvideZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
@@ -98,6 +104,11 @@ private fun BottomSheetContent(
             }
         }
 
+        state.privateUsd?.let {
+            Spacer(8.dp)
+            PrivateUsdCard(it, modifier = Modifier.fillMaxWidth())
+        }
+
         Spacer(32.dp)
         ZappButton(
             text = state.positive.text.getValue(),
@@ -147,6 +158,49 @@ private fun BalanceCard(
     }
 }
 
+@Composable
+private fun PrivateUsdCard(
+    state: BalanceBreakdownPrivateUsdState,
+    modifier: Modifier = Modifier,
+) {
+    val c = ZappTheme.colors
+    ZappBorderedCard(
+        modifier =
+            modifier.clickable(
+                onClickLabel = stringResource(R.string.private_usd_home_content_description),
+                role = Role.Button,
+                onClick = state.onClick,
+            ),
+        padding = 16.dp,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicText(
+                text = stringResource(R.string.private_usd_title),
+                style = ZappTheme.typography.rowSubtitle.copy(color = c.textMuted),
+                modifier = Modifier.weight(1f),
+            )
+            ZappRowChevron()
+        }
+        Spacer(6.dp)
+        BasicText(
+            text = state.amount.getValue(),
+            style = ZappTheme.typography.rowTitle.copy(color = c.text, fontWeight = FontWeight.Black),
+        )
+        state.detail?.let {
+            Spacer(2.dp)
+            BasicText(
+                text = it.getValue(),
+                style = ZappTheme.typography.rowSubtitle.copy(color = if (state.isBlocked) c.danger else c.accentText),
+            )
+        }
+        Spacer(6.dp)
+        BasicText(
+            text = stringResource(R.string.private_usd_breakdown_note),
+            style = ZappTheme.typography.rowSubtitle.copy(color = c.textSubtle),
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @PreviewScreens
 @Composable
@@ -170,6 +224,13 @@ private fun BalanceBreakdownPreview() =
                                 BalanceBreakdownItemState(stringRes("Orchard"), Zatoshi(5404772), null),
                                 BalanceBreakdownItemState(stringRes("Sapling"), Zatoshi(0), null),
                                 BalanceBreakdownItemState(stringRes("Transparent"), Zatoshi(0), null),
+                            ),
+                        privateUsd =
+                            BalanceBreakdownPrivateUsdState(
+                                amount = stringRes("$12.34"),
+                                detail = stringRes("+ $0.98 arriving"),
+                                isBlocked = false,
+                                onClick = {},
                             ),
                         positive = ButtonState(text = stringRes("Got it")),
                         onBack = {},
