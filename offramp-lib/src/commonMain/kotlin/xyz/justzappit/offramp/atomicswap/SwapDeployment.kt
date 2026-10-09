@@ -11,7 +11,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
-import xyz.justzappit.offramp.p2p.Usdc6
 
 /** A ZecSwap deployment, kept with each reverse swap's record; what's at its default isn't written. */
 @Serializable
@@ -28,9 +27,6 @@ data class SwapDeployment(
     val maker: Address,
     /** The only relayer payouts are signed for. */
     val relayer: Address,
-    /** The most a relayer may keep from a payout. */
-    @SerialName("maxRefundFee")
-    val maxRelayerFee: Usdc6,
     /** Confirmations, including its own block, required for escrow, locks and payouts in either direction. */
     @SerialName("confirmations")
     val escrowConfirmations: Long = DEFAULT_ESCROW_CONFIRMATIONS,

@@ -26,7 +26,6 @@
     <string name="reverse_broadcaster_fee">Comisión de transmisión</string>
     <string name="reverse_total">Total pagado</string>
     <string name="reverse_receive_estimate">ZEC estimado tras la comisión de envío</string>
-    <string name="reverse_refund_terms">Antes de autorizar la liquidación, puedes cancelar. Después, el reembolso espera el plazo y bloqueo del contrato. La comisión de reembolso es de hasta %1$s, más las comisiones de protección de Railgun. Cerrar la aplicación nunca autoriza la liquidación.</string>
     <string name="private_usd_action_convert">Convertir</string>
     <string name="convert_title">Convertir</string>
     <string name="reverse_insufficient">No hay suficiente USD privado para este importe y sus comisiones.</string>

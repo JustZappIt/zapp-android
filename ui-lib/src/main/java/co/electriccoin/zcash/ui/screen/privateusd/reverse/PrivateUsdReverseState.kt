@@ -51,4 +51,6 @@ internal data class PrivateUsdReverseReviewState(
     val railgunFee: StringResource,
     val broadcasterFee: StringResource,
     val receive: StringResource,
+    /** The market maker's network cost, which comes off the ZEC paid. */
+    val makerCost: StringResource? = null,
 )

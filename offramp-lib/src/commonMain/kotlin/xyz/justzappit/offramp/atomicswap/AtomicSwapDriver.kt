@@ -48,15 +48,16 @@ class AtomicSwapDriver(
         if (!deployment.serves(quote)) {
             throw AtomicSwapBlockedException(AtomicSwapBlock.WRONG_DEPLOYMENT, "the quote is for another deployment")
         }
-        val relayerFee = claim.relayerFee(quote.amount)
-        val receives = payoutAfterFees(quote.amount, relayerFee)
-        return AtomicSwapOffer(index, requested, quote, relayerFee, receives)
+        val terms = claim.relayerTerms()
+        val receives = payoutAfterFees(quote.amount, terms.fee)
+        return AtomicSwapOffer(index, requested, quote, terms.fee, receives, feeExpiresAt = terms.feeExpiresAt)
     }
 
     /** Accepts [offer], saving the record before the maker sees the share, so an accept cut short is still known. */
     suspend fun accept(offer: AtomicSwapOffer): AtomicSwapRecord {
         requireNoSwapUnderWay()
         val quote = offer.quote
+        requirePaysOut(quote.amount, offer.relayerFee)
         quote.requireTimeToAccept(nowSeconds())
         val acceptance =
             keys.accept(
@@ -77,6 +78,7 @@ class AtomicSwapDriver(
                 receives = offer.receives,
                 maxTotalZat = offer.maxTotalZat,
                 relayerFee = offer.relayerFee,
+                feeExpiresAt = offer.feeExpiresAt,
             )
         store.save(record)
         val accepted =
@@ -273,6 +275,7 @@ internal fun payoutAfterFees(
     amount: Usdc6,
     relayerFee: Usdc6
 ): Usdc6 {
+    if (relayerFee >= amount) return Usdc6.ZERO
     val shielded = amount.micros - relayerFee.micros
     val fee = shielded * bigIntegerValueOf(RAILGUN_FEE.value.toLong()) / bigIntegerValueOf(Bps.MAX.toLong())
     return Usdc6(shielded - fee)
@@ -319,7 +322,7 @@ internal class AtomicSwapClaim(
     private val store: AtomicSwapStore,
     private val nowSeconds: () -> Long,
 ) {
-    /** Reveals `z` under a held claim lock once Railgun would take the payout at the quoted fee, then pays out. */
+    /** Reveals `z` under a held claim lock once Railgun would take the payout, then pays out. */
     suspend fun claim(
         record: AtomicSwapRecord,
         swap: OnChainSwap
@@ -328,25 +331,44 @@ internal class AtomicSwapClaim(
         requireRailgunOpen(swap)
         holdClaimLock(record, swap)
         // Key derivation may suspend too. Read the lock and the clock again after every preparatory step.
-        val reveal = SwapReveal(record.swapId, keys.claimSecret(record.index).hex(), payout)
-        requireFreshClaimLock(record, swap.terms)
-        relayer.claim(reveal, swap.terms)
+        val secret = keys.claimSecret(record.index).hex()
+        sendPayout(record, swap, payout) {
+            requireFreshClaimLock(record, swap.terms)
+            relayer.claim(SwapReveal(record.swapId, secret, it), swap.terms)
+        }
         val claimed = chain.caughtUp(record.swapId, swap.terms) { it.stage == SwapStage.CLAIMED }
         if (!claimed.paidOut) payOut(record, claimed)
     }
 
-    /** Retries a revealed claim's payout without expanding the fee authorization the user reviewed. */
+    /** Retries a revealed claim's payout. */
     suspend fun payOut(
         record: AtomicSwapRecord,
         swap: OnChainSwap
     ) {
         val payout = payout(record, swap)
         requireRailgunOpen(swap)
-        relayer.payout(payout, swap.terms)
+        sendPayout(record, swap, payout) { relayer.payout(it, swap.terms) }
         chain.caughtUp(record.swapId, swap.terms) { it.stage == SwapStage.CLAIMED && it.paidOut }
     }
 
-    suspend fun relayerFee(amount: Usdc6): Usdc6 = relayer.terms().checkedFee(deployment, amount)
+    suspend fun relayerTerms(): RelayerTerms = relayer.terms().also { it.checkedFee(deployment) }
+
+    // Nothing is sent on a refusal: one turning down the fee is signed again at the relayer's fee now, and sent again.
+    private suspend fun sendPayout(
+        record: AtomicSwapRecord,
+        swap: OnChainSwap,
+        payout: SwapPayout,
+        request: suspend (SwapPayout) -> Unit,
+    ) {
+        try {
+            request(payout)
+        } catch (e: AtomicSwapHttpException.Refused) {
+            if (e.code != SwapErrorCode.REJECTED) throw e
+            val fee = relayer.terms().checkedFee(deployment)
+            if (fee <= payout.fee) throw e
+            request(payout(record, swap, repriced = fee))
+        }
+    }
 
     private suspend fun requireRailgunOpen(swap: OnChainSwap) {
         if (!chain.railgunAccepts(swap.token)) {
@@ -354,9 +376,11 @@ internal class AtomicSwapClaim(
         }
     }
 
+    // The user can't claim without the relayer, so a claim pays its fee: the offer's while it holds, or its fee now.
     private suspend fun payout(
         record: AtomicSwapRecord,
         swap: OnChainSwap,
+        repriced: Usdc6? = null,
     ): SwapPayout {
         val current = checkNotNull(store.active()?.takeIf { it.index == record.index && !it.finished })
         val note = keys.payoutNote(current.index)
@@ -366,8 +390,15 @@ internal class AtomicSwapClaim(
                 "the saved payout is for another swap"
             }
         }
+        val asked = relayer.terms().checkedFee(deployment)
+        val expiresAt = current.feeExpiresAt
         val fee =
-            relayer.terms().checkedFee(deployment, swap.amount, minOf(current.relayerFee, deployment.maxRelayerFee))
+            when {
+                repriced != null -> repriced
+                expiresAt != null && nowSeconds() < expiresAt -> current.relayerFee
+                else -> asked
+            }
+        requirePaysOut(swap.amount, fee)
         if (saved?.fee == fee) return saved
         val signature =
             keys.signPayout(

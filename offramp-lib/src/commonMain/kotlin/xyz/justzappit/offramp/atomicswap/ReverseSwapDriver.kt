@@ -50,6 +50,8 @@ class ReverseSwapDriver(
             maker.info().requireServing(deployment, reverse = true)
             isMakerChecked = true
         }
+        // A refund pays out less the relayer's fee: one it would take all of could never come back.
+        relayer.terms().checkedFee(deployment, requested)
         val index = indices.take()
         val user = keys.authAddress(index)
         val note = keys.payoutNote(index).commitment
@@ -134,7 +136,11 @@ class ReverseSwapDriver(
             check(records.current(index) == record) { "the conversion changed while its payment was being prepared" }
             store.save(record.copy(funding = transaction, phase = ReversePhase.SENDING_USDC))
         }
-        submission.submit(record, transaction)
+        try {
+            submission.submit(record, transaction)
+        } catch (e: AtomicSwapHttpException.Refused) {
+            submission.reprice(record, transaction, e)
+        }
     }
 
     /** Only the second foreground authorization calls this; a restart never authorizes `ready`. */

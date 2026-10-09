@@ -83,6 +83,7 @@
     <string name="convert_you_receive">You receive about</string>
     <string name="convert_fees">Conversion fees</string>
     <string name="convert_fees_value">%1$s relayer · %2$s%% Railgun</string>
+    <string name="convert_maker_cost" tools:ignore="MissingTranslation">Market maker\'s network cost</string>
     <string name="convert_quote_expires">Quote refreshes in %1$s</string>
     <string name="convert_quote_holds" tools:ignore="MissingTranslation">Quote holds for %1$s</string>
     <string name="convert_quote_countdown" tools:ignore="MissingTranslation">%1$d:%2$02d</string>
@@ -93,6 +94,8 @@
     <string name="convert_error_maker_busy" tools:ignore="MissingTranslation">The market maker is busy with other conversions. Try again in a few minutes.</string>
     <string name="convert_error_no_tokens_today" tools:ignore="MissingTranslation">This device has used today\'s conversions. More are available after midnight UTC.</string>
     <string name="convert_error_tokens_unavailable" tools:ignore="MissingTranslation">Zapp couldn\'t get this conversion\'s token over Tor, so nothing was sent. Try again in a moment.</string>
+    <string name="convert_error_below_fee" tools:ignore="MissingTranslation">This amount doesn\'t cover the relayer\'s fee. Try a larger amount.</string>
+    <string name="convert_error_amount_refused" tools:ignore="MissingTranslation">The market maker won\'t convert this amount. It may not cover the swap\'s network cost, so try a larger amount.</string>
     <string name="convert_error_tor_off" tools:ignore="MissingTranslation">Conversions get their token over Tor, which is off. Turn on Tor in Settings, then convert again.</string>
     <string name="convert_error_relayer">The relayer that completes conversions can\'t be reached right now. Try again in a moment.</string>
     <string name="convert_error_generic">Couldn\'t get a quote. Try again in a moment.</string>
@@ -112,7 +115,7 @@
     <string name="convert_review_title">Review conversion</string>
     <string name="convert_review_arrow">for about</string>
     <string name="convert_review_info_title">Before you convert</string>
-    <string name="convert_review_info_pay">You pay the ZEC deposit, plus the Zcash network fee.</string>
+    <string name="convert_review_info_pay">You pay the ZEC deposit, which includes the market maker\'s network cost, plus the Zcash network fee.</string>
     <string name="convert_review_info_receive">You receive the dollars left after the relayer\'s fee and Railgun\'s %1$s%% fee for shielding them.</string>
     <string name="convert_review_info_quote">The quote holds for a few minutes. If it runs out, get a new one: nothing is sent until you convert.</string>
     <string name="convert_new_quote">Get a new quote</string>
@@ -276,13 +279,13 @@
     <string name="reverse_broadcaster_fee">Broadcast fee</string>
     <string name="reverse_total">Total paid</string>
     <string name="reverse_receive_estimate">Estimated ZEC after sweep fee</string>
-    <string name="reverse_refund_terms">Before settlement authorization, you can cancel. Afterwards, refunds wait for the contract deadline and lock. The refund fee is at most %1$s, plus Railgun shielding fees. Closing the app never authorizes settlement.</string>
+    <string name="reverse_refund_note" tools:ignore="MissingTranslation">Before settlement authorization, you can cancel. Afterwards, refunds wait for the contract deadline and lock. A refund pays the relayer\'s fee for its gas, plus Railgun shielding fees. Closing the app never authorizes settlement.</string>
     <string name="reverse_insufficient">Not enough Private USD for this amount and its fees.</string>
     <string name="reverse_title_description" tools:ignore="MissingTranslation">Private USD to ZEC</string>
     <string name="reverse_error_max" tools:ignore="MissingTranslation">Couldn\'t work out the most you can convert. Try again in a moment.</string>
     <string name="reverse_error_rescue" tools:ignore="MissingTranslation">Couldn\'t recover the refund. Try again in a moment.</string>
     <string name="reverse_error_unconfirmed" tools:ignore="MissingTranslation">The market maker\'s ZEC isn\'t confirmed yet. Try again in a few minutes.</string>
-    <string name="reverse_error_cost_changed" tools:ignore="MissingTranslation">Railgun\'s fees changed, so nothing was paid. The new total shows above: convert again to pay it, or cancel.</string>
+    <string name="reverse_error_cost_changed" tools:ignore="MissingTranslation">The fees changed, so nothing was paid. The new total shows above: convert again to pay it, or cancel.</string>
     <string name="reverse_error_funding_unavailable">Conversion to ZEC is temporarily unavailable. Please try again later.</string>
     <string name="reverse_error_too_late" tools:ignore="MissingTranslation">It\'s too late for this step, so the conversion ends by itself. Anything you paid comes back.</string>
     <string name="convert_asset_zec">ZEC</string>

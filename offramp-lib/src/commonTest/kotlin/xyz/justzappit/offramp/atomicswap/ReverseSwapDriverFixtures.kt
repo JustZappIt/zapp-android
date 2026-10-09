@@ -48,6 +48,7 @@ abstract class ReverseSwapDriverFixtures {
             )
         var info = MakerInfo(1, MAKER, ChainId(11_155_111), CONTRACT, TOKEN, SwapZcashNetwork.TESTNET, true)
         var relayer = RELAYER
+        var relayerFee = Usdc6.ofMicros(100_000)
         var block = 15L
         var now = 1_000L
         var nextIndex = 0
@@ -187,7 +188,7 @@ abstract class ReverseSwapDriverFixtures {
 
         override suspend fun collectToken(swapId: SwapId) = error("forward only")
 
-        override suspend fun terms() = RelayerTerms(relayer, ChainId(11_155_111), CONTRACT, Usdc6.ofMicros(100_000))
+        override suspend fun terms() = RelayerTerms(relayer, ChainId(11_155_111), CONTRACT, relayerFee)
 
         override suspend fun ready(
             authorization: SwapAuthorization,
@@ -427,7 +428,6 @@ abstract class ReverseSwapDriverFixtures {
                 address(6),
                 MAKER,
                 RELAYER,
-                Usdc6.ofMicros(100_000),
             )
 
         fun hex(bytes: Int, value: Int) = "0x" + value.toString(16).padStart(2, '0').repeat(bytes)

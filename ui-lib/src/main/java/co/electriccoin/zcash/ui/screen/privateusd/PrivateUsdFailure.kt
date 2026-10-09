@@ -18,6 +18,7 @@ import xyz.justzappit.offramp.atomicswap.AtomicSwapBlockedException
 import xyz.justzappit.offramp.atomicswap.AtomicSwapHttpException
 import xyz.justzappit.offramp.atomicswap.AtomicSwapService
 import xyz.justzappit.offramp.atomicswap.ReverseRefundUnavailableException
+import xyz.justzappit.offramp.atomicswap.SwapErrorCode
 import java.io.IOException
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -44,6 +45,8 @@ internal enum class PrivateUsdFailure(
     NO_TOKENS_TODAY(R.string.convert_error_no_tokens_today),
     TOKENS_UNAVAILABLE(R.string.convert_error_tokens_unavailable),
     TOR_OFF(R.string.convert_error_tor_off),
+    BELOW_RELAYER_FEE(R.string.convert_error_below_fee),
+    AMOUNT_REFUSED(R.string.convert_error_amount_refused),
 
     /** Another conversion is under way: its screen is the place to be. */
     SWAP_UNDER_WAY(null),
@@ -60,6 +63,7 @@ internal fun Throwable.toFailure(): PrivateUsdFailure =
         is PrivateUsdSpendBlockedException -> PrivateUsdFailure.PAYMENT_PENDING
         is ZecInputQuoteException -> PrivateUsdFailure.NO_QUOTE_FITS
         is AtomicSwapBlockedException -> reason.toFailure()
+        is AtomicSwapHttpException.Refused -> refusal()
         is AtomicSwapHttpException -> service.toFailure()
         is RpcException -> PrivateUsdFailure.ETHEREUM_UNREACHABLE
         is SdkException, is IOException -> PrivateUsdFailure.ZCASH_UNAVAILABLE
@@ -87,6 +91,14 @@ private fun AtomicSwapService.toFailure() =
         AtomicSwapService.RELAYER -> PrivateUsdFailure.RELAYER_UNREACHABLE
     }
 
+// A maker turns an amount down when it's out of range, or too small to carry the swap's network cost.
+private fun AtomicSwapHttpException.Refused.refusal() =
+    if (service == AtomicSwapService.MAKER && code == SwapErrorCode.REJECTED) {
+        PrivateUsdFailure.AMOUNT_REFUSED
+    } else {
+        service.toFailure()
+    }
+
 private fun AtomicSwapBlock.toFailure() =
     when (this) {
         AtomicSwapBlock.SWAP_UNDER_WAY -> PrivateUsdFailure.SWAP_UNDER_WAY
@@ -101,7 +113,7 @@ private fun AtomicSwapBlock.toFailure() =
 
         AtomicSwapBlock.CHAIN_LAGGING, AtomicSwapBlock.CHAIN_UNREADABLE -> PrivateUsdFailure.ETHEREUM_UNREACHABLE
 
-        AtomicSwapBlock.RELAYER_FEE -> PrivateUsdFailure.RELAYER_UNREACHABLE
+        AtomicSwapBlock.RELAYER_FEE -> PrivateUsdFailure.BELOW_RELAYER_FEE
 
         AtomicSwapBlock.DEPOSIT_UNCONFIRMED -> PrivateUsdFailure.DEPOSIT_UNCONFIRMED
 

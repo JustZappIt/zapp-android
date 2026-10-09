@@ -83,7 +83,7 @@ data class AtomicSwapRecord(
     val acceptedAt: Long,
     /** Expected net payout, replaced by the confirmed event's net payout at completion. */
     val receives: Usdc6,
-    /** The relayer's fee the offer named: the most a payout may pay. */
+    /** The relayer's fee the offer named, which the payout pays while the relayer takes it, until [feeExpiresAt]. */
     val relayerFee: Usdc6,
     val deposit: SwapDeposit = SwapDeposit.NotStarted,
     /** A refund's sweep home, kept before it is first sent. */
@@ -96,6 +96,8 @@ data class AtomicSwapRecord(
     /** The deadlines the maker opened with, from its acceptance; with the quote and our keys, the swap's terms. */
     val t0: Long? = null,
     val t1: Long? = null,
+    /** Unix seconds; none where the relayer quoted a fee it doesn't price by gas. */
+    val feeExpiresAt: Long? = null,
 ) {
     val outcome: AtomicSwapOutcome? get() = end?.outcome
 
@@ -194,7 +196,12 @@ data class AtomicSwapOffer(
     val relayerFee: Usdc6,
     val receives: Usdc6,
     val maxTotalZat: Long? = null,
-)
+    /** Until when the relayer takes [relayerFee], in unix seconds. */
+    val feeExpiresAt: Long? = null,
+) {
+    /** The relayer's fee leaves something of the amount: a swap it would take all of is never started. */
+    val paysOut: Boolean get() = relayerFee < quote.amount
+}
 
 /** [AtomicSwapRecord] as the store keeps it: flat, with the deposit and the end as flags and nullables. */
 internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
@@ -227,6 +234,7 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
         val payout: SwapPayout? = null,
         val t0: Long? = null,
         val t1: Long? = null,
+        val feeExpiresAt: Long? = null,
     ) {
         fun record() =
             AtomicSwapRecord(
@@ -250,6 +258,7 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
                 payout = payout,
                 t0 = t0,
                 t1 = t1,
+                feeExpiresAt = feeExpiresAt,
             )
 
         companion object {
@@ -272,6 +281,7 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
                     payout = record.payout,
                     t0 = record.t0,
                     t1 = record.t1,
+                    feeExpiresAt = record.feeExpiresAt,
                 )
         }
     }

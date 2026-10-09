@@ -257,7 +257,6 @@ class SwapRecordStorageTest {
                 railgunProxy = Address.parse("0xeCFCf3b4eC647c4Ca6D49108b311b7a7C9543fea"),
                 maker = Address.parse(MAKER),
                 relayer = Address.parse("0xd9633572041886fa7584a2e12f36c8c7f1126412"),
-                maxRelayerFee = Usdc6.ofMicros(100_000),
             )
 
         /** The hosted testnet as reverse records keep it. */
@@ -266,7 +265,7 @@ class SwapRecordStorageTest {
                 """"relayerUrl":"https://zecswap-testnet.pepeman931.workers.dev/relayer",""" +
                 """"rpcUrl":"https://ethereum-sepolia-rpc.publicnode.com","chainId":11155111,""" +
                 """"contract":"$CONTRACT","token":"$TOKEN","railgun":"0xecfcf3b4ec647c4ca6d49108b311b7a7c9543fea",""" +
-                """"maker":"$MAKER","relayer":"0xd9633572041886fa7584a2e12f36c8c7f1126412","maxRefundFee":"100000"}"""
+                """"maker":"$MAKER","relayer":"0xd9633572041886fa7584a2e12f36c8c7f1126412"}"""
 
         private val REVERSE_HEAD =
             """{"index":4,"deployment":$TESTNET_JSON,"quote":{"terms":{"quoteId":"${hex(32, 1)}","maker":"$MAKER",""" +
@@ -308,7 +307,7 @@ class SwapRecordStorageTest {
             """
             {"index":4,"deployment":{"makerUrl":"https://maker","relayerUrl":"https://relayer","rpcUrl":"https://rpc",
              "chainId":11155111,"contract":"${hex(20, 4)}","token":"${hex(20, 3)}","railgun":"${hex(20, 6)}",
-             "maker":"${hex(20, 2)}","relayer":"${hex(20, 5)}","maxRefundFee":"100000"},
+             "maker":"${hex(20, 2)}","relayer":"${hex(20, 5)}"},
              "quote":{"terms":{"quoteId":"${hex(32, 1)}","maker":"${hex(20, 2)}","makerShare":"${hex(64, 2)}",
               "makerProof":"${hex(64, 7)}","chainId":11155111,"contract":"${hex(20, 4)}","token":"${hex(20, 3)}",
               "amount":"1000000","depositZat":100000,"expiresAt":2000},

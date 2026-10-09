@@ -47,4 +47,6 @@ internal data class PrivateUsdQuoteState(
     val fees: StringResource,
     /** How long the quote has left. */
     val expiry: StringResource,
+    /** The market maker's network cost, which the ZEC paid covers. */
+    val makerCost: StringResource? = null,
 )

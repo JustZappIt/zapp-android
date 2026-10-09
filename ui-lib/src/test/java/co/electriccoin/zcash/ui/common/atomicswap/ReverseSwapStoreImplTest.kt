@@ -78,7 +78,7 @@ class ReverseSwapStoreImplTest {
         }
 
     private companion object {
-        const val KEY = "reverse_swap_v2"
+        const val KEY = "reverse_swap_v3"
         private const val COST = """{"debit":"1252506","railgunFee":"2506","broadcasterFee":"250000"}"""
         private val RECORD =
             """{"index":4,"deployment":{"makerUrl":"https://zecswap-testnet.pepeman931.workers.dev/maker",""" +
@@ -88,7 +88,7 @@ class ReverseSwapStoreImplTest {
                 """"token":"0x5764d0044bef5aa839e0ddafe2073421101b9ed8",""" +
                 """"railgun":"0xecfcf3b4ec647c4ca6d49108b311b7a7c9543fea",""" +
                 """"maker":"0x2bac02b5032e9092493814c705f156b49e288922",""" +
-                """"relayer":"0xd9633572041886fa7584a2e12f36c8c7f1126412","maxRefundFee":"100000"},""" +
+                """"relayer":"0xd9633572041886fa7584a2e12f36c8c7f1126412"},""" +
                 """"quote":{"terms":{"quoteId":"0x${"01".repeat(32)}",""" +
                 """"maker":"0x2bac02b5032e9092493814c705f156b49e288922",""" +
                 """"makerShare":"0x${"02".repeat(64)}","makerProof":"0x${"07".repeat(64)}","chainId":11155111,""" +

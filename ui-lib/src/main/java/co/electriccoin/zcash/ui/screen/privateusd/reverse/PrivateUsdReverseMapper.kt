@@ -75,12 +75,14 @@ internal class PrivateUsdReverseMapper(
         currency: LocalCurrency,
     ): PrivateUsdReverseReviewState? {
         val cost = record.cost ?: return null
+        val makerCost = record.quote.terms.networkCost
         return PrivateUsdReverseReviewState(
             debit = terms.format(cost.debit, currency),
             escrow = terms.format(record.quote.terms.amount, currency),
             railgunFee = terms.format(cost.railgunFee, currency),
             broadcasterFee = terms.format(cost.broadcasterFee, currency),
             receive = stringRes(Zatoshi(record.receivedZat())),
+            makerCost = makerCost?.let { terms.format(it, currency) },
         )
     }
 
@@ -103,7 +105,7 @@ internal class PrivateUsdReverseMapper(
             zcashWait = conversion.swap.zcashWait?.takeIf { record.underWay },
             error = form.error,
             primary = primary,
-            info = terms.info(currency),
+            info = terms.info,
             isBackEnabled = form.isBackEnabled,
             onBack = actions::back,
         )

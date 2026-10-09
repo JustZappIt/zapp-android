@@ -369,7 +369,6 @@ class AtomicSwapChainTest {
                 railgunProxy = Address.parse("0xeCFCf3b4eC647c4Ca6D49108b311b7a7C9543fea"),
                 maker = Address.parse("0x09eD1F966745Be18C711C346242c0974DAd7c3e5"),
                 relayer = Address.parse("0x507d1d152025e9F6DA7Bc03B358acc247f07b4eB"),
-                maxRelayerFee = Usdc6.ofMicros(100_000),
             )
 
         fun selector(signature: String) = Selector4.fromCanonicalSignature(signature).hex

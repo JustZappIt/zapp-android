@@ -96,6 +96,18 @@ class PrivateUsdZecQuotesTest {
         }
 
     @Test
+    fun `typed ZEC pays for the maker's network cost as well as the amount`() =
+        runTest {
+            coEvery { repository.quote(any()) } answers { quote(requested(), networkCost = NETWORK_COST) }
+
+            val quote = quotes.quote(3_000_000 + FEE_ZAT)
+
+            assertEquals(Usdc6.ofMicros(780_000), quote.offer.requested)
+            assertEquals(3_000_000 + FEE_ZAT, quote.totalZat)
+            coVerify(exactly = 2) { repository.quote(any()) }
+        }
+
+    @Test
     fun `a quote that ran out is asked for again at its size first`() =
         runTest {
             coEvery { repository.quote(any()) } answers { quote(requested()) }
@@ -108,11 +120,13 @@ class PrivateUsdZecQuotesTest {
 
     private fun quote(
         requested: Usdc6,
-        feeZat: Long? = FEE_ZAT
+        feeZat: Long? = FEE_ZAT,
+        networkCost: Long? = null,
     ): AtomicSwapQuote {
         val units = requested.micros.toLong()
-        val depositZat = units * ZAT_PER_UNIT
-        val offer = offer(units.toInt(), requested = units, depositZat = depositZat, expiresAt = now + VALIDITY)
+        val depositZat = (units + (networkCost ?: 0)) * ZAT_PER_UNIT
+        val offer =
+            offer(units.toInt(), units, depositZat, expiresAt = now + VALIDITY, networkCost = networkCost)
         return AtomicSwapQuote(offer, feeZat)
     }
 
@@ -122,5 +136,6 @@ class PrivateUsdZecQuotesTest {
         const val ONE_ZEC = 100_000_000L
         const val ZAT_PER_UNIT = 3L
         const val FEE_ZAT = 10_000L
+        const val NETWORK_COST = 220_000L
     }
 }

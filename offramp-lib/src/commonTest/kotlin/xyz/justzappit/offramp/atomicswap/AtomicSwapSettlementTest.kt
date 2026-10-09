@@ -173,7 +173,7 @@ class AtomicSwapSettlementTest : AtomicSwapDriverFixtures() {
             assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(record))
             assertEquals(h.chain.payoutHash, h.store.record?.payoutTx)
             assertEquals(Usdc6.ofMicros(987_525), h.store.record?.receives)
-            assertEquals(record.relayerFee, h.store.record?.relayerFee, "the reviewed cap is retained")
+            assertEquals(record.relayerFee, h.store.record?.relayerFee, "the offer's fee is kept")
             assertTrue(h.keys.signedFees.isEmpty())
         }
 

@@ -34,6 +34,10 @@ abstract class AtomicSwapDriverFixtures {
         var acceptedSwapId = SWAP_ID.hex
         var relayer = RELAYER
         var relayerFee = "20000"
+        var feeExpiresAt: Long? = null
+
+        /** The least fee the relayer takes: a claim or payout signed for less is refused, and nothing is sent. */
+        var leastFee: Long? = null
         var feeAfterClaim: String? = null
         var claimPaysOut = true
         var zcashNetwork = "testnet"
@@ -43,13 +47,21 @@ abstract class AtomicSwapDriverFixtures {
             MockEngine { request ->
                 val path = request.url.encodedPath
                 paths += path
-                bodies[path] = (request.body as? TextContent)?.text.orEmpty()
+                val sent = (request.body as? TextContent)?.text.orEmpty()
+                bodies[path] = sent
                 if (path == unreachable) throw IOException("connection refused")
-                val status = if (path.endsWith("/accept")) acceptStatus else HttpStatusCode.OK
+                val fee = FEE_FIELD.find(sent)?.let { it.groupValues[1].toLong() }
+                val refused = fee != null && leastFee?.let { fee < it } == true
+                val status =
+                    when {
+                        path.endsWith("/accept") -> acceptStatus
+                        refused -> HttpStatusCode.BadRequest
+                        else -> HttpStatusCode.OK
+                    }
                 val body =
                     when {
                         status != HttpStatusCode.OK -> {
-                            val code = acceptCode?.let { "\"code\":\"$it\"," }.orEmpty()
+                            val code = (if (refused) "rejected" else acceptCode)?.let { "\"code\":\"$it\"," }.orEmpty()
                             """{$code"error":"${status.description}"}"""
                         }
 
@@ -69,8 +81,9 @@ abstract class AtomicSwapDriverFixtures {
                         }
 
                         path == "/v1/terms" -> {
+                            val expiry = feeExpiresAt?.let { ",\"feeExpiresAt\":$it" }.orEmpty()
                             """{"relayer":"${relayer.lowercaseHex}","chainId":11155111,""" +
-                                """"contract":"${CONTRACT.lowercaseHex}","fee":"$relayerFee"}"""
+                                """"contract":"${CONTRACT.lowercaseHex}","fee":"$relayerFee"$expiry}"""
                         }
 
                         path == "/v1/lock-claim" -> {
@@ -84,7 +97,7 @@ abstract class AtomicSwapDriverFixtures {
                             chain.stage = SwapStage.CLAIMED
                             chain.paidOut = claimPaysOut
                             chain.payoutHash = TxHash.fromHex(hash(1))
-                            chain.payoutFee = Usdc6.ofMicros(relayerFee.toLong())
+                            chain.payoutFee = Usdc6.ofMicros(checkNotNull(fee))
                             feeAfterClaim?.let { relayerFee = it }
                             sent(if (claimPaysOut) 2 else 1)
                         }
@@ -93,7 +106,7 @@ abstract class AtomicSwapDriverFixtures {
                             sent(1).also {
                                 chain.paidOut = true
                                 chain.payoutHash = TxHash.fromHex(hash(0))
-                                chain.payoutFee = Usdc6.ofMicros(relayerFee.toLong())
+                                chain.payoutFee = Usdc6.ofMicros(checkNotNull(fee))
                             }
                         }
 
@@ -331,6 +344,7 @@ abstract class AtomicSwapDriverFixtures {
     protected companion object {
         const val NOW = 1_790_000_000L
         const val LOCK_SECONDS = 600
+        const val FEE_VALIDITY = 3_600L
         const val DEPOSIT_ZAT = 202_021L
         const val QUOTE_ID = "0x" + "22222222222222222222222222222222" + "22222222222222222222222222222222"
         val MAKER = Address.parse("0x09eD1F966745Be18C711C346242c0974DAd7c3e5")
@@ -344,6 +358,7 @@ abstract class AtomicSwapDriverFixtures {
         val NOTE_COMMITMENT = NoteCommitment.of(filled(32, 0x05))
         val NOTE = note(npk = 1, commitment = NOTE_COMMITMENT)
         val ONE_UNIT = Usdc6.ofMicros(1)
+        val FEE_FIELD = Regex(""""fee":"(\d+)"""")
         val SWAP_ID = SwapId.of(MAKER, USER_SHARE)
         val DEPLOYMENT =
             SwapDeployment(
@@ -356,7 +371,6 @@ abstract class AtomicSwapDriverFixtures {
                 railgunProxy = Address.parse("0xeCFCf3b4eC647c4Ca6D49108b311b7a7C9543fea"),
                 maker = MAKER,
                 relayer = RELAYER,
-                maxRelayerFee = Usdc6.ofMicros(100_000),
             )
         val QUOTE_JSON =
             """

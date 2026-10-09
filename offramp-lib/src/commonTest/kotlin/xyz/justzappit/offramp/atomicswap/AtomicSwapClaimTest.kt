@@ -6,9 +6,11 @@ package xyz.justzappit.offramp.atomicswap
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.test.runTest
 import xyz.justzappit.evm.types.TxHash
+import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -220,16 +222,63 @@ class AtomicSwapClaimTest : AtomicSwapDriverFixtures() {
         }
 
     @Test
-    fun aPayoutNeverPaysTheRelayerMoreThanTheOfferSaid() =
+    fun aClaimSignsTheOffersFeeWithinItsHourThoughTheRelayerAsksMoreNow() =
         runTest {
             val h = Harness()
+            h.feeExpiresAt = NOW + FEE_VALIDITY
             val record = h.depositedRecord()
             h.relayerFee = "30000"
             h.chain.stage = SwapStage.READY
 
-            val blocked = assertFailsWith<AtomicSwapBlockedException> { h.driver.advance(record) }
-            assertEquals(AtomicSwapBlock.RELAYER_FEE, blocked.reason)
-            assertTrue("/v1/claim" !in h.paths)
+            assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(record))
+            assertEquals(listOf(Usdc6.ofMicros(20_000)), h.keys.signedFees)
+            assertEquals(payoutAfterFees(AMOUNT, Usdc6.ofMicros(20_000)), h.store.record?.receives)
+        }
+
+    @Test
+    fun pastItsHourAClaimSignsTheRelayersFeeNowAndShowsWhatItKept() =
+        runTest {
+            val h = Harness()
+            h.feeExpiresAt = NOW + FEE_VALIDITY
+            val record = h.depositedRecord()
+            h.relayerFee = "30000"
+            h.chain.stage = SwapStage.READY
+            h.clock = NOW + FEE_VALIDITY
+            h.chain.now = h.clock
+
+            assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(record))
+            assertEquals(listOf(Usdc6.ofMicros(30_000)), h.keys.signedFees)
+            assertEquals(payoutAfterFees(AMOUNT, Usdc6.ofMicros(30_000)), h.store.record?.receives)
+        }
+
+    @Test
+    fun aFeeTheRelayerRefusesIsSignedAgainAtItsFeeNow() =
+        runTest {
+            val h = Harness()
+            h.feeExpiresAt = NOW + FEE_VALIDITY
+            val record = h.depositedRecord()
+            h.relayerFee = "30000"
+            h.leastFee = 30_000
+            h.chain.stage = SwapStage.READY
+
+            assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(record))
+            assertEquals(listOf(Usdc6.ofMicros(20_000), Usdc6.ofMicros(30_000)), h.keys.signedFees)
+            assertEquals(2, h.paths.count { it == "/v1/claim" })
+            assertEquals(Usdc6.ofMicros(30_000), checkNotNull(h.store.record).payout?.fee)
+        }
+
+    @Test
+    fun aSwapWhoseRelayerFeeTakesItsWholeAmountIsNeverStarted() =
+        runTest {
+            val h = Harness()
+            h.relayerFee = AMOUNT.micros.toString()
+            val offer = h.driver.quote(ONE_UNIT)
+
+            assertFalse(offer.paysOut)
+            val refused = assertFailsWith<AtomicSwapBlockedException> { h.driver.accept(offer) }
+            assertEquals(AtomicSwapBlock.RELAYER_FEE, refused.reason)
+            assertNull(h.store.record)
+            assertTrue(h.paths.none { it.endsWith("/accept") })
         }
 
     @Test
@@ -392,52 +441,18 @@ class AtomicSwapClaimTest : AtomicSwapDriverFixtures() {
         }
 
     @Test
-    fun aPayoutAfterTheClaimNeverRaisesTheReviewedFee() =
+    fun aPayoutNeverSignsAFeeThatLeavesNothing() =
         runTest {
             val h = Harness()
             val record = h.depositedRecord()
             h.chain.stage = SwapStage.CLAIMED
-            h.relayerFee = "30000"
+            h.relayerFee = AMOUNT.micros.toString()
 
             val blocked = assertFailsWith<AtomicSwapBlockedException> { h.driver.advance(record) }
             assertEquals(AtomicSwapBlock.RELAYER_FEE, blocked.reason)
             assertTrue("/v1/payout" !in h.paths)
             assertTrue(h.keys.signedFees.isEmpty())
             assertNull(h.store.record?.outcome)
-        }
-
-    @Test
-    fun aSplitClaimCannotAuthorizeAHigherFeeAndResumesAtTheReviewedFee() =
-        runTest {
-            val h = Harness()
-            val record = h.depositedRecord()
-            h.chain.stage = SwapStage.READY
-            h.claimPaysOut = false
-            h.feeAfterClaim = "100000"
-
-            val blocked = assertFailsWith<AtomicSwapBlockedException> { h.driver.advance(record) }
-            assertEquals(AtomicSwapBlock.RELAYER_FEE, blocked.reason)
-            assertTrue(h.bodies.getValue("/v1/claim").contains("\"fee\":\"20000\""))
-            assertTrue("/v1/payout" !in h.paths)
-            assertEquals(listOf(record.relayerFee), h.keys.signedFees)
-            assertNull(h.store.record?.outcome)
-
-            h.relayerFee = "20000"
-            assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(h.store.record!!))
-            assertTrue(h.bodies.getValue("/v1/payout").contains("\"fee\":\"20000\""))
-        }
-
-    @Test
-    fun aPayoutNeverPaysTheRelayerMoreThanTheDeploymentAllows() =
-        runTest {
-            val h = Harness()
-            val record = h.depositedRecord()
-            h.chain.stage = SwapStage.CLAIMED
-            h.relayerFee = "100001"
-
-            val blocked = assertFailsWith<AtomicSwapBlockedException> { h.driver.advance(record) }
-            assertEquals(AtomicSwapBlock.RELAYER_FEE, blocked.reason)
-            assertTrue("/v1/payout" !in h.paths)
         }
 
     @Test

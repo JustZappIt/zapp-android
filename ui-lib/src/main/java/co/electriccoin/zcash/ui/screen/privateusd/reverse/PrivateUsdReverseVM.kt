@@ -181,7 +181,7 @@ class PrivateUsdReverseVM(
                     ?: holdings.spending.message().takeUnless {
                         holdings.spending.canStartConversion || !form.canAct
                     },
-            info = terms.info(currency),
+            info = terms.info,
             primary = primary,
             isBackEnabled = form.isBackEnabled,
             pinVerify = pin,

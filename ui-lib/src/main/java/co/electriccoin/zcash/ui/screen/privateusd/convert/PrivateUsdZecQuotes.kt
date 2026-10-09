@@ -11,6 +11,7 @@ import xyz.justzappit.offramp.atomicswap.AtomicSwapBlock
 import xyz.justzappit.offramp.atomicswap.AtomicSwapBlockedException
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOffer
 import xyz.justzappit.offramp.p2p.Usdc6
+import java.math.BigInteger
 import kotlin.time.Clock
 
 /** An offer the wallet can pay now: its deposit and the network fee on it, capped at what they come to. */
@@ -60,7 +61,8 @@ internal class PrivateUsdZecQuotes(
         latest?.takeIf { it.offer.quote.expiresAt > nowSeconds() }
             ?: repository.quote(deployment.minAmount).also { latest = it }
 
-    // What [basis]'s price buys with [totalZat], less [basis]'s fee or the least one there is.
+    // What [basis]'s price buys with [totalZat], less [basis]'s fee or the least one there is. A deposit pays the
+    // maker's network cost on top of the amount, at the same price.
     private fun amountFor(
         totalZat: Long,
         basis: AtomicSwapQuote,
@@ -68,8 +70,9 @@ internal class PrivateUsdZecQuotes(
         lessThan: Usdc6? = null,
     ): Usdc6 {
         val depositZat = (totalZat - (basis.depositFeeZat ?: ZIP317_MIN_FEE_ZAT)).coerceAtLeast(0)
-        val offer = basis.offer
-        val priced = depositZat.toBigInteger() * offer.requested.micros / offer.quote.depositZat.toBigInteger()
+        val quote = basis.offer.quote
+        val cost = quote.networkCost?.micros ?: BigInteger.ZERO
+        val priced = depositZat.toBigInteger() * (quote.amount.micros + cost) / quote.depositZat.toBigInteger() - cost
         val ceilings = listOfNotNull(lessThan?.micros?.dec(), deployment.maxAmount.micros.takeIf { capped })
         val amount = ceilings.fold(priced) { least, ceiling -> least.min(ceiling) }
         if (amount !in limits) throw ZecInputQuoteException()

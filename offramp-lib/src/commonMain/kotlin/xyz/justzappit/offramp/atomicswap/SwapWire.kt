@@ -26,6 +26,8 @@ data class SwapQuote(
     val amount: Usdc6,
     val depositZat: Long,
     val expiresAt: Long,
+    /** The maker's own gas and Zcash fee this quote charges: in [depositZat] forward, kept from the ZEC paid back. */
+    val networkCost: Usdc6? = null,
 )
 
 /** A quote accepted: our share, its proof, and the viewing keys the maker watches the deposit with. */
@@ -87,10 +89,13 @@ data class RelayerTerms(
     val relayer: Address,
     val chainId: ChainId,
     val contract: Address,
+    /** Kept from a payout, a refund's payout or a rescue; where the relayer prices gas, it follows gas. */
     val fee: Usdc6,
     val reverseFunding: ReverseFundingTerms? = null,
     /** Present when the relayer sends wallets' private Railgun sends and withdrawals, as their broadcaster. */
     val railgunSends: RailgunSendsTerms? = null,
+    /** Unix seconds until which the relayer takes [fee] and the funding fee as quoted; none where it prices no gas. */
+    val feeExpiresAt: Long? = null,
 )
 
 /** How the relayer sends a wallet's Railgun transaction: it pays the gas for a fee note to [railgunAddress]. */
@@ -231,6 +236,7 @@ internal fun SwapQuote.requireWellFormed() {
     fixedHex(quoteId, SWAP_WORD_BYTES)
     fixedHex(makerProof, SWAP_SHARE_BYTES)
     requireSwapAmount(amount, positive = true)
+    networkCost?.let { requireSwapAmount(it, positive = false) }
     require(depositZat in 1..MAX_ZATOSHI && expiresAt > 0) { "the quote's terms are empty" }
 }
 

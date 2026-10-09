@@ -139,7 +139,6 @@ internal class PrivateUsdReverseTerms(
     private val token = deployment.privateUsdToken
     private val least = deployment.minAmount.micros
     private val most = deployment.maxAmount.micros
-    private val maxRefundFee = deployment.swap.maxRelayerFee.micros
 
     /** [typed] of [currency] in the token, when a conversion can be that much. */
     fun amount(
@@ -177,15 +176,12 @@ internal class PrivateUsdReverseTerms(
         currency: LocalCurrency
     ): StringResource = currency.format(amount.micros.toDecimal(token.decimals))
 
-    fun info(currency: LocalCurrency) =
+    val info =
         PrivateUsdInfo(
             title = stringRes(R.string.reverse_title),
             titleDescription = stringRes(R.string.reverse_title_description),
             steps = listOf(stringRes(R.string.reverse_intro)),
-            notes =
-                listOf(
-                    stringRes(R.string.reverse_refund_terms, currency.format(maxRefundFee.toDecimal(token.decimals))),
-                ),
+            notes = listOf(stringRes(R.string.reverse_refund_note)),
         )
 }
 

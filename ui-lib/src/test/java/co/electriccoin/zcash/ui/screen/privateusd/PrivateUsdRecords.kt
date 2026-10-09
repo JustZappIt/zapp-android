@@ -47,10 +47,11 @@ internal fun offer(
     expiresAt: Long,
     receives: Long = requested,
     maxTotalZat: Long? = null,
+    networkCost: Long? = null,
 ) = AtomicSwapOffer(
     index = index,
     requested = Usdc6.ofMicros(requested),
-    quote = forwardQuote(requested, depositZat, expiresAt),
+    quote = forwardQuote(requested, depositZat, expiresAt, networkCost),
     relayerFee = Usdc6.ofMicros(20_000),
     receives = Usdc6.ofMicros(receives),
     maxTotalZat = maxTotalZat,
@@ -60,6 +61,7 @@ private fun forwardQuote(
     amount: Long,
     depositZat: Long,
     expiresAt: Long,
+    networkCost: Long? = null,
 ) = SwapQuote(
     quoteId = hex(32, 0x22),
     maker = Address.parse("0x09eD1F966745Be18C711C346242c0974DAd7c3e5"),
@@ -71,6 +73,7 @@ private fun forwardQuote(
     amount = Usdc6.ofMicros(amount),
     depositZat = depositZat,
     expiresAt = expiresAt,
+    networkCost = networkCost?.let(Usdc6::ofMicros),
 )
 
 internal fun toZec(

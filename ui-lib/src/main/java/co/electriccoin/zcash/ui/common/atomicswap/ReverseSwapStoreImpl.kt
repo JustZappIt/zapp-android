@@ -33,7 +33,7 @@ interface ReverseSwapRecords : ReverseSwapStore {
 class ReverseSwapStoreImpl(
     preferences: EncryptedPreferenceProvider
 ) : ReverseSwapRecords {
-    private val store = EncryptedJsonStore(preferences, "reverse_swap_v2", State.serializer(), strict = true)
+    private val store = EncryptedJsonStore(preferences, "reverse_swap_v3", State.serializer(), strict = true)
     private val lock = Mutex()
 
     override val observeActive: Flow<ReverseSwapRecord?> = store.observe().map { it?.active }

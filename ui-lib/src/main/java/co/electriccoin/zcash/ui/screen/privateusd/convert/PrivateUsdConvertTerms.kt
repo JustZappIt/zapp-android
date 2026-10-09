@@ -43,7 +43,7 @@ internal data class ConvertForm(
     fun canGoOn(
         spendable: Zatoshi?,
         now: Long
-    ): Boolean = ready != null && !isExpired(now) && spendable != null && !isShort(spendable)
+    ): Boolean = ready?.quote?.offer?.paysOut == true && !isExpired(now) && spendable != null && !isShort(spendable)
 
     /** Why it can't go on, most pressing first. */
     fun message(
@@ -53,6 +53,7 @@ internal data class ConvertForm(
         when {
             error != null -> error
             spendable != null && isShort(spendable) -> stringRes(R.string.convert_insufficient, stringRes(spendable))
+            ready?.quote?.offer?.paysOut == false -> stringRes(R.string.convert_error_below_fee)
             quote is ConvertQuote.Failed -> quote.message
             phase == PrivateUsdConvertPhase.REVIEW && isExpired(now) -> stringRes(R.string.convert_quote_ran_out)
             else -> null
@@ -133,6 +134,7 @@ internal class PrivateUsdConvertTerms(
                     currency.format(offer.relayerFee.micros.toDecimal(token.decimals)),
                     basisPoints(RAILGUN_FEE),
                 ),
+            makerCost = offer.quote.networkCost?.let { currency.format(it.micros.toDecimal(token.decimals)) },
             expiry =
                 stringRes(
                     when (phase) {

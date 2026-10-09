@@ -27,22 +27,29 @@ internal fun MakerInfo.requireServing(
     }
 }
 
-/** The fee these terms ask, once they're [deployment]'s own relayer's, not its maker's, and within [limit]. */
-internal fun RelayerTerms.checkedFee(
-    deployment: SwapDeployment,
-    amount: Usdc6,
-    limit: Usdc6 = deployment.maxRelayerFee,
-): Usdc6 {
+/** The fee these terms ask, once they're [deployment]'s own relayer's, not its maker's. */
+internal fun RelayerTerms.checkedFee(deployment: SwapDeployment): Usdc6 {
     val serves =
         chainId == deployment.chainId &&
             contract == deployment.contract &&
             relayer == deployment.relayer &&
             relayer != deployment.maker
     if (!serves) throw AtomicSwapBlockedException(AtomicSwapBlock.WRONG_DEPLOYMENT, "another deployment's relayer")
-    if (fee > limit || fee >= amount) {
-        throw AtomicSwapBlockedException(AtomicSwapBlock.RELAYER_FEE, "the relayer asks a fee of $fee")
-    }
     return fee
+}
+
+/** As [checkedFee], once it leaves something of a payout of [amount]. */
+internal fun RelayerTerms.checkedFee(
+    deployment: SwapDeployment,
+    amount: Usdc6,
+): Usdc6 = checkedFee(deployment).also { requirePaysOut(amount, it) }
+
+/** The relayer refuses a payout of [amount] that [fee] would take all of, so nothing that needs one starts. */
+internal fun requirePaysOut(
+    amount: Usdc6,
+    fee: Usdc6
+) {
+    if (fee >= amount) throw AtomicSwapBlockedException(AtomicSwapBlock.RELAYER_FEE, "a fee of $fee leaves nothing")
 }
 
 /** Whether the contract gives us a lock at [now]: none is held, nor is it the other side's turn after ours lapsed. */

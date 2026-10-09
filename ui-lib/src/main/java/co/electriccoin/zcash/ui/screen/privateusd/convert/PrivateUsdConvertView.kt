@@ -79,7 +79,7 @@ private fun Amount(
     state.quote?.let { quote ->
         ZappSettlementLedger(
             rows =
-                listOf(
+                listOfNotNull(
                     ZappSettlementLedgerRow(stringResource(R.string.convert_you_pay), quote.pay.getValue()),
                     ZappSettlementLedgerRow(stringResource(R.string.convert_network_fee), quote.networkFee.getValue()),
                     ZappSettlementLedgerRow(stringResource(R.string.convert_you_receive), quote.receive.getValue()),
@@ -88,6 +88,9 @@ private fun Amount(
                         quote.fees.getValue(),
                         isSingleLine = true
                     ),
+                    quote.makerCost?.let {
+                        ZappSettlementLedgerRow(stringResource(R.string.convert_maker_cost), it.getValue())
+                    },
                 ),
             notice = quote.expiry.getValue(),
         )
@@ -100,13 +103,16 @@ private fun Review(state: PrivateUsdConvertState) {
         PrivateUsdReviewHeader(pay = quote.pay.getValue(), receive = quote.receive.getValue())
         ZappSettlementLedger(
             rows =
-                listOf(
+                listOfNotNull(
                     ZappSettlementLedgerRow(stringResource(R.string.convert_network_fee), quote.networkFee.getValue()),
                     ZappSettlementLedgerRow(
                         stringResource(R.string.convert_fees),
                         quote.fees.getValue(),
                         isSingleLine = true
                     ),
+                    quote.makerCost?.let {
+                        ZappSettlementLedgerRow(stringResource(R.string.convert_maker_cost), it.getValue())
+                    },
                 ),
             notice = quote.expiry.getValue(),
             noticeIsDanger = state.message != null,
@@ -145,6 +151,7 @@ private fun previewState(phase: PrivateUsdConvertPhase) =
                 receive = stringRes("₹81.60"),
                 fees = stringRes("₹1.67 relayer · 0.25% Railgun"),
                 expiry = stringRes("Quote refreshes in 4:12"),
+                makerCost = stringRes("₹18.40"),
             ),
         isQuoting = false,
         message = null,

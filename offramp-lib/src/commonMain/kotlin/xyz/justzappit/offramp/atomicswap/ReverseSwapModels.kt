@@ -50,6 +50,8 @@ data class ReverseFundingCost(
     val debit: Usdc6,
     val railgunFee: Usdc6,
     val broadcasterFee: Usdc6,
+    /** Unix seconds until which the relayer takes [broadcasterFee]; none where it prices no gas. */
+    val feeExpiresAt: Long? = null,
 )
 
 /** Funding's proved calldata, kept before submission, and the transaction the relayer sent it in. */

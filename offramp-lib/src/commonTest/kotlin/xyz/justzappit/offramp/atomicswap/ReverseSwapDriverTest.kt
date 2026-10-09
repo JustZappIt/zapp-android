@@ -240,6 +240,18 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
         }
 
     @Test
+    fun aConversionWhoseRefundTheRelayersFeeWouldTakeAllOfIsNeverQuoted() =
+        runTest {
+            val h = Harness()
+            h.relayerFee = AMOUNT
+
+            val refused = assertFailsWith<AtomicSwapBlockedException> { h.driver.quote(AMOUNT) }
+            assertEquals(AtomicSwapBlock.RELAYER_FEE, refused.reason)
+            assertEquals(0, h.nextIndex)
+            assertNull(h.saved)
+        }
+
+    @Test
     fun pendingSwapCannotMoveToAnotherDeployment() =
         runTest {
             val h = Harness()

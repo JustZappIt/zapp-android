@@ -67,7 +67,7 @@ class AtomicSwapSessionsTest {
                 """"token":"0x5764d0044bef5aa839e0ddafe2073421101b9ed8",""" +
                 """"railgun":"0xecfcf3b4ec647c4ca6d49108b311b7a7c9543fea",""" +
                 """"maker":"0x2bac02b5032e9092493814c705f156b49e288922",""" +
-                """"relayer":"0xd9633572041886fa7584a2e12f36c8c7f1126412","maxRefundFee":"100000"}"""
+                """"relayer":"0xd9633572041886fa7584a2e12f36c8c7f1126412"}"""
 
         fun current(issuer: SwapTokenIssuer) =
             KEPT

@@ -130,7 +130,7 @@ internal class ReverseSwapRefunds(
         }
     }
 
-    /** Signs the refund's payout only when it goes out, and keeps it with the record first. */
+    /** Signs the refund's payout when it goes out, at the relayer's fee then, and keeps it with the record first. */
     private suspend fun sendPayout(
         record: ReverseSwapRecord,
         phase: ReversePhase,
@@ -138,7 +138,9 @@ internal class ReverseSwapRefunds(
         send: suspend (SwapPayout) -> Unit,
     ) {
         val terms = verifier.relayerTerms(record)
-        val payout = record.payout ?: payout(record, terms, reverseKeys.signPayout(record, terms))
+        val payout =
+            record.payout?.takeIf { it.fee == terms.fee }
+                ?: payout(record, terms, reverseKeys.signPayout(record, terms))
         val expectedNote = keys.payoutNote(record.index).wire()
         check(payout.swapId == record.swapId && payout.note == expectedNote) {
             "the saved refund payout is for another swap"

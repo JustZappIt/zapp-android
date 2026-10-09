@@ -100,7 +100,7 @@ class PrivateUsdSpendGuardTest {
     fun `unreadable conversion records prevent accepting another conversion`() =
         runTest {
             val preferences = InMemoryPreferenceProvider()
-            val key = PreferenceKey("reverse_swap_v2")
+            val key = PreferenceKey("reverse_swap_v3")
             preferences.putString(key, "corrupt")
             val encrypted = preferences.encrypted()
             val guard =
