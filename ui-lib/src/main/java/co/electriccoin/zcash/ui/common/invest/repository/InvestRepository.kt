@@ -69,6 +69,12 @@ interface InvestRepository {
      */
     suspend fun dismissBuy(depositAddress: String)
 
+    /**
+     * Forgets everything cached for the current wallet (holdings, the estimate's refund address); called when
+     * the wallet is reset, so none of it carries over to the next wallet.
+     */
+    fun clearWalletData()
+
     companion object {
         /** The in-app minimum (decided 2026-09-27): nothing below about $30 quoted on 2026-09-25/26. */
         val MINIMUM_USD: BigDecimal = BigDecimal(40)

@@ -51,6 +51,7 @@ import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.imageRes
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
@@ -477,14 +478,65 @@ class InvestRepositoryImplTest {
         }
 
     @Test
-    fun `the market lists all ten curated stocks with 1Click prices`() =
+    fun `the market lists the curated stocks 1Click still lists, priced or not`() =
         runTest {
             repository.refreshMarket()
 
             val market = requireNotNull(repository.market.value)
-            assertEquals(InvestAssets.curated, market.assets.map { it.asset })
+            // The fake lists NVDA (priced) and TSLA (no price); the other curated stocks aren't listed.
+            assertEquals(listOf(nvda, InvestAssets.curated[1]), market.assets.map { it.asset })
             assertEquals(BigDecimal("224.46"), market.assets.first { it.asset == nvda }.usdPrice)
+            assertNull(market.assets.first { it.asset == InvestAssets.curated[1] }.usdPrice)
             assertEquals(2, repository.investSwapAssets().size)
+        }
+
+    @Test
+    fun `holdings count one row per stock from the private balance only`() =
+        runTest {
+            coEvery { session.balances() } returns
+                BalancesResponse(
+                    listOf(
+                        AccountBalance(tokenId = nvda.assetId, available = "400000000000000000", source = "private"),
+                        AccountBalance(tokenId = nvda.assetId, available = "40974000000000000", source = null),
+                        AccountBalance(tokenId = nvda.assetId, available = "900000000000000000", source = "public"),
+                    ),
+                )
+
+            repository.refreshHoldings()
+
+            val holding = requireNotNull(repository.holdings.value).items.single()
+            assertEquals(BigDecimal("0.440974"), holding.units)
+        }
+
+    @Test
+    fun `a wallet reset forgets the holdings and the estimate's refund address`() =
+        runTest {
+            coEvery { session.balances() } returns
+                BalancesResponse(listOf(AccountBalance(nvda.assetId, "440974000000000000", "private")))
+            repository.refreshHoldings()
+            repository.estimateBuy(nvda, BigDecimal(100))
+            assertEquals(1, wallet.addressesHandedOut)
+
+            repository.clearWalletData()
+
+            assertNull(repository.holdings.value)
+            repository.estimateBuy(nvda, BigDecimal(100))
+            assertEquals(2, wallet.addressesHandedOut) // the next wallet's estimate asks for its own address
+        }
+
+    @Test
+    fun `a receipt for an old buy doesn't read the private balance, a followed buy does`() =
+        runTest {
+            coEvery { session.balances() } returns BalancesResponse(emptyList())
+            api.statuses += status(SwapStatus.SUCCESS, amountOut = BigDecimal("0.440974"))
+
+            repository.observeBuy(DEPOSIT).toList()
+            coVerify(exactly = 0) { session.balances() }
+
+            checkpoints.add(InvestBuyCheckpoint(DEPOSIT, nvda.assetId, 0))
+            api.statuses += status(SwapStatus.SUCCESS, amountOut = BigDecimal("0.440974"))
+            repository.observeBuy(DEPOSIT).toList()
+            coVerify(exactly = 1) { session.balances() }
         }
 
     private fun status(

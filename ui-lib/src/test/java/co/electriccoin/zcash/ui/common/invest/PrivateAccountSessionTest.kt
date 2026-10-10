@@ -18,6 +18,7 @@ import co.electriccoin.zcash.ui.common.model.near.QuoteRequest
 import co.electriccoin.zcash.ui.common.model.near.QuoteResponseDto
 import co.electriccoin.zcash.ui.common.model.near.SubmitDepositTransactionRequest
 import co.electriccoin.zcash.ui.common.model.near.SwapStatusResponseDto
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -171,21 +172,22 @@ class PrivateAccountSessionTest {
         }
 
     @Test
-    fun `a login that lands after reset does not store its token`() =
+    fun `a login that lands after reset is neither stored nor used`() =
         runTest {
             val loginStarted = CompletableDeferred<Unit>()
             val release = CompletableDeferred<Unit>()
             val api = FakeApi(beforeLogin = { if (it == 1) loginStarted.complete(Unit).also { release.await() } })
             val session = session(api)
 
-            val first = async { session.balances() }
+            val first = async { runCatching { session.balances() } }
             loginStarted.await()
             session.reset() // doesn't wait for the login in flight
             release.complete(Unit)
-            first.await()
+            // The deleted wallet's token must not read balances for the call that asked for it.
+            assertTrue(first.await().exceptionOrNull() is CancellationException)
             session.balances()
 
-            assertEquals(listOf("token-1", "token-2"), api.balanceTokens)
+            assertEquals(listOf("token-2"), api.balanceTokens)
         }
 
     @Test

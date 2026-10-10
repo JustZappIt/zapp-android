@@ -6,6 +6,8 @@ import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
 import co.electriccoin.zcash.preference.StandardPreferenceProvider
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
+import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSellRepository
 import co.electriccoin.zcash.ui.common.migration.MigrationAppHooks
 import co.electriccoin.zcash.ui.common.provider.ChatBlockedKeysStorageProvider
 import co.electriccoin.zcash.ui.common.provider.SynchronizerProvider
@@ -42,6 +44,8 @@ class ResetZashiUseCase(
     private val migrationAppHooks: MigrationAppHooks,
     private val ensureNoUnsharedGiftFunds: EnsureNoUnsharedGiftFundsUseCase,
     private val privateAccountSession: PrivateAccountSession,
+    private val investRepository: InvestRepository,
+    private val investSellRepository: InvestSellRepository,
 ) {
     @Suppress("TooGenericExceptionCaught", "ThrowsCount")
     suspend operator fun invoke(
@@ -63,8 +67,10 @@ class ResetZashiUseCase(
             // clear, and would keep driving the deleted wallet's smart account.
             peerCashOutRepository.reset()
             baseBalanceRepository.reset()
-            // The Invest session and account ID belong to this wallet's recovery phrase.
+            // The Invest session, account ID and cached holdings and addresses belong to this wallet.
             privateAccountSession.reset()
+            investRepository.clearWalletData()
+            investSellRepository.clearWalletData()
             deleteLocalFiles(keepFiles)
             closeSynchronizer()
             clearSDK()

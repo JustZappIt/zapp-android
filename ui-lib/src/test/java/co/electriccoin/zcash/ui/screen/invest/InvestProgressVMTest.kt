@@ -124,7 +124,8 @@ class InvestProgressVMTest {
             assertTrue(state.isSuccess)
             assertEquals(stringRes(R.string.invest_progress_held_title), state.title)
             assertEquals(stringRes(R.string.invest_progress_held_subtitle, "0.4410 NVDA"), state.subtitle)
-            assertEquals(1, repo.refreshHoldingsCalls)
+            // The repository refreshes holdings when the buy settles; the screen doesn't ask a second time.
+            assertEquals(0, repo.refreshHoldingsCalls)
         }
 
     @Test

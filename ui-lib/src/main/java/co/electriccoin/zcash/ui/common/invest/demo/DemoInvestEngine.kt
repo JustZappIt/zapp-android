@@ -234,6 +234,9 @@ internal class DemoInvestEngine(
     // Demo trades move on their own, so there is nothing to follow.
     override suspend fun followPendingTrades(): Nothing = awaitCancellation()
 
+    // A wallet reset starts the demo over too, as a fresh install would.
+    override fun clearWalletData() = reset()
+
     /** Clears holdings and trades, as on a fresh install; the country and setup stay. */
     fun reset() {
         synchronized(running) { running.toList() }.forEach { it.cancel() }

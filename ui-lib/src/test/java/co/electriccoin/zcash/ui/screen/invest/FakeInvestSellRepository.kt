@@ -52,6 +52,8 @@ internal class FakeInvestSellRepository : InvestSellRepository {
     override suspend fun dismissSell(depositAddress: String) {
         dismissed += depositAddress
     }
+
+    override fun clearWalletData() = Unit
 }
 
 /**

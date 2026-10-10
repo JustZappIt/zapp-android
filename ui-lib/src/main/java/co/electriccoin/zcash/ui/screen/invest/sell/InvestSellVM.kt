@@ -124,18 +124,19 @@ internal class InvestSellVM(
 
     init {
         // collectLatest cancels the previous block, so the leading delay is the debounce: one quote per pause.
-        // The currency is part of the key: a new exchange rate changes the USD asked for, so it re-asks.
+        // Keyed on what was typed and the currency, not the exchange rate, which moves with every ZEC price tick;
+        // the review sheet fetches a live quote at the current rate anyway.
         viewModelScope.launch {
-            combine(form, currency, ::sellAmountOf)
+            combine(form, currency.map { it.code }, ::estimateKeyOf)
                 .distinctUntilChanged()
-                .collectLatest { request ->
-                    if (request == null) {
+                .collectLatest { key ->
+                    if (key == null) {
                         quote.update { SellQuote.Idle }
                         return@collectLatest
                     }
                     quote.update { SellQuote.Loading }
                     delay(AMOUNT_SETTLE_DELAY_MS)
-                    requestEstimate(request)
+                    requestEstimate()
                 }
         }
     }
@@ -168,10 +169,32 @@ internal class InvestSellVM(
         }
     }
 
-    private suspend fun requestEstimate(request: SellAmount) {
+    /** What a sale estimate depends on, apart from the exchange rate; null when there is nothing to estimate. */
+    private data class EstimateKey(
+        val sellAll: Boolean,
+        val mode: SellAmountMode,
+        val typed: BigDecimal?,
+        val currencyCode: String,
+    )
+
+    private fun estimateKeyOf(
+        current: Form,
+        currencyCode: String,
+    ): EstimateKey? {
+        val typed = current.amount.amount?.takeIf { it.signum() > 0 }
+        if (!current.sellAll && typed == null) return null
+        val mode = if (current.sellAll) SellAmountMode.MONEY else current.mode
+        return EstimateKey(current.sellAll, mode, typed.takeUnless { current.sellAll }, currencyCode)
+    }
+
+    private suspend fun requestEstimate() {
+        val key = estimateKeyOf(form.value, currency.value.code)
+        val request = sellAmountOf(form.value)
+        if (key == null || request == null) return
         val result = investCatching { sellRepository.estimateSell(asset, request) }
-        // A figure for an amount the user has already changed is worth nothing.
-        if (sellAmountOf(form.value) != request) return
+        // A figure for an amount (or currency) the user has already changed is worth nothing; a rate that moved
+        // meanwhile is not a change.
+        if (estimateKeyOf(form.value, currency.value.code) != key) return
         quote.update {
             result.fold(
                 onSuccess = { SellQuote.Ready(it) },
@@ -287,11 +310,11 @@ internal class InvestSellVM(
             ?.let(NumberTextFieldInnerState::fromAmount) ?: NumberTextFieldInnerState()
 
     private fun onTryAgain() {
-        val request = sellAmountOf(form.value) ?: return
+        if (sellAmountOf(form.value) == null) return
         if (form.value.isRetrying) return
         form.update { it.copy(isRetrying = true) }
         viewModelScope.launch {
-            requestEstimate(request)
+            requestEstimate()
             form.update { it.copy(isRetrying = false) }
         }
     }

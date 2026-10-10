@@ -66,21 +66,13 @@ internal class InvestProgressVM(
         observeJob =
             viewModelScope.launch {
                 investCatching {
-                    investRepository.observeBuy(args.depositAddress).collect { next ->
-                        progress.update { next }
-                        if (next is BuyProgress.Held) refreshHoldingsQuietly()
-                    }
+                    // The repository refreshes the holdings itself when the buy settles.
+                    investRepository.observeBuy(args.depositAddress).collect { next -> progress.update { next } }
                 }.onFailure { e ->
                     Twig.warn(e) { "InvestProgressVM: observing the buy failed" }
                     checkError.update { e.toInvestMessage() }
                 }
             }
-    }
-
-    // The new position should be on PAY by the time the user gets back there; a failure only means it shows later.
-    private suspend fun refreshHoldingsQuietly() {
-        investCatching { investRepository.refreshHoldings() }
-            .onFailure { Twig.warn(it) { "InvestProgressVM: holdings refresh after buy failed" } }
     }
 
     private fun buildState(

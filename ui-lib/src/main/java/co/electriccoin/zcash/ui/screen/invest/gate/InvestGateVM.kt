@@ -73,10 +73,13 @@ internal class InvestGateVM(
 
     init {
         viewModelScope.launch {
-            val saved = investCatching { settingsRepository.get() }.getOrNull()?.countryCode
+            val saved = investCatching { settingsRepository.get() }.getOrNull()
+            val savedCountry = saved?.countryCode
             val initial =
-                if (saved != null) {
-                    Form(countryCode = saved)
+                if (savedCountry != null) {
+                    // A qualified investor keeps that attestation when they reopen their own country; dropping it
+                    // here would quietly turn a saved restricted country into sell-only.
+                    Form(countryCode = savedCountry, qualified = saved.qualifiedInvestor)
                 } else {
                     hintProvider.hint()?.let { Form(countryCode = it.countryCode, hintSource = it.source) } ?: Form()
                 }

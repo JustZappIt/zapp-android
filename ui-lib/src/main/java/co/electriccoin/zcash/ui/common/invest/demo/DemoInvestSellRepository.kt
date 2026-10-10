@@ -113,6 +113,9 @@ internal class DemoInvestSellRepository(
 
     override suspend fun dismissSell(depositAddress: String) = engine.dismiss(depositAddress)
 
+    // The engine's clearWalletData() resets sales along with buys.
+    override fun clearWalletData() = Unit
+
     private sealed interface Order {
         data class Priced(
             val estimate: SellEstimate.Priced,

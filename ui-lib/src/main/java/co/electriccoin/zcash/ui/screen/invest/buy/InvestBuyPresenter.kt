@@ -1,5 +1,7 @@
 package co.electriccoin.zcash.ui.screen.invest.buy
 
+import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
+import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.invest.model.BuyEstimate
 import co.electriccoin.zcash.ui.common.invest.model.InvestAsset
@@ -150,6 +152,35 @@ internal object InvestBuyPresenter {
         )
     }
 
+    /** The spendable shielded ZEC, with its value in the user's currency once the ZEC price is known. */
+    fun balanceText(
+        spendable: Zatoshi,
+        zecUsd: BigDecimal?,
+        money: InvestCurrency,
+    ): StringResource {
+        val zec = spendable.convertZatoshiToZec()
+        val zecText = InvestFormat.zec(zec)
+        return if (zecUsd == null) {
+            stringRes(zecText)
+        } else {
+            stringRes(R.string.invest_buy_balance_value, zecText, money.format(zec.multiply(zecUsd)))
+        }
+    }
+
+    /** Max leaves room for the network fee and the quote's own slippage, so it doesn't land on "not enough ZEC". */
+    fun maxUsd(
+        spendable: Zatoshi,
+        price: BigDecimal?,
+    ): BigDecimal? {
+        val zec = spendable.convertZatoshiToZec().subtract(MAX_FEE_RESERVE_ZEC)
+        if (price == null || price.signum() <= 0 || zec.signum() <= 0) return null
+        return zec
+            .multiply(price)
+            .multiply(MAX_HEADROOM)
+            .setScale(2, RoundingMode.DOWN)
+            .takeIf { it.signum() > 0 }
+    }
+
     /** "9:42": minutes and seconds left on the held price. */
     fun countdownText(seconds: Long): String =
         "%d:%02d".format(seconds / SECONDS_PER_MINUTE, seconds % SECONDS_PER_MINUTE)
@@ -171,6 +202,8 @@ internal object InvestBuyPresenter {
     }
 
     private val HUNDRED = BigDecimal.TEN.pow(2)
+    private val MAX_FEE_RESERVE_ZEC = BigDecimal("0.0005")
+    private val MAX_HEADROOM = BigDecimal("0.98")
     private const val SECONDS_PER_MINUTE = 60L
 }
 

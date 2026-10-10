@@ -91,6 +91,8 @@ internal class FakeInvestRepository : InvestRepository {
     override suspend fun dismissBuy(depositAddress: String) {
         dismissedBuys += depositAddress
     }
+
+    override fun clearWalletData() = Unit
 }
 
 /** Counts who is following; never returns, like the real one, until the caller's scope ends. */

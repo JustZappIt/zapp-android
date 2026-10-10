@@ -63,7 +63,7 @@ class InvestSellProgressVMTest {
     }
 
     @Test
-    fun `a sale that went through shows the success header with the ZEC and refreshes holdings`() =
+    fun `a sale that went through shows the success header with the ZEC`() =
         runTest {
             val fixture = fixture(flowOf(SellProgress.Sent(DEPOSIT, BigDecimal("0.0634"))))
 
@@ -72,7 +72,6 @@ class InvestSellProgressVMTest {
             assertTrue(state.isSuccess)
             assertEquals(stringRes(R.string.invest_sell_sent_title), state.title)
             assertEquals(stringRes(R.string.invest_sell_sent_subtitle, "0.0634 ZEC"), state.subtitle)
-            assertEquals(1, fixture.repo.refreshHoldingsCalls)
         }
 
     @Test
@@ -144,7 +143,6 @@ class InvestSellProgressVMTest {
             InvestSellProgressVM(
                 InvestSellProgressArgs(DEPOSIT, NVIDIA.assetId, usdAmount),
                 sell,
-                repo,
                 USD_CURRENCY,
                 router,
             )

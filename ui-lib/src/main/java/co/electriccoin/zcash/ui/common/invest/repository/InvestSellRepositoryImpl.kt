@@ -344,6 +344,10 @@ internal class InvestSellRepositoryImpl(
         checkpoints.remove(depositAddress)
     }
 
+    override fun clearWalletData() {
+        estimateRecipient = null
+    }
+
     private suspend fun settle(progress: SellProgress) {
         if (progress !is SellProgress.NeedsAttention) checkpoints.remove(progress.depositAddress)
         try {

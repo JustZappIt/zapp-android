@@ -54,6 +54,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.math.BigDecimal
+import java.math.BigInteger
 import java.math.RoundingMode
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -95,6 +96,10 @@ internal class InvestRepositoryImpl(
     @Volatile
     private var estimateRefundAddress: String? = null
 
+    // Bumped by clearWalletData(), so a holdings read that started for the deleted wallet doesn't land after it.
+    @Volatile
+    private var walletGeneration = 0
+
     // Deposit addresses being paid right now, so a second tap can't send twice for one quote.
     private val paying = mutableSetOf<String>()
     private val payingMutex = Mutex()
@@ -112,19 +117,31 @@ internal class InvestRepositoryImpl(
     }
 
     override suspend fun refreshHoldings() {
+        val startedIn = walletGeneration
         try {
             val catalog = catalog ?: loadCatalog()
-            val balances = session.balances().balances
+            // One holding per stock, from the private balance only: the same token may be listed again from
+            // another source, which can't be sold from here (the sell side counts the same way). Two rows for
+            // one stock would also share a list key on PAY.
+            val held =
+                session
+                    .balances()
+                    .balances
+                    .filter { it.source == null || it.source == PRIVATE_SOURCE }
+                    .groupBy { it.tokenId }
+                    .mapValues { (_, entries) ->
+                        entries.mapNotNull { it.available.toBigIntegerOrNull() }.fold(BigInteger.ZERO, BigInteger::add)
+                    }
             val items =
-                balances.mapNotNull { balance ->
-                    val asset = InvestAssets.find(balance.tokenId) ?: return@mapNotNull null
+                held.mapNotNull { (tokenId, raw) ->
+                    val asset = InvestAssets.find(tokenId) ?: return@mapNotNull null
                     val token = catalog.tokens[asset.assetId] ?: return@mapNotNull null
-                    val raw = balance.available.toBigDecimalOrNull() ?: return@mapNotNull null
-                    val units = raw.movePointLeft(token.decimals).stripTrailingZeros()
+                    val units = raw.toBigDecimal().movePointLeft(token.decimals).stripTrailingZeros()
                     if (units.signum() <= 0) return@mapNotNull null
                     Holding(asset = asset, units = units, usdValue = token.price?.let { units.multiply(it) })
                 }
             val priced = items.mapNotNull { it.usdValue }
+            if (startedIn != walletGeneration) return
             _holdings.value =
                 Holdings(
                     items = items,
@@ -133,9 +150,15 @@ internal class InvestRepositoryImpl(
                     isStale = false,
                 )
         } catch (e: InvestApiException) {
-            _holdings.value = _holdings.value?.copy(isStale = true)
+            if (startedIn == walletGeneration) _holdings.value = _holdings.value?.copy(isStale = true)
             throw e
         }
+    }
+
+    override fun clearWalletData() {
+        walletGeneration++
+        estimateRefundAddress = null
+        _holdings.value = null
     }
 
     // Each early return is one of the estimate's outcomes, checked in the order the screen explains them.
@@ -323,9 +346,12 @@ internal class InvestRepositoryImpl(
         }
 
     private suspend fun settle(progress: BuyProgress) {
+        // Only a buy this phone was still following changes the holdings. A receipt opened for an old buy
+        // reaches its final state too, and shouldn't sign in and read balances every time it's viewed.
+        val wasPending = checkpoints.observe().first().any { it.depositAddress == progress.depositAddress }
         // A buy that needs attention stays listed, so the user can find it again and reach support.
         if (progress !is BuyProgress.NeedsAttention) checkpoints.remove(progress.depositAddress)
-        if (progress is BuyProgress.Held) {
+        if (progress is BuyProgress.Held && wasPending) {
             try {
                 refreshHoldings()
             } catch (e: CancellationException) {
@@ -348,9 +374,14 @@ internal class InvestRepositoryImpl(
                 InvestAssets.curated
                     .mapNotNull { asset -> tokens[asset.assetId]?.let { asset.assetId to it.toSwapAsset() } }
                     .toMap()
+            // A curated stock 1Click no longer lists is left out, so it can't be offered and then refused at
+            // review. A listed one without a price still shows, as "no price".
             _market.value =
                 InvestMarket(
-                    assets = InvestAssets.curated.map { MarketAsset(it, tokens[it.assetId]?.price) },
+                    assets =
+                        InvestAssets.curated
+                            .filter { it.assetId in tokens }
+                            .map { MarketAsset(it, tokens[it.assetId]?.price) },
                     updatedAt = now(),
                 )
             Catalog(tokens = tokens, zecAsset = zecAsset, swapAssets = swapAssets, loadedAt = now())
@@ -472,6 +503,7 @@ internal class InvestRepositoryImpl(
     private fun Long.toZec(): BigDecimal = BigDecimal(this).movePointLeft(ZEC_DECIMALS)
 
     private companion object {
+        const val PRIVATE_SOURCE = "private"
         const val NOT_AVAILABLE_HERE = "Buying isn't available in the country of residence"
         const val TRADE_IN_FLIGHT = "A buy or sale of this stock is still in progress"
         const val ZEC_ASSET_ID = "nep141:zec.omft.near"

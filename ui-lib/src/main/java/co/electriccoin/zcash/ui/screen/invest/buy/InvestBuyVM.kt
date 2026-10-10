@@ -2,7 +2,6 @@ package co.electriccoin.zcash.ui.screen.invest.buy
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import cash.z.ecc.android.sdk.ext.convertZatoshiToZec
 import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
@@ -27,7 +26,6 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.common.ExecuteFailure
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
-import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
 import co.electriccoin.zcash.ui.screen.invest.common.InvestTradeInProgressState
 import co.electriccoin.zcash.ui.screen.invest.common.TradeBlock
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
@@ -133,18 +131,21 @@ internal class InvestBuyVM(
 
     init {
         // collectLatest cancels the previous block, so the leading delay is the debounce: one quote per pause.
-        // The currency is part of the key, so a new exchange rate re-asks for the same typed amount.
+        // Keyed on what was typed and the currency, not the exchange rate: the rate moves with every ZEC price
+        // tick, and re-quoting on each one could keep the estimate loading forever. The review sheet fetches a
+        // live quote at the current rate anyway.
         viewModelScope.launch {
-            combine(amount.map { it.amount }, currency) { local, money -> local?.let(money::toUsd) }
+            combine(amount.map { it.amount }, currency.map { it.code }, ::Pair)
                 .distinctUntilChanged()
-                .collectLatest { usd ->
-                    if (usd == null || usd.signum() <= 0) {
+                .collectLatest { (local, _) ->
+                    val usd = local?.let(::usdOf)
+                    if (local == null || usd == null || usd.signum() <= 0) {
                         quote.update { BuyQuote.Idle }
                         return@collectLatest
                     }
                     quote.update { if (usd >= InvestRepository.MINIMUM_USD) BuyQuote.Loading else BuyQuote.Idle }
                     delay(AMOUNT_SETTLE_DELAY_MS)
-                    requestEstimate(usd)
+                    requestEstimate(local)
                 }
         }
     }
@@ -197,14 +198,17 @@ internal class InvestBuyVM(
 
     private fun usdOf(local: BigDecimal): BigDecimal = currency.value.toUsd(local)
 
-    private suspend fun requestEstimate(usd: BigDecimal) {
+    private suspend fun requestEstimate(local: BigDecimal) {
+        val code = currency.value.code
+        val usd = usdOf(local)
         if (usd < InvestRepository.MINIMUM_USD) {
             quote.update { BuyQuote.Ready(BuyEstimate.BelowMinimum(InvestRepository.MINIMUM_USD)) }
             return
         }
         val result = investCatching { investRepository.estimateBuy(asset, usd) }
-        // A figure for an amount the user has already changed is worth nothing.
-        if (amount.value.amount?.let(::usdOf) != usd) return
+        // A figure for an amount (or currency) the user has already changed is worth nothing; a rate that moved
+        // meanwhile is not a change.
+        if (amount.value.amount != local || currency.value.code != code) return
         quote.update {
             result.fold(
                 onSuccess = { BuyQuote.Ready(it) },
@@ -233,8 +237,8 @@ internal class InvestBuyVM(
             title = stringRes(R.string.invest_buy_title, asset.name),
             currencySymbol = money.symbol,
             amountInput = NumberTextFieldState(innerState = amt, onValueChange = ::onAmountChange),
-            balanceText = balanceText(wallet, money),
-            presets = presets(maxUsd(wallet.spendable, wallet.zecUsd), money),
+            balanceText = InvestBuyPresenter.balanceText(wallet.spendable, wallet.zecUsd, money),
+            presets = presets(InvestBuyPresenter.maxUsd(wallet.spendable, wallet.zecUsd), money),
             ledger = InvestBuyPresenter.ledger(current, asset, amt.amount?.let(money::toUsd), money),
             noPrice =
                 if (estimate is BuyEstimate.NoPrice) {
@@ -267,19 +271,6 @@ internal class InvestBuyVM(
         )
     }
 
-    private fun balanceText(
-        wallet: Wallet,
-        money: InvestCurrency,
-    ): StringResource {
-        val zec = wallet.spendable.convertZatoshiToZec()
-        val zecText = InvestFormat.zec(zec)
-        return if (wallet.zecUsd == null) {
-            stringRes(zecText)
-        } else {
-            stringRes(R.string.invest_buy_balance_value, zecText, money.format(zec.multiply(wallet.zecUsd)))
-        }
-    }
-
     // $40, $100 and $250 in the user's currency, rounded up to a round figure so the smallest still clears $40.
     private fun presets(
         maxUsd: BigDecimal?,
@@ -293,30 +284,16 @@ internal class InvestBuyVM(
                 maxUsd?.let { setAmount(money.fromUsd(it).setScale(2, RoundingMode.DOWN)) }
             }
 
-    // Max leaves room for the network fee and the quote's own slippage, so it doesn't land on "not enough ZEC".
-    private fun maxUsd(
-        spendable: Zatoshi,
-        price: BigDecimal?,
-    ): BigDecimal? {
-        val zec = spendable.convertZatoshiToZec().subtract(MAX_FEE_RESERVE_ZEC)
-        if (price == null || price.signum() <= 0 || zec.signum() <= 0) return null
-        return zec
-            .multiply(price)
-            .multiply(MAX_HEADROOM)
-            .setScale(2, RoundingMode.DOWN)
-            .takeIf { it.signum() > 0 }
-    }
-
     private fun setAmount(local: BigDecimal) = amount.update { NumberTextFieldInnerState.fromAmount(local) }
 
     private fun onAmountChange(next: NumberTextFieldInnerState) = amount.update { next }
 
     private fun onTryAgain() {
-        val usd = amount.value.amount?.let(::usdOf) ?: return
+        val local = amount.value.amount ?: return
         if (isRetrying.value) return
         isRetrying.update { true }
         viewModelScope.launch {
-            requestEstimate(usd)
+            requestEstimate(local)
             isRetrying.update { false }
         }
     }
@@ -508,7 +485,5 @@ internal class InvestBuyVM(
         const val AMOUNT_SETTLE_DELAY_MS = 500L
         private const val COUNTDOWN_TICK_MS = 1_000L
         private val PRESETS_USD = listOf(BigDecimal(40), BigDecimal(100), BigDecimal(250))
-        private val MAX_FEE_RESERVE_ZEC = BigDecimal("0.0005")
-        private val MAX_HEADROOM = BigDecimal("0.98")
     }
 }

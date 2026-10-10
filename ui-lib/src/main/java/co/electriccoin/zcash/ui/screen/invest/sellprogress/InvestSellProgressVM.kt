@@ -8,7 +8,6 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.invest.model.SellProgress
-import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSellRepository
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -36,7 +35,6 @@ import kotlinx.coroutines.launch
 internal class InvestSellProgressVM(
     private val args: InvestSellProgressArgs,
     private val sellRepository: InvestSellRepository,
-    private val investRepository: InvestRepository,
     currencyProvider: InvestCurrencyProvider,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
@@ -67,21 +65,13 @@ internal class InvestSellProgressVM(
         observeJob =
             viewModelScope.launch {
                 investCatching {
-                    sellRepository.observeSell(args.depositAddress).collect { next ->
-                        progress.update { next }
-                        if (next.isFinal) refreshHoldingsQuietly()
-                    }
+                    // The repository refreshes the holdings itself when the sale settles.
+                    sellRepository.observeSell(args.depositAddress).collect { next -> progress.update { next } }
                 }.onFailure { e ->
                     Twig.warn(e) { "InvestSellProgressVM: observing the sale failed" }
                     checkError.update { e.toInvestMessage() }
                 }
             }
-    }
-
-    // The holding changed (or came back): PAY and Invest home should show it by the time the user returns.
-    private suspend fun refreshHoldingsQuietly() {
-        investCatching { investRepository.refreshHoldings() }
-            .onFailure { Twig.warn(it) { "InvestSellProgressVM: holdings refresh after sale failed" } }
     }
 
     private fun buildState(

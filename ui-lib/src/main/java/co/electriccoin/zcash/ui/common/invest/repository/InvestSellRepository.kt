@@ -41,4 +41,7 @@ interface InvestSellRepository {
 
     /** Stops listing a sell that needs attention once it has gone to support. */
     suspend fun dismissSell(depositAddress: String)
+
+    /** Forgets everything cached for the current wallet; called when the wallet is reset. */
+    fun clearWalletData()
 }

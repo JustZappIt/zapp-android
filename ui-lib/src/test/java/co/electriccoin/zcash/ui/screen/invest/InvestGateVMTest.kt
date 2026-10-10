@@ -269,6 +269,26 @@ class InvestGateVMTest {
             verify { fixture.router.back() }
         }
 
+    /** Reopening their own restricted country must not quietly drop a qualified investor to sell-only. */
+    @Test
+    fun `a qualified investor keeps the attestation when the change screen opens on their country`() =
+        runTest {
+            val saved = InvestSettings(countryCode = "DE", qualifiedInvestor = true, setupComplete = true)
+            val fixture = fixture(hint = null, settings = saved, isChange = true)
+
+            val state = fixture.state()
+            assertTrue(assertNotNull(state.qualifiedInvestor).isChecked)
+            state.attestation!!.onClick()
+            advanceUntilIdle()
+            fixture.vm.state.value.primaryButton
+                .onClick()
+            advanceUntilIdle()
+
+            assertNull(fixture.vm.state.value.confirmation)
+            assertEquals(listOf("DE" to true), fixture.settings.residenceCalls)
+            verify { fixture.router.back() }
+        }
+
     @Test
     fun `back from the change screen leaves the saved country alone`() =
         runTest {
