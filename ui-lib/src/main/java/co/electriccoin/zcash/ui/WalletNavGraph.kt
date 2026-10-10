@@ -116,6 +116,29 @@ import co.electriccoin.zcash.ui.screen.insufficientfunds.InsufficientFundsArgs
 import co.electriccoin.zcash.ui.screen.insufficientfunds.InsufficientFundsScreen
 import co.electriccoin.zcash.ui.screen.integrations.IntegrationsArgs
 import co.electriccoin.zcash.ui.screen.integrations.IntegrationsScreen
+import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyArgs
+import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyScreen
+import co.electriccoin.zcash.ui.screen.invest.demo.InvestDemoControlsArgs
+import co.electriccoin.zcash.ui.screen.invest.demo.InvestDemoControlsScreen
+import co.electriccoin.zcash.ui.screen.invest.gate.InvestChangeCountryArgs
+import co.electriccoin.zcash.ui.screen.invest.gate.InvestGateArgs
+import co.electriccoin.zcash.ui.screen.invest.gate.InvestGateScreen
+import co.electriccoin.zcash.ui.screen.invest.gate.InvestUnavailableArgs
+import co.electriccoin.zcash.ui.screen.invest.gate.InvestUnavailableScreen
+import co.electriccoin.zcash.ui.screen.invest.home.InvestHomeArgs
+import co.electriccoin.zcash.ui.screen.invest.home.InvestHomeScreen
+import co.electriccoin.zcash.ui.screen.invest.intro.InvestIntroArgs
+import co.electriccoin.zcash.ui.screen.invest.intro.InvestIntroScreen
+import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
+import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressScreen
+import co.electriccoin.zcash.ui.screen.invest.receipt.InvestReceiptArgs
+import co.electriccoin.zcash.ui.screen.invest.receipt.InvestReceiptScreen
+import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellArgs
+import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellScreen
+import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressArgs
+import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressScreen
+import co.electriccoin.zcash.ui.screen.invest.settings.InvestSettingsArgs
+import co.electriccoin.zcash.ui.screen.invest.settings.InvestSettingsScreen
 import co.electriccoin.zcash.ui.screen.ironwood.IronwoodAnnouncementArgs
 import co.electriccoin.zcash.ui.screen.ironwood.IronwoodAnnouncementScreen
 import co.electriccoin.zcash.ui.screen.keepopen.KeepOpenArgs
@@ -405,6 +428,18 @@ fun NavGraphBuilder.walletNavGraph(
         composable<PeerOrderArgs> { PeerOrderScreen(it.toRoute()) }
         composable<BridgeToBaseArgs> { BridgeToBaseScreen(it.toRoute()) }
         composable<ScanUpiArgs> { ScanUpiScreen(it.toRoute()) }
+        composable<InvestGateArgs> { InvestGateScreen() }
+        composable<InvestChangeCountryArgs> { InvestGateScreen(isChange = true) }
+        composable<InvestSettingsArgs> { InvestSettingsScreen() }
+        composable<InvestDemoControlsArgs> { InvestDemoControlsScreen() }
+        composable<InvestUnavailableArgs> { InvestUnavailableScreen(it.toRoute()) }
+        composable<InvestIntroArgs> { InvestIntroScreen() }
+        composable<InvestHomeArgs> { InvestHomeScreen() }
+        composable<InvestBuyArgs> { InvestBuyScreen(it.toRoute()) }
+        composable<InvestProgressArgs> { InvestProgressScreen(it.toRoute()) }
+        composable<InvestReceiptArgs> { InvestReceiptScreen(it.toRoute()) }
+        composable<InvestSellArgs> { InvestSellScreen(it.toRoute()) }
+        composable<InvestSellProgressArgs> { InvestSellProgressScreen(it.toRoute()) }
         dialogComposable<SwapSlippageArgs> { SwapSlippageScreen(it.toRoute()) }
         dialogComposable<SwapInfoArgs> { SwapInfoScreen() }
         dialogComposable<DepositSwapInfoArgs> { DepositSwapInfoScreen() }

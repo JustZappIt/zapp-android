@@ -8,6 +8,9 @@ import cash.z.ecc.android.sdk.WalletCoordinator
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
 import co.electriccoin.zcash.preference.StandardPreferenceProvider
 import co.electriccoin.zcash.preference.api.PreferenceProvider
+import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
+import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSellRepository
 import co.electriccoin.zcash.ui.common.migration.MigrationAppHooks
 import co.electriccoin.zcash.ui.common.provider.ChatBlockedKeysStorageProvider
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
@@ -25,6 +28,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -65,6 +69,9 @@ class ResetZashiUseCaseTest {
 
             coVerify(exactly = 1) { fixture.encryptedPreferences.clearPreferences() }
             coVerify(exactly = 1) { fixture.biometricRepository.requestBiometrics(any()) }
+            verify(exactly = 1) { fixture.privateAccountSession.reset() }
+            verify(exactly = 1) { fixture.investRepository.clearWalletData() }
+            verify(exactly = 1) { fixture.investSellRepository.clearWalletData() }
         }
 
     @Test
@@ -86,6 +93,9 @@ class ResetZashiUseCaseTest {
         val walletCoordinator = mockk<WalletCoordinator>(relaxed = true)
         val addressBookRepository = mockk<AddressBookRepository>(relaxed = true)
         val metadataRepository = mockk<MetadataRepository>(relaxed = true)
+        val privateAccountSession = mockk<PrivateAccountSession>(relaxed = true)
+        val investRepository = mockk<InvestRepository>(relaxed = true)
+        val investSellRepository = mockk<InvestSellRepository>(relaxed = true)
 
         val giftCardStorageProvider = mockk<GiftCardStorageProvider>()
         private val synchronizerProvider = mockk<SynchronizerProvider>()
@@ -125,6 +135,9 @@ class ResetZashiUseCaseTest {
                             giftCardStorageProvider,
                             mockk(relaxed = true),
                         ),
+                    privateAccountSession = privateAccountSession,
+                    investRepository = investRepository,
+                    investSellRepository = investSellRepository,
                 )
         }
 
@@ -136,6 +149,8 @@ class ResetZashiUseCaseTest {
             coVerify(exactly = 0) { biometricRepository.requestBiometrics(any()) }
             coVerify(exactly = 0) { addressBookRepository.delete() }
             coVerify(exactly = 0) { metadataRepository.delete() }
+            verify(exactly = 0) { privateAccountSession.reset() }
+            verify(exactly = 0) { investRepository.clearWalletData() }
         }
     }
 }

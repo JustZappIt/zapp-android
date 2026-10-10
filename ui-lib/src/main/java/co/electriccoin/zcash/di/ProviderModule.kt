@@ -170,6 +170,7 @@ const val OFFRAMP_HTTP_CLIENT_QUALIFIER = "offramp_http"
 
 val providerModule =
     module {
+        includes(investModule)
         factoryOf(::LightWalletEndpointProvider)
         factoryOf(::SecretAuthGate)
         singleOf(::GetVersionInfoProvider)

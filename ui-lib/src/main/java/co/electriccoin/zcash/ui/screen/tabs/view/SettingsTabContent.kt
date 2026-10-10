@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ShowChart
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Contacts
@@ -103,6 +104,8 @@ internal fun SettingsTabContent(
     onPortfolioChartClick: () -> Unit,
     onViewingKeyExportClick: () -> Unit,
     onHardwareWalletClick: () -> Unit,
+    // Null where Invest isn't offered (the build, or a Keystone account), which hides the row.
+    onInvestClick: (() -> Unit)?,
     // Null while the coinholder-polling kill switch is off, which hides the group entirely.
     onVotingClick: (() -> Unit)?,
     walletViewModel: WalletViewModel = koinViewModel(),
@@ -278,6 +281,17 @@ internal fun SettingsTabContent(
                             onClick = onPortfolioChartClick,
                         )
                         ZappRowDivider(inset = true)
+                        if (onInvestClick != null) {
+                            ZappRow(
+                                title = stringResource(R.string.invest_settings_title),
+                                subtitle = stringResource(R.string.invest_settings_row_subtitle),
+                                icon = Icons.AutoMirrored.Filled.TrendingUp,
+                                iconTint = c.accentText,
+                                iconBackground = c.accentSoft,
+                                onClick = onInvestClick,
+                            )
+                            ZappRowDivider(inset = true)
+                        }
                         // Without a CMC key only USD resolves (non-USD falls back to the USD-only
                         // rate), so gate the row like ExchangeRateSettingsVM / ExchangeRateOptInView.
                         if (VersionInfo.IS_CMC_AVAILABLE) {
