@@ -157,6 +157,16 @@ internal class InvestRepositoryImplTest : InvestRepositoryImplTestBase() {
         }
 
     @Test
+    fun `a deposit address that isn't a Zcash address is refused before review`() =
+        runTest {
+            depositAddressType = AddressType.Invalid()
+
+            assertFailsWith<IllegalArgumentException> { repository.prepareBuy(nvda, BigDecimal(100)) }
+
+            assertTrue(checkpoints.items.value.isEmpty())
+        }
+
+    @Test
     fun `the checkpoint is written before any ZEC moves`() =
         runTest {
             val prepared = repository.prepareBuy(nvda, BigDecimal(100))

@@ -84,6 +84,7 @@ internal abstract class InvestRepositoryImplTestBase {
     protected val session = mockk<PrivateAccountSession>()
     protected val keys = PrivateAccountKeyProvider(SeedPhraseSource { TEST_MNEMONIC.toCharArray() })
     protected var currentAccount: WalletAccount = mockk<ZashiAccount>()
+    protected var depositAddressType: AddressType = AddressType.Transparent
 
     protected val repository =
         InvestRepositoryImpl(
@@ -95,7 +96,7 @@ internal abstract class InvestRepositoryImplTestBase {
             swapAssetProvider = FakeSwapAssetProvider,
             synchronizerProvider =
                 mockk<SynchronizerProvider> {
-                    coEvery { getSynchronizer() } returns mockk { coEvery { validateAddress(any()) } returns AddressType.Transparent }
+                    coEvery { getSynchronizer() } returns mockk { coEvery { validateAddress(any()) } answers { depositAddressType } }
                 },
             checkpoints = checkpoints,
             settings = mockk<InvestSettingsRepository> { coEvery { get() } answers { residence } },
@@ -148,10 +149,11 @@ internal abstract class InvestRepositoryImplTestBase {
         val statuses = ArrayDeque<SwapStatusResponseDto?>()
 
         var tokenLoads = 0
+        var tokensFailure: InvestApiException? = null
         val statusFailures = ArrayDeque<InvestApiException>()
 
         override suspend fun getOndoTokens(): List<NearTokenDto> =
-            listOf(
+            tokensFailure?.let { throw it } ?: listOf(
                 NearTokenDto("nep141:zec.omft.near", 8, "zec", "ZEC", BigDecimal("1543.62")),
                 NearTokenDto(nvda.assetId, 18, "bsc", "NVDAon", BigDecimal("224.46")),
                 NearTokenDto(InvestAssets.curated[1].assetId, 18, "bsc", "TSLAon", null),

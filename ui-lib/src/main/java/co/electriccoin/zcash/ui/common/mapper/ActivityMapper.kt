@@ -66,13 +66,7 @@ class ActivityMapper {
                     isShielded = false,
                     value = getSwapValue(data),
                     fiatValue = null,
-                    onClick = {
-                        if (data.swap.isInvestBuy()) {
-                            onInvestClick(data.swap.depositAddress)
-                        } else {
-                            onSwapClick(data.swap.depositAddress)
-                        }
-                    },
+                    onClick = { onSwapClick(data.swap.depositAddress) },
                     isUnread = false,
                     onDisplayed = { onDisplayed(data) }
                 )

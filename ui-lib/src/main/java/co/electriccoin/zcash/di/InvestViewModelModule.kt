@@ -1,6 +1,7 @@
 package co.electriccoin.zcash.di
 
 import co.electriccoin.zcash.ui.BuildConfig
+import co.electriccoin.zcash.ui.common.invest.provider.InvestServerClock
 import co.electriccoin.zcash.ui.screen.invest.NavigateToInvestUseCase
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyArgs
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyVM
@@ -30,7 +31,6 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.bind
 import org.koin.dsl.module
-import kotlin.time.Clock
 
 /**
  * The Invest screens. Their data layer is investModule; the screens depend on
@@ -83,7 +83,7 @@ val investViewModelModule =
                 tradeFollower = get(),
                 session = get(),
                 navigationRouter = get(),
-                clock = Clock.System,
+                clock = get<InvestServerClock>(),
             )
         }
         viewModel { (args: InvestBuyArgs) ->
@@ -96,7 +96,7 @@ val investViewModelModule =
                 currencyProvider = get(),
                 tradeFollower = get(),
                 navigationRouter = get(),
-                clock = Clock.System,
+                clock = get<InvestServerClock>(),
             )
         }
         viewModelOf(::InvestProgressVM)
@@ -110,7 +110,7 @@ val investViewModelModule =
                 currencyProvider = get(),
                 tradeFollower = get(),
                 navigationRouter = get(),
-                clock = Clock.System,
+                clock = get<InvestServerClock>(),
             )
         }
         viewModelOf(::InvestSellProgressVM)

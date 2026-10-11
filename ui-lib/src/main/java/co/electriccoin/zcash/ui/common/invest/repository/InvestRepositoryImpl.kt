@@ -20,6 +20,11 @@ import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpoint
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
+import co.electriccoin.zcash.ui.common.invest.repository.InvestQuoteParams.QUOTE_WAITING_TIME_MS
+import co.electriccoin.zcash.ui.common.invest.repository.InvestQuoteParams.REFERRAL
+import co.electriccoin.zcash.ui.common.invest.repository.InvestQuoteParams.SLIPPAGE_BPS
+import co.electriccoin.zcash.ui.common.invest.repository.InvestQuoteParams.ZEC_ASSET_ID
+import co.electriccoin.zcash.ui.common.invest.repository.InvestQuoteParams.ZEC_DECIMALS
 import co.electriccoin.zcash.ui.common.model.DynamicSwapAddress
 import co.electriccoin.zcash.ui.common.model.SwapAsset
 import co.electriccoin.zcash.ui.common.model.ZashiAccount
@@ -54,7 +59,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.math.BigDecimal
-import java.math.BigInteger
 import java.math.RoundingMode
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -119,26 +123,17 @@ internal class InvestRepositoryImpl(
     override suspend fun refreshHoldings() {
         val startedIn = walletGeneration
         try {
-            val catalog = catalog ?: loadCatalog()
-            // One holding per stock, from the private balance only: the same token may be listed again from
-            // another source, which can't be sold from here (the sell side counts the same way). Two rows for
-            // one stock would also share a list key on PAY.
-            val held =
-                session
-                    .balances()
-                    .balances
-                    .filter { it.source == null || it.source == PRIVATE_SOURCE }
-                    .groupBy { it.tokenId }
-                    .mapValues { (_, entries) ->
-                        entries.mapNotNull { it.available.toBigIntegerOrNull() }.fold(BigInteger.ZERO, BigInteger::add)
-                    }
+            val (catalog, isPriceStale) = catalogForHoldings()
+            // One holding per stock, from the private balance only (see BalancesResponse.privateBaseUnits); two
+            // rows for one stock would also share a list key on PAY.
             val items =
-                held.mapNotNull { (tokenId, raw) ->
+                session.balances().privateBaseUnits().mapNotNull { (tokenId, raw) ->
                     val asset = InvestAssets.find(tokenId) ?: return@mapNotNull null
-                    val token = catalog.tokens[asset.assetId] ?: return@mapNotNull null
-                    val units = raw.toBigDecimal().movePointLeft(token.decimals).stripTrailingZeros()
+                    // A stock 1Click no longer lists is still held: it shows, without a price, rather than vanish.
+                    val token = catalog.tokens[asset.assetId]
+                    val units = raw.toBigDecimal().movePointLeft(token?.decimals ?: asset.decimals).stripTrailingZeros()
                     if (units.signum() <= 0) return@mapNotNull null
-                    Holding(asset = asset, units = units, usdValue = token.price?.let { units.multiply(it) })
+                    Holding(asset = asset, units = units, usdValue = token?.price?.let { units.multiply(it) })
                 }
             val priced = items.mapNotNull { it.usdValue }
             if (startedIn != walletGeneration) return
@@ -147,7 +142,7 @@ internal class InvestRepositoryImpl(
                     items = items,
                     totalUsd = if (priced.isEmpty()) null else priced.fold(BigDecimal.ZERO, BigDecimal::add),
                     updatedAt = now(),
-                    isStale = false,
+                    isStale = isPriceStale,
                 )
         } catch (e: InvestApiException) {
             if (startedIn == walletGeneration) _holdings.value = _holdings.value?.copy(isStale = true)
@@ -391,6 +386,22 @@ internal class InvestRepositoryImpl(
     private suspend fun catalogNoOlderThan(maxAge: Duration): Catalog =
         catalog?.takeIf { now() - it.loadedAt < maxAge } ?: loadCatalog()
 
+    /**
+     * Holdings are valued at prices as fresh as an estimate's. If they can't be fetched again (no answer, or a list
+     * without ZEC), the last ones still value the holdings, which are then marked stale rather than shown as just
+     * updated.
+     */
+    private suspend fun catalogForHoldings(): Pair<Catalog, Boolean> {
+        val cached = catalog
+        return try {
+            catalogNoOlderThan(CATALOG_MAX_AGE) to false
+        } catch (e: InvestApiException) {
+            (cached ?: throw e) to true
+        } catch (e: IllegalArgumentException) {
+            (cached ?: throw e) to true
+        }
+    }
+
     private fun zatsFor(
         usdAmount: BigDecimal,
         catalog: Catalog,
@@ -428,10 +439,13 @@ internal class InvestRepositoryImpl(
         confidentiality = Confidentiality.BASIC,
     )
 
+    // Checked before the review sheet: an address the wallet can't pay would otherwise fail only after Confirm has
+    // recorded the buy, leaving the stock blocked behind a payment that never left.
     private suspend fun zcashSwapAddress(address: String): ZcashSwapAddress =
         when (synchronizerProvider.getSynchronizer().validateAddress(address)) {
             AddressType.Unified, AddressType.Shielded -> ZcashShieldedSwapAddress(address)
-            AddressType.Tex, AddressType.Transparent, is AddressType.Invalid -> ZcashTransparentSwapAddress(address)
+            AddressType.Tex, AddressType.Transparent -> ZcashTransparentSwapAddress(address)
+            is AddressType.Invalid -> throw IllegalArgumentException("1Click returned an invalid deposit address")
         }
 
     private fun NearTokenDto.toSwapAsset(): SwapAsset =
@@ -503,14 +517,8 @@ internal class InvestRepositoryImpl(
     private fun Long.toZec(): BigDecimal = BigDecimal(this).movePointLeft(ZEC_DECIMALS)
 
     private companion object {
-        const val PRIVATE_SOURCE = "private"
         const val NOT_AVAILABLE_HERE = "Buying isn't available in the country of residence"
         const val TRADE_IN_FLIGHT = "A buy or sale of this stock is still in progress"
-        const val ZEC_ASSET_ID = "nep141:zec.omft.near"
-        const val ZEC_DECIMALS = 8
-        const val SLIPPAGE_BPS = 100
-        const val QUOTE_WAITING_TIME_MS = 3_000
-        const val REFERRAL = "zapp"
         const val DEFAULT_POLL_INTERVAL_MS = 5_000L
 
         // How long the review sheet may show one price before asking for a fresh one. Shorter than the

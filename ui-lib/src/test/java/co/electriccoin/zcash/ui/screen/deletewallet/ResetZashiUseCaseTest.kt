@@ -26,6 +26,7 @@ import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnsharedGiftFundsUseCase
 import co.electriccoin.zcash.ui.common.usecase.UnsharedGiftFundsException
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -69,9 +70,27 @@ class ResetZashiUseCaseTest {
 
             coVerify(exactly = 1) { fixture.encryptedPreferences.clearPreferences() }
             coVerify(exactly = 1) { fixture.biometricRepository.requestBiometrics(any()) }
-            verify(exactly = 1) { fixture.privateAccountSession.reset() }
-            verify(exactly = 1) { fixture.investRepository.clearWalletData() }
-            verify(exactly = 1) { fixture.investSellRepository.clearWalletData() }
+            verify(exactly = 2) { fixture.privateAccountSession.reset() }
+            verify(exactly = 2) { fixture.investRepository.clearWalletData() }
+            verify(exactly = 2) { fixture.investSellRepository.clearWalletData() }
+        }
+
+    @Test
+    fun `clears Invest again after the recovery phrase is gone`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false)
+
+            fixture.useCase(keepFiles = true)
+
+            // An Invest call between the first clear and the wipe re-derives the old account from the phrase; the
+            // second clear, after the wipe, is what keeps that account ID from reaching the next wallet.
+            coVerifyOrder {
+                fixture.privateAccountSession.reset()
+                fixture.encryptedPreferences.clearPreferences()
+                fixture.privateAccountSession.reset()
+                fixture.investRepository.clearWalletData()
+                fixture.investSellRepository.clearWalletData()
+            }
         }
 
     @Test

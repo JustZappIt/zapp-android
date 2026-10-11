@@ -41,24 +41,32 @@ internal class InvestTradeFollowerImpl(
             buys.observeBuy(trade.depositAddress).collect()
         }
 
-    /** One poller per pending trade; a trade that leaves the list (final, or dismissed) stops its poller. */
-    private suspend fun follow() =
-        coroutineScope {
-            val pollers = mutableMapOf<String, Job>()
-            buys.pendingTrades.collect { trades ->
-                val pending = trades.orEmpty().associateBy { it.depositAddress }
-                (pollers.keys - pending.keys).forEach { pollers.remove(it)?.cancel() }
-                pending.values.filter { it.depositAddress !in pollers }.forEach { trade ->
-                    pollers[trade.depositAddress] =
-                        launch {
-                            // Polling already rides out API errors; anything else (a store error) is retried later.
-                            while (!bestEffort("Following an Invest trade failed") { observe(trade) }) {
-                                delay(RETRY_AFTER)
+    /**
+     * One poller per pending trade; a trade that leaves the list (final, or dismissed) stops its poller. When the
+     * trade records can't be read, the list ends on null and every poller stops; the records are read again after
+     * [RETRY_AFTER], so one failed read doesn't end following for as long as a screen stays open.
+     */
+    private suspend fun follow(): Nothing {
+        while (true) {
+            coroutineScope {
+                val pollers = mutableMapOf<String, Job>()
+                buys.pendingTrades.collect { trades ->
+                    val pending = trades.orEmpty().associateBy { it.depositAddress }
+                    (pollers.keys - pending.keys).forEach { pollers.remove(it)?.cancel() }
+                    pending.values.filter { it.depositAddress !in pollers }.forEach { trade ->
+                        pollers[trade.depositAddress] =
+                            launch {
+                                // Polling already rides out API errors; anything else (a store error) is retried later.
+                                while (!bestEffort("Following an Invest trade failed") { observe(trade) }) {
+                                    delay(RETRY_AFTER)
+                                }
                             }
-                        }
+                    }
                 }
             }
+            delay(RETRY_AFTER)
         }
+    }
 
     private companion object {
         val RETRY_AFTER = 1.minutes

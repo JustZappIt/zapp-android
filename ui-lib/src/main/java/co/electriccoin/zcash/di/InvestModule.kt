@@ -27,14 +27,13 @@ import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollower
 import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollowerImpl
 import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeGuard
 import org.koin.core.module.dsl.singleOf
-import org.koin.core.scope.Scope
 import org.koin.dsl.bind
 import org.koin.dsl.binds
 import org.koin.dsl.module
-import kotlin.time.Instant
 
 /**
- * Invest's data layer. Its network calls follow the user's Tor setting. A debug build made with `ZAPP_INVEST_DEMO`
+ * Invest's data layer. Its network calls follow the user's Tor setting, and its clock is [InvestServerClock]
+ * (1Click's time once it has been seen, the phone's until then). A debug build made with `ZAPP_INVEST_DEMO`
  * binds the demo engine in place of the real one, so nothing reaches 1Click and no ZEC is sent.
  */
 val investModule =
@@ -74,7 +73,7 @@ val investModule =
                     biometricRepository = get(),
                     checkpoints = get(),
                     trades = get(),
-                    now = serverNow(),
+                    now = get<InvestServerClock>()::now,
                 )
             } bind InvestSellRepository::class
             single {
@@ -89,7 +88,7 @@ val investModule =
                     checkpoints = get(),
                     trades = get(),
                     settings = get(),
-                    now = serverNow(),
+                    now = get<InvestServerClock>()::now,
                 )
             } binds arrayOf(InvestRepository::class, InvestSwapAssetSource::class)
             single<InvestTradeFollower> { InvestTradeFollowerImpl(buys = get(), sells = get()) }
@@ -104,9 +103,3 @@ val investModule =
             )
         }
     }
-
-// The engine's clock: 1Click's time once it has been seen, the phone's until then.
-private fun Scope.serverNow(): () -> Instant {
-    val clock = get<InvestServerClock>()
-    return { Instant.fromEpochMilliseconds(clock.nowMillis()) }
-}

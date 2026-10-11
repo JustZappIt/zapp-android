@@ -69,6 +69,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 @Suppress("MaxLineLength")
@@ -135,8 +136,36 @@ internal class InvestSellRepositoryImplTest : InvestSellRepositoryTestBase() {
             assertEquals(api.payload(), prepared.signedMessage)
             assertEquals(BigDecimal("0.440974000000000000"), prepared.units)
             assertEquals(BigDecimal("0.06280000"), prepared.zecOutMin)
-            // The intent's deadline is 14:08, a minute of margin before it beats the ten-minute price hold.
-            assertEquals(Instant.parse("2026-09-28T14:07:00Z"), prepared.expiresAt)
+            // The intent's deadline is 14:08; with 20 s of margin before it, it beats the ten-minute price hold.
+            assertEquals(Instant.parse("2026-09-28T14:07:40Z"), prepared.expiresAt)
+        }
+
+    @Test
+    fun `a short intent deadline still leaves time to review and confirm`() =
+        runTest {
+            api.payloadDeadline = "2026-09-28T14:01:30.000Z" // 90 s out
+
+            val prepared = repository.prepareSell(nvda, SellAmount.All)
+            assertEquals(Instant.parse("2026-09-28T14:01:10Z"), prepared.expiresAt)
+
+            now += 60.seconds
+            repository.executeSell(prepared)
+            assertEquals(1, api.submitted.size)
+        }
+
+    @Test
+    fun `a balance read that runs past the price hold submits nothing`() =
+        runTest {
+            val prepared = repository.prepareSell(nvda, SellAmount.All)
+            coEvery { session.balances() } answers {
+                now += 8.minutes // 14:08: the intent can't run any more by the time it would be submitted
+                BalancesResponse(listOf(AccountBalance(tokenId = nvda.assetId, available = holdings.value, source = "private")))
+            }
+
+            assertFailsWith<IllegalStateException> { repository.executeSell(prepared) }
+
+            assertTrue(api.submitted.isEmpty())
+            assertTrue(checkpoints.items.value.isEmpty())
         }
 
     @Test
@@ -244,8 +273,8 @@ internal class InvestSellRepositoryImplTest : InvestSellRepositoryTestBase() {
     fun `a prompt that outlasts the price hold signs nothing`() =
         runTest {
             val prepared = repository.prepareSell(nvda, SellAmount.All)
-            // 14:07: past the price hold, still before the intent's own 14:08 deadline the signer would enforce.
-            coEvery { biometrics.requestBiometrics(any()) } answers { now += 7.minutes }
+            // 14:07:50: past the price hold, still before the intent's own 14:08 deadline the signer would enforce.
+            coEvery { biometrics.requestBiometrics(any()) } answers { now += 7.minutes + 50.seconds }
 
             val refused = assertFailsWith<IllegalStateException> { repository.executeSell(prepared) }
             assertTrue(refused !is SellIntentRefusedException)

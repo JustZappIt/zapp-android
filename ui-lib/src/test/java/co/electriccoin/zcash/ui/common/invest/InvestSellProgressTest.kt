@@ -51,6 +51,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import xyz.justzappit.evm.intents.IntentTransferSigner
@@ -98,6 +99,34 @@ internal class InvestSellProgressTest : InvestSellRepositoryTestBase() {
 
             assertEquals(listOf(SellProgress.NeedsAttention(DEPOSIT, "hash")), repository.observeSell(DEPOSIT).toList())
             assertEquals(1, checkpoints.items.value.size)
+        }
+
+    @Test
+    fun `a sale another observer just settled as not sold is judged the same way`() =
+        runTest {
+            checkpoints.add(pastDeadline())
+            api.statuses += status(SwapStatus.PENDING_DEPOSIT)
+            now += 14.minutes
+            // The record is gone by the time this observer's poll returns: the progress screen and the shared
+            // follower both poll, and the other one settled the sale first.
+            api.onStatus = { checkpoints.items.value = emptyList() }
+
+            assertEquals(listOf(SellProgress.NotSold(DEPOSIT)), repository.observeSell(DEPOSIT).toList())
+        }
+
+    @Test
+    fun `a sale with no record stops waiting once its intent can't run any more`() =
+        runTest {
+            // No record (say the screen came back after the app was killed, once the sale had settled): the intent's
+            // deadline is unknown, but at most an hour past the quote's 14:30.
+            val waiting = status(SwapStatus.PENDING_DEPOSIT)
+            api.statuses += waiting
+            now += 95.minutes
+            assertEquals(SellProgress.Authorised(DEPOSIT), repository.observeSell(DEPOSIT).first())
+
+            api.statuses += waiting
+            now += 1.minutes
+            assertEquals(listOf(SellProgress.NeedsAttention(DEPOSIT, DEPOSIT)), repository.observeSell(DEPOSIT).toList())
         }
 
     @Test

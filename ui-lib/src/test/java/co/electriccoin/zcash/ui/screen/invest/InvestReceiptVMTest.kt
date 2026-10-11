@@ -97,6 +97,23 @@ class InvestReceiptVMTest {
             assertNull(state.units)
         }
 
+    @Test
+    fun `rejected polls don't turn a settled buy into one that needs attention`() =
+        runTest {
+            val attention = BuyProgress.NeedsAttention(DEPOSIT, DEPOSIT)
+            val stillHeld = fixture(record(SwapStatus.SUCCESS), progress = attention).state()
+            assertEquals(stringRes(R.string.invest_receipt_title_bought, "NVIDIA"), stillHeld.title)
+            assertNull(stillHeld.contactSupportButton)
+
+            val stillRefunded = fixture(record(SwapStatus.REFUNDED), progress = attention).state()
+            assertEquals(stringRes(R.string.invest_progress_refunded_title), stillRefunded.title)
+
+            // A buy not yet settled in the record does need attention.
+            val pending = fixture(record(SwapStatus.PENDING), progress = attention).state()
+            assertEquals(stringRes(R.string.invest_progress_attention_title), pending.title)
+            assertNotNull(pending.contactSupportButton)
+        }
+
     private inner class Fixture(
         val vm: InvestReceiptVM,
         val router: NavigationRouter,

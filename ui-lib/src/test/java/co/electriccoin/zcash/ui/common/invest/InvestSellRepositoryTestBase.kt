@@ -160,9 +160,13 @@ internal abstract class InvestSellRepositoryTestBase {
         var payloadAmount: String? = null
         var extraTransferField = ""
         var checkpointsAtSubmit: List<String>? = null
+        var payloadDeadline = "2026-09-28T14:08:00.000Z"
+
+        /** Runs as each status check starts, e.g. to stand in for another observer settling the sale meanwhile. */
+        var onStatus: () -> Unit = {}
 
         fun payload(): String =
-            "{\"signer_id\":\"$TEST_ACCOUNT_ID\",\"verifying_contract\":\"intents.near\",\"deadline\":\"2026-09-28T14:08:00.000Z\"," +
+            "{\"signer_id\":\"$TEST_ACCOUNT_ID\",\"verifying_contract\":\"intents.near\",\"deadline\":\"$payloadDeadline\"," +
                 "\"nonce\":\"Vij2xgAlKBKzAMg6wgOB2RgAwGTZ2YDZGAECAwQFBgc=\",\"intents\":[{\"intent\":\"transfer\"," +
                 "\"receiver_id\":\"$DEPOSIT\",$extraTransferField\"tokens\":{\"${nvda.assetId}\":\"${payloadAmount ?: lastRequest?.amount?.toPlainString()}\"}}]}"
 
@@ -223,7 +227,7 @@ internal abstract class InvestSellRepositoryTestBase {
         }
 
         override suspend fun checkStatus(depositAddress: String): SwapStatusResponseDto =
-            when (val next = statuses.removeAt(0)) {
+            when (val next = statuses.removeAt(0).also { onStatus() }) {
                 is Throwable -> throw next
                 else -> next as SwapStatusResponseDto
             }

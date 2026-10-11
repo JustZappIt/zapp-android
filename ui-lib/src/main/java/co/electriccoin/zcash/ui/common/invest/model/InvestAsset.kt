@@ -29,9 +29,13 @@ data class InvestAsset(
     /** 1Click's chain for every Ondo token today. */
     val chain: String get() = ONDO_CHAIN
 
+    /** The token's decimals, so a holding can be counted even when 1Click no longer lists the token. */
+    val decimals: Int get() = ONDO_DECIMALS
+
     private companion object {
         const val ONDO_SUFFIX = "on"
         const val ONDO_CHAIN = "bsc"
+        const val ONDO_DECIMALS = 18
     }
 }
 

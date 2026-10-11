@@ -221,6 +221,49 @@ internal class InvestRepositoryProgressTest : InvestRepositoryImplTestBase() {
         }
 
     @Test
+    fun `a held stock 1Click no longer lists still shows, without a price`() =
+        runTest {
+            val apple = InvestAssets.curated.first { it.ticker == "AAPL" } // not in the fake's token list
+            coEvery { session.balances() } returns
+                BalancesResponse(
+                    listOf(
+                        AccountBalance(tokenId = nvda.assetId, available = "440974000000000000", source = "private"),
+                        AccountBalance(tokenId = apple.assetId, available = "1500000000000000000", source = "private"),
+                    ),
+                )
+
+            repository.refreshHoldings()
+
+            val holdings = requireNotNull(repository.holdings.value)
+            val appleHolding = holdings.items.single { it.asset == apple }
+            assertEquals(BigDecimal("1.5"), appleHolding.units)
+            assertNull(appleHolding.usdValue)
+            assertEquals(holdings.items.single { it.asset == nvda }.usdValue, holdings.totalUsd)
+        }
+
+    @Test
+    fun `holdings are valued at prices no older than a minute, or marked stale`() =
+        runTest {
+            coEvery { session.balances() } returns
+                BalancesResponse(listOf(AccountBalance(nvda.assetId, "440974000000000000", "private")))
+            repository.refreshHoldings()
+            assertEquals(1, api.tokenLoads)
+
+            now += 2.minutes
+            repository.refreshHoldings()
+            assertEquals(2, api.tokenLoads)
+            assertEquals(false, repository.holdings.value?.isStale)
+
+            // Prices that can't be fetched again still value the holdings, which then say they're out of date.
+            api.tokensFailure = InvestApiException.Unreachable(IllegalStateException("tokens"))
+            now += 2.minutes
+            repository.refreshHoldings()
+            val holdings = requireNotNull(repository.holdings.value)
+            assertEquals(true, holdings.isStale)
+            assertEquals(0, BigDecimal("98.98102404").compareTo(holdings.totalUsd))
+        }
+
+    @Test
     fun `a failed refresh keeps the last holdings and marks them stale`() =
         runTest {
             coEvery { session.balances() } returns BalancesResponse(emptyList())

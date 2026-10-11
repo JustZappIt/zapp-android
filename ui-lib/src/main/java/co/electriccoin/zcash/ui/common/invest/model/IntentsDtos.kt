@@ -6,6 +6,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonIgnoreUnknownKeys
+import java.math.BigInteger
 
 /** The `erc191` member of 1Click's `MultiPayload`: what `authenticate` and `submit-intent` accept as signed data. */
 @Serializable
@@ -43,7 +44,20 @@ data class AuthenticateResponse(
 data class BalancesResponse(
     @SerialName("balances")
     val balances: List<AccountBalance>,
-)
+) {
+    /**
+     * Base units held in the private account, by token. The balances may list the same token again from another
+     * source, which Invest can't sell from, so only private (or untagged) entries count. Holdings and a sale's
+     * "not sold" check both read the account this way, so the two always agree.
+     */
+    fun privateBaseUnits(): Map<String, BigInteger> =
+        balances
+            .filter { it.source == null || it.source == AccountBalance.PRIVATE_SOURCE }
+            .groupBy { it.tokenId }
+            .mapValues { (_, entries) ->
+                entries.mapNotNull { it.available.toBigIntegerOrNull() }.fold(BigInteger.ZERO, BigInteger::add)
+            }
+}
 
 @JsonIgnoreUnknownKeys
 @Serializable
@@ -56,7 +70,11 @@ data class AccountBalance(
     /** `"private"` for a confidential balance. */
     @SerialName("source")
     val source: String? = null,
-)
+) {
+    companion object {
+        const val PRIVATE_SOURCE = "private"
+    }
+}
 
 @Serializable
 data class GenerateIntentRequest(

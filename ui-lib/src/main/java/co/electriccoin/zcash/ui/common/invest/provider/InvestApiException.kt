@@ -52,6 +52,13 @@ sealed class InvestApiException(
         correlationId: String?,
     ) : InvestApiException("Login refused: ${apiMessage.orEmpty()}", correlationId)
 
+    /**
+     * The wallet was reset while this call was signing in, so it was abandoned rather than run with the deleted
+     * wallet's token. An ordinary failure, not a cancellation: the caller's coroutine wasn't cancelled, and its
+     * error handling has to run.
+     */
+    class SessionReset : InvestApiException("The wallet was reset while signing in", correlationId = null)
+
     /** No usable answer at all: network or an unreadable body. */
     class Unreachable(
         cause: Throwable,

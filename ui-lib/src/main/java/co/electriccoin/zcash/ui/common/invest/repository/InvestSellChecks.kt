@@ -3,6 +3,10 @@ package co.electriccoin.zcash.ui.common.invest.repository
 import co.electriccoin.zcash.ui.common.invest.model.InvestAsset
 import co.electriccoin.zcash.ui.common.invest.model.SellAmount
 import co.electriccoin.zcash.ui.common.invest.model.SellEstimate
+import co.electriccoin.zcash.ui.common.invest.repository.InvestQuoteParams.QUOTE_WAITING_TIME_MS
+import co.electriccoin.zcash.ui.common.invest.repository.InvestQuoteParams.REFERRAL
+import co.electriccoin.zcash.ui.common.invest.repository.InvestQuoteParams.SLIPPAGE_BPS
+import co.electriccoin.zcash.ui.common.invest.repository.InvestQuoteParams.ZEC_ASSET_ID
 import co.electriccoin.zcash.ui.common.model.near.Confidentiality
 import co.electriccoin.zcash.ui.common.model.near.QuoteRequest
 import co.electriccoin.zcash.ui.common.model.near.QuoteResponseDto
@@ -20,8 +24,6 @@ import kotlin.time.Instant
 
 /** The pure decisions behind a sale, kept apart from the network calls so each can be tested on its own. */
 internal object InvestSellChecks {
-    const val ZEC_ASSET_ID = "nep141:zec.omft.near"
-    const val SLIPPAGE_BPS = 100
     private val MAX_USD_DRIFT = BigDecimal("0.05")
     private val SLIPPAGE_FLOOR = BigDecimal("0.99")
 
@@ -203,8 +205,6 @@ internal object InvestSellChecks {
     private fun BigDecimal.toBaseUnits(decimals: Int): BigInteger =
         movePointRight(decimals).setScale(0, RoundingMode.DOWN).toBigInteger()
 
-    private const val QUOTE_WAITING_TIME_MS = 3_000
-    private const val REFERRAL = "zapp"
     private val QUOTE_DEADLINE = 30.minutes
     private const val HTTP_BAD_REQUEST = 400
     private const val HTTP_TOO_MANY_REQUESTS = 429

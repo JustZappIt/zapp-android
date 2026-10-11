@@ -18,7 +18,6 @@ import co.electriccoin.zcash.ui.common.model.near.QuoteRequest
 import co.electriccoin.zcash.ui.common.model.near.QuoteResponseDto
 import co.electriccoin.zcash.ui.common.model.near.SubmitDepositTransactionRequest
 import co.electriccoin.zcash.ui.common.model.near.SwapStatusResponseDto
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -184,7 +183,9 @@ class PrivateAccountSessionTest {
             session.reset() // doesn't wait for the login in flight
             release.complete(Unit)
             // The deleted wallet's token must not read balances for the call that asked for it.
-            assertTrue(first.await().exceptionOrNull() is CancellationException)
+            // An ordinary Invest failure, so the caller's own error handling runs; a CancellationException would
+            // end the caller's coroutine silently (a spinner that never stops).
+            assertTrue(first.await().exceptionOrNull() is InvestApiException.SessionReset)
             session.balances()
 
             assertEquals(listOf("token-2"), api.balanceTokens)

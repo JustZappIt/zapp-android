@@ -1,6 +1,7 @@
 package co.electriccoin.zcash.ui.common.invest
 
 import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
+import co.electriccoin.zcash.ui.common.invest.model.InvestEligibility
 import co.electriccoin.zcash.ui.common.invest.model.TradingSchedule
 import co.electriccoin.zcash.ui.common.invest.provider.InvestServerClock
 import co.electriccoin.zcash.ui.common.model.near.Confidentiality
@@ -150,6 +151,20 @@ class InvestModelsTest {
         assertEquals(1_790_603_880_000L, clock.nowMillis())
         clock.observe("Mon, 28 Sep 2026 14:10:00 GMT", fromOneClick = false)
         assertEquals(1_790_603_880_000L, clock.nowMillis())
+        // The screens' countdowns read the same corrected time as the engine's price holds.
+        assertEquals(Instant.fromEpochMilliseconds(1_790_603_880_000L), clock.now())
+    }
+
+    @Test
+    fun `every jurisdiction Ondo prohibits is prohibited, and Switzerland too, since its individuals can't buy`() {
+        val prohibited = listOf("US", "CA", "AF", "BY", "CU", "KP", "IR", "LY", "MM", "RU", "SO", "SS", "SD", "SY", "CH")
+        prohibited.forEach { assertEquals(InvestEligibility.PROHIBITED, InvestEligibility.of(it), it) }
+        assertEquals(InvestEligibility.PROHIBITED, InvestEligibility.of("ru"))
+
+        listOf("GB", "DE", "NO", "SG", "HK", "BR", "MY").forEach {
+            assertEquals(InvestEligibility.RESTRICTED, InvestEligibility.of(it), it)
+        }
+        listOf("AE", "MX", "JP", "IN").forEach { assertEquals(InvestEligibility.ELIGIBLE, InvestEligibility.of(it), it) }
     }
 
     private fun quote(

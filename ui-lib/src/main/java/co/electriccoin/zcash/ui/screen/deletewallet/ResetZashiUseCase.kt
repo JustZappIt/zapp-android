@@ -68,13 +68,14 @@ class ResetZashiUseCase(
             peerCashOutRepository.reset()
             baseBalanceRepository.reset()
             // The Invest session, account ID and cached holdings and addresses belong to this wallet.
-            privateAccountSession.reset()
-            investRepository.clearWalletData()
-            investSellRepository.clearWalletData()
+            clearInvestData()
             deleteLocalFiles(keepFiles)
             closeSynchronizer()
             clearSDK()
             clearSharedPrefs()
+            // Again once the recovery phrase is gone: an Invest call that landed in between still derived the old
+            // account from it, and would otherwise leave that account ID cached for the next wallet.
+            clearInvestData()
             clearInMemoryData()
         } catch (_: BiometricsFailureException) {
             // do nothing
@@ -124,6 +125,12 @@ class ResetZashiUseCase(
         // Outside the provider stack above; without this the deleted wallet's blocklist mirror
         // survives into the next wallet on this device.
         chatBlockedKeysStorageProvider.clear()
+    }
+
+    private fun clearInvestData() {
+        privateAccountSession.reset()
+        investRepository.clearWalletData()
+        investSellRepository.clearWalletData()
     }
 
     private fun clearInMemoryData() {

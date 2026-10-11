@@ -17,6 +17,7 @@ import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -100,6 +101,22 @@ class InvestTradeFollowerTest {
 
             advanceTimeBy(61.seconds)
             assertEquals(2, attempts)
+        }
+
+    @Test
+    fun `following resumes once the trade records can be read again`() =
+        runTest {
+            var reads = 0
+            // The guard reports an unreadable store as null and ends the list; the next read succeeds.
+            every { buys.pendingTrades } returns flow { if (++reads == 1) emit(null) else emitAll(pending) }
+            pending.value = listOf(PendingTrade("buy-1", "nvda", isSale = false))
+            val follower = InvestTradeFollowerImpl(buys, sells, backgroundScope)
+            backgroundScope.launch { follower.followPendingTrades() }
+            runCurrent()
+            verify(exactly = 0) { buys.observeBuy("buy-1") }
+
+            advanceTimeBy(61.seconds)
+            verify(exactly = 1) { buys.observeBuy("buy-1") }
         }
 
     @Test

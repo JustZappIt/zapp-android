@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -27,6 +28,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import xyz.justzappit.evm.intents.IntentNonce
+import java.util.concurrent.TimeoutException
 
 /**
  * The 4-byte salt every intents nonce carries: `intents.near`'s `current_salt` view. Read from the same
@@ -40,6 +42,7 @@ class IntentsSaltProvider(
     private val serverClock: InvestServerClock,
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val rpcUrls: List<String> = NEAR_RPC_URLS,
+    private val perHostTimeoutMillis: Long = PER_HOST_TIMEOUT_MILLIS,
 ) {
     private val mutex = Mutex()
     private var cached: ByteArray? = null
@@ -60,13 +63,17 @@ class IntentsSaltProvider(
         mutex.withLock { cached = null }
     }
 
-    // Cancellation and a Tor that can't start end the failover at once; anything else tries the next host.
+    // Cancellation and a Tor that can't start end the failover at once; anything else tries the next host. Each
+    // host gets [perHostTimeoutMillis]: the Tor client has no timeouts of its own, so a host that accepts the
+    // connection and never answers would otherwise hold this lock, and the session's login behind it, for good.
     @Suppress("TooGenericExceptionCaught", "ThrowsCount")
     private suspend fun fetch(): ByteArray {
         val failures = mutableListOf<Throwable>()
         for (url in rpcUrls) {
             try {
-                return fetchFrom(url)
+                val salt = fetchFrom(url)
+                if (salt != null) return salt
+                failures += TimeoutException("$url didn't answer within $perHostTimeoutMillis ms")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: TorUnavailableException) {
@@ -85,20 +92,24 @@ class IntentsSaltProvider(
         )
     }
 
-    private suspend fun fetchFrom(url: String): ByteArray =
+    /** The salt from [url], or null if it didn't answer within [perHostTimeoutMillis] (timed with the request). */
+    private suspend fun fetchFrom(url: String): ByteArray? =
         withContext(Dispatchers.IO) {
-            httpClientProvider.create().use { client ->
-                val response =
-                    client.post(url) {
-                        contentType(ContentType.Application.Json)
-                        setBody(CURRENT_SALT_QUERY)
-                        // The failover across endpoints is the retry; a stalled host must not hold the
-                        // lock through the direct client's own retries first.
-                        retry { noRetry() }
-                    }
-                serverClock.observe(response.headers[HttpHeaders.Date], fromOneClick = false)
-                parseViewResult(response.body<RpcResponse>())
-            }
+            withTimeoutOrNull(perHostTimeoutMillis) { fetchSalt(url) }
+        }
+
+    private suspend fun fetchSalt(url: String): ByteArray =
+        httpClientProvider.create().use { client ->
+            val response =
+                client.post(url) {
+                    contentType(ContentType.Application.Json)
+                    setBody(CURRENT_SALT_QUERY)
+                    // The failover across endpoints is the retry; a stalled host must not hold the
+                    // lock through the direct client's own retries first.
+                    retry { noRetry() }
+                }
+            serverClock.observe(response.headers[HttpHeaders.Date], fromOneClick = false)
+            parseViewResult(response.body<RpcResponse>())
         }
 
     @JsonIgnoreUnknownKeys
@@ -129,6 +140,9 @@ class IntentsSaltProvider(
             )
 
         private const val CACHE_MILLIS = 300_000L
+
+        // Several Tor round trips; the five hosts together stay within a couple of minutes.
+        const val PER_HOST_TIMEOUT_MILLIS = 20_000L
         private const val BYTE_MASK = 0xff
 
         private val CURRENT_SALT_QUERY =

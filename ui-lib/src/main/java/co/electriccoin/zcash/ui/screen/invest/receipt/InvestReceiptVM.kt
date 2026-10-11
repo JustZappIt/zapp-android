@@ -132,19 +132,23 @@ internal class InvestReceiptVM(
     private fun outcomeOf(
         progress: BuyProgress?,
         recorded: SwapStatus?,
-    ): Outcome =
-        when {
-            progress is BuyProgress.Held -> Outcome.HELD
-            progress is BuyProgress.Refunded -> Outcome.REFUNDED
-            progress is BuyProgress.NeedsAttention -> Outcome.ATTENTION
-            progress is BuyProgress.Expired -> Outcome.EXPIRED
-            progress != null -> Outcome.PENDING
+    ): Outcome {
+        // A buy the wallet already recorded as settled stays settled: status for an old deposit address may stop
+        // answering, and a few rejected polls are no reason to send the user to support.
+        val polled = progress.takeUnless { it is BuyProgress.NeedsAttention && recorded in SETTLED }
+        return when {
+            polled is BuyProgress.Held -> Outcome.HELD
+            polled is BuyProgress.Refunded -> Outcome.REFUNDED
+            polled is BuyProgress.NeedsAttention -> Outcome.ATTENTION
+            polled is BuyProgress.Expired -> Outcome.EXPIRED
+            polled != null -> Outcome.PENDING
             recorded == SwapStatus.SUCCESS -> Outcome.HELD
             recorded == SwapStatus.REFUNDED -> Outcome.REFUNDED
             recorded == SwapStatus.FAILED -> Outcome.ATTENTION
             recorded == SwapStatus.EXPIRED -> Outcome.EXPIRED
             else -> Outcome.PENDING
         }
+    }
 
     private fun titleOf(
         outcome: Outcome,
@@ -186,4 +190,8 @@ internal class InvestReceiptVM(
         )
 
     private fun onSeeProgress() = navigationRouter.forward(InvestProgressArgs(depositAddress = args.depositAddress))
+
+    private companion object {
+        val SETTLED = setOf(SwapStatus.SUCCESS, SwapStatus.REFUNDED)
+    }
 }

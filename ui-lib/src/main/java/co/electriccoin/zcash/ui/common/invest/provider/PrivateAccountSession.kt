@@ -3,7 +3,6 @@ package co.electriccoin.zcash.ui.common.invest.provider
 import co.electriccoin.zcash.ui.common.invest.model.AuthenticateRequest
 import co.electriccoin.zcash.ui.common.invest.model.BalancesResponse
 import co.electriccoin.zcash.ui.common.invest.model.Erc191SignedData
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import xyz.justzappit.evm.intents.IntentsLogin
@@ -82,7 +81,7 @@ class PrivateAccountSession(
                 val (token, expiresAt) = loginWithRecovery()
                 // The wallet was reset during the login: the token belongs to the deleted wallet, so the call
                 // that asked for it is abandoned rather than run with it.
-                if (startedIn != generation) throw CancellationException(SESSION_RESET)
+                if (startedIn != generation) throw InvestApiException.SessionReset()
                 accessToken = token
                 expiresAtMillis = expiresAt
                 token
@@ -128,7 +127,6 @@ class PrivateAccountSession(
 
     private companion object {
         const val MILLIS_PER_SECOND = 1_000L
-        const val SESSION_RESET = "The wallet was reset while signing in"
         const val HTTP_BAD_REQUEST = 400
 
         // Sign in again this long before the token's stated expiry, so a request never races it.

@@ -6,6 +6,7 @@ import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestServerClock
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -58,6 +59,22 @@ class IntentsSaltProviderTest {
                 listOf("near-rpc.defuse.org", "free.rpc.fastnear.com", "1rpc.io"),
                 http.requests.map { it.url.host },
             )
+        }
+
+    @Test
+    fun `a host that never answers is skipped after its timeout`() =
+        runTest {
+            val http =
+                FakeHttpClientProvider { request ->
+                    if (request.url.host == "near-rpc.defuse.org") awaitCancellation()
+                    jsonResponse(SALT_RPC_RESULT)
+                }
+
+            // The timeout runs in real time alongside the request, so it is kept short here.
+            val salt = IntentsSaltProvider(http, InvestServerClock(), perHostTimeoutMillis = 300).salt()
+
+            assertEquals(0x25, salt[0].toInt())
+            assertEquals(listOf("near-rpc.defuse.org", "free.rpc.fastnear.com"), http.requests.map { it.url.host })
         }
 
     @Test
