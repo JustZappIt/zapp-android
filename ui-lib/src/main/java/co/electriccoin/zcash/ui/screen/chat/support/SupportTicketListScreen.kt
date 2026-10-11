@@ -100,7 +100,9 @@ private fun SupportTicketListView(state: SupportTicketListState) {
                         contentPadding =
                             PaddingValues(
                                 top = 4.dp,
-                                bottom = navBarBottom + ZappNavBar.CLEARANCE_DP.dp,
+                                bottom =
+                                    navBarBottom + ZappNavBar.PUSHED_FLOATING_MARGIN_DP.dp +
+                                        ZappNavBar.FAB_LIST_CLEARANCE_DP.dp,
                             ),
                     ) {
                         items(items = state.tickets, key = { it.conversationId }) { ticket ->

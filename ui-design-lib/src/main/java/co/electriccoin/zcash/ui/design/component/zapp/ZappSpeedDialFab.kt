@@ -42,6 +42,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
+import co.electriccoin.zcash.ui.design.theme.colors.ZappNavBar
 
 data class ZappSpeedDialAction(
     val icon: ImageVector,
@@ -170,7 +171,7 @@ private fun ToggleFab(
     Box(
         modifier =
             Modifier
-                .size(FAB_SIZE_DP.dp)
+                .size(ZappNavBar.FAB_SIZE_DP.dp)
                 .shadow(elevation = 4.dp, shape = RectangleShape, clip = false)
                 .background(c.accent, RectangleShape)
                 .border(BorderStroke(1.dp, c.accentBorder), RectangleShape)
@@ -193,6 +194,5 @@ private fun ToggleFab(
     }
 }
 
-private const val FAB_SIZE_DP = 56
 private const val ACTION_GAP_DP = 12
 private const val ROTATION_EXPANDED = 45f

@@ -63,6 +63,12 @@ internal fun ChatContactsView(
 ) {
     val contacts = state.contacts
     val c = ZappTheme.colors
+    val floatingBottom =
+        if (showBackButton) {
+            ZappNavBar.PUSHED_FLOATING_MARGIN_DP.dp
+        } else {
+            ZappNavBar.FAB_BOTTOM_PADDING_DP.dp
+        }
     val grouped =
         remember(contacts) {
             contacts
@@ -97,7 +103,7 @@ internal fun ChatContactsView(
                     contentPadding =
                         PaddingValues(
                             top = 4.dp,
-                            bottom = navBarBottom + ZappNavBar.CLEARANCE_DP.dp,
+                            bottom = navBarBottom + floatingBottom + ZappNavBar.FAB_LIST_CLEARANCE_DP.dp,
                         ),
                 ) {
                     grouped.forEach { (letter, bucket) ->
@@ -129,12 +135,6 @@ internal fun ChatContactsView(
             }
         }
 
-        val floatingBottom =
-            if (showBackButton) {
-                ZappNavBar.PUSHED_FLOATING_MARGIN_DP.dp
-            } else {
-                ZappNavBar.FAB_BOTTOM_PADDING_DP.dp
-            }
         ZappFab(
             icon = Icons.Default.PersonAdd,
             contentDescription = stringResource(R.string.chat_contacts_add_content_description),

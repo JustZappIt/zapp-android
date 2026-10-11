@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.design.animation.pressScale
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
+import co.electriccoin.zcash.ui.design.theme.colors.ZappNavBar
 
 @Composable
 fun ZappFab(
@@ -35,7 +36,7 @@ fun ZappFab(
     Box(
         modifier =
             modifier
-                .size(FAB_SIZE_DP.dp)
+                .size(ZappNavBar.FAB_SIZE_DP.dp)
                 .pressScale(interactionSource)
                 .shadow(elevation = 4.dp, shape = RectangleShape, clip = false)
                 .background(c.accent, RectangleShape)
@@ -55,5 +56,3 @@ fun ZappFab(
         )
     }
 }
-
-private const val FAB_SIZE_DP = 56

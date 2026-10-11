@@ -82,6 +82,7 @@ class ChatListScrollTest : UiTestPrerequisites() {
                         onLeaveSwipe = {},
                     )
                 },
+            waitingJoins = emptyList(),
             emptyTitle = stringRes(""),
             emptySubtitle = stringRes(""),
             newConversationContentDescription = stringRes("New chat"),
