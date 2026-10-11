@@ -27,6 +27,7 @@ data class Holdings(
     val items: List<Holding>,
     /** Sum of the priced holdings; null when none is priced. */
     val totalUsd: BigDecimal?,
+    /** When these were read, on this phone's clock: only ever shown as "Updated 3 minutes ago" against it. */
     val updatedAt: Instant,
     /** True when the last refresh failed and these are the last known figures. */
     val isStale: Boolean,

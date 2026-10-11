@@ -44,7 +44,7 @@ import co.electriccoin.zcash.ui.screen.invest.common.InvestModalSheet
 /** I9: what the private-account key is about to sign, in words, with the raw message one tap away. */
 @Composable
 internal fun InvestSellReviewSheet(state: InvestSellReviewState?) {
-    InvestModalSheet(state = state, onDismiss = { it.onDismiss() }) { active ->
+    InvestModalSheet(state = state, onDismiss = { it.onDismiss() }, isBusy = { it.isBusy }) { active ->
         InvestSellReviewContent(active, Modifier.weight(1f, false))
     }
 }

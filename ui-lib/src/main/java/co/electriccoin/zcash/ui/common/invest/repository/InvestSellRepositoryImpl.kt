@@ -302,7 +302,7 @@ internal class InvestSellRepositoryImpl(
             while (true) {
                 val progress = poll.next()
                 if (progress != null) {
-                    if (progress.isFinal) settle(progress)
+                    if (progress.isFinal) poll.settle(progress)
                     emit(progress)
                     if (progress.isFinal) break
                 }
@@ -355,8 +355,11 @@ internal class InvestSellRepositoryImpl(
         estimateRecipient = null
     }
 
-    private suspend fun settle(progress: SellProgress) {
+    private suspend fun Poll.settle(progress: SellProgress) {
         if (progress !is SellProgress.NeedsAttention) checkpoints.remove(progress.depositAddress)
+        // Only a sale this phone recorded changes what it holds; one that needs attention is reached again whenever
+        // following restarts, and the holdings catch up on the next refresh anyway.
+        if (record == null || progress is SellProgress.NeedsAttention) return
         try {
             investRepository.refreshHoldings()
         } catch (e: CancellationException) {

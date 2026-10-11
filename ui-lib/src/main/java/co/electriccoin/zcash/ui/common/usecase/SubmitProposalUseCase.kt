@@ -53,12 +53,18 @@ class SubmitProposalUseCase(
      * @param navigateAfter When true (default), navigates to [TransactionProgressArgs] after a Zashi
      *   submit. When false the caller keeps the foreground, as the offramp bridge does. Keystone
      *   always goes to [SignKeystoneTransactionArgs] — nothing can be signed otherwise.
+     * @param beforeSubmit Runs once the user has authorized and before anything is submitted or sent for signing:
+     *   a caller that must record a payment before it can leave (Invest) does so here. If it throws, nothing is
+     *   submitted and the exception reaches the caller.
      * @return true once the proposal is authorized and handed off, false if the user dismissed or
      *   failed the biometric prompt. A declined prompt submits nothing and emits no
      *   `SubmitProposalState.Result`, so a caller that awaits that state must check this first or it
      *   will suspend forever.
      */
-    suspend operator fun invoke(navigateAfter: Boolean = true): Boolean =
+    suspend operator fun invoke(
+        navigateAfter: Boolean = true,
+        beforeSubmit: suspend () -> Unit = {},
+    ): Boolean =
         try {
             biometricRepository.requestBiometrics(
                 request =
@@ -70,6 +76,7 @@ class SubmitProposalUseCase(
                             )
                     )
             )
+            beforeSubmit()
             val account = accountDataSource.getSelectedAccount()
             val proposal =
                 when (account) {

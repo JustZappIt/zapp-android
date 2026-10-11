@@ -54,6 +54,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -150,15 +151,19 @@ internal abstract class InvestRepositoryImplTestBase {
 
         var tokenLoads = 0
         var tokensFailure: InvestApiException? = null
+        var tokensGate: CompletableDeferred<Unit>? = null
         val statusFailures = ArrayDeque<InvestApiException>()
 
-        override suspend fun getOndoTokens(): List<NearTokenDto> =
-            tokensFailure?.let { throw it } ?: listOf(
+        override suspend fun getOndoTokens(): List<NearTokenDto> {
+            tokensGate?.await()
+            tokensFailure?.let { throw it }
+            return listOf(
                 NearTokenDto("nep141:zec.omft.near", 8, "zec", "ZEC", BigDecimal("1543.62")),
                 NearTokenDto(nvda.assetId, 18, "bsc", "NVDAon", BigDecimal("224.46")),
                 NearTokenDto(InvestAssets.curated[1].assetId, 18, "bsc", "TSLAon", null),
                 NearTokenDto("nep141:wrap.near", 24, "near", "wNEAR", BigDecimal("3")),
             ).also { tokenLoads++ }
+        }
 
         override suspend fun requestQuote(request: QuoteRequest): QuoteResponseDto {
             quoteFailure?.let { throw it }
@@ -207,6 +212,12 @@ internal abstract class InvestRepositoryImplTestBase {
 
     protected inner class FakeWallet : OfframpBridgeWallet {
         var spendable = Zatoshi(100_000_000)
+
+        /** What happens while the prompt is up (time passing, another trade starting). */
+        var duringPrompt: () -> Unit = {}
+
+        /** The prompt declined or failed: thrown before the caller's beforeSubmit runs. */
+        var authFailure: Exception? = null
         var sendFailure: Exception? = null
         var checkpointsAtSend: List<String>? = null
 
@@ -214,7 +225,13 @@ internal abstract class InvestRepositoryImplTestBase {
 
         override suspend fun zcashAddress(): String = FRESH_UA.also { addressesHandedOut++ }
 
-        override suspend fun sendZecDeposit(quote: SwapQuote): String {
+        override suspend fun sendZecDeposit(
+            quote: SwapQuote,
+            beforeSubmit: suspend () -> Unit,
+        ): String {
+            duringPrompt()
+            authFailure?.let { throw it }
+            beforeSubmit()
             checkpointsAtSend = checkpoints.items.value.map { it.depositAddress }
             sendFailure?.let { throw it }
             return "txid"

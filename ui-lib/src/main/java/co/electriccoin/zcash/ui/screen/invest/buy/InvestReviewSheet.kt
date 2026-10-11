@@ -36,7 +36,7 @@ import co.electriccoin.zcash.ui.screen.invest.common.InvestModalSheet
  */
 @Composable
 internal fun InvestReviewSheet(state: InvestReviewState?) {
-    InvestModalSheet(state = state, onDismiss = { it.onDismiss() }) { active ->
+    InvestModalSheet(state = state, onDismiss = { it.onDismiss() }, isBusy = { it.isBusy }) { active ->
         InvestReviewContent(active, Modifier.weight(1f, false))
     }
 }

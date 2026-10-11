@@ -141,7 +141,7 @@ internal class InvestRepositoryImpl(
                 Holdings(
                     items = items,
                     totalUsd = if (priced.isEmpty()) null else priced.fold(BigDecimal.ZERO, BigDecimal::add),
-                    updatedAt = now(),
+                    updatedAt = Clock.System.now(),
                     isStale = isPriceStale,
                 )
         } catch (e: InvestApiException) {
@@ -224,6 +224,8 @@ internal class InvestRepositoryImpl(
         requireEcho("recipient", accountId, echo.recipient)
         requireEcho("recipientType", RecipientType.CONFIDENTIAL_INTENTS, echo.recipientType)
         requireEcho("refundTo", refundTo, echo.refundTo)
+        // The privacy level the review sheet describes; an unknown value decodes to null and is refused too.
+        requireEcho("confidentiality", Confidentiality.BASIC, echo.confidentiality)
         // compareTo, not equals: a value like 6,480,000 carries a different scale once trailing zeros go.
         require(response.quote.amountIn.compareTo(BigDecimal(zats)) == 0) {
             "Invest quote amountIn differs from the request"
@@ -267,7 +269,7 @@ internal class InvestRepositoryImpl(
     }
 
     override suspend fun executeBuy(prepared: PreparedBuy): String {
-        check(now() < prepared.expiresAt) { "The price is no longer held; prepare the buy again" }
+        check(now() < prepared.expiresAt) { PRICE_EXPIRED }
         check(isAccountSupported()) { "Invest isn't available for this account" }
         // Selling stays open wherever the user now lives, so holdings are never trapped; buying doesn't.
         check(settings.get().isAvailable) { NOT_AVAILABLE_HERE }
@@ -280,16 +282,11 @@ internal class InvestRepositoryImpl(
             paying += depositAddress
         }
         try {
-            // Persisted BEFORE any ZEC moves: a crash after sending must resume polling this deposit address,
-            // never prepare and pay for a second buy. No other trade of the stock may be pending: one whose
-            // outcome is unknown must settle before the same stock is paid for again.
-            trades.withLock {
-                val assetId = prepared.asset.assetId
-                check(!trades.hasTrade(assetId)) { TRADE_IN_FLIGHT }
-                checkpoints.add(InvestBuyCheckpoint(depositAddress, assetId, now().toEpochMilliseconds()))
-            }
             try {
-                wallet.sendZecDeposit(prepared.quote)
+                // The checkpoint is written once the user has authorized, and BEFORE any ZEC moves: a crash after
+                // sending must resume polling this deposit address, never prepare and pay for a second buy. A prompt
+                // that is declined, or a process killed while it's up, leaves nothing behind.
+                wallet.sendZecDeposit(prepared.quote) { recordBuy(prepared, depositAddress) }
             } catch (e: BridgeAuthorizationCancelledException) {
                 checkpoints.remove(depositAddress)
                 throw e
@@ -307,6 +304,20 @@ internal class InvestRepositoryImpl(
             withContext(NonCancellable) { payingMutex.withLock { paying -= depositAddress } }
         }
         return depositAddress
+    }
+
+    /**
+     * After the prompt, under the trade lock: the price must still be held (the prompt can outlast it) and no
+     * other trade of the stock may be pending, one started during the prompt included, since one whose outcome is
+     * unknown must settle before the stock is paid for again. Then the checkpoint. If a check fails, nothing is sent.
+     */
+    private suspend fun recordBuy(
+        prepared: PreparedBuy,
+        depositAddress: String,
+    ) = trades.withLock {
+        check(now() < prepared.expiresAt) { PRICE_EXPIRED }
+        check(!trades.hasTrade(prepared.asset.assetId)) { TRADE_IN_FLIGHT }
+        checkpoints.add(InvestBuyCheckpoint(depositAddress, prepared.asset.assetId, now().toEpochMilliseconds()))
     }
 
     override fun observeBuy(depositAddress: String): Flow<BuyProgress> =
@@ -358,33 +369,39 @@ internal class InvestRepositoryImpl(
     }
 
     /** The curated stocks as swap assets, so a buy's swap record resolves in status polling and activity. */
-    override suspend fun investSwapAssets(): List<SwapAsset> = (catalog ?: loadCatalog()).swapAssets.values.toList()
+    override suspend fun investSwapAssets(): List<SwapAsset> =
+        (catalog ?: catalogMutex.withLock { catalog ?: fetchCatalog() }).swapAssets.values.toList()
 
-    private suspend fun loadCatalog(): Catalog =
-        catalogMutex.withLock {
-            val tokens = api.getOndoTokens().associateBy { it.assetId }
-            val zecToken = requireNotNull(tokens[ZEC_ASSET_ID]) { "1Click listed no ZEC" }
-            val zecAsset = zecToken.toSwapAsset()
-            val swapAssets =
-                InvestAssets.curated
-                    .mapNotNull { asset -> tokens[asset.assetId]?.let { asset.assetId to it.toSwapAsset() } }
-                    .toMap()
-            // A curated stock 1Click no longer lists is left out, so it can't be offered and then refused at
-            // review. A listed one without a price still shows, as "no price".
-            _market.value =
-                InvestMarket(
-                    assets =
-                        InvestAssets.curated
-                            .filter { it.assetId in tokens }
-                            .map { MarketAsset(it, tokens[it.assetId]?.price) },
-                    updatedAt = now(),
-                )
-            Catalog(tokens = tokens, zecAsset = zecAsset, swapAssets = swapAssets, loadedAt = now())
-                .also { catalog = it }
-        }
+    private suspend fun loadCatalog(): Catalog = catalogMutex.withLock { fetchCatalog() }
 
+    // Call with catalogMutex held.
+    private suspend fun fetchCatalog(): Catalog {
+        val tokens = api.getOndoTokens().associateBy { it.assetId }
+        val zecToken = requireNotNull(tokens[ZEC_ASSET_ID]) { "1Click listed no ZEC" }
+        val zecAsset = zecToken.toSwapAsset()
+        val swapAssets =
+            InvestAssets.curated
+                .mapNotNull { asset -> tokens[asset.assetId]?.let { asset.assetId to it.toSwapAsset() } }
+                .toMap()
+        // A curated stock 1Click no longer lists is left out, so it can't be offered and then refused at
+        // review. A listed one without a price still shows, as "no price".
+        _market.value =
+            InvestMarket(
+                assets =
+                    InvestAssets.curated
+                        .filter { it.assetId in tokens }
+                        .map { MarketAsset(it, tokens[it.assetId]?.price) },
+                updatedAt = now(),
+            )
+        return Catalog(tokens = tokens, zecAsset = zecAsset, swapAssets = swapAssets, loadedAt = now())
+            .also { catalog = it }
+    }
+
+    // Checked again under the lock: a load that was in progress while this one waited has just fetched it.
     private suspend fun catalogNoOlderThan(maxAge: Duration): Catalog =
-        catalog?.takeIf { now() - it.loadedAt < maxAge } ?: loadCatalog()
+        freshCatalog(maxAge) ?: catalogMutex.withLock { freshCatalog(maxAge) ?: fetchCatalog() }
+
+    private fun freshCatalog(maxAge: Duration): Catalog? = catalog?.takeIf { now() - it.loadedAt < maxAge }
 
     /**
      * Holdings are valued at prices as fresh as an estimate's. If they can't be fetched again (no answer, or a list
@@ -519,6 +536,7 @@ internal class InvestRepositoryImpl(
     private companion object {
         const val NOT_AVAILABLE_HERE = "Buying isn't available in the country of residence"
         const val TRADE_IN_FLIGHT = "A buy or sale of this stock is still in progress"
+        const val PRICE_EXPIRED = "The price is no longer held; prepare the buy again"
         const val DEFAULT_POLL_INTERVAL_MS = 5_000L
 
         // How long the review sheet may show one price before asking for a fresh one. Shorter than the

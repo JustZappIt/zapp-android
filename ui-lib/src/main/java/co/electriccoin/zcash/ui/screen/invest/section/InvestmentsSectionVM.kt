@@ -37,8 +37,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * The PAY tab's Invest block, kept out of HomeVM, and the Settings tab's Invest row. Holdings refresh once when the
- * tab opens (the repository keeps the last figures, so a failure leaves them on screen marked stale).
+ * The PAY tab's Invest block, kept out of HomeVM, and the Settings tab's Invest row. Holdings refresh once PAY is first
+ * shown, not when the tabs are built (the app may open on another tab, and a refresh is a sign-in and a balance read,
+ * mostly over Tor). The repository keeps the last figures, so a failure leaves them on screen marked stale.
  * [isInvestEnabled] is `BuildConfig.IS_INVEST_ENABLED` in the app and a plain flag in tests.
  *
  * In sell-only mode (set up, but the saved country no longer allows buying) the block shows only while something is
@@ -73,25 +74,15 @@ internal class InvestmentsSectionVM(
     private val currency =
         currencyProvider.observe().stateIn(viewModelScope, SharingStarted.Eagerly, InvestCurrency.USD)
 
-    private val isOwnAccount =
+    // Shared by the block, the Settings row and the refresh, so each account change is checked once.
+    private val isOwnAccount: StateFlow<Boolean> =
         accountDataSource.selectedAccount
             .map { investCatching { investRepository.isAccountSupported() }.getOrDefault(false) }
             .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT), false)
 
-    init {
-        if (isInvestEnabled) {
-            viewModelScope.launch {
-                combine(
-                    // Sell-only users still need their holdings, so set up is enough.
-                    settingsRepository.settings.map { it.setupComplete },
-                    isOwnAccount,
-                ) { isSetUp, isOwnAccount -> isSetUp && isOwnAccount }
-                    .distinctUntilChanged()
-                    .filter { it }
-                    .collect { refreshHoldings() }
-            }
-        }
-    }
+    private val isSetUp = settingsRepository.settings.map { it.setupComplete }
+    private var isRefreshStarted = false
 
     val state: StateFlow<InvestPayState> =
         if (!isInvestEnabled) {
@@ -101,7 +92,7 @@ internal class InvestmentsSectionVM(
                 combine(settingsRepository.settings, investRepository.pendingTrades, ::Pair),
                 investRepository.holdings,
                 refresh,
-                isOwnAccount.distinctUntilChanged(),
+                isOwnAccount,
                 currency,
             ) { (settings, trades), holdings, status, isOwnAccount, _ ->
                 if (isOwnAccount) buildState(settings, holdings, trades, status) else InvestPayState.HIDDEN
@@ -113,16 +104,7 @@ internal class InvestmentsSectionVM(
         }
 
     /** Settings › Invest is offered wherever Invest is: the build has it and the phone's own account is selected. */
-    val isSettingsRowVisible: StateFlow<Boolean> =
-        if (!isInvestEnabled) {
-            MutableStateFlow(false)
-        } else {
-            isOwnAccount.stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-                initialValue = false,
-            )
-        }
+    val isSettingsRowVisible: StateFlow<Boolean> = if (!isInvestEnabled) MutableStateFlow(false) else isOwnAccount
 
     fun onSettingsClick() = navigationRouter.forward(InvestSettingsArgs)
 
@@ -225,9 +207,26 @@ internal class InvestmentsSectionVM(
     /**
      * Follows pending trades so a buy or sale settles without its progress screen. The PAY screen calls this while
      * it is STARTED only: this view model lives as long as the tabs do, and following polls (over Tor) all the time.
+     * The first call also starts the holdings refresh.
      */
-    suspend fun followPendingTrades(): Nothing =
-        if (isInvestEnabled) tradeFollower.followPendingTrades() else awaitCancellation()
+    suspend fun followPendingTrades(): Nothing {
+        if (!isInvestEnabled) awaitCancellation()
+        startRefreshing()
+        tradeFollower.followPendingTrades()
+    }
+
+    // Once per view model, from the first time PAY is shown: for the phone's own account, once Invest is set up
+    // (sell-only users still need their holdings, so set up is enough), and again when either comes back.
+    private fun startRefreshing() {
+        if (isRefreshStarted) return
+        isRefreshStarted = true
+        viewModelScope.launch {
+            combine(isSetUp, isOwnAccount) { isSetUp, isOwnAccount -> isSetUp && isOwnAccount }
+                .distinctUntilChanged()
+                .filter { it }
+                .collect { refreshHoldings() }
+        }
+    }
 
     private fun onInvestClick() {
         viewModelScope.launch { navigateToInvest() }

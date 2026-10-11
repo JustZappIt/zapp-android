@@ -51,7 +51,7 @@ class InvestmentsSectionVMTest {
         runTest {
             val fixture = fixture(isEnabled = false, settings = READY)
 
-            val state = fixture.state()
+            val state = fixture.shown()
 
             assertEquals(InvestPayState.HIDDEN, state)
             assertEquals(0, fixture.repo.refreshHoldingsCalls)
@@ -74,7 +74,7 @@ class InvestmentsSectionVMTest {
             val fixture = fixture(settings = READY, accountSupported = false)
             fixture.repo.holdings.value = HOLDINGS
 
-            assertEquals(InvestPayState.HIDDEN, fixture.state())
+            assertEquals(InvestPayState.HIDDEN, fixture.shown())
             assertEquals(0, fixture.repo.refreshHoldingsCalls)
         }
 
@@ -83,7 +83,7 @@ class InvestmentsSectionVMTest {
         runTest {
             val fixture = fixture(settings = InvestSettings())
 
-            val state = fixture.state()
+            val state = fixture.shown()
 
             assertIs<InvestmentsSectionState.Entry>(state.section)
             assertTrue(state.isSpeedDialActionVisible)
@@ -117,7 +117,7 @@ class InvestmentsSectionVMTest {
             val fixture = fixture(settings = READY)
             fixture.repo.holdings.value = HOLDINGS
 
-            val section = assertIs<InvestmentsSectionState.Holdings>(fixture.state().section)
+            val section = assertIs<InvestmentsSectionState.Holdings>(fixture.shown().section)
 
             assertEquals(1, fixture.repo.refreshHoldingsCalls)
             assertEquals(stringRes("$98.99"), section.rows.single().value)
@@ -130,13 +130,28 @@ class InvestmentsSectionVMTest {
         }
 
     @Test
+    fun `nothing is fetched until PAY is shown, and only once while it comes and goes`() =
+        runTest {
+            val fixture = fixture(settings = READY)
+            fixture.repo.holdings.value = HOLDINGS
+
+            // Built with the tabs, which may open on Chats: no sign-in or balance read for a block not on screen.
+            fixture.state()
+            assertEquals(0, fixture.repo.refreshHoldingsCalls)
+
+            fixture.shown()
+            fixture.shown()
+            assertEquals(1, fixture.repo.refreshHoldingsCalls)
+        }
+
+    @Test
     fun `a failed refresh keeps the cached holdings and marks them stale`() =
         runTest {
             val fixture = fixture(settings = READY)
             fixture.repo.holdings.value = HOLDINGS
             fixture.repo.onRefreshHoldings = { throw InvestApiException.Unreachable(IOException()) }
 
-            val section = assertIs<InvestmentsSectionState.Holdings>(fixture.state().section)
+            val section = assertIs<InvestmentsSectionState.Holdings>(fixture.shown().section)
 
             assertTrue(section.isStale)
         }
@@ -147,7 +162,7 @@ class InvestmentsSectionVMTest {
             val fixture = fixture(settings = READY)
             fixture.repo.onRefreshHoldings = { throw InvestApiException.ClockSkew(null) }
 
-            val section = assertIs<InvestmentsSectionState.Error>(fixture.state().section)
+            val section = assertIs<InvestmentsSectionState.Error>(fixture.shown().section)
 
             fixture.repo.onRefreshHoldings = { fixture.repo.holdings.value = HOLDINGS }
             section.onRetry()
@@ -188,7 +203,7 @@ class InvestmentsSectionVMTest {
             val fixture = fixture(settings = INVEST_SELL_ONLY)
             fixture.repo.holdings.value = HOLDINGS
 
-            val state = fixture.state()
+            val state = fixture.shown()
             val section = assertIs<InvestmentsSectionState.Holdings>(state.section)
 
             assertEquals(1, fixture.repo.refreshHoldingsCalls)
@@ -256,6 +271,12 @@ class InvestmentsSectionVMTest {
             scope.backgroundScope.launch(UnconfinedTestDispatcher(scope.testScheduler)) { vm.state.collect {} }
             scope.advanceUntilIdle()
             return vm.state.value
+        }
+
+        /** The state once PAY is on screen, which follows pending trades and so starts the holdings refresh. */
+        fun shown(): InvestPayState {
+            scope.backgroundScope.launch(UnconfinedTestDispatcher(scope.testScheduler)) { vm.followPendingTrades() }
+            return state()
         }
 
         fun settingsRow(): Boolean {

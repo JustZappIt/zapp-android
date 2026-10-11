@@ -1,5 +1,7 @@
 package co.electriccoin.zcash.ui.common.invest.provider
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import xyz.justzappit.evm.hd.EvmKey
 import xyz.justzappit.evm.intents.IntentsAccount
 import xyz.justzappit.offramp.account.SeedPhraseSource
@@ -19,22 +21,25 @@ class PrivateAccountKeyProvider(
     @Volatile
     private var generation = 0
 
-    suspend fun <T> withKey(block: suspend (EvmKey) -> T): T {
-        val startedIn = generation
-        val mnemonic = seedPhraseSource.getSeedPhrase()
-        val key =
+    // PBKDF2 and the curve maths take a noticeable moment, so never on the caller's (often the main) thread. All of
+    // it runs there, phrase to wipe, so no hand-over between threads can skip a wipe.
+    suspend fun <T> withKey(block: suspend (EvmKey) -> T): T =
+        withContext(Dispatchers.Default) {
+            val startedIn = generation
+            val mnemonic = seedPhraseSource.getSeedPhrase()
+            val key =
+                try {
+                    IntentsAccount.derive(mnemonic)
+                } finally {
+                    mnemonic.fill('\u0000')
+                }
             try {
-                IntentsAccount.derive(mnemonic)
+                if (startedIn == generation) cachedAccountId = IntentsAccount.accountId(key)
+                block(key)
             } finally {
-                mnemonic.fill('\u0000')
+                key.zeroize()
             }
-        return try {
-            if (startedIn == generation) cachedAccountId = IntentsAccount.accountId(key)
-            block(key)
-        } finally {
-            key.zeroize()
         }
-    }
 
     /** The Intents account ID (a lowercase 0x address). Public information, so it is kept once known. */
     suspend fun accountId(): String = cachedAccountId ?: withKey { IntentsAccount.accountId(it) }

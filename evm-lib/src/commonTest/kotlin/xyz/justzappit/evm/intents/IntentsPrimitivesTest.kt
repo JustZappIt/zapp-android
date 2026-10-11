@@ -120,15 +120,23 @@ class IntentsPrimitivesTest {
     }
 
     @Test
-    fun `nonce refuses a deadline before its start or beyond year 9999`() {
+    fun `nonce refuses a deadline before its start or beyond what its nanoseconds can hold`() {
         val salt = ByteArray(4)
         val random = ByteArray(7)
         assertFailsWith<IllegalArgumentException> { IntentNonce.encode(salt, 1_000, 1_000, random) }
         assertFailsWith<IllegalArgumentException> { IntentNonce.encode(salt, 999, 1_000, random) }
+        // Past 2262-04-11 the nanoseconds would wrap; the year-9999 ISO cap is far beyond that.
         assertFailsWith<IllegalArgumentException> {
-            IntentNonce.encode(salt, IntentNonce.MAX_EPOCH_MILLIS + 1, 1_000, random)
+            IntentNonce.encode(salt, IntentNonce.MAX_NONCE_EPOCH_MILLIS + 1, 1_000, random)
         }
-        assertEquals(IntentNonce.SIZE, IntentNonce.encode(salt, IntentNonce.MAX_EPOCH_MILLIS, 1_000, random).size)
+        assertFailsWith<IllegalArgumentException> {
+            IntentNonce.encode(salt, IntentNonce.MAX_EPOCH_MILLIS, 1_000, random)
+        }
+
+        // The last deadline it accepts is written exactly, as little-endian nanoseconds after magic, version and salt.
+        val nonce = IntentNonce.encode(salt, IntentNonce.MAX_NONCE_EPOCH_MILLIS, 1_000, random)
+        val deadlineNanos = (0 until 8).fold(0L) { acc, i -> acc or ((nonce[9 + i].toLong() and 0xff) shl (8 * i)) }
+        assertEquals(IntentNonce.MAX_NONCE_EPOCH_MILLIS * 1_000_000, deadlineNanos)
     }
 
     @Test

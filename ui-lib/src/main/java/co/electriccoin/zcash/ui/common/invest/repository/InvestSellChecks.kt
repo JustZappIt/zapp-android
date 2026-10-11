@@ -115,6 +115,7 @@ internal object InvestSellChecks {
         require(echo.refundTo == accountId) { "Sell quote echo: refundTo" }
         require(echo.recipient == recipient) { "Sell quote echo: recipient" }
         require(echo.recipientType == RecipientType.DESTINATION_CHAIN) { "Sell quote echo: recipientType" }
+        require(echo.confidentiality == Confidentiality.BASIC) { "Sell quote echo: confidentiality" }
         require(quote.amountIn.compareTo(BigDecimal(order.baseUnits)) == 0) { "Sell quote echo: amountIn" }
         // The ZEC side: the floor the user is promised must really be within the 1 % slippage asked for.
         // 1Click rounds its floor down to a whole zat (6342045 out, 6278624 floor on 2026-09-25).

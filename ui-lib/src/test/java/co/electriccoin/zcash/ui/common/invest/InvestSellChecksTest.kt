@@ -5,6 +5,7 @@ import co.electriccoin.zcash.ui.common.invest.model.SellAmount
 import co.electriccoin.zcash.ui.common.invest.model.SellEstimate
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSellChecks
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSellChecks.Resolved
+import co.electriccoin.zcash.ui.common.model.near.Confidentiality
 import co.electriccoin.zcash.ui.common.model.near.QuoteDetails
 import co.electriccoin.zcash.ui.common.model.near.QuoteRequest
 import co.electriccoin.zcash.ui.common.model.near.QuoteResponseDto
@@ -155,6 +156,7 @@ class InvestSellChecksTest {
                 recipientType = RecipientType.DESTINATION_CHAIN,
                 deadline = NOW,
                 appFees = emptyList(),
+                confidentiality = Confidentiality.BASIC,
             ),
         quote =
             QuoteDetails(

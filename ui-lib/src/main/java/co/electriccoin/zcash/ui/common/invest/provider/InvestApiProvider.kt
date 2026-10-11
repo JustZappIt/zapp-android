@@ -34,7 +34,9 @@ import io.ktor.serialization.ContentConvertException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.SerializationException
+import java.util.concurrent.TimeoutException
 
 /**
  * Every 1Click call Invest makes. It follows the user's Tor setting through [HttpClientProvider.create]:
@@ -67,6 +69,7 @@ interface InvestApiProvider {
 class KtorInvestApiProvider(
     private val httpClientProvider: HttpClientProvider,
     private val serverClock: InvestServerClock,
+    private val callTimeoutMillis: Long = CALL_TIMEOUT_MILLIS,
 ) : InvestApiProvider {
     override suspend fun getOndoTokens(): List<NearTokenDto> =
         call {
@@ -140,36 +143,43 @@ class KtorInvestApiProvider(
         header(HttpHeaders.Authorization, NEAR_PARTNER_AUTHORIZATION)
     }
 
+    // Each call is bounded by [callTimeoutMillis], timed with the request: the Tor client has no timeouts of its own,
+    // so a circuit that never answers would otherwise hang the caller (a review sheet's Confirm, a sign-in holding
+    // the session lock). A timeout reads as Unreachable: for a submission, whether it arrived is unknown.
     @Suppress("TooGenericExceptionCaught")
     private suspend inline fun <reified T> call(
         isLogin: Boolean = false,
         crossinline request: suspend HttpClient.() -> HttpResponse,
     ): T =
         withContext(Dispatchers.IO) {
-            try {
-                httpClientProvider.create().use { client ->
-                    val response = client.request()
-                    serverClock.observe(response.headers[HttpHeaders.Date], fromOneClick = true)
-                    if (T::class == Unit::class) Unit as T else response.body<T>()
+            val answer =
+                try {
+                    withTimeoutOrNull(callTimeoutMillis) {
+                        httpClientProvider.create().use { client ->
+                            val response = client.request()
+                            serverClock.observe(response.headers[HttpHeaders.Date], fromOneClick = true)
+                            if (T::class == Unit::class) Unit as T else response.body<T>()
+                        }
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: ResponseException) {
+                    serverClock.observe(e.response.headers[HttpHeaders.Date], fromOneClick = true)
+                    throw e.toInvestException(isLogin)
+                } catch (e: TorUnavailableException) {
+                    throw InvestApiException.TorUnavailable(e)
+                } catch (e: TorInitializationErrorException) {
+                    throw InvestApiException.TorUnavailable(e)
+                } catch (_: SerializationException) {
+                    // A decoding message quotes the body it choked on, which can be a session token.
+                    throw InvestApiException.Unreachable(IllegalStateException("Unreadable ${T::class.simpleName}"))
+                } catch (_: ContentConvertException) {
+                    // Ktor's wrapper for the same failure, with the same quoted body.
+                    throw InvestApiException.Unreachable(IllegalStateException("Unreadable ${T::class.simpleName}"))
+                } catch (e: Exception) {
+                    throw InvestApiException.Unreachable(e)
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: ResponseException) {
-                serverClock.observe(e.response.headers[HttpHeaders.Date], fromOneClick = true)
-                throw e.toInvestException(isLogin)
-            } catch (e: TorUnavailableException) {
-                throw InvestApiException.TorUnavailable(e)
-            } catch (e: TorInitializationErrorException) {
-                throw InvestApiException.TorUnavailable(e)
-            } catch (_: SerializationException) {
-                // A decoding message quotes the body it choked on, which can be a session token.
-                throw InvestApiException.Unreachable(IllegalStateException("Unreadable ${T::class.simpleName}"))
-            } catch (_: ContentConvertException) {
-                // Ktor's wrapper for the same failure, with the same quoted body.
-                throw InvestApiException.Unreachable(IllegalStateException("Unreadable ${T::class.simpleName}"))
-            } catch (e: Exception) {
-                throw InvestApiException.Unreachable(e)
-            }
+            answer ?: throw InvestApiException.Unreachable(TimeoutException("No answer within $callTimeoutMillis ms"))
         }
 
     @Suppress("TooGenericExceptionCaught")
@@ -210,6 +220,9 @@ class KtorInvestApiProvider(
     internal companion object {
         const val HOST = "1click.chaindefuser.com"
         const val BASE_URL = "https://$HOST"
+
+        // A slow Tor circuit takes a few seconds per round trip; this is well past that.
+        const val CALL_TIMEOUT_MILLIS = 60_000L
         private const val NO_LIQUIDITY = "No liquidity available"
         private const val TIMESTAMP_REJECTED = "timestamp validation failed"
     }

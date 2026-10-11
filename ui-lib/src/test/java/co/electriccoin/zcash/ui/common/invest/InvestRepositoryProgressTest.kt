@@ -54,10 +54,14 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import xyz.justzappit.offramp.account.SeedPhraseSource
 import java.math.BigDecimal
@@ -261,6 +265,24 @@ internal class InvestRepositoryProgressTest : InvestRepositoryImplTestBase() {
             val holdings = requireNotNull(repository.holdings.value)
             assertEquals(true, holdings.isStale)
             assertEquals(0, BigDecimal("98.98102404").compareTo(holdings.totalUsd))
+        }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `a refresh waiting on a price load in progress uses it rather than loading again`() =
+        runTest {
+            coEvery { session.balances() } returns BalancesResponse(emptyList())
+            val gate = CompletableDeferred<Unit>().also { api.tokensGate = it }
+
+            // What Invest home does when it opens: market and holdings at once.
+            val market = async { repository.refreshMarket() }
+            val holdings = async { repository.refreshHoldings() }
+            runCurrent()
+            gate.complete(Unit)
+            market.await()
+            holdings.await()
+
+            assertEquals(1, api.tokenLoads)
         }
 
     @Test

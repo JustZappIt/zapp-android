@@ -147,6 +147,8 @@ internal class InvestRepositoryImplTest : InvestRepositoryImplTestBase() {
                 { it.copy(destinationAsset = InvestAssets.curated[1].assetId) },
                 { it.copy(originAsset = "nep141:wrap.near") },
                 { it.copy(dry = true) },
+                { it.copy(confidentiality = Confidentiality.PUBLIC) },
+                { it.copy(confidentiality = null) },
             ).forEach { tamper ->
                 api.echoTamper = tamper
                 assertFailsWith<IllegalArgumentException> { repository.prepareBuy(nvda, BigDecimal(100)) }
@@ -182,10 +184,48 @@ internal class InvestRepositoryImplTest : InvestRepositoryImplTestBase() {
     fun `a cancelled send leaves nothing to resume`() =
         runTest {
             val prepared = repository.prepareBuy(nvda, BigDecimal(100))
-            wallet.sendFailure = BridgeAuthorizationCancelledException()
+            wallet.authFailure = BridgeAuthorizationCancelledException()
 
             assertFailsWith<BridgeAuthorizationCancelledException> { repository.executeBuy(prepared) }
 
+            assertTrue(checkpoints.items.value.isEmpty())
+        }
+
+    @Test
+    fun `nothing is recorded until the prompt is passed`() =
+        runTest {
+            val prepared = repository.prepareBuy(nvda, BigDecimal(100))
+            // A process killed while the prompt is up never gets past it: there must be nothing to resume.
+            var recordedDuringPrompt: List<InvestBuyCheckpoint>? = null
+            wallet.duringPrompt = { recordedDuringPrompt = checkpoints.items.value }
+
+            repository.executeBuy(prepared)
+
+            assertEquals(emptyList(), recordedDuringPrompt)
+            assertEquals(listOf(DEPOSIT), wallet.checkpointsAtSend)
+        }
+
+    @Test
+    fun `a prompt that outlasts the price hold pays nothing`() =
+        runTest {
+            val prepared = repository.prepareBuy(nvda, BigDecimal(100))
+            wallet.duringPrompt = { now += 11.minutes }
+
+            assertFailsWith<IllegalStateException> { repository.executeBuy(prepared) }
+
+            assertNull(wallet.checkpointsAtSend)
+            assertTrue(checkpoints.items.value.isEmpty())
+        }
+
+    @Test
+    fun `a trade of the stock started during the prompt holds the buy back`() =
+        runTest {
+            val prepared = repository.prepareBuy(nvda, BigDecimal(100))
+            wallet.duringPrompt = { sellCheckpoints.value = listOf(InvestBuyCheckpoint("sell-deposit", nvda.assetId, 0)) }
+
+            assertFailsWith<IllegalStateException> { repository.executeBuy(prepared) }
+
+            assertNull(wallet.checkpointsAtSend)
             assertTrue(checkpoints.items.value.isEmpty())
         }
 

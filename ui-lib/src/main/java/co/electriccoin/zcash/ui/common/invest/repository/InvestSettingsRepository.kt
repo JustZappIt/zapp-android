@@ -1,10 +1,13 @@
 package co.electriccoin.zcash.ui.common.invest.repository
 
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
+import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.common.invest.model.InvestEligibility
 import co.electriccoin.zcash.ui.common.provider.EncryptedJsonStore
+import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.serialization.Serializable
 
 /** The answers Invest keeps on this phone only: where the user lives and whether setup has run. */
@@ -45,15 +48,39 @@ interface InvestSettingsRepository {
 /**
  * Kept in encrypted preferences, which [co.electriccoin.zcash.ui.screen.deletewallet.ResetZashiUseCase]
  * clears with the wallet, so a new wallet on the phone asks again.
+ *
+ * Settings that can't be read are cleared, and count as never given: Invest asks for the country again, and nothing
+ * can be bought meanwhile. Throwing instead would crash the PAY tab, which reads them at every launch. Holdings are
+ * untouched: they live in the private account, not here.
  */
 internal class InvestSettingsRepositoryImpl(
     encryptedPreferenceProvider: EncryptedPreferenceProvider,
 ) : InvestSettingsRepository {
     private val store = EncryptedJsonStore(encryptedPreferenceProvider, PREF_KEY, InvestSettings.serializer())
 
-    override val settings: Flow<InvestSettings> = store.observe().map { it ?: InvestSettings() }
+    // Cleared once, then read again; settings that still can't be read after that are a real fault, and surface.
+    override val settings: Flow<InvestSettings> =
+        store
+            .observe()
+            .map { it ?: InvestSettings() }
+            .retryWhen { e, attempt ->
+                val isRepairable = e is StoreCorruptedException && attempt == 0L
+                if (isRepairable) forgetUnreadable(e)
+                isRepairable
+            }
 
-    override suspend fun get(): InvestSettings = store.get() ?: InvestSettings()
+    override suspend fun get(): InvestSettings =
+        try {
+            store.get() ?: InvestSettings()
+        } catch (e: StoreCorruptedException) {
+            forgetUnreadable(e)
+            InvestSettings()
+        }
+
+    private suspend fun forgetUnreadable(e: Throwable) {
+        Twig.warn(e) { "Invest settings can't be read; clearing them, so the country is asked again" }
+        store.clear()
+    }
 
     override suspend fun setResidence(
         countryCode: String,

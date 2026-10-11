@@ -39,7 +39,8 @@ import org.koin.dsl.module
 val investModule =
     module {
         single { InvestServerClock() }
-        singleOf(::KtorInvestApiProvider) bind InvestApiProvider::class
+        // Not singleOf: its defaulted timeout would be asked of Koin as a Long.
+        single<InvestApiProvider> { KtorInvestApiProvider(httpClientProvider = get(), serverClock = get()) }
         single { IntentsSaltProvider(httpClientProvider = get(), serverClock = get()) }
         singleOf(::PrivateAccountKeyProvider)
         singleOf(::InvestSettingsRepositoryImpl) bind InvestSettingsRepository::class

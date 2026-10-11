@@ -30,6 +30,7 @@ import co.electriccoin.zcash.ui.common.model.DynamicSwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapBlockchain
 import co.electriccoin.zcash.ui.common.model.SwapQuote
+import co.electriccoin.zcash.ui.common.model.near.Confidentiality
 import co.electriccoin.zcash.ui.common.model.near.NearTokenDto
 import co.electriccoin.zcash.ui.common.model.near.QuoteDetails
 import co.electriccoin.zcash.ui.common.model.near.QuoteRequest
@@ -188,6 +189,8 @@ internal class InvestSellRepositoryImplTest : InvestSellRepositoryTestBase() {
                 { it.copy(depositType = RefundType.INTENTS) },
                 { it.copy(recipient = "u1someoneelse") },
                 { it.copy(destinationAsset = "nep141:wrap.near") },
+                { it.copy(confidentiality = Confidentiality.PUBLIC) },
+                { it.copy(confidentiality = null) },
             ).forEach { tamper ->
                 api.echoTamper = tamper
                 assertFailsWith<IllegalArgumentException> { repository.prepareSell(nvda, SellAmount.All) }
@@ -314,14 +317,17 @@ internal class InvestSellRepositoryImplTest : InvestSellRepositoryTestBase() {
     fun `a buy can't start between the sale's balance read and its checkpoint`() =
         runTest {
             val prepared = repository.prepareSell(nvda, SellAmount.All)
+            val reading = CompletableDeferred<Unit>()
             val balanceRead = CompletableDeferred<Unit>()
             coEvery { session.balances() } coAnswers {
+                reading.complete(Unit)
                 balanceRead.await()
                 BalancesResponse(listOf(AccountBalance(tokenId = nvda.assetId, available = holdings.value, source = "private")))
             }
 
             val sale = async { repository.executeSell(prepared) }
-            runCurrent()
+            // Signing derives the key off the test's thread, so wait for the sale to reach its balance read.
+            reading.await()
             // What a buy does before writing its checkpoint: it has to wait for the sale's.
             val buyCheck = async { trades.withLock { trades.hasSale(nvda.assetId) } }
             runCurrent()

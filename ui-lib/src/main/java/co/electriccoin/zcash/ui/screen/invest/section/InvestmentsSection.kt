@@ -99,8 +99,9 @@ private fun LazyListScope.holdingsItems(state: InvestmentsSectionState.Holdings)
         HoldingRow(row)
         ZappRowDivider(inset = true)
     }
+    // Sell-only with a sale pending and nothing left held: no rows, so no total either; the header leads to the trade.
     item(key = "invest_total") {
-        TotalRow(state)
+        if (state.rows.isNotEmpty()) TotalRow(state)
         Spacer(Modifier.height(SECTION_BOTTOM_GAP.dp))
     }
 }

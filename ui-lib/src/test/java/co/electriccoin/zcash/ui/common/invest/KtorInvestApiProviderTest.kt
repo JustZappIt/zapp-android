@@ -13,11 +13,13 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.IOException
+import java.util.concurrent.TimeoutException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -179,6 +181,17 @@ class KtorInvestApiProviderTest {
             val api = KtorInvestApiProvider(FakeHttpClientProvider { throw IOException("circuit closed") }, InvestServerClock())
 
             assertFailsWith<InvestApiException.Unreachable> { api.getOndoTokens() }
+        }
+
+    @Test
+    fun `a call that never answers gives up as Unreachable instead of hanging`() =
+        runTest {
+            // A Tor circuit that accepts the request and never answers; the timeout runs in real time with it.
+            val api = KtorInvestApiProvider(FakeHttpClientProvider { awaitCancellation() }, InvestServerClock(), callTimeoutMillis = 300)
+
+            val failure = assertFailsWith<InvestApiException.Unreachable> { api.submitIntent(SubmitIntentRequest(signedData = signed)) }
+
+            assertIs<TimeoutException>(failure.cause)
         }
 
     @Test

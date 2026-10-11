@@ -454,12 +454,13 @@ dependencies {
 }
 
 // A build without the partner JWT sends no 1Click partner header: its swaps, bridges and Invest trades still work
-// but aren't attributed to Zapp. Release builds must set it (local.properties or the CI secret), so say so here
-// rather than ship that silently. A warning, not a failure: fork PRs get no secrets.
+// but aren't attributed to Zapp, which nothing on the phone shows. A release is built on a maintainer's machine (no
+// workflow publishes one), so a release task there refuses to run without it. CI only warns: fork PRs get no secrets.
 if (project.property("ZAPP_NEAR_PARTNER_JWT")?.toString().isNullOrBlank()) {
-    logger.warn(
+    val message =
         "ZAPP_NEAR_PARTNER_JWT is blank: this build sends no 1Click partner header, so its swaps, bridges " +
             "and Invest trades aren't attributed to Zapp. Set it in local.properties or " +
             "ORG_GRADLE_PROJECT_ZAPP_NEAR_PARTNER_JWT."
-    )
+    val isRelease = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+    if (isRelease && System.getenv("CI").isNullOrBlank()) throw GradleException(message) else logger.warn(message)
 }

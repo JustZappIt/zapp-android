@@ -28,9 +28,12 @@ object IntentNonce {
     private const val NANOS_PER_MILLI = 1_000_000L
     private const val SALT_HEX_LENGTH = SALT_SIZE * 2
 
-    // Nanoseconds overflow a u64 past this; also caps any timestamp at 9999-12-31, the last date
-    // Date.toISOString writes without a sign.
+    // 9999-12-31, the last date Date.toISOString writes without a sign: the cap on a payload's ISO deadline.
     internal const val MAX_EPOCH_MILLIS = 253_402_300_799_999L
+
+    // The nonce's times are nanoseconds, computed in a signed Long, which ends on 2262-04-11 (long before the
+    // u64 they are written as). A later time would wrap silently, so it is refused.
+    internal const val MAX_NONCE_EPOCH_MILLIS = Long.MAX_VALUE / NANOS_PER_MILLI
 
     /**
      * The 4-byte salt from `intents.near`'s `current_salt` view, which returns a hex string such as
@@ -53,7 +56,7 @@ object IntentNonce {
         require(random.size == RANDOM_SIZE) { "random must be $RANDOM_SIZE bytes" }
         require(startEpochMillis > 0) { "start must be positive" }
         require(deadlineEpochMillis > startEpochMillis) { "deadline must be after start" }
-        require(deadlineEpochMillis <= MAX_EPOCH_MILLIS) { "deadline out of range" }
+        require(deadlineEpochMillis <= MAX_NONCE_EPOCH_MILLIS) { "deadline out of range" }
         return MAGIC +
             byteArrayOf(VERSION) +
             salt +

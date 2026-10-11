@@ -101,7 +101,10 @@ internal abstract class InvestSellRepositoryTestBase {
                 object : OfframpBridgeWallet {
                     override suspend fun zcashAddress(): String = PAYOUT.also { addressesHandedOut++ }
 
-                    override suspend fun sendZecDeposit(quote: SwapQuote): String = error("a sale sends no ZEC")
+                    override suspend fun sendZecDeposit(
+                        quote: SwapQuote,
+                        beforeSubmit: suspend () -> Unit,
+                    ): String = error("a sale sends no ZEC")
 
                     override suspend fun spendableZec(): Zatoshi = Zatoshi(0)
                 },

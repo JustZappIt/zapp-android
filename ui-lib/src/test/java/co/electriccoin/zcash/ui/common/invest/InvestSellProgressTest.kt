@@ -71,6 +71,7 @@ internal class InvestSellProgressTest : InvestSellRepositoryTestBase() {
     @Test
     fun `progress runs to sent and refreshes holdings`() =
         runTest {
+            checkpoints.add(pastDeadline())
             api.statuses.addAll(listOf(status(SwapStatus.PENDING_DEPOSIT), status(SwapStatus.PROCESSING), status(SwapStatus.SUCCESS)))
 
             val progress = repository.observeSell(DEPOSIT).toList()
@@ -79,7 +80,22 @@ internal class InvestSellProgressTest : InvestSellRepositoryTestBase() {
                 listOf(SellProgress.Authorised(DEPOSIT), SellProgress.Selling(DEPOSIT), SellProgress.Sent(DEPOSIT, BigDecimal("0.0634"))),
                 progress,
             )
-            coVerify { investRepository.refreshHoldings() }
+            coVerify(exactly = 1) { investRepository.refreshHoldings() }
+        }
+
+    @Test
+    fun `only a sale this phone recorded, and not one needing attention, refreshes holdings`() =
+        runTest {
+            // Not recorded here (an old sale's screen): its outcome doesn't change what this phone shows.
+            api.statuses += status(SwapStatus.SUCCESS)
+            repository.observeSell(DEPOSIT).toList()
+
+            // Needs attention: reached again every time following restarts, so no sign-in for it.
+            checkpoints.add(InvestBuyCheckpoint(DEPOSIT, nvda.assetId, 0))
+            api.statuses += status(SwapStatus.FAILED)
+            repository.observeSell(DEPOSIT).toList()
+
+            coVerify(exactly = 0) { investRepository.refreshHoldings() }
         }
 
     @Test

@@ -11,11 +11,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
+import androidx.compose.material3.SheetValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -26,15 +28,20 @@ import co.electriccoin.zcash.ui.design.theme.ZappTheme
 /**
  * The review sheets' frame, from ZappConfirmationBottomSheet: the same surface, handle and back handling, with the
  * content the caller draws. A null [state] keeps it hidden, and the last state stays drawn while it slides away.
+ *
+ * While [isBusy] (a Confirm in progress) neither a swipe nor a tap outside hides it: the screen keeps the review
+ * open until the trade's outcome is known, and a sheet hidden meanwhile would stay invisible over the screen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun <T : Any> InvestModalSheet(
     state: T?,
     onDismiss: (T) -> Unit,
+    isBusy: (T) -> Boolean = { false },
     content: @Composable ColumnScope.(T) -> Unit,
 ) {
-    val sheetState = rememberInScreenModalBottomSheetState()
+    val busy by rememberUpdatedState(state?.let(isBusy) == true)
+    val sheetState = rememberInScreenModalBottomSheetState(confirmValueChange = { it != SheetValue.Hidden || !busy })
     var current by remember { mutableStateOf(state) }
 
     current?.let { active ->
