@@ -107,9 +107,16 @@ internal fun WalletHomeView() {
                 .windowInsetsPadding(WindowInsets.statusBars),
     ) {
         val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        // Clear the speed-dial FAB, not just the nav pill, so the last activity row and
+        // "See all" can scroll out from under the button.
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = navBarBottom + ZappNavBar.CLEARANCE_DP.dp),
+            contentPadding =
+                PaddingValues(
+                    bottom =
+                        navBarBottom + ZappNavBar.FAB_BOTTOM_PADDING_DP.dp +
+                            ZappNavBar.FAB_LIST_CLEARANCE_DP.dp,
+                ),
         ) {
             item {
                 ZappScreenHeader(
