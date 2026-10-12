@@ -184,7 +184,19 @@ data class SwapAccepted(
     val swapId: SwapId,
     val t0: Long,
     val t1: Long,
+    /**
+     * Sent unchanged with each relayer request for the swap, which the gateway then gives an allowance of its own.
+     * Opaque, and never logged: whoever holds it has that allowance. Older makers send none.
+     */
+    val ticket: String? = null,
 )
+
+/**
+ * [SwapAccepted.ticket] if it's [swapId]'s, as its swap id and a dot begin it, and a header carries it as it came;
+ * otherwise none, and the swap's requests go without one.
+ */
+internal fun SwapAccepted.ticketFor(swapId: SwapId): String? =
+    ticket?.takeIf { it.startsWith("${swapId.hex}.") && it.all { c -> c in '!'..'~' } }
 
 // What a relayer is sent: the swap's own request, with the terms the contract checks it against, in zecSwap's order.
 @Serializable

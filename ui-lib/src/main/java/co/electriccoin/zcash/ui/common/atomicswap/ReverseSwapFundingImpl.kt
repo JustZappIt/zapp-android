@@ -75,7 +75,10 @@ class ReverseSwapFundingImpl(
         )
     }
 
-    override suspend fun submit(transaction: ReverseFundingTransaction): TxHash? {
+    override suspend fun submit(
+        transaction: ReverseFundingTransaction,
+        ticket: String?
+    ): TxHash? {
         val request = transaction.request
         val terms = sponsored().terms
         check(request.chainId == deployment.chainId && request.to == terms.relayAdapt) {
@@ -84,7 +87,7 @@ class ReverseSwapFundingImpl(
         check((request.data.length - 2) / 2 <= terms.maxCalldataBytes) {
             "funding exceeds the relayer's calldata limit"
         }
-        val sent = relayer.fundReverse(request)
+        val sent = relayer.fundReverse(request, ticket)
         check(sent.transactions.size <= 1) { "funding returned multiple transactions" }
         return sent.transactions.singleOrNull()
     }

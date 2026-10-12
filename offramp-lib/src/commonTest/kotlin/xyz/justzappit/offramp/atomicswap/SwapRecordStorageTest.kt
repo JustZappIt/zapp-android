@@ -101,6 +101,26 @@ class SwapRecordStorageTest {
     }
 
     @Test
+    fun recordsKeptBeforeMakersGaveTicketsReadWithNone() {
+        for (json in FORWARD_STATES) assertNull(forward(json).ticket)
+        for (json in REVERSE_STATES + REVERSE) {
+            assertNull(storeJson.decodeFromString(ReverseSwapRecord.serializer(), json).ticket)
+        }
+    }
+
+    @Test
+    fun aRecordsTicketIsKeptAndWrittenBackAsItCame() {
+        val forwardJson = """$FORWARD_HEAD,"t0":1790002100,"t1":1790002400,"ticket":"$TICKET"}"""
+        val reverseJson =
+            REVERSE_STATES[2].removeSuffix("}") + ""","makerAccepted":true,"ticket":"$TICKET"}"""
+
+        assertEquals(TICKET, forward(forwardJson).ticket)
+        assertEquals(TICKET, storeJson.decodeFromString(ReverseSwapRecord.serializer(), reverseJson).ticket)
+        assertRoundTrip(AtomicSwapRecord.serializer(), forwardJson)
+        assertRoundTrip(ReverseSwapRecord.serializer(), reverseJson)
+    }
+
+    @Test
     fun theTestnetDeploymentWritesExactlyWhatReverseRecordsKept() {
         assertEquals(TESTNET_JSON, storeJson.encodeToString(SwapDeployment.serializer(), TESTNET))
         assertEquals(TESTNET, storeJson.decodeFromString(SwapDeployment.serializer(), TESTNET_JSON))
@@ -214,6 +234,7 @@ class SwapRecordStorageTest {
         const val TOKEN = "0x5764d0044bef5aa839e0ddafe2073421101b9ed8"
         const val USER = "0x4444444444444444444444444444444444444444"
         val SWAP_ID = hex(32, 0x5c)
+        val TICKET = "$SWAP_ID." + "3f".repeat(32)
         val TX_HEX = "ab".repeat(32)
         val SWEEP_HEX = "cd".repeat(32)
         val PAYOUT_TX = hex(32, 0xa1)

@@ -98,6 +98,8 @@ data class AtomicSwapRecord(
     val t1: Long? = null,
     /** Unix seconds; none where the relayer quoted a fee it doesn't price by gas. */
     val feeExpiresAt: Long? = null,
+    /** The maker's ticket for the swap, from its acceptance, which each relayer request carries; none from before. */
+    val ticket: String? = null,
 ) {
     val outcome: AtomicSwapOutcome? get() = end?.outcome
 
@@ -235,6 +237,7 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
         val t0: Long? = null,
         val t1: Long? = null,
         val feeExpiresAt: Long? = null,
+        val ticket: String? = null,
     ) {
         fun record() =
             AtomicSwapRecord(
@@ -259,6 +262,7 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
                 t0 = t0,
                 t1 = t1,
                 feeExpiresAt = feeExpiresAt,
+                ticket = ticket,
             )
 
         companion object {
@@ -282,6 +286,7 @@ internal object AtomicSwapRecordSerializer : KSerializer<AtomicSwapRecord> {
                     t0 = record.t0,
                     t1 = record.t1,
                     feeExpiresAt = record.feeExpiresAt,
+                    ticket = record.ticket,
                 )
         }
     }

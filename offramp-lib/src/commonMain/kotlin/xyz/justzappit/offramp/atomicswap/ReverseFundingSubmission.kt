@@ -22,7 +22,7 @@ internal class ReverseFundingSubmission(
         }
         val txId =
             try {
-                funding.submit(transaction)
+                funding.submit(transaction, record.ticket)
             } catch (e: AtomicSwapHttpException.Refused) {
                 if (e.code == SwapErrorCode.REJECTED && transaction.txId == null) drop(record, transaction)
                 throw e

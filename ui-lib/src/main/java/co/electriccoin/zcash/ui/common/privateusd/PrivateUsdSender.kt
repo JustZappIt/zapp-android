@@ -328,9 +328,17 @@ private class PrivateUsdSendSettlement(
             when {
                 spentAt != null -> settleSpent(send.id, relay, now - spentAt)
                 send.txHash != null -> settleTransaction(send.id, send.txHash, relay, now)
-                else -> post(send.id, relay.request)
+                else -> postAgain(send.id, relay)
             }
         }
+    }
+
+    // The same bytes again, though no sooner than the broadcaster asked: it holds the notes of a send that reverted.
+    private suspend fun postAgain(
+        id: String,
+        relay: PrivateUsdRelay
+    ) {
+        if (relay.retryAt?.let { clock.now().epochSeconds < it } != true) post(id, relay.request)
     }
 
     // A reverted send moved nothing. One still out is asked about again after a while: the same bytes answer with the
@@ -351,7 +359,7 @@ private class PrivateUsdSendSettlement(
             }
 
             TransactionStatus.PENDING, TransactionStatus.UNKNOWN -> {
-                if (now - (relay.postedAt ?: 0) >= ASK_AGAIN_AFTER.inWholeSeconds) post(id, relay.request)
+                if (now - (relay.postedAt ?: 0) >= ASK_AGAIN_AFTER.inWholeSeconds) postAgain(id, relay)
             }
         }
     }
@@ -372,7 +380,7 @@ private class PrivateUsdSendSettlement(
             when (chain.spent(relay.spends)) {
                 PrivateUsdNullifiers.ALL -> sendLog.update(id) { it.landed(null) }
                 PrivateUsdNullifiers.SOME -> sendLog.remove(id)
-                PrivateUsdNullifiers.NONE -> if (since >= SPENT_RECHECK_AFTER.inWholeSeconds) post(id, relay.request)
+                PrivateUsdNullifiers.NONE -> if (since >= SPENT_RECHECK_AFTER.inWholeSeconds) postAgain(id, relay)
             }
         }
     }
@@ -405,7 +413,8 @@ private class PrivateUsdSendSettlement(
 
             is RailgunBroadcast.Retry -> {
                 Twig.warn { "Private USD: the relayer's answer is unknown: ${answer.reason}" }
-                noted { sendLog.update(id) { it.posted(now) } }
+                val retryAt = answer.retryAfter?.let { now + it.inWholeSeconds }
+                noted { sendLog.update(id) { it.posted(now, retryAt) } }
             }
         }
         return answer

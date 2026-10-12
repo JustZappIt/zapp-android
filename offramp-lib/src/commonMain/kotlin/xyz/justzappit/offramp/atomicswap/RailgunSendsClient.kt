@@ -7,6 +7,8 @@ import io.ktor.client.HttpClient
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import xyz.justzappit.evm.types.TxHash
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 
 /** A relayer as the broadcaster of wallets' Railgun sends and withdrawals: it pays their gas for a fee note. */
 interface RailgunSendRelayer {
@@ -35,9 +37,10 @@ sealed interface RailgunBroadcast {
         val transactions: List<TxHash>
     ) : RailgunBroadcast
 
-    /** Not known yet, or never answered: the same bytes go again later. */
+    /** Not known yet, or never answered: the same bytes go again later, and no sooner than [retryAfter] if it's set. */
     data class Retry(
-        val reason: String
+        val reason: String,
+        val retryAfter: Duration? = null,
     ) : RailgunBroadcast
 }
 
@@ -52,7 +55,9 @@ class RailgunSendsClient(
         service.get("/v1/terms", RelayerTerms.serializer()) { it.requireWellFormed() }
 
     // As zecswap-client's RelayerApi::railgun_transact: a 409 with its code is spent, any other 4xx refused, and
-    // anything else, a lost answer included, unknown.
+    // anything else, a lost answer included, unknown. A refusal is the relayer's last word on a proof, such as one
+    // withdrawing another token than its own or with calldata it doesn't take. A 503 may say when to post again: once
+    // a send of the same notes reverted, the relayer holds them an hour.
     override suspend fun transact(request: RailgunTransactRequest): RailgunBroadcast =
         try {
             service
@@ -73,7 +78,7 @@ class RailgunSendsClient(
                 }
 
                 else -> {
-                    RailgunBroadcast.Retry(e.message.orEmpty())
+                    RailgunBroadcast.Retry(e.message.orEmpty(), e.retryAfter?.coerceAtMost(MAX_RETRY_AFTER))
                 }
             }
         } catch (e: AtomicSwapHttpException) {
@@ -83,5 +88,8 @@ class RailgunSendsClient(
     private companion object {
         const val FIRST_CLIENT_ERROR = 400
         const val LAST_CLIENT_ERROR = 499
+
+        // The longest the relayer asks: a longer wait, which it never asks, would hold a send on a bad answer.
+        val MAX_RETRY_AFTER = 1.hours
     }
 }

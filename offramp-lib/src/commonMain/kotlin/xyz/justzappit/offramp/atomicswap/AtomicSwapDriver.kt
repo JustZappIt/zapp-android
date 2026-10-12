@@ -91,8 +91,12 @@ class AtomicSwapDriver(
                 ending.conclude(record, AtomicSwapOutcome.NothingSent(NothingSentCause.MAKER_UNAVAILABLE))
                 throw e
             }
-        // The maker picks the deadlines, the last of the terms checked on chain before anything is paid.
-        val opened = record.copy(t0 = accepted.t0, t1 = accepted.t1).also { store.save(it) }
+        // The maker picks the deadlines, the last of the terms checked on chain before anything is paid. Its ticket,
+        // kept before any relayer request, goes with each of them.
+        val opened =
+            record
+                .copy(t0 = accepted.t0, t1 = accepted.t1, ticket = accepted.ticketFor(record.swapId))
+                .also { store.save(it) }
         return if (accepted.swapId == record.swapId) {
             opened
         } else {
@@ -334,7 +338,7 @@ internal class AtomicSwapClaim(
         val secret = keys.claimSecret(record.index).hex()
         sendPayout(record, swap, payout) {
             requireFreshClaimLock(record, swap.terms)
-            relayer.claim(SwapReveal(record.swapId, secret, it), swap.terms)
+            relayer.claim(SwapReveal(record.swapId, secret, it), swap.terms, record.ticket)
         }
         val claimed = chain.caughtUp(record.swapId, swap.terms) { it.stage == SwapStage.CLAIMED }
         if (!claimed.paidOut) payOut(record, claimed)
@@ -347,7 +351,7 @@ internal class AtomicSwapClaim(
     ) {
         val payout = payout(record, swap)
         requireRailgunOpen(swap)
-        sendPayout(record, swap, payout) { relayer.payout(it, swap.terms) }
+        sendPayout(record, swap, payout) { relayer.payout(it, swap.terms, record.ticket) }
         chain.caughtUp(record.swapId, swap.terms) { it.stage == SwapStage.CLAIMED && it.paidOut }
     }
 
@@ -434,7 +438,7 @@ internal class AtomicSwapClaim(
         val deadline = now + SIGNATURE_TTL_SECONDS
         val signature =
             keys.signLockClaim(record.index, record.quote.chainId, deployment.contract, record.swapId, deadline)
-        relayer.lockClaim(SwapAuthorization(record.swapId, deadline, signature.hex()), swap.terms)
+        relayer.lockClaim(SwapAuthorization(record.swapId, deadline, signature.hex()), swap.terms, record.ticket)
         chain.caughtUp(record.swapId, swap.terms) { it.claimLockUntil > now }
     }
 

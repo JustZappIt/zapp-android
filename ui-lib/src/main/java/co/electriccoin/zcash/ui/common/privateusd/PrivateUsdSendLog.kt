@@ -45,16 +45,22 @@ data class PrivateUsdSendRecord(
     fun submitted(
         txHash: TxHash,
         at: Long
-    ) = copy(txHash = txHash, relay = relay?.copy(postedAt = at, spentAt = null, spentIn = emptyList()))
+    ) = copy(
+        txHash = txHash,
+        relay = relay?.copy(postedAt = at, spentAt = null, spentIn = emptyList(), retryAt = null),
+    )
 
-    /** Its request went out without an answer that settles anything. */
-    fun posted(at: Long) = copy(relay = relay?.copy(postedAt = at))
+    /** Its request went out without an answer that settles anything, and goes again no sooner than [retryAt]. */
+    fun posted(
+        at: Long,
+        retryAt: Long? = null
+    ) = copy(relay = relay?.copy(postedAt = at, retryAt = retryAt))
 
     /** The broadcaster answered that a note it spends is spent, by [transactions] of its own where it named any. */
     fun spent(
         at: Long,
         transactions: List<TxHash>
-    ) = copy(relay = relay?.copy(postedAt = at, spentAt = at, spentIn = transactions))
+    ) = copy(relay = relay?.copy(postedAt = at, spentAt = at, spentIn = transactions, retryAt = null))
 
     /** It landed, in [txHash] when that's known. */
     fun landed(txHash: TxHash?) = copy(confirmed = true, txHash = txHash, relay = null)
@@ -71,8 +77,10 @@ data class PrivateUsdRelay(
     val spentAt: Long? = null,
     /** The broadcaster's own transactions that answer named as spending its notes. */
     val spentIn: List<TxHash> = emptyList(),
+    /** Unix seconds before which the broadcaster asked not to be posted the request again. */
+    val retryAt: Long? = null,
 ) {
-    override fun toString() = "PrivateUsdRelay($request, postedAt=$postedAt, spentAt=$spentAt)"
+    override fun toString() = "PrivateUsdRelay($request, postedAt=$postedAt, spentAt=$spentAt, retryAt=$retryAt)"
 }
 
 /** A send still being proved, which nothing has left the wallet for. */

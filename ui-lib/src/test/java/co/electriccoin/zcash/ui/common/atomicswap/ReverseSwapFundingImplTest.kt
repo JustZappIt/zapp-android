@@ -43,7 +43,8 @@ class ReverseSwapFundingImplTest {
             coEvery { relayer.terms() } returns TERMS
             coEvery { wallet.prepareReverse(capture(preparation)) } returns proved
             val submission = slot<ReverseFundingRequest>()
-            coEvery { relayer.fundReverse(capture(submission)) } returns Sent(listOf(HASH))
+            val ticket = slot<String>()
+            coEvery { relayer.fundReverse(capture(submission), capture(ticket)) } returns Sent(listOf(HASH))
             val funding = ReverseSwapFundingImpl(wallet, DEPLOYMENT, relayer)
 
             val kept = funding.prepare(record, ByteArray(65))
@@ -55,8 +56,9 @@ class ReverseSwapFundingImplTest {
             )
             assertEquals(FEE.micros, preparation.captured.fee)
             assertEquals(FEE, kept.cost.broadcasterFee)
-            assertEquals(HASH, funding.submit(kept))
+            assertEquals(HASH, funding.submit(kept, TICKET))
             assertEquals(kept.request, submission.captured)
+            assertEquals(TICKET, ticket.captured, "the swap's ticket goes with its funding")
             assertEquals(record.swapId, submission.captured.swapId)
             assertEquals("0", submission.captured.value)
             coVerify(exactly = 0) { wallet.prove(any(), any(), any()) }
@@ -114,5 +116,6 @@ class ReverseSwapFundingImplTest {
         val COST = RailgunReverseCost(BigInteger("1002506"), BigInteger("2506"))
         val HASH = TxHash.fromHex("0x" + "08".repeat(32))
         const val DATA = "0x12345678"
+        const val TICKET = "0x0101010101010101010101010101010101010101010101010101010101010101.3f"
     }
 }

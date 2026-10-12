@@ -6,6 +6,7 @@ package xyz.justzappit.offramp.atomicswap
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import xyz.justzappit.evm.types.TxHash
+import kotlin.time.Duration
 
 enum class AtomicSwapService { MAKER, RELAYER }
 
@@ -33,6 +34,8 @@ sealed class AtomicSwapHttpException(
         reason: String,
         /** Transactions the refusal names, such as the relayer's own that already spend a send's notes. */
         val transactions: List<TxHash> = emptyList(),
+        /** How long the service asked to wait before the same request goes again, where its `Retry-After` said. */
+        val retryAfter: Duration? = null,
     ) : AtomicSwapHttpException(service, "${service.label} answered $status: $reason", null)
 }
 

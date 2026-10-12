@@ -175,6 +175,42 @@ class AtomicSwapDriverTest : AtomicSwapDriverFixtures() {
         }
 
     @Test
+    fun theAcceptsTicketIsKeptBeforeAnyRelayerRequestAndEachOfThemCarriesIt() =
+        runTest {
+            val h = Harness()
+            h.claimPaysOut = false
+            val record = h.accepted()
+
+            assertEquals(TICKET, record.ticket)
+            assertEquals(TICKET, h.store.record?.ticket, "kept with the deadlines, before any relayer request")
+            assertTrue(SWAP_REQUESTS.none { it in h.paths })
+            h.driver.advance(record)
+            h.chain.stage = SwapStage.READY
+            assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(h.store.record!!))
+
+            assertEquals(SWAP_REQUESTS.associateWith { TICKET }, h.tickets.filterKeys { it in SWAP_REQUESTS })
+            assertNull(h.tickets.getValue("/v1/terms"), "the relayer's terms are no swap's")
+        }
+
+    @Test
+    fun aSwapWithoutATicketOfItsOwnClaimsWithoutOne() =
+        runTest {
+            // An older maker's answer, and a ticket for another swap.
+            for (ticket in listOf(null, "${hash(7)}." + "3f".repeat(32))) {
+                val h = Harness()
+                h.claimPaysOut = false
+                h.acceptTicket = ticket
+                val record = h.accepted()
+
+                assertNull(record.ticket)
+                h.driver.advance(record)
+                h.chain.stage = SwapStage.READY
+                assertEquals(AtomicSwapStep.Finished(AtomicSwapOutcome.Paid), h.driver.advance(h.store.record!!))
+                assertEquals(SWAP_REQUESTS.associateWith { null }, h.tickets.filterKeys { it in SWAP_REQUESTS })
+            }
+        }
+
+    @Test
     fun anAcceptThatMayHaveOpenedWaitsForTheSwapThenGivesUp() =
         runTest {
             val h = Harness()
@@ -406,3 +442,6 @@ private fun ByteArray.plusOne(at: Int = lastIndex) = copyOf().also { it[at] = (i
 private fun Address.plusOne() = Address.fromBytes(bytes.plusOne())
 
 private fun SwapShare.plusOne(word: Int) = SwapShare.of(bytes.plusOne(word * SWAP_WORD_BYTES + SWAP_WORD_BYTES - 1))
+
+/** A forward swap's requests to the relayer, each for the swap. */
+private val SWAP_REQUESTS = listOf("/v1/lock-claim", "/v1/claim", "/v1/payout")

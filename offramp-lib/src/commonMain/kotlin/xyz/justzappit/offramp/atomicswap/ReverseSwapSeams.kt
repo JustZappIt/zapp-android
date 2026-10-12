@@ -64,8 +64,14 @@ interface ReverseSwapFunding {
         signature: ByteArray
     ): ReverseFundingTransaction
 
-    /** A submitted hash, or null if matching escrow already exists; neither is confirmation. */
-    suspend fun submit(transaction: ReverseFundingTransaction): TxHash?
+    /**
+     * A submitted hash, or null if matching escrow already exists; neither is confirmation. Sent with the swap's
+     * [ticket][ReverseSwapRecord.ticket], where it has one.
+     */
+    suspend fun submit(
+        transaction: ReverseFundingTransaction,
+        ticket: String?
+    ): TxHash?
 }
 
 /** What both directions ask of the Zcash wallet. */

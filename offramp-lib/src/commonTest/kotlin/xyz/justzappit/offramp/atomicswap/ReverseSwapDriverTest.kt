@@ -83,6 +83,65 @@ class ReverseSwapDriverTest : ReverseSwapDriverFixtures() {
         }
 
     @Test
+    fun theAcceptsTicketIsKeptBeforeFundingAndTheRelayerRequestsCarryIt() =
+        runTest {
+            val h = Harness()
+            h.prepared()
+            assertEquals(TICKET, h.record.ticket, "kept once the maker accepts, before anything is funded")
+            assertTrue(h.relayed.isEmpty())
+
+            h.driver.fund(0)
+            h.funded()
+            h.paidIn = DEPOSIT
+            h.driver.advance()
+            h.driver.ready(0)
+            h.restart()
+            h.driver.advance()
+
+            assertEquals(TICKET, h.record.ticket)
+            assertEquals(listOf("fund", "ready", "ready"), h.relayed.map { it.first })
+            assertTrue(h.relayed.all { it.second == TICKET })
+        }
+
+    @Test
+    fun eachRequestToGetTheDollarsBackCarriesTheTicket() =
+        runTest {
+            val h = Harness()
+            h.prepared()
+            h.driver.fund(0)
+            h.funded()
+            h.driver.cancel(0)
+            h.refundUntil = h.now + 600
+            h.driver.advance()
+            h.escrow = h.swap(SwapStage.REFUNDED)
+            h.driver.advance()
+            h.paidOut = true
+            h.driver.advance()
+            h.driver.rescue(0)
+
+            assertEquals(ReversePhase.REFUNDED, h.record.phase)
+            assertEquals(listOf("fund", "lockRefund", "refund", "refundPayout", "rescue"), h.relayed.map { it.first })
+            assertTrue(h.relayed.all { it.second == TICKET })
+        }
+
+    @Test
+    fun aConversionWithoutATicketOfItsOwnGoesWithoutOne() =
+        runTest {
+            // An older maker's answer, and a ticket for another swap.
+            for (ticket in listOf(null, "${hex(32, 9)}." + "3f".repeat(32))) {
+                val h = Harness()
+                h.acceptTicket = ticket
+                h.prepared()
+                assertNull(h.record.ticket)
+
+                h.driver.fund(0)
+                h.funded()
+                h.driver.cancel(0)
+                assertEquals(listOf<Pair<String, String?>>("fund" to null, "lockRefund" to null), h.relayed)
+            }
+        }
+
+    @Test
     fun partialAndUnconfirmedDepositsNeverEnableReady() =
         runTest {
             val h = Harness()

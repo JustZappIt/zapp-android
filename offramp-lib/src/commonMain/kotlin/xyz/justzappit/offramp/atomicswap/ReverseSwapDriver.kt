@@ -153,7 +153,7 @@ class ReverseSwapDriver(
         }
         val estimate = receiving.estimate(snapshot)
         val authorized = lock.withLock { approvals.authorizeReady(index, estimate) }
-        relayer.ready(authorized, snapshot.terms)
+        relayer.ready(authorized, snapshot.terms, snapshot.ticket)
     }
 
     suspend fun cancel(index: Int) {
@@ -349,7 +349,9 @@ internal class ReverseSwapStages(
             // A `ready` the user signed is sent again while it holds, and never signed again after.
             ready != null -> {
                 val lapsed = observed.now > ready.deadline
-                if (!lapsed && escrow.refundLockUntil == 0L) outbox.send { relayer.ready(ready, record.terms) }
+                if (!lapsed && escrow.refundLockUntil == 0L) {
+                    outbox.send { relayer.ready(ready, record.terms, record.ticket) }
+                }
                 store.keep(record, record.copy(phase = if (lapsed) ReversePhase.REFUND_WAIT else ReversePhase.SETTLING))
             }
 
@@ -385,19 +387,23 @@ internal class ReverseSwapOpening(
      * refusal another try wouldn't change ends the conversion, before anything is paid.
      */
     suspend fun accept(record: ReverseSwapRecord) {
-        try {
-            requireAccepted(record)
-        } catch (e: AtomicSwapBlockedException) {
-            if (e.reason in ENDS_ACCEPTANCE) {
-                lock.withLock { kept(record)?.let { ending.finish(it, ReversePhase.CANCELLED) } }
+        val accepted =
+            try {
+                requireAccepted(record)
+            } catch (e: AtomicSwapBlockedException) {
+                if (e.reason in ENDS_ACCEPTANCE) {
+                    lock.withLock { kept(record)?.let { ending.finish(it, ReversePhase.CANCELLED) } }
+                }
+                throw e
             }
-            throw e
+        // Its ticket goes with each relayer request for the swap, the first of which, the funding, waits for this.
+        lock.withLock {
+            kept(record)?.let { store.keep(it, it.copy(makerAccepted = true, ticket = accepted.ticketFor(it.swapId))) }
         }
-        lock.withLock { kept(record)?.let { store.keep(it, it.copy(makerAccepted = true)) } }
     }
 
     // The maker takes the same keys again, on the quote's deadlines.
-    private suspend fun requireAccepted(record: ReverseSwapRecord) {
+    private suspend fun requireAccepted(record: ReverseSwapRecord): SwapAccepted {
         val accepted =
             try {
                 maker.acceptReverse(record.quote.terms.quoteId, record.swapId, record.acceptance)
@@ -409,6 +415,7 @@ internal class ReverseSwapOpening(
         if (!opened || accepted.t0 != quote.readyDeadline || accepted.t1 != quote.refundAfter) {
             throw AtomicSwapBlockedException(AtomicSwapBlock.MISMATCH, "the maker opened another swap")
         }
+        return accepted
     }
 
     private suspend fun kept(record: ReverseSwapRecord) = store.active()?.takeIf { it.index == record.index }

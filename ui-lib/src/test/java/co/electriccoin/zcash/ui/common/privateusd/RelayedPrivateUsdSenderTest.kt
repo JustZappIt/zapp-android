@@ -127,6 +127,54 @@ class RelayedPrivateUsdSenderTest {
         }
 
     @Test
+    fun `a send the relayer holds back goes again as the same bytes, and no sooner than it asked`() =
+        runTest {
+            answers { RailgunBroadcast.Retry("a send of these notes reverted lately", 30.minutes) }
+            val sender = sender()
+
+            assertEquals(PrivateUsdSendOutcome.Unconfirmed(null), sender.send(WITHDRAWAL, COST))
+            val retryAt = now + 30.minutes.inWholeSeconds
+            assertEquals(
+                retryAt,
+                log
+                    .unconfirmed()
+                    .single()
+                    .relay
+                    ?.retryAt
+            )
+            now = retryAt - 1
+            sender.reconcile()
+            runCurrent()
+            assertEquals(1, posts.size, "not before the relayer said")
+
+            answers { RailgunBroadcast.Sent(TX_HASH) }
+            coEvery { chain.status(TX_HASH) } returns TransactionStatus.CONFIRMED
+            now = retryAt
+            sender.reconcile()
+            runCurrent()
+            assertEquals(2, posts.size)
+            assertEquals(posts.first(), posts.last())
+            assertNull(
+                log
+                    .unconfirmed()
+                    .single()
+                    .relay
+                    ?.retryAt,
+                "its answer settles the wait",
+            )
+            sender.reconcile()
+            runCurrent()
+            assertTrue(
+                log.observe
+                    .first()
+                    .sends
+                    .single()
+                    .confirmed
+            )
+            coVerify(exactly = 1) { wallet.prove(any(), any(), any()) }
+        }
+
+    @Test
     fun `notes spent elsewhere settle from their nullifiers, asking again only after a while`() =
         runTest {
             answers { RailgunBroadcast.Spent(emptyList()) }

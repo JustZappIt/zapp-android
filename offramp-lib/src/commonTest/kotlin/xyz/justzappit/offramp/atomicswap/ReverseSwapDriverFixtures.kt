@@ -91,6 +91,12 @@ abstract class ReverseSwapDriverFixtures {
         var refundNote = NOTE
         val submissions = mutableListOf<ReverseFundingTransaction>()
 
+        /** The ticket the maker answers the accept with. */
+        var acceptTicket: String? = TICKET
+
+        /** Each relayer request, by what it asks, with the ticket it carried. */
+        val relayed = mutableListOf<Pair<String, String?>>()
+
         fun restart() {
             saved = Json.decodeFromString(Json.encodeToString(record))
             driver = driver()
@@ -169,7 +175,7 @@ abstract class ReverseSwapDriverFixtures {
             acceptance: SwapAcceptance,
         ): SwapAccepted {
             accepts++
-            return SwapAccepted(record.swapId, record.quote.readyDeadline, record.quote.refundAfter)
+            return SwapAccepted(record.swapId, record.quote.readyDeadline, record.quote.refundAfter, acceptTicket)
         }
 
         override suspend fun collectReverseToken(swapId: SwapId) = Unit
@@ -192,35 +198,43 @@ abstract class ReverseSwapDriverFixtures {
 
         override suspend fun ready(
             authorization: SwapAuthorization,
-            terms: SwapTerms
+            terms: SwapTerms,
+            ticket: String?
         ): Sent {
             assertEquals(record.ready, authorization)
+            relayed += "ready" to ticket
             readyCalls++
             return Sent(emptyList())
         }
 
         override suspend fun lockRefund(
             authorization: SwapAuthorization,
-            terms: SwapTerms
+            terms: SwapTerms,
+            ticket: String?
         ): Sent {
             assertEquals(record.refundLock, authorization)
+            relayed += "lockRefund" to ticket
             lockCalls++
             return Sent(emptyList())
         }
 
         override suspend fun refund(
             reveal: SwapReveal,
-            terms: SwapTerms
+            terms: SwapTerms,
+            ticket: String?
         ): Sent {
             assertEquals(record.payout, reveal.payout)
+            relayed += "refund" to ticket
             refundCalls++
             return Sent(emptyList())
         }
 
         override suspend fun refundPayout(
             payout: SwapPayout,
-            terms: SwapTerms
+            terms: SwapTerms,
+            ticket: String?
         ): Sent {
+            relayed += "refundPayout" to ticket
             payoutCalls++
             check(!interruptPayout)
             return Sent(emptyList())
@@ -228,8 +242,10 @@ abstract class ReverseSwapDriverFixtures {
 
         override suspend fun rescue(
             rescue: SwapRescue,
-            terms: SwapTerms
+            terms: SwapTerms,
+            ticket: String?
         ): Sent {
+            relayed += "rescue" to ticket
             rescueCalls++
             check(!interruptPayout)
             return Sent(emptyList())
@@ -237,17 +253,20 @@ abstract class ReverseSwapDriverFixtures {
 
         override suspend fun lockClaim(
             authorization: SwapAuthorization,
-            terms: SwapTerms
+            terms: SwapTerms,
+            ticket: String?
         ) = error("forward only")
 
         override suspend fun claim(
             reveal: SwapReveal,
-            terms: SwapTerms
+            terms: SwapTerms,
+            ticket: String?
         ) = error("forward only")
 
         override suspend fun payout(
             payout: SwapPayout,
-            terms: SwapTerms
+            terms: SwapTerms,
+            ticket: String?
         ) = error("forward only")
 
         override suspend fun signOpen(record: ReverseSwapRecord) = ByteArray(65)
@@ -290,15 +309,22 @@ abstract class ReverseSwapDriverFixtures {
             )
         }
 
-        override suspend fun submit(transaction: ReverseFundingTransaction): TxHash? {
+        override suspend fun submit(
+            transaction: ReverseFundingTransaction,
+            ticket: String?
+        ): TxHash? {
             assertEquals(record.funding, transaction)
+            relayed += "fund" to ticket
             submissions.add(transaction)
             check(!interruptFunding)
             submitting?.let { return it.await() }
             return submittedFundingHash ?: transaction.txId
         }
 
-        override suspend fun fundReverse(request: ReverseFundingRequest) = Sent(emptyList())
+        override suspend fun fundReverse(
+            request: ReverseFundingRequest,
+            ticket: String?
+        ) = Sent(emptyList())
 
         override suspend fun chainHeight() = 100L
 
@@ -417,6 +443,10 @@ abstract class ReverseSwapDriverFixtures {
         val MAKER_SHARE = SwapShare.parse(hex(64, 2))
         val USER_SHARE = SwapShare.parse(hex(64, 1))
         val ACCOUNT = JointAccountId.parse("0a".repeat(16))
+        val SWAP_ID = ReverseSwapId.of(USER, MAKER_SHARE)
+
+        /** The maker's ticket for [SWAP_ID]: its id, a dot, and a MAC the app never reads. */
+        val TICKET = "${SWAP_ID.hex}." + "3f".repeat(32)
         val DEPLOYMENT =
             SwapDeployment(
                 Url("https://maker"),

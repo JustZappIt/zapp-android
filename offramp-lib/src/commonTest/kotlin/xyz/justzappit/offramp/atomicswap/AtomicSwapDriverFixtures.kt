@@ -32,6 +32,12 @@ abstract class AtomicSwapDriverFixtures {
         var acceptStatus = HttpStatusCode.OK
         var acceptCode: String? = null
         var acceptedSwapId = SWAP_ID.hex
+
+        /** The ticket the maker answers the accept with. */
+        var acceptTicket: String? = TICKET
+
+        /** The `ZecSwap-Ticket` header each path last went out with, none where it carried none. */
+        val tickets = mutableMapOf<String, String?>()
         var relayer = RELAYER
         var relayerFee = "20000"
         var feeExpiresAt: Long? = null
@@ -47,6 +53,7 @@ abstract class AtomicSwapDriverFixtures {
             MockEngine { request ->
                 val path = request.url.encodedPath
                 paths += path
+                tickets[path] = request.headers["ZecSwap-Ticket"]
                 val sent = (request.body as? TextContent)?.text.orEmpty()
                 bodies[path] = sent
                 if (path == unreachable) throw IOException("connection refused")
@@ -77,7 +84,8 @@ abstract class AtomicSwapDriverFixtures {
 
                         path.endsWith("/accept") -> {
                             chain.opened = true
-                            """{"swapId":"$acceptedSwapId","t0":${chain.t0},"t1":${chain.t0 + 300}}"""
+                            val ticket = acceptTicket?.let { ",\"ticket\":\"$it\"" }.orEmpty()
+                            """{"swapId":"$acceptedSwapId","t0":${chain.t0},"t1":${chain.t0 + 300}$ticket}"""
                         }
 
                         path == "/v1/terms" -> {
@@ -360,6 +368,9 @@ abstract class AtomicSwapDriverFixtures {
         val ONE_UNIT = Usdc6.ofMicros(1)
         val FEE_FIELD = Regex(""""fee":"(\d+)"""")
         val SWAP_ID = SwapId.of(MAKER, USER_SHARE)
+
+        /** The maker's ticket for [SWAP_ID]: its id, a dot, and a MAC the app never reads. */
+        val TICKET = "${SWAP_ID.hex}." + "3f".repeat(32)
         val DEPLOYMENT =
             SwapDeployment(
                 makerUrl = Url("http://maker"),

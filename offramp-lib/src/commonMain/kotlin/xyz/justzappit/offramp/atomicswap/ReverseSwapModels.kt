@@ -142,6 +142,8 @@ data class ReverseSwapRecord(
     val acceptedAt: Long? = null,
     /** The maker took the quote: a token paid for that, and it's never asked again. */
     val makerAccepted: Boolean = false,
+    /** The maker's ticket for the swap, from its acceptance, which each relayer request carries; none from before. */
+    val ticket: String? = null,
 ) {
     /** What `openReverse` stores of its escrow, as the quote and our share give it. */
     val terms: SwapTerms get() = SwapTerms.reverse(quote, userShare)

@@ -25,6 +25,7 @@ import kotlinx.serialization.json.Json
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.p2p.Usdc6
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 /** A maker's quote API, for swaps either way. */
@@ -65,50 +66,65 @@ interface SwapMaker {
     suspend fun collectReverseToken(swapId: SwapId)
 }
 
-/** A relayer, which sends the transactions of a user with no account on the chain, each with its swap's terms. */
+/**
+ * A relayer, which sends the transactions of a user with no account on the chain, each with its swap's terms. Each
+ * request for a swap carries the [ticket][SwapAccepted.ticket] its accept answered with, where its record keeps one:
+ * the gateway gives the swap an allowance of its own then, which other traffic can't use up.
+ */
 interface SwapRelayer {
     suspend fun terms(): RelayerTerms
 
-    suspend fun fundReverse(request: ReverseFundingRequest): Sent
+    suspend fun fundReverse(
+        request: ReverseFundingRequest,
+        ticket: String?
+    ): Sent
 
     suspend fun lockClaim(
         authorization: SwapAuthorization,
-        terms: SwapTerms
+        terms: SwapTerms,
+        ticket: String?
     ): Sent
 
     suspend fun claim(
         reveal: SwapReveal,
-        terms: SwapTerms
+        terms: SwapTerms,
+        ticket: String?
     ): Sent
 
     suspend fun payout(
         payout: SwapPayout,
-        terms: SwapTerms
+        terms: SwapTerms,
+        ticket: String?
     ): Sent
 
     suspend fun ready(
         authorization: SwapAuthorization,
-        terms: SwapTerms
+        terms: SwapTerms,
+        ticket: String?
     ): Sent
 
     suspend fun lockRefund(
         authorization: SwapAuthorization,
-        terms: SwapTerms
+        terms: SwapTerms,
+        ticket: String?
     ): Sent
 
     suspend fun refund(
         reveal: SwapReveal,
-        terms: SwapTerms
+        terms: SwapTerms,
+        ticket: String?
     ): Sent
 
     suspend fun refundPayout(
         payout: SwapPayout,
-        terms: SwapTerms
+        terms: SwapTerms,
+        ticket: String?
     ): Sent
 
     suspend fun rescue(
         rescue: SwapRescue,
-        terms: SwapTerms
+        terms: SwapTerms,
+        ticket: String?
     ): Sent
 }
 
@@ -203,57 +219,80 @@ class RelayerClient(
     override suspend fun terms(): RelayerTerms =
         service.get("/v1/terms", RelayerTerms.serializer()) { it.requireWellFormed() }
 
-    override suspend fun fundReverse(request: ReverseFundingRequest): Sent =
-        service.post("/v1/reverse/fund", request, ReverseFundingRequest.serializer(), Sent.serializer()) {
+    override suspend fun fundReverse(
+        request: ReverseFundingRequest,
+        ticket: String?
+    ): Sent =
+        service.post(
+            "/v1/reverse/fund",
+            request,
+            ReverseFundingRequest.serializer(),
+            Sent.serializer(),
+            ticket = ticket,
+        ) {
             require(it.transactions.size <= 1) { "funding returned multiple transactions" }
         }
 
     override suspend fun lockClaim(
         authorization: SwapAuthorization,
-        terms: SwapTerms
-    ) = service.send("/v1/lock-claim", authorization.request(terms), AuthorizationRequest.serializer())
+        terms: SwapTerms,
+        ticket: String?
+    ) = service.send("/v1/lock-claim", authorization.request(terms), AuthorizationRequest.serializer(), ticket)
 
     override suspend fun claim(
         reveal: SwapReveal,
-        terms: SwapTerms
-    ) = service.send("/v1/claim", reveal.request(terms), RevealRequest.serializer())
+        terms: SwapTerms,
+        ticket: String?
+    ) = service.send("/v1/claim", reveal.request(terms), RevealRequest.serializer(), ticket)
 
     override suspend fun payout(
         payout: SwapPayout,
-        terms: SwapTerms
-    ) = service.send("/v1/payout", payout.request(terms), PayoutRequest.serializer())
+        terms: SwapTerms,
+        ticket: String?
+    ) = service.send("/v1/payout", payout.request(terms), PayoutRequest.serializer(), ticket)
 
     override suspend fun ready(
         authorization: SwapAuthorization,
-        terms: SwapTerms
-    ) = service.send("/v1/reverse/ready", authorization.request(terms), AuthorizationRequest.serializer())
+        terms: SwapTerms,
+        ticket: String?
+    ) = service.send("/v1/reverse/ready", authorization.request(terms), AuthorizationRequest.serializer(), ticket)
 
     override suspend fun lockRefund(
         authorization: SwapAuthorization,
-        terms: SwapTerms
-    ) = service.send("/v1/reverse/lock-refund", authorization.request(terms), AuthorizationRequest.serializer())
+        terms: SwapTerms,
+        ticket: String?
+    ) = service.send(
+        "/v1/reverse/lock-refund",
+        authorization.request(terms),
+        AuthorizationRequest.serializer(),
+        ticket,
+    )
 
     override suspend fun refund(
         reveal: SwapReveal,
-        terms: SwapTerms
-    ) = service.send("/v1/reverse/refund", reveal.request(terms), RevealRequest.serializer())
+        terms: SwapTerms,
+        ticket: String?
+    ) = service.send("/v1/reverse/refund", reveal.request(terms), RevealRequest.serializer(), ticket)
 
     override suspend fun refundPayout(
         payout: SwapPayout,
-        terms: SwapTerms
-    ) = service.send("/v1/reverse/refund-payout", payout.request(terms), PayoutRequest.serializer())
+        terms: SwapTerms,
+        ticket: String?
+    ) = service.send("/v1/reverse/refund-payout", payout.request(terms), PayoutRequest.serializer(), ticket)
 
     override suspend fun rescue(
         rescue: SwapRescue,
-        terms: SwapTerms
-    ) = service.send("/v1/reverse/rescue", rescue.request(terms), RescueRequest.serializer())
+        terms: SwapTerms,
+        ticket: String?
+    ) = service.send("/v1/reverse/rescue", rescue.request(terms), RescueRequest.serializer(), ticket)
 }
 
 private suspend fun <T> SwapService.send(
     path: String,
     request: T,
-    serializer: KSerializer<T>
-): Sent = post(path, request, serializer, Sent.serializer())
+    serializer: KSerializer<T>,
+    ticket: String?,
+): Sent = post(path, request, serializer, Sent.serializer(), ticket = ticket)
 
 /** One swap service over HTTP, whose failures are all [AtomicSwapHttpException]s naming it. */
 internal class SwapService(
@@ -268,14 +307,16 @@ internal class SwapService(
         check: (T) -> Unit = {},
     ): T = read(exchange { http.get(url(path)) { quick() } }, answer, check)
 
+    /** A post; one for a swap carries the swap's [ticket], where it has one. */
     suspend fun <B, T> post(
         path: String,
         body: B,
         request: KSerializer<B>,
         answer: KSerializer<T>,
         isQuick: Boolean = false,
+        ticket: String? = null,
         check: (T) -> Unit = {},
-    ): T = read(deliver(path, json.encodeToString(request, body), isQuick, authorization = null), answer, check)
+    ): T = read(deliver(path, json.encodeToString(request, body), isQuick, authorization = null, ticket), answer, check)
 
     /**
      * An accept, which the maker may ask a token for: then it goes again with one from [tokens] and a request for it
@@ -312,11 +353,13 @@ internal class SwapService(
         payload: String,
         isQuick: Boolean,
         authorization: String?,
+        ticket: String? = null,
     ): Answer =
         exchange {
             http.post(url(path)) {
                 if (isQuick) quick()
                 authorization?.let { header(HttpHeaders.Authorization, it) }
+                ticket?.let { header(TICKET_HEADER, it) }
                 contentType(ContentType.Application.Json)
                 setBody(payload)
             }
@@ -332,7 +375,14 @@ internal class SwapService(
 
     private suspend fun exchange(request: suspend () -> HttpResponse): Answer =
         try {
-            request().let { Answer(it.status, it.bodyAsText(), it.headers[HttpHeaders.WWWAuthenticate]) }
+            request().let {
+                Answer(
+                    it.status,
+                    it.bodyAsText(),
+                    it.headers[HttpHeaders.WWWAuthenticate],
+                    it.headers[HttpHeaders.RetryAfter]?.let(::delaySeconds),
+                )
+            }
         } catch (e: IOException) {
             throw AtomicSwapHttpException.Unreachable(service, e)
         }
@@ -361,7 +411,14 @@ internal class SwapService(
         val reason = error?.error ?: answer.body.take(ERROR_EXCERPT)
         val code = error?.code?.let(SwapErrorCode::named)
         val transactions = error?.transactions.orEmpty().mapNotNull { runCatching { TxHash.fromHex(it) }.getOrNull() }
-        return AtomicSwapHttpException.Refused(service, answer.status.value, code, reason, transactions)
+        return AtomicSwapHttpException.Refused(
+            service,
+            answer.status.value,
+            code,
+            reason,
+            transactions,
+            answer.retryAfter,
+        )
     }
 
     private class Answer(
@@ -369,11 +426,15 @@ internal class SwapService(
         val body: String,
         /** RFC 9577's challenge, on a refusal that a token would pay for. */
         val challenge: String?,
+        val retryAfter: Duration?,
     )
 
     private companion object {
         const val ERROR_EXCERPT = 200
         const val PAID_ATTEMPTS = 3
+
+        /** zecswap-api's `TICKET_HEADER`, which every relayer request for a swap carries its ticket in. */
+        const val TICKET_HEADER = "ZecSwap-Ticket"
         val QUICK_TIMEOUT = 20.seconds
         val json =
             Json {
@@ -382,6 +443,14 @@ internal class SwapService(
             }
     }
 }
+
+// RFC 9110's delay-seconds, as the swap services send `Retry-After`; an HTTP-date reads as no wait asked for.
+private fun delaySeconds(value: String): Duration? =
+    value
+        .trim()
+        .toLongOrNull()
+        ?.takeIf { it >= 0 }
+        ?.seconds
 
 // The code stays a string here, so one this build doesn't know still leaves the message readable.
 @Serializable
