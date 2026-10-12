@@ -109,30 +109,98 @@ class ReverseFundingTest : ReverseSwapDriverFixtures() {
 
     @Test
     fun sponsorshipMustServeThePinnedChainContractRelayerMakerTokenAndAdapter() {
-        val funding = ReverseFundingTerms(CONTRACT, TOKEN, MAKER, 4_000_000, "20000000000", 65_536, AMOUNT)
-        val terms = RelayerTerms(RELAYER, DEPLOYMENT.chainId, CONTRACT, AMOUNT, funding)
-        assertEquals(funding, terms.requireReverseFunding(DEPLOYMENT, CONTRACT))
+        val deployment = DEPLOYMENT.copy(railgunProxy = RailgunContracts.SEPOLIA.proxy)
+        val adapt = RailgunContracts.SEPOLIA.relayAdapt
+        val funding = ReverseFundingTerms(adapt, TOKEN, MAKER, 4_000_000, "20000000000", 65_536, AMOUNT)
+        val terms = RelayerTerms(RELAYER, deployment.chainId, CONTRACT, AMOUNT, funding)
+        assertEquals(funding, terms.requireReverseFunding(deployment))
         for (bad in listOf(
             terms.copy(chainId = ChainId(1)),
             terms.copy(contract = USER),
             terms.copy(relayer = USER),
             terms.copy(reverseFunding = funding.copy(relayAdapt = USER)),
+            terms.copy(reverseFunding = funding.copy(relayAdapt = RailgunContracts.ETHEREUM.relayAdapt)),
             terms.copy(reverseFunding = funding.copy(token = USER)),
             terms.copy(reverseFunding = funding.copy(maker = USER)),
         )) {
-            val error = assertFailsWith<AtomicSwapBlockedException> { bad.requireReverseFunding(DEPLOYMENT, CONTRACT) }
+            val error = assertFailsWith<AtomicSwapBlockedException> { bad.requireReverseFunding(deployment) }
             assertEquals(AtomicSwapBlock.WRONG_DEPLOYMENT, error.reason)
         }
         val unsupported =
             assertFailsWith<AtomicSwapBlockedException> {
-                terms.copy(reverseFunding = null).requireReverseFunding(DEPLOYMENT, CONTRACT)
+                terms.copy(reverseFunding = null).requireReverseFunding(deployment)
             }
         assertEquals(AtomicSwapBlock.FUNDING_UNAVAILABLE, unsupported.reason)
         val unpaid =
             assertFailsWith<AtomicSwapBlockedException> {
-                terms.copy(reverseFunding = funding.copy(fee = null)).requireReverseFunding(DEPLOYMENT, CONTRACT)
+                terms.copy(reverseFunding = funding.copy(fee = null)).requireReverseFunding(deployment)
             }
         assertEquals(AtomicSwapBlock.FUNDING_UNAVAILABLE, unpaid.reason)
+    }
+
+    @Test
+    fun aMainnetDeploymentIsSponsoredOnEthereumThroughRailgunsRelayAdaptThere() {
+        val mainnet =
+            DEPLOYMENT.copy(
+                chainId = ChainId.ETHEREUM_MAINNET,
+                token = ETHEREUM_USDC,
+                railgunProxy = RailgunContracts.ETHEREUM.proxy,
+                zcashNetwork = SwapZcashNetwork.MAINNET,
+            )
+        val funding =
+            ReverseFundingTerms(
+                RailgunContracts.ETHEREUM.relayAdapt,
+                ETHEREUM_USDC,
+                MAKER,
+                4_000_000,
+                "20000000000",
+                65_536,
+                AMOUNT,
+            )
+        val terms = RelayerTerms(RELAYER, mainnet.chainId, CONTRACT, AMOUNT, funding)
+
+        assertEquals(funding, terms.requireReverseFunding(mainnet))
+        val sepoliaAdapt = terms.copy(reverseFunding = funding.copy(relayAdapt = RailgunContracts.SEPOLIA.relayAdapt))
+        val wrong = assertFailsWith<AtomicSwapBlockedException> { sepoliaAdapt.requireReverseFunding(mainnet) }
+        assertEquals(AtomicSwapBlock.WRONG_DEPLOYMENT, wrong.reason)
+    }
+
+    @Test
+    fun noFundingIsSponsoredOffItsNetworksOwnRailgun() {
+        val sepolia = DEPLOYMENT.copy(railgunProxy = RailgunContracts.SEPOLIA.proxy)
+        val elsewhere =
+            listOf(
+                sepolia.copy(zcashNetwork = SwapZcashNetwork.MAINNET),
+                sepolia.copy(railgunProxy = RailgunContracts.ETHEREUM.proxy),
+                sepolia.copy(chainId = ChainId.ETHEREUM_MAINNET, railgunProxy = RailgunContracts.ETHEREUM.proxy),
+                sepolia.copy(chainId = ChainId.BASE_SEPOLIA),
+            )
+        for (deployment in elsewhere) {
+            val funding =
+                ReverseFundingTerms(
+                    RailgunContracts.SEPOLIA.relayAdapt,
+                    TOKEN,
+                    MAKER,
+                    4_000_000,
+                    "20000000000",
+                    65_536,
+                    AMOUNT,
+                )
+            val terms = RelayerTerms(RELAYER, deployment.chainId, CONTRACT, AMOUNT, funding)
+            val error = assertFailsWith<AtomicSwapBlockedException> { terms.requireReverseFunding(deployment) }
+            assertEquals(AtomicSwapBlock.FUNDING_UNAVAILABLE, error.reason, deployment.toString())
+        }
+    }
+
+    @Test
+    fun eachNetworkSettlesOnRailgunsOwnContractsOnItsChainAlone() {
+        val mainnet = DEPLOYMENT.copy(chainId = ChainId.ETHEREUM_MAINNET, zcashNetwork = SwapZcashNetwork.MAINNET)
+
+        assertEquals(RailgunContracts.SEPOLIA, DEPLOYMENT.railgun)
+        assertEquals(RailgunContracts.ETHEREUM, mainnet.railgun)
+        assertNull(DEPLOYMENT.copy(zcashNetwork = SwapZcashNetwork.MAINNET).railgun)
+        assertNull(mainnet.copy(zcashNetwork = SwapZcashNetwork.TESTNET).railgun)
+        assertNull(DEPLOYMENT.copy(chainId = ChainId.BASE_SEPOLIA).railgun)
     }
 
     @Test

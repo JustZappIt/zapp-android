@@ -9,6 +9,8 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployment
 import io.ktor.http.Url
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
+import xyz.justzappit.offramp.atomicswap.ETHEREUM_USDC
+import xyz.justzappit.offramp.atomicswap.RailgunContracts
 import xyz.justzappit.railgun.RailgunEndpoints
 import xyz.justzappit.railgun.RailgunNetwork
 
@@ -27,8 +29,7 @@ object Sepolia {
     val RPC_URL = Url(RailgunEndpoints.SEPOLIA_RPC_URL)
     const val EXPLORER_TX_URL = "https://sepolia.etherscan.io/tx/"
     const val RAILSCAN_TX_URL = "https://railscan.io/sepolia/tx/"
-    val RAILGUN_PROXY = Address.parse("0xeCFCf3b4eC647c4Ca6D49108b311b7a7C9543fea")
-    val RELAY_ADAPT = Address.parse("0x7e3d929EbD5bDC84d02Bd3205c777578f33A214D")
+    val RAILGUN_PROXY = RailgunContracts.SEPOLIA.proxy
 
     // The testnet maker's token has no decimals() or symbol(); it stands in for USDC.
     val TEST_USD = Address.parse("0x5764D0044bef5AA839E0dDafE2073421101B9Ed8")
@@ -54,7 +55,7 @@ object PrivateUsdTokens {
     private val ethereum =
         listOf(
             PrivateUsdToken(
-                Address.parse("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+                ETHEREUM_USDC,
                 "USDC",
                 R.string.private_usd_token_usdc,
                 USD_DECIMALS,

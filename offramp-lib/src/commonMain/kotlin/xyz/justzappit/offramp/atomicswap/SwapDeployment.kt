@@ -37,6 +37,39 @@ data class SwapDeployment(
     val tokenIssuer: SwapTokenIssuer? = null,
 )
 
+/** Railgun's own contracts on a chain, as its `NETWORK_CONFIG` names them (@railgun-community/shared-models 8.2.0). */
+data class RailgunContracts(
+    val proxy: Address,
+    val relayAdapt: Address,
+) {
+    companion object {
+        val ETHEREUM =
+            RailgunContracts(
+                proxy = Address.parse("0xFA7093CDD9EE6932B4eb2c9e1cde7CE00B1FA4b9"),
+                relayAdapt = Address.parse("0xAc9f360Ae85469B27aEDdEaFC579Ef2d052aD405"),
+            )
+        val SEPOLIA =
+            RailgunContracts(
+                proxy = Address.parse("0xeCFCf3b4eC647c4Ca6D49108b311b7a7C9543fea"),
+                relayAdapt = Address.parse("0x7e3d929EbD5bDC84d02Bd3205c777578f33A214D"),
+            )
+    }
+}
+
+/** Circle's USDC on Ethereum: what mainnet swaps pay out, the one token zecswap-api's `Network` takes there. */
+val ETHEREUM_USDC: Address = Address.parse("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
+
+/**
+ * Railgun's contracts on the deployment's chain, where its Zcash network settles on Railgun's own deployment as
+ * zecswap-api's `Network` fixes it: Ethereum for mainnet, Sepolia for testnet. None on any other chain.
+ */
+val SwapDeployment.railgun: RailgunContracts?
+    get() =
+        when (zcashNetwork) {
+            SwapZcashNetwork.MAINNET -> RailgunContracts.ETHEREUM.takeIf { chainId == ChainId.ETHEREUM_MAINNET }
+            SwapZcashNetwork.TESTNET -> RailgunContracts.SEPOLIA.takeIf { chainId == ChainId.ETHEREUM_SEPOLIA }
+        }
+
 /** How a forward swap's maker times its deposit. */
 data class ZcashDepositTerms(
     /** The soonest `t0` a swap may have: time for the deposit to get its confirmations. */

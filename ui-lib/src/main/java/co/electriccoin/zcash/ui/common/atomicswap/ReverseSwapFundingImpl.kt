@@ -3,7 +3,6 @@
 
 package co.electriccoin.zcash.ui.common.atomicswap
 
-import co.electriccoin.zcash.ui.common.privateusd.Sepolia
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.evm.util.toHex
@@ -94,7 +93,7 @@ class ReverseSwapFundingImpl(
 
     private suspend fun sponsored(): Sponsored {
         val terms = relayer.terms()
-        val funding = terms.requireReverseFunding(deployment, Sepolia.RELAY_ADAPT)
+        val funding = terms.requireReverseFunding(deployment)
         val fee = checkNotNull(funding.fee) { "the relayer charges no funding fee" }
         return Sponsored(funding, fee, terms.feeExpiresAt)
     }

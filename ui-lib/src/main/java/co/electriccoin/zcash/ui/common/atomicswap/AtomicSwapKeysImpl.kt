@@ -3,9 +3,7 @@
 
 package co.electriccoin.zcash.ui.common.atomicswap
 
-import cash.z.ecc.android.sdk.model.ZcashNetwork
 import co.electriccoin.zcash.ui.common.provider.PersistableWalletProvider
-import co.electriccoin.zcash.ui.common.provider.ZcashNetworkProvider
 import co.electriccoin.zcash.ui.common.provider.fingerprint
 import co.electriccoin.zcash.ui.common.provider.railgunSeed
 import co.electriccoin.zcash.ui.common.usecase.GetWalletSeedBytesUseCase
@@ -22,6 +20,7 @@ import xyz.justzappit.offramp.atomicswap.NoteCommitment
 import xyz.justzappit.offramp.atomicswap.PayoutNote
 import xyz.justzappit.offramp.atomicswap.SwapId
 import xyz.justzappit.offramp.atomicswap.SwapShare
+import xyz.justzappit.offramp.atomicswap.SwapZcashNetwork
 import xyz.justzappit.offramp.atomicswap.UserAcceptance
 import xyz.justzappit.offramp.p2p.Usdc6
 import java.util.concurrent.ConcurrentHashMap
@@ -48,11 +47,15 @@ interface SwapKeyring {
         }
 }
 
-/** The seed is read for each call and wiped after; only what a key shows anyone is kept, per wallet and index. */
+/**
+ * The seed is read for each call and wiped after; only what a key shows anyone is kept, per wallet and index. Keys are
+ * derived on the Zcash network of the pinned deployment, the one its maker takes deposits on, and a build that pins
+ * none derives none.
+ */
 class AtomicSwapKeysImpl(
     private val getWalletSeedBytes: GetWalletSeedBytesUseCase,
     persistableWalletProvider: PersistableWalletProvider,
-    private val zcashNetworkProvider: ZcashNetworkProvider,
+    private val deployments: AtomicSwapDeployments,
 ) : AtomicSwapKeys,
     SwapKeyring {
     private val shown = ShownKeysHolder(persistableWalletProvider)
@@ -116,9 +119,10 @@ class AtomicSwapKeysImpl(
         block: (SwapKey) -> T
     ): T =
         withContext(Dispatchers.Default) {
+            val network = checkNotNull(deployments.current) { "no swap deployment on this network" }.swap.zcashNetwork
             val seed = getWalletSeedBytes()
             try {
-                block(SwapKey(seed, zcashNetworkProvider() == ZcashNetwork.Mainnet, index))
+                block(SwapKey(seed, network == SwapZcashNetwork.MAINNET, index))
             } finally {
                 seed.fill(0)
             }

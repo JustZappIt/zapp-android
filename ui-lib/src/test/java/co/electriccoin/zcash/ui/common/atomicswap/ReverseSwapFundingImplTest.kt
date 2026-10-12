@@ -3,7 +3,6 @@
 
 package co.electriccoin.zcash.ui.common.atomicswap
 
-import co.electriccoin.zcash.ui.common.privateusd.Sepolia
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import co.electriccoin.zcash.ui.screen.privateusd.toZec
 import io.mockk.coEvery
@@ -15,6 +14,7 @@ import org.junit.Test
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.atomicswap.AtomicSwapBlock
 import xyz.justzappit.offramp.atomicswap.AtomicSwapBlockedException
+import xyz.justzappit.offramp.atomicswap.RailgunContracts
 import xyz.justzappit.offramp.atomicswap.RelayerTerms
 import xyz.justzappit.offramp.atomicswap.ReverseFundingRequest
 import xyz.justzappit.offramp.atomicswap.ReverseFundingTerms
@@ -38,7 +38,7 @@ class ReverseSwapFundingImplTest {
             val wallet = mockk<RailgunWalletRepository>()
             val relayer = mockk<SwapRelayer>()
             val record = record()
-            val proved = RailgunReverseTransaction(Sepolia.RELAY_ADAPT, DATA, BigInteger.ZERO, COST)
+            val proved = RailgunReverseTransaction(RELAY_ADAPT, DATA, BigInteger.ZERO, COST)
             val preparation = slot<RailgunReverseRequest>()
             coEvery { relayer.terms() } returns TERMS
             coEvery { wallet.prepareReverse(capture(preparation)) } returns proved
@@ -49,7 +49,7 @@ class ReverseSwapFundingImplTest {
 
             val kept = funding.prepare(record, ByteArray(65))
             assertNull(kept.txId)
-            assertEquals(Sepolia.RELAY_ADAPT, preparation.captured.relayAdapt)
+            assertEquals(RELAY_ADAPT, preparation.captured.relayAdapt)
             assertEquals(
                 listOf(DEPLOYMENT.token, DEPLOYMENT.contract, DEPLOYMENT.token),
                 preparation.captured.calls.map { it.to }
@@ -96,6 +96,7 @@ class ReverseSwapFundingImplTest {
 
     private companion object {
         val DEPLOYMENT = AtomicSwapTestnet.deployment.swap
+        val RELAY_ADAPT = RailgunContracts.SEPOLIA.relayAdapt
         val FEE = Usdc6.ofMicros(250_000)
         val TERMS =
             RelayerTerms(
@@ -104,7 +105,7 @@ class ReverseSwapFundingImplTest {
                 DEPLOYMENT.contract,
                 Usdc6.ofMicros(100_000),
                 ReverseFundingTerms(
-                    Sepolia.RELAY_ADAPT,
+                    RELAY_ADAPT,
                     DEPLOYMENT.token,
                     DEPLOYMENT.maker,
                     4_000_000,

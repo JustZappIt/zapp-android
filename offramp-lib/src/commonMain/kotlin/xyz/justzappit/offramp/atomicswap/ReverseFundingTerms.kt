@@ -12,7 +12,10 @@ import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.offramp.p2p.Usdc6
 
-/** The relayer's opt-in limits for locally proved Sepolia funding, whose gas it pays for [fee] in the escrow token. */
+/**
+ * The relayer's opt-in limits for locally proved funding on the deployment's chain, whose gas it pays for [fee] in the
+ * escrow token.
+ */
 @Serializable
 data class ReverseFundingTerms(
     val relayAdapt: Address,
@@ -53,18 +56,23 @@ data class ReverseFundingRequest(
     override fun toString() = "ReverseFundingRequest(swapId=$swapId, chainId=$chainId)"
 }
 
-/** Pins the advertised service and adapter before any proof is prepared. */
-fun RelayerTerms.requireReverseFunding(
-    deployment: SwapDeployment,
-    relayAdapt: Address,
-): ReverseFundingTerms {
+/**
+ * Pins the advertised service and adapter before any proof is prepared: funding leaves the deployment's Railgun through
+ * Railgun's own Relay Adapt, on the chain the deployment pins.
+ */
+fun RelayerTerms.requireReverseFunding(deployment: SwapDeployment): ReverseFundingTerms {
     requireFundingService(deployment)
     // Terms without a fee predate paid sponsorship, whose funding the relayer would refuse.
     val funding = reverseFunding?.takeIf { it.fee != null }
-    if (deployment.chainId != ChainId.ETHEREUM_SEPOLIA || funding == null) {
+    val railgun = deployment.railgun?.takeIf { it.proxy == deployment.railgunProxy }
+    if (railgun == null || funding == null) {
         throw AtomicSwapBlockedException(AtomicSwapBlock.FUNDING_UNAVAILABLE, "reverse funding is not sponsored")
     }
-    if (funding.relayAdapt != relayAdapt || funding.token != deployment.token || funding.maker != deployment.maker) {
+    val isPinned =
+        funding.relayAdapt == railgun.relayAdapt &&
+            funding.token == deployment.token &&
+            funding.maker == deployment.maker
+    if (!isPinned) {
         throw AtomicSwapBlockedException(AtomicSwapBlock.WRONG_DEPLOYMENT, "funding terms name another deployment")
     }
     return funding
