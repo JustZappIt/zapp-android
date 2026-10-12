@@ -60,6 +60,9 @@ sealed interface SwapHold
 
 enum class AtomicSwapProblem : SwapHold {
     RELAYER_UNREACHABLE,
+
+    /** The relayer's fee now would take the whole payout, so nothing is signed until it comes down. */
+    RELAYER_FEE,
     ETHEREUM_UNREACHABLE,
     RAILGUN_CLOSED,
     CLAIM_TURN,
@@ -422,7 +425,11 @@ internal fun AtomicSwapBlock.hold(): SwapHold =
             AtomicSwapProblem.ETHEREUM_UNREACHABLE
         }
 
-        AtomicSwapBlock.RELAYER_FEE, AtomicSwapBlock.WRONG_DEPLOYMENT -> {
+        AtomicSwapBlock.RELAYER_FEE -> {
+            AtomicSwapProblem.RELAYER_FEE
+        }
+
+        AtomicSwapBlock.WRONG_DEPLOYMENT -> {
             AtomicSwapProblem.RELAYER_UNREACHABLE
         }
 
@@ -460,6 +467,8 @@ internal fun AtomicSwapBlock.hold(): SwapHold =
         AtomicSwapBlock.MAKER_BUSY,
         AtomicSwapBlock.TOKENS_EXHAUSTED,
         AtomicSwapBlock.TOKENS_REFUSED,
+        AtomicSwapBlock.TOKENS_DEVICE_REFUSED,
+        AtomicSwapBlock.TOKENS_KEYSTORE_FAILED,
         AtomicSwapBlock.TOKENS_NEED_TOR -> {
             AtomicSwapProblem.UNEXPECTED
         }

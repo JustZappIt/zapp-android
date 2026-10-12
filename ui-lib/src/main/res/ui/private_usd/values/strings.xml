@@ -91,9 +91,12 @@
     <string name="convert_insufficient">Not enough ZEC. You have %1$s available.</string>
     <string name="convert_review">Review</string>
     <string name="convert_error_maker">The market maker can\'t be reached right now. Try again in a moment.</string>
+    <string name="convert_error_maker_cant_fill">The market maker can\'t convert this much right now. Try a smaller amount, or try again later.</string>
     <string name="convert_error_maker_busy" tools:ignore="MissingTranslation">The market maker is busy with other conversions. Try again in a few minutes.</string>
     <string name="convert_error_no_tokens_today" tools:ignore="MissingTranslation">This device has used today\'s conversions. More are available after midnight UTC.</string>
     <string name="convert_error_tokens_unavailable" tools:ignore="MissingTranslation">Zapp couldn\'t get this conversion\'s token over Tor, so nothing was sent. Try again in a moment.</string>
+    <string name="convert_error_device_refused">This phone can\'t get conversion tokens. The token issuer turns away emulators, phones with an unlocked bootloader or a modified system, and builds of Zapp it doesn\'t recognize.</string>
+    <string name="convert_error_keystore">Zapp couldn\'t use this phone\'s secure key storage to get a conversion token, so nothing was sent. Try again in a moment.</string>
     <string name="convert_error_below_fee" tools:ignore="MissingTranslation">This amount doesn\'t cover the relayer\'s fee. Try a larger amount.</string>
     <string name="convert_error_amount_refused" tools:ignore="MissingTranslation">The market maker won\'t convert this amount. It may not cover the swap\'s network cost, so try a larger amount.</string>
     <string name="convert_error_tor_off" tools:ignore="MissingTranslation">Conversions get their token over Tor, which is off. Turn on Tor in Settings, then convert again.</string>
@@ -160,6 +163,7 @@
     <!-- Convert: needs attention -->
     <string name="convert_problem_title" tools:ignore="MissingTranslation">Taking longer than usual</string>
     <string name="convert_problem_relayer">Zapp can\'t reach the relayer that sends your claim. It keeps trying by itself.</string>
+    <string name="convert_problem_relayer_fee">The relayer\'s fee is more than this conversion pays out right now, so Zapp waits for it to come down. It keeps checking by itself.</string>
     <string name="convert_problem_ethereum">Zapp can\'t reach Ethereum right now. It keeps trying by itself.</string>
     <string name="convert_problem_railgun">Railgun isn\'t accepting deposits right now, so Zapp holds off claiming. If it doesn\'t reopen in time, the swap is called off and your ZEC comes back.</string>
     <string name="convert_problem_turn">The market maker holds the claim for a few minutes. Zapp claims as soon as it\'s your turn.</string>

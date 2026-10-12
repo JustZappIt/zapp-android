@@ -105,6 +105,19 @@ class SwapLoopTest {
         }
 
     @Test
+    fun `a relayer fee that would take the whole payout says so, not that the relayer is out of reach`() =
+        runTest {
+            val fee = AtomicSwapBlockedException(AtomicSwapBlock.RELAYER_FEE, "a fee of 0.12 leaves nothing")
+            val loop = loop(Scripted(*Array(5) { fail(fee) }, waiting()))
+
+            loop.start(resuming = false)
+            runCurrent()
+            advanceTimeBy(PERSISTED)
+
+            assertEquals(AtomicSwapProblem.RELAYER_FEE, loop.progress.value.problem)
+        }
+
+    @Test
     fun `a loop that keeps stopping unexpectedly says so, and picks the conversion up again`() =
         runTest {
             val conversions = Scripted(*Array(3) { fail(UnsupportedOperationException("a bug")) }, waiting())

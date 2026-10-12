@@ -106,6 +106,9 @@
     <string name="convert_insufficient">No hay suficiente ZEC. Tienes %1$s disponibles.</string>
     <string name="convert_review">Revisar</string>
     <string name="convert_error_maker">No se puede contactar con el creador de mercado. Inténtalo de nuevo en un momento.</string>
+    <string name="convert_error_maker_cant_fill">El creador de mercado no puede convertir tanto en este momento. Prueba con un importe menor o inténtalo de nuevo más tarde.</string>
+    <string name="convert_error_device_refused">Este teléfono no puede obtener tokens de conversión. El emisor de tokens rechaza los emuladores, los teléfonos con el bootloader desbloqueado o un sistema modificado y las versiones de Zapp que no reconoce.</string>
+    <string name="convert_error_keystore">Zapp no pudo usar el almacén seguro de claves de este teléfono para obtener un token de conversión, así que no se envió nada. Inténtalo de nuevo en un momento.</string>
     <string name="convert_error_relayer">No se puede contactar con el relayer que completa las conversiones. Inténtalo de nuevo en un momento.</string>
     <string name="convert_error_generic">No se pudo obtener una cotización. Inténtalo de nuevo en un momento.</string>
     <string name="convert_info_title">Cómo funciona la conversión</string>
@@ -148,6 +151,7 @@
     <string name="convert_progress_info_screen">Railgun los revisa durante %1$s antes de que se puedan gastar.</string>
     <string name="convert_progress_info_refund">Si el intercambio no puede terminar a tiempo, se cancela y tus ZEC regresan, menos una pequeña comisión de red.</string>
     <string name="convert_problem_relayer">Zapp no puede contactar con el relayer que envía tu reclamación. Sigue intentándolo automáticamente.</string>
+    <string name="convert_problem_relayer_fee">La comisión del relayer supera ahora lo que paga esta conversión, así que Zapp espera a que baje. Sigue comprobándolo automáticamente.</string>
     <string name="convert_problem_ethereum">Zapp no puede contactar con Ethereum en este momento. Sigue intentándolo automáticamente.</string>
     <string name="convert_problem_railgun">Railgun no acepta depósitos en este momento, por lo que Zapp espera para reclamar. Si no vuelve a aceptarlos a tiempo, se cancela el intercambio y tus ZEC regresan.</string>
     <string name="convert_problem_turn">El creador de mercado tiene prioridad para reclamar durante unos minutos. Zapp reclama en cuanto llega tu turno.</string>

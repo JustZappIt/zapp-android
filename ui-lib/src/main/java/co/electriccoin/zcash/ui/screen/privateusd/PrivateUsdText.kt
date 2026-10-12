@@ -38,6 +38,7 @@ internal fun AtomicSwapProblem.message(): StringResource =
     stringRes(
         when (this) {
             AtomicSwapProblem.RELAYER_UNREACHABLE -> R.string.convert_problem_relayer
+            AtomicSwapProblem.RELAYER_FEE -> R.string.convert_problem_relayer_fee
             AtomicSwapProblem.ETHEREUM_UNREACHABLE -> R.string.convert_problem_ethereum
             AtomicSwapProblem.RAILGUN_CLOSED -> R.string.convert_problem_railgun
             AtomicSwapProblem.CLAIM_TURN -> R.string.convert_problem_turn

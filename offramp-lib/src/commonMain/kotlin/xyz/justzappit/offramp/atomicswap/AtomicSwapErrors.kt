@@ -135,8 +135,14 @@ enum class AtomicSwapBlock {
     /** This device's tokens for the UTC day are spent, so no maker accepts another conversion before 00:00 UTC. */
     TOKENS_EXHAUSTED,
 
-    /** The issuer refused this device, or the maker named a key, issuer or day this build takes no tokens for. */
+    /** The maker or the issuer named a key, issuer or day this build takes no tokens for, or the maker refused one. */
     TOKENS_REFUSED,
+
+    /** The issuer refused this device's attestation, as it does an emulator's or an unlocked phone's. */
+    TOKENS_DEVICE_REFUSED,
+
+    /** This phone's keystore couldn't make or use the install's attested key. */
+    TOKENS_KEYSTORE_FAILED,
 
     /** No token could be fetched now: the issuer is unreachable or its answer doesn't read. */
     TOKENS_UNAVAILABLE,

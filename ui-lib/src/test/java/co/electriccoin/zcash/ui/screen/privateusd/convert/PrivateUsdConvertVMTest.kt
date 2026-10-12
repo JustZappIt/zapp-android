@@ -56,6 +56,7 @@ import xyz.justzappit.offramp.atomicswap.AtomicSwapBlock
 import xyz.justzappit.offramp.atomicswap.AtomicSwapBlockedException
 import xyz.justzappit.offramp.atomicswap.AtomicSwapHttpException
 import xyz.justzappit.offramp.atomicswap.AtomicSwapService
+import xyz.justzappit.offramp.atomicswap.SwapErrorCode
 import xyz.justzappit.offramp.p2p.Usdc6
 import java.io.IOException
 import java.math.BigDecimal
@@ -206,6 +207,10 @@ class PrivateUsdConvertVMTest {
                         R.string.convert_error_relayer,
                     AtomicSwapHttpException.Unreachable(AtomicSwapService.MAKER, IOException("down")) to
                         R.string.convert_error_maker,
+                    AtomicSwapHttpException.Refused(AtomicSwapService.MAKER, 503, SwapErrorCode.UNAVAILABLE, "short") to
+                        R.string.convert_error_maker_cant_fill,
+                    AtomicSwapBlockedException(AtomicSwapBlock.TOKENS_DEVICE_REFUSED, "attestation refused") to
+                        R.string.convert_error_device_refused,
                     StoreCorruptedException("unreadable") to R.string.convert_error_store,
                     AtomicSwapBlockedException(AtomicSwapBlock.ZCASH_UNAVAILABLE, "no height") to
                         R.string.convert_error_wallet,

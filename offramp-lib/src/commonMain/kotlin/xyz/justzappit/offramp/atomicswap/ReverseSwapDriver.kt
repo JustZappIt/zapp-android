@@ -572,6 +572,7 @@ private val ENDS_ACCEPTANCE =
         AtomicSwapBlock.QUOTE_EXPIRED,
         AtomicSwapBlock.TOKENS_EXHAUSTED,
         AtomicSwapBlock.TOKENS_REFUSED,
+        AtomicSwapBlock.TOKENS_DEVICE_REFUSED,
         AtomicSwapBlock.TOKENS_NEED_TOR,
     )
 

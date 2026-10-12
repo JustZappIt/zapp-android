@@ -97,6 +97,7 @@ internal class ReverseSwapRepositoryImpl(
         if (forward.underWay() != null) {
             throw AtomicSwapBlockedException(AtomicSwapBlock.SWAP_UNDER_WAY, "a conversion to private USD is under way")
         }
+        tokens.requireNotRefused()
         return sessions.reverse(checkNotNull(deployment).swap).quote(requested)
     }
 

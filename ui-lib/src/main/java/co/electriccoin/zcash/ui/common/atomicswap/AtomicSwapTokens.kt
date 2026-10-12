@@ -60,6 +60,14 @@ class AtomicSwapTokens(
             }
         }
     }
+
+    /** Throws if the current issuer refused this device when last asked; a fetch under way isn't waited for. */
+    suspend fun requireNotRefused() {
+        val issuer = deployments.current?.swap?.tokenIssuer ?: return
+        if (store.load().refusedBy == issuer.name) {
+            throw AtomicSwapBlockedException(AtomicSwapBlock.TOKENS_DEVICE_REFUSED, "the issuer refused this device")
+        }
+    }
 }
 
 /** The tokens held for the next conversions, encrypted; an unreadable store starts over with none. */

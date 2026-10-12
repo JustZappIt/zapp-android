@@ -166,6 +166,8 @@ data class SwapTokenState(
     val exhaustedDay: Long? = null,
     /** Each paid accept's request for its token back; more than one for a swap whose accept was tried again. */
     val returns: List<PendingReturn> = emptyList(),
+    /** The issuer that refused this device's attestation when last asked; none once one has signed for it since. */
+    val refusedBy: String? = null,
 )
 
 /** An unspent token, base64url, with the challenge and key it answers. */
@@ -204,7 +206,7 @@ class SwapTokens(
     private val lock = Mutex()
     private val tokenKey = base64Url.decode(issuer.tokenKey)
     private val returnKey = base64Url.decode(issuer.returnKey)
-    private val issuance = SwapTokenIssuance(issuer, http, crypto, attestation)
+    private val issuance = SwapTokenIssuance(issuer, http, crypto, attestation, store)
 
     /** The issuer's tokens first, fetched now if none is held; then, once it has none left today, one handed back. */
     override suspend fun pay(
@@ -363,6 +365,7 @@ internal class SwapTokenIssuance(
     private val http: suspend () -> HttpClient,
     private val crypto: PrivacyPassClient,
     private val attestation: DeviceAttestation,
+    private val store: SwapTokenStore,
 ) {
     private val tokenKey = base64Url.decode(issuer.tokenKey)
 
@@ -378,6 +381,10 @@ internal class SwapTokenIssuance(
                 val perDay = published(client).tokensPerDay.coerceIn(1, MAX_BATCH)
                 val requests = List(perDay) { crypto.blind(base64Url.decode(challenge), tokenKey) }
                 requests to issued(client, requests)
+            } catch (e: AtomicSwapBlockedException) {
+                // Kept for later quotes; any other answer clears it, since the issuer checks the attestation first.
+                if (e.reason == AtomicSwapBlock.TOKENS_DEVICE_REFUSED) store.save(state.copy(refusedBy = issuer.name))
+                throw e
             } finally {
                 client.close()
             }
@@ -389,7 +396,7 @@ internal class SwapTokenIssuance(
             }
         // The issuer signs only what the day has left: a short batch, or none, spent it.
         val exhaustedDay = if (signatures.size < requests.size) day else state.exhaustedDay
-        return state.copy(held = state.held + tokens, exhaustedDay = exhaustedDay)
+        return state.copy(held = state.held + tokens, exhaustedDay = exhaustedDay, refusedBy = null)
     }
 
     // Takes only the key the issuer publishes to everyone: one shown to some devices alone would mark their tokens.
@@ -402,8 +409,19 @@ internal class SwapTokenIssuance(
         return published
     }
 
-    // None once the issuer has nothing left for this device today.
+    // None once the issuer has nothing left today. A refusal gets one more try: an expired challenge is refused too.
     private suspend fun issued(
+        client: HttpClient,
+        requests: List<BlindedToken>,
+    ): List<ByteArray> =
+        try {
+            signed(client, requests)
+        } catch (e: AtomicSwapBlockedException) {
+            if (e.reason != AtomicSwapBlock.TOKENS_DEVICE_REFUSED) throw e
+            signed(client, requests)
+        }
+
+    private suspend fun signed(
         client: HttpClient,
         requests: List<BlindedToken>,
     ): List<ByteArray> {
@@ -482,16 +500,20 @@ internal class SwapTokenIssuance(
 
         fun refusal(answer: IssuerAnswer): AtomicSwapBlockedException? {
             if (answer.status.isSuccess()) return null
-            val reason =
+            val error =
                 try {
-                    json.decodeFromString(ServiceError.serializer(), answer.body).error
+                    json.decodeFromString(ServiceError.serializer(), answer.body)
                 } catch (_: IllegalArgumentException) {
                     null
                 }
-            val answered = "the token issuer answered ${answer.status.value}" + reason?.let { ": $it" }.orEmpty()
-            return when (answer.status) {
-                HttpStatusCode.TooManyRequests -> exhausted()
-                HttpStatusCode.Forbidden -> refused(answered)
+            val answered = "the token issuer answered ${answer.status.value}" + error?.error?.let { ": $it" }.orEmpty()
+            val isIssuers = error?.code?.let(SwapErrorCode::named) == SwapErrorCode.REJECTED
+            return when {
+                answer.status == HttpStatusCode.TooManyRequests -> exhausted()
+
+                // The issuer's own refusal only: a gateway in front of it may turn Tor away with a 403 of its own.
+                answer.status == HttpStatusCode.Forbidden && isIssuers -> deviceRefused(answered)
+
                 else -> unavailable(answered)
             }
         }
@@ -596,6 +618,8 @@ private fun exhausted() =
     AtomicSwapBlockedException(AtomicSwapBlock.TOKENS_EXHAUSTED, "this device's tokens for today are spent")
 
 private fun refused(why: String) = AtomicSwapBlockedException(AtomicSwapBlock.TOKENS_REFUSED, why)
+
+private fun deviceRefused(why: String) = AtomicSwapBlockedException(AtomicSwapBlock.TOKENS_DEVICE_REFUSED, why)
 
 private fun unavailable(
     why: String,

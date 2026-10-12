@@ -25,6 +25,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SwapTokensTest {
@@ -139,6 +140,37 @@ class SwapTokensTest {
         }
 
     @Test
+    fun anIssuersRefusalIsAskedAgainOnceThenKeptUntilTheIssuerSigns() =
+        runTest {
+            val device = Device()
+            val maker = Maker(device)
+
+            device.issuer.refusing = 2
+            val refused =
+                assertFailsWith<AtomicSwapBlockedException> { maker.client().accept(quote(1), swap(1), ACCEPTANCE) }
+            assertEquals(AtomicSwapBlock.TOKENS_DEVICE_REFUSED, refused.reason)
+            assertEquals(PINNED_ISSUER, device.state.refusedBy, "kept for the quotes after")
+
+            device.issuer.refusing = 1
+            maker.client().accept(quote(2), swap(2), ACCEPTANCE)
+            assertNull(device.state.refusedBy)
+            assertEquals(1, device.issuer.batches, "asked again under a fresh challenge, and signed")
+        }
+
+    @Test
+    fun aForbiddenThatIsntTheIssuersOwnIsUnavailableAndNotKept() =
+        runTest {
+            val device = Device()
+            device.issuer.isGatewayBlocking = true
+
+            val maker = Maker(device)
+            val blocked =
+                assertFailsWith<AtomicSwapBlockedException> { maker.client().accept(quote(1), swap(1), ACCEPTANCE) }
+            assertEquals(AtomicSwapBlock.TOKENS_UNAVAILABLE, blocked.reason)
+            assertNull(device.state.refusedBy)
+        }
+
+    @Test
     fun anInstallsKeyAndEachRequestSignWhatZecSwapsIssuerChecks() {
         assertEquals(
             "f5cbc5e3281d0519f8ae7efb241c7c10b7d2d52f3bde46703d1ecd0fd5613488",
@@ -183,6 +215,12 @@ class SwapTokensTest {
     ) {
         var requests = 0
         var batches = 0
+
+        /** Token requests still to refuse, as zecSwap's issuer refuses an attestation. */
+        var refusing = 0
+
+        /** A gateway in front of the issuer answers token requests with a 403 of its own. */
+        var isGatewayBlocking = false
         val engine =
             MockEngine { request ->
                 requests++
@@ -206,13 +244,26 @@ class SwapTokensTest {
                                 .getValue("blinded")
                                 .jsonArray
                                 .map { it.jsonPrimitive.content }
-                        if (left == 0) {
-                            respond("", HttpStatusCode.TooManyRequests)
-                        } else {
-                            batches++
-                            val signed = blinded.take(left).also { left -= it.size }
-                            val signatures = signed.joinToString { "\"$it\"" }
-                            respond("""{"blindSignatures":[$signatures]}""", headers = JSON_HEADERS)
+                        when {
+                            isGatewayBlocking -> {
+                                respond("<html>Access denied</html>", HttpStatusCode.Forbidden)
+                            }
+
+                            refusing > 0 -> {
+                                refusing--
+                                respond(REFUSAL, HttpStatusCode.Forbidden, JSON_HEADERS)
+                            }
+
+                            left == 0 -> {
+                                respond("", HttpStatusCode.TooManyRequests)
+                            }
+
+                            else -> {
+                                batches++
+                                val signed = blinded.take(left).also { left -= it.size }
+                                val signatures = signed.joinToString { "\"$it\"" }
+                                respond("""{"blindSignatures":[$signatures]}""", headers = JSON_HEADERS)
+                            }
                         }
                     }
                 }
@@ -360,6 +411,7 @@ class SwapTokensTest {
         const val SECONDS_PER_DAY = 86_400L
         const val TODAY = NOW / SECONDS_PER_DAY
         const val PINNED_ISSUER = "issuer.test"
+        const val REFUSAL = """{"code":"rejected","error":"the attestation is refused: an expired challenge"}"""
         val base64Url = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
         val ISSUER_KEY = base64Url.encode("a fake token key".encodeToByteArray())
         val RETURN_KEY = base64Url.encode("a fake return key".encodeToByteArray())

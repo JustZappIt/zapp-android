@@ -6,7 +6,6 @@ package co.electriccoin.zcash.ui.common.atomicswap
 import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
-import android.security.keystore.StrongBoxUnavailableException
 import androidx.annotation.RequiresApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -76,7 +75,7 @@ class AtomicSwapAttestation internal constructor(
         val base64Url = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
 
         fun keyStoreFailed(cause: Exception) =
-            AtomicSwapBlockedException(AtomicSwapBlock.TOKENS_UNAVAILABLE, "this phone's keystore failed", cause)
+            AtomicSwapBlockedException(AtomicSwapBlock.TOKENS_KEYSTORE_FAILED, "this phone's keystore failed", cause)
     }
 }
 
@@ -133,7 +132,8 @@ private object AndroidAttestationKeys : AttestationKeys {
     ) = try {
         generate(spec(alias, challenge).setIsStrongBoxBacked(true).build())
         true
-    } catch (_: StrongBoxUnavailableException) {
+    } catch (_: ProviderException) {
+        // StrongBoxUnavailableException among them: any StrongBox failure leaves the key to the TEE.
         false
     }
 

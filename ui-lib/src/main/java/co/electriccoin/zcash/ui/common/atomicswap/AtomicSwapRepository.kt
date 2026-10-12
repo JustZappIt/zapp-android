@@ -120,6 +120,7 @@ internal class AtomicSwapRepositoryImpl(
     override suspend fun quote(requested: Usdc6): AtomicSwapQuote {
         tokens.prefetch()
         reverse.requireNotUnderWay()
+        tokens.requireNotRefused()
         val offer = driverLock.withLock { sessions.forward(checkNotNull(deployment)).quote(requested) }
         return AtomicSwapQuote(offer, zcash.depositFee(offer))
     }

@@ -28,6 +28,7 @@ internal enum class PrivateUsdFailure(
 ) {
     NO_QUOTE_FITS(R.string.convert_zec_no_quote),
     MAKER_UNREACHABLE(R.string.convert_error_maker),
+    MAKER_CANT_FILL(R.string.convert_error_maker_cant_fill),
     RELAYER_UNREACHABLE(R.string.convert_error_relayer),
     ETHEREUM_UNREACHABLE(R.string.convert_error_ethereum),
     ZCASH_UNAVAILABLE(R.string.convert_error_wallet),
@@ -44,6 +45,8 @@ internal enum class PrivateUsdFailure(
     MAKER_BUSY(R.string.convert_error_maker_busy),
     NO_TOKENS_TODAY(R.string.convert_error_no_tokens_today),
     TOKENS_UNAVAILABLE(R.string.convert_error_tokens_unavailable),
+    DEVICE_REFUSED(R.string.convert_error_device_refused),
+    KEYSTORE_FAILED(R.string.convert_error_keystore),
     TOR_OFF(R.string.convert_error_tor_off),
     BELOW_RELAYER_FEE(R.string.convert_error_below_fee),
     AMOUNT_REFUSED(R.string.convert_error_amount_refused),
@@ -91,12 +94,13 @@ private fun AtomicSwapService.toFailure() =
         AtomicSwapService.RELAYER -> PrivateUsdFailure.RELAYER_UNREACHABLE
     }
 
-// A maker turns an amount down when it's out of range, or too small to carry the swap's network cost.
+// Rejected: out of range or under the swap's network cost. Unavailable: more than the maker holds, or a stale price.
 private fun AtomicSwapHttpException.Refused.refusal() =
-    if (service == AtomicSwapService.MAKER && code == SwapErrorCode.REJECTED) {
-        PrivateUsdFailure.AMOUNT_REFUSED
-    } else {
-        service.toFailure()
+    when {
+        service != AtomicSwapService.MAKER -> service.toFailure()
+        code == SwapErrorCode.REJECTED -> PrivateUsdFailure.AMOUNT_REFUSED
+        code == SwapErrorCode.UNAVAILABLE -> PrivateUsdFailure.MAKER_CANT_FILL
+        else -> service.toFailure()
     }
 
 private fun AtomicSwapBlock.toFailure() =
@@ -126,7 +130,9 @@ private fun AtomicSwapBlock.toFailure() =
         AtomicSwapBlock.MAKER_BUSY,
         AtomicSwapBlock.TOKENS_EXHAUSTED,
         AtomicSwapBlock.TOKENS_UNAVAILABLE,
-        AtomicSwapBlock.TOKENS_NEED_TOR -> tryLater()
+        AtomicSwapBlock.TOKENS_DEVICE_REFUSED,
+        AtomicSwapBlock.TOKENS_KEYSTORE_FAILED,
+        AtomicSwapBlock.TOKENS_NEED_TOR -> turnedAway()
 
         AtomicSwapBlock.WRONG_DEPLOYMENT,
         AtomicSwapBlock.RAILGUN_CLOSED,
@@ -137,11 +143,13 @@ private fun AtomicSwapBlock.toFailure() =
         AtomicSwapBlock.TOKENS_REFUSED -> PrivateUsdFailure.OTHER
     }
 
-// None is a failure of the conversion: it can go ahead later, once the maker, this device's allowance or Tor allows.
-private fun AtomicSwapBlock.tryLater() =
+// Turned away before anything was sent: by the maker, the day's allowance, the issuer, the keystore or Tor.
+private fun AtomicSwapBlock.turnedAway() =
     when (this) {
         AtomicSwapBlock.MAKER_BUSY -> PrivateUsdFailure.MAKER_BUSY
         AtomicSwapBlock.TOKENS_UNAVAILABLE -> PrivateUsdFailure.TOKENS_UNAVAILABLE
+        AtomicSwapBlock.TOKENS_DEVICE_REFUSED -> PrivateUsdFailure.DEVICE_REFUSED
+        AtomicSwapBlock.TOKENS_KEYSTORE_FAILED -> PrivateUsdFailure.KEYSTORE_FAILED
         AtomicSwapBlock.TOKENS_NEED_TOR -> PrivateUsdFailure.TOR_OFF
         else -> PrivateUsdFailure.NO_TOKENS_TODAY
     }

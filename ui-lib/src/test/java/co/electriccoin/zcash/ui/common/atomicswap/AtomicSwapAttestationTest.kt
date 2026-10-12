@@ -33,6 +33,7 @@ import xyz.justzappit.offramp.atomicswap.SwapTokens
 import xyz.justzappit.offramp.atomicswap.TokenChallenge
 import java.security.KeyPair
 import java.security.KeyPairGenerator
+import java.security.ProviderException
 import java.security.Signature
 import java.security.cert.X509Certificate
 import java.security.spec.ECGenParameterSpec
@@ -42,6 +43,7 @@ import kotlin.random.Random
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class AtomicSwapAttestationTest {
@@ -60,23 +62,34 @@ class AtomicSwapAttestationTest {
             install.askedFor()
             issuer.answer = HttpStatusCode.Forbidden
             val refused = assertFailsWith<AtomicSwapBlockedException> { install.tokens.prefetch() }
-            assertEquals(AtomicSwapBlock.TOKENS_REFUSED, refused.reason)
+            assertEquals(AtomicSwapBlock.TOKENS_DEVICE_REFUSED, refused.reason)
             assertTrue("bootloader unlocked" in refused.message.orEmpty(), "the issuer's reason")
+            assertEquals(NAME, install.store.state.refusedBy)
             issuer.answer = HttpStatusCode.TooManyRequests
             install.tokens.prefetch()
             assertEquals(TODAY, install.store.state.exhaustedDay)
+            assertNull(install.store.state.refusedBy, "a spent day means the attestation held")
             install.askedFor()
             issuer.answer = HttpStatusCode.OK
             install.tokens.prefetch()
             assertEquals(3, install.store.state.held.size)
 
             assertEquals(1, keys.made, "neither a refusal nor a spent day makes another key")
-            assertEquals(List(3) { listOf("token-key", "challenge", "tokens") }.flatten(), issuer.log)
+            val asked = listOf("token-key", "challenge", "tokens")
+            assertEquals(asked + listOf("challenge", "tokens") + asked + asked, issuer.log, "a refusal is asked again")
             val posts = issuer.posts.map(::Post)
             assertEquals(issuer.challenges, posts.map { it.challenge }, "each request, the challenge given just before")
-            assertEquals(3, issuer.challenges.toSet().size)
+            assertEquals(4, issuer.challenges.toSet().size)
             assertTrue(posts.all { it.chain == keys.encodedChain() })
             posts.forEach { it.assertSignedBy(keys.key) }
+        }
+
+    @Test
+    fun `a keystore that fails says so, not that the issuer is out of reach`() =
+        runTest {
+            val keys = Keys().apply { failure = ProviderException("keystore busy") }
+            val failed = assertFailsWith<AtomicSwapBlockedException> { Install(keys, Issuer()).tokens.prefetch() }
+            assertEquals(AtomicSwapBlock.TOKENS_KEYSTORE_FAILED, failed.reason)
         }
 
     @Test
@@ -135,6 +148,7 @@ class AtomicSwapAttestationTest {
     /** A P-256 key for each [generate], whose chain's batch certificate runs out when [expire] says. */
     private class Keys : AttestationKeys {
         var made = 0
+        var failure: Exception? = null
         val challenges = mutableListOf<ByteArray>()
         private val entries = mutableMapOf<String, Pair<KeyPair, List<X509Certificate>>>()
 
@@ -156,6 +170,7 @@ class AtomicSwapAttestationTest {
             alias: String,
             challenge: ByteArray
         ) {
+            failure?.let { throw it }
             made++
             challenges += challenge
             val generator = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }
