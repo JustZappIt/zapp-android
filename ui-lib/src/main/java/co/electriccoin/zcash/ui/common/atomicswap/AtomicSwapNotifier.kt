@@ -80,14 +80,17 @@ class AtomicSwapNotifier(
                 SwapDirection.FORWARD -> R.string.private_usd_notification_needs_you_body
                 SwapDirection.REVERSE -> R.string.reverse_notification_needs_you_body
             }
-        val text = context.getString(body)
-        post(
-            NEEDS_YOU_ID,
-            builder(UPDATES_CHANNEL, R.string.private_usd_notification_needs_you_title, text, direction)
-                .setAutoCancel(true)
-                .setCategory(NotificationCompat.CATEGORY_REMINDER)
-                .build(),
-        )
+        ask(direction, body)
+    }
+
+    /** Steps have kept failing, and opening the app may get them going. */
+    fun heldUp(direction: SwapDirection) {
+        val body =
+            when (direction) {
+                SwapDirection.FORWARD -> R.string.private_usd_notification_needs_you_body
+                SwapDirection.REVERSE -> R.string.reverse_notification_held_up_body
+            }
+        ask(direction, body)
     }
 
     fun clearNeedsYou() = manager.cancel(NEEDS_YOU_ID)
@@ -96,6 +99,20 @@ class AtomicSwapNotifier(
     fun clear() {
         manager.cancel(RESULT_ID)
         manager.cancel(NEEDS_YOU_ID)
+    }
+
+    private fun ask(
+        direction: SwapDirection,
+        @StringRes body: Int,
+    ) {
+        val text = context.getString(body)
+        post(
+            NEEDS_YOU_ID,
+            builder(UPDATES_CHANNEL, R.string.private_usd_notification_needs_you_title, text, direction)
+                .setAutoCancel(true)
+                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .build(),
+        )
     }
 
     // areNotificationsEnabled() is the real guard; lint can't see it as a permission check.

@@ -16,6 +16,7 @@ import xyz.justzappit.offramp.atomicswap.ReversePhase
 import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
 import xyz.justzappit.offramp.atomicswap.ReverseSwapResult
 import xyz.justzappit.offramp.atomicswap.ReverseSwapStatus
+import xyz.justzappit.offramp.atomicswap.SwapDirection
 
 /** What the reverse conversion's screen does when tapped. */
 internal interface PrivateUsdReverseActions {
@@ -101,7 +102,8 @@ internal class PrivateUsdReverseMapper(
             problem =
                 conversion.swap.problem
                     ?.takeIf { record.underWay }
-                    ?.let { PrivateUsdProblemState(it.message(), onRetry = null) },
+                    ?.message(SwapDirection.REVERSE)
+                    ?.let { PrivateUsdProblemState(it, onRetry = null) },
             zcashWait = conversion.swap.zcashWait?.takeIf { record.underWay },
             error = form.error,
             primary = primary,

@@ -16,6 +16,7 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDateTime
+import xyz.justzappit.offramp.atomicswap.SwapDirection
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import kotlin.time.Duration
@@ -34,10 +35,11 @@ internal fun Duration.about(): StringResource {
     }
 }
 
-internal fun AtomicSwapProblem.message(): StringResource =
+internal fun AtomicSwapProblem.message(direction: SwapDirection): StringResource =
     stringRes(
         when (this) {
-            AtomicSwapProblem.RELAYER_UNREACHABLE -> R.string.convert_problem_relayer
+            AtomicSwapProblem.RELAYER_UNREACHABLE -> direction.unreachableRelayer
+            AtomicSwapProblem.RELAYER_REFUSED -> R.string.convert_problem_relayer_refused
             AtomicSwapProblem.RELAYER_FEE -> R.string.convert_problem_relayer_fee
             AtomicSwapProblem.ETHEREUM_UNREACHABLE -> R.string.convert_problem_ethereum
             AtomicSwapProblem.RAILGUN_CLOSED -> R.string.convert_problem_railgun
@@ -50,6 +52,14 @@ internal fun AtomicSwapProblem.message(): StringResource =
             AtomicSwapProblem.UNEXPECTED -> R.string.convert_problem_unexpected
         }
     )
+
+// A reverse conversion's relayer sends the user's payment and any refund, never a claim.
+private val SwapDirection.unreachableRelayer: Int
+    get() =
+        when (this) {
+            SwapDirection.FORWARD -> R.string.convert_problem_relayer
+            SwapDirection.REVERSE -> R.string.reverse_problem_relayer
+        }
 
 /** The stage under way, with the confirmation count while there is one. */
 internal fun AtomicSwapState.stageDetail(confirmationsNeeded: Int?): StringResource {

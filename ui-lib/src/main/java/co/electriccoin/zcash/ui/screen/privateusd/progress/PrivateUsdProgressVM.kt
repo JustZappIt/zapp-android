@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
 import xyz.justzappit.offramp.atomicswap.AtomicSwapWait
+import xyz.justzappit.offramp.atomicswap.SwapDirection
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
@@ -96,7 +97,8 @@ class PrivateUsdProgressVM(
             problem =
                 swap.problem
                     ?.takeIf { swap.isUnderWay }
-                    ?.let { PrivateUsdProblemState(it.message(), onRetry = atomicSwapRepository::retryNow) },
+                    ?.message(SwapDirection.FORWARD)
+                    ?.let { PrivateUsdProblemState(it, onRetry = atomicSwapRepository::retryNow) },
             error = callOff.error,
             callOff =
                 ButtonState(

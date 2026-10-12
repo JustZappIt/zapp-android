@@ -30,6 +30,7 @@ internal enum class PrivateUsdFailure(
     MAKER_UNREACHABLE(R.string.convert_error_maker),
     MAKER_CANT_FILL(R.string.convert_error_maker_cant_fill),
     RELAYER_UNREACHABLE(R.string.convert_error_relayer),
+    RELAYER_REFUSED(R.string.convert_error_relayer_refused),
     ETHEREUM_UNREACHABLE(R.string.convert_error_ethereum),
     ZCASH_UNAVAILABLE(R.string.convert_error_wallet),
     DEPOSIT_UNPAYABLE(R.string.convert_error_unpayable),
@@ -97,7 +98,7 @@ private fun AtomicSwapService.toFailure() =
 // Rejected: out of range or under the swap's network cost. Unavailable: more than the maker holds, or a stale price.
 private fun AtomicSwapHttpException.Refused.refusal() =
     when {
-        service != AtomicSwapService.MAKER -> service.toFailure()
+        service == AtomicSwapService.RELAYER -> PrivateUsdFailure.RELAYER_REFUSED
         code == SwapErrorCode.REJECTED -> PrivateUsdFailure.AMOUNT_REFUSED
         code == SwapErrorCode.UNAVAILABLE -> PrivateUsdFailure.MAKER_CANT_FILL
         else -> service.toFailure()

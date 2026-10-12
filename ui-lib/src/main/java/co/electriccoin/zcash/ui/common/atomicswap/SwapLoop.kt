@@ -61,6 +61,9 @@ sealed interface SwapHold
 enum class AtomicSwapProblem : SwapHold {
     RELAYER_UNREACHABLE,
 
+    /** The relayer answers, but keeps turning the step down. */
+    RELAYER_REFUSED,
+
     /** The relayer's fee now would take the whole payout, so nothing is signed until it comes down. */
     RELAYER_FEE,
     ETHEREUM_UNREACHABLE,
@@ -218,7 +221,7 @@ internal class SwapLoop<R : Any>(
                 SwapProgress(index, failingSince = failingSince, resuming = resuming)
             }
         }
-        val attention = Attention(askedForYou = record?.let(conversions::needsYou) == true)
+        val attention = Attention(asked = Ask.NEEDS_YOU.takeIf { record?.let(conversions::needsYou) == true })
         while (record != null && session == conversions.session) {
             when (val step = step(record, session)) {
                 null -> {
@@ -242,25 +245,30 @@ internal class SwapLoop<R : Any>(
 
     /** When to ask for the user. Only a change is announced: a conversion found waiting on them already was. */
     private inner class Attention(
-        private var askedForYou: Boolean,
+        private var asked: Ask?,
     ) {
-        // Waiting for the maker's turn to pass, or for Railgun to reopen: opening the app changes neither.
+        // Waiting for the maker's turn to pass, for Railgun to reopen, or for the relayer's fee to come down: opening
+        // the app changes none of them.
         fun failed() {
             val current = progress.value
             val failingFor = nowSeconds() - (current.failingSince ?: nowSeconds())
             val canHelp = current.problem?.let { it !in OUT_OF_THE_USERS_HANDS } == true
-            if (!askedForYou && canHelp && failingFor >= NEEDS_YOU_AFTER.inWholeSeconds) {
-                notifier.needsYou(conversions.direction)
-                askedForYou = true
+            if (asked == null && canHelp && failingFor >= NEEDS_YOU_AFTER.inWholeSeconds) {
+                notifier.heldUp(conversions.direction)
+                asked = Ask.HELD_UP
             }
         }
 
+        // Asking for the user replaces a held-up conversion's notice with its own.
         fun waiting(needsYou: Boolean) {
-            if (needsYou == askedForYou) return
+            val ask = Ask.NEEDS_YOU.takeIf { needsYou }
+            if (ask == asked) return
             if (needsYou) notifier.needsYou(conversions.direction) else notifier.clearNeedsYou()
-            askedForYou = needsYou
+            asked = ask
         }
     }
+
+    private enum class Ask { NEEDS_YOU, HELD_UP }
 
     /** One step, or null when it failed and should be tried again. Zcash to wait for is waited for like any step. */
     private suspend fun step(
@@ -329,6 +337,7 @@ internal class SwapLoop<R : Any>(
             setOf(
                 AtomicSwapProblem.CLAIM_TURN,
                 AtomicSwapProblem.RAILGUN_CLOSED,
+                AtomicSwapProblem.RELAYER_FEE,
                 AtomicSwapProblem.ZCASH_REJECTED,
                 AtomicSwapProblem.MISMATCH,
             )
@@ -387,7 +396,7 @@ internal inline fun <T> catchingSwapFailures(
     } catch (e: AtomicSwapBlockedException) {
         onFailure(e, e.reason.hold())
     } catch (e: AtomicSwapHttpException) {
-        onFailure(e, e.service.problem())
+        onFailure(e, e.problem())
     } catch (e: RpcException) {
         onFailure(e, AtomicSwapProblem.ETHEREUM_UNREACHABLE)
     } catch (e: SdkException) {
@@ -405,10 +414,11 @@ internal inline fun <T> catchingSwapFailures(
     }
 
 // The loop reaches a maker only to accept a reverse swap, and keeps trying: there's nothing more to say about it.
-internal fun AtomicSwapService.problem() =
-    when (this) {
-        AtomicSwapService.RELAYER -> AtomicSwapProblem.RELAYER_UNREACHABLE
-        AtomicSwapService.MAKER -> AtomicSwapProblem.UNEXPECTED
+internal fun AtomicSwapHttpException.problem() =
+    when {
+        service == AtomicSwapService.MAKER -> AtomicSwapProblem.UNEXPECTED
+        this is AtomicSwapHttpException.Refused -> AtomicSwapProblem.RELAYER_REFUSED
+        else -> AtomicSwapProblem.RELAYER_UNREACHABLE
     }
 
 internal fun AtomicSwapBlock.hold(): SwapHold =

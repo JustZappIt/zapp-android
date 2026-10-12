@@ -359,7 +359,8 @@ class PrivateUsdReverseVMTest {
     @Test
     fun `checks that keep failing in the background show as a problem`() =
         runTest {
-            conversion.value = ReverseSwapState(record(ReversePhase.RECEIVING_ZEC), AtomicSwapProblem.UNEXPECTED)
+            conversion.value =
+                ReverseSwapState(record(ReversePhase.RECEIVING_ZEC), AtomicSwapProblem.RELAYER_UNREACHABLE)
             start()
 
             val problem =
@@ -367,7 +368,7 @@ class PrivateUsdReverseVMTest {
                     vm.state.value.progress
                         ?.problem
                 )
-            assertEquals(stringRes(R.string.convert_problem_unexpected), problem.message)
+            assertEquals(stringRes(R.string.reverse_problem_relayer), problem.message)
             assertNull(problem.onRetry)
         }
 

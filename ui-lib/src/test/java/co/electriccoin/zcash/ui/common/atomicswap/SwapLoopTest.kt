@@ -38,6 +38,7 @@ import xyz.justzappit.offramp.atomicswap.ReversePhase
 import xyz.justzappit.offramp.atomicswap.ReverseSwapDriver
 import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
 import xyz.justzappit.offramp.atomicswap.SwapDirection
+import xyz.justzappit.offramp.atomicswap.SwapErrorCode
 import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -80,11 +81,11 @@ class SwapLoopTest {
 
             loop.start(resuming = false)
             advanceTimeBy(4.minutes + 50.seconds)
-            verify(exactly = 0) { notifier.needsYou(any()) }
+            verify(exactly = 0) { notifier.heldUp(any()) }
             advanceTimeBy(30.seconds)
-            verify(exactly = 1) { notifier.needsYou(SwapDirection.FORWARD) }
+            verify(exactly = 1) { notifier.heldUp(SwapDirection.FORWARD) }
             advanceTimeBy(1.minutes)
-            verify(exactly = 1) { notifier.needsYou(any()) }
+            verify(exactly = 1) { notifier.heldUp(any()) }
 
             advanceTimeBy(2.minutes)
             assertNull(loop.progress.value.problem)
@@ -101,20 +102,33 @@ class SwapLoopTest {
             advanceTimeBy(10.minutes)
 
             assertEquals(AtomicSwapProblem.CLAIM_TURN, loop.progress.value.problem)
-            verify(exactly = 0) { notifier.needsYou(any()) }
+            verify(exactly = 0) { notifier.heldUp(any()) }
         }
 
     @Test
-    fun `a relayer fee that would take the whole payout says so, not that the relayer is out of reach`() =
+    fun `a relayer fee that would take the whole payout says so, and doesn't ask the user, who can't lower it`() =
         runTest {
             val fee = AtomicSwapBlockedException(AtomicSwapBlock.RELAYER_FEE, "a fee of 0.12 leaves nothing")
-            val loop = loop(Scripted(*Array(5) { fail(fee) }, waiting()))
+            val loop = loop(Scripted(*Array(60) { fail(fee) }))
+
+            loop.start(resuming = false)
+            advanceTimeBy(10.minutes)
+
+            assertEquals(AtomicSwapProblem.RELAYER_FEE, loop.progress.value.problem)
+            verify(exactly = 0) { notifier.heldUp(any()) }
+        }
+
+    @Test
+    fun `a relayer that answers but turns a step down isn't said to be out of reach`() =
+        runTest {
+            val refused = AtomicSwapHttpException.Refused(AtomicSwapService.RELAYER, 400, SwapErrorCode.REJECTED, "no")
+            val loop = loop(Scripted(*Array(5) { fail(refused) }, waiting()))
 
             loop.start(resuming = false)
             runCurrent()
             advanceTimeBy(PERSISTED)
 
-            assertEquals(AtomicSwapProblem.RELAYER_FEE, loop.progress.value.problem)
+            assertEquals(AtomicSwapProblem.RELAYER_REFUSED, loop.progress.value.problem)
         }
 
     @Test
@@ -243,6 +257,24 @@ class SwapLoopTest {
             coEvery { driver.advance() } returns store.record
             advanceTimeBy(RETRY + 1.seconds)
             assertNull(loop.progress.value.problem)
+        }
+
+    @Test
+    fun `a reverse conversion held up by failures doesn't say its ZEC is in, and asks for approval once it is`() =
+        runTest {
+            val store = ReverseRecords(toZec(index = 1, ReversePhase.RECEIVING_ZEC))
+            val driver = mockk<ReverseSwapDriver>()
+            coEvery { driver.advance() } throws RpcException.TransportError("eth_call", IOException("offline"))
+            val loop = loop(ReverseSwapConversions(sessions(driver), store, notifier, mockk(relaxed = true)))
+
+            loop.start(resuming = false)
+            advanceTimeBy(5.minutes + 30.seconds)
+            verify(exactly = 1) { notifier.heldUp(SwapDirection.REVERSE) }
+            verify(exactly = 0) { notifier.needsYou(any()) }
+
+            coEvery { driver.advance() } answers { store.moveTo(ReversePhase.AWAITING_READY) }
+            advanceTimeBy(RETRY + 1.seconds)
+            verify(exactly = 1) { notifier.needsYou(SwapDirection.REVERSE) }
         }
 
     @Test

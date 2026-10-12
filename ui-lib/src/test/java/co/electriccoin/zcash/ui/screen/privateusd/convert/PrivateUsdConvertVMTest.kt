@@ -248,6 +248,8 @@ class PrivateUsdConvertVMTest {
                 mapOf(
                     AtomicSwapHttpException.Unreachable(AtomicSwapService.RELAYER, IOException("down")) to
                         R.string.convert_error_relayer,
+                    AtomicSwapHttpException.Refused(AtomicSwapService.RELAYER, 400, SwapErrorCode.REJECTED, "no") to
+                        R.string.convert_error_relayer_refused,
                     AtomicSwapHttpException.Unreachable(AtomicSwapService.MAKER, IOException("down")) to
                         R.string.convert_error_maker,
                     AtomicSwapHttpException.Refused(AtomicSwapService.MAKER, 503, SwapErrorCode.UNAVAILABLE, "short") to

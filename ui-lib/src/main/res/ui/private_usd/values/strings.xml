@@ -103,6 +103,7 @@
     <string name="convert_error_amount_refused" tools:ignore="MissingTranslation">The market maker won\'t convert this amount. It may not cover the swap\'s network cost, so try a larger amount.</string>
     <string name="convert_error_tor_off" tools:ignore="MissingTranslation">Conversions get their token over Tor, which is off. Turn on Tor in Settings, then convert again.</string>
     <string name="convert_error_relayer">The relayer that completes conversions can\'t be reached right now. Try again in a moment.</string>
+    <string name="convert_error_relayer_refused">The relayer that completes conversions turned this down. Try again in a moment.</string>
     <string name="convert_error_generic">Couldn\'t get a quote. Try again in a moment.</string>
     <string name="convert_error_ethereum" tools:ignore="MissingTranslation">Zapp can\'t reach Ethereum right now. Try again in a moment.</string>
     <string name="convert_error_wallet" tools:ignore="MissingTranslation">Your Zcash wallet isn\'t ready. Try again once it has synced.</string>
@@ -165,6 +166,8 @@
     <!-- Convert: needs attention -->
     <string name="convert_problem_title" tools:ignore="MissingTranslation">Taking longer than usual</string>
     <string name="convert_problem_relayer">Zapp can\'t reach the relayer that sends your claim. It keeps trying by itself.</string>
+    <string name="reverse_problem_relayer">Zapp can\'t reach the relayer that moves your dollars. It keeps trying by itself.</string>
+    <string name="convert_problem_relayer_refused">The relayer keeps turning down this conversion\'s transaction. Zapp keeps trying by itself.</string>
     <string name="convert_problem_relayer_fee">The relayer\'s fee is more than this conversion pays out right now, so Zapp waits for it to come down. It keeps checking by itself.</string>
     <string name="convert_problem_ethereum">Zapp can\'t reach Ethereum right now. It keeps trying by itself.</string>
     <string name="convert_problem_railgun">Railgun isn\'t accepting deposits right now, so Zapp holds off claiming. If it doesn\'t reopen in time, the swap is called off and your ZEC comes back.</string>
@@ -210,6 +213,7 @@
     <string name="private_usd_notification_needs_you_title">Your conversion needs you</string>
     <string name="private_usd_notification_needs_you_body">Open Zapp so it can finish converting to private USD.</string>
     <string name="reverse_notification_needs_you_body" tools:ignore="MissingTranslation">The ZEC for your conversion is in. Open Zapp to approve settlement.</string>
+    <string name="reverse_notification_held_up_body">Your conversion is taking longer than usual. Open Zapp so it can carry on.</string>
 
     <!-- Send and withdraw -->
     <string name="private_usd_send_title">Send privately</string>
