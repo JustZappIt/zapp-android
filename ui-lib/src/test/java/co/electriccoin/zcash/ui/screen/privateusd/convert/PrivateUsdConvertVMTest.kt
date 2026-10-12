@@ -4,7 +4,9 @@
 package co.electriccoin.zcash.ui.screen.privateusd.convert
 
 import androidx.lifecycle.viewModelScope
+import cash.z.ecc.android.sdk.Synchronizer
 import cash.z.ecc.android.sdk.model.FiatCurrency
+import cash.z.ecc.android.sdk.model.PercentDecimal
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
@@ -13,6 +15,8 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapTestnet
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
+import co.electriccoin.zcash.ui.common.model.WalletRestoringState
+import co.electriccoin.zcash.ui.common.model.WalletSnapshot
 import co.electriccoin.zcash.ui.common.model.ZashiAccount
 import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.common.privateusd.ObserveLocalCurrencyUseCase
@@ -41,7 +45,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -84,6 +88,10 @@ class PrivateUsdConvertVMTest {
         }
     private val navigation = mockk<NavigationRouter>(relaxed = true)
     private val spendable = MutableStateFlow(Zatoshi(ONE_ZEC))
+
+    // The whole shielded balance; none means all of it is spendable.
+    private val shielded = MutableStateFlow<Zatoshi?>(null)
+    private val sync = MutableStateFlow<WalletSnapshot?>(walletAt(Synchronizer.Status.SYNCED))
     private val currency = MutableStateFlow(LocalCurrency.DOLLAR)
     private val privateBalance = MutableStateFlow(PrivateUsdBalanceState())
     private val spending = MutableStateFlow(PrivateUsdSpendStatus.AVAILABLE)
@@ -165,6 +173,41 @@ class PrivateUsdConvertVMTest {
                     ?.pay
             )
             coVerify { swaps.quote(AtomicSwapTestnet.deployment.maxAmount) }
+        }
+
+    @Test
+    fun `the maximum fills in the whole balance at once, then what its quote pays for`() =
+        runTest {
+            start()
+            val maximum = CompletableDeferred<Unit>()
+            coEvery { swaps.quote(any()) } coAnswers {
+                maximum.await()
+                quoteFor(requested())
+            }
+
+            checkNotNull(vm.state.value.onMax).invoke()
+
+            assertEquals(BigDecimal("1.00000000"), vm.state.value.amount.innerState.amount)
+            assertTrue(vm.state.value.isQuoting)
+            maximum.complete(Unit)
+            runCurrent()
+            assertEquals(BigDecimal("0.60010000"), vm.state.value.amount.innerState.amount)
+            assertFalse(vm.state.value.isQuoting)
+        }
+
+    @Test
+    fun `while the wallet syncs, the balance it hasn't caught up on is said, and the maximum waits for it`() =
+        runTest {
+            shielded.value = Zatoshi(2 * ONE_ZEC)
+            sync.value = walletAt(Synchronizer.Status.SYNCING, progress = 0.42f)
+            start()
+
+            assertEquals(stringRes(R.string.convert_zec_syncing_progress, 42), vm.state.value.zecSyncing)
+            assertNull(vm.state.value.onMax)
+
+            sync.value = walletAt(Synchronizer.Status.SYNCED)
+            assertNull(vm.state.value.zecSyncing)
+            assertNotNull(vm.state.value.onMax)
         }
 
     @Test
@@ -339,7 +382,12 @@ class PrivateUsdConvertVMTest {
         val accounts =
             mockk<AccountDataSource> {
                 every { zashiAccount } returns
-                    spendable.map { mockk<ZashiAccount> { every { spendableShieldedBalance } returns it } }
+                    combine(spendable, shielded) { available, total ->
+                        mockk<ZashiAccount> {
+                            every { spendableShieldedBalance } returns available
+                            every { totalShieldedBalance } returns (total ?: available)
+                        }
+                    }
             }
         val balances =
             mockk<PrivateUsdBalanceRepository> {
@@ -356,6 +404,7 @@ class PrivateUsdConvertVMTest {
                 navigationRouter = navigation,
                 navigateBackToPay = mockk(relaxed = true),
                 accountDataSource = accounts,
+                walletSnapshotDataSource = mockk { every { observe() } returns sync },
                 spendGuard =
                     mockk<PrivateUsdSpendGuard> {
                         every { state } returns spending
@@ -378,6 +427,17 @@ class PrivateUsdConvertVMTest {
         const val ZAT_PER_UNIT = 3L
         const val FEE_ZAT = 10_000L
         val TYPING = 700.milliseconds
+
+        fun walletAt(
+            status: Synchronizer.Status,
+            progress: Float = 1f
+        ) = WalletSnapshot(
+            status = status,
+            progress = PercentDecimal(progress),
+            synchronizerError = null,
+            isSpendable = true,
+            restoringState = WalletRestoringState.NONE,
+        )
 
         fun quoteFor(
             requested: Usdc6,

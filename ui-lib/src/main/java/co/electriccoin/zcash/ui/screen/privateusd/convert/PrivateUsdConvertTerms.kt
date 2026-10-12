@@ -3,9 +3,12 @@
 
 package co.electriccoin.zcash.ui.screen.privateusd.convert
 
+import cash.z.ecc.android.sdk.Synchronizer
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployment
+import co.electriccoin.zcash.ui.common.model.WalletAccount
+import co.electriccoin.zcash.ui.common.model.WalletSnapshot
 import co.electriccoin.zcash.ui.common.privateusd.LocalCurrency
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendStatus
@@ -22,6 +25,7 @@ import co.electriccoin.zcash.ui.screen.privateusd.availableText
 import co.electriccoin.zcash.ui.screen.privateusd.zatoshi
 import co.electriccoin.zcash.ui.screen.privateusd.zecField
 import xyz.justzappit.offramp.atomicswap.RAILGUN_FEE
+import kotlin.math.roundToInt
 
 internal data class ConvertForm(
     val phase: PrivateUsdConvertPhase = PrivateUsdConvertPhase.AMOUNT,
@@ -97,7 +101,34 @@ internal data class ConvertHoldings(
     val balance: PrivateUsdBalanceState,
     val currency: LocalCurrency,
     val spending: PrivateUsdSpendStatus = PrivateUsdSpendStatus.AVAILABLE,
-)
+    val catchUp: ZecCatchUp? = null,
+) {
+    /** What the maximum spends: nothing while the wallet is still catching up on part of the balance. */
+    fun maximum(): Zatoshi? = spendable?.takeIf { it.value > 0 && catchUp == null }
+}
+
+/** Part of the shielded balance isn't spendable until the wallet catches up; [percent] while it syncs. */
+internal data class ZecCatchUp(
+    val percent: Int?,
+) {
+    val message: StringResource
+        get() =
+            percent?.let { stringRes(R.string.convert_zec_syncing_progress, it) }
+                ?: stringRes(R.string.convert_zec_syncing)
+}
+
+/** Notes the wallet hasn't scanned up to the tip aren't spendable yet, so the rest of the balance waits on the sync. */
+internal fun zecCatchUp(
+    account: WalletAccount?,
+    snapshot: WalletSnapshot?,
+): ZecCatchUp? {
+    val isWaiting = account != null && account.totalShieldedBalance > account.spendableShieldedBalance
+    if (!isWaiting || snapshot?.status == Synchronizer.Status.SYNCED) return null
+    val progress = snapshot?.takeIf { it.status == Synchronizer.Status.SYNCING }?.progress
+    return ZecCatchUp(progress?.let { (it.decimal * PERCENT).roundToInt().coerceIn(0, PERCENT - 1) })
+}
+
+private const val PERCENT = 100
 
 /** What a deployment's conversions cost and bring, in the user's currency. */
 internal class PrivateUsdConvertTerms(

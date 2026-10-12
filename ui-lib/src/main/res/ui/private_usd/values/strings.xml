@@ -90,6 +90,8 @@
     <string name="convert_quote_loading">Getting quote…</string>
     <string name="convert_insufficient">Not enough ZEC. You have %1$s available.</string>
     <string name="convert_review">Review</string>
+    <string name="convert_zec_syncing">Your wallet is still syncing. The rest of your ZEC is available once it catches up.</string>
+    <string name="convert_zec_syncing_progress">Your wallet is still syncing (%1$d%%). The rest of your ZEC is available once it catches up.</string>
     <string name="convert_error_maker">The market maker can\'t be reached right now. Try again in a moment.</string>
     <string name="convert_error_maker_cant_fill">The market maker can\'t convert this much right now. Try a smaller amount, or try again later.</string>
     <string name="convert_error_maker_busy" tools:ignore="MissingTranslation">The market maker is busy with other conversions. Try again in a few minutes.</string>

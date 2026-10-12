@@ -105,6 +105,8 @@
     <string name="convert_quote_expires">La cotización se actualiza en %1$s</string>
     <string name="convert_insufficient">No hay suficiente ZEC. Tienes %1$s disponibles.</string>
     <string name="convert_review">Revisar</string>
+    <string name="convert_zec_syncing">Tu billetera aún se está sincronizando. El resto de tus ZEC estará disponible cuando termine.</string>
+    <string name="convert_zec_syncing_progress">Tu billetera aún se está sincronizando (%1$d%%). El resto de tus ZEC estará disponible cuando termine.</string>
     <string name="convert_error_maker">No se puede contactar con el creador de mercado. Inténtalo de nuevo en un momento.</string>
     <string name="convert_error_maker_cant_fill">El creador de mercado no puede convertir tanto en este momento. Prueba con un importe menor o inténtalo de nuevo más tarde.</string>
     <string name="convert_error_device_refused">Este teléfono no puede obtener tokens de conversión. El emisor de tokens rechaza los emuladores, los teléfonos con el bootloader desbloqueado o un sistema modificado y las versiones de Zapp que no reconoce.</string>

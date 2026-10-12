@@ -37,6 +37,7 @@ internal fun PrivateUsdConvertAmountView(
     onMax: (() -> Unit)?,
     onSwitchDirection: (() -> Unit)?,
     isZecBalanceLoading: Boolean = false,
+    zecSyncing: StringResource? = null,
     isUsdBalanceLoading: Boolean = false,
     usdBalanceError: StringResource? = null,
     isUsdBalanceRefreshing: Boolean = false,
@@ -45,6 +46,8 @@ internal fun PrivateUsdConvertAmountView(
     fun loading(asset: ConvertAsset) = if (asset == ConvertAsset.ZEC) isZecBalanceLoading else isUsdBalanceLoading
 
     fun refresh(asset: ConvertAsset) = onRefreshBalance.takeIf { asset == ConvertAsset.PRIVATE_USD }
+
+    fun syncing(asset: ConvertAsset) = asset == ConvertAsset.ZEC && zecSyncing != null
 
     fun available(asset: ConvertAsset) =
         when (asset) {
@@ -60,6 +63,7 @@ internal fun PrivateUsdConvertAmountView(
         isInvalid = isInvalid,
         onMax = onMax,
         isLoading = loading(direction.from),
+        isSyncing = syncing(direction.from),
         onRefresh = refresh(direction.from),
         isRefreshing = isUsdBalanceRefreshing,
     )
@@ -75,7 +79,14 @@ internal fun PrivateUsdConvertAmountView(
         onRefresh = refresh(direction.to),
         isRefreshing = isUsdBalanceRefreshing,
         isLoading = loading(direction.to),
+        isSyncing = syncing(direction.to),
     )
+    zecSyncing?.let {
+        BasicText(
+            text = it.getValue(),
+            style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.textMuted)
+        )
+    }
     if (isUsdBalanceLoading) {
         BasicText(
             text = stringResource(R.string.private_usd_first_load),
@@ -99,6 +110,7 @@ private fun AssetAmount(
     isInvalid: Boolean,
     onMax: (() -> Unit)?,
     isLoading: Boolean,
+    isSyncing: Boolean,
     onRefresh: (() -> Unit)?,
     isRefreshing: Boolean,
 ) {
@@ -136,7 +148,8 @@ private fun AssetAmount(
                             available?.getValue()
                                 ?: stringResource(R.string.private_usd_home_unknown)
                         },
-                    isLoading = isLoading,
+                    // Syncing shows what's spendable so far, spinning, with the maximum held back until it's all there.
+                    isLoading = isLoading || isSyncing,
                     action =
                         onMax?.let {
                             ZappFieldBalanceAction(
