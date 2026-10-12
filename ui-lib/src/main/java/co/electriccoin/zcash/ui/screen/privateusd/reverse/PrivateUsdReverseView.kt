@@ -74,7 +74,7 @@ private fun Amount(
     PrivateUsdConvertAmountView(
         direction = PrivateUsdConversionDirection.USD_TO_ZEC,
         amount = state.amount,
-        note = state.amountNote,
+        note = null,
         isInvalid = state.isAmountInvalid,
         estimate = state.receiveEstimate,
         currencySymbol = state.currencySymbol,
@@ -184,7 +184,6 @@ private fun previewState() =
     PrivateUsdReverseState(
         amount = NumberTextFieldState(NumberTextFieldInnerState.fromAmount(BigDecimal("835"))) {},
         isAmountInvalid = false,
-        amountNote = stringRes("₹9.19 to ₹1,669.12"),
         currencySymbol = "₹",
         usdAvailable = stringRes("₹1,200.00"),
         zecAvailable = stringRes("2.51 ZEC"),

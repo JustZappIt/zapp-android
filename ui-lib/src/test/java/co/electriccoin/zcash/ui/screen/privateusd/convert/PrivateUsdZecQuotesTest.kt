@@ -5,7 +5,6 @@ package co.electriccoin.zcash.ui.screen.privateusd.convert
 
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapQuote
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
-import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapTestnet
 import co.electriccoin.zcash.ui.screen.privateusd.offer
 import co.electriccoin.zcash.ui.screen.privateusd.requested
 import io.mockk.coEvery
@@ -14,6 +13,9 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import xyz.justzappit.offramp.atomicswap.AtomicSwapBlock
 import xyz.justzappit.offramp.atomicswap.AtomicSwapBlockedException
+import xyz.justzappit.offramp.atomicswap.AtomicSwapHttpException
+import xyz.justzappit.offramp.atomicswap.AtomicSwapService
+import xyz.justzappit.offramp.atomicswap.SwapErrorCode
 import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -21,13 +23,12 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class PrivateUsdZecQuotesTest {
-    private val deployment = AtomicSwapTestnet.deployment
     private val repository = mockk<AtomicSwapRepository>()
     private var now = NOW
-    private val quotes = PrivateUsdZecQuotes(repository, deployment) { now }
+    private val quotes = PrivateUsdZecQuotes(repository) { now }
 
     @Test
-    fun `the price comes from the deployment's least amount, then each quote prices the next while it holds`() =
+    fun `the price comes from a dollar's quote, then each quote prices the next while it holds`() =
         runTest {
             coEvery { repository.quote(any()) } answers { quote(requested()) }
 
@@ -36,7 +37,7 @@ class PrivateUsdZecQuotesTest {
             now = NOW + VALIDITY
             quotes.quote(30_000_000)
 
-            coVerify(exactly = 2) { repository.quote(deployment.minAmount) }
+            coVerify(exactly = 2) { repository.quote(PrivateUsdZecQuotes.PRICE_PROBE) }
             coVerify(exactly = 5) { repository.quote(any()) }
         }
 
@@ -45,7 +46,7 @@ class PrivateUsdZecQuotesTest {
         runTest {
             coEvery { repository.quote(any()) } answers {
                 val amount = requested()
-                quote(amount, feeZat = if (amount == deployment.minAmount) FEE_ZAT else 25_000)
+                quote(amount, feeZat = if (amount == PrivateUsdZecQuotes.PRICE_PROBE) FEE_ZAT else 25_000)
             }
 
             val quote = quotes.quote(50_000_000)
@@ -77,22 +78,38 @@ class PrivateUsdZecQuotesTest {
         }
 
     @Test
-    fun `the maximum stops at the deployment's most`() =
+    fun `a whole balance is asked for in full, with no most of the app's own`() =
         runTest {
             coEvery { repository.quote(any()) } answers { quote(requested()) }
 
-            val quote = quotes.maximum(10 * ONE_ZEC)
+            val quote = quotes.quote(10 * ONE_ZEC)
 
-            assertEquals(deployment.maxAmount, quote.offer.requested)
+            assertEquals(Usdc6.ofMicros(333_330_000), quote.offer.requested)
+            assertEquals(10 * ONE_ZEC, quote.totalZat)
         }
 
     @Test
-    fun `an amount outside the deployment's limits has no quote`() =
+    fun `an amount the maker refuses is its refusal, not asked for again`() =
+        runTest {
+            val refusal =
+                AtomicSwapHttpException.Refused(AtomicSwapService.MAKER, 400, SwapErrorCode.REJECTED, "range")
+            coEvery { repository.quote(any()) } answers {
+                val amount = requested()
+                if (amount == PrivateUsdZecQuotes.PRICE_PROBE) quote(amount) else throw refusal
+            }
+
+            val failure = assertFailsWith<AtomicSwapHttpException.Refused> { quotes.quote(10 * ONE_ZEC) }
+
+            assertEquals(SwapErrorCode.REJECTED, failure.code)
+            coVerify(exactly = 2) { repository.quote(any()) }
+        }
+
+    @Test
+    fun `ZEC that only covers the network fee has no quote`() =
         runTest {
             coEvery { repository.quote(any()) } answers { quote(requested()) }
 
-            assertFailsWith<ZecInputQuoteException> { quotes.quote(100_000) }
-            assertFailsWith<ZecInputQuoteException> { quotes.quote(10 * ONE_ZEC) }
+            assertFailsWith<ZecInputQuoteException> { quotes.quote(FEE_ZAT) }
         }
 
     @Test

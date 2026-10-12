@@ -149,6 +149,9 @@ enum class AtomicSwapBlock {
 
     /** Tokens are fetched over Tor only, and Tor is off on this device. */
     TOKENS_NEED_TOR,
+
+    /** More than a quote can name: a maker counts the amount in `u32` token base units. */
+    AMOUNT_UNQUOTABLE,
 }
 
 internal val AtomicSwapService.label get() = name.lowercase()

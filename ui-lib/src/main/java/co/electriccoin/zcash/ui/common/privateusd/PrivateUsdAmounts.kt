@@ -37,12 +37,6 @@ data class LocalCurrency(
 
     fun format(dollars: BigDecimal): StringResource = money(of(dollars, RoundingMode.HALF_EVEN))
 
-    /** A lower limit in this currency, rounded up so the amount shown is one that can be typed. */
-    fun formatAtLeast(dollars: BigDecimal): StringResource = money(of(dollars, RoundingMode.UP))
-
-    /** An upper limit in this currency, rounded down for the same reason. */
-    fun formatAtMost(dollars: BigDecimal): StringResource = money(of(dollars, RoundingMode.DOWN))
-
     /** [dollars] as an amount field in this currency shows them. */
     fun field(dollars: BigDecimal): NumberTextFieldInnerState = input(of(dollars, RoundingMode.HALF_EVEN))
 

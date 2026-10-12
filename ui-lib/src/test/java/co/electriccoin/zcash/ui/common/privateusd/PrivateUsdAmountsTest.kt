@@ -74,17 +74,6 @@ class PrivateUsdAmountsTest {
     }
 
     @Test
-    fun `limits round inward, so both ends can be typed`() {
-        val least = rupees.formatAtLeast(BigDecimal("0.11")) as StringResource.ByCurrencyNumber
-        val most = rupees.formatAtMost(BigDecimal("20")) as StringResource.ByCurrencyNumber
-
-        assertEquals(BigDecimal("9.19"), least.amount)
-        assertTrue(rupees.toDollars(BigDecimal("9.19")) >= BigDecimal("0.11"))
-        assertEquals(BigDecimal("1669.12"), most.amount)
-        assertTrue(rupees.toDollars(BigDecimal("1669.12")) <= BigDecimal("20"))
-    }
-
-    @Test
     fun `the maximum never rounds up past what's there`() {
         val available = BigDecimal("1.123456")
         val input = checkNotNull(rupees.maximumField(available).amount)

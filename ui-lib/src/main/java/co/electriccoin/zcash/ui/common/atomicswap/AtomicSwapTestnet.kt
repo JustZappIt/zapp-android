@@ -11,7 +11,6 @@ import xyz.justzappit.offramp.atomicswap.SwapDeployment
 import xyz.justzappit.offramp.atomicswap.SwapTokenIssuer
 import xyz.justzappit.offramp.atomicswap.SwapZcashNetwork
 import xyz.justzappit.offramp.atomicswap.ZcashDepositTerms
-import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunNetwork
 import kotlin.time.Duration.Companion.minutes
@@ -21,10 +20,6 @@ object AtomicSwapTestnet {
     // minutes out. Records kept with the defaults keep theirs.
     private const val CONFIRMATIONS = 2
     private const val MIN_SECONDS_TO_T0 = 9 * 60L
-
-    // In the token's base units; the hosted relayer's fee is never under 0.10.
-    private const val MIN_AMOUNT = 110_000L
-    private const val MAX_AMOUNT = 20_000_000L
 
     // The relayer's own 0zk address, which a private send's fee note pays.
     private const val RELAYER_RAILGUN_ADDRESS =
@@ -74,8 +69,6 @@ object AtomicSwapTestnet {
             railgunNetwork = RailgunNetwork.SEPOLIA,
             explorerTxUrl = Sepolia.EXPLORER_TX_URL,
             railscanTxUrl = Sepolia.RAILSCAN_TX_URL,
-            minAmount = Usdc6.ofMicros(MIN_AMOUNT),
-            maxAmount = Usdc6.ofMicros(MAX_AMOUNT),
             screeningTime = 1.minutes,
             railgunSends =
                 RailgunSendsPin(

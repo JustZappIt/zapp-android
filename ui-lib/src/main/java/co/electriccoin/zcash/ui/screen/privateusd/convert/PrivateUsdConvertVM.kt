@@ -69,7 +69,7 @@ class PrivateUsdConvertVM(
 ) : ViewModel() {
     private val deployment = atomicSwapRepository.requireDeployment()
     private val terms = PrivateUsdConvertTerms(deployment)
-    private val zecQuotes = PrivateUsdZecQuotes(atomicSwapRepository, deployment)
+    private val zecQuotes = PrivateUsdZecQuotes(atomicSwapRepository)
     private val form = MutableStateFlow(ConvertForm())
     private var quoteJob: Job? = null
 
@@ -148,7 +148,7 @@ class PrivateUsdConvertVM(
                         {
                             // The whole balance shows at once; its quote then brings it to what that pays for.
                             this.form.update { it.copy(amount = zecField(available.value)) }
-                            requestQuote(fillsAmount = true) { zecQuotes.maximum(available.value) }
+                            requestQuote(fillsAmount = true) { zecQuotes.quote(available.value) }
                         }
                     },
             quote = ready?.let { terms.quote(it, form.phase, now, holdings.currency) },

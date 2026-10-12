@@ -479,7 +479,8 @@ internal fun AtomicSwapBlock.hold(): SwapHold =
         AtomicSwapBlock.TOKENS_REFUSED,
         AtomicSwapBlock.TOKENS_DEVICE_REFUSED,
         AtomicSwapBlock.TOKENS_KEYSTORE_FAILED,
-        AtomicSwapBlock.TOKENS_NEED_TOR -> {
+        AtomicSwapBlock.TOKENS_NEED_TOR,
+        AtomicSwapBlock.AMOUNT_UNQUOTABLE -> {
             AtomicSwapProblem.UNEXPECTED
         }
     }

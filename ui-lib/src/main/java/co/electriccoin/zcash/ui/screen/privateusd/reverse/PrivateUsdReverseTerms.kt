@@ -137,10 +137,8 @@ internal class PrivateUsdReverseTerms(
     deployment: AtomicSwapDeployment,
 ) {
     private val token = deployment.privateUsdToken
-    private val least = deployment.minAmount.micros
-    private val most = deployment.maxAmount.micros
 
-    /** [typed] of [currency] in the token, when a conversion can be that much. */
+    /** [typed] of [currency] in the token, when it comes to some: the maker says whether it converts that much. */
     fun amount(
         typed: BigDecimal,
         currency: LocalCurrency
@@ -148,15 +146,8 @@ internal class PrivateUsdReverseTerms(
         typed
             .takeIf { currency.holds(it) }
             ?.let { currency.toDollars(it).toBaseUnits(token.decimals) }
-            ?.takeIf { it in least..most }
+            ?.takeIf { it.signum() > 0 }
             ?.let(::Usdc6)
-
-    fun limits(currency: LocalCurrency): StringResource =
-        stringRes(
-            R.string.convert_local_limits,
-            currency.formatAtLeast(least.toDecimal(token.decimals)),
-            currency.formatAtMost(most.toDecimal(token.decimals)),
-        )
 
     fun spendable(balance: PrivateUsdBalanceState): BigInteger? = balance.available(token)
 
@@ -165,11 +156,11 @@ internal class PrivateUsdReverseTerms(
         currency: LocalCurrency
     ): StringResource = balance.availableText(token, currency)
 
-    /** As much as [units] pay for, up to the most a conversion takes. */
+    /** As much as [units] pay for. */
     fun maximum(
         units: BigInteger,
         currency: LocalCurrency
-    ): NumberTextFieldInnerState = currency.maximumField(units.min(most).toDecimal(token.decimals))
+    ): NumberTextFieldInnerState = currency.maximumField(units.toDecimal(token.decimals))
 
     fun format(
         amount: Usdc6,

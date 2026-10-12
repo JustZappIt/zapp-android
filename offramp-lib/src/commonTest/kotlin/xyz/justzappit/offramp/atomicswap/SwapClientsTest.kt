@@ -300,12 +300,17 @@ class SwapClientsTest {
     fun anAmountTheMakerCantQuoteIsNeverAskedFor() =
         runTest {
             val services = Services { respond("{}") }
+            val note = NoteCommitment.of(ByteArray(32))
+            val tooMuch = Usdc6.ofMicros(1L shl 32)
 
-            for (amount in listOf(Usdc6.ZERO, Usdc6.ofMicros(1L shl 32))) {
-                assertFailsWith<IllegalArgumentException> {
-                    services.maker.quote(amount, Address.ZERO, NoteCommitment.of(ByteArray(32)))
-                }
-            }
+            assertFailsWith<IllegalArgumentException> { services.maker.quote(Usdc6.ZERO, Address.ZERO, note) }
+            // Past what a quote can name, it's refused the way the maker refuses more than it converts.
+            val forward =
+                assertFailsWith<AtomicSwapBlockedException> { services.maker.quote(tooMuch, Address.ZERO, note) }
+            val reverse =
+                assertFailsWith<AtomicSwapBlockedException> { services.maker.quoteReverse(tooMuch, Address.ZERO, note) }
+            assertEquals(AtomicSwapBlock.AMOUNT_UNQUOTABLE, forward.reason)
+            assertEquals(AtomicSwapBlock.AMOUNT_UNQUOTABLE, reverse.reason)
             assertTrue(services.paths.isEmpty())
             services.close()
         }

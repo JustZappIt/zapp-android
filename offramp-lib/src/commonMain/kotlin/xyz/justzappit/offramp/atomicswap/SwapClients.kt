@@ -185,7 +185,10 @@ class MakerClient(
 
     // The maker counts a quote's amount in `u32` token base units.
     private fun Usdc6.units(): Long {
-        require(micros.signum() > 0 && micros.bitLength() <= Int.SIZE_BITS) { "an amount the maker can't quote" }
+        require(micros.signum() > 0) { "an amount the maker can't quote" }
+        if (micros.bitLength() > Int.SIZE_BITS) {
+            throw AtomicSwapBlockedException(AtomicSwapBlock.AMOUNT_UNQUOTABLE, "more than a quote can name")
+        }
         return micros.toLong()
     }
 }

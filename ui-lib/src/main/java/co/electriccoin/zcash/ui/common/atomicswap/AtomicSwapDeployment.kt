@@ -8,7 +8,6 @@ import co.electriccoin.zcash.ui.common.privateusd.RailgunSendsPin
 import co.electriccoin.zcash.ui.common.provider.ZcashNetworkProvider
 import xyz.justzappit.offramp.atomicswap.SwapDeployment
 import xyz.justzappit.offramp.atomicswap.ZcashDepositTerms
-import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.railgun.RailgunNetwork
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
@@ -22,8 +21,6 @@ data class AtomicSwapDeployment(
     val explorerTxUrl: String,
     /** Railscan, Railgun's explorer, on the same chain. */
     val railscanTxUrl: String,
-    val minAmount: Usdc6,
-    val maxAmount: Usdc6,
     /** How long Railgun screens a payout before it can be spent. */
     val screeningTime: Duration,
     /** The relayer's terms for private sends this app accepts; none sends nothing. */

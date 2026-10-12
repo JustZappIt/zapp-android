@@ -15,8 +15,6 @@ internal data class PrivateUsdReverseState(
     /** The private dollars to convert, in [currencySymbol]'s currency. */
     val amount: NumberTextFieldState,
     val isAmountInvalid: Boolean,
-    /** The least and the most one conversion takes. */
-    val amountNote: StringResource,
     val currencySymbol: String,
     val usdAvailable: StringResource,
     val zecAvailable: StringResource?,

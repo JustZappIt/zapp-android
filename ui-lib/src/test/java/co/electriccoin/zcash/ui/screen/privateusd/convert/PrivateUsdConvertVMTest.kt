@@ -114,7 +114,7 @@ class PrivateUsdConvertVMTest {
             assertEquals(stringRes(Zatoshi(49_999_999)), quote.pay)
             assertEquals(stringRes(Zatoshi(FEE_ZAT)), quote.networkFee)
             assertTrue(vm.state.value.primaryButton.isEnabled)
-            coVerify(exactly = 1) { swaps.quote(AtomicSwapTestnet.deployment.minAmount) }
+            coVerify(exactly = 1) { swaps.quote(PrivateUsdZecQuotes.PRICE_PROBE) }
             coVerify(exactly = 2) { swaps.quote(any()) }
 
             type("0.4")
@@ -166,18 +166,19 @@ class PrivateUsdConvertVMTest {
             runCurrent()
 
             assertEquals(PrivateUsdConvertPhase.AMOUNT, vm.state.value.phase)
-            assertEquals(BigDecimal("0.60010000"), vm.state.value.amount.innerState.amount)
+            assertEquals(BigDecimal("1.00000000"), vm.state.value.amount.innerState.amount)
             assertEquals(
-                stringRes(Zatoshi(60_010_000)),
+                stringRes(Zatoshi(ONE_ZEC)),
                 vm.state.value.quote
                     ?.pay
             )
-            coVerify { swaps.quote(AtomicSwapTestnet.deployment.maxAmount) }
+            coVerify { swaps.quote(Usdc6.ofMicros(33_330_000)) }
         }
 
     @Test
     fun `the maximum fills in the whole balance at once, then what its quote pays for`() =
         runTest {
+            spendable.value = Zatoshi(ONE_ZEC + 2)
             start()
             val maximum = CompletableDeferred<Unit>()
             coEvery { swaps.quote(any()) } coAnswers {
@@ -187,12 +188,13 @@ class PrivateUsdConvertVMTest {
 
             checkNotNull(vm.state.value.onMax).invoke()
 
-            assertEquals(BigDecimal("1.00000000"), vm.state.value.amount.innerState.amount)
+            assertEquals(BigDecimal("1.00000002"), vm.state.value.amount.innerState.amount)
             assertTrue(vm.state.value.isQuoting)
             maximum.complete(Unit)
             runCurrent()
-            assertEquals(BigDecimal("0.60010000"), vm.state.value.amount.innerState.amount)
+            assertEquals(BigDecimal("1.00000000"), vm.state.value.amount.innerState.amount)
             assertFalse(vm.state.value.isQuoting)
+            coVerify { swaps.quote(Usdc6.ofMicros(33_330_000)) }
         }
 
     @Test
@@ -254,6 +256,10 @@ class PrivateUsdConvertVMTest {
                         R.string.convert_error_maker,
                     AtomicSwapHttpException.Refused(AtomicSwapService.MAKER, 503, SwapErrorCode.UNAVAILABLE, "short") to
                         R.string.convert_error_maker_cant_fill,
+                    AtomicSwapHttpException.Refused(AtomicSwapService.MAKER, 400, SwapErrorCode.REJECTED, "range") to
+                        R.string.convert_error_amount_refused,
+                    AtomicSwapBlockedException(AtomicSwapBlock.AMOUNT_UNQUOTABLE, "more than a quote can name") to
+                        R.string.convert_error_amount_refused,
                     AtomicSwapBlockedException(AtomicSwapBlock.TOKENS_DEVICE_REFUSED, "attestation refused") to
                         R.string.convert_error_device_refused,
                     StoreCorruptedException("unreadable") to R.string.convert_error_store,

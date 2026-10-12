@@ -44,7 +44,6 @@
     <string name="reverse_step_fund">Enviando USD privados al depósito en garantía</string>
     <string name="reverse_step_settle">Liquidando tu conversión</string>
     <string name="reverse_step_approval_detail">Se necesita tu autorización para continuar.</string>
-    <string name="convert_local_limits">De %1$s a %2$s</string>
     <string name="convert_quote_loading">Obteniendo cotización…</string>
     <string name="convert_fees_value">%1$s relayer · %2$s%% Railgun</string>
     <string name="private_usd_switch_currency">Cambiar la moneda del saldo</string>
@@ -109,6 +108,7 @@
     <string name="convert_zec_syncing_progress">Tu billetera aún se está sincronizando (%1$d%%). El resto de tus ZEC estará disponible cuando termine.</string>
     <string name="convert_error_maker">No se puede contactar con el creador de mercado. Inténtalo de nuevo en un momento.</string>
     <string name="convert_error_maker_cant_fill">El creador de mercado no puede convertir tanto en este momento. Prueba con un importe menor o inténtalo de nuevo más tarde.</string>
+    <string name="convert_error_amount_refused">El creador de mercado no convierte este importe. Puede superar su límite por conversión o no cubrir la comisión de red del intercambio.</string>
     <string name="convert_error_device_refused">Este teléfono no puede obtener tokens de conversión. El emisor de tokens rechaza los emuladores, los teléfonos con el bootloader desbloqueado o un sistema modificado y las versiones de Zapp que no reconoce.</string>
     <string name="convert_error_keystore">Zapp no pudo usar el almacén seguro de claves de este teléfono para obtener un token de conversión, así que no se envió nada. Inténtalo de nuevo en un momento.</string>
     <string name="convert_error_relayer">No se puede contactar con el relayer que completa las conversiones. Inténtalo de nuevo en un momento.</string>

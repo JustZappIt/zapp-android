@@ -159,7 +159,6 @@ class PrivateUsdReverseVM(
         return PrivateUsdReverseState(
             amount = NumberTextFieldState(form.amount) { onAmountChange(it, currency) },
             isAmountInvalid = form.isInvalid(record, available),
-            amountNote = terms.limits(currency),
             currencySymbol = currency.symbol,
             usdAvailable = terms.available(holdings.balance, currency),
             zecAvailable = holdings.spendable?.let { stringRes(it).asPrivacySensitive() },

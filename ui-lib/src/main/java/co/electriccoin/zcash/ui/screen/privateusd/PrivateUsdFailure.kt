@@ -118,7 +118,7 @@ private fun AtomicSwapBlock.toFailure() =
 
         AtomicSwapBlock.CHAIN_LAGGING, AtomicSwapBlock.CHAIN_UNREADABLE -> PrivateUsdFailure.ETHEREUM_UNREACHABLE
 
-        AtomicSwapBlock.RELAYER_FEE -> PrivateUsdFailure.BELOW_RELAYER_FEE
+        AtomicSwapBlock.RELAYER_FEE, AtomicSwapBlock.AMOUNT_UNQUOTABLE -> amountRefused()
 
         AtomicSwapBlock.DEPOSIT_UNCONFIRMED -> PrivateUsdFailure.DEPOSIT_UNCONFIRMED
 
@@ -142,6 +142,13 @@ private fun AtomicSwapBlock.toFailure() =
         AtomicSwapBlock.ZCASH_REJECTED,
         AtomicSwapBlock.INDICES_IN_USE,
         AtomicSwapBlock.TOKENS_REFUSED -> PrivateUsdFailure.OTHER
+    }
+
+// The amount itself won't do: the relayer's fee would take all of it, or it's more than a quote can name.
+private fun AtomicSwapBlock.amountRefused() =
+    when (this) {
+        AtomicSwapBlock.RELAYER_FEE -> PrivateUsdFailure.BELOW_RELAYER_FEE
+        else -> PrivateUsdFailure.AMOUNT_REFUSED
     }
 
 // Turned away before anything was sent: by the maker, the day's allowance, the issuer, the keystore or Tor.
