@@ -128,7 +128,6 @@ class PrivateUsdSendVM(
         return PrivateUsdSendState(
             phase = form.phase,
             mode = form.mode,
-            onModeSelect = { mode -> updateForm { it.copy(mode = mode, recipient = "") } },
             assets =
                 assets.takeIf { it.size > 1 }.orEmpty().map { choice ->
                     PrivateUsdSendAssetState(choice.token.symbol, isSelected = choice.token == token) {

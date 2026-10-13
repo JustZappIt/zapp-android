@@ -45,8 +45,8 @@ enum class PrivateUsdSendMode(
 
 internal data class PrivateUsdSendState(
     val phase: PrivateUsdSendPhase,
+    /** Fixed by the button that opened the screen, which its title names. */
     val mode: PrivateUsdSendMode,
-    val onModeSelect: (PrivateUsdSendMode) -> Unit,
     /** The dollar tokens there are to send, shown when there's a choice. */
     val assets: List<PrivateUsdSendAssetState>,
     /** In dollars. */

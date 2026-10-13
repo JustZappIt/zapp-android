@@ -45,7 +45,6 @@ private fun previewState(phase: PrivateUsdSendPhase) =
     PrivateUsdSendState(
         phase = phase,
         mode = PrivateUsdSendMode.WITHDRAW,
-        onModeSelect = {},
         assets =
             listOf(
                 PrivateUsdSendAssetState("tUSD", isSelected = true) {},
