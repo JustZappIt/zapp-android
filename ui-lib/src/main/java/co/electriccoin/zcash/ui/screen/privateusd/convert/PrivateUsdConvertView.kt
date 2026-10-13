@@ -71,6 +71,7 @@ private fun Amount(
         isZecBalanceLoading = state.isZecBalanceLoading,
         zecSyncing = state.zecSyncing,
         isUsdBalanceLoading = state.isUsdBalanceLoading,
+        usdFirstLoad = state.usdFirstLoad,
         usdBalanceError = state.usdBalanceError,
         isUsdBalanceRefreshing = state.isUsdBalanceRefreshing,
         onRefreshBalance = state.onRefreshBalance,

@@ -38,6 +38,7 @@ internal data class PrivateUsdReverseState(
     val onBack: () -> Unit,
     val isZecBalanceLoading: Boolean = false,
     val isUsdBalanceLoading: Boolean = false,
+    val usdFirstLoad: StringResource? = null,
     val usdBalanceError: StringResource? = null,
     val isUsdBalanceRefreshing: Boolean = false,
     val onRefreshBalance: () -> Unit = {},

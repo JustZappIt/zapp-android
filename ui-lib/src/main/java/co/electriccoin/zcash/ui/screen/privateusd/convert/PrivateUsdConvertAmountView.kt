@@ -39,6 +39,7 @@ internal fun PrivateUsdConvertAmountView(
     isZecBalanceLoading: Boolean = false,
     zecSyncing: StringResource? = null,
     isUsdBalanceLoading: Boolean = false,
+    usdFirstLoad: StringResource? = null,
     usdBalanceError: StringResource? = null,
     isUsdBalanceRefreshing: Boolean = false,
     onRefreshBalance: () -> Unit = {},
@@ -89,7 +90,7 @@ internal fun PrivateUsdConvertAmountView(
     }
     if (isUsdBalanceLoading) {
         BasicText(
-            text = stringResource(R.string.private_usd_first_load),
+            text = usdFirstLoad?.getValue() ?: stringResource(R.string.private_usd_first_load),
             style = ZappTheme.typography.caption.copy(color = ZappTheme.colors.textMuted)
         )
     } else if (usdBalanceError != null) {

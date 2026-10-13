@@ -156,7 +156,7 @@ class PrivateUsdVM(
 
     private fun status(balance: PrivateUsdBalanceState): StringResource? =
         when {
-            balance.isRefreshing && balance.balances == null -> stringRes(R.string.private_usd_first_load)
+            balance.isRefreshing && balance.balances == null -> balance.firstLoad
             balance.isRefreshing -> stringRes(R.string.private_usd_updating)
             else -> balance.updatedAt?.let { stringRes(R.string.private_usd_updated, dateTime(it)) }
         }

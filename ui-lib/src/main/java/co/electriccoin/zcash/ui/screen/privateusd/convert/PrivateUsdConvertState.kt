@@ -37,6 +37,7 @@ internal data class PrivateUsdConvertState(
     /** Why some of the ZEC isn't available yet: the wallet is still syncing. */
     val zecSyncing: StringResource? = null,
     val isUsdBalanceLoading: Boolean = false,
+    val usdFirstLoad: StringResource? = null,
     val usdBalanceError: StringResource? = null,
     val isUsdBalanceRefreshing: Boolean = false,
     val onRefreshBalance: () -> Unit = {},

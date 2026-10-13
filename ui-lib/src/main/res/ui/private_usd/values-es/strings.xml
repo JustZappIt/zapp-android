@@ -76,7 +76,7 @@
     <string name="private_usd_action_withdraw">Retirar</string>
     <string name="private_usd_updated">Actualizado: %1$s</string>
     <string name="private_usd_updating">Actualizando…</string>
-    <string name="private_usd_first_load">Cargando tu saldo privado. La primera vez se lee el historial de Railgun y puede tardar hasta un minuto.</string>
+    <string name="private_usd_first_load">Cargando tu saldo privado. La primera vez se lee el historial de Railgun y puede tardar un rato.</string>
     <string name="private_usd_refresh_failed">No se pudo actualizar el saldo. Se muestran los últimos importes conocidos.</string>
     <string name="private_usd_refresh">Actualizar</string>
     <string name="private_usd_empty_title">Aún no tienes dólares privados</string>

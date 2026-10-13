@@ -95,6 +95,12 @@ internal fun PrivateUsdBalanceState.placeholder(): StringResource =
 internal val PrivateUsdBalanceState.isLoading: Boolean
     get() = balances == null && (!refreshFailed || isRefreshing)
 
+/** What a first load says, with how far it has come once the engine reports it. */
+internal val PrivateUsdBalanceState.firstLoad: StringResource
+    get() =
+        firstSyncPercent?.let { stringRes(R.string.private_usd_first_load_progress, it) }
+            ?: stringRes(R.string.private_usd_first_load)
+
 /** What of [token] can be spent, in [currency], or what stands in for it until that's known. */
 internal fun PrivateUsdBalanceState.availableText(
     token: PrivateUsdToken,

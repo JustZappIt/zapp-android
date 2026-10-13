@@ -10,8 +10,10 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapState
 import co.electriccoin.zcash.ui.common.provider.RailgunMnemonicProvider
 import co.electriccoin.zcash.ui.common.repository.RailgunSync
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
+import co.electriccoin.zcash.ui.common.repository.RailgunWalletState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -22,6 +24,7 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -32,15 +35,19 @@ import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunBalanceBucket
 import xyz.justzappit.railgun.RailgunNetwork
+import xyz.justzappit.railgun.RailgunScanStatus
 import xyz.justzappit.railgun.RailgunTokenAmount
 import java.math.BigDecimal
 import java.math.BigInteger
+import kotlin.math.exp
+import kotlin.math.pow
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import kotlin.time.TimeSource
 
 data class PrivateUsdAsset(
     val token: PrivateUsdToken,
@@ -123,13 +130,15 @@ data class PrivateUsdBalanceState(
     val updatedAt: Instant? = null,
     val isRefreshing: Boolean = false,
     val refreshFailed: Boolean = false,
+    /** How far the wallet's first sync has come, while there's nothing to show yet. */
+    val firstSyncPercent: Int? = null,
 ) {
     /** What of [token] can be spent now: none once synced without it, null until known. */
     fun available(token: PrivateUsdToken): BigInteger? =
         balances?.let { known -> known.assets.firstOrNull { it.token == token }?.available ?: BigInteger.ZERO }
 }
 
-/** The Railgun balance as private USD. A cold engine takes up to a minute to sync, so the last one is cached. */
+/** The Railgun balance as private USD. A wallet's first sync reads all of Railgun's history, so the last is cached. */
 interface PrivateUsdBalanceRepository {
     val state: StateFlow<PrivateUsdBalanceState>
 
@@ -182,7 +191,26 @@ class PrivateUsdBalanceRepositoryImpl(
                         senders.current?.reconcile()
                     }
             }
+            scope.launch { showFirstSync() }
         }
+    }
+
+    // Between the engine's reports the number creeps, so it's worked out again now and then.
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private suspend fun showFirstSync() {
+        val firstSync = FirstSyncProgress()
+        railgunWalletRepository.state
+            .transformLatest { railgun ->
+                emit(firstSync.percent(railgun))
+                while (firstSync.isCreeping) {
+                    delay(FIRST_SYNC_TICK)
+                    emit(firstSync.percent(railgun))
+                }
+            }.collect { percent ->
+                mutableState.update { balance ->
+                    balance.copy(firstSyncPercent = percent.takeIf { balance.balances == null })
+                }
+            }
     }
 
     override fun observe(): Flow<PrivateUsdBalanceState> = keptFresh(ifUsed = false)
@@ -229,7 +257,8 @@ class PrivateUsdBalanceRepositoryImpl(
     private suspend fun refreshNow(network: RailgunNetwork) {
         mutableState.update { it.copy(isRefreshing = true, refreshFailed = false) }
         try {
-            val sync = syncWithin(REFRESH_TIMEOUT)
+            // With nothing shown yet, this may be the wallet's first sync, which reads all of Railgun's history.
+            val sync = syncWithin(if (state.value.balances == null) FIRST_SYNC_TIMEOUT else REFRESH_TIMEOUT)
             sync?.let { show(network, it) }
             retries.record(succeeded = sync != null)
             mutableState.update { it.copy(refreshFailed = sync == null) }
@@ -279,6 +308,8 @@ class PrivateUsdBalanceRepositoryImpl(
         val ARRIVING_POLL = 30.seconds
         val STALE_AFTER = 5.minutes
         val REFRESH_TIMEOUT = 5.minutes
+        val FIRST_SYNC_TIMEOUT = 2.hours
+        val FIRST_SYNC_TICK = 3.seconds
     }
 }
 
@@ -322,6 +353,117 @@ internal fun isArriving(
     return payoutUnseen || (balance.balances?.arriving?.signum() ?: 0) > 0
 }
 
+/**
+ * A first sync's progress, in percent of the time one takes: Railgun's notes, then the transaction ids its screening
+ * needs. The engine reports the notes at milestones that can be minutes apart, so between two the number creeps toward
+ * the next one's, slower the nearer it gets, without passing it. The ids come in batches whose progress each starts
+ * over, so every batch covers part of what's left and the number never goes back.
+ */
+internal class FirstSyncProgress(
+    private val timeSource: TimeSource = TimeSource.Monotonic,
+) {
+    private var idBatches = 0
+    private var lastIds = 0f
+    private var lastNotes = -1f
+    private var notesSince = timeSource.markNow()
+
+    /** Whether the number can move before the engine's next report, so is worth working out again. */
+    var isCreeping = false
+        private set
+
+    fun percent(railgun: RailgunWalletState): Int? {
+        val notes = railgun.utxoScan
+        val ids = railgun.txidScan
+        isCreeping = false
+        return when {
+            notes == null -> {
+                null
+            }
+
+            notes.status != RailgunScanStatus.COMPLETE -> {
+                idBatches = 0
+                lastIds = 0f
+                notesPercent(notes.progress.coerceIn(0f, 1f))
+            }
+
+            ids == null -> {
+                NOTES_PERCENT
+            }
+
+            ids.status == RailgunScanStatus.COMPLETE -> {
+                LAST_PERCENT
+            }
+
+            else -> {
+                if (ids.progress < lastIds) idBatches += 1
+                lastIds = ids.progress
+                val left = ID_BATCH_LEFT.pow(idBatches + ids.progress.coerceIn(0f, 1f))
+                LAST_PERCENT - ((LAST_PERCENT - NOTES_PERCENT) * left).toInt()
+            }
+        }
+    }
+
+    private fun notesPercent(progress: Float): Int {
+        if (progress != lastNotes) {
+            lastNotes = progress
+            notesSince = timeSource.markNow()
+        }
+        val next = NOTES_STEPS.indexOfFirst { it.at > progress }
+        return when (next) {
+            -1 -> {
+                NOTES_PERCENT
+            }
+
+            0 -> {
+                0
+            }
+
+            else -> {
+                val from = NOTES_STEPS[next - 1]
+                val to = NOTES_STEPS[next]
+                val done = (progress - from.at) / (to.at - from.at)
+                val reported = from.percent + (to.percent - from.percent) * done
+                val wait = notesSince.elapsedNow() / (from.takes * (1 - done.toDouble()) / 2)
+                val crept = reported + (to.percent - reported) * (1 - exp(-wait))
+                isCreeping = crept.toInt() + 1 < to.percent
+                crept.toInt()
+            }
+        }
+    }
+
+    private companion object {
+        // The engine's notes milestones, each with how long the next one took on a Galaxy A35 over Wi-Fi.
+        val NOTES_STEPS =
+            notesSteps(
+                0.03f to 5.seconds, // loading the network
+                0.10f to 6.minutes, // downloading Railgun's history
+                0.15f to 7.minutes, // saving its unshields
+                0.25f to 4.minutes, // and nullifiers
+                0.30f to 16.minutes, // building its trees
+                0.40f to 5.seconds,
+                0.50f to 5.seconds, // catching up with the chain
+                0.70f to 6.minutes, // finding this wallet's notes
+                0.97f to 5.seconds,
+                1f to Duration.ZERO,
+            )
+    }
+}
+
+/** One of the engine's notes milestones, with how long the next one takes and where on the way it comes. */
+private class NotesStep(
+    val at: Float,
+    val takes: Duration,
+    val percent: Double,
+)
+
+private fun notesSteps(vararg steps: Pair<Float, Duration>): List<NotesStep> {
+    val total = steps.fold(Duration.ZERO) { sum, (_, takes) -> sum + takes }
+    var before = Duration.ZERO
+    return steps.map { (at, takes) ->
+        NotesStep(at, takes, NOTES_PERCENT * (before / total)).also { before += takes }
+    }
+}
+
 internal suspend fun RailgunMnemonicProvider.addressOrNull(): RailgunAddress? =
     try {
         address()
@@ -334,3 +476,8 @@ internal suspend fun RailgunMnemonicProvider.addressOrNull(): RailgunAddress? =
 
 private val PAYOUT_WATCH = 2.hours
 private val RPC_LAG = 30.seconds
+
+// On Ethereum the notes take about 60% of a first sync, and each of its 15 or so id batches leaves 85% of the rest.
+private const val NOTES_PERCENT = 60
+private const val LAST_PERCENT = 99
+private const val ID_BATCH_LEFT = 0.85f

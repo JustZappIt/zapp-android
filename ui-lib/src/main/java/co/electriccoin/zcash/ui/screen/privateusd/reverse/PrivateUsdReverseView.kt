@@ -82,6 +82,7 @@ private fun Amount(
         usdAvailable = state.usdAvailable,
         isZecBalanceLoading = state.isZecBalanceLoading,
         isUsdBalanceLoading = state.isUsdBalanceLoading,
+        usdFirstLoad = state.usdFirstLoad,
         usdBalanceError = state.usdBalanceError,
         isUsdBalanceRefreshing = state.isUsdBalanceRefreshing,
         onRefreshBalance = state.onRefreshBalance,

@@ -21,6 +21,7 @@ import kotlinx.serialization.json.longOrNull
 import xyz.justzappit.evm.types.Address
 import java.math.BigInteger
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -35,8 +36,10 @@ internal enum class RailgunMethod(
     @SerialName("openWallet")
     OPEN_WALLET(1.minutes),
 
+    // A wallet's first sync reads all of Railgun's history, half an hour or more on Ethereum, and keeps none of it
+    // until it's done; a timeout closes the page, which starts it over.
     @SerialName("refresh")
-    REFRESH(10.minutes),
+    REFRESH(2.hours),
 
     @SerialName("transfer")
     TRANSFER(10.minutes),

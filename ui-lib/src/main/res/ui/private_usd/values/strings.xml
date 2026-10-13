@@ -39,7 +39,8 @@
     <string name="private_usd_action_withdraw">Withdraw</string>
     <string name="private_usd_updated">Updated %1$s</string>
     <string name="private_usd_updating">Updating…</string>
-    <string name="private_usd_first_load">Loading your private balance. The first time reads Railgun\'s history and can take up to a minute.</string>
+    <string name="private_usd_first_load">Loading your private balance. The first time reads Railgun\'s history and can take a while.</string>
+    <string name="private_usd_first_load_progress" tools:ignore="MissingTranslation">Loading your private balance: %1$d%%. The first time reads Railgun\'s history and can take a while.</string>
     <string name="private_usd_refresh_failed">Couldn\'t update the balance. Showing the last known amounts.</string>
     <string name="private_usd_load_failed" tools:ignore="MissingTranslation">Couldn\'t load the balance. Try again in a moment.</string>
     <string name="private_usd_refresh">Refresh</string>

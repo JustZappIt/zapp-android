@@ -30,8 +30,11 @@ import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
 import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunBalanceBucket
 import xyz.justzappit.railgun.RailgunBalances
+import xyz.justzappit.railgun.RailgunEvent
 import xyz.justzappit.railgun.RailgunException
+import xyz.justzappit.railgun.RailgunMerkletree
 import xyz.justzappit.railgun.RailgunNetwork
+import xyz.justzappit.railgun.RailgunScanStatus
 import xyz.justzappit.railgun.RailgunTokenAmount
 import java.math.BigDecimal
 import java.math.BigInteger
@@ -41,9 +44,11 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import kotlin.time.TestTimeSource
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PrivateUsdBalanceRepositoryTest {
@@ -107,9 +112,9 @@ class PrivateUsdBalanceRepositoryTest {
     fun `refreshes run one at a time, and one that never ends times out as a failure`() =
         runTest {
             val repository = repository()
-            val never = CompletableDeferred<Unit>()
+            var gate = CompletableDeferred<Unit>()
             syncsReturn(WALLET) {
-                never.await()
+                gate.await()
                 balances(ONE_DOLLAR)
             }
             runCurrent()
@@ -119,7 +124,10 @@ class PrivateUsdBalanceRepositoryTest {
             runCurrent()
             assertEquals(1, syncs)
 
+            // Nothing is shown yet, so it may be the wallet's first sync, which reads all of Railgun's history.
             advanceTimeBy(5.minutes + 1.seconds)
+            assertTrue(repository.state.value.isRefreshing)
+            advanceTimeBy(2.hours)
             assertTrue(repository.state.value.refreshFailed)
             assertFalse(repository.state.value.isRefreshing)
 
@@ -127,6 +135,14 @@ class PrivateUsdBalanceRepositoryTest {
             runCurrent()
             assertFalse(repository.state.value.refreshFailed)
             assertTrue(repository.state.value.isRefreshing)
+            gate.complete(Unit)
+            runCurrent()
+            checkNotNull(repository.state.value.balances)
+
+            gate = CompletableDeferred()
+            repository.refresh()
+            advanceTimeBy(5.minutes + 1.seconds)
+            assertTrue(repository.state.value.refreshFailed)
         }
 
     @Test
@@ -233,6 +249,24 @@ class PrivateUsdBalanceRepositoryTest {
             scope = backgroundScope,
             clock = clock(),
         )
+
+    @Test
+    fun `a first sync creeps between the engine's reports, never past the next one's`() {
+        val time = TestTimeSource()
+        val progress = FirstSyncProgress(time)
+        val scan = { notes: Float ->
+            val event = RailgunEvent.Scan(RailgunMerkletree.UTXO, RailgunScanStatus.UPDATED, notes)
+            progress.percent(railgunState.value.copy(utxoScan = event))!!
+        }
+
+        val downloading = scan(0.10f)
+        time += 3.minutes
+        assertTrue(scan(0.10f) > downloading && progress.isCreeping)
+        time += 2.hours
+        val stalled = scan(0.10f)
+        assertFalse(progress.isCreeping)
+        assertTrue(stalled <= scan(0.15f))
+    }
 
     private fun TestScope.clock() =
         object : Clock {

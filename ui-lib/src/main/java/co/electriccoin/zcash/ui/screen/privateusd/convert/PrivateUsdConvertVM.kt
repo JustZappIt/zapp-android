@@ -28,6 +28,7 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.TYPING_DEBOUNCE
 import co.electriccoin.zcash.ui.screen.privateusd.authenticateSpend
 import co.electriccoin.zcash.ui.screen.privateusd.epochSeconds
+import co.electriccoin.zcash.ui.screen.privateusd.firstLoad
 import co.electriccoin.zcash.ui.screen.privateusd.isLoading
 import co.electriccoin.zcash.ui.screen.privateusd.isPositive
 import co.electriccoin.zcash.ui.screen.privateusd.message
@@ -170,6 +171,7 @@ class PrivateUsdConvertVM(
             isZecBalanceLoading = spendable == null,
             zecSyncing = holdings.catchUp?.message,
             isUsdBalanceLoading = holdings.balance.isLoading,
+            usdFirstLoad = holdings.balance.firstLoad,
             usdBalanceError =
                 stringRes(R.string.private_usd_load_failed).takeIf {
                     holdings.balance.refreshFailed &&
