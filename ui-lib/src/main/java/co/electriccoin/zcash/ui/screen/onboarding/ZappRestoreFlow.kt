@@ -143,14 +143,14 @@ private fun RestoreFlowEffects(
         }
     }
 
-    // Wallet-provisioning gate. Once the seed is persisted, move to the seed-backup
-    // confirmation. The chat identity is NOT derived here: the username (and the
-    // identity derived from the seed) is collected *after* the wallet exists, so the
-    // wallet comes first.
+    // Wallet-provisioning gate. Once the seed is persisted, move on to the username: the user
+    // typed this phrase moments ago, so confirming it again was redundant. The chat identity is
+    // NOT derived here: the username (and the identity derived from the seed) is collected
+    // *after* the wallet exists, so the wallet comes first.
     LaunchedEffect(secretState, step) {
         if (step == RestoreStep.RESTORING && secretState == SecretState.READY) {
             restoreVM.markRestoreCompleted()
-            onStepChange(RestoreStep.SEED_CONFIRM)
+            onStepChange(RestoreStep.USERNAME)
         }
     }
 
@@ -231,13 +231,17 @@ private fun RestoreStepHost(
             RestoringStepView(walletViewModel, restoreVM)
         }
 
+        // Legacy saved step: the recovery effect moves it on to USERNAME.
         RestoreStep.SEED_CONFIRM -> {
-            SeedConfirmStepView(walletViewModel, onStepChange)
+            Unit
         }
 
         RestoreStep.USERNAME -> {
             UsernameEntryScreen(
                 onBack = onBack,
+                // The wallet is restored by now; there is no earlier step to go back to.
+                showBack = false,
+                subtitle = stringResource(R.string.restore_flow_username_subtitle),
                 onContinue = { name ->
                     onPendingUsernameChange(name)
                     onStepChange(RestoreStep.DERIVING)
@@ -298,6 +302,7 @@ private fun BirthdayStepView(
     val selectedYearMonth by restoreVM.selectedYearMonth.collectAsStateWithLifecycle()
     val isEstimating by restoreVM.isEstimating.collectAsStateWithLifecycle()
     val birthdayErrorRes by restoreVM.birthdayError.collectAsStateWithLifecycle()
+    val dateEstimate by restoreVM.dateEstimate.collectAsStateWithLifecycle()
     // Tor is on by default (persisted during wallet provisioning), so tapping Restore starts
     // the restore immediately. If the VM rejects the start (invalid birthday), birthdayError is
     // set and isRestoring stays false, so we stay on BIRTHDAY for the user to fix it.
@@ -316,12 +321,14 @@ private fun BirthdayStepView(
         errorMessage = birthdayErrorRes?.getValue(),
         onBack = onBack,
         onNext = {
+            // From a date, one tap estimates the height and restores from it.
             if (birthdayMode == BirthdayMode.DATE) {
-                restoreVM.estimateFromDate()
+                restoreVM.estimateFromDate(onEstimated = startRestore)
             } else {
                 startRestore()
             }
         },
+        dateEstimate = dateEstimate,
         onSkip = startRestore,
     )
 }
@@ -348,30 +355,6 @@ private fun RestoringStepView(
             null
         }
     RestoreInProgressScreen(errorMessage = errorMessage, onRetry = onRetry)
-}
-
-@Composable
-private fun SeedConfirmStepView(walletViewModel: WalletViewModel, onStepChange: (RestoreStep) -> Unit) {
-    // Pull words from the persisted wallet (not the VM's in-memory entered words):
-    // VM state dies on process death but rememberSaveable restores `step`, so a
-    // rehydrated user would otherwise land on SEED_CONFIRM with 24 empty boxes.
-    val walletSeed by walletViewModel.currentSeedWords.collectAsStateWithLifecycle()
-    val words = walletSeed
-    if (words == null) {
-        WalletEncryptingScreen(
-            message = stringResource(R.string.onboarding_wallet_ready_message),
-            errorMessage = null,
-            onRetry = null,
-        )
-    } else {
-        SeedRevealScreen(
-            step = 1,
-            title = stringResource(R.string.restore_flow_confirm_title),
-            sub = stringResource(R.string.restore_flow_confirm_sub),
-            words = words,
-            onContinue = { onStepChange(RestoreStep.USERNAME) },
-        )
-    }
 }
 
 @Composable
