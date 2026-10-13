@@ -98,17 +98,22 @@ class SwapZcashTransactions(
     suspend fun status(
         account: AccountUuid,
         transaction: ZcashTransaction
-    ): ZcashTransactionStatus =
-        find(account, transaction.txId)
-            ?: if (synchronizers.getSynchronizer().hasScannedPast(transaction.expiryHeight)) {
+    ): ZcashTransactionStatus {
+        val synchronizer = synchronizers.getSynchronizer()
+        // Nothing else syncs the wallet for a conversion in the background; in the foreground this returns at once.
+        synchronizer.syncToTip(STATUS_SYNC_TIMEOUT)
+        return find(account, transaction.txId)
+            ?: if (synchronizer.hasScannedPast(transaction.expiryHeight)) {
                 ZcashTransactionStatus.Expired
             } else {
                 ZcashTransactionStatus.Unknown
             }
+    }
 
     private companion object {
         val HEIGHT_TIMEOUT = 30.seconds
         val SYNC_TIMEOUT = 2.minutes
+        val STATUS_SYNC_TIMEOUT = 1.minutes
     }
 }
 
