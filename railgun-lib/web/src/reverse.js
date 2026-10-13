@@ -1,4 +1,4 @@
-import { EVMGasType, NETWORK_CONFIG, NetworkName, getEVMGasTypeForTransaction } from '@railgun-community/shared-models';
+import { EVMGasType, NETWORK_CONFIG, getEVMGasTypeForTransaction } from '@railgun-community/shared-models';
 import {
   generateCrossContractCallsProof,
   populateProvedCrossContractCalls,
@@ -13,7 +13,6 @@ import { TXID_VERSION, session } from './wallet.js';
 /** What unshielding enough to leave `amount` in escrow and pay the relayer `fee` costs, at the fee the engine loaded. */
 export function reverseCost({ amount, fee, railgun }) {
   const { network, fees } = session();
-  if (network !== NetworkName.EthereumSepolia) throw badRequest('reverse funding is testnet only');
   const proxy = NETWORK_CONFIG[network].proxyContract;
   if (getAddress(railgun) !== getAddress(proxy)) throw badRequest(`the engine's Railgun contract is ${proxy}`);
   if (BigInt(fee) < 0n) throw badRequest('invalid relayer fee');
