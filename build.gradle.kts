@@ -116,6 +116,10 @@ tasks {
             "RECLAIM_APP_ID" to "",
             "RECLAIM_APP_SECRET" to "",
 
+            // Private USD's Ethereum endpoints, whose URLs carry an API key.
+            "ETHEREUM_RPC_URL_MAINNET" to "",
+            "ETHEREUM_RPC_URL_SEPOLIA" to "",
+
             "ZCASH_FLEXA_KEY" to "",
             "ZCASH_CMC_KEY" to "",
             "SDK_INCLUDED_BUILD_PATH" to "",

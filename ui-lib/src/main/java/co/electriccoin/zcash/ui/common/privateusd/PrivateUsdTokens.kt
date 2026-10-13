@@ -11,6 +11,7 @@ import xyz.justzappit.evm.types.Address
 import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.offramp.atomicswap.ETHEREUM_USDC
 import xyz.justzappit.offramp.atomicswap.RailgunContracts
+import xyz.justzappit.offramp.atomicswap.SwapDeployment
 import xyz.justzappit.railgun.RailgunEndpoints
 import xyz.justzappit.railgun.RailgunNetwork
 
@@ -50,6 +51,18 @@ object Ethereum {
     val RAILGUN_PROXY = RailgunContracts.ETHEREUM.proxy
     val USDC = ETHEREUM_USDC
 }
+
+/**
+ * Where this build reads the deployment's chain: its own endpoint when it has one, else the deployment's. It stays out
+ * of the deployment, which a reverse conversion stores and checks again as it funds, so a new key strands none.
+ */
+val SwapDeployment.rpcEndpoint: String
+    get() =
+        when (chainId) {
+            Ethereum.CHAIN_ID -> RailgunEndpoints.MAINNET_KEYED_RPC_URL
+            Sepolia.CHAIN_ID -> RailgunEndpoints.SEPOLIA_KEYED_RPC_URL
+            else -> null
+        } ?: rpcUrl.toString()
 
 /** The tokens the app knows how to show. Decimals come from here, never from the chain. */
 object PrivateUsdTokens {

@@ -66,11 +66,6 @@ internal fun PrivateUsdSendView(state: PrivateUsdSendState) {
 
 @Composable
 private fun Form(state: PrivateUsdSendState) {
-    ZappSegmentedSelector(
-        segments = PrivateUsdSendMode.entries.map { ZappSegment(stringResource(it.title)) },
-        selectedIndex = state.mode.ordinal,
-        onSelect = { state.onModeSelect(PrivateUsdSendMode.entries[it]) },
-    )
     if (state.assets.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.md)) {
             ZappSectionLabel(text = stringResource(R.string.private_usd_send_asset))
