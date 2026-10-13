@@ -3,6 +3,7 @@
 
 package co.electriccoin.zcash.ui.common.atomicswap
 
+import co.electriccoin.zcash.ui.common.privateusd.rpcEndpoint
 import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.sync.Mutex
@@ -115,7 +116,7 @@ class AtomicSwapSessions(
         private val deployment: SwapDeployment,
         private val session: Session,
     ) {
-        private val rpc = BaseRpcClient(RpcHttpClient.create(), deployment.rpcUrl.toString())
+        private val rpc = BaseRpcClient(RpcHttpClient.create(), deployment.rpcEndpoint)
         private val maker =
             deployment.tokenIssuer?.let { MakerClient(http, deployment.makerUrl, tokens.source(it)) }
                 ?: MakerClient(http, deployment.makerUrl)

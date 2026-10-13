@@ -8,6 +8,15 @@ plugins {
 
 android {
     namespace = "xyz.justzappit.railgun"
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    defaultConfig {
+        buildConfigField("String", "ETHEREUM_RPC_URL_MAINNET", "\"${project.property("ETHEREUM_RPC_URL_MAINNET")}\"")
+        buildConfigField("String", "ETHEREUM_RPC_URL_SEPOLIA", "\"${project.property("ETHEREUM_RPC_URL_SEPOLIA")}\"")
+    }
 }
 
 dependencies {

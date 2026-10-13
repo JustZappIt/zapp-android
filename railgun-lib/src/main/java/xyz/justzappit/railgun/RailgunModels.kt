@@ -18,24 +18,39 @@ enum class RailgunNetwork(
     internal val rpcUrls: List<String>,
 ) {
     @SerialName("sepolia")
-    SEPOLIA(listOf(RailgunEndpoints.SEPOLIA_RPC_URL)),
+    SEPOLIA(listOfNotNull(RailgunEndpoints.SEPOLIA_KEYED_RPC_URL, RailgunEndpoints.SEPOLIA_RPC_URL)),
 
     @SerialName("mainnet")
-    MAINNET(listOf(RailgunEndpoints.MAINNET_RPC_URL)),
+    MAINNET(listOfNotNull(RailgunEndpoints.MAINNET_KEYED_RPC_URL, RailgunEndpoints.MAINNET_RPC_URL)),
 }
 
 /** What the page may reach besides its own assets; the CSP in `web/src/index.html` lists the same hosts. */
 object RailgunEndpoints {
     private const val SEPOLIA_RPC_HOST = "ethereum-sepolia-rpc.publicnode.com"
     private const val MAINNET_RPC_HOST = "ethereum-rpc.publicnode.com"
+    private const val SEPOLIA_ALCHEMY_HOST = "eth-sepolia.g.alchemy.com"
+    private const val MAINNET_ALCHEMY_HOST = "eth-mainnet.g.alchemy.com"
     private const val POI_NODE_HOST = "ppoi.fdi.network"
     const val SEPOLIA_RPC_URL = "https://$SEPOLIA_RPC_HOST"
     const val MAINNET_RPC_URL = "https://$MAINNET_RPC_HOST"
     internal const val POI_NODE_URL = "https://$POI_NODE_HOST/"
 
+    // This build's own endpoints, read before publicnode's. Their URLs carry an API key, so they come from
+    // local.properties; a build without one reads publicnode's alone.
+    val SEPOLIA_KEYED_RPC_URL: String? = BuildConfig.ETHEREUM_RPC_URL_SEPOLIA.ifBlank { null }
+    val MAINNET_KEYED_RPC_URL: String? = BuildConfig.ETHEREUM_RPC_URL_MAINNET.ifBlank { null }
+
     // The SDK's own: its quick sync, and the gateway it downloads proving artifacts from.
     internal val hosts =
-        setOf(SEPOLIA_RPC_HOST, MAINNET_RPC_HOST, POI_NODE_HOST, "rail-squid.squids.live", "ipfs-lb.com")
+        setOf(
+            SEPOLIA_RPC_HOST,
+            MAINNET_RPC_HOST,
+            SEPOLIA_ALCHEMY_HOST,
+            MAINNET_ALCHEMY_HOST,
+            POI_NODE_HOST,
+            "rail-squid.squids.live",
+            "ipfs-lb.com",
+        )
 }
 
 /** A Railgun `0zk` address, its bech32m checksum verified, so a mistyped one never gets this far. */

@@ -472,7 +472,7 @@ class PrivateUsdSenders(
                         relayer = PrivateUsdRelayer(RailgunSendsClient(http, deployment.swap.relayerUrl), pin),
                         chain =
                             PrivateUsdSendChain(
-                                BaseRpcClient(RpcHttpClient.create(), deployment.swap.rpcUrl.toString()),
+                                BaseRpcClient(RpcHttpClient.create(), deployment.swap.rpcEndpoint),
                                 pin.railgunProxy,
                             ),
                         pin = pin,
