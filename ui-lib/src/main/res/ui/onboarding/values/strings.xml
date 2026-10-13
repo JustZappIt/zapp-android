@@ -63,7 +63,7 @@
     <string name="onboarding_msg_intro_title">Create your\nmessaging\nidentity</string>
     <string name="onboarding_msg_intro_sub">Your identity is a username backed by your wallet\'s recovery phrase: one phrase restores your wallet and messaging identity on any device. Message history is stored locally and is not recoverable.</string>
     <string name="onboarding_msg_intro_bullet_username_label">Pick a username</string>
-    <string name="onboarding_msg_intro_bullet_username_sub">How friends find and message you</string>
+    <string name="onboarding_msg_intro_bullet_username_sub">How you appear to people</string>
     <string name="onboarding_msg_intro_bullet_phrase_label">One recovery phrase</string>
     <string name="onboarding_msg_intro_bullet_phrase_sub">Your wallet\'s 24-word phrase also restores your messaging identity.</string>
 

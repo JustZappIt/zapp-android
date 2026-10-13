@@ -61,7 +61,7 @@
     <string name="onboarding_msg_intro_title">Crie sua\nidentidade de\nmensagens</string>
     <string name="onboarding_msg_intro_sub">Sua identidade é um nome de usuário sustentado pela frase de recuperação da sua carteira: uma única frase restaura sua carteira e sua identidade de mensagens em qualquer dispositivo. O histórico de mensagens é armazenado localmente e não pode ser recuperado.</string>
     <string name="onboarding_msg_intro_bullet_username_label">Escolha um nome de usuário</string>
-    <string name="onboarding_msg_intro_bullet_username_sub">É assim que seus amigos te encontram e te enviam mensagens</string>
+    <string name="onboarding_msg_intro_bullet_username_sub">É assim que as pessoas te veem</string>
     <string name="onboarding_msg_intro_bullet_phrase_label">Uma única frase de recuperação</string>
     <string name="onboarding_msg_intro_bullet_phrase_sub">A frase de 24 palavras da sua carteira também restaura sua identidade de mensagens.</string>
 
