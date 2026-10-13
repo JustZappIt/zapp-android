@@ -218,7 +218,7 @@ private fun ReceiveShareButton(
         contentAlignment = Alignment.Center,
     ) {
         BasicText(
-            text = stringResource(R.string.receive_share).uppercase(),
+            text = stringResource(R.string.receive_share),
             style =
                 ZappTheme.typography.button.copy(
                     color = c.textMuted,
@@ -281,7 +281,7 @@ private fun ReceiveBottomDock(
             contentAlignment = Alignment.Center,
         ) {
             BasicText(
-                text = stringResource(R.string.receive_request).uppercase(),
+                text = stringResource(R.string.receive_request),
                 style =
                     ZappTheme.typography.button.copy(
                         color = c.onAccent,

@@ -21,7 +21,7 @@
     <!-- Bottom dock -->
     <string name="security_settings_back_content_description">Voltar</string>
     <string name="security_settings_save_changes_content_description">Salvar alterações</string>
-    <string name="security_settings_save_changes_button">SALVAR ALTERAÇÕES</string>
+    <string name="security_settings_save_changes_button">Salvar alterações</string>
 
     <!-- Change-PIN screen -->
     <string name="security_settings_change_pin_confirm_title">Confirme\nseu PIN</string>

@@ -21,7 +21,7 @@
     <!-- Bottom dock -->
     <string name="security_settings_back_content_description">Kembali</string>
     <string name="security_settings_save_changes_content_description">Simpan Perubahan</string>
-    <string name="security_settings_save_changes_button">SIMPAN PERUBAHAN</string>
+    <string name="security_settings_save_changes_button">Simpan perubahan</string>
 
     <!-- Change-PIN screen -->
     <string name="security_settings_change_pin_confirm_title">Konfirmasi\nPIN Anda</string>

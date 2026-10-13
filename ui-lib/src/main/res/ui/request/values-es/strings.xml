@@ -4,7 +4,7 @@
     <string name="request_amount_invalid">Este monto de transacción no es válido</string>
     <string name="request_amount_btn">Siguiente</string>
     <string name="request_memo_btn">Solicitar</string>
-    <string name="request_qr_share_btn">Compartir Código QR</string>
+    <string name="request_qr_share_btn">Compartir código QR</string>
     <string name="request_qr_close_btn">Cerrar</string>
     <string name="request_qr_save_btn">Guardar QR en Fotos</string>
     <string name="request_qr_send_in_chat_btn">Enviar por chat</string>

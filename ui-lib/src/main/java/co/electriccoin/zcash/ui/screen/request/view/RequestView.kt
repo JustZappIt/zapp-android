@@ -254,7 +254,7 @@ private fun SwissPrimaryButton(
         contentAlignment = Alignment.Center,
     ) {
         BasicText(
-            text = text.uppercase(),
+            text = text,
             style =
                 ZappTheme.typography.button.copy(
                     color = fg,
