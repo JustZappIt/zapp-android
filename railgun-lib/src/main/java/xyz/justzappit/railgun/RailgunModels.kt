@@ -20,20 +20,22 @@ enum class RailgunNetwork(
     @SerialName("sepolia")
     SEPOLIA(listOf(RailgunEndpoints.SEPOLIA_RPC_URL)),
 
-    // No RPC yet: the page refuses to start without one.
     @SerialName("mainnet")
-    MAINNET(emptyList()),
+    MAINNET(listOf(RailgunEndpoints.MAINNET_RPC_URL)),
 }
 
 /** What the page may reach besides its own assets; the CSP in `web/src/index.html` lists the same hosts. */
 object RailgunEndpoints {
     private const val SEPOLIA_RPC_HOST = "ethereum-sepolia-rpc.publicnode.com"
+    private const val MAINNET_RPC_HOST = "ethereum-rpc.publicnode.com"
     private const val POI_NODE_HOST = "ppoi.fdi.network"
     const val SEPOLIA_RPC_URL = "https://$SEPOLIA_RPC_HOST"
+    const val MAINNET_RPC_URL = "https://$MAINNET_RPC_HOST"
     internal const val POI_NODE_URL = "https://$POI_NODE_HOST/"
 
     // The SDK's own: its quick sync, and the gateway it downloads proving artifacts from.
-    internal val hosts = setOf(SEPOLIA_RPC_HOST, POI_NODE_HOST, "rail-squid.squids.live", "ipfs-lb.com")
+    internal val hosts =
+        setOf(SEPOLIA_RPC_HOST, MAINNET_RPC_HOST, POI_NODE_HOST, "rail-squid.squids.live", "ipfs-lb.com")
 }
 
 /** A Railgun `0zk` address, its bech32m checksum verified, so a mistyped one never gets this far. */

@@ -3,6 +3,7 @@
 
 package co.electriccoin.zcash.ui.common.privateusd
 
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapMainnet
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapStoreImpl
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapTestnet
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapStoreImpl
@@ -19,6 +20,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import xyz.justzappit.evm.rpc.TransactionStatus
 import xyz.justzappit.evm.types.Address
+import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.atomicswap.RailgunBroadcast
 import xyz.justzappit.offramp.atomicswap.RailgunSendRelayer
@@ -290,6 +292,22 @@ class RelayedPrivateUsdSenderTest {
             assertEquals(PrivateUsdSendHistory(), log.observe.first())
         }
 
+    @Test
+    fun `the mainnet beta's pin takes its own relayer's sends, and neither network takes the other's`() =
+        runTest {
+            val pin = checkNotNull(AtomicSwapMainnet.deployment.railgunSends)
+            coEvery { relayer.terms() } returns MAINNET_TERMS
+
+            val broadcaster = checkNotNull(PrivateUsdRelayer(relayer, pin).broadcaster())
+            assertEquals(ChainId.ETHEREUM_MAINNET.value, broadcaster.chainId)
+            assertEquals(BigInteger.valueOf(500_000), broadcaster.minFee)
+            assertEquals(BigInteger("2740801164"), broadcaster.feePerUnitGas)
+            assertNull(PrivateUsdRelayer(relayer, PIN).broadcaster())
+
+            coEvery { relayer.terms() } returns PRICED_TERMS
+            assertNull(PrivateUsdRelayer(relayer, pin).broadcaster())
+        }
+
     private fun TestScope.sender(): RelayedPrivateUsdSender {
         val preferences = InMemoryPreferenceProvider().encrypted()
         val guard =
@@ -367,5 +385,28 @@ class RelayedPrivateUsdSenderTest {
                 to = RailgunDestination.Public(Address.parse("0x09ed1f966745be18c711c346242c0974dad7c3e5")),
             )
         val COST = PrivateUsdSendCost(BigInteger.valueOf(2_500), 25, BigInteger.valueOf(250_000), PIN.feeToken)
+
+        /** The mainnet beta relayer's terms, as it served them on 2026-10-12. */
+        val MAINNET_TERMS =
+            RelayerTerms(
+                relayer = Address.parse("0xcbcb5f57c79c88a0e4bb450289de2088958a017f"),
+                chainId = ChainId.ETHEREUM_MAINNET,
+                contract = Address.parse("0x4708d7d36992b7e33ad97a1ab0a31c3ac6c4fe6d"),
+                fee = Usdc6.ofMicros(1_309_405),
+                railgunSends =
+                    RailgunSendsTerms(
+                        railgunAddress =
+                            "0zk1qy860uut20m8gd6fnhzvr0zqeyhs0ya5247x7h2eyedxsazx43w5nrv7j6fe3z53l78hn78kmslky2206" +
+                                "lm75mclrv7dawd756m2suy7l4zud2m4yhg6kcsn7ed",
+                        railgunProxy = Address.parse("0xfa7093cdd9ee6932b4eb2c9e1cde7ce00b1fa4b9"),
+                        token = Address.parse("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
+                        fee = Usdc6.ofMicros(500_000),
+                        feePerUnitGas = "2740801164",
+                        feeExpiresAt = 1_791_842_621,
+                        maxGasLimit = 3_000_000,
+                        maxGasPriceWei = "20000000000",
+                        maxCalldataBytes = 65_536,
+                    ),
+            )
     }
 }

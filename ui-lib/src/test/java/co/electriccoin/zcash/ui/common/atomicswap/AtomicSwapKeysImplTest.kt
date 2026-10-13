@@ -10,7 +10,6 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
-import xyz.justzappit.offramp.atomicswap.SwapZcashNetwork
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -22,13 +21,11 @@ class AtomicSwapKeysImplTest {
     @Test
     fun `every key is derived on the pinned deployment's Zcash network`() =
         runTest {
-            val testnet = AtomicSwapTestnet.deployment
-            val mainnet = testnet.copy(swap = testnet.swap.copy(zcashNetwork = SwapZcashNetwork.MAINNET))
             val seed = ByteArray(64) { 1 }
             coEvery { seeds() } answers { seed.copyOf() }
 
-            assertEquals(false to 3, keys(testnet).withKey(3) { it.mainnet to it.index })
-            assertEquals(true to 3, keys(mainnet).withKey(3) { it.mainnet to it.index })
+            assertEquals(false to 3, keys(AtomicSwapTestnet.deployment).withKey(3) { it.mainnet to it.index })
+            assertEquals(true to 3, keys(AtomicSwapMainnet.deployment).withKey(3) { it.mainnet to it.index })
         }
 
     @Test

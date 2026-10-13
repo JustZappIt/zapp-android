@@ -15,6 +15,7 @@ class RailgunBoundaryTest {
         assertEquals(Route.OWN_ASSET, route(RailgunRequests.PAGE_URL))
         RailgunEndpoints.hosts.forEach { assertEquals(Route.ALLOWED, route("https://$it/any/path")) }
         assertEquals(Route.ALLOWED, route(RailgunEndpoints.SEPOLIA_RPC_URL))
+        assertEquals(Route.ALLOWED, route(RailgunEndpoints.MAINNET_RPC_URL))
         assertEquals(Route.ALLOWED, route(RailgunEndpoints.POI_NODE_URL))
         assertEquals(Route.ALLOWED, route("blob:https://railgun.appassets.androidplatform.net/0f1e"))
         assertEquals(Route.ALLOWED, route("data:application/wasm;base64,AGFzbQ=="))

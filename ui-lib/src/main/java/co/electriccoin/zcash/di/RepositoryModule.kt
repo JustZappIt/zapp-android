@@ -120,7 +120,7 @@ val repositoryModule =
                 railgunWallet = get(),
                 keyProvider = get(),
                 mnemonicProvider = get(),
-                zcashNetworkProvider = get(),
+                deployments = get(),
                 scope = backgroundScope("Railgun"),
             )
         } bind RailgunWalletRepository::class

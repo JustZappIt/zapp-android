@@ -3,10 +3,12 @@
 
 package co.electriccoin.zcash.ui.common.repository
 
-import cash.z.ecc.android.sdk.model.ZcashNetwork
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployment
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapMainnet
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapTestnet
 import co.electriccoin.zcash.ui.common.provider.RailgunKeyProvider
 import co.electriccoin.zcash.ui.common.provider.RailgunMnemonicProvider
-import co.electriccoin.zcash.ui.common.provider.ZcashNetworkProvider
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -26,6 +28,7 @@ import xyz.justzappit.railgun.RailgunBroadcaster
 import xyz.justzappit.railgun.RailgunDestination
 import xyz.justzappit.railgun.RailgunException
 import xyz.justzappit.railgun.RailgunFees
+import xyz.justzappit.railgun.RailgunNetwork
 import xyz.justzappit.railgun.RailgunNullifiers
 import xyz.justzappit.railgun.RailgunRelayRequest
 import xyz.justzappit.railgun.RailgunRelayedProof
@@ -125,9 +128,15 @@ class RailgunWalletRepositoryTest {
         }
 
     @Test
-    fun `a mainnet build stays unavailable, whatever happens to its wallet`() =
+    fun `a mainnet build keeps its wallet on ethereum`() =
         runTest {
-            val repository = repository(ZcashNetwork.Mainnet)
+            assertEquals(RailgunNetwork.MAINNET, repository(AtomicSwapMainnet.deployment).state.value.network)
+        }
+
+    @Test
+    fun `a build with no swap deployment stays unavailable, whatever happens to its wallet`() =
+        runTest {
+            val repository = repository(deployment = null)
 
             walletChanges.emit(Unit)
             repository.reset()
@@ -148,7 +157,9 @@ class RailgunWalletRepositoryTest {
             assertTrue(sync.balances.byBucket.isEmpty())
         }
 
-    private fun TestScope.repository(network: ZcashNetwork = ZcashNetwork.Testnet): RailgunWalletRepository {
+    private fun TestScope.repository(
+        deployment: AtomicSwapDeployment? = AtomicSwapTestnet.deployment
+    ): RailgunWalletRepository {
         val keys = mockk<RailgunKeyProvider>()
         coEvery { keys.encryptionKey() } answers { ByteArray(KEY_BYTES) }
         val mnemonic = mockk<RailgunMnemonicProvider>()
@@ -157,9 +168,8 @@ class RailgunWalletRepositoryTest {
         coEvery { mnemonic.withMnemonic(any<suspend (CharArray) -> RailgunSession>()) } coAnswers {
             firstArg<suspend (CharArray) -> RailgunSession>()(CharArray(0))
         }
-        val networks = mockk<ZcashNetworkProvider>()
-        every { networks() } returns network
-        return RailgunWalletRepositoryImpl(wallet, keys, mnemonic, networks, backgroundScope)
+        val deployments = mockk<AtomicSwapDeployments> { every { current } returns deployment }
+        return RailgunWalletRepositoryImpl(wallet, keys, mnemonic, deployments, backgroundScope)
     }
 
     private companion object {

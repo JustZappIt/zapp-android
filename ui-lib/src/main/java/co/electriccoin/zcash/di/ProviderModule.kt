@@ -539,6 +539,7 @@ val providerModule =
         singleOf(::AtomicSwapDeployments)
         single {
             AtomicSwapSessions(
+                deployments = get(),
                 http = get(named(ATOMIC_SWAP_HTTP)),
                 keys = get(),
                 zcash = get(),

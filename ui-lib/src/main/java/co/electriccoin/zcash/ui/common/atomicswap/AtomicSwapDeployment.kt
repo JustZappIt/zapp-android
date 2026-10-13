@@ -33,13 +33,18 @@ data class AtomicSwapDeployment(
     val expectedDuration: Duration get() = ZCASH_BLOCK_TIME * makerConfirmations + OPEN_AND_CLAIM
 }
 
+// Before NU7, which cuts it to 25 s.
 private val ZCASH_BLOCK_TIME = 75.seconds
 private val OPEN_AND_CLAIM = 2.minutes
 
-/** The deployment this build's network settles on; mainnet builds have none yet. */
+/** The deployment this build's network settles on. */
 class AtomicSwapDeployments(
     zcashNetworkProvider: ZcashNetworkProvider,
 ) {
     val current: AtomicSwapDeployment? =
-        if (zcashNetworkProvider() == ZcashNetwork.Testnet) AtomicSwapTestnet.deployment else null
+        when (zcashNetworkProvider()) {
+            ZcashNetwork.Mainnet -> AtomicSwapMainnet.deployment
+            ZcashNetwork.Testnet -> AtomicSwapTestnet.deployment
+            else -> null
+        }
 }

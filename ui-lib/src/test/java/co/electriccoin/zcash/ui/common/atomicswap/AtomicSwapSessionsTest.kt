@@ -10,21 +10,33 @@ import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
 import xyz.justzappit.offramp.atomicswap.SwapDeployment
 import xyz.justzappit.offramp.atomicswap.SwapTokenIssuer
+import xyz.justzappit.offramp.atomicswap.SwapZcashNetwork
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class AtomicSwapSessionsTest {
     @Test
     fun pendingSwapsKeepTheirContractAndServices() {
-        val current = AtomicSwapTestnet.deployment
-        assertEquals(current, AtomicSwapSessions.deploymentFor(record(current)))
+        for (deployment in listOf(AtomicSwapTestnet.deployment, AtomicSwapMainnet.deployment)) {
+            assertEquals(deployment, AtomicSwapSessions.deploymentFor(record(deployment)))
+        }
     }
 
     @Test
     fun `each deployment takes quotes from its own maker and pays through its own relayer only`() {
-        val current = AtomicSwapTestnet.deployment.swap
-        assertEquals(Address.parse("0x2bac02b5032e9092493814c705f156b49e288922"), current.maker)
-        assertEquals(Address.parse("0xd9633572041886fa7584a2e12f36c8c7f1126412"), current.relayer)
+        val testnet = AtomicSwapTestnet.deployment.swap
+        assertEquals(Address.parse("0x2bac02b5032e9092493814c705f156b49e288922"), testnet.maker)
+        assertEquals(Address.parse("0xd9633572041886fa7584a2e12f36c8c7f1126412"), testnet.relayer)
+        val mainnet = AtomicSwapMainnet.deployment.swap
+        assertEquals(Address.parse("0x4370eeaa6becf1daef21deeb0379eb7f6caef7ef"), mainnet.maker)
+        assertEquals(Address.parse("0xcbcb5f57c79c88a0e4bb450289de2088958a017f"), mainnet.relayer)
+    }
+
+    @Test
+    fun `a build checks swap indices against the contracts on its own zcash network`() {
+        assertEquals(listOf(AtomicSwapTestnet.deployment), AtomicSwapSessions.indexedOn(SwapZcashNetwork.TESTNET))
+        assertEquals(listOf(AtomicSwapMainnet.deployment), AtomicSwapSessions.indexedOn(SwapZcashNetwork.MAINNET))
+        assertEquals(emptyList(), AtomicSwapSessions.indexedOn(null))
     }
 
     @Test
@@ -48,6 +60,14 @@ class AtomicSwapSessionsTest {
             ),
             storeJson.decodeFromString(SwapDeployment.serializer(), KEPT),
         )
+    }
+
+    @Test
+    fun `the hosted mainnet beta is written with its network, confirmations and issuer`() {
+        val mainnet = AtomicSwapMainnet.deployment.swap
+        val json = mainnet(checkNotNull(mainnet.tokenIssuer))
+        assertEquals(json, storeJson.encodeToString(SwapDeployment.serializer(), mainnet))
+        assertEquals(mainnet, storeJson.decodeFromString(SwapDeployment.serializer(), json))
     }
 
     private fun record(deployment: AtomicSwapDeployment): AtomicSwapRecord {
@@ -75,6 +95,21 @@ class AtomicSwapSessionsTest {
                 .removeSuffix("}") + ""","confirmations":2,"zcashConfirmations":2,""" +
                 """"tokenIssuer":{"url":"https://zecswap-testnet.pepeman931.workers.dev/issuer",""" +
                 """"name":"zecswap-testnet-issuer","tokenKey":"${issuer.tokenKey}",""" +
+                """"returnKey":"${issuer.returnKey}"}}"""
+
+        // Its escrows take the default 3 confirmations, so none are written.
+        fun mainnet(issuer: SwapTokenIssuer) =
+            """{"makerUrl":"https://zecswap-mainnet.pepeman931.workers.dev/maker",""" +
+                """"relayerUrl":"https://zecswap-mainnet.pepeman931.workers.dev/relayer",""" +
+                """"rpcUrl":"https://ethereum-rpc.publicnode.com","chainId":1,""" +
+                """"contract":"0x4708d7d36992b7e33ad97a1ab0a31c3ac6c4fe6d",""" +
+                """"token":"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",""" +
+                """"railgun":"0xfa7093cdd9ee6932b4eb2c9e1cde7ce00b1fa4b9",""" +
+                """"maker":"0x4370eeaa6becf1daef21deeb0379eb7f6caef7ef",""" +
+                """"relayer":"0xcbcb5f57c79c88a0e4bb450289de2088958a017f",""" +
+                """"zcashNetwork":"mainnet","zcashConfirmations":2,""" +
+                """"tokenIssuer":{"url":"https://zecswap-mainnet.pepeman931.workers.dev/issuer",""" +
+                """"name":"zecswap-mainnet-issuer","tokenKey":"${issuer.tokenKey}",""" +
                 """"returnKey":"${issuer.returnKey}"}}"""
     }
 }

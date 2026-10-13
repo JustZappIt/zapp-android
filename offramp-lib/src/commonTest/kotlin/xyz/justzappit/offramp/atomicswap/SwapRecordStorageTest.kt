@@ -131,6 +131,16 @@ class SwapRecordStorageTest {
     }
 
     @Test
+    fun aMainnetRecordKeepsTheMainnetBetaAndWritesBackExactlyAsKept() {
+        assertEquals(MAINNET_JSON, storeJson.encodeToString(SwapDeployment.serializer(), MAINNET))
+        val record = storeJson.decodeFromString(ReverseSwapRecord.serializer(), MAINNET_REVERSE)
+
+        assertEquals(MAINNET, record.deployment)
+        assertEquals(ChainId.ETHEREUM_MAINNET, record.quote.terms.chainId)
+        assertEquals(MAINNET_REVERSE, storeJson.encodeToString(ReverseSwapRecord.serializer(), record))
+    }
+
+    @Test
     fun aSwapIdIsItsContractWordWrittenLowercase() {
         val id = storeJson.decodeFromString(SwapId.serializer(), "\"0x${"AB".repeat(32)}\"")
 
@@ -288,6 +298,36 @@ class SwapRecordStorageTest {
                 """"contract":"$CONTRACT","token":"$TOKEN","railgun":"0xecfcf3b4ec647c4ca6d49108b311b7a7c9543fea",""" +
                 """"maker":"$MAKER","relayer":"0xd9633572041886fa7584a2e12f36c8c7f1126412"}"""
 
+        const val MAINNET_MAKER = "0x4370eeaa6becf1daef21deeb0379eb7f6caef7ef"
+        const val MAINNET_CONTRACT = "0x4708d7d36992b7e33ad97a1ab0a31c3ac6c4fe6d"
+        const val USDC = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        const val MAINNET_URL = "https://zecswap-mainnet.pepeman931.workers.dev"
+
+        val MAINNET =
+            SwapDeployment(
+                makerUrl = Url("$MAINNET_URL/maker"),
+                relayerUrl = Url("$MAINNET_URL/relayer"),
+                rpcUrl = Url("https://ethereum-rpc.publicnode.com"),
+                chainId = ChainId.ETHEREUM_MAINNET,
+                contract = Address.parse(MAINNET_CONTRACT),
+                token = ETHEREUM_USDC,
+                railgunProxy = RailgunContracts.ETHEREUM.proxy,
+                maker = Address.parse(MAINNET_MAKER),
+                relayer = Address.parse("0xcBcb5f57C79C88a0E4BB450289dE2088958A017F"),
+                zcashNetwork = SwapZcashNetwork.MAINNET,
+                zcashConfirmations = 2,
+                tokenIssuer = SwapTokenIssuer(Url("$MAINNET_URL/issuer"), "zecswap-mainnet-issuer", "token", "return"),
+            )
+
+        /** The hosted mainnet beta as reverse records keep it: its escrows take the default 3 confirmations. */
+        val MAINNET_JSON =
+            """{"makerUrl":"$MAINNET_URL/maker","relayerUrl":"$MAINNET_URL/relayer",""" +
+                """"rpcUrl":"https://ethereum-rpc.publicnode.com","chainId":1,"contract":"$MAINNET_CONTRACT",""" +
+                """"token":"$USDC","railgun":"0xfa7093cdd9ee6932b4eb2c9e1cde7ce00b1fa4b9","maker":"$MAINNET_MAKER",""" +
+                """"relayer":"0xcbcb5f57c79c88a0e4bb450289de2088958a017f","zcashNetwork":"mainnet",""" +
+                """"zcashConfirmations":2,"tokenIssuer":{"url":"$MAINNET_URL/issuer",""" +
+                """"name":"zecswap-mainnet-issuer","tokenKey":"token","returnKey":"return"}}"""
+
         private val REVERSE_HEAD =
             """{"index":4,"deployment":$TESTNET_JSON,"quote":{"terms":{"quoteId":"${hex(32, 1)}","maker":"$MAKER",""" +
                 """"makerShare":"${hex(64, 2)}","makerProof":"${hex(64, 7)}",""" +
@@ -323,6 +363,16 @@ class SwapRecordStorageTest {
                 """$REVERSE_HEAD,"account":"$ACCOUNT","phase":"REFUNDED","cost":$COST,"funding":$FUNDING,""" +
                     """"cancelRequested":true,"refundLock":$AUTHORIZATION,"payout":$PAYOUT,"acceptedAt":1790000100}""",
             )
+
+        /** The last of them, kept by a mainnet build. */
+        val MAINNET_REVERSE =
+            REVERSE_STATES
+                .last()
+                .replace(TESTNET_JSON, MAINNET_JSON)
+                .replace(""""chainId":11155111""", """"chainId":1""")
+                .replace(CONTRACT, MAINNET_CONTRACT)
+                .replace(TOKEN, USDC)
+                .replace(MAKER, MAINNET_MAKER)
 
         val REVERSE =
             """

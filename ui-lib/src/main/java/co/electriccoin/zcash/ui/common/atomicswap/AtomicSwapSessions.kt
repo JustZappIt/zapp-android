@@ -27,10 +27,12 @@ import xyz.justzappit.offramp.atomicswap.ReverseSwapZcash
 import xyz.justzappit.offramp.atomicswap.SwapContract
 import xyz.justzappit.offramp.atomicswap.SwapDeployment
 import xyz.justzappit.offramp.atomicswap.SwapIndices
+import xyz.justzappit.offramp.atomicswap.SwapZcashNetwork
 import xyz.justzappit.offramp.atomicswap.ZcashDepositTerms
 
 /** One wallet's drivers on each deployment; a reset closes its session, and nothing its drivers keep after lands. */
 class AtomicSwapSessions(
+    deployments: AtomicSwapDeployments,
     private val http: HttpClient,
     private val keys: AtomicSwapKeys,
     private val zcash: AtomicSwapZcash,
@@ -41,6 +43,8 @@ class AtomicSwapSessions(
     private val wallet: RailgunWalletRepository,
     private val tokens: AtomicSwapTokens,
 ) {
+    private val network = deployments.current?.swap?.zcashNetwork
+
     // Guarded by `this`; none while a reset wipes the wallet's records.
     private var current: Session? = Session(number = 0)
     private var opened = 0L
@@ -97,7 +101,8 @@ class AtomicSwapSessions(
         val writes = SessionWrites(store, reverseStore)
 
         val indices: SwapIndices by lazy {
-            SwapIndices(writes.forward, keys, KNOWN.map { SwapContract(deployment(it.swap).chain, it.swap.maker) })
+            val checked = indexedOn(network).map { SwapContract(deployment(it.swap).chain, it.swap.maker) }
+            SwapIndices(writes.forward, keys, checked)
         }
 
         fun deployment(swap: SwapDeployment): Deployment =
@@ -159,7 +164,7 @@ class AtomicSwapSessions(
 
         // Forward swaps keep the deployment they were accepted on, found again from their quote. Indices are checked
         // against these alone: a contract users swapped on stays, or a restored wallet reuses secrets published there.
-        private val KNOWN = listOf(AtomicSwapTestnet.deployment)
+        private val KNOWN = listOf(AtomicSwapTestnet.deployment, AtomicSwapMainnet.deployment)
 
         fun deploymentFor(record: AtomicSwapRecord): AtomicSwapDeployment =
             checkNotNull(
@@ -169,6 +174,10 @@ class AtomicSwapSessions(
                         it.swap.token == record.quote.token
                 },
             ) { "unknown original swap deployment" }
+
+        /** The deployments whose contracts can hold secrets of keys derived on [network]: keys differ by network. */
+        internal fun indexedOn(network: SwapZcashNetwork?): List<AtomicSwapDeployment> =
+            KNOWN.filter { it.swap.zcashNetwork == network }
     }
 }
 

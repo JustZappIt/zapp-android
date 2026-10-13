@@ -3,11 +3,10 @@
 
 package co.electriccoin.zcash.ui.common.repository
 
-import cash.z.ecc.android.sdk.model.ZcashNetwork
 import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
 import co.electriccoin.zcash.ui.common.provider.RailgunKeyProvider
 import co.electriccoin.zcash.ui.common.provider.RailgunMnemonicProvider
-import co.electriccoin.zcash.ui.common.provider.ZcashNetworkProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,7 +34,7 @@ import java.math.BigInteger
 import kotlin.time.Clock
 import kotlin.time.Instant
 
-/** The Railgun wallet of the Zapp seed's Railgun mnemonic, on Sepolia in testnet builds; mainnet builds have none. */
+/** The Railgun wallet of the Zapp seed's Railgun mnemonic, on the network of the build's swap deployment, if any. */
 interface RailgunWalletRepository {
     val state: StateFlow<RailgunWalletState>
 
@@ -91,10 +90,10 @@ class RailgunWalletRepositoryImpl(
     railgunWallet: RailgunWallet,
     keyProvider: RailgunKeyProvider,
     mnemonicProvider: RailgunMnemonicProvider,
-    zcashNetworkProvider: ZcashNetworkProvider,
+    deployments: AtomicSwapDeployments,
     scope: CoroutineScope,
 ) : RailgunWalletRepository {
-    private val network = if (zcashNetworkProvider() == ZcashNetwork.Testnet) RailgunNetwork.SEPOLIA else null
+    private val network = deployments.current?.railgunNetwork
     private val mutableState =
         MutableStateFlow(
             RailgunWalletState(

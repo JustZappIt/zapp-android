@@ -8,8 +8,11 @@ import co.electriccoin.zcash.ui.common.provider.InMemoryPreferenceProvider
 import co.electriccoin.zcash.ui.screen.privateusd.toZec
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import xyz.justzappit.evm.types.ChainId
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.atomicswap.ReversePhase
+import xyz.justzappit.offramp.atomicswap.SwapDeployment
 import xyz.justzappit.offramp.p2p.Usdc6
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -77,18 +80,35 @@ class ReverseSwapStoreImplTest {
             assertEquals(KEPT, preferences.getString(PreferenceKey(KEY)))
         }
 
+    @Test
+    fun `a mainnet conversion under way keeps the mainnet beta and is written back unchanged`() =
+        runTest {
+            val preferences = InMemoryPreferenceProvider()
+            preferences.putString(PreferenceKey(KEY), MAINNET_KEPT)
+            val store = ReverseSwapStoreImpl(preferences.encrypted())
+
+            val record = checkNotNull(store.underWay())
+            store.save(record)
+
+            assertEquals(AtomicSwapMainnet.deployment.swap, record.deployment)
+            assertEquals(ChainId.ETHEREUM_MAINNET, record.quote.terms.chainId)
+            assertEquals(MAINNET_KEPT, preferences.getString(PreferenceKey(KEY)))
+        }
+
     private companion object {
         const val KEY = "reverse_swap_v3"
         private const val COST = """{"debit":"1252506","railgunFee":"2506","broadcasterFee":"250000"}"""
-        private val RECORD =
-            """{"index":4,"deployment":{"makerUrl":"https://zecswap-testnet.pepeman931.workers.dev/maker",""" +
+        private const val TESTNET =
+            """{"makerUrl":"https://zecswap-testnet.pepeman931.workers.dev/maker",""" +
                 """"relayerUrl":"https://zecswap-testnet.pepeman931.workers.dev/relayer",""" +
                 """"rpcUrl":"https://ethereum-sepolia-rpc.publicnode.com","chainId":11155111,""" +
                 """"contract":"0xbd9a37f47a988aefc4d80395727f41feb698e225",""" +
                 """"token":"0x5764d0044bef5aa839e0ddafe2073421101b9ed8",""" +
                 """"railgun":"0xecfcf3b4ec647c4ca6d49108b311b7a7c9543fea",""" +
                 """"maker":"0x2bac02b5032e9092493814c705f156b49e288922",""" +
-                """"relayer":"0xd9633572041886fa7584a2e12f36c8c7f1126412"},""" +
+                """"relayer":"0xd9633572041886fa7584a2e12f36c8c7f1126412"}"""
+        private val RECORD =
+            """{"index":4,"deployment":$TESTNET,""" +
                 """"quote":{"terms":{"quoteId":"0x${"01".repeat(32)}",""" +
                 """"maker":"0x2bac02b5032e9092493814c705f156b49e288922",""" +
                 """"makerShare":"0x${"02".repeat(64)}","makerProof":"0x${"07".repeat(64)}","chainId":11155111,""" +
@@ -105,5 +125,18 @@ class ReverseSwapStoreImplTest {
 
         /** A conversion under way, as the store keeps it. */
         val KEPT = """{"active":$RECORD,"history":[$RECORD]}"""
+
+        private val storeJson = Json { explicitNulls = false }
+        private val MAINNET = storeJson.encodeToString(SwapDeployment.serializer(), AtomicSwapMainnet.deployment.swap)
+        private val MAINNET_RECORD =
+            RECORD
+                .replace(TESTNET, MAINNET)
+                .replace(""""chainId":11155111""", """"chainId":1""")
+                .replace("0xbd9a37f47a988aefc4d80395727f41feb698e225", "0x4708d7d36992b7e33ad97a1ab0a31c3ac6c4fe6d")
+                .replace("0x5764d0044bef5aa839e0ddafe2073421101b9ed8", "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
+                .replace("0x2bac02b5032e9092493814c705f156b49e288922", "0x4370eeaa6becf1daef21deeb0379eb7f6caef7ef")
+
+        /** The same conversion, kept by a mainnet build. */
+        val MAINNET_KEPT = """{"active":$MAINNET_RECORD,"history":[$MAINNET_RECORD]}"""
     }
 }

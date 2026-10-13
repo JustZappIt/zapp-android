@@ -41,6 +41,16 @@ object Sepolia {
     val WETH = Address.parse("0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14")
 }
 
+/** Ethereum mainnet, where mainnet builds keep private USD. */
+object Ethereum {
+    val CHAIN_ID = ChainId.ETHEREUM_MAINNET
+    val RPC_URL = Url(RailgunEndpoints.MAINNET_RPC_URL)
+    const val EXPLORER_TX_URL = "https://etherscan.io/tx/"
+    const val RAILSCAN_TX_URL = "https://railscan.io/ethereum/tx/"
+    val RAILGUN_PROXY = RailgunContracts.ETHEREUM.proxy
+    val USDC = ETHEREUM_USDC
+}
+
 /** The tokens the app knows how to show. Decimals come from here, never from the chain. */
 object PrivateUsdTokens {
     private const val USD_DECIMALS = 6
@@ -54,13 +64,7 @@ object PrivateUsdTokens {
         )
     private val ethereum =
         listOf(
-            PrivateUsdToken(
-                ETHEREUM_USDC,
-                "USDC",
-                R.string.private_usd_token_usdc,
-                USD_DECIMALS,
-                true,
-            ),
+            PrivateUsdToken(Ethereum.USDC, "USDC", R.string.private_usd_token_usdc, USD_DECIMALS, true),
         )
 
     fun of(network: RailgunNetwork): List<PrivateUsdToken> =
