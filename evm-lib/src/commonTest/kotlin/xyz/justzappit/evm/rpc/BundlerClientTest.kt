@@ -141,7 +141,7 @@ class BundlerClientTest {
                     config =
                         RpcHttpClient.Config(
                             maxRetries = 3,
-                            maxBackoffMillis = 0,
+                            maxBackoffMillis = 1,
                             randomJitterMillis = 0,
                         ),
                 )

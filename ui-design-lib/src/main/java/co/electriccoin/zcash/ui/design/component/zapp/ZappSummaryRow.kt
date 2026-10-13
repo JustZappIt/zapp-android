@@ -1,24 +1,16 @@
 package co.electriccoin.zcash.ui.design.component.zapp
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,24 +49,13 @@ fun ZappSummaryRow(
                         .copy(color = ZappTheme.colors.textMuted, fontWeight = FontWeight.Medium),
             )
             info?.let { action ->
-                Box(
-                    modifier =
-                        Modifier
-                            .size(INFO_TAP_TARGET.dp)
-                            .clickable(onClick = action.onClick)
-                            .semantics {
-                                role = Role.Button
-                                contentDescription = action.contentDescription
-                            },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        tint = ZappTheme.colors.textMuted,
-                        modifier = Modifier.size(INFO_ICON_SIZE.dp),
-                    )
-                }
+                ZappIconButton(
+                    icon = Icons.Default.Info,
+                    contentDescription = action.contentDescription,
+                    onClick = action.onClick,
+                    tint = ZappTheme.colors.textMuted,
+                    iconSize = INFO_ICON_SIZE.dp,
+                )
             }
         }
         BasicText(
@@ -92,6 +73,3 @@ private const val LABEL_ICON_GAP = 2
 
 /** Small enough to sit on a caption line. */
 private const val INFO_ICON_SIZE = 14
-
-/** Android's own minimum, and the size the feature's other info button already uses. */
-private const val INFO_TAP_TARGET = 48

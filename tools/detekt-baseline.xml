@@ -111,11 +111,8 @@
     <ID>MagicNumber:EoaSigner.kt$EoaSigner$100L</ID>
     <ID>MagicNumber:Erc4337Submitter.kt$Erc4337Submitter$100L</ID>
     <ID>MagicNumber:Erc4337Submitter.kt$Erc4337Submitter$60_000</ID>
-    <ID>MagicNumber:EvmKeyDerivation.kt$EvmKeyDerivation$16</ID>
-    <ID>MagicNumber:EvmKeyDerivation.kt$EvmKeyDerivation$24</ID>
     <ID>MagicNumber:EvmKeyDerivation.kt$EvmKeyDerivation$44</ID>
     <ID>MagicNumber:EvmKeyDerivation.kt$EvmKeyDerivation$60</ID>
-    <ID>MagicNumber:EvmKeyDerivation.kt$EvmKeyDerivation$8</ID>
     <ID>MagicNumber:FileUtils.kt$FileUtils$1024</ID>
     <ID>MagicNumber:FileUtils.kt$FileUtils$1024.0</ID>
     <ID>MagicNumber:FloatingPillNavBar.kt$0.81f</ID>
@@ -389,7 +386,6 @@
     <ID>ReturnCount:DebugStartMigrationE2EUseCase.kt$DebugStartMigrationE2EUseCase$suspend operator fun invoke()</ID>
     <ID>ReturnCount:DirectPixResolver.kt$private fun isForbiddenPixHost(host: String): Boolean</ID>
     <ID>ReturnCount:EcdsaSigner.kt$EcdsaSigner$fun recoverPublicKeyBytes( recId: Int, r: BigInteger, s: BigInteger, messageHash: ByteArray, ): ByteArray?</ID>
-    <ID>ReturnCount:EvmKeyDerivation.kt$EvmKeyDerivation$private fun ckdPrivOnce(parent: ExtKey, index: Int): ExtKey?</ID>
     <ID>ReturnCount:ExactInputVMMapper.kt$ExactInputVMMapper$private fun createTopUpButtonState( state: ExactInputInternalState, onTopUpClick: () -&gt; Unit, ): ButtonState?</ID>
     <ID>ReturnCount:FakeOrchardMigrationSdk.kt$FakeOrchardMigrationSdk$override suspend fun estimateMigrationRunCount(): Int?</ID>
     <ID>ReturnCount:FakeOrchardMigrationSdk.kt$FakeOrchardMigrationSdk$override suspend fun executeNextPendingTransfer( options: NetworkPrivacyOptions, useEstimatedTip: Boolean, ): TransferAttemptOutcome</ID>

@@ -8,6 +8,8 @@ import cash.z.ecc.android.sdk.WalletCoordinator
 import co.electriccoin.zcash.preference.EncryptedPreferenceProvider
 import co.electriccoin.zcash.preference.StandardPreferenceProvider
 import co.electriccoin.zcash.preference.api.PreferenceProvider
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
 import co.electriccoin.zcash.ui.common.migration.MigrationAppHooks
 import co.electriccoin.zcash.ui.common.provider.ChatBlockedKeysStorageProvider
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
@@ -19,15 +21,20 @@ import co.electriccoin.zcash.ui.common.repository.FlexaRepository
 import co.electriccoin.zcash.ui.common.repository.HomeMessageCacheRepository
 import co.electriccoin.zcash.ui.common.repository.MetadataRepository
 import co.electriccoin.zcash.ui.common.repository.PeerCashOutRepository
+import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import co.electriccoin.zcash.ui.common.usecase.EnsureNoUnsharedGiftFundsUseCase
 import co.electriccoin.zcash.ui.common.usecase.UnsharedGiftFundsException
+import co.electriccoin.zcash.ui.screen.tabs.SelectedTabRepository
+import co.electriccoin.zcash.ui.screen.tabs.view.ZappTab
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 /**
@@ -68,6 +75,32 @@ class ResetZashiUseCaseTest {
         }
 
     @Test
+    fun `conversions and private USD's engine stop before anything of the wallet is wiped`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false)
+
+            fixture.useCase(keepFiles = true)
+
+            coVerifyOrder {
+                fixture.atomicSwapRepository.reset()
+                fixture.reverseSwapRepository.reset()
+                fixture.railgunWalletRepository.reset()
+                fixture.encryptedPreferences.clearPreferences()
+            }
+        }
+
+    @Test
+    fun `the next wallet opens on the default tab, not the one this one was reset from`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false)
+            fixture.selectedTabRepository.select(ZappTab.YOU)
+
+            fixture.useCase(keepFiles = true)
+
+            assertEquals(ZappTab.DEFAULT, fixture.selectedTabRepository.requested.value)
+        }
+
+    @Test
     fun `explicit start fresh confirmation may discard gift recovery`() =
         runTest {
             val fixture = Fixture(hasUnsharedFunds = true)
@@ -86,6 +119,10 @@ class ResetZashiUseCaseTest {
         val walletCoordinator = mockk<WalletCoordinator>(relaxed = true)
         val addressBookRepository = mockk<AddressBookRepository>(relaxed = true)
         val metadataRepository = mockk<MetadataRepository>(relaxed = true)
+        val atomicSwapRepository = mockk<AtomicSwapRepository>(relaxed = true)
+        val reverseSwapRepository = mockk<ReverseSwapRepository>(relaxed = true)
+        val railgunWalletRepository = mockk<RailgunWalletRepository>(relaxed = true)
+        val selectedTabRepository = SelectedTabRepository()
 
         val giftCardStorageProvider = mockk<GiftCardStorageProvider>()
         private val synchronizerProvider = mockk<SynchronizerProvider>()
@@ -125,6 +162,11 @@ class ResetZashiUseCaseTest {
                             giftCardStorageProvider,
                             mockk(relaxed = true),
                         ),
+                    atomicSwapRepository = atomicSwapRepository,
+                    reverseSwapRepository = reverseSwapRepository,
+                    railgunWalletRepository = railgunWalletRepository,
+                    privateUsdSenders = mockk(relaxed = true),
+                    selectedTabRepository = selectedTabRepository,
                 )
         }
 
@@ -136,6 +178,9 @@ class ResetZashiUseCaseTest {
             coVerify(exactly = 0) { biometricRepository.requestBiometrics(any()) }
             coVerify(exactly = 0) { addressBookRepository.delete() }
             coVerify(exactly = 0) { metadataRepository.delete() }
+            coVerify(exactly = 0) { atomicSwapRepository.reset() }
+            coVerify(exactly = 0) { reverseSwapRepository.reset() }
+            coVerify(exactly = 0) { railgunWalletRepository.reset() }
         }
     }
 }

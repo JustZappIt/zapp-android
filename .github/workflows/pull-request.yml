@@ -30,6 +30,7 @@ env:
   # with .zapp-deps; verify_composite_build fails when the two disagree.
   ZAPP_MESSAGING_REF: 58f3cc72792d5efe663ebb4fd397f845dfcec2ac
   BARE_KIT_REF: 15a3569f3d704de7151761051c8d9cc2e299414f
+  ZECSWAP_REF: 9b52dfc4897c8f370e07439f072455375008b764
 
 jobs:
   validate_gradle_wrapper:
@@ -184,6 +185,14 @@ jobs:
           repository: holepunchto/bare-kit
           ref: ${{ env.BARE_KIT_REF }}
           path: bare-kit
+      - name: Checkout zecSwap
+        timeout-minutes: 5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zecSwap
+          ref: ${{ env.ZECSWAP_REF }}
+          persist-credentials: false
+          path: zecSwap
       - name: Free runner disk space
         uses: ./.github/actions/free-disk-space
         timeout-minutes: 5
@@ -224,6 +233,39 @@ jobs:
           name: Android Lint static analysis results
           path: ~/artifacts
 
+  railgun_web:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        timeout-minutes: 5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        timeout-minutes: 5
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: railgun-lib/web/package-lock.json
+      - name: Build the Railgun page
+        timeout-minutes: 10
+        working-directory: railgun-lib/web
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+      - name: Check the committed page is what its sources build
+        timeout-minutes: 1
+        run: |
+          git diff --exit-code -- railgun-lib/src/main/assets
+          test -z "$(git status --porcelain -- railgun-lib/src/main/assets)"
+      - name: Test
+        timeout-minutes: 5
+        working-directory: railgun-lib/web
+        run: npm test
+
   test_kotlin_modules:
     needs: validate_gradle_wrapper
     runs-on: ubuntu-latest
@@ -245,10 +287,11 @@ jobs:
         uses: ./.github/actions/setup-gradle
         timeout-minutes: 5
       - name: Test
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: |
           # Note that we explicitly check just the Kotlin modules, to avoid compiling the Android modules here
-          ./gradlew :configuration-api-lib:check :crash-lib:check :preference-api-lib:check :spackle-lib:check
+          ./gradlew :configuration-api-lib:check :crash-lib:check :preference-api-lib:check :spackle-lib:check \
+            :offramp-lib:jvmTest :evm-lib:jvmTest
       - name: Collect Artifacts
         if: ${{ always() }}
         timeout-minutes: 1
@@ -292,6 +335,14 @@ jobs:
           repository: holepunchto/bare-kit
           ref: ${{ env.BARE_KIT_REF }}
           path: bare-kit
+      - name: Checkout zecSwap
+        timeout-minutes: 5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zecSwap
+          ref: ${{ env.ZECSWAP_REF }}
+          persist-credentials: false
+          path: zecSwap
       - name: Set up bare-kit npm dependencies
         uses: ./.github/actions/setup-bare-kit
         timeout-minutes: 10
@@ -413,6 +464,14 @@ jobs:
           repository: holepunchto/bare-kit
           ref: ${{ env.BARE_KIT_REF }}
           path: bare-kit
+      - name: Checkout zecSwap
+        timeout-minutes: 5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zecSwap
+          ref: ${{ env.ZECSWAP_REF }}
+          persist-credentials: false
+          path: zecSwap
       - name: Free runner disk space
         uses: ./.github/actions/free-disk-space
         timeout-minutes: 5
@@ -534,6 +593,14 @@ jobs:
           repository: holepunchto/bare-kit
           ref: ${{ env.BARE_KIT_REF }}
           path: bare-kit
+      - name: Checkout zecSwap
+        timeout-minutes: 5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zecSwap
+          ref: ${{ env.ZECSWAP_REF }}
+          persist-credentials: false
+          path: zecSwap
       - name: Set up bare-kit npm dependencies
         uses: ./.github/actions/setup-bare-kit
         timeout-minutes: 10
@@ -581,9 +648,9 @@ jobs:
           ./gradlew :app:runFlankSanityConfigDebug
 
   verify_composite_build:
-    # Verifies that the composite build (zapp-android + zappMessaging + bare-kit)
+    # Verifies that the composite build (zapp-android + zappMessaging + bare-kit + zecSwap)
     # compiles cleanly. Requires sibling repos to be checked out at the paths
-    # referenced in settings.gradle.kts (../zappMessaging/android and ../bare-kit/android).
+    # referenced in settings.gradle.kts (../zappMessaging/android, ../bare-kit/android, ../zecSwap/android).
     needs: [validate_gradle_wrapper]
     runs-on: ubuntu-latest
     permissions:
@@ -612,6 +679,14 @@ jobs:
           repository: holepunchto/bare-kit
           ref: ${{ env.BARE_KIT_REF }}
           path: bare-kit
+      - name: Checkout zecSwap
+        timeout-minutes: 5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zecSwap
+          ref: ${{ env.ZECSWAP_REF }}
+          persist-credentials: false
+          path: zecSwap
       - name: Free runner disk space
         uses: ./zapp-android/.github/actions/free-disk-space
         timeout-minutes: 5
@@ -633,6 +708,7 @@ jobs:
           }
           verify_sha zappMessaging ../zappMessaging
           verify_sha bare-kit ../bare-kit
+          verify_sha zecSwap ../zecSwap
       - name: Set up bare-kit npm dependencies
         uses: ./zapp-android/.github/actions/setup-bare-kit
         timeout-minutes: 10
@@ -689,6 +765,14 @@ jobs:
           repository: holepunchto/bare-kit
           ref: ${{ env.BARE_KIT_REF }}
           path: bare-kit
+      - name: Checkout zecSwap
+        timeout-minutes: 5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zecSwap
+          ref: ${{ env.ZECSWAP_REF }}
+          persist-credentials: false
+          path: zecSwap
       - name: Free runner disk space
         uses: ./.github/actions/free-disk-space
         timeout-minutes: 5
@@ -802,6 +886,14 @@ jobs:
           repository: holepunchto/bare-kit
           ref: ${{ env.BARE_KIT_REF }}
           path: bare-kit
+      - name: Checkout zecSwap
+        timeout-minutes: 5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zecSwap
+          ref: ${{ env.ZECSWAP_REF }}
+          persist-credentials: false
+          path: zecSwap
       - name: Free runner disk space
         uses: ./.github/actions/free-disk-space
         timeout-minutes: 5
@@ -999,6 +1091,14 @@ jobs:
           repository: holepunchto/bare-kit
           ref: ${{ env.BARE_KIT_REF }}
           path: bare-kit
+      - name: Checkout zecSwap
+        timeout-minutes: 5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          repository: JustZappIt/zecSwap
+          ref: ${{ env.ZECSWAP_REF }}
+          persist-credentials: false
+          path: zecSwap
       - name: Set up bare-kit npm dependencies
         uses: ./.github/actions/setup-bare-kit
         timeout-minutes: 10

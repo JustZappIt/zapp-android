@@ -1,10 +1,6 @@
 package co.electriccoin.zcash.ui.screen.receive
 
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,19 +26,11 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -53,20 +41,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.appbar.ZashiMainTopAppBarState
-import co.electriccoin.zcash.ui.design.animation.ZappMotion
 import co.electriccoin.zcash.ui.design.component.CircularScreenProgressIndicator
 import co.electriccoin.zcash.ui.design.component.IconButtonState
 import co.electriccoin.zcash.ui.design.component.QrState
 import co.electriccoin.zcash.ui.design.component.ZashiQr
+import co.electriccoin.zcash.ui.design.component.zapp.ZappAddressCopyRow
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
-import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.styledStringResource
 import co.electriccoin.zcash.ui.fixture.ZashiMainTopAppBarStateFixture
-import kotlinx.coroutines.delay
 
 @Composable
 internal fun ReceiveView(
@@ -160,22 +146,11 @@ private fun ReceiveMainPanel(
 
         Spacer(Modifier.height(20.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            BasicText(
-                text = selectedItem.subtitle.getValue(),
-                style =
-                    ZappTheme.typography.mono.copy(
-                        color = c.textMuted,
-                        fontSize = 12.sp,
-                    ),
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.width(8.dp))
-            CopyIconButton(onClick = selectedItem.onCopyClicked)
-        }
+        ZappAddressCopyRow(
+            address = selectedItem.subtitle,
+            copyContentDescription = stringResource(R.string.receive_copy),
+            onCopy = selectedItem.onCopyClicked,
+        )
 
         Spacer(Modifier.height(20.dp))
 
@@ -371,74 +346,6 @@ private fun ReceiveTabSwitcher(
         }
     }
 }
-
-@Composable
-private fun CopyIconButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val c = ZappTheme.colors
-    val haptic = LocalHapticFeedback.current
-    val copyContentDescription = stringResource(R.string.receive_copy)
-    // Inline ✓ confirmation: the system clipboard chip is not shown on non-admin
-    // profiles (see CopyToClipboardUseCase), so the button itself must confirm.
-    var copied by remember { mutableStateOf(false) }
-    LaunchedEffect(copied) {
-        if (copied) {
-            delay(COPY_CONFIRM_MS)
-            copied = false
-        }
-    }
-    val borderColor by
-        animateColorAsState(
-            targetValue = if (copied) c.success else c.border,
-            animationSpec = tween(ZappMotion.STATE_MS, easing = ZappMotion.easing),
-            label = "copyBorder",
-        )
-    Box(
-        modifier =
-            modifier
-                .size(40.dp)
-                .border(BorderStroke(1.dp, borderColor), RectangleShape)
-                .clickable(onClick = {
-                    runCatching { haptic.performHapticFeedback(HapticFeedbackType.ContextClick) }
-                    copied = true
-                    onClick()
-                })
-                .semantics {
-                    role = Role.Button
-                    contentDescription = copyContentDescription
-                },
-        contentAlignment = Alignment.Center,
-    ) {
-        Crossfade(
-            targetState = copied,
-            animationSpec = tween(ZappMotion.STATE_MS, easing = ZappMotion.easing),
-            label = "copyIcon",
-        ) { showCheck ->
-            if (showCheck) {
-                BasicText(
-                    text = "✓",
-                    style =
-                        ZappTheme.typography.chip.copy(
-                            color = c.success,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Black,
-                        ),
-                )
-            } else {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_copy_shielded),
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    colorFilter = ColorFilter.tint(c.accentText),
-                )
-            }
-        }
-    }
-}
-
-private const val COPY_CONFIRM_MS = 1_500L
 
 @Composable
 @PreviewScreens

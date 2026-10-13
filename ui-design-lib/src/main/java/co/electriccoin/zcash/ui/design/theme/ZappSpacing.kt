@@ -14,4 +14,7 @@ object ZappSpacing {
     val xl4 = 32.dp
     val xl5 = 40.dp
     val xl6 = 48.dp
+
+    /** How far content sits from the screen's sides: headers, rows and action bars share it. */
+    val gutter = 18.dp
 }

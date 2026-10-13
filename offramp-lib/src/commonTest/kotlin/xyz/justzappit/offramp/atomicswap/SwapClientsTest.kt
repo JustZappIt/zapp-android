@@ -1,0 +1,510 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-FileCopyrightText: 2025-2026 The Zapp Contributors
+
+package xyz.justzappit.offramp.atomicswap
+
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockRequestHandleScope
+import io.ktor.client.engine.mock.respond
+import io.ktor.client.request.HttpRequestData
+import io.ktor.client.request.HttpResponseData
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.Url
+import io.ktor.http.content.TextContent
+import io.ktor.http.headersOf
+import kotlinx.coroutines.test.runTest
+import kotlinx.io.IOException
+import xyz.justzappit.evm.types.Address
+import xyz.justzappit.evm.types.ChainId
+import xyz.justzappit.evm.types.TxHash
+import xyz.justzappit.offramp.p2p.Usdc6
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+
+class SwapClientsTest {
+    @Test
+    fun errorsUseCodesEvenWhenDisplayTextChanges() =
+        runTest {
+            val refusal = """{"code":"rejected","error":"not a stable protocol field"}"""
+            val services = Services { respond(refusal, HttpStatusCode.Conflict) }
+
+            val failure =
+                assertFailsWith<AtomicSwapHttpException.Refused> {
+                    services.relayer.ready(SwapAuthorization(SWAP_ID, 100, "0x" + "01".repeat(65)), TERMS, TICKET)
+                }
+
+            assertEquals(SwapErrorCode.REJECTED, failure.code)
+            assertEquals(409, failure.status)
+            assertEquals(AtomicSwapService.RELAYER, failure.service)
+            assertEquals(1, services.paths.size)
+            services.close()
+        }
+
+    @Test
+    fun aRefusalWithoutACodeStillSaysWhyAndWithWhatStatus() =
+        runTest {
+            var answer = """{"error":"quote expired"}"""
+            val services = Services { respond(answer, HttpStatusCode.NotFound) }
+
+            val coded =
+                assertFailsWith<AtomicSwapHttpException.Refused> {
+                    services.maker.accept(QUOTE_ID, SWAP_ID, ACCEPTANCE)
+                }
+            assertEquals(404, coded.status)
+            assertNull(coded.code)
+            assertTrue("quote expired" in coded.message.orEmpty())
+
+            answer = "<html>bad gateway</html>"
+            val notJson = assertFailsWith<AtomicSwapHttpException.Refused> { services.maker.info() }
+            assertEquals(404, notJson.status)
+            assertNull(notJson.code)
+            services.close()
+        }
+
+    @Test
+    fun aCodeThisBuildDoesNotKnowStillLeavesTheReasonReadable() =
+        runTest {
+            val services =
+                Services { respond("""{"code":"rateLimited","error":"slow down"}""", HttpStatusCode.TooManyRequests) }
+
+            val failure = assertFailsWith<AtomicSwapHttpException.Refused> { services.relayer.terms() }
+
+            assertNull(failure.code)
+            assertEquals(429, failure.status)
+            assertTrue("slow down" in failure.message.orEmpty())
+            assertTrue("rateLimited" !in failure.message.orEmpty(), "the reason, not the raw body")
+            services.close()
+        }
+
+    @Test
+    fun aMakerOnAZcashNetworkThisBuildDoesNotKnowIsUnreadable() =
+        runTest {
+            val services =
+                Services {
+                    respond(
+                        """{"apiVersion":1,"maker":"$ADDRESS","chainId":11155111,"contract":"$ADDRESS",
+                        "token":"$ADDRESS","zcashNetwork":"regtest","reverseEnabled":true}"""
+                    )
+                }
+
+            assertFailsWith<AtomicSwapHttpException.Unreadable> { services.maker.info() }
+            services.close()
+        }
+
+    @Test
+    fun infoUsesThePinnedMakerPath() =
+        runTest {
+            val services =
+                Services(maker = Url("https://host/maker")) {
+                    respond(
+                        """{"apiVersion":1,"maker":"$ADDRESS","chainId":11155111,"contract":"$ADDRESS",
+                        "token":"$ADDRESS","zcashNetwork":"testnet","reverseEnabled":true}"""
+                    )
+                }
+
+            val info = services.maker.info()
+            assertEquals(ChainId.ETHEREUM_SEPOLIA, info.chainId)
+            assertEquals(SwapZcashNetwork.TESTNET, info.zcashNetwork)
+            assertEquals(listOf("https://host/maker/v1/info"), services.urls)
+            services.close()
+        }
+
+    @Test
+    fun unreadableAnswersAndUnreachableServicesAreTypedFailures() =
+        runTest {
+            var answer = "<html>bad gateway</html>"
+            var status = HttpStatusCode.OK
+            val services =
+                Services { request ->
+                    if (request.url.encodedPath.endsWith("/v1/info")) throw IOException("connection refused")
+                    respond(answer, status)
+                }
+
+            val unreachable = assertFailsWith<AtomicSwapHttpException.Unreachable> { services.maker.info() }
+            assertEquals(AtomicSwapService.MAKER, unreachable.service)
+            val unreadable = assertFailsWith<AtomicSwapHttpException.Unreadable> { services.relayer.terms() }
+            assertEquals(AtomicSwapService.RELAYER, unreadable.service)
+            status = HttpStatusCode.BadGateway
+            assertEquals(502, assertFailsWith<AtomicSwapHttpException.Refused> { services.relayer.terms() }.status)
+            answer = """{"relayer":"0x01","chainId":11155111,"contract":"$ADDRESS","fee":"1"}"""
+            status = HttpStatusCode.OK
+            assertFailsWith<AtomicSwapHttpException.Unreadable> { services.relayer.terms() }
+            answer = """{"relayer":"$ADDRESS","chainId":11155111,"contract":"$ADDRESS","fee":"-1"}"""
+            assertFailsWith<AtomicSwapHttpException.Unreadable> { services.relayer.terms() }
+            answer = """{"transactions":["0xpay"]}"""
+            assertFailsWith<AtomicSwapHttpException.Unreadable> { services.relayer.refund(REVEAL, TERMS, TICKET) }
+            services.close()
+        }
+
+    @Test
+    fun requestsGoOutAsZecSwapsSerdeWritesThem() =
+        runTest {
+            val services = Services { respond("""{"transactions":[]}""") }
+            val funding =
+                """{"swapId":"${SWAP_ID.hex}","chainId":11155111,"to":"$ADDRESS","data":"0x12345678","value":"0"}"""
+
+            services.relayer.fundReverse(FUNDING, TICKET)
+            services.relayer.lockClaim(AUTHORIZATION, TERMS, TICKET)
+            services.relayer.claim(REVEAL, TERMS, TICKET)
+            services.relayer.payout(PAYOUT, TERMS, TICKET)
+            services.relayer.ready(AUTHORIZATION, TERMS, TICKET)
+            services.relayer.lockRefund(AUTHORIZATION, TERMS, TICKET)
+            services.relayer.refund(REVEAL, TERMS, TICKET)
+            services.relayer.refundPayout(PAYOUT, TERMS, TICKET)
+            services.relayer.rescue(RESCUE, TERMS, TICKET)
+
+            assertEquals(
+                listOf(
+                    "/relayer/v1/reverse/fund" to funding,
+                    "/relayer/v1/lock-claim" to ZecSwapWireSamples.AUTHORIZATION,
+                    "/relayer/v1/claim" to ZecSwapWireSamples.REVEAL,
+                    "/relayer/v1/payout" to ZecSwapWireSamples.PAYOUT,
+                    "/relayer/v1/reverse/ready" to ZecSwapWireSamples.AUTHORIZATION,
+                    "/relayer/v1/reverse/lock-refund" to ZecSwapWireSamples.AUTHORIZATION,
+                    "/relayer/v1/reverse/refund" to ZecSwapWireSamples.REVEAL,
+                    "/relayer/v1/reverse/refund-payout" to ZecSwapWireSamples.PAYOUT,
+                    "/relayer/v1/reverse/rescue" to ZecSwapWireSamples.RESCUE,
+                ),
+                services.paths.zip(services.bodies),
+            )
+            services.close()
+        }
+
+    @Test
+    fun relayerTermsDiscoverSponsorshipWithoutBreakingOlderServices() =
+        runTest {
+            var sponsorship = ""
+            val services =
+                Services {
+                    respond(
+                        """{"relayer":"$ADDRESS","chainId":11155111,"contract":"$ADDRESS","fee":"20000"$sponsorship}"""
+                    )
+                }
+            assertNull(services.relayer.terms().reverseFunding)
+            sponsorship =
+                ""","reverseFunding":{"relayAdapt":"$ADDRESS","token":"$ADDRESS","maker":"$ADDRESS",""" +
+                """"maxGasLimit":4000000,"maxGasPriceWei":"20000000000","maxCalldataBytes":65536,"fee":"250000"}"""
+            val funding = services.relayer.terms().reverseFunding
+            assertEquals("20000000000", funding?.maxGasPriceWei)
+            assertEquals(Usdc6.ofMicros(250_000), funding?.fee)
+            services.close()
+        }
+
+    @Test
+    fun railgunSendTermsCarryTheGasRateOnlyWhereTheRelayerQuotesOne() =
+        runTest {
+            var rate = ""
+            val services =
+                Services {
+                    respond(
+                        """{"relayer":"$ADDRESS","chainId":11155111,"contract":"$ADDRESS","fee":"20000",""" +
+                            """"railgunSends":{"railgunAddress":"0zk1","railgunProxy":"$ADDRESS",""" +
+                            """"token":"$ADDRESS","fee":"500000"$rate,"maxGasLimit":3000000,""" +
+                            """"maxGasPriceWei":"50000000000","maxCalldataBytes":65536}}"""
+                    )
+                }
+            val fixed = checkNotNull(services.relayer.terms().railgunSends)
+            assertEquals(Usdc6.ofMicros(500_000), fixed.fee)
+            assertNull(fixed.feePerUnitGas)
+            assertNull(fixed.feeExpiresAt)
+
+            rate = ""","feePerUnitGas":"2726271000","feeExpiresAt":1791504000"""
+            val priced = checkNotNull(services.sends.terms().railgunSends)
+            assertEquals("2726271000", priced.feePerUnitGas)
+            assertEquals(1_791_504_000, priced.feeExpiresAt)
+            services.close()
+        }
+
+    @Test
+    fun aRailgunSendGoesOutAsProvedAndEachAnswerSaysWhetherToDropItOrPostItAgain() =
+        runTest {
+            var status = HttpStatusCode.OK
+            var answer = """{"transactions":["$WORD"]}"""
+            val services = Services { respond(answer, status) }
+            val request = RailgunTransactRequest(ChainId.ETHEREUM_SEPOLIA, Address.parse(ADDRESS), "0xd8ae136a", "0")
+            val relayer = services.sends
+
+            assertEquals(RailgunBroadcast.Sent(TxHash.fromHex(WORD)), relayer.transact(request))
+            assertEquals("/relayer/v1/railgun/transact", services.paths.last())
+            val body = """{"chainId":11155111,"to":"$ADDRESS","data":"0xd8ae136a","value":"0"}"""
+            assertEquals(body, services.bodies.last())
+
+            status = HttpStatusCode.Conflict
+            answer = """{"code":"alreadySpent","error":"a note it spends is spent"}"""
+            assertEquals(RailgunBroadcast.Spent(emptyList()), relayer.transact(request))
+            answer = """{"code":"alreadySpent","error":"a note it spends is spent","transactions":["$WORD"]}"""
+            assertEquals(RailgunBroadcast.Spent(listOf(TxHash.fromHex(WORD))), relayer.transact(request))
+            answer = """{"code":"unavailable","error":"busy"}"""
+            assertIs<RailgunBroadcast.Retry>(relayer.transact(request))
+            answer = "not json"
+            for (refusal in listOf(400, 404, 413, 415, 422)) {
+                status = HttpStatusCode.fromValue(refusal)
+                assertIs<RailgunBroadcast.Refused>(relayer.transact(request))
+            }
+            for (unknown in listOf(500, 503)) {
+                status = HttpStatusCode.fromValue(unknown)
+                assertIs<RailgunBroadcast.Retry>(relayer.transact(request))
+            }
+            status = HttpStatusCode.OK
+            answer = """{"transactions":[]}"""
+            assertIs<RailgunBroadcast.Retry>(relayer.transact(request))
+            services.close()
+
+            val lost = Services { throw IOException("response lost") }
+            assertIs<RailgunBroadcast.Retry>(lost.sends.transact(request))
+            lost.close()
+        }
+
+    @Test
+    fun timedOutFundingIsNotRetriedByTheHttpClient() =
+        runTest {
+            val services = Services { throw IOException("response lost") }
+            assertFailsWith<AtomicSwapHttpException.Unreachable> { services.relayer.fundReverse(FUNDING, TICKET) }
+            assertEquals(listOf("/relayer/v1/reverse/fund"), services.paths)
+            services.close()
+        }
+
+    @Test
+    fun eachRequestForASwapCarriesItsTicketAsItCameAndNoneWithoutOne() =
+        runTest {
+            val services = Services { respond("""{"transactions":[]}""") }
+
+            for (ticket in listOf(TICKET, null)) {
+                services.tickets.clear()
+                services.relayer.fundReverse(FUNDING, ticket)
+                services.relayer.lockClaim(AUTHORIZATION, TERMS, ticket)
+                services.relayer.claim(REVEAL, TERMS, ticket)
+                services.relayer.payout(PAYOUT, TERMS, ticket)
+                services.relayer.ready(AUTHORIZATION, TERMS, ticket)
+                services.relayer.lockRefund(AUTHORIZATION, TERMS, ticket)
+                services.relayer.refund(REVEAL, TERMS, ticket)
+                services.relayer.refundPayout(PAYOUT, TERMS, ticket)
+                services.relayer.rescue(RESCUE, TERMS, ticket)
+                assertEquals(List(9) { ticket }, services.tickets)
+            }
+            services.close()
+        }
+
+    @Test
+    fun theRelayersTermsAndRailgunSendsBelongToNoSwapAndCarryNoTicket() =
+        runTest {
+            val services =
+                Services { request ->
+                    val isTerms = request.url.encodedPath.endsWith("/v1/terms")
+                    respond(if (isTerms) RELAYER_TERMS else """{"transactions":["$WORD"]}""")
+                }
+
+            services.relayer.terms()
+            services.sends.terms()
+            services.sends.transact(RAILGUN_SEND)
+
+            assertEquals(
+                listOf("/relayer/v1/terms", "/relayer/v1/terms", "/relayer/v1/railgun/transact"),
+                services.paths,
+            )
+            assertEquals(listOf<String?>(null, null, null), services.tickets)
+            services.close()
+        }
+
+    @Test
+    fun anAcceptAnswerReadsWithItsTicketOrWithoutOne() =
+        runTest {
+            var ticket = ""
+            val services =
+                Services { respond("""{"swapId":"${SWAP_ID.hex}","t0":1790003600,"t1":1790007200$ticket}""") }
+
+            assertNull(services.maker.accept(QUOTE_ID, SWAP_ID, ACCEPTANCE).ticket, "an older maker's answer")
+            ticket = ""","ticket":"$TICKET""""
+            assertEquals(
+                SwapAccepted(SWAP_ID, 1_790_003_600, 1_790_007_200, TICKET),
+                services.maker.accept(QUOTE_ID, SWAP_ID, ACCEPTANCE),
+            )
+            assertEquals(TICKET, services.maker.acceptReverse(QUOTE_ID, SWAP_ID, ACCEPTANCE).ticket)
+            services.close()
+        }
+
+    @Test
+    fun aSwapKeepsOnlyItsOwnTicketAndOnlyOneAHeaderCarriesAsItCame() {
+        val accepted = SwapAccepted(SWAP_ID, 1_790_003_600, 1_790_007_200, TICKET)
+        val other = SwapId.of(ByteArray(32) { 7 })
+
+        assertEquals(TICKET, accepted.ticketFor(SWAP_ID))
+        assertNull(accepted.ticketFor(other), "another swap's ticket")
+        assertNull(accepted.copy(ticket = "${other.hex}." + "3f".repeat(32)).ticketFor(SWAP_ID))
+        assertNull(accepted.copy(ticket = null).ticketFor(SWAP_ID))
+        val unsendable =
+            listOf(
+                SWAP_ID.hex + "3f".repeat(32),
+                "${SWAP_ID.hex}.3f\r\nX-Other: 1",
+                "${SWAP_ID.hex}.3f 3f",
+                "${SWAP_ID.hex}.3fé",
+            )
+        for (ticket in unsendable) assertNull(accepted.copy(ticket = ticket).ticketFor(SWAP_ID), ticket)
+    }
+
+    @Test
+    fun aRailgunSendTheRelayerHoldsBackSaysWhenToPostItAgain() =
+        runTest {
+            var retryAfter: String? = "1800"
+            val services =
+                Services {
+                    respond(
+                        """{"code":"unavailable","error":"a send of these notes reverted lately"}""",
+                        HttpStatusCode.ServiceUnavailable,
+                        retryAfter?.let { headersOf(HttpHeaders.RetryAfter, it) } ?: headersOf(),
+                    )
+                }
+
+            suspend fun asked() = assertIs<RailgunBroadcast.Retry>(services.sends.transact(RAILGUN_SEND)).retryAfter
+
+            assertEquals(30.minutes, asked())
+            retryAfter = "5"
+            assertEquals(5.seconds, asked(), "the gateway's own when it's busy")
+            retryAfter = "86400"
+            assertEquals(1.hours, asked(), "never longer than the relayer holds a reverted send's notes")
+            for (unreadable in listOf(null, "Wed, 21 Oct 2026 07:28:00 GMT", "-1", "1.5", "99999999999999999999")) {
+                retryAfter = unreadable
+                assertNull(asked(), unreadable)
+            }
+            services.close()
+        }
+
+    @Test
+    fun everyReasonTheRelayerTurnsAProofDownForDropsIt() =
+        runTest {
+            var reason = ""
+            val services = Services { respond("""{"code":"rejected","error":"$reason"}""", HttpStatusCode.BadRequest) }
+
+            val reasons =
+                listOf(
+                    "noncanonical transact calldata",
+                    "the calldata holds more than the relayer takes",
+                    "expected at least one Railgun transaction",
+                    "a withdrawal must pay out the relayer's token",
+                )
+            for (refusal in reasons) {
+                reason = refusal
+                val refused = assertIs<RailgunBroadcast.Refused>(services.sends.transact(RAILGUN_SEND))
+                assertTrue(refusal in refused.reason)
+            }
+            services.close()
+        }
+
+    @Test
+    fun quotesAskForBaseUnitsForALowercaseAddress() =
+        runTest {
+            val services = Services { respond("{}") }
+            val user = Address.parse("0x09eD1F966745Be18C711C346242c0974DAd7c3e5")
+
+            assertFailsWith<AtomicSwapHttpException.Unreadable> {
+                services.maker.quote(Usdc6.ofMicros(110_000), user, NoteCommitment.of(ByteArray(32) { 5 }))
+            }
+            assertFailsWith<AtomicSwapHttpException.Unreadable> {
+                services.maker.quoteReverse(Usdc6.ofMicros(1_000_000), user, NoteCommitment.of(ByteArray(32) { 6 }))
+            }
+
+            assertEquals(
+                listOf(
+                    """{"units":110000,"payout":"${user.lowercaseHex}","payoutNote":"0x${"05".repeat(32)}"}""",
+                    """{"units":1000000,"user":"${user.lowercaseHex}","refundNote":"0x${"06".repeat(32)}"}""",
+                ),
+                services.bodies,
+            )
+            assertEquals(listOf("/maker/v1/quote", "/maker/v1/reverse/quote"), services.paths)
+            services.close()
+        }
+
+    @Test
+    fun anAmountTheMakerCantQuoteIsNeverAskedFor() =
+        runTest {
+            val services = Services { respond("{}") }
+            val note = NoteCommitment.of(ByteArray(32))
+            val tooMuch = Usdc6.ofMicros(1L shl 32)
+
+            assertFailsWith<IllegalArgumentException> { services.maker.quote(Usdc6.ZERO, Address.ZERO, note) }
+            // Past what a quote can name, it's refused the way the maker refuses more than it converts.
+            val forward =
+                assertFailsWith<AtomicSwapBlockedException> { services.maker.quote(tooMuch, Address.ZERO, note) }
+            val reverse =
+                assertFailsWith<AtomicSwapBlockedException> { services.maker.quoteReverse(tooMuch, Address.ZERO, note) }
+            assertEquals(AtomicSwapBlock.AMOUNT_UNQUOTABLE, forward.reason)
+            assertEquals(AtomicSwapBlock.AMOUNT_UNQUOTABLE, reverse.reason)
+            assertTrue(services.paths.isEmpty())
+            services.close()
+        }
+
+    @Test
+    fun anAcceptAnsweredWithAnotherSwapComesBackAsIt() =
+        runTest {
+            val other = SwapId.of(ByteArray(32) { 7 })
+            val services = Services { respond("""{"swapId":"${other.hex}","t0":1790003600,"t1":1790007200}""") }
+
+            val accepted = services.maker.acceptReverse(QUOTE_ID, SWAP_ID, ACCEPTANCE)
+            assertEquals(SwapAccepted(other, 1_790_003_600, 1_790_007_200), accepted)
+            assertEquals(listOf("/maker/v1/reverse/quote/$QUOTE_ID/accept"), services.paths)
+            assertEquals(
+                """{"userShare":"${ACCEPTANCE.userShare}","userProof":"${ACCEPTANCE.userProof}",""" +
+                    """"viewingKeys":"${ACCEPTANCE.viewingKeys}"}""",
+                services.bodies.single(),
+            )
+            services.close()
+        }
+
+    private class Services(
+        maker: Url = Url("https://host/maker"),
+        relayer: Url = Url("https://host/relayer/"),
+        answer: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData,
+    ) {
+        val urls = mutableListOf<String>()
+        val paths = mutableListOf<String>()
+        val bodies = mutableListOf<String>()
+
+        /** Each request's `ZecSwap-Ticket` header, null where it carried none. */
+        val tickets = mutableListOf<String?>()
+        private val http =
+            HttpClient(
+                MockEngine { request ->
+                    urls += request.url.toString()
+                    paths += request.url.encodedPath
+                    tickets += request.headers["ZecSwap-Ticket"]
+                    (request.body as? TextContent)?.let { bodies += it.text }
+                    answer(request)
+                }
+            )
+        val maker = MakerClient(http, maker)
+        val relayer = RelayerClient(http, relayer)
+        val sends = RailgunSendsClient(http, relayer)
+
+        fun close() = http.close()
+    }
+
+    private companion object {
+        val ADDRESS = "0x" + "01".repeat(20)
+        val WORD = "0x" + "02".repeat(32)
+        val SIGNATURE = "0x" + "01".repeat(65)
+        val QUOTE_ID = "0x" + "22".repeat(32)
+        val SWAP_ID = SwapId.of(ByteArray(32) { 1 })
+        val ACCEPTANCE = SwapAcceptance("0x" + "0c".repeat(64), "0x" + "04".repeat(64), "0x" + "05".repeat(64))
+        val AUTHORIZATION = SwapAuthorization(SWAP_ID, 100, SIGNATURE)
+        val PAYOUT = SwapPayout(SWAP_ID, SwapNote(WORD, List(3) { WORD }, WORD), Usdc6.ofMicros(20_000), SIGNATURE)
+        val TERMS = ZecSwapVectors.PAYS_RAILGUN
+        val REVEAL = SwapReveal(SWAP_ID, WORD, PAYOUT)
+        val RESCUE = SwapRescue(SWAP_ID, PAYOUT.note, PAYOUT.fee, 0, 1000, SIGNATURE)
+        val FUNDING =
+            ReverseFundingRequest(SWAP_ID, ChainId.ETHEREUM_SEPOLIA, Address.parse(ADDRESS), "0x12345678", "0")
+        val RAILGUN_SEND = RailgunTransactRequest(ChainId.ETHEREUM_SEPOLIA, Address.parse(ADDRESS), "0xd8ae136a", "0")
+        val RELAYER_TERMS = """{"relayer":"$ADDRESS","chainId":11155111,"contract":"$ADDRESS","fee":"20000"}"""
+
+        /** The maker's ticket for [SWAP_ID], as zecswap-maker writes one: the id, a dot, and an HMAC in hex. */
+        val TICKET = "${SWAP_ID.hex}." + "3f".repeat(32)
+    }
+}

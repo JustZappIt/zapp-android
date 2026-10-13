@@ -19,12 +19,14 @@ fun ZappCopyableAddress(
     onCopy: () -> Unit,
     modifier: Modifier = Modifier,
     isCopied: Boolean = false,
+    /** Enough for the whole address: a long one cut short isn't shown whole. */
+    maxLines: Int = ADDRESS_MAX_LINES,
 ) {
     ZappValueCard(
         value = address,
         modifier = modifier,
         label = label,
-        maxLines = ADDRESS_MAX_LINES,
+        maxLines = maxLines,
         gutter = 0.dp,
         trailing = {
             ZappCopyIconButton(
