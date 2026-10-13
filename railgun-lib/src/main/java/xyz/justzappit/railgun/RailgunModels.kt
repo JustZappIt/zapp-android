@@ -30,6 +30,8 @@ object RailgunEndpoints {
     private const val MAINNET_RPC_HOST = "ethereum-rpc.publicnode.com"
     private const val SEPOLIA_ALCHEMY_HOST = "eth-sepolia.g.alchemy.com"
     private const val MAINNET_ALCHEMY_HOST = "eth-mainnet.g.alchemy.com"
+    private const val SEPOLIA_INFURA_HOST = "sepolia.infura.io"
+    private const val MAINNET_INFURA_HOST = "mainnet.infura.io"
     private const val POI_NODE_HOST = "ppoi.fdi.network"
     const val SEPOLIA_RPC_URL = "https://$SEPOLIA_RPC_HOST"
     const val MAINNET_RPC_URL = "https://$MAINNET_RPC_HOST"
@@ -47,6 +49,8 @@ object RailgunEndpoints {
             MAINNET_RPC_HOST,
             SEPOLIA_ALCHEMY_HOST,
             MAINNET_ALCHEMY_HOST,
+            SEPOLIA_INFURA_HOST,
+            MAINNET_INFURA_HOST,
             POI_NODE_HOST,
             "rail-squid.squids.live",
             "ipfs-lb.com",
