@@ -27,6 +27,8 @@ data class ReputationSummary(
     val buyLimit: Usdc6,
     val maxBuyLimit: Usdc6,
     val rpPerUsdc: RpPerUsdcLimit,
+    val identityVerified: Set<IdentityCheck> = emptySet(),
+    val identityAwards: Map<IdentityCheck, BigInteger> = emptyMap(),
 ) {
     /**
      * A cold wallet's buy limit is $0 and it cannot place a BUY of any size. Cashing out is never
@@ -39,20 +41,27 @@ data class ReputationSummary(
 
     fun award(platform: SocialPlatform): BigInteger = awards[platform] ?: bigIntegerZero
 
+    fun award(check: IdentityCheck): BigInteger = identityAwards[check] ?: bigIntegerZero
+
     /**
-     * The buy limit [platform] would actually add, or null when we cannot state it honestly.
+     * The buy limit a verification would actually add, or null when we cannot state it honestly.
      *
-     * Null when the platform is already verified, when the corridor's RP-to-limit ratio is
+     * Null when it is already verified, when the corridor's RP-to-limit ratio is
      * unreadable, and at the ceiling, where the true answer is zero. Clamped to the remaining
      * headroom otherwise, so the last verification before the ceiling promises what is left
      * rather than its full award.
      */
+    fun limitGainFor(platform: SocialPlatform): Usdc6? =
+        if (platform in verified) null else limitGainFor(award(platform))
+
+    fun limitGainFor(check: IdentityCheck): Usdc6? =
+        if (check in identityVerified) null else limitGainFor(award(check))
+
     @Suppress("ReturnCount")
-    fun limitGainFor(platform: SocialPlatform): Usdc6? {
-        if (platform in verified) return null
+    private fun limitGainFor(award: BigInteger): Usdc6? {
         val headroom = maxBuyLimit.micros - buyLimit.micros
         if (headroom.signum() <= 0) return null
-        val gain = rpPerUsdc.limitMicrosFor(award(platform)) ?: return null
+        val gain = rpPerUsdc.limitMicrosFor(award) ?: return null
         if (gain.signum() <= 0) return null
         return Usdc6(if (gain > headroom) headroom else gain)
     }

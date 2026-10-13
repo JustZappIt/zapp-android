@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -169,7 +170,7 @@ private fun SplitTotalField(
         onValueChange = onChange,
         placeholder = stringResource(R.string.chat_split_total_placeholder),
         trailingIcon = { UnitLabel(unit, onToggle = onToggleCurrency) },
-        keyboardType = KeyboardType.Decimal,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
     )
     if (equivalent != null) {
         BasicText(
@@ -229,7 +230,7 @@ private fun SplitParticipantRow(
                 onValueChange = onValueChange,
                 placeholder = stringResource(R.string.chat_split_total_placeholder),
                 trailingIcon = { UnitLabel(unit) },
-                keyboardType = KeyboardType.Decimal,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             )
         }
     }

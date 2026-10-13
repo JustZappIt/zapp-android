@@ -6,11 +6,12 @@ package co.electriccoin.zcash.ui.screen.reputation.increase
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
 import co.electriccoin.zcash.ui.design.util.StringResource
-import xyz.justzappit.offramp.reputation.SocialPlatform
 
 internal data class IncreaseReputationState(
     val isLoading: Boolean,
     val platforms: List<VerifiableRow>,
+    /** Liveness and passport, where p2p.me offers them for this corridor. */
+    val identityChecks: List<VerifiableRow>,
     /** Non-null once a row is tapped: the run takes over the body, in place, with no new route. */
     val run: VerificationRun?,
     val error: StringResource?,
@@ -22,9 +23,8 @@ internal data class IncreaseReputationState(
 )
 
 internal data class VerifiableRow(
-    val platform: SocialPlatform,
-    /** The brand's own name, as the contract spells it. Not translated. */
-    val name: String,
+    /** A platform is the brand's own name, as the contract spells it, and is not translated. */
+    val name: StringResource,
     val reward: StringResource,
     /**
      * What verifying this account would actually add to the buy limit — the only number on the row
@@ -33,17 +33,18 @@ internal data class VerifiableRow(
      */
     val limitGain: StringResource?,
     /**
-     * The provider's own rule, said before the user spends five minutes finding out: a too-new
-     * account comes back as a *successful* proof that verifies nothing.
+     * For a platform, the provider's own rule, said before the user spends five minutes finding
+     * out: a too-new account comes back as a *successful* proof that verifies nothing. For an
+     * identity check, what it asks of the user.
      */
-    val requirement: StringResource?,
+    val subtitle: StringResource?,
     val isVerified: Boolean,
     val onClick: () -> Unit,
 )
 
 internal data class VerificationRun(
-    val platform: SocialPlatform,
-    val name: String,
+    /** A liveness or passport check: it runs in the browser and returns by redirect. */
+    val isIdentityCheck: Boolean,
     val stage: VerificationStage,
     val steps: List<ZappStep>,
     val message: StringResource,

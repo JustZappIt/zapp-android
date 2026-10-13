@@ -82,6 +82,10 @@ import co.electriccoin.zcash.ui.screen.gift.GiftCardListScreen
 import co.electriccoin.zcash.ui.screen.gift.GiftCardScreen
 import co.electriccoin.zcash.ui.screen.gift.GiftClaimArgs
 import co.electriccoin.zcash.ui.screen.gift.GiftClaimScreen
+import co.electriccoin.zcash.ui.screen.grouplink.GroupInvitePreviewArgs
+import co.electriccoin.zcash.ui.screen.grouplink.GroupInvitePreviewScreen
+import co.electriccoin.zcash.ui.screen.grouplink.GroupLinkArgs
+import co.electriccoin.zcash.ui.screen.grouplink.GroupLinkScreen
 import co.electriccoin.zcash.ui.screen.heightinfo.HeightInfoArgs
 import co.electriccoin.zcash.ui.screen.heightinfo.HeightInfoScreen
 import co.electriccoin.zcash.ui.screen.home.AndroidHome
@@ -120,6 +124,18 @@ import co.electriccoin.zcash.ui.screen.more.MoreArgs
 import co.electriccoin.zcash.ui.screen.more.MoreScreen
 import co.electriccoin.zcash.ui.screen.onramp.OnrampArgs
 import co.electriccoin.zcash.ui.screen.onramp.OnrampScreen
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdArgs
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdScreen
+import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
+import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertScreen
+import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
+import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressScreen
+import co.electriccoin.zcash.ui.screen.privateusd.refunds.PrivateUsdRefundsArgs
+import co.electriccoin.zcash.ui.screen.privateusd.refunds.PrivateUsdRefundsScreen
+import co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseArgs
+import co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseScreen
+import co.electriccoin.zcash.ui.screen.privateusd.send.PrivateUsdSendArgs
+import co.electriccoin.zcash.ui.screen.privateusd.send.PrivateUsdSendScreen
 import co.electriccoin.zcash.ui.screen.qrcode.QrCodeScreen
 import co.electriccoin.zcash.ui.screen.receive.ReceiveAddressType
 import co.electriccoin.zcash.ui.screen.receive.ReceiveArgs
@@ -297,6 +313,8 @@ fun NavGraphBuilder.walletNavGraph(
         composable<GiftCardArgs> { GiftCardScreen() }
         composable<GiftCardListArgs> { GiftCardListScreen() }
         composable<GiftClaimArgs> { GiftClaimScreen(it.toRoute()) }
+        composable<GroupInvitePreviewArgs> { GroupInvitePreviewScreen(it.toRoute()) }
+        composable<GroupLinkArgs> { GroupLinkScreen(it.toRoute()) }
         composable<ChooseServerArgs> { ChooseServerScreen() }
         composable<P2pTransactionsArgs> { P2pTransactionsScreen() }
         composable<P2pPaymentMethodArgs> { P2pPaymentMethodScreen() }
@@ -425,6 +443,12 @@ fun NavGraphBuilder.walletNavGraph(
         composable<DebugArgs> { DebugScreen() }
         composable<DebugDBArgs> { DebugDBScreen() }
         composable<DebugOrchardBalanceArgs> { DebugOrchardBalanceScreen() }
+        composable<PrivateUsdArgs> { PrivateUsdScreen() }
+        composable<PrivateUsdRefundsArgs> { PrivateUsdRefundsScreen() }
+        composable<PrivateUsdReverseArgs> { PrivateUsdReverseScreen() }
+        composable<PrivateUsdConvertArgs> { PrivateUsdConvertScreen() }
+        composable<PrivateUsdProgressArgs> { PrivateUsdProgressScreen() }
+        composable<PrivateUsdSendArgs> { PrivateUsdSendScreen(it.toRoute()) }
         dialogComposable<DebugTextArgs> { DebugTextScreen(it.toRoute()) }
         composable<ResyncConfirmArgs> { ResyncConfirmScreen() }
         composable<ResyncDateArgs> { ResyncDateScreen(it.toRoute()) }

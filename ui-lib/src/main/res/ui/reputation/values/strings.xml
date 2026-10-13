@@ -69,6 +69,27 @@
     <string name="increase_reputation_error_gas">We can\'t cover the network fee right now. Try again in a little while.</string>
     <string name="increase_reputation_error_network">We couldn\'t reach the network. Try again in a moment.</string>
 
+    <string name="increase_reputation_identity_group">VERIFY YOURSELF</string>
+    <string name="increase_reputation_identity_footer">Run by p2p.me in your browser. Zapp never sees your face or your passport.</string>
+    <string name="increase_reputation_identity_liveness">Selfie check</string>
+    <string name="increase_reputation_identity_liveness_subtitle">A short video selfie. No ID needed</string>
+    <string name="increase_reputation_identity_passport">Passport</string>
+    <string name="increase_reputation_identity_passport_subtitle">Scan your passport, then take a selfie</string>
+    <string name="increase_reputation_identity_step_open">Open the check</string>
+    <string name="increase_reputation_identity_step_verify">Finish it in your browser</string>
+    <string name="increase_reputation_identity_ready">%1$s opens in your browser. Finish it there and it brings you back here.</string>
+    <string name="increase_reputation_identity_waiting">Waiting for the check…</string>
+    <string name="increase_reputation_identity_waiting_help">Let the browser bring you back to Zapp when you finish. Switching back yourself loses the result.</string>
+    <string name="increase_reputation_identity_done">%1$s complete</string>
+    <string name="increase_reputation_identity_open">Open in browser</string>
+    <string name="increase_reputation_identity_error_unavailable">This check isn\'t available right now. Try again later.</string>
+    <string name="increase_reputation_identity_error_not_passed">The check didn\'t pass. Try again in good light, with your face in full view.</string>
+    <string name="increase_reputation_identity_error_already_claimed">This face or passport is already verified on another wallet.</string>
+    <string name="increase_reputation_identity_error_already_verified">This wallet has already completed this check.</string>
+    <string name="increase_reputation_identity_error_expired">That check expired. Start it again.</string>
+    <string name="increase_reputation_identity_error_rejected">The exchange couldn\'t accept that check. Start it again.</string>
+    <string name="increase_reputation_identity_error_no_return">The check didn\'t come back to Zapp. If you finished it, start again and let the browser bring you back.</string>
+
     <string name="increase_reputation_info_title">How verifying works</string>
     <string name="increase_reputation_info_step_pick">Pick an account you already have.</string>
     <string name="increase_reputation_info_step_open">Zapp opens Reclaim, a separate app that does the checking. Install it if you haven\'t — it\'s free.</string>

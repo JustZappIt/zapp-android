@@ -2,22 +2,28 @@ package co.electriccoin.zcash.ui.design.component.zapp
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -26,6 +32,7 @@ import co.electriccoin.zcash.ui.design.component.ZashiNumberTextField
 import co.electriccoin.zcash.ui.design.component.ZashiNumberTextFieldDefaults
 import co.electriccoin.zcash.ui.design.component.ZashiTextFieldDefaults
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
+import co.electriccoin.zcash.ui.design.util.getValue
 
 @Composable
 fun ZappOfframpHeroAmountField(
@@ -36,10 +43,29 @@ fun ZappOfframpHeroAmountField(
     balance: ZappFieldBalance? = null,
     isError: Boolean = false,
     flag: Painter? = null,
+    leadingIcon: Painter? = null,
+    /** Drawn over [leadingIcon]'s bottom-right corner. */
+    leadingIconBadge: Painter? = null,
+    /** Steps an amount longer than eight characters down a size, for a field sharing its row with an icon. */
+    shrinksLongAmounts: Boolean = false,
 ) {
     val c = ZappTheme.colors
+    val amountStyle =
+        if (shrinksLongAmounts &&
+            state.innerState.innerTextFieldState.value
+                .getValue()
+                .length > COMPACT_AMOUNT_LENGTH
+        ) {
+            ZappTheme.typography.displaySecondary
+        } else {
+            ZappTheme.typography.display
+        }
     Column(modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            leadingIcon?.let {
+                LeadingIcon(it, leadingIconBadge)
+                Spacer(Modifier.width(ZappTheme.spacing.lg))
+            }
             flag?.let {
                 Image(
                     painter = it,
@@ -48,21 +74,23 @@ fun ZappOfframpHeroAmountField(
                 )
                 Spacer(Modifier.width(10.dp))
             }
-            BasicText(
-                text = symbol,
-                style =
-                    ZappTheme.typography.display.copy(
-                        color = c.text,
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-            )
-            Spacer(Modifier.width(8.dp))
+            if (symbol.isNotEmpty()) {
+                BasicText(
+                    text = symbol,
+                    style =
+                        amountStyle.copy(
+                            color = c.text,
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                )
+                Spacer(Modifier.width(8.dp))
+            }
             ZashiNumberTextField(
                 state = state,
                 modifier = Modifier.weight(1f),
                 shape = RectangleShape,
                 textStyle =
-                    ZappTheme.typography.display.copy(
+                    amountStyle.copy(
                         color = if (isError) c.danger else c.text,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Start,
@@ -91,7 +119,7 @@ fun ZappOfframpHeroAmountField(
                 placeholder = {
                     ZashiNumberTextFieldDefaults.Placeholder(
                         modifier = Modifier.fillMaxWidth(),
-                        style = ZappTheme.typography.display,
+                        style = amountStyle,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Start,
                         contentAlignment = Alignment.CenterStart,
@@ -99,25 +127,54 @@ fun ZappOfframpHeroAmountField(
                 },
             )
             balance?.let {
+                val action = it.action.takeUnless { _ -> it.isLoading }
                 Column(
                     horizontalAlignment = Alignment.End,
-                    modifier = Modifier.padding(start = 12.dp),
+                    verticalArrangement = Arrangement.Center,
+                    modifier =
+                        Modifier
+                            .padding(start = 12.dp)
+                            .then(
+                                if (action != null) {
+                                    Modifier
+                                        .defaultMinSize(minHeight = 48.dp)
+                                        .clickable(
+                                            onClickLabel = action.onClickLabel,
+                                            role = Role.Button,
+                                            onClick = action.onClick,
+                                        )
+                                } else {
+                                    Modifier
+                                }
+                            ),
                 ) {
                     BasicText(
                         text = it.label,
                         style = ZappTheme.typography.caption.copy(color = c.textSubtle, textAlign = TextAlign.End),
                         maxLines = 1,
                     )
-                    BasicText(
-                        text = it.amount,
-                        style =
-                            ZappTheme.typography.caption.copy(
-                                color = c.textMuted,
-                                fontWeight = FontWeight.Medium,
-                                textAlign = TextAlign.End,
-                            ),
-                        maxLines = 1,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.xs)
+                    ) {
+                        if (it.isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(ZappTheme.spacing.md),
+                                color = c.accent,
+                                strokeWidth = 1.dp,
+                            )
+                        }
+                        BasicText(
+                            text = it.amount,
+                            style =
+                                ZappTheme.typography.caption.copy(
+                                    color = if (action != null) c.accentText else c.textMuted,
+                                    fontWeight = if (action != null) FontWeight.SemiBold else FontWeight.Medium,
+                                    textAlign = TextAlign.End,
+                                ),
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }
@@ -138,3 +195,26 @@ fun ZappOfframpHeroAmountField(
         }
     }
 }
+
+@Composable
+private fun LeadingIcon(
+    icon: Painter,
+    badge: Painter?,
+) {
+    Box(Modifier.size(ZappTheme.spacing.xl4)) {
+        Image(painter = icon, contentDescription = null, modifier = Modifier.size(ZappTheme.spacing.xl4))
+        badge?.let {
+            Image(
+                painter = it,
+                contentDescription = null,
+                modifier =
+                    Modifier
+                        .size(14.dp)
+                        .align(Alignment.BottomEnd)
+                        .offset(x = 2.dp, y = 2.dp),
+            )
+        }
+    }
+}
+
+private const val COMPACT_AMOUNT_LENGTH = 8

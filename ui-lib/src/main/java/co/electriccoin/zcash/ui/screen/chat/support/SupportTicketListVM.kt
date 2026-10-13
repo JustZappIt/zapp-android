@@ -108,6 +108,7 @@ class SupportTicketListVM(
                     .map(ChatConversation::from)
                     .filter {
                         SupportChatConstants.isSupportConversation(
+                            type = it.type,
                             displayName = it.displayName,
                             participantIds = it.participantIds,
                             localPublicKey = localPublicKey,

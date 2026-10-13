@@ -2,8 +2,17 @@ package co.electriccoin.zcash.di
 
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.BuildConfig
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepositoryImpl
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepositoryImpl
+import co.electriccoin.zcash.ui.common.backgroundScope
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepository
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepositoryImpl
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepositoryImpl
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
+import co.electriccoin.zcash.ui.common.provider.IdentityVerificationStorageProvider
 import co.electriccoin.zcash.ui.common.provider.OrderRecipientUpiStorageProvider
 import co.electriccoin.zcash.ui.common.provider.RelayIdentityStorageProvider
 import co.electriccoin.zcash.ui.common.provider.TwigOfframpLogger
@@ -31,6 +40,8 @@ import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepository
 import co.electriccoin.zcash.ui.common.repository.MockOrchardBalanceRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.PeerCashOutRepository
 import co.electriccoin.zcash.ui.common.repository.PeerCashOutRepositoryImpl
+import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
+import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.repository.SwapRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.TransactionFilterRepository
@@ -44,14 +55,24 @@ import co.electriccoin.zcash.ui.common.repository.WalletSnapshotRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepository
 import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepositoryImpl
 import co.electriccoin.zcash.ui.screen.chat.linkpreview.LinkPreviewRepository
+import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnInbox
+import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnLink
 import co.electriccoin.zcash.ui.screen.reputation.increase.ReclaimReturnLink
+import co.electriccoin.zcash.ui.screen.tabs.SelectedTabRepository
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.qualifier.named
 import org.koin.dsl.bind
+import org.koin.dsl.binds
 import org.koin.dsl.module
 import xyz.justzappit.evm.rpc.BaseRpcClient
+import xyz.justzappit.offramp.account.Erc4337SubmitterProvider
 import xyz.justzappit.offramp.account.SmartOfframpAccountProvider
 import xyz.justzappit.offramp.config.P2pNetworkConfig
+import xyz.justzappit.offramp.config.P2pNetworks
+import xyz.justzappit.offramp.identity.IdentityServices
+import xyz.justzappit.offramp.identity.IdentityVerificationDriver
+import xyz.justzappit.offramp.identity.IdentityVerificationStore
+import xyz.justzappit.offramp.identity.IdentityWidgetClient
 import xyz.justzappit.offramp.onramp.DirectOnrampDriver
 import xyz.justzappit.offramp.onramp.FakeOnrampDriver
 import xyz.justzappit.offramp.onramp.OnrampDriver
@@ -73,6 +94,7 @@ import xyz.justzappit.offramp.reclaim.ReclaimPoller
 import xyz.justzappit.offramp.reclaim.ReclaimSessionMinter
 import xyz.justzappit.offramp.reclaim.ReclaimVerificationDriver
 import xyz.justzappit.offramp.reputation.ReputationReader
+import kotlin.time.Clock
 
 val repositoryModule =
     module {
@@ -87,11 +109,59 @@ val repositoryModule =
         singleOf(::TransactionFilterRepositoryImpl) bind TransactionFilterRepository::class
         singleOf(::ZashiProposalRepositoryImpl) bind ZashiProposalRepository::class
         singleOf(::HomeMessageCacheRepositoryImpl) bind HomeMessageCacheRepository::class
+        singleOf(::SelectedTabRepository)
         singleOf(::WalletSnapshotRepositoryImpl) bind WalletSnapshotRepository::class
         singleOf(::ApplicationStateRepositoryImpl) bind ApplicationStateRepository::class
         singleOf(::SwapRepositoryImpl) bind SwapRepository::class
         singleOf(::EphemeralAddressRepositoryImpl) bind EphemeralAddressRepository::class
         singleOf(::MockOrchardBalanceRepositoryImpl) bind MockOrchardBalanceRepository::class
+        single {
+            RailgunWalletRepositoryImpl(
+                railgunWallet = get(),
+                keyProvider = get(),
+                mnemonicProvider = get(),
+                deployments = get(),
+                scope = backgroundScope("Railgun"),
+            )
+        } bind RailgunWalletRepository::class
+        single<ReverseSwapRepository> {
+            ReverseSwapRepositoryImpl(
+                deployments = get(),
+                sessions = get(),
+                store = get(),
+                forward = get(),
+                scheduler = get(),
+                notifier = get(),
+                spendGuard = get(),
+                tokens = get(),
+            )
+        }
+        single<AtomicSwapRepository> {
+            AtomicSwapRepositoryImpl(
+                deployments = get(),
+                reverse = get(),
+                sessions = get(),
+                store = get(),
+                zcash = get(),
+                scheduler = get(),
+                notifier = get(),
+                spendGuard = get(),
+                tokens = get(),
+            )
+        }
+        single<PrivateUsdBalanceRepository> {
+            PrivateUsdBalanceRepositoryImpl(
+                railgunWalletRepository = get(),
+                atomicSwapRepository = get(),
+                railgunMnemonicProvider = get(),
+                sendLog = get(),
+                senders = get(),
+                encryptedPreferenceProvider = get(),
+                scope = backgroundScope("Private USD"),
+                clock = Clock.System,
+            )
+        }
+        single { PrivateUsdSpendGuard(get(), get(), get(), backgroundScope("Private USD spending")) }
         singleOf(::LinkPreviewRepository)
         singleOf(::HistoricalPriceRepositoryImpl) bind HistoricalPriceRepository::class
         single<BaseBalanceRepository> {
@@ -183,6 +253,29 @@ val repositoryModule =
                 credentials = get(),
                 onUnrecognisedRevert = { selector ->
                     Twig.warn { "Reclaim socialVerify reverted with an unmapped selector: $selector" }
+                },
+            )
+        }
+        single { IdentityReturnInbox() }
+        single<IdentityVerificationStore> { IdentityVerificationStorageProvider(get()) }
+        // Same shape as Reclaim: the widget session is opened from the device through p2p.me's
+        // public proxy, and the attestation goes straight to the ReputationManager. p2p.me's
+        // tenants sign for mainnet only.
+        single {
+            val network: P2pNetworkConfig = get()
+            IdentityVerificationDriver(
+                widget = IdentityWidgetClient(httpClient = get(named(OFFRAMP_HTTP_CLIENT_QUALIFIER))),
+                services =
+                    if (network.name == P2pNetworks.MAINNET_NAME) IdentityServices.MAINNET else IdentityServices.NONE,
+                returnUrl = IdentityReturnLink::url,
+                reputationReader = get(),
+                resolveAccount = get<Erc4337SubmitterProvider>()::resolve,
+                store = get(),
+                nowSeconds = { System.currentTimeMillis() / 1_000L },
+                rpc = get(),
+                network = network,
+                onUnrecognisedRevert = { selector ->
+                    Twig.warn { "Identity attestation reverted with an unmapped selector: $selector" }
                 },
             )
         }

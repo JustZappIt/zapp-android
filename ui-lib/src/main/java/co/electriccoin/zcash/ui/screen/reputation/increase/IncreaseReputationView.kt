@@ -143,6 +143,17 @@ private fun ListContent(state: IncreaseReputationState) {
                 }
             }
         }
+        if (state.identityChecks.isNotEmpty()) {
+            ZappSettingsGroup(
+                title = stringResource(R.string.increase_reputation_identity_group),
+                footer = stringResource(R.string.increase_reputation_identity_footer),
+            ) {
+                state.identityChecks.forEachIndexed { index, row ->
+                    if (index > 0) ZappRowDivider()
+                    PlatformRow(row)
+                }
+            }
+        }
     }
 }
 
@@ -150,8 +161,8 @@ private fun ListContent(state: IncreaseReputationState) {
 private fun PlatformRow(row: VerifiableRow) {
     val c = ZappTheme.colors
     ZappRow(
-        title = row.name,
-        subtitle = row.requirement?.getValue(),
+        title = row.name.getValue(),
+        subtitle = row.subtitle?.getValue(),
         titleColor = if (row.isVerified) c.textMuted else c.text,
         trailing = {
             if (row.isVerified) {
@@ -216,7 +227,15 @@ private fun RunContent(run: VerificationRun, state: IncreaseReputationState) {
             )
             ZappStepList(steps = run.steps)
             if (run.stage == VerificationStage.VERIFYING) {
-                ReputationNotice(stringResource(R.string.increase_reputation_waiting_help))
+                ReputationNotice(
+                    stringResource(
+                        if (run.isIdentityCheck) {
+                            R.string.increase_reputation_identity_waiting_help
+                        } else {
+                            R.string.increase_reputation_waiting_help
+                        },
+                    ),
+                )
             }
         }
         run.error?.let {
@@ -280,6 +299,8 @@ private fun BottomDock(state: IncreaseReputationState, uriHandler: UriHandler) {
  *
  * The user is not resumed into this session afterwards; nothing carries it across an install.
  * They come back to this screen, which is still holding the live session, and tap again.
+ *
+ * A liveness or passport check takes the same path with a single https link and no fallbacks.
  */
 private fun openVerifier(uriHandler: UriHandler, run: VerificationRun) {
     val candidates = listOfNotNull(run.launchUrl, run.installIntentUrl, run.storeUrl)

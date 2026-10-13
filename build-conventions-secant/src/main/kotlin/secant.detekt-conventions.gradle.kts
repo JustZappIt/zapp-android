@@ -21,6 +21,8 @@ tasks {
         // an IDE-driven sync. CI never has it, so findings in it are invisible on CI and drown the
         // real ones locally — which is how four genuine issues reached CI unseen.
         exclude("**/bin/**")
+        // railgun-lib/web's npm dependencies, which carry Kotlin sources of their own.
+        exclude("**/node_modules/**")
         config.setFrom(files("${rootProject.projectDir}/tools/detekt.yml"))
         baseline.set(File("${rootProject.projectDir}/tools/detekt-baseline.xml"))
         buildUponDefaultConfig = true
@@ -39,5 +41,6 @@ tasks {
         exclude("**/resources/**")
         exclude("**/build/**")
         exclude("**/bin/**")
+        exclude("**/node_modules/**")
     }
 }

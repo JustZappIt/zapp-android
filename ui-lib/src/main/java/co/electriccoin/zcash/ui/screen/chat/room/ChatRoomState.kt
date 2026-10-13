@@ -32,6 +32,7 @@ data class ChatRoomState(
     val localPublicKey: String?,
     val fiatRate: ZecFiatRate?,
     val isLoading: Boolean,
+    val removedNotice: StringResource?,
     val input: ChatRoomInputState,
     val onPayRequest: (ChatMessage) -> Unit,
     val onViewTransaction: (txId: String) -> Unit,
@@ -45,20 +46,38 @@ data class ChatRoomState(
     val groupInfoSheet: ChatRoomGroupInfoSheetState?,
     val groupRenameDialog: ChatRoomGroupRenameDialogState?,
     val addMemberSheet: ChatRoomAddMemberSheetState?,
+    val removeMemberDialog: ChatRoomRemoveMemberDialogState?,
     val blockDialog: BlockUserDialogState?,
 )
 
 data class ChatRoomGroupInfoSheetState(
     val groupName: String,
     val members: List<ChatRoomGroupMember>,
+    /** Owner only: members accept membership changes from the creator alone. */
+    val onAddMember: (() -> Unit)?,
+    val onInviteLink: (() -> Unit)?,
     val onRename: () -> Unit,
-    val onAddMember: () -> Unit,
     val onDismiss: () -> Unit,
 )
 
 data class ChatRoomGroupMember(
     val publicKey: String,
     val displayName: String,
+    val onRemove: (() -> Unit)? = null,
+)
+
+data class ChatRoomRemoveMemberDialogState(
+    val name: String,
+    val olderMembersNote: StringResource?,
+    val resetLink: ChatRoomRemoveMemberResetOption?,
+    val isBusy: Boolean,
+    val onConfirm: () -> Unit,
+    val onDismiss: () -> Unit,
+)
+
+data class ChatRoomRemoveMemberResetOption(
+    val isChecked: Boolean,
+    val onToggle: () -> Unit,
 )
 
 data class ChatRoomGroupRenameDialogState(

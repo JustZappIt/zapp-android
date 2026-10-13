@@ -32,6 +32,10 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.toRoute
 import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
+import co.electriccoin.zcash.ui.common.atomicswap.PRIVATE_USD_CONVERSION_EXTRA
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
 import co.electriccoin.zcash.ui.common.compose.BindCompLocalProvider
 import co.electriccoin.zcash.ui.common.compose.DisableScreenTimeout
 import co.electriccoin.zcash.ui.common.extension.setContentCompat
@@ -56,6 +60,13 @@ import co.electriccoin.zcash.ui.screen.gift.GiftClaimArgs
 import co.electriccoin.zcash.ui.screen.gift.model.GIFT_LINK_HOST
 import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkIntake
 import co.electriccoin.zcash.ui.screen.gift.model.PendingGiftLinkStore
+import co.electriccoin.zcash.ui.screen.grouplink.GroupInviteCoordinator
+import co.electriccoin.zcash.ui.screen.grouplink.model.GroupInviteLinks
+import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
+import co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseArgs
+import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnInbox
+import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnLink
+import co.electriccoin.zcash.ui.screen.reputation.increase.IncreaseReputationArgs
 import co.electriccoin.zcash.ui.screen.reputation.increase.ReclaimReturnLink
 import co.electriccoin.zcash.ui.screen.scan.thirdparty.ThirdPartyScan
 import co.electriccoin.zcash.ui.screen.splash.ZappSplashAnimation
@@ -69,6 +80,8 @@ import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
 import org.koin.androidx.viewmodel.ext.android.viewModel
+import xyz.justzappit.offramp.atomicswap.SwapDirection
+import xyz.justzappit.offramp.identity.IdentityReturn
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -95,6 +108,12 @@ class MainActivity : FragmentActivity() {
     private val chatNotificationTiming: ChatNotificationTiming by inject()
 
     private val pendingGiftLinks: PendingGiftLinkStore by inject()
+    private val identityReturns: IdentityReturnInbox by inject()
+    private val atomicSwapDeployments: AtomicSwapDeployments by inject()
+    private val reverseSwapRepository: ReverseSwapRepository by inject()
+    private val atomicSwapRepository: AtomicSwapRepository by inject()
+
+    private val groupInvites: GroupInviteCoordinator by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -110,6 +129,7 @@ class MainActivity : FragmentActivity() {
 
         forwardUriIntent(intent, resumeReclaim = true)
         forwardChatNotificationIntent(intent)
+        forwardPrivateUsdIntent(intent)
         handleMigrationIntent(intent)
     }
 
@@ -119,6 +139,7 @@ class MainActivity : FragmentActivity() {
 
         forwardUriIntent(intent, resumeReclaim = false)
         forwardChatNotificationIntent(intent)
+        forwardPrivateUsdIntent(intent)
         handleMigrationIntent(intent)
     }
 
@@ -138,7 +159,11 @@ class MainActivity : FragmentActivity() {
 
             isReclaimReturnUri(intent, data) -> openReclaimReturn(intent, data, resumeReclaim)
 
+            isIdentityReturnUri(intent, data) -> openIdentityReturn(intent, data, resumeReclaim)
+
             isGiftUri(intent, data) -> openGiftClaim(intent, data)
+
+            isGroupInviteUri(intent) -> openGroupInvite(intent)
 
             else -> navigationRouter.forward(ThirdPartyScan)
         }
@@ -166,6 +191,37 @@ class MainActivity : FragmentActivity() {
             )?.let { navigationRouter.forward(it) }
     }
 
+    private fun isIdentityReturnUri(intent: Intent, data: Uri): Boolean =
+        intent.action == Intent.ACTION_VIEW &&
+            IdentityReturnLink.SCHEME.equals(data.scheme, ignoreCase = true) &&
+            IdentityReturnLink.checkForHost(data.host) != null
+
+    /**
+     * The code on this link is the only copy of the result. A live run picks it out of the inbox;
+     * a cold process gets the route rebuilt from `state` and the new screen drains the inbox. A
+     * return with no usable state on a cold start has no route to rebuild and is dropped, and the
+     * user starts again.
+     */
+    private fun openIdentityReturn(
+        intent: Intent,
+        data: Uri,
+        coldStart: Boolean,
+    ) {
+        intent.data = null
+        val check = IdentityReturnLink.checkForHost(data.host) ?: return
+        val ret =
+            IdentityReturnLink.parse(
+                check = check,
+                code = data.getQueryParameter(IdentityReturn.CODE_QUERY),
+                error = data.getQueryParameter(IdentityReturn.ERROR_QUERY),
+                state = data.getQueryParameter(IdentityReturn.STATE_QUERY),
+            ) ?: return
+        identityReturns.put(ret)
+        if (coldStart) {
+            ret.currency?.let { navigationRouter.forward(IncreaseReputationArgs(currency = it)) }
+        }
+    }
+
     private fun openGiftClaim(intent: Intent, data: Uri) {
         val raw = intent.dataString ?: data.toString()
         // Consume once, exactly as the chat notification path does, so Activity recreation cannot
@@ -185,6 +241,18 @@ class MainActivity : FragmentActivity() {
 
     private fun isGiftUri(intent: Intent, data: Uri): Boolean =
         intent.action == Intent.ACTION_VIEW && GIFT_LINK_HOST.equals(data.host, ignoreCase = true)
+
+    private fun isGroupInviteUri(intent: Intent): Boolean =
+        intent.action == Intent.ACTION_VIEW && intent.dataString?.let(GroupInviteLinks::isGroupLink) == true
+
+    // RootNavGraph opens the held invite once there is someone to join as. The fragment is a bearer secret.
+    private fun openGroupInvite(intent: Intent) {
+        val raw = intent.dataString ?: return
+        intent.data = null
+        lifecycleScope.launch {
+            groupInvites.intake(raw)?.let { navigationRouter.forward(it) }
+        }
+    }
 
     private fun forwardChatNotificationIntent(intent: Intent) {
         intent.getStringExtra(CHAT_CONVERSATION_ID_EXTRA)?.let { conversationId ->
@@ -210,12 +278,37 @@ class MainActivity : FragmentActivity() {
             toRoute<ChatRoomArgs>().conversationId == conversationId
     }
 
+    private fun forwardPrivateUsdIntent(intent: Intent) {
+        val requested = intent.getStringExtra(PRIVATE_USD_CONVERSION_EXTRA) ?: return
+        intent.removeExtra(PRIVATE_USD_CONVERSION_EXTRA)
+        val direction = SwapDirection.entries.firstOrNull { it.name == requested }
+        // Builds without conversions have no screen for one, whatever an intent asks.
+        if (direction == null || atomicSwapDeployments.current == null) return
+        val route: Any =
+            when (direction) {
+                SwapDirection.FORWARD -> PrivateUsdProgressArgs
+                SwapDirection.REVERSE -> PrivateUsdReverseArgs
+            }
+        navigationRouter.custom { current ->
+            if (current?.destination?.hasRoute(route::class) == true) {
+                null
+            } else {
+                NavigationCommand.Forward(listOf(route))
+            }
+        }
+    }
+
     private fun handleMigrationIntent(intent: Intent): Boolean = migrationAppHooks.handleIntent(intent, lifecycleScope)
 
     override fun onStart() {
         Twig.debug { "Activity state: Start" }
         authenticationViewModel.runAuthenticationRequiredCheck()
         checkMigrationRecoveryOnStart()
+        // Conversions resume here: from the foreground, their worker may run as a foreground service.
+        if (atomicSwapDeployments.current != null) {
+            atomicSwapRepository.resume(isForeground = true)
+            reverseSwapRepository.resume(isForeground = true)
+        }
         super.onStart()
     }
 

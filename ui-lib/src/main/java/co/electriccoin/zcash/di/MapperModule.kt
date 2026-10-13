@@ -2,6 +2,7 @@ package co.electriccoin.zcash.di
 
 import co.electriccoin.zcash.ui.common.mapper.ActivityMapper
 import co.electriccoin.zcash.ui.screen.home.HomeMessageMapper
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdActivityMapper
 import co.electriccoin.zcash.ui.screen.swap.ExactInputVMMapper
 import co.electriccoin.zcash.ui.screen.swap.quote.SwapQuoteVMMapper
 import co.electriccoin.zcash.ui.screen.transactiondetail.CommonTransactionDetailMapper
@@ -17,4 +18,5 @@ val mapperModule =
         factoryOf(::SwapQuoteVMMapper)
         factoryOf(::CommonTransactionDetailMapper)
         factoryOf(::UnifiedSendVMMapper)
+        factoryOf(::PrivateUsdActivityMapper)
     }

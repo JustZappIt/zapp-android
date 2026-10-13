@@ -4,15 +4,14 @@
 package xyz.justzappit.evm.hd
 
 import xyz.justzappit.evm.abi.keccak256
+import xyz.justzappit.evm.hd.Bip32.HARDENED
 import xyz.justzappit.evm.math.BigInteger
 import xyz.justzappit.evm.math.bigIntegerZero
-import xyz.justzappit.evm.math.plus
 import xyz.justzappit.evm.signer.EcdsaSignature
 import xyz.justzappit.evm.signer.EcdsaSigner
 import xyz.justzappit.evm.signer.SECP256K1_N
 import xyz.justzappit.evm.signer.secpPublicKeyUncompressed
 import xyz.justzappit.evm.types.Address
-import xyz.justzappit.evm.util.padLeftToWord
 
 class EvmKey internal constructor(
     internal val privateKey: ByteArray,
@@ -41,9 +40,7 @@ class EvmKey internal constructor(
     override fun toString(): String = "EvmKey(address=$address)"
 }
 
-@Suppress("TooManyFunctions")
 object EvmKeyDerivation {
-    private const val HARDENED_BIT: Int = 0x80000000.toInt()
     private const val PBKDF2_ITERATIONS = 2048
     private const val SEED_BYTES = 64
     private const val FIELD_BYTES = 32
@@ -52,24 +49,19 @@ object EvmKeyDerivation {
     fun derive(mnemonic: CharArray, accountIndex: Int = 0, passphrase: String = ""): EvmKey {
         require(accountIndex >= 0) { "accountIndex must be non-negative" }
         val seed = mnemonicToSeed(mnemonic, passphrase)
-        var current: ExtKey? = null
-        return try {
-            current = masterFromSeed(seed)
-            listOf(
-                44 or HARDENED_BIT,
-                60 or HARDENED_BIT,
-                0 or HARDENED_BIT,
-                0,
-                accountIndex,
-            ).forEach { index ->
-                val parent = checkNotNull(current)
-                current = ckdPrivWithRetry(parent, index)
-                parent.zeroize()
+        val key =
+            try {
+                Bip32.derive(
+                    Bip32.master(seed),
+                    listOf(44 or HARDENED, 60 or HARDENED, 0 or HARDENED, 0, accountIndex),
+                )
+            } finally {
+                seed.fill(0)
             }
-            fromPrivateKey(checkNotNull(current).priv)
+        return try {
+            fromPrivateKey(key.privateKey)
         } finally {
-            seed.fill(0)
-            current?.zeroize()
+            key.zeroize()
         }
     }
 
@@ -96,16 +88,6 @@ object EvmKeyDerivation {
         )
     }
 
-    private data class ExtKey(
-        val priv: ByteArray,
-        val chainCode: ByteArray,
-    ) {
-        fun zeroize() {
-            priv.fill(0)
-            chainCode.fill(0)
-        }
-    }
-
     private fun mnemonicToSeed(mnemonic: CharArray, passphrase: String): ByteArray {
         val mnemonicString = mnemonic.concatToString().trim()
         val normalizedMnemonic = platformNormalizeNfkd(mnemonicString).encodeToByteArray()
@@ -118,83 +100,13 @@ object EvmKeyDerivation {
         }
     }
 
-    private fun masterFromSeed(seed: ByteArray): ExtKey {
-        val key = "Bitcoin seed".encodeToByteArray()
-        val derived = platformHmacSha512(key, seed)
-        return try {
-            ExtKey(
-                priv = derived.copyOfRange(0, FIELD_BYTES),
-                chainCode = derived.copyOfRange(FIELD_BYTES, derived.size),
-            )
-        } finally {
-            key.fill(0)
-            derived.fill(0)
-        }
-    }
-
-    private fun ckdPrivWithRetry(parent: ExtKey, startIndex: Int): ExtKey {
-        var index = startIndex
-        while (true) {
-            val candidate = ckdPrivOnce(parent, index)
-            if (candidate != null) return candidate
-            val next = index + 1
-            check(next != startIndex) { "BIP-32 ckdPriv: exhausted all 2^32 child indices" }
-            index = next
-        }
-    }
-
-    private fun ckdPrivOnce(parent: ExtKey, index: Int): ExtKey? {
-        val hardened = (index.toLong() and UNSIGNED_INT_MASK) >= HARDENED_THRESHOLD
-        val data =
-            if (hardened) {
-                byteArrayOf(0x00) + parent.priv + intToBytes(index)
-            } else {
-                compressedPub(parent.priv) + intToBytes(index)
-            }
-        val derived = platformHmacSha512(parent.chainCode, data)
-        val left = derived.copyOfRange(0, FIELD_BYTES)
-        return try {
-            val leftNumber = BigInteger(1, left)
-            if (leftNumber >= SECP256K1_N) return null
-            val child = (leftNumber + BigInteger(1, parent.priv)).mod(SECP256K1_N)
-            if (child == bigIntegerZero) return null
-            ExtKey(
-                priv = child.toByteArray().padLeftToWord(),
-                chainCode = derived.copyOfRange(FIELD_BYTES, derived.size),
-            )
-        } finally {
-            data.fill(0)
-            derived.fill(0)
-            left.fill(0)
-        }
-    }
-
-    private fun compressedPub(privBytes: ByteArray): ByteArray {
-        val uncompressed = secpPublicKeyUncompressed(privBytes)
-        val prefix = if (uncompressed.last().toInt() and 1 == 0) COMPRESSED_EVEN_PREFIX else COMPRESSED_ODD_PREFIX
-        return byteArrayOf(prefix.toByte()) + uncompressed.copyOfRange(1, FIELD_BYTES + 1)
-    }
-
     private fun addressFromPub(pubXY: ByteArray): Address {
         val hash = keccak256(pubXY)
         return Address.fromBytes(hash.copyOfRange(hash.size - ADDRESS_BYTES, hash.size))
     }
 
-    private fun intToBytes(value: Int): ByteArray =
-        byteArrayOf(
-            (value ushr 24 and BYTE_MASK).toByte(),
-            (value ushr 16 and BYTE_MASK).toByte(),
-            (value ushr 8 and BYTE_MASK).toByte(),
-            (value and BYTE_MASK).toByte(),
-        )
-
-    private const val UNSIGNED_INT_MASK = 0xffff_ffffL
-    private const val HARDENED_THRESHOLD = 0x8000_0000L
     private const val UNCOMPRESSED_PUBLIC_KEY_BYTES = 65
     private const val UNCOMPRESSED_PREFIX = 0x04
-    private const val COMPRESSED_EVEN_PREFIX = 0x02
-    private const val COMPRESSED_ODD_PREFIX = 0x03
-    private const val BYTE_MASK = 0xff
 }
 
 internal expect fun platformNormalizeNfkd(value: String): String
