@@ -13,6 +13,7 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapQuote
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapTestnet
+import co.electriccoin.zcash.ui.common.atomicswap.DepositFee
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.model.WalletRestoringState
@@ -213,9 +214,9 @@ class PrivateUsdConvertVMTest {
         }
 
     @Test
-    fun `an offer the wallet can't price the fee of can't be reviewed, and says why`() =
+    fun `a deposit that takes more than one transaction can't be reviewed, and says why`() =
         runTest {
-            coEvery { swaps.quote(any()) } answers { quoteFor(requested(), feeZat = null) }
+            coEvery { swaps.quote(any()) } answers { quoteFor(requested(), DepositFee.Split) }
             start()
 
             type("0.5")
@@ -223,6 +224,43 @@ class PrivateUsdConvertVMTest {
             assertNull(vm.state.value.quote)
             assertEquals(stringRes(R.string.convert_error_unpayable), vm.state.value.message)
             assertFalse(vm.state.value.primaryButton.isEnabled)
+        }
+
+    @Test
+    fun `a wallet that can't propose the deposit says it isn't ready, not that it can't pay`() =
+        runTest {
+            coEvery { swaps.quote(any()) } answers { quoteFor(requested(), DepositFee.Unready) }
+            start()
+
+            type("0.5")
+
+            assertNull(vm.state.value.quote)
+            assertEquals(stringRes(R.string.convert_error_wallet), vm.state.value.message)
+        }
+
+    @Test
+    fun `the maximum, whose every note costs a dearer fee than a smaller deposit's, can still be reviewed`() =
+        runTest {
+            coEvery { swaps.quote(any()) } answers {
+                val units = requested().micros.toLong()
+                val shortZat = units * ZAT_PER_UNIT + WHOLE_BALANCE_FEE_ZAT - ONE_ZEC
+                val fee =
+                    when {
+                        requested() == PrivateUsdZecQuotes.PRICE_PROBE -> DepositFee.Payable(FEE_ZAT)
+                        shortZat > 0 -> DepositFee.Short(shortZat)
+                        else -> DepositFee.Payable(WHOLE_BALANCE_FEE_ZAT)
+                    }
+                quoteFor(requested(), fee)
+            }
+            start()
+
+            checkNotNull(vm.state.value.onMax).invoke()
+            runCurrent()
+
+            assertNull(vm.state.value.message)
+            assertNotNull(vm.state.value.quote)
+            assertEquals(BigDecimal("1.00000000"), vm.state.value.amount.innerState.amount)
+            assertTrue(vm.state.value.primaryButton.isEnabled)
         }
 
     @Test
@@ -434,6 +472,7 @@ class PrivateUsdConvertVMTest {
         const val ONE_ZEC = 100_000_000L
         const val ZAT_PER_UNIT = 3L
         const val FEE_ZAT = 10_000L
+        const val WHOLE_BALANCE_FEE_ZAT = 25_000L
         val TYPING = 700.milliseconds
 
         fun walletAt(
@@ -449,7 +488,7 @@ class PrivateUsdConvertVMTest {
 
         fun quoteFor(
             requested: Usdc6,
-            feeZat: Long? = FEE_ZAT
+            fee: DepositFee = DepositFee.Payable(FEE_ZAT)
         ): AtomicSwapQuote {
             val units = requested.micros.toLong()
             return AtomicSwapQuote(
@@ -460,7 +499,7 @@ class PrivateUsdConvertVMTest {
                     expiresAt = Clock.System.now().epochSeconds + 300,
                     receives = units * 97L / 100,
                 ),
-                feeZat,
+                fee,
             )
         }
     }
