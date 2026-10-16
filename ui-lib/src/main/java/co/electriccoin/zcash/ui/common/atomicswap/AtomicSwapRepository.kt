@@ -44,11 +44,13 @@ data class AtomicSwapState(
     val isUnderWay: Boolean get() = record?.finished == false
 }
 
-/** An offer to show before accepting it; [depositFeeZat] is null when the wallet can't pay it now. */
+/** An offer to show before accepting it, and what paying its deposit from the wallet now takes. */
 data class AtomicSwapQuote(
     val offer: AtomicSwapOffer,
-    val depositFeeZat: Long?,
-)
+    val depositFee: DepositFee,
+) {
+    val depositFeeZat: Long? get() = (depositFee as? DepositFee.Payable)?.zat
+}
 
 /** The one forward swap under way, run to its end a step at a time; the worker keeps the process alive meanwhile. */
 interface AtomicSwapRepository : SwapConversionLifecycle {

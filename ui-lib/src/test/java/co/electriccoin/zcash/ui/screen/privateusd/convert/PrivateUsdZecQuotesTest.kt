@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.screen.privateusd.convert
 
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapQuote
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
+import co.electriccoin.zcash.ui.common.atomicswap.DepositFee
 import co.electriccoin.zcash.ui.screen.privateusd.offer
 import co.electriccoin.zcash.ui.screen.privateusd.requested
 import io.mockk.coEvery
@@ -46,7 +47,7 @@ class PrivateUsdZecQuotesTest {
         runTest {
             coEvery { repository.quote(any()) } answers {
                 val amount = requested()
-                quote(amount, feeZat = if (amount == PrivateUsdZecQuotes.PRICE_PROBE) FEE_ZAT else 25_000)
+                quote(amount, DepositFee.Payable(if (amount == PrivateUsdZecQuotes.PRICE_PROBE) FEE_ZAT else 25_000))
             }
 
             val quote = quotes.quote(50_000_000)
@@ -68,13 +69,38 @@ class PrivateUsdZecQuotesTest {
         }
 
     @Test
-    fun `an offer whose fee the wallet can't work out can't be paid`() =
+    fun `a whole balance whose notes cost more to spend than a smaller deposit's is asked for again, short of it`() =
         runTest {
-            coEvery { repository.quote(any()) } answers { quote(requested(), feeZat = null) }
+            coEvery { repository.quote(any()) } answers {
+                val amount = requested()
+                if (amount == PrivateUsdZecQuotes.PRICE_PROBE) quote(amount) else quote(amount, feeAgainst(amount))
+            }
+
+            val quote = quotes.quote(10 * ONE_ZEC)
+
+            assertEquals(10 * ONE_ZEC, quote.totalZat)
+            assertEquals(WHOLE_BALANCE_FEE_ZAT, quote.feeZat)
+            coVerify(exactly = 3) { repository.quote(any()) }
+        }
+
+    @Test
+    fun `a deposit that takes more than one transaction can't be paid`() =
+        runTest {
+            coEvery { repository.quote(any()) } answers { quote(requested(), DepositFee.Split) }
 
             val failure = assertFailsWith<AtomicSwapBlockedException> { quotes.quote(50_000_000) }
 
             assertEquals(AtomicSwapBlock.DEPOSIT_UNPAYABLE, failure.reason)
+        }
+
+    @Test
+    fun `a wallet that can't propose the deposit isn't ready, rather than unable to pay`() =
+        runTest {
+            coEvery { repository.quote(any()) } answers { quote(requested(), DepositFee.Unready) }
+
+            val failure = assertFailsWith<AtomicSwapBlockedException> { quotes.quote(50_000_000) }
+
+            assertEquals(AtomicSwapBlock.ZCASH_UNAVAILABLE, failure.reason)
         }
 
     @Test
@@ -135,16 +161,22 @@ class PrivateUsdZecQuotesTest {
             coVerify(exactly = 1) { repository.quote(any()) }
         }
 
+    // A balance of 10 ZEC, whose whole spends more notes than the dollar's deposit.
+    private fun feeAgainst(requested: Usdc6): DepositFee {
+        val shortZat = requested.micros.toLong() * ZAT_PER_UNIT + WHOLE_BALANCE_FEE_ZAT - 10 * ONE_ZEC
+        return if (shortZat > 0) DepositFee.Short(shortZat) else DepositFee.Payable(WHOLE_BALANCE_FEE_ZAT)
+    }
+
     private fun quote(
         requested: Usdc6,
-        feeZat: Long? = FEE_ZAT,
+        fee: DepositFee = DepositFee.Payable(FEE_ZAT),
         networkCost: Long? = null,
     ): AtomicSwapQuote {
         val units = requested.micros.toLong()
         val depositZat = (units + (networkCost ?: 0)) * ZAT_PER_UNIT
         val offer =
             offer(units.toInt(), units, depositZat, expiresAt = now + VALIDITY, networkCost = networkCost)
-        return AtomicSwapQuote(offer, feeZat)
+        return AtomicSwapQuote(offer, fee)
     }
 
     private companion object {
@@ -153,6 +185,7 @@ class PrivateUsdZecQuotesTest {
         const val ONE_ZEC = 100_000_000L
         const val ZAT_PER_UNIT = 3L
         const val FEE_ZAT = 10_000L
+        const val WHOLE_BALANCE_FEE_ZAT = 25_000L
         const val NETWORK_COST = 220_000L
     }
 }

@@ -20,8 +20,8 @@ class AtomicSwapZcashInfo(
     private val transactions: SwapZcashTransactions,
     private val keys: AtomicSwapKeys,
 ) {
-    /** The network fee of paying [offer]'s deposit from the wallet now, or null unless one transaction can. */
-    suspend fun depositFee(offer: AtomicSwapOffer): Long? =
+    /** What paying [offer]'s deposit from the wallet now costs in network fee, or why one transaction can't. */
+    suspend fun depositFee(offer: AtomicSwapOffer): DepositFee =
         try {
             val proposal =
                 synchronizerProvider
@@ -31,10 +31,16 @@ class AtomicSwapZcashInfo(
                         keys.depositAddress(offer.index, offer.quote.makerShare),
                         Zatoshi(offer.quote.depositZat),
                     )
-            proposal.totalFeeRequired().value.takeIf { proposal.transactionCount() == 1 }
+            val count = proposal.transactionCount()
+            if (count == 1) {
+                DepositFee.Payable(proposal.totalFeeRequired().value)
+            } else {
+                Twig.info { "Atomic swap: the deposit takes $count transactions" }
+                DepositFee.Split
+            }
         } catch (e: SdkException) {
             Twig.info { "Atomic swap: no deposit fee estimate, ${e.message}" }
-            null
+            e.shortfall()?.let { DepositFee.Short(it) } ?: DepositFee.Unready
         }
 
     /** How many blocks have mined the wallet's [txId] so far, or null while the chain's height is unknown. */
@@ -45,3 +51,29 @@ class AtomicSwapZcashInfo(
         return ((status as? ZcashTransactionStatus.Mined)?.confirmations ?: 0).toInt()
     }
 }
+
+/** Paying a forward swap's deposit from the wallet now: its network fee, or why the wallet can't. */
+sealed interface DepositFee {
+    data class Payable(
+        val zat: Long
+    ) : DepositFee
+
+    /** The spendable balance is [zat] short of the deposit and its fee. */
+    data class Short(
+        val zat: Long
+    ) : DepositFee
+
+    /** It takes more than one transaction. */
+    data object Split : DepositFee
+
+    /** Not synced, or the wallet can't propose a payment for some other reason. */
+    data object Unready : DepositFee
+}
+
+// librustzcash names both amounts when the balance can't cover a payment and its fee.
+private val INSUFFICIENT_BALANCE = Regex("""Insufficient balance \(have (\d+), need (\d+)""")
+
+private fun SdkException.shortfall(): Long? =
+    message?.let(INSUFFICIENT_BALANCE::find)?.destructured?.let { (have, need) ->
+        (need.toLong() - have.toLong()).takeIf { it > 0 }
+    }
