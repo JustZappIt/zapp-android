@@ -30,6 +30,7 @@ import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
 import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
+import co.electriccoin.zcash.ui.design.component.TextSelection
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.offer
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
@@ -67,6 +68,7 @@ import java.io.IOException
 import java.math.BigDecimal
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -194,8 +196,33 @@ class PrivateUsdConvertVMTest {
             maximum.complete(Unit)
             runCurrent()
             assertEquals(BigDecimal("1.00000000"), vm.state.value.amount.innerState.amount)
+            assertEquals(TextSelection.End, vm.state.value.amount.innerState.innerTextFieldState.selection)
             assertFalse(vm.state.value.isQuoting)
             coVerify { swaps.quote(Usdc6.ofMicros(33_330_000)) }
+        }
+
+    @Test
+    fun `while a changed amount is quoted the last quote stays up, and can't be reviewed`() =
+        runTest {
+            start()
+            type("0.5")
+            val first = checkNotNull(vm.state.value.quote)
+            val next = CompletableDeferred<Unit>()
+            coEvery { swaps.quote(any()) } coAnswers {
+                next.await()
+                quoteFor(requested())
+            }
+
+            type("0.6")
+
+            assertTrue(vm.state.value.isQuoting)
+            assertEquals(first, vm.state.value.quote)
+            assertFalse(vm.state.value.primaryButton.isEnabled)
+            next.complete(Unit)
+            runCurrent()
+            assertFalse(vm.state.value.isQuoting)
+            assertNotEquals(first.pay, checkNotNull(vm.state.value.quote).pay)
+            assertTrue(vm.state.value.primaryButton.isEnabled)
         }
 
     @Test
@@ -227,15 +254,24 @@ class PrivateUsdConvertVMTest {
         }
 
     @Test
-    fun `a wallet that can't propose the deposit says it isn't ready, not that it can't pay`() =
+    fun `a wallet that can't propose the deposit before it syncs says so, and quotes once it has`() =
         runTest {
+            sync.value = walletAt(Synchronizer.Status.SYNCING, progress = 0.3f)
             coEvery { swaps.quote(any()) } answers { quoteFor(requested(), DepositFee.Unready) }
             start()
 
             type("0.5")
 
             assertNull(vm.state.value.quote)
-            assertEquals(stringRes(R.string.convert_error_wallet), vm.state.value.message)
+            assertEquals(stringRes(R.string.convert_quote_after_sync), vm.state.value.message)
+
+            coEvery { swaps.quote(any()) } answers { quoteFor(requested()) }
+            sync.value = walletAt(Synchronizer.Status.SYNCED)
+            runCurrent()
+
+            assertNull(vm.state.value.message)
+            assertNotNull(vm.state.value.quote)
+            assertTrue(vm.state.value.primaryButton.isEnabled)
         }
 
     @Test
@@ -302,7 +338,7 @@ class PrivateUsdConvertVMTest {
                         R.string.convert_error_device_refused,
                     StoreCorruptedException("unreadable") to R.string.convert_error_store,
                     AtomicSwapBlockedException(AtomicSwapBlock.ZCASH_UNAVAILABLE, "no height") to
-                        R.string.convert_error_wallet,
+                        R.string.convert_quote_after_sync,
                     IllegalStateException("anything else") to R.string.convert_error_generic,
                 )
 

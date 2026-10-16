@@ -32,7 +32,6 @@ import co.electriccoin.zcash.ui.design.component.ZashiNumberTextField
 import co.electriccoin.zcash.ui.design.component.ZashiNumberTextFieldDefaults
 import co.electriccoin.zcash.ui.design.component.ZashiTextFieldDefaults
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
-import co.electriccoin.zcash.ui.design.util.getValue
 
 @Composable
 fun ZappOfframpHeroAmountField(
@@ -46,20 +45,11 @@ fun ZappOfframpHeroAmountField(
     leadingIcon: Painter? = null,
     /** Drawn over [leadingIcon]'s bottom-right corner. */
     leadingIconBadge: Painter? = null,
-    /** Steps an amount longer than eight characters down a size, for a field sharing its row with an icon. */
-    shrinksLongAmounts: Boolean = false,
+    /** A size down, for a field sharing its row with an icon; fixed, so the text doesn't jump while typed. */
+    isCompact: Boolean = false,
 ) {
     val c = ZappTheme.colors
-    val amountStyle =
-        if (shrinksLongAmounts &&
-            state.innerState.innerTextFieldState.value
-                .getValue()
-                .length > COMPACT_AMOUNT_LENGTH
-        ) {
-            ZappTheme.typography.displaySecondary
-        } else {
-            ZappTheme.typography.display
-        }
+    val amountStyle = if (isCompact) ZappTheme.typography.displaySecondary else ZappTheme.typography.display
     Column(modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             leadingIcon?.let {
@@ -216,5 +206,3 @@ private fun LeadingIcon(
         }
     }
 }
-
-private const val COMPACT_AMOUNT_LENGTH = 8

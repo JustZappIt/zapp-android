@@ -135,7 +135,7 @@ private fun AssetAmount(
             symbol = if (asset == ConvertAsset.PRIVATE_USD) currencySymbol else "",
             leadingIcon = painterResource(asset.icon),
             leadingIconBadge = asset.badge?.let { painterResource(it) },
-            shrinksLongAmounts = true,
+            isCompact = true,
             state = amount,
             secondaryText = note,
             isError = isInvalid,
