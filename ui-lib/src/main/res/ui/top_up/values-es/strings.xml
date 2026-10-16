@@ -8,4 +8,10 @@
     <string name="top_up_from_wallet_subtitle">Recibe directamente en tu dirección blindada.</string>
     <string name="top_up_add_zec_button">Agregar ZEC</string>
     <string name="top_up_balance_subtitle">Recarga desde un exchange u otra billetera.</string>
+    <string name="add_funds_panel_title">Tu billetera está vacía</string>
+    <string name="add_funds_panel_send">Añade ZEC antes de enviar. Recíbelos desde otra billetera o un exchange.</string>
+    <string name="add_funds_panel_swap">Añade ZEC antes de cambiarlos. Recíbelos desde otra billetera o un exchange.</string>
+    <string name="add_funds_panel_gift">Añade ZEC antes de cargar un Zpacket. Recíbelos desde otra billetera o un exchange.</string>
+    <string name="add_funds_panel_pay_merchant">Añade ZEC o USDC en Base antes de pagar. Zapp paga a los comercios con cualquiera de los dos.</string>
+    <string name="add_funds_panel_base">Añade ZEC antes de mover fondos a Base.</string>
 </resources>

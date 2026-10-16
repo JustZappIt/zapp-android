@@ -6,6 +6,7 @@ import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.compose.AddFundsPanelState
 import co.electriccoin.zcash.ui.common.model.SwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapMode
 import co.electriccoin.zcash.ui.common.model.WalletAccount
@@ -13,6 +14,7 @@ import co.electriccoin.zcash.ui.common.repository.EnhancedABContact
 import co.electriccoin.zcash.ui.common.repository.SwapAssetsData
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.usecase.CancelSwapUseCase
+import co.electriccoin.zcash.ui.common.usecase.Funding
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedSwapAssetUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSlippageUseCase
@@ -21,6 +23,7 @@ import co.electriccoin.zcash.ui.common.usecase.NavigateToScanGenericAddressUseCa
 import co.electriccoin.zcash.ui.common.usecase.NavigateToSelectABSwapRecipientUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToSwapInfoUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToSwapQuoteIfAvailableUseCase
+import co.electriccoin.zcash.ui.common.usecase.ObserveFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.PreselectSwapAssetUseCase
 import co.electriccoin.zcash.ui.common.usecase.RequestSwapQuoteUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
@@ -41,6 +44,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.WhileSubscribed
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -64,6 +68,7 @@ internal class SwapVM(
     private val exactInputVMMapper: ExactInputVMMapper,
     private val navigateToScanAddress: NavigateToScanGenericAddressUseCase,
     private val navigateToSelectSwapRecipient: NavigateToSelectABSwapRecipientUseCase,
+    observeFunding: ObserveFundingUseCase,
 ) : ViewModel() {
     private val mode = MutableStateFlow(SWAP_INTO_ZEC)
 
@@ -154,14 +159,19 @@ internal class SwapVM(
         }
 
     val state =
-        innerState
-            .map { innerState ->
-                createState(innerState)
-            }.stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-                initialValue = null
+        combine(innerState, observeFunding.zec(), mode) { innerState, funding, currentMode ->
+            createState(innerState).copy(
+                addFunds =
+                    AddFundsPanelState(
+                        body = stringRes(R.string.add_funds_panel_swap),
+                        onAddFunds = ::onTopUpClick,
+                    ).takeIf { funding == Funding.EMPTY && currentMode == SWAP_FROM_ZEC },
             )
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
+            initialValue = null
+        )
 
     init {
         preselectSwapAsset
