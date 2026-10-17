@@ -21,6 +21,11 @@ internal data class ReputationState(
     val isRaiseLimitVisible: Boolean,
     val onBack: () -> Unit,
     val onRaiseLimit: () -> Unit,
+    /**
+     * While buying is locked, the way to ZEC that needs no verification: swapping crypto the user
+     * already holds. Null once buying works.
+     */
+    val onSwapInstead: (() -> Unit)? = null,
 )
 
 internal sealed interface ReputationContent {
@@ -29,12 +34,14 @@ internal sealed interface ReputationContent {
     data class Ready(
         val points: String,
         /**
-         * The Diamond's own number, or the single word that stands in for it while buying is
-         * locked — never a rendered "$0", which reads as a bug rather than as a gate.
+         * The Diamond's own number, or while buying is locked either the "Up to" figure one
+         * verification unlocks or the single word "Locked" — never a rendered "$0", which reads as
+         * a bug rather than as a gate.
          */
         val buyLimit: StringResource,
         /** Underneath the figure, with room to wrap: what it means, or what to do about it. */
         val buyLimitCaption: StringResource,
+        /** Dims the figure: true only while it reads "Locked", not while it states what one verification unlocks. */
         val isLocked: Boolean,
         /**
          * Only the accounts already verified. The ones that are *not* are a list of things to do,

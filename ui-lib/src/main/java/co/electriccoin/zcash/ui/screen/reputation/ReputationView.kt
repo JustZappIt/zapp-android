@@ -45,6 +45,7 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappCompactButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRow
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRowDivider
@@ -164,6 +165,7 @@ private fun BlacklistedContent() {
 private fun ReadyContent(content: ReputationContent.Ready, state: ReputationState) {
     Column(verticalArrangement = Arrangement.spacedBy(REPUTATION_SECTION_GAP)) {
         BuyLimitCard(content)
+        SwapInsteadAction(state)
         if (content.verified.isNotEmpty()) {
             ZappSettingsGroup(title = stringResource(R.string.reputation_verified_group)) {
                 content.verified.forEachIndexed { index, row ->
@@ -211,6 +213,19 @@ private fun BuyLimitCard(content: ReputationContent.Ready) {
             value = content.points,
         )
     }
+}
+
+/** While buying is locked: ZEC is still one swap away for anyone already holding crypto. */
+@Composable
+private fun SwapInsteadAction(state: ReputationState) {
+    val onSwapInstead = state.onSwapInstead ?: return
+    // Ghost, so it never competes with Verify to buy in the bottom bar.
+    ZappButton(
+        text = stringResource(R.string.reputation_swap_instead),
+        variant = ZappButtonVariant.Ghost,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = CARD_GUTTER),
+        onClick = onSwapInstead,
+    )
 }
 
 /**
