@@ -26,6 +26,8 @@ import kotlin.time.Duration.Companion.seconds
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncStartupTest {
+    private val engine = mockk<Synchronizer>()
+
     @Test
     fun `fires once a startup state outlasts the window`() =
         runTest {
@@ -52,21 +54,21 @@ class SyncStartupTest {
             val job = launch { watchSyncStartup(states) { stalls += it } }
 
             advanceTimeBy(SYNC_STARTUP_STALL_TIMEOUT - 10.seconds)
-            states.value = SyncStartup.Starting(Synchronizer.Status.INITIALIZING)
+            states.value = SyncStartup.Starting(engine, Synchronizer.Status.INITIALIZING)
             advanceTimeBy(SYNC_STARTUP_STALL_TIMEOUT - 10.seconds)
             runCurrent()
             assertEquals(emptyList(), stalls)
 
             advanceTimeBy(20.seconds)
             runCurrent()
-            assertEquals(listOf<SyncStartup>(SyncStartup.Starting(Synchronizer.Status.INITIALIZING)), stalls)
+            assertEquals(listOf<SyncStartup>(SyncStartup.Starting(engine, Synchronizer.Status.INITIALIZING)), stalls)
             job.cancel()
         }
 
     @Test
     fun `never fires once the engine reaches the server`() =
         runTest {
-            val states = MutableStateFlow<SyncStartup>(SyncStartup.Starting(Synchronizer.Status.INITIALIZING))
+            val states = MutableStateFlow<SyncStartup>(SyncStartup.Starting(engine, Synchronizer.Status.INITIALIZING))
             val stalls = mutableListOf<SyncStartup>()
             val job = launch { watchSyncStartup(states) { stalls += it } }
 
@@ -85,6 +87,7 @@ class SyncStartupTest {
                 syncStartupStates(
                     synchronizer = flowOf(null),
                     hasWallet = flowOf(false),
+                    hasNetwork = flowOf(true),
                 ).toList()
             assertEquals(listOf<SyncStartup>(SyncStartup.Idle), states)
         }
@@ -96,6 +99,7 @@ class SyncStartupTest {
                 syncStartupStates(
                     synchronizer = flowOf(null),
                     hasWallet = flowOf(true),
+                    hasNetwork = flowOf(true),
                 ).toList()
             assertEquals(listOf<SyncStartup>(SyncStartup.AwaitingEngine), states)
         }
@@ -103,7 +107,6 @@ class SyncStartupTest {
     @Test
     fun `an engine is watched only until it first leaves startup`() =
         runTest {
-            val engine = mockk<Synchronizer>()
             every { engine.status } returns
                 flowOf(
                     Synchronizer.Status.INITIALIZING,
@@ -116,10 +119,58 @@ class SyncStartupTest {
                 syncStartupStates(
                     synchronizer = flowOf(engine),
                     hasWallet = flowOf(true),
+                    hasNetwork = flowOf(true),
                 ).toList()
             assertEquals(
-                listOf(SyncStartup.Starting(Synchronizer.Status.INITIALIZING), SyncStartup.Idle),
+                listOf(SyncStartup.Starting(engine, Synchronizer.Status.INITIALIZING), SyncStartup.Idle),
                 states,
             )
+        }
+
+    @Test
+    fun `a rebuilt engine gets its own window`() =
+        runTest {
+            fun stuck() =
+                mockk<Synchronizer> { every { status } returns MutableStateFlow(Synchronizer.Status.INITIALIZING) }
+            val second = stuck()
+            val engines = MutableStateFlow<Synchronizer?>(stuck())
+            val stalls = mutableListOf<SyncStartup>()
+            val job =
+                launch {
+                    watchSyncStartup(syncStartupStates(engines, flowOf(true), flowOf(true))) {
+                        stalls += it
+                        // Swap engines with no null in between, as a conflated reset can look.
+                        engines.value = second
+                    }
+                }
+            advanceTimeBy(SYNC_STARTUP_STALL_TIMEOUT * 2 + 1.seconds)
+            runCurrent()
+            assertEquals(2, stalls.size)
+            job.cancel()
+        }
+
+    @Test
+    fun `no window runs offline and the network's return starts a fresh one`() =
+        runTest {
+            every { engine.status } returns MutableStateFlow(Synchronizer.Status.INITIALIZING)
+            val online = MutableStateFlow(false)
+            val stalls = mutableListOf<SyncStartup>()
+            val job =
+                launch {
+                    watchSyncStartup(syncStartupStates(flowOf(engine), flowOf(true), online)) { stalls += it }
+                }
+            advanceTimeBy(SYNC_STARTUP_STALL_TIMEOUT * 4)
+            runCurrent()
+            assertEquals(emptyList(), stalls)
+
+            online.value = true
+            advanceTimeBy(SYNC_STARTUP_STALL_TIMEOUT - 1.seconds)
+            runCurrent()
+            assertEquals(emptyList(), stalls)
+
+            advanceTimeBy(2.seconds)
+            runCurrent()
+            assertEquals(listOf<SyncStartup>(SyncStartup.Starting(engine, Synchronizer.Status.INITIALIZING)), stalls)
+            job.cancel()
         }
 }
