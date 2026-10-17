@@ -4,6 +4,8 @@
 package co.electriccoin.zcash.ui.screen.privateusd.convert
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.stringResource
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.security.PinVerifyOverlay
@@ -80,6 +82,8 @@ private fun Amount(
     )
     state.quote?.let { quote ->
         ZappSettlementLedger(
+            // The last quote, held while the next loads, is dimmed: it's no longer the one on offer.
+            modifier = Modifier.alpha(if (state.isQuoting) STALE_QUOTE_ALPHA else 1f),
             rows =
                 listOfNotNull(
                     ZappSettlementLedgerRow(stringResource(R.string.convert_you_pay), quote.pay.getValue()),
@@ -164,3 +168,5 @@ private fun previewState(phase: PrivateUsdConvertPhase) =
         pinVerify = null,
         onBack = {},
     )
+
+private const val STALE_QUOTE_ALPHA = 0.4f

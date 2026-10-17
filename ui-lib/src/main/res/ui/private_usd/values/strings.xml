@@ -107,6 +107,7 @@
     <string name="convert_error_relayer_refused">The relayer that completes conversions turned this down. Try again in a moment.</string>
     <string name="convert_error_generic">Couldn\'t get a quote. Try again in a moment.</string>
     <string name="convert_error_ethereum" tools:ignore="MissingTranslation">Zapp can\'t reach Ethereum right now. Try again in a moment.</string>
+    <string name="convert_quote_after_sync">Your Zcash wallet is still syncing. The quote follows once it has.</string>
     <string name="convert_error_wallet" tools:ignore="MissingTranslation">Your Zcash wallet isn\'t ready. Try again once it has synced.</string>
     <string name="convert_error_unpayable" tools:ignore="MissingTranslation">Your wallet can\'t pay this in one transaction right now. Try a smaller amount.</string>
     <string name="convert_error_store" tools:ignore="MissingTranslation">Zapp can\'t read its saved conversions. Contact Zapp support.</string>

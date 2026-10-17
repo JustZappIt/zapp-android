@@ -45,7 +45,7 @@ class AtomicSwapZcashImpl(
         if (proposal.transactionCount() != 1 || overCap) {
             throw AtomicSwapBlockedException(
                 AtomicSwapBlock.DEPOSIT_UNPAYABLE,
-                "the deposit takes ${proposal.transactionCount()} transactions and $total zatoshi",
+                "the deposit takes ${proposal.transactionCount()} transactions and $total zatoshi, cap $maxTotalZat",
             )
         }
         val usk = zashiSpendingKeyDataSource.getZashiSpendingKey()

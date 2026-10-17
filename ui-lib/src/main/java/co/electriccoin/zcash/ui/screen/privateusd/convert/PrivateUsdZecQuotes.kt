@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.screen.privateusd.convert
 
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapQuote
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
+import co.electriccoin.zcash.ui.common.atomicswap.DepositFee
 import co.electriccoin.zcash.ui.common.atomicswap.ZIP317_MIN_FEE_ZAT
 import xyz.justzappit.offramp.atomicswap.AtomicSwapBlock
 import xyz.justzappit.offramp.atomicswap.AtomicSwapBlockedException
@@ -36,12 +37,20 @@ internal class PrivateUsdZecQuotes(
         totalZat: Long,
         requested: Usdc6? = null
     ): ZecQuote {
-        var amount = requested ?: amountFor(totalZat, basis())
+        var amount = requested ?: basis().let { amountFor(totalZat - (it.depositFeeZat ?: ZIP317_MIN_FEE_ZAT), it) }
         repeat(MAX_QUOTES) {
             val quote = repository.quote(amount).also { latest = it }
-            val payable = quote.payable()
-            if (payable.totalZat <= totalZat) return payable
-            amount = amountFor(totalZat, quote, lessThan = amount)
+            val shortZat = (quote.depositFee as? DepositFee.Short)?.zat
+            // Short: spending the whole balance takes more notes, so a dearer fee, than the last quote's deposit did.
+            val depositZat =
+                if (shortZat != null) {
+                    quote.offer.quote.depositZat - shortZat
+                } else {
+                    val payable = quote.payable()
+                    if (payable.totalZat <= totalZat) return payable
+                    totalZat - payable.feeZat
+                }
+            amount = amountFor(depositZat, quote, lessThan = amount)
         }
         throw ZecInputQuoteException()
     }
@@ -51,26 +60,33 @@ internal class PrivateUsdZecQuotes(
         latest?.takeIf { it.offer.quote.expiresAt > nowSeconds() }
             ?: repository.quote(PRICE_PROBE).also { latest = it }
 
-    // What [basis]'s price buys with [totalZat], less [basis]'s fee or the least one there is. A deposit pays the
-    // maker's network cost on top of the amount, at the same price.
+    // What [basis]'s price buys with a [depositZat] deposit. A deposit pays the maker's network cost on top of the
+    // amount, at the same price.
     private fun amountFor(
-        totalZat: Long,
+        depositZat: Long,
         basis: AtomicSwapQuote,
         lessThan: Usdc6? = null,
     ): Usdc6 {
-        val depositZat = (totalZat - (basis.depositFeeZat ?: ZIP317_MIN_FEE_ZAT)).coerceAtLeast(0)
         val quote = basis.offer.quote
         val cost = quote.networkCost?.micros ?: BigInteger.ZERO
-        val priced = depositZat.toBigInteger() * (quote.amount.micros + cost) / quote.depositZat.toBigInteger() - cost
+        val deposit = depositZat.coerceAtLeast(0).toBigInteger()
+        val priced = deposit * (quote.amount.micros + cost) / quote.depositZat.toBigInteger() - cost
         val amount = lessThan?.let { priced.min(it.micros.dec()) } ?: priced
         if (amount.signum() <= 0) throw ZecInputQuoteException()
         return Usdc6(amount)
     }
 
     private fun AtomicSwapQuote.payable(): ZecQuote {
-        val feeZat = depositFeeZat ?: throw AtomicSwapBlockedException(AtomicSwapBlock.DEPOSIT_UNPAYABLE, "no fee")
+        val feeZat = depositFeeZat ?: throw depositFee.unpayable()
         return ZecQuote(offer.copy(maxTotalZat = offer.quote.depositZat + feeZat), feeZat)
     }
+
+    private fun DepositFee.unpayable(): Exception =
+        when (this) {
+            DepositFee.Split -> AtomicSwapBlockedException(AtomicSwapBlock.DEPOSIT_UNPAYABLE, "split")
+            DepositFee.Unready -> AtomicSwapBlockedException(AtomicSwapBlock.ZCASH_UNAVAILABLE, "unready")
+            is DepositFee.Payable, is DepositFee.Short -> ZecInputQuoteException()
+        }
 
     companion object {
         /** Quoted for the maker's price while no quote holds: a dollar's deposit prices the next to the zatoshi. */
