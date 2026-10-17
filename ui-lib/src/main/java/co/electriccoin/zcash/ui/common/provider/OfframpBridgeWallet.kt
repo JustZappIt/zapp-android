@@ -58,9 +58,13 @@ interface OfframpBridgeWallet {
 
     /**
      * Sends the bridge's ZEC input (per [quote]) to the 1-Click deposit address with explicit user
-     * authorization, returning the Zcash deposit tx id once submitted.
+     * authorization, returning the Zcash deposit tx id once submitted. [beforeSubmit] runs once the user
+     * has authorized and before anything is submitted; if it throws, nothing is sent.
      */
-    suspend fun sendZecDeposit(quote: SwapQuote): String
+    suspend fun sendZecDeposit(
+        quote: SwapQuote,
+        beforeSubmit: suspend () -> Unit = {},
+    ): String
 
     /** The wallet's spendable shielded ZEC, used to gate a bridge before any ZEC is sent. */
     suspend fun spendableZec(): Zatoshi
@@ -88,7 +92,10 @@ class RealOfframpBridgeWallet(
 
     override suspend fun spendableZec(): Zatoshi = accountDataSource.getSelectedAccount().spendableShieldedBalance
 
-    override suspend fun sendZecDeposit(quote: SwapQuote): String {
+    override suspend fun sendZecDeposit(
+        quote: SwapQuote,
+        beforeSubmit: suspend () -> Unit,
+    ): String {
         val send =
             ZecSend(
                 destination = walletAddress(quote.depositAddress.address),
@@ -120,7 +127,9 @@ class RealOfframpBridgeWallet(
         // and `submitState` resolves the same way.
         // A declined prompt submits nothing and never emits a Result, so the await below would
         // suspend for the life of the process. Turn it into a terminal failure the caller can clear.
-        if (!submitProposal(navigateAfter = false)) throw BridgeAuthorizationCancelledException()
+        if (!submitProposal(navigateAfter = false, beforeSubmit = beforeSubmit)) {
+            throw BridgeAuthorizationCancelledException()
+        }
         val result =
             if (account is KeystoneAccount) {
                 awaitKeystoneSubmitResult()

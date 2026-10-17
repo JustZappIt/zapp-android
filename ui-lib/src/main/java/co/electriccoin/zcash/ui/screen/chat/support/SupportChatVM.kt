@@ -44,7 +44,7 @@ class SupportChatVM(
 ) : ViewModel() {
     private val conversationId = MutableStateFlow(args.conversationId.takeIf { it.isNotEmpty() })
     private val messages = MutableStateFlow<List<SupportUiMessage>>(emptyList())
-    private val input = MutableStateFlow("")
+    private val input = MutableStateFlow(args.prefilledMessage)
     private val isLoading = MutableStateFlow(true)
     private val isSubmittingCategory = MutableStateFlow(false)
     private val showLeaveDialog = MutableStateFlow(false)

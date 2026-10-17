@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallReceived
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Storefront
@@ -31,6 +32,8 @@ internal fun PayActionSpeedDial(
     onGift: () -> Unit,
     onPrivateUsd: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    // Null hides the Invest action: the build doesn't offer it, or the user's country is prohibited.
+    onInvest: (() -> Unit)? = null,
 ) {
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     ZappSpeedDialFab(
@@ -38,6 +41,13 @@ internal fun PayActionSpeedDial(
         collapseContentDescription = stringResource(R.string.home_fab_actions_collapse),
         actions =
             listOfNotNull(
+                onInvest?.let {
+                    ZappSpeedDialAction(
+                        icon = Icons.AutoMirrored.Filled.TrendingUp,
+                        label = stringResource(R.string.invest_speed_dial),
+                        onClick = it,
+                    )
+                },
                 ZappSpeedDialAction(
                     icon = Icons.Default.Wallet,
                     label = stringResource(R.string.onramp_speed_dial_buy_usdc),

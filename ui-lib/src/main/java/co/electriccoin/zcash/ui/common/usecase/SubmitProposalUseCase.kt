@@ -8,6 +8,7 @@ import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.SendTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.SwapTransactionProposal
 import co.electriccoin.zcash.ui.common.datasource.TransactionProposal
+import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.model.KeystoneAccount
 import co.electriccoin.zcash.ui.common.model.SubmitResult
 import co.electriccoin.zcash.ui.common.model.ZashiAccount
@@ -52,12 +53,18 @@ class SubmitProposalUseCase(
      * @param navigateAfter When true (default), navigates to [TransactionProgressArgs] after a Zashi
      *   submit. When false the caller keeps the foreground, as the offramp bridge does. Keystone
      *   always goes to [SignKeystoneTransactionArgs] — nothing can be signed otherwise.
+     * @param beforeSubmit Runs once the user has authorized and before anything is submitted or sent for signing:
+     *   a caller that must record a payment before it can leave (Invest) does so here. If it throws, nothing is
+     *   submitted and the exception reaches the caller.
      * @return true once the proposal is authorized and handed off, false if the user dismissed or
      *   failed the biometric prompt. A declined prompt submits nothing and emits no
      *   `SubmitProposalState.Result`, so a caller that awaits that state must check this first or it
      *   will suspend forever.
      */
-    suspend operator fun invoke(navigateAfter: Boolean = true): Boolean =
+    suspend operator fun invoke(
+        navigateAfter: Boolean = true,
+        beforeSubmit: suspend () -> Unit = {},
+    ): Boolean =
         try {
             biometricRepository.requestBiometrics(
                 request =
@@ -69,6 +76,7 @@ class SubmitProposalUseCase(
                             )
                     )
             )
+            beforeSubmit()
             val account = accountDataSource.getSelectedAccount()
             val proposal =
                 when (account) {
@@ -77,10 +85,16 @@ class SubmitProposalUseCase(
                 }
             if (proposal is SwapTransactionProposal) {
                 val selectedSwapAsset = proposal.quote.destinationAsset
-                metadataRepository.addSwapAssetToHistory(
-                    tokenTicker = selectedSwapAsset.tokenTicker,
-                    chainTicker = selectedSwapAsset.chainTicker
-                )
+                // An Invest buy isn't a swap the user picked: kept out of Swap's recent assets, which
+                // would otherwise preselect a stock the Swap screen doesn't offer.
+                val isInvestBuy =
+                    InvestAssets.findBySwapTickers(selectedSwapAsset.tokenTicker, selectedSwapAsset.chainTicker) != null
+                if (!isInvestBuy) {
+                    metadataRepository.addSwapAssetToHistory(
+                        tokenTicker = selectedSwapAsset.tokenTicker,
+                        chainTicker = selectedSwapAsset.chainTicker
+                    )
+                }
             }
             when (account) {
                 is KeystoneAccount -> {

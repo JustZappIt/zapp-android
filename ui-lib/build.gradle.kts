@@ -61,6 +61,7 @@ android {
                     "src/main/res/ui/group_link",
                     "src/main/res/ui/home",
                     "src/main/res/ui/insufficient_funds",
+                    "src/main/res/ui/invest",
                     "src/main/res/ui/choose_server",
                     "src/main/res/ui/integrations",
                     "src/main/res/ui/ironwood",
@@ -215,6 +216,31 @@ androidComponents {
             )
         )
         variant.buildConfigFields?.put(
+            "IS_INVEST_ENABLED",
+            BuildConfigField(
+                type = "boolean",
+                value =
+                    (
+                        project.property("ZAPP_INVEST_ENABLED").toString().toBoolean() ||
+                            variant.buildType == "debug" ||
+                            variant.productFlavors.any { it.second == DistributionDimension.INTERNAL.value }
+                    ).toString(),
+                comment = "Whether Invest (tokenised stocks held privately) is offered"
+            )
+        )
+        variant.buildConfigFields?.put(
+            "IS_INVEST_DEMO",
+            BuildConfigField(
+                type = "boolean",
+                value =
+                    (
+                        project.property("ZAPP_INVEST_DEMO").toString().toBoolean() &&
+                            variant.buildType == "debug"
+                    ).toString(),
+                comment = "Debug-only: Invest runs on the scripted demo engine, with no network and no ZEC sent"
+            )
+        )
+        variant.buildConfigFields?.put(
             "IS_GROUP_LINKS_ENABLED",
             BuildConfigField(
                 type = "boolean",
@@ -297,6 +323,14 @@ androidComponents {
                 type = "String",
                 value = "\"${project.property("NTFY_BASE_URL")?.toString().orEmpty()}\"",
                 comment = "Self-hosted ntfy base URL for the embedded push doorbell"
+            )
+        )
+        variant.buildConfigFields?.put(
+            "NEAR_PARTNER_JWT",
+            BuildConfigField(
+                type = "String",
+                value = "\"${project.property("ZAPP_NEAR_PARTNER_JWT")?.toString().orEmpty()}\"",
+                comment = "1Click partner JWT; blank when this build has none"
             )
         )
         variant.buildConfigFields?.put(
@@ -420,4 +454,16 @@ dependencies {
             }
         }
     }
+}
+
+// A build without the partner JWT sends no 1Click partner header: its swaps, bridges and Invest trades still work
+// but aren't attributed to Zapp, which nothing on the phone shows. A release is built on a maintainer's machine (no
+// workflow publishes one), so a release task there refuses to run without it. CI only warns: fork PRs get no secrets.
+if (project.property("ZAPP_NEAR_PARTNER_JWT")?.toString().isNullOrBlank()) {
+    val message =
+        "ZAPP_NEAR_PARTNER_JWT is blank: this build sends no 1Click partner header, so its swaps, bridges " +
+            "and Invest trades aren't attributed to Zapp. Set it in local.properties or " +
+            "ORG_GRADLE_PROJECT_ZAPP_NEAR_PARTNER_JWT."
+    val isRelease = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+    if (isRelease && System.getenv("CI").isNullOrBlank()) throw GradleException(message) else logger.warn(message)
 }

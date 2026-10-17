@@ -7,6 +7,9 @@ import co.electriccoin.zcash.preference.StandardPreferenceProvider
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
+import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
+import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSellRepository
 import co.electriccoin.zcash.ui.common.migration.MigrationAppHooks
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
 import co.electriccoin.zcash.ui.common.provider.ChatBlockedKeysStorageProvider
@@ -45,6 +48,9 @@ class ResetZashiUseCase internal constructor(
     private val baseBalanceRepository: BaseBalanceRepository,
     private val migrationAppHooks: MigrationAppHooks,
     private val ensureNoUnsharedGiftFunds: EnsureNoUnsharedGiftFundsUseCase,
+    private val privateAccountSession: PrivateAccountSession,
+    private val investRepository: InvestRepository,
+    private val investSellRepository: InvestSellRepository,
     private val atomicSwapRepository: AtomicSwapRepository,
     private val reverseSwapRepository: ReverseSwapRepository,
     private val railgunWalletRepository: RailgunWalletRepository,
@@ -71,6 +77,8 @@ class ResetZashiUseCase internal constructor(
             // clear, and would keep driving the deleted wallet's smart account.
             peerCashOutRepository.reset()
             baseBalanceRepository.reset()
+            // The Invest session, account ID and cached holdings and addresses belong to this wallet.
+            clearInvestData()
             // Conversions too: a loop still running would write the wiped wallet's swap back.
             atomicSwapRepository.reset()
             reverseSwapRepository.reset()
@@ -81,6 +89,9 @@ class ResetZashiUseCase internal constructor(
             closeSynchronizer()
             clearSDK()
             clearSharedPrefs()
+            // Again once the recovery phrase is gone: an Invest call that landed in between still derived the old
+            // account from it, and would otherwise leave that account ID cached for the next wallet.
+            clearInvestData()
             clearInMemoryData()
         } catch (_: BiometricsFailureException) {
             // do nothing
@@ -130,6 +141,12 @@ class ResetZashiUseCase internal constructor(
         // Outside the provider stack above; without this the deleted wallet's blocklist mirror
         // survives into the next wallet on this device.
         chatBlockedKeysStorageProvider.clear()
+    }
+
+    private fun clearInvestData() {
+        privateAccountSession.reset()
+        investRepository.clearWalletData()
+        investSellRepository.clearWalletData()
     }
 
     private fun clearInMemoryData() {

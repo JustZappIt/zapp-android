@@ -16,6 +16,7 @@ import com.flexa.core.Flexa
 import com.flexa.spend.buildSpend
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.serializer
+import kotlin.reflect.KClass
 
 interface Navigator {
     suspend fun executeCommand(command: NavigationCommand)
@@ -23,6 +24,7 @@ interface Navigator {
     suspend fun executeCommand(command: CustomNavigationCommand)
 }
 
+@Suppress("TooManyFunctions")
 class NavigatorImpl(
     private val activity: Activity,
     private val navController: NavHostController,
@@ -37,6 +39,7 @@ class NavigatorImpl(
         when (command) {
             NavigationCommand.Back,
             NavigationCommand.BackToRoot,
+            is NavigationCommand.BackToOrRoot,
             is NavigationCommand.BackTo -> {
                 val currentRoute =
                     navController
@@ -59,6 +62,7 @@ class NavigatorImpl(
             NavigationCommand.Back -> navController.popBackStack()
             is NavigationCommand.BackTo -> backTo(command)
             NavigationCommand.BackToRoot -> backToRoot()
+            is NavigationCommand.BackToOrRoot -> backToOrRoot(command)
         }
     }
 
@@ -77,6 +81,16 @@ class NavigatorImpl(
             destinationId = command.route.serializer().generateHashCode(),
             inclusive = false
         )
+    }
+
+    // Public API only: getBackStackEntry throws when the route isn't on the back stack.
+    @Suppress("UNCHECKED_CAST")
+    private fun backToOrRoot(command: NavigationCommand.BackToOrRoot) {
+        val resolved =
+            command.resolve { route ->
+                runCatching { navController.getBackStackEntry(route as KClass<Any>) }.isSuccess
+            }
+        if (resolved is NavigationCommand.BackTo) backTo(resolved) else backToRoot()
     }
 
     private fun backToRoot() {

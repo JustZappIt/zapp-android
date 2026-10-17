@@ -25,7 +25,7 @@ class WalletBackupDetailViewModel(
 
     private fun onNextClick() =
         viewModelScope.launch {
-            navigateToWalletBackup(true)
+            navigateToWalletBackup(true, returnTarget = args.returnTarget)
         }
 
     private fun onInfoClick() {

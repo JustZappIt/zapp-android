@@ -23,7 +23,10 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import co.electriccoin.zcash.di.koinActivityViewModel
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.appbar.ZashiTopAppBarVM
@@ -39,6 +42,8 @@ import co.electriccoin.zcash.ui.screen.home.HomeVM
 import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartState
 import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartVM
 import co.electriccoin.zcash.ui.screen.home.migration.MigrationMessageState
+import co.electriccoin.zcash.ui.screen.invest.section.InvestmentsSectionVM
+import co.electriccoin.zcash.ui.screen.invest.section.investmentsSection
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdConversionBanner
 import co.electriccoin.zcash.ui.screen.privateusd.widget.PrivateUsdWidgetVM
 import co.electriccoin.zcash.ui.screen.tabs.viewmodel.WalletSyncStateVM
@@ -66,6 +71,7 @@ internal fun WalletHomeView() {
     val activityVM: ActivityWidgetVM = koinViewModel()
     val chartVM: BalanceChartVM = koinViewModel()
     val syncVM: WalletSyncStateVM = koinViewModel()
+    val investVM: InvestmentsSectionVM = koinViewModel()
     val privateUsdVM: PrivateUsdWidgetVM = koinViewModel()
 
     val topAppBarState by topAppBarVM.state.collectAsStateWithLifecycle()
@@ -78,6 +84,12 @@ internal fun WalletHomeView() {
     val activityState by activityVM.state.collectAsStateWithLifecycle()
     val chartState by chartVM.state.collectAsStateWithLifecycle()
     val syncChip by syncVM.state.collectAsStateWithLifecycle()
+    val investState by investVM.state.collectAsStateWithLifecycle()
+    // Pending Invest trades settle while PAY is on screen (STARTED), not for as long as the tabs exist.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(investVM, lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) { investVM.followPendingTrades() }
+    }
     val privateUsd by privateUsdVM.state.collectAsStateWithLifecycle()
 
     // The send screen sources its USD figure from the 1-Click swap asset list (always on, no opt-in),
@@ -159,6 +171,8 @@ internal fun WalletHomeView() {
                 Spacer(Modifier.height(20.dp))
             }
 
+            investmentsSection(investState.section)
+
             item {
                 ZappSectionLabel(
                     text = stringResource(R.string.home_recent_activity_title),
@@ -176,6 +190,7 @@ internal fun WalletHomeView() {
             onReceive = { homeState?.firstButton?.onClick?.invoke() },
             onBuyUsdc = homeVM::onBuyUsdcClick,
             onGift = homeVM::onGiftClick,
+            onInvest = investState.onInvestClick.takeIf { investState.isSpeedDialActionVisible },
             onPrivateUsd = privateUsd?.onConvertClick,
             modifier = Modifier.fillMaxSize(),
         )
