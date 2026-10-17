@@ -9,6 +9,7 @@ import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.component.TextFieldState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
 import kotlinx.serialization.Serializable
@@ -57,7 +58,8 @@ internal data class PrivateUsdSendState(
     val amountNote: StringResource?,
     val isAmountInvalid: Boolean,
     val available: StringResource?,
-    val onMax: () -> Unit,
+    /** 20% / 50% / ALL of the balance while the form is open. */
+    val presets: AmountPresetsState?,
     val recipient: TextFieldState,
     val review: PrivateUsdSendReviewState?,
     /** From 0 to 1 while the proof is being built. */

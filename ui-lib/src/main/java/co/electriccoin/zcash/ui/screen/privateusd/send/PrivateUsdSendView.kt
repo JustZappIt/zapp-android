@@ -28,7 +28,6 @@ import co.electriccoin.zcash.ui.design.component.TextFieldState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappFieldBalance
-import co.electriccoin.zcash.ui.design.component.zapp.ZappFieldBalanceAction
 import co.electriccoin.zcash.ui.design.component.zapp.ZappInputField
 import co.electriccoin.zcash.ui.design.component.zapp.ZappOfframpHeroAmountField
 import co.electriccoin.zcash.ui.design.component.zapp.ZappProgressBar
@@ -53,6 +52,7 @@ internal fun PrivateUsdSendView(state: PrivateUsdSendState) {
         isBackEnabled = state.isBackEnabled,
         primaryButton = state.primaryButton,
         error = state.error,
+        presets = state.presets.takeIf { state.phase == PrivateUsdSendPhase.FORM },
     ) {
         when (state.phase) {
             PrivateUsdSendPhase.FORM -> Form(state)
@@ -88,11 +88,6 @@ private fun Form(state: PrivateUsdSendState) {
                     ZappFieldBalance(
                         label = stringResource(R.string.private_usd_row_available),
                         amount = it.getValue(),
-                        action =
-                            ZappFieldBalanceAction(
-                                onClickLabel = stringResource(R.string.private_usd_use_available),
-                                onClick = state.onMax,
-                            ),
                     )
                 },
         )

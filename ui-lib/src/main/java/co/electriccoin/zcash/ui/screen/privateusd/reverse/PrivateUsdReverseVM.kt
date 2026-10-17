@@ -24,6 +24,8 @@ import co.electriccoin.zcash.ui.common.usecase.NavigateBackToPayUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -165,10 +167,7 @@ class PrivateUsdReverseVM(
             zecAvailable = holdings.spendable?.let { stringRes(it).asPrivacySensitive() },
             receiveEstimate = record?.let { zecField(it.receivedZat()) } ?: NumberTextFieldInnerState(),
             isQuoting = form.step == ReverseStep.Quoting,
-            onMax =
-                available
-                    ?.takeIf { it.signum() > 0 && form.step == ReverseStep.Typing }
-                    ?.let { balance -> { onMax(balance, currency) } },
+            presets = form.presets(available) { preset, balance -> onAmountPreset(preset, balance, currency) },
             canSwitchDirection = form.canSwitchDirection(record),
             review = review,
             progress =
@@ -210,17 +209,20 @@ class PrivateUsdReverseVM(
             .takeIf { record?.underWay != true && !isReviewing }
     }
 
+    /** [inner] on screen and a quote for [requested]: what [inner] means, or less where ALL's fees come out of it. */
     private fun onAmountChange(
         inner: NumberTextFieldInnerState,
         shown: LocalCurrency,
+        preset: AmountPreset? = null,
+        requested: Usdc6? = shown.typed(inner)?.let { currency -> inner.amount?.let { terms.amount(it, currency) } },
     ) {
         if (form.value.step !in EDITABLE) return
+        val currency = shown.typed(inner)
         quoteJob?.cancel()
-        val currency = shown.takeUnless { inner.innerTextFieldState.value.isEmpty() }
-        val requested = currency?.let { inner.amount?.let { amount -> terms.amount(amount, it) } }
         form.update {
             it.copy(
                 amount = inner,
+                preset = preset,
                 currency = currency,
                 requested = requested,
                 step = if (requested != null) ReverseStep.Quoting else ReverseStep.Typing,
@@ -237,14 +239,32 @@ class PrivateUsdReverseVM(
         }
     }
 
-    private fun onMax(
+    /**
+     * A share of [balance], with the fees on top — except ALL, which shows the whole balance and quotes what's
+     * left of it once the unshield and relayer fees come out, so review shows them taken out of it.
+     */
+    private fun onAmountPreset(
+        preset: AmountPreset,
         balance: BigInteger,
-        currency: LocalCurrency
-    ) = runStep(ReverseStepKind.LOOK_UP, R.string.reverse_error_max) {
-        val unshieldFee = railgunWalletRepository.fees().unshieldFee(balance)
-        val relayerFee = repository.fundingFee().micros
-        form.update { it.copy(step = ReverseStep.Typing) }
-        onAmountChange(terms.maximum((balance - unshieldFee - relayerFee).max(BigInteger.ZERO), currency), currency)
+        currency: LocalCurrency,
+    ) {
+        if (form.value.step !in EDITABLE) return
+        if (preset != AmountPreset.ALL) {
+            onAmountChange(terms.maximum(preset.of(balance), currency), currency, preset)
+            return
+        }
+        // The fee look-up is a step of its own, which a quote still on its way would refuse.
+        quoteJob?.cancel()
+        form.update { if (it.step == ReverseStep.Quoting) it.copy(step = ReverseStep.Typing) else it }
+        runStep(ReverseStepKind.LOOK_UP, R.string.reverse_error_max) {
+            val unshieldFee = railgunWalletRepository.fees().unshieldFee(balance)
+            val relayerFee = repository.fundingFee().micros
+            form.update { it.copy(step = ReverseStep.Typing) }
+            val afterFees = balance - unshieldFee - relayerFee
+            // A balance the fees take all of is typed in whole, so the form says it's short.
+            val requested = if (afterFees.signum() > 0) Usdc6(afterFees) else Usdc6(balance)
+            onAmountChange(terms.maximum(balance, currency), currency, preset, requested)
+        }
     }
 
     // A quote that ran out while its amount shows is replaced, once: one that doesn't come isn't asked for again.
@@ -375,8 +395,21 @@ class PrivateUsdReverseVM(
 
         override fun back() = onBack()
     }
-
-    private companion object {
-        val EDITABLE = setOf(ReverseStep.Typing, ReverseStep.Quoting)
-    }
 }
+
+private val EDITABLE = setOf(ReverseStep.Typing, ReverseStep.Quoting)
+
+/** What an amount is in: none until one is typed, so a rate arriving later can't change what it means. */
+private fun LocalCurrency.typed(inner: NumberTextFieldInnerState): LocalCurrency? =
+    takeUnless { inner.innerTextFieldState.value.isEmpty() }
+
+/** Kept up through a quote and ALL's fee look-up, so the row doesn't blink out under the thumb. */
+private fun ReverseForm.presets(
+    available: BigInteger?,
+    onSelect: (AmountPreset, BigInteger) -> Unit,
+): AmountPresetsState? =
+    available
+        ?.takeIf { it.signum() > 0 && ((step as? ReverseStep.Acting)?.from ?: step) in EDITABLE }
+        ?.let { balance ->
+            AmountPresetsState(selected = preset, isEnabled = step in EDITABLE) { onSelect(it, balance) }
+        }

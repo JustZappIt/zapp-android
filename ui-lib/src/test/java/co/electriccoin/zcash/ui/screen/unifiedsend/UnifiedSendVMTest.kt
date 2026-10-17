@@ -2,10 +2,12 @@ package co.electriccoin.zcash.ui.screen.unifiedsend
 
 import androidx.navigation.NavBackStackEntry
 import cash.z.ecc.android.sdk.model.Zatoshi
+import cash.z.ecc.android.sdk.type.AddressType
 import co.electriccoin.zcash.ui.BaseNavigationCommand
 import co.electriccoin.zcash.ui.NavigationCommand
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.datasource.InsufficientFundsException
 import co.electriccoin.zcash.ui.common.model.DynamicSwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapBlockchain
@@ -22,6 +24,7 @@ import co.electriccoin.zcash.ui.common.usecase.GetSelectedSwapAssetUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSlippageUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSwapAssetsUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetWholeBalanceSendableUseCase
 import co.electriccoin.zcash.ui.common.usecase.IsABContactHintVisibleUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToScanGenericAddressUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToSelectABSwapRecipientUseCase
@@ -35,9 +38,11 @@ import co.electriccoin.zcash.ui.common.usecase.RequestSwapQuoteUseCase
 import co.electriccoin.zcash.ui.common.usecase.ValidateAddressUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.imageRes
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.insufficientfunds.InsufficientFundsArgs
 import co.electriccoin.zcash.ui.screen.swap.info.CrossPayInfoArgs
 import co.electriccoin.zcash.ui.screen.swap.picker.SwapAssetPickerArgs
 import co.electriccoin.zcash.ui.screen.swap.slippage.SwapSlippageArgs
@@ -471,6 +476,110 @@ class UnifiedSendVMTest {
 
     // endregion
 
+    // region amount presets
+
+    @Test
+    fun `a preset fills a share of the spendable ZEC, and typing over it lets go`() =
+        swapForm(selected = zec()) {
+            checkNotNull(state().presets).onSelect(AmountPreset.TWENTY)
+            runCurrent()
+
+            assertEqualsBd("2", state().zecAmount.innerState.amount)
+            assertEquals(AmountPreset.TWENTY, state().presets?.selected)
+
+            vm.onZecAmountChange(amount("1"))
+            runCurrent()
+
+            assertNull(state().presets?.selected)
+        }
+
+    @Test
+    fun `ALL shows the whole balance and sends what this payment's fee leaves, unfloored`() =
+        swapForm(selected = zec()) {
+            coEvery { validateAddress(any()) } returns AddressType.Unified
+            coEvery { getWholeBalanceSendable(any()) } returns Zatoshi(999_985_000)
+            vm.onAddressChange(UNIFIED_ADDRESS)
+            runCurrent()
+
+            checkNotNull(state().presets).onSelect(AmountPreset.ALL)
+            runCurrent()
+            assertEqualsBd("10", state().zecAmount.innerState.amount)
+
+            vm.onPrimaryButtonClick(isSwap = false)
+            runCurrent()
+
+            coVerify { createProposal(match { it.amount == Zatoshi(999_985_000) }, false) }
+        }
+
+    @Test
+    fun `ALL on a payment asks for a quote of what the deposit's fee leaves`() =
+        swapForm {
+            coEvery { getWholeBalanceSendable(any()) } returns Zatoshi(999_980_000)
+            vm.onAddressChange(BTC_ADDRESS)
+            checkNotNull(state().presets).onSelect(AmountPreset.ALL)
+            runCurrent()
+
+            vm.onPrimaryButtonClick(isSwap = true)
+            runCurrent()
+
+            coVerify {
+                requestSwapQuote.requestExactInput(
+                    amount = match { it.compareTo(BigDecimal("9.9998")) == 0 },
+                    address = BTC_ADDRESS,
+                    canNavigateToSwapQuote = any(),
+                )
+            }
+        }
+
+    @Test
+    fun `ALL that the balance can't cover shows why instead of building a payment`() =
+        swapForm(selected = zec()) {
+            coEvery { validateAddress(any()) } returns AddressType.Unified
+            coEvery { getWholeBalanceSendable(any()) } throws InsufficientFundsException()
+            vm.onAddressChange(UNIFIED_ADDRESS)
+            checkNotNull(state().presets).onSelect(AmountPreset.ALL)
+            runCurrent()
+
+            vm.onPrimaryButtonClick(isSwap = false)
+            runCurrent()
+
+            assertEquals(InsufficientFundsArgs, navigationRouter.forwarded.last())
+            coVerify(exactly = 0) { createProposal(any(), any()) }
+        }
+
+    @Test
+    fun `ALL fills the balance to the last zatoshi, never rounding it up past what there is`() =
+        swapForm(selected = zec(), spendable = Zatoshi(123_456_789)) {
+            checkNotNull(state().presets).onSelect(AmountPreset.ALL)
+            runCurrent()
+
+            assertEqualsBd("1.23456789", state().zecAmount.innerState.amount)
+            assertNull(state().amountError)
+        }
+
+    @Test
+    fun `ALL that can't be priced goes ahead with the whole balance, so the payment says what's wrong`() =
+        swapForm(selected = zec()) {
+            coEvery { validateAddress(any()) } returns AddressType.Unified
+            coEvery { getWholeBalanceSendable(any()) } throws IllegalStateException("not synced")
+            vm.onAddressChange(UNIFIED_ADDRESS)
+            checkNotNull(state().presets).onSelect(AmountPreset.ALL)
+            runCurrent()
+
+            vm.onPrimaryButtonClick(isSwap = false)
+            runCurrent()
+
+            coVerify { createProposal(match { it.amount == Zatoshi(1_000_000_000) }, false) }
+        }
+
+    @Test
+    fun `there are no presets with nothing to spend`() =
+        swapForm(selected = zec(), spendable = Zatoshi(0)) {
+            assertNull(state().presets)
+        }
+
+    // endregion
+
     // region harness
 
     private fun swapForm(
@@ -502,6 +611,9 @@ class UnifiedSendVMTest {
         val requestSwapQuote = mockk<RequestSwapQuoteUseCase>(relaxed = true)
         val preselectSwapAsset = mockk<PreselectSwapAssetUseCase> { every { observe() } returns emptyFlow<Unit>() }
         val navigationRouter = RecordingNavigationRouter()
+        val validateAddress = mockk<ValidateAddressUseCase>(relaxed = true)
+        val createProposal = mockk<CreateProposalUseCase>(relaxed = true)
+        val getWholeBalanceSendable = mockk<GetWholeBalanceSendableUseCase>()
 
         private val assetsData =
             MutableStateFlow(
@@ -549,8 +661,9 @@ class UnifiedSendVMTest {
                 cancelSwap = mockk(relaxed = true),
                 requestSwapQuote = requestSwapQuote,
                 navigateToSwapQuoteIfAvailable = mockk<NavigateToSwapQuoteIfAvailableUseCase>(relaxed = true),
-                validateAddress = mockk<ValidateAddressUseCase>(relaxed = true),
-                createProposal = mockk<CreateProposalUseCase>(relaxed = true),
+                validateAddress = validateAddress,
+                createProposal = createProposal,
+                getWholeBalanceSendable = getWholeBalanceSendable,
                 observeABContactPicked = observeABContactPicked,
                 prefillSend = prefillSend,
                 observeClearSend = observeClearSend,
@@ -579,6 +692,7 @@ class UnifiedSendVMTest {
 
     private companion object {
         const val BTC_ADDRESS = "bc1qexampleaddressforunittests"
+        const val UNIFIED_ADDRESS = "u1recipientaddressforunittests"
 
         fun btc(decimals: Int = 8, usdPrice: BigDecimal = BigDecimal("50000")) =
             swapAsset("BTC", "BTC", usdPrice, decimals)

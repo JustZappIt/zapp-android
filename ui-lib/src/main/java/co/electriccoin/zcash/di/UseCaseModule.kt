@@ -87,6 +87,7 @@ import co.electriccoin.zcash.ui.common.usecase.GetViewingKeyExportDataUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetWalletAccountsUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetWalletRestoringStateUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetWalletSeedBytesUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetWholeBalanceSendableUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetZashiAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.IsABContactHintVisibleUseCase
 import co.electriccoin.zcash.ui.common.usecase.IsEphemeralAddressLockedUseCase
@@ -277,6 +278,7 @@ val useCaseModule =
         factoryOf(::GetTransactionsUseCase)
         factoryOf(::GetFilteredActivitiesUseCase)
         factoryOf(::CreateProposalUseCase)
+        factoryOf(::GetWholeBalanceSendableUseCase)
         factoryOf(::OnZip321ScannedUseCase)
         factoryOf(::OnAddressScannedUseCase)
         factoryOf(::ParseKeystonePCZTUseCase)

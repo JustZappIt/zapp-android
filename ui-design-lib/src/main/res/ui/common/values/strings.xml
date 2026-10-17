@@ -323,4 +323,8 @@
     <string name="restartMigration_support">If restarting doesn\'t resolve the issue, please reach out to Zapp Support via Send Feedback.</string>
     <string name="restartMigration_title">Restart Migration</string>
     <string name="restartMigration_warning">This cancels the current migration plan. It cannot be undone once confirmed.</string>
+    <string name="amount_preset_all">ALL</string>
+    <string name="amount_preset_all_description">Fill your whole balance. The fee comes out of it at review</string>
+    <string name="amount_preset_percent" translatable="false">%1$d%%</string>
+    <string name="amount_preset_percent_description">Fill %1$d%% of your balance</string>
 </resources>

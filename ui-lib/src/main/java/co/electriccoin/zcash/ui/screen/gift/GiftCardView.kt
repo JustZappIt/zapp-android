@@ -54,6 +54,7 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.compose.SecureScreen
 import co.electriccoin.zcash.ui.common.compose.shouldSecureScreen
 import co.electriccoin.zcash.ui.common.security.PinVerifyOverlay
+import co.electriccoin.zcash.ui.design.component.zapp.ZappAmountPresetRow
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
@@ -107,7 +108,12 @@ internal fun GiftCardView(
                 right = { HeaderActions(state) { showFundingInfo = true } },
             )
         },
-        bottomBar = { GiftCardBottomBar(state) },
+        bottomBar = {
+            Column {
+                state.presets?.let { ZappAmountPresetRow(it) }
+                GiftCardBottomBar(state)
+            }
+        },
     ) { contentPadding ->
         Column(
             modifier =

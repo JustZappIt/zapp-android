@@ -20,6 +20,9 @@ import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.component.TextFieldState
+import co.electriccoin.zcash.ui.design.component.TextSelection
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.swap.peer.order.PeerOrderArgs
@@ -70,6 +73,9 @@ internal class PeerCashOutVM(
     private val platform: PeerPlatform,
 ) : ViewModel() {
     private val amountState = MutableStateFlow(NumberTextFieldInnerState())
+
+    /** The 20% / 50% / ALL fill behind the amount, until it's typed over. */
+    private val amountPreset = MutableStateFlow<AmountPreset?>(null)
     private val handle = MutableStateFlow("")
     private val selection = MutableStateFlow(PeerCurrencySelection.of(platform.defaultCurrencies))
     private val market = MutableStateFlow<PeerMarketSnapshot?>(null)
@@ -107,7 +113,7 @@ internal class PeerCashOutVM(
 
     val state: StateFlow<PeerCashOutState> =
         combine(
-            combine(amountState, isSubmitting, ::AmountEntry),
+            combine(amountState, isSubmitting, amountPreset, ::AmountEntry),
             handle,
             selection,
             combine(baseBalance.balance, observeCommitted()) { read, committed ->
@@ -125,7 +131,7 @@ internal class PeerCashOutVM(
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
             initialValue =
                 buildState(
-                    entry = AmountEntry(NumberTextFieldInnerState(), isSubmitting = false),
+                    entry = AmountEntry(NumberTextFieldInnerState(), isSubmitting = false, preset = null),
                     typedHandle = "",
                     currencies = PeerCurrencySelection.of(platform.defaultCurrencies),
                     spendable = PeerSpendable.Loading,
@@ -151,8 +157,23 @@ internal class PeerCashOutVM(
             amountInput =
                 NumberTextFieldState(
                     innerState = amount,
-                    onValueChange = { next -> amountState.update { next } },
+                    onValueChange = { next ->
+                        amountPreset.update { null }
+                        amountState.update { next }
+                    },
                 ),
+            // Escrow takes the amount as typed, gas included, so ALL is the whole spendable balance.
+            presets =
+                (spendable as? PeerSpendable.Ready)
+                    ?.available
+                    ?.takeIf { it > Usdc6.ZERO && !entry.isSubmitting }
+                    ?.let { available ->
+                        AmountPresetsState(selected = entry.preset) { preset ->
+                            val share = Usdc6.ofMicros(preset.of(available.micros))
+                            amountState.update { NumberTextFieldInnerState.fromAmount(share.whole, TextSelection.End) }
+                            amountPreset.update { preset }
+                        }
+                    },
             amountError = amountError,
             availableBalance = availableBalanceFor(spendable),
             fiatEquivalent = fiatEquivalentOf(usdc, orders.quote),
@@ -402,6 +423,7 @@ internal class PeerCashOutVM(
                 .getOrNull() ?: return
         val id = startCashOut(request)
         amountState.update { NumberTextFieldInnerState() }
+        amountPreset.update { null }
         navigationRouter.forward(PeerCashOutProgressArgs(cashOutId = id.value))
     }
 
@@ -421,6 +443,7 @@ internal class PeerCashOutVM(
     private data class AmountEntry(
         val amount: NumberTextFieldInnerState,
         val isSubmitting: Boolean,
+        val preset: AmountPreset?,
     )
 
     private data class Orders(

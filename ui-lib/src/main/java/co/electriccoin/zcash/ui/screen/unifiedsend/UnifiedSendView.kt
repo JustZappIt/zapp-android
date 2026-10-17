@@ -72,6 +72,7 @@ import co.electriccoin.zcash.ui.design.component.ZashiNumberTextFieldDefaults
 import co.electriccoin.zcash.ui.design.component.ZashiTextField
 import co.electriccoin.zcash.ui.design.component.ZashiTextFieldDefaults
 import co.electriccoin.zcash.ui.design.component.zapp.ZappActionBarStyle
+import co.electriccoin.zcash.ui.design.component.zapp.ZappAmountPresetRow
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
@@ -217,6 +218,7 @@ internal fun UnifiedSendView(
                         .padding(horizontal = 18.dp, vertical = 8.dp),
             )
         }
+        state.presets?.let { ZappAmountPresetRow(it) }
         ZappBottomActionBar(onBack = state.onBack, style = ZappActionBarStyle.Docked) {
             Row(
                 modifier = Modifier.weight(1f).padding(start = 12.dp),

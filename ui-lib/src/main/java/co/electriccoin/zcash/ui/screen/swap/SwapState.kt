@@ -6,6 +6,7 @@ import co.electriccoin.zcash.ui.design.component.IconButtonState
 import co.electriccoin.zcash.ui.design.component.ModalBottomSheetState
 import co.electriccoin.zcash.ui.design.component.TextFieldState
 import co.electriccoin.zcash.ui.design.component.listitem.SimpleListItemState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.util.ImageResource
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.screen.swap.ui.SwapAmountTextFieldState
@@ -35,6 +36,8 @@ internal data class SwapState(
     val changeModeButton: IconButtonState,
     val receivingZecAddress: StringResource?,
     val onChangeReceivingAddress: (() -> Unit)?,
+    // 20% / 50% / ALL above the bottom bar, swapping from ZEC only
+    val presets: AmountPresetsState? = null,
 ) {
     enum class AddressLocation {
         TOP,

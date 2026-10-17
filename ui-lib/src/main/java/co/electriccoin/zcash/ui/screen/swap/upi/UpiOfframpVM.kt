@@ -13,6 +13,9 @@ import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepository
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
+import co.electriccoin.zcash.ui.design.component.TextSelection
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -71,6 +74,10 @@ internal class UpiOfframpVM(
                 ?.let { NumberTextFieldInnerState.fromAmount(it) }
                 ?: NumberTextFieldInnerState(),
         )
+
+    /** The 20% / 50% / ALL fill behind the amount, until it's typed over. */
+    private val inrPreset = MutableStateFlow<AmountPreset?>(null)
+
     private val pricing = MutableStateFlow(Pricing(rate = fallbackRate(currency)))
     private val inFlight = MutableStateFlow<OfframpCheckpoint?>(null)
 
@@ -132,14 +139,15 @@ internal class UpiOfframpVM(
 
     val state: StateFlow<UpiOfframpState> =
         combine(
-            inrState,
+            combine(inrState, inrPreset, ::Pair),
             pricing,
             inFlight,
             baseBalance.balance,
             commitFeedback,
-        ) { inr, currentPricing, checkpoint, balance, (probe, failed) ->
+        ) { (inr, preset), currentPricing, checkpoint, balance, (probe, failed) ->
             buildState(
                 inr = inr,
+                preset = preset,
                 pricing = currentPricing,
                 inFlightCheckpoint = checkpoint,
                 balance = balance.loadedOrNull,
@@ -154,6 +162,7 @@ internal class UpiOfframpVM(
                 initialValue =
                     buildState(
                         inr = inrState.value,
+                        preset = null,
                         pricing = pricing.value,
                         inFlightCheckpoint = inFlight.value,
                         balance = baseBalance.balance.value.loadedOrNull,
@@ -223,8 +232,10 @@ internal class UpiOfframpVM(
 
     private suspend fun readRate(): BigDecimal = rpc.getPriceConfig(network.diamondAddress, currency).sellPriceAsRate()
 
+    @Suppress("LongParameterList")
     private fun buildState(
         inr: NumberTextFieldInnerState,
+        preset: AmountPreset?,
         pricing: Pricing,
         inFlightCheckpoint: OfframpCheckpoint?,
         balance: Usdc6?,
@@ -288,7 +299,37 @@ internal class UpiOfframpVM(
                 },
             isTopUpNeeded = short,
             onDiscardInFlight = if (inFlightCheckpoint != null) ::onDiscardInFlight else null,
+            presets = presetsFor(balance, preset, pricing, inFlightCheckpoint),
         )
+    }
+
+    private fun presetsFor(
+        balance: Usdc6?,
+        preset: AmountPreset?,
+        pricing: Pricing,
+        inFlightCheckpoint: OfframpCheckpoint?,
+    ): AmountPresetsState? =
+        balance
+            ?.takeIf { it > Usdc6.ZERO && inFlightCheckpoint == null && prescanned.fiatAmount == null }
+            ?.let { AmountPresetsState(selected = preset) { next -> onInrPreset(next, it, pricing) } }
+
+    /**
+     * A share of the Base balance in the currency paid. The field is what the merchant receives, so ALL is what the
+     * balance pays once the order's fee is set aside, and review shows that fee on top. Never more than the balance
+     * buys: the fiat rounds down, and the USDC behind it rounds down again.
+     */
+    private fun onInrPreset(
+        preset: AmountPreset,
+        balance: Usdc6,
+        pricing: Pricing,
+    ) {
+        val share = Usdc6.ofMicros(preset.of(balance.micros))
+        val order = if (preset == AmountPreset.ALL) share - payFeeFor(share, pricing) else share
+        if (order <= Usdc6.ZERO) return
+        val inr = order.whole.multiply(pricing.rate).setScale(currency.precision, RoundingMode.FLOOR)
+        inrState.update { NumberTextFieldInnerState.fromAmount(inr, TextSelection.End) }
+        inrPreset.update { preset }
+        quoteFailed.update { false }
     }
 
     private fun isShortOnMainnet(orderAmount: Usdc6?, balance: Usdc6?, fee: Usdc6): Boolean =
@@ -418,6 +459,7 @@ internal class UpiOfframpVM(
         }
 
     private fun onInrChange(next: NumberTextFieldInnerState) {
+        inrPreset.update { null }
         inrState.update { next }
         quoteFailed.update { false }
     }

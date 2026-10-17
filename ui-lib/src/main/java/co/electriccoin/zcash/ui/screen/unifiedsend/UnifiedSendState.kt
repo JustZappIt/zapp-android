@@ -7,6 +7,7 @@ import co.electriccoin.zcash.ui.design.component.ChipButtonState
 import co.electriccoin.zcash.ui.design.component.IconButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.component.TextFieldState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.screen.swap.SwapErrorFooterState
 
@@ -45,6 +46,8 @@ internal data class UnifiedSendState(
     // Navigation
     val onBack: () -> Unit,
     val primaryButton: PrimaryButtonState,
+    // 20% / 50% / ALL above the bottom bar; null while there's nothing to spend
+    val presets: AmountPresetsState? = null,
 )
 
 /**

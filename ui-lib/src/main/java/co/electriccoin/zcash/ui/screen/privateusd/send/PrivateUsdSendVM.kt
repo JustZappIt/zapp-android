@@ -31,6 +31,9 @@ import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.component.TextFieldState
+import co.electriccoin.zcash.ui.design.component.TextSelection
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -131,12 +134,14 @@ class PrivateUsdSendVM(
             assets =
                 assets.takeIf { it.size > 1 }.orEmpty().map { choice ->
                     PrivateUsdSendAssetState(choice.token.symbol, isSelected = choice.token == token) {
-                        updateForm { it.copy(token = choice.token, amount = NumberTextFieldInnerState()) }
+                        updateForm {
+                            it.copy(token = choice.token, amount = NumberTextFieldInnerState(), preset = null)
+                        }
                     }
                 },
             amount =
                 NumberTextFieldState(innerState = form.amount, isEnabled = !form.isBusy) { inner ->
-                    updateForm { it.copy(amount = inner) }
+                    updateForm { it.copy(amount = inner, preset = null) }
                 },
             currencySymbol = LocalCurrency.DOLLAR.symbol,
             amountNote =
@@ -146,19 +151,22 @@ class PrivateUsdSendVM(
                         ?.let { stringRes(R.string.private_usd_worth, currency.format(it)) },
             isAmountInvalid = amountError != null,
             available = asset?.let { exactTokenAmount(it.available, it.token).asPrivacySensitive() },
-            onMax = {
-                asset?.let { max ->
-                    updateForm {
-                        it.copy(
-                            token = max.token,
-                            amount =
-                                NumberTextFieldInnerState.fromAmount(
-                                    (it.networkFee?.sendable(max) ?: max.available).toDecimal(max.token.decimals)
-                                ),
-                        )
+            presets =
+                asset?.takeIf { it.available.signum() > 0 }?.let { max ->
+                    AmountPresetsState(selected = form.preset, isEnabled = !form.isBusy) { preset ->
+                        updateForm {
+                            it.copy(
+                                token = max.token,
+                                amount =
+                                    NumberTextFieldInnerState.fromAmount(
+                                        preset.of(max.available).toDecimal(max.token.decimals),
+                                        TextSelection.End,
+                                    ),
+                                preset = preset,
+                            )
+                        }
                     }
-                }
-            },
+                },
             recipient =
                 TextFieldState(
                     value = stringRes(form.recipient),
@@ -238,18 +246,31 @@ class PrivateUsdSendVM(
         reviewJob =
             viewModelScope.launch {
                 try {
-                    runConversionStep("no send cost") { sender.cost(request) }.fold(
-                        onSuccess = { cost -> form.update { it.priced(request, cost) } },
-                        onFailure = { e ->
-                            val error =
-                                if (e is PrivateUsdSendsUnavailableException) {
-                                    stringRes(R.string.private_usd_send_unavailable)
-                                } else {
-                                    stringRes(R.string.private_usd_send_not_sent)
-                                }
-                            form.update { it.notSent(error) }
-                        },
-                    )
+                    // ALL sends what the fee leaves, so a fee quoted above the reserve it was sized by prices the
+                    // smaller send once more.
+                    var next: PrivateUsdSendRequest? = request
+                    repeat(if (current.preset == AmountPreset.ALL) 2 else 1) {
+                        val priced = next ?: return@repeat
+                        next = null
+                        runConversionStep("no send cost") { sender.cost(priced) }.fold(
+                            onSuccess = { cost ->
+                                form.update { it.priced(priced, cost) }
+                                next =
+                                    form.value
+                                        .wholeBalanceRequest(balanceRepository.state.value)
+                                        ?.takeIf { it != priced }
+                            },
+                            onFailure = { e ->
+                                val error =
+                                    if (e is PrivateUsdSendsUnavailableException) {
+                                        stringRes(R.string.private_usd_send_unavailable)
+                                    } else {
+                                        stringRes(R.string.private_usd_send_not_sent)
+                                    }
+                                form.update { it.notSent(error) }
+                            },
+                        )
+                    }
                 } finally {
                     form.update { it.copy(isBusy = false) }
                 }
@@ -408,3 +429,10 @@ private data class RailgunProgress(
     val fees: RailgunFees?,
     val spending: PrivateUsdSpendStatus,
 )
+
+/** An ALL send still on the form after pricing, sized again by the fee just quoted. */
+private fun PrivateUsdSendForm.wholeBalanceRequest(balance: PrivateUsdBalanceState): PrivateUsdSendRequest? =
+    assets(balance)
+        .firstOrNull { it.token == token }
+        ?.takeIf { phase == PrivateUsdSendPhase.FORM && preset == AmountPreset.ALL }
+        ?.let(::request)
