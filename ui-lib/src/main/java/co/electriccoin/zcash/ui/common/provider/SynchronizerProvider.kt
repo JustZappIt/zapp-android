@@ -1,5 +1,9 @@
 package co.electriccoin.zcash.ui.common.provider
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import androidx.core.content.getSystemService
 import cash.z.ecc.android.sdk.Synchronizer
 import cash.z.ecc.android.sdk.WalletCoordinator
 import cash.z.ecc.android.sdk.model.AccountBalance
@@ -16,6 +20,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
@@ -67,6 +72,7 @@ interface SynchronizerProvider {
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SynchronizerProviderImpl(
+    private val context: Context,
     private val walletCoordinator: WalletCoordinator,
     private val persistableWalletProvider: PersistableWalletProvider,
     // Lazy on purpose: the hook's implementation resolves (via AccountDataSource) back to
@@ -79,7 +85,29 @@ class SynchronizerProviderImpl(
 
     override val error = MutableStateFlow<SynchronizerError?>(null)
 
+    /** How many times [onSyncStartupStall] has rebuilt a stuck engine in this process. */
+    private var syncStartupResets = 0
+
     override val isSeedMismatch: StateFlow<Boolean> = walletCoordinator.isSeedMismatch
+
+    /** Whether a default network exists, so the startup watchdog never spends a reset offline. */
+    private val hasNetwork: Flow<Boolean> =
+        callbackFlow {
+            val cm = checkNotNull(context.getSystemService<ConnectivityManager>())
+            val callback =
+                object : ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: Network) {
+                        trySend(true)
+                    }
+
+                    override fun onLost(network: Network) {
+                        trySend(false)
+                    }
+                }
+            trySend(cm.activeNetwork != null)
+            cm.registerDefaultNetworkCallback(callback)
+            awaitClose { cm.unregisterNetworkCallback(callback) }
+        }.distinctUntilChanged()
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override val synchronizer: StateFlow<Synchronizer?> =
@@ -130,6 +158,55 @@ class SynchronizerProviderImpl(
                             .onFailure { Twig.warn { "MIGRATION_DIAG foreground SYNCED hook: ${it.message}" } }
                     }
                 }
+        }
+        scope.launch {
+            watchSyncStartup(
+                states =
+                    syncStartupStates(
+                        synchronizer = synchronizer,
+                        hasWallet = persistableWalletProvider.persistableWallet.map { it != null },
+                        hasNetwork = hasNetwork,
+                    ),
+                onStall = ::onSyncStartupStall,
+            )
+        }
+    }
+
+    /**
+     * An engine that starts without a network (airplane mode, or a dropped emulator/Wi-Fi link
+     * while a new wallet is created) stays at INITIALIZING after the network returns: Slipstream's
+     * prepare() makes its anchor call before engine.open() and nothing retries that step, so the
+     * Pay tab sat on "Connecting" until the app was restarted.
+     * Reproduced 2026-10-08 by creating a wallet in airplane mode and turning it off afterwards.
+     * Log which part is stuck, and rebuild a stuck engine a bounded number of times so a
+     * slow-but-healthy start can't be reset forever.
+     */
+    private fun onSyncStartupStall(state: SyncStartup) {
+        when (state) {
+            is SyncStartup.Starting -> {
+                if (syncStartupResets < MAX_SYNC_STARTUP_RESETS) {
+                    syncStartupResets++
+                    Twig.warn {
+                        "SYNC_STARTUP_DIAG engine stuck at ${state.status}; " +
+                            "resetting ($syncStartupResets/$MAX_SYNC_STARTUP_RESETS)"
+                    }
+                    walletCoordinator.resetSynchronizer()
+                } else {
+                    Twig.warn { "SYNC_STARTUP_DIAG engine still stuck at ${state.status}; reset limit reached" }
+                }
+            }
+
+            // WalletCoordinator.resetSynchronizer() does nothing while no engine exists, so the
+            // only thing to do here is leave a trace for the next report.
+            SyncStartup.AwaitingEngine -> {
+                // A seed mismatch publishes no engine on purpose; that is not a stall.
+                if (isSeedMismatch.value) return
+                Twig.warn { "SYNC_STARTUP_DIAG wallet persisted but no engine was built" }
+            }
+
+            SyncStartup.Idle -> {
+                Unit
+            }
         }
     }
 
@@ -183,5 +260,9 @@ class SynchronizerProviderImpl(
         }
 
         return pipeline
+    }
+
+    private companion object {
+        const val MAX_SYNC_STARTUP_RESETS = 2
     }
 }
