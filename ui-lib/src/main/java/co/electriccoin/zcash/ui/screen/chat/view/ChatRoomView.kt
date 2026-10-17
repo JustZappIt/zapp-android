@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBackButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationBottomSheet
 import co.electriccoin.zcash.ui.design.component.zapp.ZappScreenHeader
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.getValue
@@ -263,6 +264,8 @@ internal fun ChatRoomView(
     }
 
     state.blockDialog?.let { BlockUserDialog(state = it) }
+
+    ZappConfirmationBottomSheet(state = state.addressRequestSheet)
 
     viewerMessage?.let { msg ->
         ImageViewerOverlay(

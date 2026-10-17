@@ -11,8 +11,9 @@ import java.util.concurrent.atomic.AtomicReference
  * [requestId] links the send back to a specific in-chat payment request so the
  * confirmation the peer receives can flip that request to "paid".
  *
- * Submitting also leaves a return target, so closing the progress screen goes back to the
- * conversation the payment came from (where its receipt now shows) instead of the home tab.
+ * A send from a chat that succeeds also leaves a return target, so closing the progress screen
+ * goes back to the conversation the payment came from (where its receipt now shows) instead of
+ * the home tab.
  */
 class ChatSendContextProvider {
     data class ChatSendContext(
@@ -37,14 +38,14 @@ class ChatSendContextProvider {
     fun consume(): ChatSendContext? = ref.getAndSet(null)
 
     /**
-     * Records where the send just submitted came from, for [consumeReturnTarget]. Every submit
-     * calls this, with null when the send didn't start in a chat, so an earlier chat payment's
-     * target can never steer an unrelated send's close.
+     * Records where closing the send just submitted should return, for [consumeReturnTarget]. Every
+     * submit calls this with null first, and again with the conversation once a chat send lands, so
+     * an earlier chat payment's target can never steer an unrelated send's close.
      */
     fun markSubmitted(conversationId: String?) {
         returnTarget.set(conversationId)
     }
 
-    /** The conversation the last submitted send came from, once; null when it wasn't from a chat. */
+    /** The conversation the last submitted send returns to, once; null when it should close home. */
     fun consumeReturnTarget(): String? = returnTarget.getAndSet(null)
 }

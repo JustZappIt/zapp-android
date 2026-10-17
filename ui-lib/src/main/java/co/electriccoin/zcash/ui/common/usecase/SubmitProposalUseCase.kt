@@ -117,7 +117,8 @@ class SubmitProposalUseCase(
 
     private fun submitZashiProposal(proposal: TransactionProposal) {
         val pendingChatContext = chatSendContext.consume()
-        chatSendContext.markSubmitted(pendingChatContext?.conversationId)
+        // Closes home unless the send below lands and its receipt goes to the chat.
+        chatSendContext.markSubmitted(null)
         scope.launch {
             try {
                 val result = zashiProposalRepository.submit()
@@ -132,6 +133,9 @@ class SubmitProposalUseCase(
                     proposal is SendTransactionProposal &&
                     result is SubmitResult.Success
                 ) {
+                    // Return to the chat only where the receipt shows; a failed send closes home,
+                    // which keeps its retry and support options.
+                    chatSendContext.markSubmitted(pendingChatContext.conversationId)
                     notifyChatPeer(pendingChatContext, proposal, result)
                 }
             } catch (_: Exception) {

@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.common.usecase
 
+import co.electriccoin.zcash.ui.NavigationCommand
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.provider.ChatSendContextProvider
 import co.electriccoin.zcash.ui.common.repository.KeystoneProposalRepository
@@ -17,10 +18,11 @@ class ViewTransactionsAfterSuccessfulProposalUseCase(
         zashiProposalRepository.clear()
         keystoneProposalRepository.clear()
         prefillSend.clear()
-        if (chatSendContext.consumeReturnTarget() != null) {
-            // A send started from a chat was pushed on top of that chat room, so it is still on
-            // the stack: going back to it shows the payment's receipt in the conversation.
-            navigationRouter.backTo(ChatRoomArgs::class)
+        val conversationId = chatSendContext.consumeReturnTarget()
+        if (conversationId != null) {
+            // Back to the exact chat the payment's receipt went to. Home when that room has left
+            // the stack, so Close is never a no-op that strands the progress screen.
+            navigationRouter.custom { NavigationCommand.BackToOrRoot(ChatRoomArgs(conversationId)) }
         } else {
             navigationRouter.backToRoot()
         }

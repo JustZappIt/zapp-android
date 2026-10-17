@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.screen.chat.room
 
 import android.net.Uri
 import co.electriccoin.zcash.ui.common.wallet.ZecFiatRate
+import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.screen.chat.contacts.EditChatContactState
 import co.electriccoin.zcash.ui.screen.chat.list.ChatListChipVariant
@@ -48,6 +49,8 @@ data class ChatRoomState(
     val addMemberSheet: ChatRoomAddMemberSheetState?,
     val removeMemberDialog: ChatRoomRemoveMemberDialogState?,
     val blockDialog: BlockUserDialogState?,
+    /** Send ZEC with no address known for a direct-chat peer: ask them, or enter one. */
+    val addressRequestSheet: ZappConfirmationState?,
 )
 
 data class ChatRoomGroupInfoSheetState(
