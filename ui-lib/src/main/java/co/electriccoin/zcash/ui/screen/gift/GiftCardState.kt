@@ -4,6 +4,7 @@
 package co.electriccoin.zcash.ui.screen.gift
 
 import cash.z.ecc.android.sdk.model.Zatoshi
+import co.electriccoin.zcash.ui.common.compose.AddFundsPanelState
 import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.usecase.GiftFundingQuote
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
@@ -105,6 +106,8 @@ internal data class GiftCardState(
     val onBack: () -> Unit,
     /** Null when nothing is stored, or when opening the list would interrupt an in-flight action. */
     val onOpenSavedCards: (() -> Unit)?,
+    /** Set on DETAILS when a synced wallet holds nothing: "Add ZEC" replaces the form. */
+    val addFunds: AddFundsPanelState? = null,
 ) {
     /**
      * Whether the sender may go back. Transaction preparation and funding are kept on-screen, but

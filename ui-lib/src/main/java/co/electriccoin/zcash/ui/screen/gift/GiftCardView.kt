@@ -51,6 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.compose.AddFundsPanel
 import co.electriccoin.zcash.ui.common.compose.SecureScreen
 import co.electriccoin.zcash.ui.common.compose.shouldSecureScreen
 import co.electriccoin.zcash.ui.common.security.PinVerifyOverlay
@@ -127,6 +128,14 @@ internal fun GiftCardView(
 
 @Composable
 private fun GiftCardBody(state: GiftCardState) {
+    val addFunds = state.addFunds
+    if (state.stage == GiftCardStage.DETAILS && addFunds != null) {
+        AddFundsPanel(
+            state = addFunds,
+            modifier = Modifier.padding(horizontal = ZappTheme.spacing.xl, vertical = ZappTheme.spacing.xl),
+        )
+        return
+    }
     if (state.stage == GiftCardStage.READY) ReadySuccessHeader()
     MintedCardPodium(state)
     when (state.stage) {
@@ -156,11 +165,16 @@ private fun GiftCardBottomBar(state: GiftCardState) {
     val action =
         when (state.stage) {
             GiftCardStage.DETAILS -> {
-                GiftCardAction(
-                    text = R.string.gift_card_continue,
-                    isEnabled = state.canContinue,
-                    onClick = state.onContinue,
-                )
+                val addFunds = state.addFunds
+                if (addFunds != null) {
+                    GiftCardAction(text = R.string.top_up_add_zec_button, onClick = addFunds.onAddFunds)
+                } else {
+                    GiftCardAction(
+                        text = R.string.gift_card_continue,
+                        isEnabled = state.canContinue,
+                        onClick = state.onContinue,
+                    )
+                }
             }
 
             GiftCardStage.REVIEW -> {

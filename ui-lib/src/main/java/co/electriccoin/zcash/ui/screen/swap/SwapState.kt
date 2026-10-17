@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.screen.swap
 
+import co.electriccoin.zcash.ui.common.compose.AddFundsPanelState
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ChipButtonState
 import co.electriccoin.zcash.ui.design.component.IconButtonState
@@ -35,6 +36,8 @@ internal data class SwapState(
     val changeModeButton: IconButtonState,
     val receivingZecAddress: StringResource?,
     val onChangeReceivingAddress: (() -> Unit)?,
+    /** Swapping ZEC out of a synced wallet that holds none: "Add ZEC" replaces the form. */
+    val addFunds: AddFundsPanelState? = null,
 ) {
     enum class AddressLocation {
         TOP,

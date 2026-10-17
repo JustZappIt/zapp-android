@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.ui.screen.swap.upi.bridge
 
+import co.electriccoin.zcash.ui.common.compose.AddFundsPanelState
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
@@ -27,4 +28,6 @@ internal data class BridgeToBaseState(
     val isInputVisible: Boolean,
     val primaryButton: ButtonState,
     val onBack: () -> Unit,
+    /** A synced wallet with no ZEC, before any bridge has started: "Add ZEC" replaces the form. */
+    val addFunds: AddFundsPanelState? = null,
 )
