@@ -19,7 +19,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
@@ -34,7 +33,8 @@ fun ZappInputField(
     placeholder: String,
     leadingIcon: @Composable (() -> Unit)? = null,
     trailingIcon: @Composable (() -> Unit)? = null,
-    keyboardType: KeyboardType = KeyboardType.Text,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    enabled: Boolean = true,
 ) {
     val c = ZappTheme.colors
     val isFilled = value.text.isNotEmpty()
@@ -67,9 +67,10 @@ fun ZappInputField(
                 BasicTextField(
                     value = value,
                     onValueChange = onValueChange,
+                    enabled = enabled,
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-                    textStyle = ZappTheme.typography.body.copy(color = c.text),
+                    keyboardOptions = keyboardOptions,
+                    textStyle = ZappTheme.typography.body.copy(color = if (enabled) c.text else c.textMuted),
                     cursorBrush = SolidColor(c.accent),
                     modifier = Modifier.fillMaxWidth(),
                 )

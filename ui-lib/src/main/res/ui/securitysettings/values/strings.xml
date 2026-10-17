@@ -21,7 +21,7 @@
     <!-- Bottom dock -->
     <string name="security_settings_back_content_description">Go back</string>
     <string name="security_settings_save_changes_content_description">Save Changes</string>
-    <string name="security_settings_save_changes_button">SAVE CHANGES</string>
+    <string name="security_settings_save_changes_button">Save changes</string>
 
     <!-- Change-PIN screen -->
     <string name="security_settings_change_pin_confirm_title">Confirm\nyour PIN</string>

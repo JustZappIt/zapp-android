@@ -7,6 +7,8 @@ import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.privateusd.ObservePrivateUsdSummaryUseCase
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSummary
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.usecase.BalancePools
 import co.electriccoin.zcash.ui.common.usecase.GetBalancePoolsUseCase
@@ -14,12 +16,20 @@ import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.TickerLocation
+import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByDynamicCurrencyNumber
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdArgs
+import co.electriccoin.zcash.ui.screen.privateusd.detail
+import co.electriccoin.zcash.ui.screen.privateusd.headline
+import co.electriccoin.zcash.ui.screen.privateusd.placeholder
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import java.math.BigDecimal
 import java.math.MathContext
@@ -27,14 +37,21 @@ import java.math.MathContext
 class BalanceBreakdownVM(
     getBalancePools: GetBalancePoolsUseCase,
     exchangeRateRepository: ExchangeRateRepository,
+    observePrivateUsdSummary: ObservePrivateUsdSummaryUseCase,
     private val navigationRouter: NavigationRouter,
 ) : ViewModel() {
+    private val privateUsd: Flow<BalanceBreakdownPrivateUsdState?> =
+        observePrivateUsdSummary()
+            .map { it?.let(::privateUsdState) }
+            .onStart { emit(null) }
+
     val state: StateFlow<BalanceBreakdownState?> =
         combine(
             getBalancePools.observe(),
             exchangeRateRepository.state,
-        ) { pools, exchangeRate ->
-            createState(pools, exchangeRate)
+            privateUsd,
+        ) { pools, exchangeRate, privateUsd ->
+            createState(pools, exchangeRate)?.copy(privateUsd = privateUsd)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
@@ -91,6 +108,16 @@ class BalanceBreakdownVM(
                     ),
             ticker = data.expectedCurrency.symbol,
             tickerLocation = TickerLocation.BEFORE
+        )
+    }
+
+    private fun privateUsdState(summary: PrivateUsdSummary): BalanceBreakdownPrivateUsdState {
+        val balances = summary.balance.balances
+        return BalanceBreakdownPrivateUsdState(
+            amount = balances?.headline(summary.currency)?.asPrivacySensitive() ?: summary.balance.placeholder(),
+            detail = balances?.detail(summary.currency),
+            isBlocked = summary.isBlocked,
+            onClick = { navigationRouter.replace(PrivateUsdArgs) },
         )
     }
 

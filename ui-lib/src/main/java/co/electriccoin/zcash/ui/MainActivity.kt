@@ -32,6 +32,10 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.toRoute
 import co.electriccoin.zcash.spackle.Twig
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
+import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
+import co.electriccoin.zcash.ui.common.atomicswap.PRIVATE_USD_CONVERSION_EXTRA
+import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
 import co.electriccoin.zcash.ui.common.compose.BindCompLocalProvider
 import co.electriccoin.zcash.ui.common.compose.DisableScreenTimeout
 import co.electriccoin.zcash.ui.common.extension.setContentCompat
@@ -58,6 +62,8 @@ import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkIntake
 import co.electriccoin.zcash.ui.screen.gift.model.PendingGiftLinkStore
 import co.electriccoin.zcash.ui.screen.grouplink.GroupInviteCoordinator
 import co.electriccoin.zcash.ui.screen.grouplink.model.GroupInviteLinks
+import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
+import co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseArgs
 import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnInbox
 import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnLink
 import co.electriccoin.zcash.ui.screen.reputation.increase.IncreaseReputationArgs
@@ -74,6 +80,7 @@ import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
 import org.koin.androidx.viewmodel.ext.android.viewModel
+import xyz.justzappit.offramp.atomicswap.SwapDirection
 import xyz.justzappit.offramp.identity.IdentityReturn
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -102,6 +109,9 @@ class MainActivity : FragmentActivity() {
 
     private val pendingGiftLinks: PendingGiftLinkStore by inject()
     private val identityReturns: IdentityReturnInbox by inject()
+    private val atomicSwapDeployments: AtomicSwapDeployments by inject()
+    private val reverseSwapRepository: ReverseSwapRepository by inject()
+    private val atomicSwapRepository: AtomicSwapRepository by inject()
 
     private val groupInvites: GroupInviteCoordinator by inject()
 
@@ -119,6 +129,7 @@ class MainActivity : FragmentActivity() {
 
         forwardUriIntent(intent, resumeReclaim = true)
         forwardChatNotificationIntent(intent)
+        forwardPrivateUsdIntent(intent)
         handleMigrationIntent(intent)
     }
 
@@ -128,6 +139,7 @@ class MainActivity : FragmentActivity() {
 
         forwardUriIntent(intent, resumeReclaim = false)
         forwardChatNotificationIntent(intent)
+        forwardPrivateUsdIntent(intent)
         handleMigrationIntent(intent)
     }
 
@@ -266,12 +278,37 @@ class MainActivity : FragmentActivity() {
             toRoute<ChatRoomArgs>().conversationId == conversationId
     }
 
+    private fun forwardPrivateUsdIntent(intent: Intent) {
+        val requested = intent.getStringExtra(PRIVATE_USD_CONVERSION_EXTRA) ?: return
+        intent.removeExtra(PRIVATE_USD_CONVERSION_EXTRA)
+        val direction = SwapDirection.entries.firstOrNull { it.name == requested }
+        // Builds without conversions have no screen for one, whatever an intent asks.
+        if (direction == null || atomicSwapDeployments.current == null) return
+        val route: Any =
+            when (direction) {
+                SwapDirection.FORWARD -> PrivateUsdProgressArgs
+                SwapDirection.REVERSE -> PrivateUsdReverseArgs
+            }
+        navigationRouter.custom { current ->
+            if (current?.destination?.hasRoute(route::class) == true) {
+                null
+            } else {
+                NavigationCommand.Forward(listOf(route))
+            }
+        }
+    }
+
     private fun handleMigrationIntent(intent: Intent): Boolean = migrationAppHooks.handleIntent(intent, lifecycleScope)
 
     override fun onStart() {
         Twig.debug { "Activity state: Start" }
         authenticationViewModel.runAuthenticationRequiredCheck()
         checkMigrationRecoveryOnStart()
+        // Conversions resume here: from the foreground, their worker may run as a foreground service.
+        if (atomicSwapDeployments.current != null) {
+            atomicSwapRepository.resume(isForeground = true)
+            reverseSwapRepository.resume(isForeground = true)
+        }
         super.onStart()
     }
 

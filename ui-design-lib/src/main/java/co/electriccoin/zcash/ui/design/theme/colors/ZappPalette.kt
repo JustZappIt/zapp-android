@@ -107,6 +107,7 @@ object ZappNavBar {
      * system navigation bar inset. Add navigationBars inset separately:
      *   val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
      *   PaddingValues(bottom = navBottom + CLEARANCE_DP.dp)
+     * Screens with a FAB need [FAB_LIST_CLEARANCE_DP] instead, or the last row ends under the FAB.
      */
     const val CLEARANCE_DP = 80
 
@@ -118,6 +119,17 @@ object ZappNavBar {
      *            .padding(bottom = FAB_BOTTOM_PADDING_DP.dp)
      */
     const val FAB_BOTTOM_PADDING_DP = 80
+
+    /** Size of the square FAB (ZappFab / ZappSpeedDialFab). */
+    const val FAB_SIZE_DP = 56
+
+    /**
+     * Extra bottom clearance for a list scrolling under a FAB: the FAB plus a 16dp gap.
+     * Add it to the FAB's bottom margin ([FAB_BOTTOM_PADDING_DP] or [PUSHED_FLOATING_MARGIN_DP])
+     * so the last row can scroll clear of the button:
+     *   PaddingValues(bottom = navBottom + FAB_BOTTOM_PADDING_DP.dp + FAB_LIST_CLEARANCE_DP.dp)
+     */
+    const val FAB_LIST_CLEARANCE_DP = FAB_SIZE_DP + 16
 
     /**
      * Bottom margin for floating buttons (FAB / back) on pushed sub-screens,

@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.CallMade
 import androidx.compose.material.icons.automirrored.filled.CallReceived
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Wallet
@@ -29,6 +30,7 @@ internal fun PayActionSpeedDial(
     onReceive: () -> Unit,
     onBuyUsdc: () -> Unit,
     onGift: () -> Unit,
+    onPrivateUsd: (() -> Unit)?,
     modifier: Modifier = Modifier,
     // Null hides the Invest action: the build doesn't offer it, or the user's country is prohibited.
     onInvest: (() -> Unit)? = null,
@@ -66,6 +68,13 @@ internal fun PayActionSpeedDial(
                     label = stringResource(R.string.home_button_swap),
                     onClick = onSwap,
                 ),
+                onPrivateUsd?.let {
+                    ZappSpeedDialAction(
+                        icon = Icons.Default.CurrencyExchange,
+                        label = stringResource(R.string.private_usd_title),
+                        onClick = it,
+                    )
+                },
                 ZappSpeedDialAction(
                     icon = Icons.Default.CardGiftcard,
                     label = stringResource(R.string.gift_card_speed_dial),

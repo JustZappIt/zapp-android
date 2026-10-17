@@ -184,6 +184,7 @@ internal fun RestoreBirthdayScreen(
     onBack: () -> Unit,
     onNext: () -> Unit,
     onSkip: () -> Unit,
+    dateEstimate: String? = null,
 ) {
     val c = ZappTheme.colors
     val borderColor = if (birthdayText.isNotEmpty()) c.text else c.border
@@ -191,7 +192,8 @@ internal fun RestoreBirthdayScreen(
     val ctaLabel =
         when {
             isEstimating -> stringResource(R.string.restore_flow_birthday_estimating)
-            birthdayMode == BirthdayMode.DATE -> stringResource(R.string.restore_bd_height_btn)
+
+            // Both modes restore in one tap: from a date, the height is estimated on the way.
             else -> stringResource(R.string.restore_bd_restore_btn)
         }
 
@@ -213,17 +215,18 @@ internal fun RestoreBirthdayScreen(
         )
         Spacer(Modifier.height(28.dp))
 
+        // Date first: it's the one most people can answer.
         Row(modifier = Modifier.fillMaxWidth()) {
-            BirthdayModeTab(
-                label = stringResource(R.string.restore_flow_birthday_mode_height),
-                isSelected = birthdayMode == BirthdayMode.HEIGHT,
-                onClick = { onBirthdayModeChange(BirthdayMode.HEIGHT) },
-                modifier = Modifier.weight(1f),
-            )
             BirthdayModeTab(
                 label = stringResource(R.string.restore_flow_birthday_mode_date),
                 isSelected = birthdayMode == BirthdayMode.DATE,
                 onClick = { onBirthdayModeChange(BirthdayMode.DATE) },
+                modifier = Modifier.weight(1f),
+            )
+            BirthdayModeTab(
+                label = stringResource(R.string.restore_flow_birthday_mode_height),
+                isSelected = birthdayMode == BirthdayMode.HEIGHT,
+                onClick = { onBirthdayModeChange(BirthdayMode.HEIGHT) },
                 modifier = Modifier.weight(1f),
             )
         }
@@ -291,6 +294,13 @@ internal fun RestoreBirthdayScreen(
                         selection = selectedYearMonth,
                         onSelectionChange = onYearMonthChange,
                         modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                if (dateEstimate != null) {
+                    Spacer(Modifier.height(12.dp))
+                    BasicText(
+                        text = stringResource(R.string.restore_flow_birthday_date_estimate, dateEstimate),
+                        style = ZappTheme.typography.body.copy(color = c.text, fontSize = 12.sp),
                     )
                 }
                 Spacer(Modifier.height(12.dp))

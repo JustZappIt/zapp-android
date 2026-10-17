@@ -44,6 +44,8 @@ import co.electriccoin.zcash.ui.screen.home.balancechart.BalanceChartVM
 import co.electriccoin.zcash.ui.screen.home.migration.MigrationMessageState
 import co.electriccoin.zcash.ui.screen.invest.section.InvestmentsSectionVM
 import co.electriccoin.zcash.ui.screen.invest.section.investmentsSection
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdConversionBanner
+import co.electriccoin.zcash.ui.screen.privateusd.widget.PrivateUsdWidgetVM
 import co.electriccoin.zcash.ui.screen.tabs.viewmodel.WalletSyncStateVM
 import co.electriccoin.zcash.ui.screen.transactionhistory.widget.ActivityWidgetVM
 import org.koin.androidx.compose.koinViewModel
@@ -70,6 +72,7 @@ internal fun WalletHomeView() {
     val chartVM: BalanceChartVM = koinViewModel()
     val syncVM: WalletSyncStateVM = koinViewModel()
     val investVM: InvestmentsSectionVM = koinViewModel()
+    val privateUsdVM: PrivateUsdWidgetVM = koinViewModel()
 
     val topAppBarState by topAppBarVM.state.collectAsStateWithLifecycle()
     val balanceState by balanceVM.state.collectAsStateWithLifecycle()
@@ -87,6 +90,7 @@ internal fun WalletHomeView() {
     LaunchedEffect(investVM, lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) { investVM.followPendingTrades() }
     }
+    val privateUsd by privateUsdVM.state.collectAsStateWithLifecycle()
 
     // The send screen sources its USD figure from the 1-Click swap asset list (always on, no opt-in),
     // so the balance card reuses it for parity. Ensure the catalog is loaded even if swap was never opened.
@@ -142,6 +146,16 @@ internal fun WalletHomeView() {
                 }
             }
 
+            privateUsd?.conversion?.let { conversion ->
+                item {
+                    Spacer(Modifier.height(14.dp))
+                    PrivateUsdConversionBanner(
+                        state = conversion,
+                        modifier = Modifier.padding(horizontal = 18.dp),
+                    )
+                }
+            }
+
             item {
                 Spacer(Modifier.height(14.dp))
                 BalanceCard(
@@ -151,6 +165,7 @@ internal fun WalletHomeView() {
                     showZecAsPrimary = showZecAsPrimary,
                     onToggleBalanceDisplay = { showZecAsPrimary = !showZecAsPrimary },
                     onToggleBalanceVisibility = topAppBarState.balanceVisibilityButton.onClick,
+                    privateUsd = privateUsd,
                     modifier = Modifier.padding(horizontal = 18.dp),
                 )
                 Spacer(Modifier.height(20.dp))
@@ -176,6 +191,7 @@ internal fun WalletHomeView() {
             onBuyUsdc = homeVM::onBuyUsdcClick,
             onGift = homeVM::onGiftClick,
             onInvest = investState.onInvestClick.takeIf { investState.isSpeedDialActionVisible },
+            onPrivateUsd = privateUsd?.onConvertClick,
             modifier = Modifier.fillMaxSize(),
         )
     }

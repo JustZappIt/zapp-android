@@ -59,3 +59,9 @@ operator fun BigInteger.times(other: BigInteger): BigInteger = multiply(other)
 operator fun BigInteger.div(other: BigInteger): BigInteger = divide(other)
 
 operator fun BigInteger.rem(other: BigInteger): BigInteger = remainder(other)
+
+/** An unsigned chain value that fits the client's signed Long, without truncation. */
+fun BigInteger.toNonNegativeLongExact(): Long {
+    require(signum() >= 0 && bitLength() < Long.SIZE_BITS) { "unsigned integer does not fit a Long" }
+    return toLong()
+}

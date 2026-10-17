@@ -214,9 +214,9 @@
     <string name="chat_new_conversation_back_content_description">Kembali</string>
     <string name="chat_new_conversation_selected_content_description">Dipilih</string>
     <string name="chat_new_conversation_remove_participant_content_description_fmt">Hapus %1$s</string>
-    <string name="chat_new_conversation_start_chat_label">MULAI OBROLAN</string>
+    <string name="chat_new_conversation_start_chat_label">Mulai obrolan</string>
     <string name="chat_new_conversation_start_chat_content_description">Mulai Obrolan</string>
-    <string name="chat_new_conversation_scan_qr_label">PINDAI KODE QR</string>
+    <string name="chat_new_conversation_scan_qr_label">Pindai kode QR</string>
     <string name="chat_new_conversation_scan_qr_content_description">Pindai Kode QR</string>
 
     <!-- Contact edit screen -->
@@ -333,22 +333,22 @@
     <string name="chat_contact_copy_messaging_key_content_description">Salin kunci perpesanan</string>
     <string name="chat_contact_copy_wallet_address_content_description">Salin alamat dompet</string>
     <string name="chat_contact_add_save_content_description">Tambah Kontak</string>
-    <string name="chat_contact_add_save_button">SIMPAN</string>
+    <string name="chat_contact_add_save_button">Simpan</string>
 
     <!-- Chat contacts — edit contact sheet -->
-    <string name="chat_contact_edit_save_changes_button">SIMPAN PERUBAHAN</string>
+    <string name="chat_contact_edit_save_changes_button">Simpan perubahan</string>
     <string name="chat_contact_edit_save_changes_content_description">Simpan perubahan</string>
-    <string name="chat_contact_edit_block_button">BLOKIR PENGGUNA</string>
+    <string name="chat_contact_edit_block_button">Blokir pengguna</string>
     <string name="chat_contact_edit_block_content_description">Blokir pengguna</string>
-    <string name="chat_contact_edit_unblock_button">BUKA BLOKIR PENGGUNA</string>
+    <string name="chat_contact_edit_unblock_button">Buka blokir pengguna</string>
     <string name="chat_contact_edit_unblock_content_description">Buka blokir pengguna</string>
-    <string name="chat_contact_edit_delete_contact_button">HAPUS KONTAK</string>
+    <string name="chat_contact_edit_delete_contact_button">Hapus kontak</string>
     <string name="chat_contact_edit_delete_contact_content_description">Hapus kontak</string>
     <string name="chat_contact_edit_delete_confirm_title">Hapus kontak?</string>
     <string name="chat_contact_edit_delete_confirm_subtitle">Tindakan ini tidak dapat dibatalkan.</string>
-    <string name="chat_contact_edit_delete_cancel_button">BATAL</string>
+    <string name="chat_contact_edit_delete_cancel_button">Batal</string>
     <string name="chat_contact_edit_delete_cancel_content_description">Batalkan penghapusan</string>
-    <string name="chat_contact_edit_delete_confirm_button">HAPUS</string>
+    <string name="chat_contact_edit_delete_confirm_button">Hapus</string>
     <string name="chat_contact_edit_delete_confirm_content_description">Konfirmasi hapus kontak</string>
 
     <!-- Chat room — attachment options sheet -->

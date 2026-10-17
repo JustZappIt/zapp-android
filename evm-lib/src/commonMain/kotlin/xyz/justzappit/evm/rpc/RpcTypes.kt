@@ -8,6 +8,11 @@ import xyz.justzappit.evm.types.Wei
 import xyz.justzappit.evm.util.hexToBigInteger
 
 @Serializable
+data class TransactionReference(
+    val hash: String
+)
+
+@Serializable
 data class TransactionReceipt(
     val transactionHash: String,
     val blockNumber: String,

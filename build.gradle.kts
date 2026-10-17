@@ -120,6 +120,10 @@ tasks {
             "ZAPP_INVEST_ENABLED" to "false",
             "ZAPP_INVEST_DEMO" to "false",
 
+            // Private USD's Ethereum endpoints, whose URLs carry an API key.
+            "ETHEREUM_RPC_URL_MAINNET" to "",
+            "ETHEREUM_RPC_URL_SEPOLIA" to "",
+
             "ZCASH_FLEXA_KEY" to "",
             "ZCASH_CMC_KEY" to "",
             "SDK_INCLUDED_BUILD_PATH" to "",
