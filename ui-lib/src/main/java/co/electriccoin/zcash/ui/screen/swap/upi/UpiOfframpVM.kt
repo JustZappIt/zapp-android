@@ -194,28 +194,30 @@ internal class UpiOfframpVM(
                 }
         }
         viewModelScope.launch { pollMerchantAvailability() }
-        // A preset is a share of the balance at the current price, so while it stays selected it follows both:
-        // a rate that drops or a fee that arrives shrinks ALL rather than leaving it short of what it promised.
-        viewModelScope.launch {
-            combine(pricing, baseBalance.balance.map { it.loadedOrNull }, ::Pair).collect { (current, balance) ->
-                val preset = inrPreset.value ?: return@collect
-                if (inFlight.value != null) return@collect
-                balance
-                    ?.let { presetFiat(preset, it, current) }
-                    ?.let { inr -> inrState.update { NumberTextFieldInnerState.fromAmount(inr) } }
-            }
-        }
     }
 
     // The rate moves; the fee schedule is Diamond config, so it is read once per visit and again at
     // commit time, where a stale one would atomic-cancel the order.
     private suspend fun pollPricing() =
         coroutineScope {
+            launch { followPreset() }
             refreshFees()
             while (isActive) {
                 refreshRate()
                 delay(RATE_REFRESH_INTERVAL_MS)
             }
+        }
+
+    // A preset is a share of the balance at the current price, so while it stays selected it follows both: a rate
+    // that drops or a fee that arrives shrinks ALL rather than leaving it short. Only while the screen is watched,
+    // like the polling, and caught up on return since both flows replay their latest value.
+    private suspend fun followPreset() =
+        combine(pricing, baseBalance.balance.map { it.loadedOrNull }, ::Pair).collect { (current, balance) ->
+            val preset = inrPreset.value ?: return@collect
+            if (inFlight.value != null) return@collect
+            balance
+                ?.let { presetFiat(preset, it, current) }
+                ?.let { inr -> inrState.update { NumberTextFieldInnerState.fromAmount(inr) } }
         }
 
     // Best-effort: a failed poll leaves the last good value in place, which is right here and wrong
@@ -345,10 +347,22 @@ internal class UpiOfframpVM(
         balance: Usdc6,
         pricing: Pricing,
     ): BigDecimal? =
-        presetOrder(preset, balance, Usdc6.ofWhole(USDC_CAP)) { payFeeFor(it, pricing) }
-            ?.whole
-            ?.multiply(pricing.rate)
-            ?.setScale(currency.precision, RoundingMode.FLOOR)
+        presetOrder(preset, balance, Usdc6.ofWhole(USDC_CAP)) { payFeeFor(placedAt(it, pricing), pricing) }
+            ?.let { toFiat(it, pricing) }
+
+    private fun toFiat(
+        usdc: Usdc6,
+        pricing: Pricing,
+    ): BigDecimal = usdc.whole.multiply(pricing.rate).setScale(currency.precision, RoundingMode.FLOOR)
+
+    /**
+     * What the order places for [usdc] once it has gone to fiat and back. Both legs floor, which can bring an
+     * amount just above the small-order threshold down onto it, where the fee applies after all.
+     */
+    private fun placedAt(
+        usdc: Usdc6,
+        pricing: Pricing,
+    ): Usdc6 = orderAmounts(toFiat(usdc, pricing), pricing.rate)?.usdc ?: usdc
 
     private fun isShortOnMainnet(orderAmount: Usdc6?, balance: Usdc6?, fee: Usdc6): Boolean =
         orderAmount != null &&
@@ -506,14 +520,23 @@ internal class UpiOfframpVM(
     // top-up bridge when the balance is short. The pay flow never kicks off an inline bridge itself.
 
     /**
-     * ALL is what the balance pays at the price committed to, which can have moved since the screen last showed
-     * it, so it's worked out again from a fresh balance and shown: it pays from Base, never routes to a top-up.
+     * The fiat the commit places: [rawInr] as typed, or for ALL what the balance pays at the price committed to —
+     * which can have moved since the screen last showed it — worked out again from a fresh balance and shown, so it
+     * pays from Base rather than routing to a top-up. Null when ALL was typed over meanwhile: that commit is stale.
      */
-    private suspend fun wholeBalanceFiat(pricing: Pricing): BigDecimal? {
+    @Suppress("ReturnCount")
+    private suspend fun committedFiat(
+        rawInr: BigDecimal,
+        pricing: Pricing,
+    ): BigDecimal? {
+        if (inrPreset.value != AmountPreset.ALL) return rawInr
         baseBalance.refresh()
-        return baseBalance.balance.value.loadedOrNull
-            ?.let { presetFiat(AmountPreset.ALL, it, pricing) }
-            ?.also { fresh -> inrState.update { NumberTextFieldInnerState.fromAmount(fresh) } }
+        if (inrPreset.value != AmountPreset.ALL) return null
+        val fresh =
+            baseBalance.balance.value.loadedOrNull
+                ?.let { presetFiat(AmountPreset.ALL, it, pricing) }
+        fresh?.let { inr -> inrState.update { NumberTextFieldInnerState.fromAmount(inr) } }
+        return fresh ?: rawInr
     }
 
     @Suppress("ReturnCount")
@@ -527,8 +550,7 @@ internal class UpiOfframpVM(
                     quoteFailed.update { true }
                 }.getOrNull() ?: return
         val sendsAll = inrPreset.value == AmountPreset.ALL
-        val wholeBalance = if (sendsAll) wholeBalanceFiat(pricing) else null
-        val committedInr = wholeBalance ?: rawInr
+        val committedInr = committedFiat(rawInr, pricing) ?: return
         val amounts = orderAmounts(committedInr, pricing.rate)?.takeIf { it.usdc.whole <= USDC_CAP } ?: return
 
         // The re-quote can move the placed amount off whatever the input probe measured, and

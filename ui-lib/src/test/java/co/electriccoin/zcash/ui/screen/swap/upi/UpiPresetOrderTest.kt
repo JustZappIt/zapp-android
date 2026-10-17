@@ -3,8 +3,11 @@ package co.electriccoin.zcash.ui.screen.swap.upi
 import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
 import org.junit.Test
 import xyz.justzappit.offramp.p2p.Usdc6
+import java.math.BigDecimal
+import java.math.RoundingMode
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class UpiPresetOrderTest {
     @Test
@@ -37,14 +40,30 @@ class UpiPresetOrderTest {
     }
 
     @Test
+    fun `ALL just above the fee threshold is priced on what the order places, so it still pays from the balance`() {
+        // Fiat floors to 2 dp at ₹97 and back to USDC at 6 dp: 50.000001 places exactly 50, which pays the fee.
+        val placed = { order: Usdc6 ->
+            val inr = order.whole.multiply(RATE).setScale(2, RoundingMode.FLOOR)
+            Usdc6.ofWhole(inr.divide(RATE, 6, RoundingMode.FLOOR))
+        }
+        val balance = usdc("50.000001")
+
+        val order = checkNotNull(presetOrder(AmountPreset.ALL, balance, CAP) { smallOrderFee(placed(it)) })
+
+        val placedOrder = placed(order)
+        assertTrue(placedOrder + smallOrderFee(placedOrder) <= balance)
+    }
+
+    @Test
     fun `a balance the fee takes all of orders nothing`() {
         assertNull(presetOrder(AmountPreset.ALL, usdc("1"), CAP, ::smallOrderFee))
     }
 
     private companion object {
         val CAP = usdc("100")
+        val RATE = BigDecimal("97")
 
-        fun usdc(whole: String) = Usdc6.ofWhole(java.math.BigDecimal(whole))
+        fun usdc(whole: String) = Usdc6.ofWhole(BigDecimal(whole))
 
         /** A 1 USDC fee on orders up to 50 USDC, as the Diamond charges small orders. */
         fun smallOrderFee(order: Usdc6): Usdc6 = if (order <= usdc("50")) usdc("1") else Usdc6.ZERO
