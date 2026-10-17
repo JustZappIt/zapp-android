@@ -241,13 +241,13 @@ private fun fiatLabels(
     zecAmount: Double,
     liveRate: ZecFiatRate?,
 ): Pair<String?, String?> {
-    if (liveRate == null) return null to null
+    // The embedded price is in the payload, so it shows even when the payer has no live rate.
     val embedded =
         fiatLabelOrNull(
             amount = parsed?.optDouble("fiatAmount", 0.0) ?: 0.0,
             code = parsed?.optString("fiatCurrency", "")?.takeIf(String::isNotEmpty),
         )
-    return embedded to liveFiatLabel(embedded, zecAmount, liveRate)
+    return embedded to liveRate?.let { liveFiatLabel(embedded, zecAmount, it) }
 }
 
 private fun liveFiatLabel(embedded: String?, zecAmount: Double, rate: ZecFiatRate): String? {

@@ -12,6 +12,7 @@ import co.electriccoin.zcash.ui.screen.chat.list.ChatListConnectionStatus
 import co.electriccoin.zcash.ui.screen.chat.list.ChatListDhtHealth
 import co.electriccoin.zcash.ui.screen.chat.model.ChatMessage
 import co.electriccoin.zcash.ui.screen.chat.model.ConnectionDetailsUi
+import co.electriccoin.zcash.ui.screen.chat.model.PaymentRequestFiatAmount
 import co.electriccoin.zcash.ui.screen.chat.view.BlockUserDialogState
 import java.math.BigDecimal
 
@@ -137,7 +138,7 @@ data class ChatRoomSplitSheetState(
     val isGroup: Boolean,
     val participants: List<SplitParticipant>,
     val fiatRate: ZecFiatRate?,
-    val onSend: (memo: String, shares: List<SplitShareInput>, typedInFiat: Boolean) -> Unit,
+    val onSend: (memo: String, shares: List<SplitShareInput>) -> Unit,
     val onDismiss: () -> Unit,
 )
 
@@ -150,6 +151,8 @@ data class SplitShareInput(
     val publicKey: String,
     val displayName: String,
     val amount: BigDecimal,
+    /** The share's price as typed, present only when the total was typed in fiat. */
+    val fiat: PaymentRequestFiatAmount? = null,
 )
 
 data class ChatRoomMediaSheetState(

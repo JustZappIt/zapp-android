@@ -36,7 +36,6 @@ import co.electriccoin.zcash.ui.common.usecase.SendChatMessageUseCase
 import co.electriccoin.zcash.ui.common.usecase.ValidateAddressUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.common.wallet.ZecFiatRate
-import co.electriccoin.zcash.ui.common.wallet.toZecFiatRate
 import co.electriccoin.zcash.ui.common.wallet.zecFiatRate
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -60,7 +59,6 @@ import co.electriccoin.zcash.ui.screen.chat.model.ConversationType
 import co.electriccoin.zcash.ui.screen.chat.model.MAX_PAYMENT_REQUEST_ZEC
 import co.electriccoin.zcash.ui.screen.chat.model.MessageStatus
 import co.electriccoin.zcash.ui.screen.chat.model.MimeTypes
-import co.electriccoin.zcash.ui.screen.chat.model.PaymentRequestFiatAmount
 import co.electriccoin.zcash.ui.screen.chat.model.buildPaymentRequestJson
 import co.electriccoin.zcash.ui.screen.chat.model.byPublicKey
 import co.electriccoin.zcash.ui.screen.chat.model.mergedWithHistory
@@ -101,7 +99,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import xyz.justzappit.zappmessaging.models.ZMGroupLinkState
 import java.math.BigDecimal
-import java.math.RoundingMode
 import java.util.UUID
 
 @Suppress("TooManyFunctions")
@@ -1200,7 +1197,7 @@ class ChatRoomVM(
         splitSheetParams.value = null
     }
 
-    private fun onCreateSplit(memo: String, shares: List<SplitShareInput>, typedInFiat: Boolean) {
+    private fun onCreateSplit(memo: String, shares: List<SplitShareInput>) {
         splitSheetParams.value = null
         val hasInvalidAmount =
             shares.any { share ->
@@ -1209,7 +1206,7 @@ class ChatRoomVM(
         if (shares.isEmpty() || hasInvalidAmount) {
             return
         }
-        viewModelScope.launch { sendSplitRequests(memo, shares, typedInFiat) }
+        viewModelScope.launch { sendSplitRequests(memo, shares) }
     }
 
     private data class SplitSheetParams(
@@ -1524,29 +1521,11 @@ class ChatRoomVM(
         }
     }
 
-    private suspend fun sendSplitRequests(memo: String, shares: List<SplitShareInput>, typedInFiat: Boolean) {
+    private suspend fun sendSplitRequests(memo: String, shares: List<SplitShareInput>) {
         val requesterAddress = getZashiAccount().unified.address.address
         val splitCount =
             if (conversation.value?.type == ConversationType.GROUP) shares.size + 1 else 1
-        // A fiat amount travels only when the requester typed one. It fixes the card's headline
-        // at that price, so attaching it to an amount typed in ZEC would show the payer a dollar
-        // figure nobody asked for.
-        val rate =
-            (exchangeRateRepository.state.value as? ExchangeRateState.Data)
-                ?.currencyConversion
-                ?.toZecFiatRate()
-                ?.takeIf { typedInFiat }
         shares.forEach { share ->
-            val fiat =
-                rate?.let {
-                    PaymentRequestFiatAmount(
-                        amount =
-                            it
-                                .zecToFiat(share.amount)
-                                .setScale(FIAT_SCALE, RoundingMode.HALF_UP),
-                        currency = it.currency,
-                    )
-                }
             val content =
                 buildPaymentRequestJson(
                     id = UUID.randomUUID().toString(),
@@ -1556,7 +1535,9 @@ class ChatRoomVM(
                     debtorId = share.publicKey,
                     debtorName = share.displayName,
                     splitCount = splitCount,
-                    fiat = fiat,
+                    // Present only when the share was typed in fiat: it fixes the payer's headline
+                    // at that price, so a share typed in ZEC travels without one.
+                    fiat = share.fiat,
                 )
             sendChatMessage(conversationId, content, MimeTypes.PAYMENT_REQUEST).onSuccess { zmMessage ->
                 addOutgoingMessage(ChatMessage.from(zmMessage))
@@ -1593,6 +1574,5 @@ class ChatRoomVM(
         const val SHORT_KEY_THRESHOLD = 12
         const val SHORT_KEY_PREFIX = 6
         const val SHORT_KEY_SUFFIX = 4
-        const val FIAT_SCALE = 2
     }
 }

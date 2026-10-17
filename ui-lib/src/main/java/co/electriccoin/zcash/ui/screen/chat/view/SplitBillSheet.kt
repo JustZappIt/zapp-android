@@ -44,6 +44,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappInputField
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.util.StringResource.Companion.NUMBER_FORMAT_LOCALE
+import co.electriccoin.zcash.ui.screen.chat.model.PaymentRequestFiatAmount
 import co.electriccoin.zcash.ui.screen.chat.room.ChatRoomSplitSheetState
 import co.electriccoin.zcash.ui.screen.chat.room.SplitParticipant
 import co.electriccoin.zcash.ui.screen.chat.room.SplitShareInput
@@ -146,7 +147,7 @@ internal fun SplitBillSheet(state: ChatRoomSplitSheetState) {
                 text = stringResource(R.string.chat_split_send_button),
                 enabled = canSend,
                 modifier = Modifier.fillMaxWidth(),
-                onClick = { state.onSend(memoText.text.trim(), shares, isFiat) },
+                onClick = { state.onSend(memoText.text.trim(), shares) },
             )
         }
     }
@@ -281,7 +282,7 @@ private object SplitBillLogic {
         if (isFiat) requireNotNull(fiatRate).symbol else zecUnit
 }
 
-private fun computeShares(
+internal fun computeShares(
     participants: List<SplitParticipant>,
     overrides: Map<String, TextFieldValue>,
     equalShare: BigDecimal?,
@@ -293,8 +294,18 @@ private fun computeShares(
         display
             ?.takeIf { it > BigDecimal.ZERO }
             ?.let {
-                val zec = if (isFiat && fiatRate != null) fiatRate.fiatToZec(it) else it
-                SplitShareInput(participant.publicKey, participant.displayName, zec)
+                if (isFiat && fiatRate != null) {
+                    // The typed price travels as-is, so the payer sees what was typed rather than
+                    // a reconversion at whatever the rate is when the request goes out.
+                    val fiat =
+                        PaymentRequestFiatAmount(
+                            amount = it.setScale(FIAT_DECIMALS, RoundingMode.HALF_UP),
+                            currency = fiatRate.currency,
+                        )
+                    SplitShareInput(participant.publicKey, participant.displayName, fiatRate.fiatToZec(it), fiat)
+                } else {
+                    SplitShareInput(participant.publicKey, participant.displayName, it)
+                }
             }
     }
 

@@ -37,9 +37,17 @@ class PaymentRequestHeadlineTest {
     }
 
     @Test
-    fun `without a live rate only ZEC is shown`() {
+    fun `without a live rate a request typed in fiat keeps its price`() {
         val parsed =
             parsePaymentRequest("""{"amount":0.25,"token":"ZEC","fiatAmount":13.00,"fiatCurrency":"USD"}""", null)
+
+        assertTrue(parsed.amountLabel.endsWith("13.00"), parsed.amountLabel)
+        assertEquals("≈ 0.25 ZEC", parsed.equivalentLabel)
+    }
+
+    @Test
+    fun `without a live rate a request typed in ZEC shows only ZEC`() {
+        val parsed = parsePaymentRequest("""{"amount":0.25,"token":"ZEC"}""", null)
 
         assertEquals("0.25 ZEC", parsed.amountLabel)
         assertNull(parsed.equivalentLabel)
