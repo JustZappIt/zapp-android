@@ -34,8 +34,9 @@ internal sealed interface ReputationContent {
     data class Ready(
         val points: String,
         /**
-         * The Diamond's own number, or the single word that stands in for it while buying is
-         * locked — never a rendered "$0", which reads as a bug rather than as a gate.
+         * The Diamond's own number, or while buying is locked either the "Up to" figure one
+         * verification unlocks or the single word "Locked" — never a rendered "$0", which reads as
+         * a bug rather than as a gate.
          */
         val buyLimit: StringResource,
         /** Underneath the figure, with room to wrap: what it means, or what to do about it. */

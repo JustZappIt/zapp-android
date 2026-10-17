@@ -4,6 +4,7 @@
 package co.electriccoin.zcash.ui.screen.reputation
 
 import xyz.justzappit.offramp.p2p.CurrencyCode
+import xyz.justzappit.offramp.p2p.P2pOrderLimits
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.reputation.ReputationSummary
 import xyz.justzappit.offramp.reputation.SocialPlatform
@@ -20,7 +21,11 @@ internal fun offeredPlatforms(currency: CurrencyCode): List<SocialPlatform> =
 /**
  * The most a single social verification would add to the buy limit, from the accounts Raise my
  * limit actually offers: what the locked screen promises before the user commits to verifying.
+ * Capped at [P2pOrderLimits.MAX_ORDER], since no single purchase can exceed it whatever the limit.
  * Null when no offered account can state a gain honestly (see [ReputationSummary.limitGainFor]).
  */
 internal fun ReputationSummary.bestSingleUnlock(currency: CurrencyCode): Usdc6? =
-    offeredPlatforms(currency).mapNotNull { limitGainFor(it) }.maxOrNull()
+    offeredPlatforms(currency)
+        .mapNotNull { limitGainFor(it) }
+        .maxOrNull()
+        ?.let { minOf(it, P2pOrderLimits.MAX_ORDER) }

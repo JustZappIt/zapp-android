@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.screen.reputation
 
 import xyz.justzappit.evm.math.bigIntegerValueOf
 import xyz.justzappit.offramp.p2p.CurrencyCode
+import xyz.justzappit.offramp.p2p.P2pOrderLimits
 import xyz.justzappit.offramp.p2p.Usdc6
 import xyz.justzappit.offramp.reputation.ReputationSummary
 import xyz.justzappit.offramp.reputation.RpPerUsdcLimit
@@ -39,8 +40,19 @@ class FirstUnlockTest {
     fun `other corridors are offered Binance`() {
         val summary = locked(mapOf(SocialPlatform.Binance to 500L, SocialPlatform.X to 50L))
 
-        assertEquals(usd(500), summary.bestSingleUnlock(CurrencyCode.Brl))
+        // X alone would give $50, so $100 proves Binance was counted; the cap keeps it from $500.
+        assertEquals(usd(100), summary.bestSingleUnlock(CurrencyCode.Brl))
         assertTrue(SocialPlatform.Binance in offeredPlatforms(CurrencyCode.Brl))
+    }
+
+    @Test
+    fun `the promise never exceeds the per-order limit`() {
+        // BRL-like ratio: 1 RP buys $3 of limit, so a 100 RP award would read "Up to $300".
+        val summary =
+            locked(mapOf(SocialPlatform.LinkedIn to 100L))
+                .copy(rpPerUsdc = RpPerUsdcLimit(bigIntegerValueOf(1L), bigIntegerValueOf(3L)))
+
+        assertEquals(P2pOrderLimits.MAX_ORDER, summary.bestSingleUnlock(CurrencyCode.Brl))
     }
 
     @Test
