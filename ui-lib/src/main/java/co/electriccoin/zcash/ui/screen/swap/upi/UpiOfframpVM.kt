@@ -194,6 +194,17 @@ internal class UpiOfframpVM(
                 }
         }
         viewModelScope.launch { pollMerchantAvailability() }
+        // A preset is a share of the balance at the current price, so while it stays selected it follows both:
+        // a rate that drops or a fee that arrives shrinks ALL rather than leaving it short of what it promised.
+        viewModelScope.launch {
+            combine(pricing, baseBalance.balance.map { it.loadedOrNull }, ::Pair).collect { (current, balance) ->
+                val preset = inrPreset.value ?: return@collect
+                if (inFlight.value != null) return@collect
+                balance
+                    ?.let { presetFiat(preset, it, current) }
+                    ?.let { inr -> inrState.update { NumberTextFieldInnerState.fromAmount(inr) } }
+            }
+        }
     }
 
     // The rate moves; the fee schedule is Diamond config, so it is read once per visit and again at
@@ -328,20 +339,16 @@ internal class UpiOfframpVM(
         quoteFailed.update { false }
     }
 
-    /** [preset]'s share of [balance] in fiat, no larger than one order may be; null when it comes to nothing. */
+    /** [preset]'s order out of [balance] in fiat, at [pricing]; null when it comes to nothing. */
     private fun presetFiat(
         preset: AmountPreset,
         balance: Usdc6,
         pricing: Pricing,
-    ): BigDecimal? {
-        val share = minOf(Usdc6.ofMicros(preset.of(balance.micros)), Usdc6.ofWhole(USDC_CAP))
-        val order = if (preset == AmountPreset.ALL) share - payFeeFor(share, pricing) else share
-        return order
-            .takeIf { it > Usdc6.ZERO }
+    ): BigDecimal? =
+        presetOrder(preset, balance, Usdc6.ofWhole(USDC_CAP)) { payFeeFor(it, pricing) }
             ?.whole
             ?.multiply(pricing.rate)
             ?.setScale(currency.precision, RoundingMode.FLOOR)
-    }
 
     private fun isShortOnMainnet(orderAmount: Usdc6?, balance: Usdc6?, fee: Usdc6): Boolean =
         orderAmount != null &&
@@ -497,6 +504,18 @@ internal class UpiOfframpVM(
     // Re-quote: the sell rate the contract stamps can drift, so refetch it the instant the user
     // commits, recompute the USDC, then either confirm a payment from the Base balance or route to a
     // top-up bridge when the balance is short. The pay flow never kicks off an inline bridge itself.
+
+    /**
+     * ALL is what the balance pays at the price committed to, which can have moved since the screen last showed
+     * it, so it's worked out again from a fresh balance and shown: it pays from Base, never routes to a top-up.
+     */
+    private suspend fun wholeBalanceFiat(pricing: Pricing): BigDecimal? {
+        baseBalance.refresh()
+        return baseBalance.balance.value.loadedOrNull
+            ?.let { presetFiat(AmountPreset.ALL, it, pricing) }
+            ?.also { fresh -> inrState.update { NumberTextFieldInnerState.fromAmount(fresh) } }
+    }
+
     @Suppress("ReturnCount")
     private suspend fun reQuoteAndRoute(rawInr: BigDecimal) {
         quoteFailed.update { false }
@@ -507,13 +526,8 @@ internal class UpiOfframpVM(
                     Twig.warn(e) { "UpiOfframpVM: commit-time pricing read failed for ${currency.code}" }
                     quoteFailed.update { true }
                 }.getOrNull() ?: return
-        // ALL is what the balance pays at the price committed to, which can have moved since the tap — the seed
-        // rate until the first read, or a fee that wasn't known yet — so it's worked out again here.
-        val wholeBalance =
-            baseBalance.balance.value.loadedOrNull
-                ?.takeIf { inrPreset.value == AmountPreset.ALL }
-                ?.let { presetFiat(AmountPreset.ALL, it, pricing) }
-        wholeBalance?.let { fresh -> inrState.update { NumberTextFieldInnerState.fromAmount(fresh) } }
+        val sendsAll = inrPreset.value == AmountPreset.ALL
+        val wholeBalance = if (sendsAll) wholeBalanceFiat(pricing) else null
         val committedInr = wholeBalance ?: rawInr
         val amounts = orderAmounts(committedInr, pricing.rate)?.takeIf { it.usdc.whole <= USDC_CAP } ?: return
 
@@ -529,7 +543,7 @@ internal class UpiOfframpVM(
         val requiredUsdc = amounts.usdc
         val fiatMicro = amounts.fiat.micros
         val fiatLimitMicro = fiatAmountLimit(requiredUsdc, pricing.rate)
-        baseBalance.refresh()
+        if (!sendsAll) baseBalance.refresh()
         val balance = baseBalance.balance.value.loadedOrNull
         when {
             // The order pulls placed + fee from the Base balance, so confirm pay-from-Base only when it
@@ -733,4 +747,29 @@ internal class UpiOfframpVM(
 
         private const val MERCHANT_PROBE_DEBOUNCE_MS = 600L
     }
+}
+
+/**
+ * The USDC a [preset] orders out of [balance], never more than [cap] — one order's limit. A share pays [feeFor] on
+ * top, as a typed amount does; ALL is the most whose fee the balance still covers, so a balance past the cap and
+ * its fee orders exactly the cap. Null when that leaves nothing.
+ */
+internal fun presetOrder(
+    preset: AmountPreset,
+    balance: Usdc6,
+    cap: Usdc6,
+    feeFor: (Usdc6) -> Usdc6,
+): Usdc6? {
+    val share = Usdc6.ofMicros(preset.of(balance.micros))
+    val capped = minOf(share, cap)
+    val order =
+        if (preset != AmountPreset.ALL) {
+            capped
+        } else {
+            // The fee is a step at a small-order threshold, so one that applies to the capped amount applies to
+            // anything smaller too.
+            val fee = feeFor(capped)
+            if (capped + fee <= share) capped else share - fee
+        }
+    return order.takeIf { it > Usdc6.ZERO }
 }
