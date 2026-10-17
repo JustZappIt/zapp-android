@@ -116,6 +116,6 @@
     <string name="transaction_shieldedFunds">Terlindungi</string>
     <string name="transaction_shieldingFunds">Melindungi</string>
     <string name="amount_preset_all">SEMUA</string>
-    <string name="amount_preset_all_description">Isi seluruh saldo Anda. Biaya dipotong saat peninjauan</string>
+    <string name="amount_preset_all_description">Isi seluruh saldo Anda</string>
     <string name="amount_preset_percent_description">Isi %1$d%% dari saldo Anda</string>
 </resources>

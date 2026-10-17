@@ -13,6 +13,7 @@
     <string name="gift_card_amount_symbol">ZEC</string>
     <string name="gift_card_amount_balance_label">Disponible</string>
     <string name="gift_card_amount_hint">La persona receptora recibe exactamente esta cantidad. Tú pagas las comisiones.</string>
+    <string name="gift_card_amount_hint_all">Todo tu saldo. Las comisiones se descuentan de él, así que la persona receptora recibe algo menos. La revisión muestra la cantidad exacta.</string>
     <string name="gift_card_amount_error_empty">Introduce una cantidad</string>
     <string name="gift_card_amount_error_too_small">Introduce una cantidad mayor que cero</string>
     <string name="gift_card_amount_error_invalid">Introduce más de cero y hasta 21.000.000 ZEC, con un máximo de 8 decimales</string>

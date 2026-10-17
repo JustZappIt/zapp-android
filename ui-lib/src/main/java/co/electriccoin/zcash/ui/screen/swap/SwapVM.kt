@@ -243,7 +243,7 @@ internal class SwapVM(
                     }
                 }
             } ?: return
-        amountText.update { NumberTextFieldInnerState.fromAmount(shown, TextSelection.End) }
+        amountText.update { NumberTextFieldInnerState.fromAmount(shown) }
         amountPreset.update { preset }
     }
 

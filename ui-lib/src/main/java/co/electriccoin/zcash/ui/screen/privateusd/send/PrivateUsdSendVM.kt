@@ -31,7 +31,6 @@ import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.component.TextFieldState
-import co.electriccoin.zcash.ui.design.component.TextSelection
 import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
 import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -159,8 +158,7 @@ class PrivateUsdSendVM(
                                 token = max.token,
                                 amount =
                                     NumberTextFieldInnerState.fromAmount(
-                                        preset.of(max.available).toDecimal(max.token.decimals),
-                                        TextSelection.End,
+                                        preset.of(max.available).toDecimal(max.token.decimals)
                                     ),
                                 preset = preset,
                             )

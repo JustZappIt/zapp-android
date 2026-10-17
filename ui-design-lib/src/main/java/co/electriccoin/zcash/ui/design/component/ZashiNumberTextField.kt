@@ -170,19 +170,16 @@ data class NumberTextFieldInnerState(
     val isError = amount == null && !innerTextFieldState.value.isEmpty()
 
     companion object {
-        /** [selection]: a fill the user may keep typing after, like an amount preset, puts the cursor at the end. */
-        fun fromAmount(
-            amount: BigDecimal,
-            selection: TextSelection = TextSelection.Start,
-        ) = NumberTextFieldInnerState(
-            innerTextFieldState =
-                InnerTextFieldState(
-                    value = stringResByNumber(amount),
-                    selection = selection
-                ),
-            amount = amount,
-            lastValidAmount = amount
-        )
+        fun fromAmount(amount: BigDecimal) =
+            NumberTextFieldInnerState(
+                innerTextFieldState =
+                    InnerTextFieldState(
+                        value = stringResByNumber(amount),
+                        selection = TextSelection.Start
+                    ),
+                amount = amount,
+                lastValidAmount = amount
+            )
     }
 }
 

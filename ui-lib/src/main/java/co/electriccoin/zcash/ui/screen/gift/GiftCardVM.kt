@@ -33,7 +33,6 @@ import co.electriccoin.zcash.ui.common.wallet.toFiatString
 import co.electriccoin.zcash.ui.common.wallet.zecFiatRate
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
-import co.electriccoin.zcash.ui.design.component.TextSelection
 import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
 import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -212,7 +211,7 @@ class GiftCardVM(
     private fun onAmountPreset(preset: AmountPreset) {
         val spendable = selectedAccount.value?.spendableShieldedBalance ?: return
         val zec = Zatoshi(preset.of(spendable.value)).toZecExact()
-        val amount = NumberTextFieldInnerState.fromAmount(zec, TextSelection.End)
+        val amount = NumberTextFieldInnerState.fromAmount(zec)
         snapshot.update { it.copy(amount = amount, preset = preset, error = null) }
     }
 

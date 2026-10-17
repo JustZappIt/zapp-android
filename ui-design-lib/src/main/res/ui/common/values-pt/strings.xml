@@ -118,6 +118,6 @@
     <string name="transaction_shieldedFunds">Protegido</string>
     <string name="transaction_shieldingFunds">Protegendo</string>
     <string name="amount_preset_all">TUDO</string>
-    <string name="amount_preset_all_description">Usar todo o seu saldo. A taxa é descontada na revisão</string>
+    <string name="amount_preset_all_description">Usar todo o seu saldo</string>
     <string name="amount_preset_percent_description">Usar %1$d%% do seu saldo</string>
 </resources>

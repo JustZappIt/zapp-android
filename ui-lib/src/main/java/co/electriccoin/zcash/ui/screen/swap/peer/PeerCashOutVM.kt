@@ -20,7 +20,6 @@ import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.component.TextFieldState
-import co.electriccoin.zcash.ui.design.component.TextSelection
 import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
 import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -166,11 +165,11 @@ internal class PeerCashOutVM(
             presets =
                 (spendable as? PeerSpendable.Ready)
                     ?.available
-                    ?.takeIf { it > Usdc6.ZERO && !entry.isSubmitting }
+                    ?.takeIf { it > Usdc6.ZERO }
                     ?.let { available ->
-                        AmountPresetsState(selected = entry.preset) { preset ->
+                        AmountPresetsState(selected = entry.preset, isEnabled = !entry.isSubmitting) { preset ->
                             val share = Usdc6.ofMicros(preset.of(available.micros))
-                            amountState.update { NumberTextFieldInnerState.fromAmount(share.whole, TextSelection.End) }
+                            amountState.update { NumberTextFieldInnerState.fromAmount(share.whole) }
                             amountPreset.update { preset }
                         }
                     },

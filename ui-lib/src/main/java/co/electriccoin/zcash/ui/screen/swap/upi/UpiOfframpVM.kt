@@ -13,7 +13,6 @@ import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepository
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
-import co.electriccoin.zcash.ui.design.component.TextSelection
 import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
 import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationState
@@ -323,13 +322,25 @@ internal class UpiOfframpVM(
         balance: Usdc6,
         pricing: Pricing,
     ) {
-        val share = Usdc6.ofMicros(preset.of(balance.micros))
-        val order = if (preset == AmountPreset.ALL) share - payFeeFor(share, pricing) else share
-        if (order <= Usdc6.ZERO) return
-        val inr = order.whole.multiply(pricing.rate).setScale(currency.precision, RoundingMode.FLOOR)
-        inrState.update { NumberTextFieldInnerState.fromAmount(inr, TextSelection.End) }
+        val inr = presetFiat(preset, balance, pricing) ?: return
+        inrState.update { NumberTextFieldInnerState.fromAmount(inr) }
         inrPreset.update { preset }
         quoteFailed.update { false }
+    }
+
+    /** [preset]'s share of [balance] in fiat, no larger than one order may be; null when it comes to nothing. */
+    private fun presetFiat(
+        preset: AmountPreset,
+        balance: Usdc6,
+        pricing: Pricing,
+    ): BigDecimal? {
+        val share = minOf(Usdc6.ofMicros(preset.of(balance.micros)), Usdc6.ofWhole(USDC_CAP))
+        val order = if (preset == AmountPreset.ALL) share - payFeeFor(share, pricing) else share
+        return order
+            .takeIf { it > Usdc6.ZERO }
+            ?.whole
+            ?.multiply(pricing.rate)
+            ?.setScale(currency.precision, RoundingMode.FLOOR)
     }
 
     private fun isShortOnMainnet(orderAmount: Usdc6?, balance: Usdc6?, fee: Usdc6): Boolean =
@@ -496,7 +507,15 @@ internal class UpiOfframpVM(
                     Twig.warn(e) { "UpiOfframpVM: commit-time pricing read failed for ${currency.code}" }
                     quoteFailed.update { true }
                 }.getOrNull() ?: return
-        val amounts = orderAmounts(rawInr, pricing.rate)?.takeIf { it.usdc.whole <= USDC_CAP } ?: return
+        // ALL is what the balance pays at the price committed to, which can have moved since the tap — the seed
+        // rate until the first read, or a fee that wasn't known yet — so it's worked out again here.
+        val wholeBalance =
+            baseBalance.balance.value.loadedOrNull
+                ?.takeIf { inrPreset.value == AmountPreset.ALL }
+                ?.let { presetFiat(AmountPreset.ALL, it, pricing) }
+        wholeBalance?.let { fresh -> inrState.update { NumberTextFieldInnerState.fromAmount(fresh) } }
+        val committedInr = wholeBalance ?: rawInr
+        val amounts = orderAmounts(committedInr, pricing.rate)?.takeIf { it.usdc.whole <= USDC_CAP } ?: return
 
         // The re-quote can move the placed amount off whatever the input probe measured, and
         // assignability is per amount — so ask once more about the exact pair now being committed.
@@ -506,7 +525,7 @@ internal class UpiOfframpVM(
         merchantProbe.update { recheck }
         if (recheck is MerchantProbe.Checked && !recheck.isAvailable) return
 
-        val snappedInr = snapFiat(rawInr)
+        val snappedInr = snapFiat(committedInr)
         val requiredUsdc = amounts.usdc
         val fiatMicro = amounts.fiat.micros
         val fiatLimitMicro = fiatAmountLimit(requiredUsdc, pricing.rate)
