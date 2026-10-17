@@ -37,7 +37,8 @@ class NavigatorImpl(
         when (command) {
             NavigationCommand.Back,
             NavigationCommand.BackToRoot,
-            is NavigationCommand.BackTo -> {
+            is NavigationCommand.BackTo,
+            is NavigationCommand.BackToOrRoot -> {
                 val currentRoute =
                     navController
                         .currentBackStackEntry
@@ -58,6 +59,7 @@ class NavigatorImpl(
             is NavigationCommand.ReplaceAll -> replaceAll(command)
             NavigationCommand.Back -> navController.popBackStack()
             is NavigationCommand.BackTo -> backTo(command)
+            is NavigationCommand.BackToOrRoot -> if (!navController.popBackStack(command.route, false)) backToRoot()
             NavigationCommand.BackToRoot -> backToRoot()
         }
     }

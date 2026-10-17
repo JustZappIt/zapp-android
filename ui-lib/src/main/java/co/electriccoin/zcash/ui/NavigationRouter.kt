@@ -113,5 +113,10 @@ sealed interface NavigationCommand : BaseNavigationCommand {
         val route: KClass<*>
     ) : NavigationCommand
 
+    /** Pops back to that exact entry, arguments included, or to the root when it is not on the stack. */
+    data class BackToOrRoot(
+        val route: Any
+    ) : NavigationCommand
+
     data object BackToRoot : NavigationCommand
 }
