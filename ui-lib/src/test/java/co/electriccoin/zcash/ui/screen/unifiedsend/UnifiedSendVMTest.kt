@@ -20,6 +20,7 @@ import co.electriccoin.zcash.ui.common.repository.SwapAssetsData
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.usecase.CancelSwapUseCase
 import co.electriccoin.zcash.ui.common.usecase.CreateProposalUseCase
+import co.electriccoin.zcash.ui.common.usecase.Funding
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedSwapAssetUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSlippageUseCase
@@ -32,6 +33,7 @@ import co.electriccoin.zcash.ui.common.usecase.NavigateToSelectRecipientUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToSwapQuoteIfAvailableUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveABContactPickedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveClearSendUseCase
+import co.electriccoin.zcash.ui.common.usecase.ObserveFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.PrefillSendUseCase
 import co.electriccoin.zcash.ui.common.usecase.PreselectSwapAssetUseCase
 import co.electriccoin.zcash.ui.common.usecase.RequestSwapQuoteUseCase
@@ -46,6 +48,7 @@ import co.electriccoin.zcash.ui.screen.insufficientfunds.InsufficientFundsArgs
 import co.electriccoin.zcash.ui.screen.swap.info.CrossPayInfoArgs
 import co.electriccoin.zcash.ui.screen.swap.picker.SwapAssetPickerArgs
 import co.electriccoin.zcash.ui.screen.swap.slippage.SwapSlippageArgs
+import co.electriccoin.zcash.ui.screen.topup.TopUpArgs
 import io.ktor.client.network.sockets.SocketTimeoutException
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -474,6 +477,24 @@ class UnifiedSendVMTest {
             )
         }
 
+    @Test
+    fun `an empty synced wallet sees Add ZEC instead of the form`() =
+        swapForm(selected = null, spendable = Zatoshi(0), funding = Funding.EMPTY) {
+            runCurrent()
+
+            val addFunds = assertNotNull(state().addFunds)
+            addFunds.onAddFunds()
+            assertEquals(TopUpArgs, navigationRouter.forwarded.single())
+        }
+
+    @Test
+    fun `a wallet not yet known to be empty keeps the form`() =
+        swapForm(selected = null, spendable = Zatoshi(0), funding = Funding.UNKNOWN) {
+            runCurrent()
+
+            assertNull(state().addFunds)
+        }
+
     // endregion
 
     // region amount presets
@@ -589,9 +610,10 @@ class UnifiedSendVMTest {
         spendable: Zatoshi = Zatoshi(1_000_000_000),
         zecPrice: BigDecimal? = BigDecimal("50"),
         assetsError: Exception? = null,
+        funding: Funding = Funding.FUNDED,
         block: suspend Harness.() -> Unit
     ) = runTest {
-        val harness = Harness(this, asset, selected, args, spendable, zecPrice, assetsError)
+        val harness = Harness(this, asset, selected, args, spendable, zecPrice, assetsError, funding)
         val collection = backgroundScope.launch { harness.vm.state.collect() }
         runCurrent()
         harness.block()
@@ -606,6 +628,7 @@ class UnifiedSendVMTest {
         spendable: Zatoshi,
         zecPrice: BigDecimal?,
         assetsError: Exception?,
+        funding: Funding,
     ) {
         val selectedAsset = MutableStateFlow(selected)
         val requestSwapQuote = mockk<RequestSwapQuoteUseCase>(relaxed = true)
@@ -677,6 +700,7 @@ class UnifiedSendVMTest {
                         every { state } returns MutableStateFlow(ExchangeRateState.OptedOut)
                     },
                 navigationRouter = navigationRouter,
+                observeFunding = mockk<ObserveFundingUseCase> { every { zec() } returns flowOf(funding) },
             )
 
         fun state(): UnifiedSendState = requireNotNull(vm.state.value)

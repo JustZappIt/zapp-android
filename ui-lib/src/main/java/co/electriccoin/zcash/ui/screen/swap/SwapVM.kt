@@ -7,6 +7,7 @@ import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.compose.AddFundsPanelState
 import co.electriccoin.zcash.ui.common.datasource.InsufficientFundsException
 import co.electriccoin.zcash.ui.common.model.SwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapMode
@@ -15,6 +16,7 @@ import co.electriccoin.zcash.ui.common.repository.EnhancedABContact
 import co.electriccoin.zcash.ui.common.repository.SwapAssetsData
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.usecase.CancelSwapUseCase
+import co.electriccoin.zcash.ui.common.usecase.Funding
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedSwapAssetUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSlippageUseCase
@@ -24,6 +26,7 @@ import co.electriccoin.zcash.ui.common.usecase.NavigateToScanGenericAddressUseCa
 import co.electriccoin.zcash.ui.common.usecase.NavigateToSelectABSwapRecipientUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToSwapInfoUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToSwapQuoteIfAvailableUseCase
+import co.electriccoin.zcash.ui.common.usecase.ObserveFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.PreselectSwapAssetUseCase
 import co.electriccoin.zcash.ui.common.usecase.RequestSwapQuoteUseCase
 import co.electriccoin.zcash.ui.common.usecase.toZecExact
@@ -77,6 +80,7 @@ internal class SwapVM(
     private val navigateToScanAddress: NavigateToScanGenericAddressUseCase,
     private val navigateToSelectSwapRecipient: NavigateToSelectABSwapRecipientUseCase,
     private val getWholeBalanceSendable: GetWholeBalanceSendableUseCase,
+    observeFunding: ObserveFundingUseCase,
 ) : ViewModel() {
     private val mode = MutableStateFlow(SWAP_INTO_ZEC)
 
@@ -172,8 +176,14 @@ internal class SwapVM(
     private val latestInner = innerState.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     val state =
-        combine(latestInner.filterNotNull(), amountPreset) { innerState, preset ->
-            createState(innerState, preset)
+        combine(latestInner.filterNotNull(), amountPreset, observeFunding.zec()) { innerState, preset, funding ->
+            createState(innerState, preset).copy(
+                addFunds =
+                    AddFundsPanelState(
+                        body = stringRes(R.string.add_funds_panel_swap),
+                        onAddFunds = ::onTopUpClick,
+                    ).takeIf { funding == Funding.EMPTY && innerState.mode == SWAP_FROM_ZEC },
+            )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),

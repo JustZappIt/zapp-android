@@ -262,6 +262,7 @@ val viewModelModule =
                 isABContactHintVisibleUseCase = get(),
                 exchangeRateRepository = get(),
                 navigationRouter = get(),
+                observeFunding = get(),
             )
         }
         viewModelOf(::SwapQuoteVM)

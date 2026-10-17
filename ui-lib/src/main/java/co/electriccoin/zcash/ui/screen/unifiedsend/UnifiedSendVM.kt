@@ -13,6 +13,7 @@ import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.compose.AddFundsPanelState
 import co.electriccoin.zcash.ui.common.datasource.InsufficientFundsException
 import co.electriccoin.zcash.ui.common.model.SwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapMode
@@ -24,6 +25,7 @@ import co.electriccoin.zcash.ui.common.repository.SwapAssetsData
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
 import co.electriccoin.zcash.ui.common.usecase.CancelSwapUseCase
 import co.electriccoin.zcash.ui.common.usecase.CreateProposalUseCase
+import co.electriccoin.zcash.ui.common.usecase.Funding
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedSwapAssetUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSlippageUseCase
@@ -36,6 +38,7 @@ import co.electriccoin.zcash.ui.common.usecase.NavigateToSelectRecipientUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToSwapQuoteIfAvailableUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveABContactPickedUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveClearSendUseCase
+import co.electriccoin.zcash.ui.common.usecase.ObserveFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.PrefillSendData
 import co.electriccoin.zcash.ui.common.usecase.PrefillSendUseCase
 import co.electriccoin.zcash.ui.common.usecase.PreselectSwapAssetUseCase
@@ -107,6 +110,7 @@ internal class UnifiedSendVM(
     private val isABContactHintVisibleUseCase: IsABContactHintVisibleUseCase,
     private val exchangeRateRepository: ExchangeRateRepository,
     private val navigationRouter: NavigationRouter,
+    observeFunding: ObserveFundingUseCase,
 ) : ViewModel() {
     // ── Internal mutable state ────────────────────────────────────────────────
 
@@ -268,7 +272,7 @@ internal class UnifiedSendVM(
         }
 
     val state =
-        combine(internalState, amountPreset) { internal, preset ->
+        combine(internalState, amountPreset, observeFunding.zec()) { internal, preset, funding ->
             mapper
                 .createState(
                     state = internal,
@@ -291,7 +295,14 @@ internal class UnifiedSendVM(
                     onPrimaryButtonClick = ::onPrimaryButtonClick,
                     onTryAgainClick = ::onTryAgainClick,
                     onTopUpClick = ::onTopUpClick,
-                ).copy(presets = presetsState(internal, preset))
+                ).copy(
+                    presets = presetsState(internal, preset),
+                    addFunds =
+                        AddFundsPanelState(
+                            body = stringRes(R.string.add_funds_panel_send),
+                            onAddFunds = ::onTopUpClick,
+                        ).takeIf { funding == Funding.EMPTY },
+                )
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),

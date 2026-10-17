@@ -1,6 +1,7 @@
 package co.electriccoin.zcash.ui.screen.unifiedsend
 
 import cash.z.ecc.android.sdk.model.FiatCurrency
+import co.electriccoin.zcash.ui.common.compose.AddFundsPanelState
 import co.electriccoin.zcash.ui.design.component.AssetCardState
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.ChipButtonState
@@ -48,6 +49,8 @@ internal data class UnifiedSendState(
     val primaryButton: PrimaryButtonState,
     // 20% / 50% / ALL above the bottom bar; null while there's nothing to spend
     val presets: AmountPresetsState? = null,
+    // A synced wallet with nothing to spend: shown in place of the form, with its own Add ZEC action
+    val addFunds: AddFundsPanelState? = null,
 )
 
 /**
