@@ -322,4 +322,7 @@
     <string name="restartMigration_support">Si reiniciar no resuelve el problema, contacta al soporte de Zapp a través de Enviar comentarios.</string>
     <string name="restartMigration_title">Reiniciar migración</string>
     <string name="restartMigration_warning">Esto cancela el plan de migración actual. No se puede deshacer una vez confirmado.</string>
+    <string name="amount_preset_all">TODO</string>
+    <string name="amount_preset_all_description">Usar todo tu saldo</string>
+    <string name="amount_preset_percent_description">Usar el %1$d%% de tu saldo</string>
 </resources>

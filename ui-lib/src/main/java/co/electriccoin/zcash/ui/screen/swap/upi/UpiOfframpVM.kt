@@ -13,6 +13,8 @@ import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepository
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -71,6 +73,10 @@ internal class UpiOfframpVM(
                 ?.let { NumberTextFieldInnerState.fromAmount(it) }
                 ?: NumberTextFieldInnerState(),
         )
+
+    /** The 20% / 50% / ALL fill behind the amount, until it's typed over. */
+    private val inrPreset = MutableStateFlow<AmountPreset?>(null)
+
     private val pricing = MutableStateFlow(Pricing(rate = fallbackRate(currency)))
     private val inFlight = MutableStateFlow<OfframpCheckpoint?>(null)
 
@@ -132,14 +138,15 @@ internal class UpiOfframpVM(
 
     val state: StateFlow<UpiOfframpState> =
         combine(
-            inrState,
+            combine(inrState, inrPreset, ::Pair),
             pricing,
             inFlight,
             baseBalance.balance,
             commitFeedback,
-        ) { inr, currentPricing, checkpoint, balance, (probe, failed) ->
+        ) { (inr, preset), currentPricing, checkpoint, balance, (probe, failed) ->
             buildState(
                 inr = inr,
+                preset = preset,
                 pricing = currentPricing,
                 inFlightCheckpoint = checkpoint,
                 balance = balance.loadedOrNull,
@@ -154,6 +161,7 @@ internal class UpiOfframpVM(
                 initialValue =
                     buildState(
                         inr = inrState.value,
+                        preset = null,
                         pricing = pricing.value,
                         inFlightCheckpoint = inFlight.value,
                         balance = baseBalance.balance.value.loadedOrNull,
@@ -192,11 +200,24 @@ internal class UpiOfframpVM(
     // commit time, where a stale one would atomic-cancel the order.
     private suspend fun pollPricing() =
         coroutineScope {
+            launch { followPreset() }
             refreshFees()
             while (isActive) {
                 refreshRate()
                 delay(RATE_REFRESH_INTERVAL_MS)
             }
+        }
+
+    // A preset is a share of the balance at the current price, so while it stays selected it follows both: a rate
+    // that drops or a fee that arrives shrinks ALL rather than leaving it short. Only while the screen is watched,
+    // like the polling, and caught up on return since both flows replay their latest value.
+    private suspend fun followPreset() =
+        combine(pricing, baseBalance.balance.map { it.loadedOrNull }, ::Pair).collect { (current, balance) ->
+            val preset = inrPreset.value ?: return@collect
+            if (inFlight.value != null) return@collect
+            balance
+                ?.let { presetFiat(preset, it, current) }
+                ?.let { inr -> inrState.update { NumberTextFieldInnerState.fromAmount(inr) } }
         }
 
     // Best-effort: a failed poll leaves the last good value in place, which is right here and wrong
@@ -223,8 +244,10 @@ internal class UpiOfframpVM(
 
     private suspend fun readRate(): BigDecimal = rpc.getPriceConfig(network.diamondAddress, currency).sellPriceAsRate()
 
+    @Suppress("LongParameterList")
     private fun buildState(
         inr: NumberTextFieldInnerState,
+        preset: AmountPreset?,
         pricing: Pricing,
         inFlightCheckpoint: OfframpCheckpoint?,
         balance: Usdc6?,
@@ -288,8 +311,58 @@ internal class UpiOfframpVM(
                 },
             isTopUpNeeded = short,
             onDiscardInFlight = if (inFlightCheckpoint != null) ::onDiscardInFlight else null,
+            presets = presetsFor(balance, preset, pricing, inFlightCheckpoint),
         )
     }
+
+    private fun presetsFor(
+        balance: Usdc6?,
+        preset: AmountPreset?,
+        pricing: Pricing,
+        inFlightCheckpoint: OfframpCheckpoint?,
+    ): AmountPresetsState? =
+        balance
+            ?.takeIf { it > Usdc6.ZERO && inFlightCheckpoint == null && prescanned.fiatAmount == null }
+            ?.let { AmountPresetsState(selected = preset) { next -> onInrPreset(next, it, pricing) } }
+
+    /**
+     * A share of the Base balance in the currency paid. The field is what the merchant receives, so ALL is what the
+     * balance pays once the order's fee is set aside, and review shows that fee on top. Never more than the balance
+     * buys: the fiat rounds down, and the USDC behind it rounds down again.
+     */
+    private fun onInrPreset(
+        preset: AmountPreset,
+        balance: Usdc6,
+        pricing: Pricing,
+    ) {
+        val inr = presetFiat(preset, balance, pricing) ?: return
+        inrState.update { NumberTextFieldInnerState.fromAmount(inr) }
+        inrPreset.update { preset }
+        quoteFailed.update { false }
+    }
+
+    /** [preset]'s order out of [balance] in fiat, at [pricing]; null when it comes to nothing. */
+    private fun presetFiat(
+        preset: AmountPreset,
+        balance: Usdc6,
+        pricing: Pricing,
+    ): BigDecimal? =
+        presetOrder(preset, balance, Usdc6.ofWhole(USDC_CAP)) { payFeeFor(placedAt(it, pricing), pricing) }
+            ?.let { toFiat(it, pricing) }
+
+    private fun toFiat(
+        usdc: Usdc6,
+        pricing: Pricing,
+    ): BigDecimal = usdc.whole.multiply(pricing.rate).setScale(currency.precision, RoundingMode.FLOOR)
+
+    /**
+     * What the order places for [usdc] once it has gone to fiat and back. Both legs floor, which can bring an
+     * amount just above the small-order threshold down onto it, where the fee applies after all.
+     */
+    private fun placedAt(
+        usdc: Usdc6,
+        pricing: Pricing,
+    ): Usdc6 = orderAmounts(toFiat(usdc, pricing), pricing.rate)?.usdc ?: usdc
 
     private fun isShortOnMainnet(orderAmount: Usdc6?, balance: Usdc6?, fee: Usdc6): Boolean =
         orderAmount != null &&
@@ -418,6 +491,7 @@ internal class UpiOfframpVM(
         }
 
     private fun onInrChange(next: NumberTextFieldInnerState) {
+        inrPreset.update { null }
         inrState.update { next }
         quoteFailed.update { false }
     }
@@ -444,6 +518,27 @@ internal class UpiOfframpVM(
     // Re-quote: the sell rate the contract stamps can drift, so refetch it the instant the user
     // commits, recompute the USDC, then either confirm a payment from the Base balance or route to a
     // top-up bridge when the balance is short. The pay flow never kicks off an inline bridge itself.
+
+    /**
+     * The fiat the commit places: [rawInr] as typed, or for ALL what the balance pays at the price committed to —
+     * which can have moved since the screen last showed it — worked out again from a fresh balance and shown, so it
+     * pays from Base rather than routing to a top-up. Null when ALL was typed over meanwhile: that commit is stale.
+     */
+    @Suppress("ReturnCount")
+    private suspend fun committedFiat(
+        rawInr: BigDecimal,
+        pricing: Pricing,
+    ): BigDecimal? {
+        if (inrPreset.value != AmountPreset.ALL) return rawInr
+        baseBalance.refresh()
+        if (inrPreset.value != AmountPreset.ALL) return null
+        val fresh =
+            baseBalance.balance.value.loadedOrNull
+                ?.let { presetFiat(AmountPreset.ALL, it, pricing) }
+        fresh?.let { inr -> inrState.update { NumberTextFieldInnerState.fromAmount(inr) } }
+        return fresh ?: rawInr
+    }
+
     @Suppress("ReturnCount")
     private suspend fun reQuoteAndRoute(rawInr: BigDecimal) {
         quoteFailed.update { false }
@@ -454,7 +549,9 @@ internal class UpiOfframpVM(
                     Twig.warn(e) { "UpiOfframpVM: commit-time pricing read failed for ${currency.code}" }
                     quoteFailed.update { true }
                 }.getOrNull() ?: return
-        val amounts = orderAmounts(rawInr, pricing.rate)?.takeIf { it.usdc.whole <= USDC_CAP } ?: return
+        val sendsAll = inrPreset.value == AmountPreset.ALL
+        val committedInr = committedFiat(rawInr, pricing) ?: return
+        val amounts = orderAmounts(committedInr, pricing.rate)?.takeIf { it.usdc.whole <= USDC_CAP } ?: return
 
         // The re-quote can move the placed amount off whatever the input probe measured, and
         // assignability is per amount — so ask once more about the exact pair now being committed.
@@ -464,11 +561,11 @@ internal class UpiOfframpVM(
         merchantProbe.update { recheck }
         if (recheck is MerchantProbe.Checked && !recheck.isAvailable) return
 
-        val snappedInr = snapFiat(rawInr)
+        val snappedInr = snapFiat(committedInr)
         val requiredUsdc = amounts.usdc
         val fiatMicro = amounts.fiat.micros
         val fiatLimitMicro = fiatAmountLimit(requiredUsdc, pricing.rate)
-        baseBalance.refresh()
+        if (!sendsAll) baseBalance.refresh()
         val balance = baseBalance.balance.value.loadedOrNull
         when {
             // The order pulls placed + fee from the Base balance, so confirm pay-from-Base only when it
@@ -672,4 +769,29 @@ internal class UpiOfframpVM(
 
         private const val MERCHANT_PROBE_DEBOUNCE_MS = 600L
     }
+}
+
+/**
+ * The USDC a [preset] orders out of [balance], never more than [cap] — one order's limit. A share pays [feeFor] on
+ * top, as a typed amount does; ALL is the most whose fee the balance still covers, so a balance past the cap and
+ * its fee orders exactly the cap. Null when that leaves nothing.
+ */
+internal fun presetOrder(
+    preset: AmountPreset,
+    balance: Usdc6,
+    cap: Usdc6,
+    feeFor: (Usdc6) -> Usdc6,
+): Usdc6? {
+    val share = Usdc6.ofMicros(preset.of(balance.micros))
+    val capped = minOf(share, cap)
+    val order =
+        if (preset != AmountPreset.ALL) {
+            capped
+        } else {
+            // The fee is a step at a small-order threshold, so one that applies to the capped amount applies to
+            // anything smaller too.
+            val fee = feeFor(capped)
+            if (capped + fee <= share) capped else share - fee
+        }
+    return order.takeIf { it > Usdc6.ZERO }
 }

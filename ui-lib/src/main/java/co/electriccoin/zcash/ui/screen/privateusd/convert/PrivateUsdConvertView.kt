@@ -10,6 +10,7 @@ import co.electriccoin.zcash.ui.common.security.PinVerifyOverlay
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSettlementLedger
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSettlementLedgerRow
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
@@ -40,6 +41,7 @@ internal fun PrivateUsdConvertView(
         onBack = state.onBack,
         isBackEnabled = state.isBackEnabled,
         error = state.message,
+        presets = state.presets,
         primaryButton =
             when (state.phase) {
                 PrivateUsdConvertPhase.AMOUNT -> state.primaryButton.copy(onClick = askThenReview)
@@ -75,7 +77,6 @@ private fun Amount(
         usdBalanceError = state.usdBalanceError,
         isUsdBalanceRefreshing = state.isUsdBalanceRefreshing,
         onRefreshBalance = state.onRefreshBalance,
-        onMax = state.onMax,
         onSwitchDirection = onSwitchDirection,
     )
     state.quote?.let { quote ->
@@ -145,7 +146,7 @@ private fun previewState(phase: PrivateUsdConvertPhase) =
         usdAvailable = stringRes("₹835.20"),
         currencySymbol = "₹",
         receiveEstimate = NumberTextFieldInnerState.fromAmount(BigDecimal("81.60")),
-        onMax = {},
+        presets = AmountPresetsState(onSelect = {}).takeIf { phase == PrivateUsdConvertPhase.AMOUNT },
         quote =
             PrivateUsdQuoteState(
                 pay = stringRes("0.2021 ZEC"),

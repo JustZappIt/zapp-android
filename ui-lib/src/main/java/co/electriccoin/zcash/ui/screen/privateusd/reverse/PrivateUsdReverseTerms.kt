@@ -13,6 +13,7 @@ import co.electriccoin.zcash.ui.common.privateusd.privateUsdToken
 import co.electriccoin.zcash.ui.common.privateusd.toBaseUnits
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
@@ -27,6 +28,8 @@ import java.math.BigInteger
 
 internal data class ReverseForm(
     val amount: NumberTextFieldInnerState = NumberTextFieldInnerState(),
+    /** The 20% / 50% / ALL fill behind [amount], until it's typed over. */
+    val preset: AmountPreset? = null,
     /** What [amount] is in, fixed from the first digit so a rate arriving later can't change what it means. */
     val currency: LocalCurrency? = null,
     val requested: Usdc6? = null,

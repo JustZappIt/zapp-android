@@ -235,7 +235,6 @@
         <item quantity="other">Use at most %1$d decimal places.</item>
     </plurals>
     <string name="private_usd_send_balance_dropped" tools:ignore="MissingTranslation">Your available balance is now less than this amount.</string>
-    <string name="private_usd_use_available" tools:ignore="MissingTranslation">use it all</string>
     <string name="private_usd_send_withdraw_public">Anyone on Ethereum can see this amount and address.</string>
     <string name="private_usd_send_info_title">Sending privately</string>
     <string name="private_usd_send_info_step_address">Enter the amount and the recipient\'s Railgun address, which starts with 0zk.</string>

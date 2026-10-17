@@ -37,6 +37,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.ButtonState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
+import co.electriccoin.zcash.ui.design.component.zapp.ZappAmountPresetRow
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappInfoButton
@@ -56,9 +58,11 @@ internal fun PrivateUsdScaffold(
     primaryButton: ButtonState? = null,
     isBackEnabled: Boolean = true,
     error: StringResource? = null,
+    /** 20% / 50% / ALL docked above the bottom bar, for a screen entering an amount. */
+    presets: AmountPresetsState? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    PrivateUsdFrame(title, subtitle = null, info, onBack, layout, primaryButton, isBackEnabled) {
+    PrivateUsdFrame(title, subtitle = null, info, onBack, layout, primaryButton, isBackEnabled, presets) {
         Column(
             modifier =
                 Modifier
@@ -106,7 +110,7 @@ internal fun PrivateUsdLazyScaffold(
     isBackEnabled: Boolean = true,
     content: LazyListScope.() -> Unit,
 ) {
-    PrivateUsdFrame(title, subtitle, info, onBack, PrivateUsdLayout.STANDARD, primaryButton, isBackEnabled) {
+    PrivateUsdFrame(title, subtitle, info, onBack, PrivateUsdLayout.STANDARD, primaryButton, isBackEnabled, null) {
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             contentPadding = PaddingValues(vertical = ZappTheme.spacing.xl),
@@ -124,6 +128,7 @@ private fun PrivateUsdFrame(
     layout: PrivateUsdLayout,
     primaryButton: ButtonState?,
     isBackEnabled: Boolean,
+    presets: AmountPresetsState?,
     body: @Composable ColumnScope.() -> Unit,
 ) {
     var showsInfo by rememberSaveable { mutableStateOf(false) }
@@ -151,6 +156,7 @@ private fun PrivateUsdFrame(
             },
         )
         body()
+        presets?.let { ZappAmountPresetRow(it) }
         ZappBottomActionBar(
             onBack = onBack,
             isBackEnabled = isBackEnabled,

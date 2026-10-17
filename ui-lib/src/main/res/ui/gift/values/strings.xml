@@ -13,6 +13,7 @@
     <string name="gift_card_amount_symbol">ZEC</string>
     <string name="gift_card_amount_balance_label">Spendable</string>
     <string name="gift_card_amount_hint">The recipient receives exactly this much. You pay the fees.</string>
+    <string name="gift_card_amount_hint_all">Your whole balance. The fees come out of it, so the recipient gets a little less. Review shows exactly how much.</string>
     <string name="gift_card_amount_error_empty">Enter an amount</string>
     <string name="gift_card_amount_error_too_small">Enter an amount above zero</string>
     <string name="gift_card_amount_error_invalid">Enter more than zero and up to 21,000,000 ZEC, using no more than 8 decimal places</string>

@@ -98,7 +98,11 @@ class TransactionProposalNotCreatedException(
     cause: Exception
 ) : Exception(cause)
 
-class InsufficientFundsException : Exception()
+/** [shortfall]: how far the spendable balance falls short of the send and its fee, when the wallet says. */
+class InsufficientFundsException(
+    val shortfall: Zatoshi? = null,
+    cause: Throwable? = null,
+) : Exception(cause)
 
 class TexUnsupportedOnKSException : Exception("TEX addresses are unsupported on Keystone")
 
@@ -324,7 +328,7 @@ class ProposalDataSourceImpl(
             block(synchronizer)
         } catch (e: TransactionEncoderException.ProposalFromParametersException) {
             if (e.isInsufficientFunds()) {
-                throw InsufficientFundsException()
+                throw InsufficientFundsException(e.shortfall(), e)
             } else {
                 throw TransactionProposalNotCreatedException(e)
             }
@@ -432,3 +436,14 @@ internal fun TransactionEncoderException.ProposalFromParametersException.isInsuf
     return message.contains("Insufficient balance", true) ||
         message.contains("The transaction requires an additional change output of", true)
 }
+
+// librustzcash names both amounts when the balance can't cover a payment and its fee:
+// "Insufficient balance (have 120000, need 135000 including fee)".
+private val INSUFFICIENT_BALANCE = Regex("""Insufficient balance \(have (\d+), need (\d+)""")
+
+/** How many zatoshi short the balance is, or null for a shape that doesn't say. */
+internal fun TransactionEncoderException.ProposalFromParametersException.shortfall(): Zatoshi? =
+    rootCause.message
+        ?.let(INSUFFICIENT_BALANCE::find)
+        ?.destructured
+        ?.let { (have, need) -> (need.toLong() - have.toLong()).takeIf { it > 0 }?.let(::Zatoshi) }

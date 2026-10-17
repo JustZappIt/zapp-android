@@ -3,6 +3,7 @@ package co.electriccoin.zcash.ui.screen.swap.peer
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.component.TextFieldState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import xyz.justzappit.offramp.peer.PeerCurrency
 import xyz.justzappit.offramp.peer.PeerPlatform
@@ -32,6 +33,8 @@ internal data class PeerCashOutState(
     val activeOrders: List<PeerActiveOrderState>,
     val primaryButton: ButtonState,
     val onBack: () -> Unit,
+    /** 20% / 50% / ALL of the spendable Base USDC, once it's read. */
+    val presets: AmountPresetsState? = null,
 )
 
 internal data class PeerLedgerRow(

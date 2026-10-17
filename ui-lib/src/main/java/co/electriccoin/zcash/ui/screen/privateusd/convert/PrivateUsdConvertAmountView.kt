@@ -16,7 +16,6 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappFieldBalance
-import co.electriccoin.zcash.ui.design.component.zapp.ZappFieldBalanceAction
 import co.electriccoin.zcash.ui.design.component.zapp.ZappOfframpHeroAmountField
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRefreshButton
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
@@ -34,7 +33,6 @@ internal fun PrivateUsdConvertAmountView(
     currencySymbol: String,
     zecAvailable: StringResource?,
     usdAvailable: StringResource,
-    onMax: (() -> Unit)?,
     onSwitchDirection: (() -> Unit)?,
     isZecBalanceLoading: Boolean = false,
     zecSyncing: StringResource? = null,
@@ -62,7 +60,6 @@ internal fun PrivateUsdConvertAmountView(
         available = available(direction.from),
         note = note?.getValue(),
         isInvalid = isInvalid,
-        onMax = onMax,
         isLoading = loading(direction.from),
         isSyncing = syncing(direction.from),
         onRefresh = refresh(direction.from),
@@ -76,7 +73,6 @@ internal fun PrivateUsdConvertAmountView(
         available = available(direction.to),
         note = stringResource(R.string.convert_estimated_amount),
         isInvalid = false,
-        onMax = null,
         onRefresh = refresh(direction.to),
         isRefreshing = isUsdBalanceRefreshing,
         isLoading = loading(direction.to),
@@ -109,7 +105,6 @@ private fun AssetAmount(
     available: StringResource?,
     note: String?,
     isInvalid: Boolean,
-    onMax: (() -> Unit)?,
     isLoading: Boolean,
     isSyncing: Boolean,
     onRefresh: (() -> Unit)?,
@@ -149,15 +144,8 @@ private fun AssetAmount(
                             available?.getValue()
                                 ?: stringResource(R.string.private_usd_home_unknown)
                         },
-                    // Syncing shows what's spendable so far, spinning, with the maximum held back until it's all there.
+                    // Syncing shows what's spendable so far, spinning, with the presets held back until it's all there.
                     isLoading = isLoading || isSyncing,
-                    action =
-                        onMax?.let {
-                            ZappFieldBalanceAction(
-                                onClickLabel = stringResource(R.string.private_usd_use_available),
-                                onClick = it,
-                            )
-                        },
                 ),
         )
     }

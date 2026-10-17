@@ -8,6 +8,7 @@ import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.component.TextFieldState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -55,7 +56,7 @@ private fun previewState(phase: PrivateUsdSendPhase) =
         amountNote = null,
         isAmountInvalid = false,
         available = stringRes("$12.345678"),
-        onMax = {},
+        presets = AmountPresetsState(onSelect = {}),
         recipient = TextFieldState(value = stringRes("")) {},
         review =
             PrivateUsdSendReviewState(

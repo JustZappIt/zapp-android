@@ -22,6 +22,7 @@ import co.electriccoin.zcash.ui.common.usecase.NavigateBackToPayUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -141,15 +142,24 @@ class PrivateUsdConvertVM(
             usdAvailable = terms.available(holdings),
             currencySymbol = holdings.currency.symbol,
             receiveEstimate = ready?.let { terms.estimate(it.quote, holdings.currency) } ?: NumberTextFieldInnerState(),
-            onMax =
+            presets =
                 holdings
                     .maximum()
                     ?.takeIf { form.phase == PrivateUsdConvertPhase.AMOUNT }
                     ?.let { available ->
-                        {
-                            // The whole balance shows at once; its quote then brings it to what that pays for.
-                            this.form.update { it.copy(amount = zecField(available.value)) }
-                            requestQuote(fillsAmount = true) { zecQuotes.quote(available.value) }
+                        // Quoted at once. The field keeps the share — ALL the whole balance — and the quote prices the
+                        // most that leaves room for the deposit's fee, so review shows the fee taken out of it.
+                        AmountPresetsState(selected = form.preset) { preset ->
+                            val totalZat = preset.of(available.value)
+                            this.form.update {
+                                it.copy(
+                                    amount = zecField(totalZat),
+                                    preset = preset,
+                                    quote = ConvertQuote.None,
+                                    error = null,
+                                )
+                            }
+                            requestQuote { zecQuotes.quote(totalZat) }
                         }
                     },
             quote = ready?.let { terms.quote(it, form.phase, now, holdings.currency) },
@@ -215,7 +225,7 @@ class PrivateUsdConvertVM(
 
     private fun onAmountChange(inner: NumberTextFieldInnerState) {
         quoteJob?.cancel()
-        form.update { it.copy(amount = inner, quote = ConvertQuote.None, error = null) }
+        form.update { it.copy(amount = inner, preset = null, quote = ConvertQuote.None, error = null) }
         val totalZat = inner.zatoshi()
         if (totalZat != null && !form.value.isShort(holdings.value.spendable)) {
             requestQuote(TYPING_DEBOUNCE) { zecQuotes.quote(totalZat) }

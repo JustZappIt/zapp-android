@@ -7,6 +7,7 @@ import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
 
@@ -22,7 +23,8 @@ internal data class PrivateUsdConvertState(
     val currencySymbol: String,
     /** What the quote brings, in the user's currency. */
     val receiveEstimate: NumberTextFieldInnerState,
-    val onMax: (() -> Unit)?,
+    /** 20% / 50% / ALL of the spendable ZEC; null until the wallet has caught up on all of it. */
+    val presets: AmountPresetsState?,
     val quote: PrivateUsdQuoteState?,
     val isQuoting: Boolean,
     /** Why it can't go on. */

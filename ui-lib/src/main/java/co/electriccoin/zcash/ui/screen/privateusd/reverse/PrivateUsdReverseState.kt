@@ -7,6 +7,7 @@ import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressState
@@ -21,7 +22,8 @@ internal data class PrivateUsdReverseState(
     /** The ZEC a quote brings home. */
     val receiveEstimate: NumberTextFieldInnerState,
     val isQuoting: Boolean,
-    val onMax: (() -> Unit)?,
+    /** 20% / 50% / ALL of the private balance while an amount is being typed. */
+    val presets: AmountPresetsState?,
     val canSwitchDirection: Boolean,
     /** Set while the user looks over a quote before converting. */
     val review: PrivateUsdReverseReviewState?,
