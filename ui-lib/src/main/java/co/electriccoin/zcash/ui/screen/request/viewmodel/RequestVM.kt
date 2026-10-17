@@ -20,6 +20,7 @@ import co.electriccoin.zcash.ui.common.usecase.SendChatMessageUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShareQRUseCase
 import co.electriccoin.zcash.ui.common.usecase.Zip321BuildUriUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
+import co.electriccoin.zcash.ui.common.wallet.ZecFiatRate
 import co.electriccoin.zcash.ui.common.wallet.toZecFiatRate
 import co.electriccoin.zcash.ui.design.util.StringResource.Companion.NUMBER_FORMAT_LOCALE
 import co.electriccoin.zcash.ui.screen.chat.ChatRoomArgs
@@ -71,7 +72,6 @@ class RequestVM(
         private const val MAX_ZCASH_SUPPLY = 21_000_000
         private const val DEFAULT_MEMO = ""
         private const val DEFAULT_URI = ""
-        private const val FIAT_SCALE = 2
     }
 
     private val decimalFormatSymbols: DecimalFormatSymbols
@@ -542,21 +542,13 @@ class RequestVM(
                 ?.currencyConversion
                 ?.toZecFiatRate()
         val fiat =
-            rate?.let {
-                val requestedAmount =
-                    if (request.value.amountState.currency == RequestCurrency.FIAT) {
-                        request.value.amountState.amount
-                            .toBigDecimalLocalized()
-                    } else {
-                        it.zecToFiat(zecAmount)
-                    }
-                requestedAmount?.let { amount ->
-                    PaymentRequestFiatAmount(
-                        amount = amount.setScale(FIAT_SCALE, RoundingMode.HALF_UP),
-                        currency = it.currency,
-                    )
-                }
-            }
+            typedFiatAmount(
+                currency = request.value.amountState.currency,
+                typedAmount =
+                    request.value.amountState.amount
+                        .toBigDecimalLocalized(),
+                rate = rate,
+            )
         val content =
             buildPaymentRequestJson(
                 id = UUID.randomUUID().toString(),
@@ -595,3 +587,22 @@ class RequestVM(
 }
 
 private const val TEMP_FILE_NAME_PREFIX = "zip_321_request_qr_" // NON-NLS
+
+/**
+ * The fiat amount a chat request carries, present only when the requester typed one. It fixes the
+ * payer's headline at that price, so an amount typed in ZEC travels without one rather than with a
+ * dollar figure nobody asked for.
+ */
+internal fun typedFiatAmount(
+    currency: RequestCurrency,
+    typedAmount: BigDecimal?,
+    rate: ZecFiatRate?,
+): PaymentRequestFiatAmount? {
+    if (currency != RequestCurrency.FIAT || typedAmount == null || rate == null) return null
+    return PaymentRequestFiatAmount(
+        amount = typedAmount.setScale(FIAT_SCALE, RoundingMode.HALF_UP),
+        currency = rate.currency,
+    )
+}
+
+private const val FIAT_SCALE = 2
