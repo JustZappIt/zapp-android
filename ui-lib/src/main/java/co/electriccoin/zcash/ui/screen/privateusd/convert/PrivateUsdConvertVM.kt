@@ -76,13 +76,15 @@ class PrivateUsdConvertVM(
     private val deployment = atomicSwapRepository.requireDeployment()
     private val terms = PrivateUsdConvertTerms(deployment)
     private val zecQuotes = PrivateUsdZecQuotes(atomicSwapRepository)
+    private val walletSnapshot = walletSnapshotDataSource.observe()
     private val form = MutableStateFlow(ConvertForm())
     private var quoteJob: Job? = null
+    private var completedSyncs = 0L
 
     private val holdings: StateFlow<ConvertHoldings> =
         combine(
             accountDataSource.zashiAccount,
-            walletSnapshotDataSource.observe(),
+            walletSnapshot,
             balanceRepository.observe(),
             observeLocalCurrency(),
             spendGuard.state,
@@ -124,12 +126,14 @@ class PrivateUsdConvertVM(
         viewModelScope.launch { navigationRouter.showConversionUnderWay(atomicSwapRepository, reverseSwapRepository) }
         // A quote the wallet couldn't price before it synced is asked for again once it has.
         viewModelScope.launch {
-            walletSnapshotDataSource
-                .observe()
+            walletSnapshot
                 .map { it?.status == Synchronizer.Status.SYNCED }
                 .distinctUntilChanged()
                 .filter { it }
-                .collect { refreshIfExpired(now(), synced = true) }
+                .collect {
+                    completedSyncs++
+                    refreshIfExpired(now(), synced = true)
+                }
         }
     }
 
@@ -264,12 +268,17 @@ class PrivateUsdConvertVM(
         quoteJob =
             viewModelScope.launch {
                 delay(debounce)
+                val completedSyncsAtStart = completedSyncs
                 val next: ConvertQuote =
                     runConversionStep("no quote") { quote() }.fold(
                         onSuccess = { ConvertQuote.Ready(it).arrived(now()) },
                         onFailure = { navigationRouter.quoteState(it, atomicSwapRepository, reverseSwapRepository) },
                     )
                 form.update { it.withQuote(next, fillsAmount) }
+                // A sync completed while this request was loading, before its failure could wait for it.
+                if (completedSyncs != completedSyncsAtStart && walletSnapshot.value?.status == Synchronizer.Status.SYNCED) {
+                    refreshIfExpired(now(), synced = true)
+                }
             }
     }
 

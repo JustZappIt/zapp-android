@@ -275,6 +275,64 @@ class PrivateUsdConvertVMTest {
         }
 
     @Test
+    fun `a wallet unavailable response arriving after sync still gets a fresh quote`() =
+        runTest {
+            sync.value = walletAt(Synchronizer.Status.SYNCING, progress = 0.9f)
+            val response = CompletableDeferred<Unit>()
+            var requests = 0
+            coEvery { swaps.quote(any()) } coAnswers {
+                val amount = requested()
+                requests++
+                if (requests == 2) {
+                    response.await()
+                    quoteFor(amount, DepositFee.Unready)
+                } else {
+                    quoteFor(amount)
+                }
+            }
+            start()
+            type("0.5")
+            assertTrue(vm.state.value.isQuoting)
+
+            sync.value = walletAt(Synchronizer.Status.SYNCED)
+            runCurrent()
+            response.complete(Unit)
+            runCurrent()
+
+            assertNull(vm.state.value.message)
+            assertNotNull(vm.state.value.quote)
+            assertTrue(vm.state.value.primaryButton.isEnabled)
+            coVerify(exactly = 3) { swaps.quote(any()) }
+        }
+
+    @Test
+    fun `a late wallet unavailable response retries only once for the completed sync`() =
+        runTest {
+            sync.value = walletAt(Synchronizer.Status.SYNCING, progress = 0.9f)
+            val response = CompletableDeferred<Unit>()
+            var requests = 0
+            coEvery { swaps.quote(any()) } coAnswers {
+                val amount = requested()
+                requests++
+                if (requests == 2) response.await()
+                quoteFor(amount, DepositFee.Unready)
+            }
+            start()
+            type("0.5")
+
+            sync.value = walletAt(Synchronizer.Status.SYNCED)
+            runCurrent()
+            response.complete(Unit)
+            runCurrent()
+            advanceTimeBy(TYPING)
+            runCurrent()
+
+            assertEquals(stringRes(R.string.convert_quote_after_sync), vm.state.value.message)
+            assertFalse(vm.state.value.primaryButton.isEnabled)
+            coVerify(exactly = 3) { swaps.quote(any()) }
+        }
+
+    @Test
     fun `the maximum, whose every note costs a dearer fee than a smaller deposit's, can still be reviewed`() =
         runTest {
             coEvery { swaps.quote(any()) } answers {
