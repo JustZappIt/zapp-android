@@ -13,6 +13,7 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapQuote
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapTestnet
+import co.electriccoin.zcash.ui.common.atomicswap.DepositFee
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.model.WalletRestoringState
@@ -29,6 +30,7 @@ import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
 import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
+import co.electriccoin.zcash.ui.design.component.TextSelection
 import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.offer
@@ -67,6 +69,7 @@ import java.io.IOException
 import java.math.BigDecimal
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -200,6 +203,7 @@ class PrivateUsdConvertVMTest {
             runCurrent()
             // The deduction is the review's to show: the field still says the whole balance.
             assertEquals(BigDecimal("1.00000002"), vm.state.value.amount.innerState.amount)
+            assertEquals(TextSelection.End, vm.state.value.amount.innerState.innerTextFieldState.selection)
             assertEquals(
                 stringRes(Zatoshi(ONE_ZEC)),
                 vm.state.value.quote
@@ -234,6 +238,30 @@ class PrivateUsdConvertVMTest {
         }
 
     @Test
+    fun `while a changed amount is quoted the last quote stays up, and can't be reviewed`() =
+        runTest {
+            start()
+            type("0.5")
+            val first = checkNotNull(vm.state.value.quote)
+            val next = CompletableDeferred<Unit>()
+            coEvery { swaps.quote(any()) } coAnswers {
+                next.await()
+                quoteFor(requested())
+            }
+
+            type("0.6")
+
+            assertTrue(vm.state.value.isQuoting)
+            assertEquals(first, vm.state.value.quote)
+            assertFalse(vm.state.value.primaryButton.isEnabled)
+            next.complete(Unit)
+            runCurrent()
+            assertFalse(vm.state.value.isQuoting)
+            assertNotEquals(first.pay, checkNotNull(vm.state.value.quote).pay)
+            assertTrue(vm.state.value.primaryButton.isEnabled)
+        }
+
+    @Test
     fun `while the wallet syncs, the balance it hasn't caught up on is said, and the presets wait for it`() =
         runTest {
             shielded.value = Zatoshi(2 * ONE_ZEC)
@@ -249,9 +277,9 @@ class PrivateUsdConvertVMTest {
         }
 
     @Test
-    fun `an offer the wallet can't price the fee of can't be reviewed, and says why`() =
+    fun `a deposit that takes more than one transaction can't be reviewed, and says why`() =
         runTest {
-            coEvery { swaps.quote(any()) } answers { quoteFor(requested(), feeZat = null) }
+            coEvery { swaps.quote(any()) } answers { quoteFor(requested(), DepositFee.Split) }
             start()
 
             type("0.5")
@@ -259,6 +287,110 @@ class PrivateUsdConvertVMTest {
             assertNull(vm.state.value.quote)
             assertEquals(stringRes(R.string.convert_error_unpayable), vm.state.value.message)
             assertFalse(vm.state.value.primaryButton.isEnabled)
+        }
+
+    @Test
+    fun `a wallet that can't propose the deposit before it syncs says so, and quotes once it has`() =
+        runTest {
+            sync.value = walletAt(Synchronizer.Status.SYNCING, progress = 0.3f)
+            coEvery { swaps.quote(any()) } answers { quoteFor(requested(), DepositFee.Unready) }
+            start()
+
+            type("0.5")
+
+            assertNull(vm.state.value.quote)
+            assertEquals(stringRes(R.string.convert_quote_after_sync), vm.state.value.message)
+
+            coEvery { swaps.quote(any()) } answers { quoteFor(requested()) }
+            sync.value = walletAt(Synchronizer.Status.SYNCED)
+            runCurrent()
+
+            assertNull(vm.state.value.message)
+            assertNotNull(vm.state.value.quote)
+            assertTrue(vm.state.value.primaryButton.isEnabled)
+        }
+
+    @Test
+    fun `a wallet unavailable response arriving after sync still gets a fresh quote`() =
+        runTest {
+            sync.value = walletAt(Synchronizer.Status.SYNCING, progress = 0.9f)
+            val response = CompletableDeferred<Unit>()
+            var requests = 0
+            coEvery { swaps.quote(any()) } coAnswers {
+                val amount = requested()
+                requests++
+                if (requests == 2) {
+                    response.await()
+                    quoteFor(amount, DepositFee.Unready)
+                } else {
+                    quoteFor(amount)
+                }
+            }
+            start()
+            type("0.5")
+            assertTrue(vm.state.value.isQuoting)
+
+            sync.value = walletAt(Synchronizer.Status.SYNCED)
+            runCurrent()
+            response.complete(Unit)
+            runCurrent()
+
+            assertNull(vm.state.value.message)
+            assertNotNull(vm.state.value.quote)
+            assertTrue(vm.state.value.primaryButton.isEnabled)
+            coVerify(exactly = 3) { swaps.quote(any()) }
+        }
+
+    @Test
+    fun `a late wallet unavailable response retries only once for the completed sync`() =
+        runTest {
+            sync.value = walletAt(Synchronizer.Status.SYNCING, progress = 0.9f)
+            val response = CompletableDeferred<Unit>()
+            var requests = 0
+            coEvery { swaps.quote(any()) } coAnswers {
+                val amount = requested()
+                requests++
+                if (requests == 2) response.await()
+                quoteFor(amount, DepositFee.Unready)
+            }
+            start()
+            type("0.5")
+
+            sync.value = walletAt(Synchronizer.Status.SYNCED)
+            runCurrent()
+            response.complete(Unit)
+            runCurrent()
+            advanceTimeBy(TYPING)
+            runCurrent()
+
+            assertEquals(stringRes(R.string.convert_quote_after_sync), vm.state.value.message)
+            assertFalse(vm.state.value.primaryButton.isEnabled)
+            coVerify(exactly = 3) { swaps.quote(any()) }
+        }
+
+    @Test
+    fun `ALL, whose every note costs a dearer fee than a smaller deposit's, can still be reviewed`() =
+        runTest {
+            coEvery { swaps.quote(any()) } answers {
+                val units = requested().micros.toLong()
+                val shortZat = units * ZAT_PER_UNIT + WHOLE_BALANCE_FEE_ZAT - ONE_ZEC
+                val fee =
+                    when {
+                        requested() == PrivateUsdZecQuotes.PRICE_PROBE -> DepositFee.Payable(FEE_ZAT)
+                        shortZat > 0 -> DepositFee.Short(shortZat)
+                        else -> DepositFee.Payable(WHOLE_BALANCE_FEE_ZAT)
+                    }
+                quoteFor(requested(), fee)
+            }
+            start()
+
+            checkNotNull(vm.state.value.presets).onSelect(AmountPreset.ALL)
+            runCurrent()
+
+            assertNull(vm.state.value.message)
+            assertNotNull(vm.state.value.quote)
+            assertEquals(BigDecimal("1.00000000"), vm.state.value.amount.innerState.amount)
+            assertTrue(vm.state.value.primaryButton.isEnabled)
         }
 
     @Test
@@ -300,7 +432,7 @@ class PrivateUsdConvertVMTest {
                         R.string.convert_error_device_refused,
                     StoreCorruptedException("unreadable") to R.string.convert_error_store,
                     AtomicSwapBlockedException(AtomicSwapBlock.ZCASH_UNAVAILABLE, "no height") to
-                        R.string.convert_error_wallet,
+                        R.string.convert_quote_after_sync,
                     IllegalStateException("anything else") to R.string.convert_error_generic,
                 )
 
@@ -470,6 +602,7 @@ class PrivateUsdConvertVMTest {
         const val ONE_ZEC = 100_000_000L
         const val ZAT_PER_UNIT = 3L
         const val FEE_ZAT = 10_000L
+        const val WHOLE_BALANCE_FEE_ZAT = 25_000L
         val TYPING = 700.milliseconds
 
         fun walletAt(
@@ -485,7 +618,7 @@ class PrivateUsdConvertVMTest {
 
         fun quoteFor(
             requested: Usdc6,
-            feeZat: Long? = FEE_ZAT
+            fee: DepositFee = DepositFee.Payable(FEE_ZAT)
         ): AtomicSwapQuote {
             val units = requested.micros.toLong()
             return AtomicSwapQuote(
@@ -496,7 +629,7 @@ class PrivateUsdConvertVMTest {
                     expiresAt = Clock.System.now().epochSeconds + 300,
                     receives = units * 97L / 100,
                 ),
-                feeZat,
+                fee,
             )
         }
     }

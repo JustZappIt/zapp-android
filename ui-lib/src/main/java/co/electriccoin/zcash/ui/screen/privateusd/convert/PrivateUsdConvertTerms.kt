@@ -36,8 +36,13 @@ internal data class ConvertForm(
     val quote: ConvertQuote = ConvertQuote.None,
     val isConfirming: Boolean = false,
     val error: StringResource? = null,
+    /** The last quote to arrive, shown while the next loads so the screen doesn't collapse on every keystroke. */
+    val lastReady: ConvertQuote.Ready? = null,
 ) {
     val ready: ConvertQuote.Ready? get() = quote as? ConvertQuote.Ready
+
+    /** What the screen shows: the quote, or the last one while the next loads. */
+    val shown: ConvertQuote.Ready? get() = ready ?: lastReady?.takeIf { quote == ConvertQuote.Loading }
 
     /** More than [spendable], which is said before any quote is asked for. */
     fun isShort(spendable: Zatoshi?): Boolean {
@@ -72,9 +77,17 @@ internal data class ConvertForm(
         fillsAmount: Boolean
     ): ConvertForm =
         when {
-            phase != PrivateUsdConvertPhase.AMOUNT -> this
-            fillsAmount && next is ConvertQuote.Ready -> copy(amount = zecField(next.quote.totalZat), quote = next)
-            else -> copy(quote = next)
+            phase != PrivateUsdConvertPhase.AMOUNT -> {
+                this
+            }
+
+            fillsAmount && next is ConvertQuote.Ready -> {
+                copy(amount = zecField(next.quote.totalZat), quote = next, lastReady = next)
+            }
+
+            else -> {
+                copy(quote = next, lastReady = next as? ConvertQuote.Ready ?: lastReady)
+            }
         }
 }
 
@@ -93,8 +106,10 @@ internal sealed interface ConvertQuote {
             if (secondsLeft(now) > 0) this else Failed(stringRes(R.string.convert_quote_clock_ahead))
     }
 
+    /** [waitsOnSync]: the wallet couldn't price it before syncing, so it's asked for again once synced. */
     data class Failed(
-        val message: StringResource
+        val message: StringResource,
+        val waitsOnSync: Boolean = false,
     ) : ConvertQuote
 }
 

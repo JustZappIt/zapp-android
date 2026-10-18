@@ -5,6 +5,7 @@ package co.electriccoin.zcash.ui.screen.privateusd.convert
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cash.z.ecc.android.sdk.Synchronizer
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
@@ -26,6 +27,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdFailure
 import co.electriccoin.zcash.ui.screen.privateusd.TYPING_DEBOUNCE
 import co.electriccoin.zcash.ui.screen.privateusd.authenticateSpend
 import co.electriccoin.zcash.ui.screen.privateusd.epochSeconds
@@ -48,6 +50,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -72,13 +77,15 @@ class PrivateUsdConvertVM(
     private val deployment = atomicSwapRepository.requireDeployment()
     private val terms = PrivateUsdConvertTerms(deployment)
     private val zecQuotes = PrivateUsdZecQuotes(atomicSwapRepository)
+    private val walletSnapshot = walletSnapshotDataSource.observe()
     private val form = MutableStateFlow(ConvertForm())
     private var quoteJob: Job? = null
+    private var completedSyncs = 0L
 
     private val holdings: StateFlow<ConvertHoldings> =
         combine(
             accountDataSource.zashiAccount,
-            walletSnapshotDataSource.observe(),
+            walletSnapshot,
             balanceRepository.observe(),
             observeLocalCurrency(),
             spendGuard.state,
@@ -118,6 +125,17 @@ class PrivateUsdConvertVM(
     init {
         // Back after the process died mid-accept, or opened while a conversion is under way.
         viewModelScope.launch { navigationRouter.showConversionUnderWay(atomicSwapRepository, reverseSwapRepository) }
+        // A quote the wallet couldn't price before it synced is asked for again once it has.
+        viewModelScope.launch {
+            walletSnapshot
+                .map { it?.status == Synchronizer.Status.SYNCED }
+                .distinctUntilChanged()
+                .filter { it }
+                .collect {
+                    completedSyncs++
+                    refreshIfExpired(now(), synced = true)
+                }
+        }
     }
 
     internal fun resetAmount() {
@@ -133,6 +151,7 @@ class PrivateUsdConvertVM(
         pin: PinVerifyState?,
     ): PrivateUsdConvertState {
         val ready = form.ready
+        val shown = form.shown
         val spendable = holdings.spendable
         return PrivateUsdConvertState(
             phase = form.phase,
@@ -141,7 +160,7 @@ class PrivateUsdConvertVM(
             zecAvailable = spendable?.let { stringRes(it).asPrivacySensitive() },
             usdAvailable = terms.available(holdings),
             currencySymbol = holdings.currency.symbol,
-            receiveEstimate = ready?.let { terms.estimate(it.quote, holdings.currency) } ?: NumberTextFieldInnerState(),
+            receiveEstimate = shown?.let { terms.estimate(it.quote, holdings.currency) } ?: NumberTextFieldInnerState(),
             presets =
                 holdings
                     .maximum()
@@ -162,7 +181,7 @@ class PrivateUsdConvertVM(
                             requestQuote { zecQuotes.quote(totalZat) }
                         }
                     },
-            quote = ready?.let { terms.quote(it, form.phase, now, holdings.currency) },
+            quote = shown?.let { terms.quote(it, form.phase, now, holdings.currency) },
             isQuoting = form.quote == ConvertQuote.Loading,
             message =
                 form.message(spendable, now)
@@ -232,13 +251,21 @@ class PrivateUsdConvertVM(
         }
     }
 
-    // A quote left to run out on the amount step is replaced; on review the user decides.
-    private fun refreshIfExpired(now: Long) {
+    // A quote left to run out on the amount step is replaced, as is one the wallet couldn't price until [synced];
+    // on review the user decides.
+    private fun refreshIfExpired(
+        now: Long,
+        synced: Boolean = false,
+    ) {
         val current = form.value
         val onAmount = current.phase == PrivateUsdConvertPhase.AMOUNT
         val expired = current.ready?.quote?.takeIf { onAmount && current.isExpired(now) }
-        val totalZat = current.amount.zatoshi()?.takeUnless { current.isShort(holdings.value.spendable) }
-        if (expired != null && totalZat != null) requestQuote { zecQuotes.quote(totalZat, expired.offer.requested) }
+        val waited = synced && onAmount && (current.quote as? ConvertQuote.Failed)?.waitsOnSync == true
+        val totalZat = current.amount.zatoshi()?.takeUnless { current.isShort(holdings.value.spendable) } ?: return
+        when {
+            expired != null -> requestQuote { zecQuotes.quote(totalZat, expired.offer.requested) }
+            waited -> requestQuote { zecQuotes.quote(totalZat) }
+        }
     }
 
     private fun requestQuote(
@@ -251,16 +278,17 @@ class PrivateUsdConvertVM(
         quoteJob =
             viewModelScope.launch {
                 delay(debounce)
+                val completedSyncsAtStart = completedSyncs
                 val next: ConvertQuote =
                     runConversionStep("no quote") { quote() }.fold(
                         onSuccess = { ConvertQuote.Ready(it).arrived(now()) },
-                        onFailure = { e ->
-                            navigationRouter
-                                .quoteFailure(e, atomicSwapRepository, reverseSwapRepository)
-                                ?.let(ConvertQuote::Failed) ?: ConvertQuote.None
-                        },
+                        onFailure = { navigationRouter.quoteState(it, atomicSwapRepository, reverseSwapRepository) },
                     )
                 form.update { it.withQuote(next, fillsAmount) }
+                // A sync completed while this request was loading, before its failure could wait for it.
+                if (completedSyncs != completedSyncsAtStart && walletSnapshot.value?.status == Synchronizer.Status.SYNCED) {
+                    refreshIfExpired(now(), synced = true)
+                }
             }
     }
 
@@ -327,3 +355,15 @@ class PrivateUsdConvertVM(
         fun now() = Clock.System.now().epochSeconds
     }
 }
+
+// A wallet that couldn't price the quote before syncing gets it once synced; the rest say why, or go where it is.
+private suspend fun NavigationRouter.quoteState(
+    e: Throwable,
+    forward: AtomicSwapRepository,
+    reverse: ReverseSwapRepository,
+): ConvertQuote =
+    if (e.toFailure() == PrivateUsdFailure.ZCASH_UNAVAILABLE) {
+        ConvertQuote.Failed(stringRes(R.string.convert_quote_after_sync), waitsOnSync = true)
+    } else {
+        quoteFailure(e, forward, reverse)?.let { ConvertQuote.Failed(it) } ?: ConvertQuote.None
+    }

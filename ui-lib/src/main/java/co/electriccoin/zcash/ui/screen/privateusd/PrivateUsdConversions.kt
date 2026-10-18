@@ -9,6 +9,7 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployment
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
+import co.electriccoin.zcash.ui.design.component.TextSelection
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
 import co.electriccoin.zcash.ui.screen.privateusd.reverse.PrivateUsdReverseArgs
@@ -84,6 +85,8 @@ internal fun NumberTextFieldInnerState.zatoshi(): Long? =
 /** Something more than zero was typed: a zero is still being typed, so it isn't flagged. */
 internal val NumberTextFieldInnerState.isPositive: Boolean get() = amount?.signum() == 1
 
-/** [zatoshi] as a ZEC amount field shows it. */
+/** [zatoshi] as a ZEC amount field shows it, with the cursor after it so typing goes on from there. */
 internal fun zecField(zatoshi: Long): NumberTextFieldInnerState =
-    NumberTextFieldInnerState.fromAmount(BigDecimal.valueOf(zatoshi, ZEC_DECIMALS))
+    NumberTextFieldInnerState.fromAmount(BigDecimal.valueOf(zatoshi, ZEC_DECIMALS)).let {
+        it.copy(innerTextFieldState = it.innerTextFieldState.copy(selection = TextSelection.End))
+    }
