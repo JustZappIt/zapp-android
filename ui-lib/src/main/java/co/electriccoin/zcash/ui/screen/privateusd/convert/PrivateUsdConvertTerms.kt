@@ -16,6 +16,7 @@ import co.electriccoin.zcash.ui.common.privateusd.basisPoints
 import co.electriccoin.zcash.ui.common.privateusd.privateUsdToken
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.PrivateUsdInfo
@@ -30,6 +31,8 @@ import kotlin.math.roundToInt
 internal data class ConvertForm(
     val phase: PrivateUsdConvertPhase = PrivateUsdConvertPhase.AMOUNT,
     val amount: NumberTextFieldInnerState = NumberTextFieldInnerState(),
+    /** The 20% / 50% / ALL fill behind [amount], until it's typed over. */
+    val preset: AmountPreset? = null,
     val quote: ConvertQuote = ConvertQuote.None,
     val isConfirming: Boolean = false,
     val error: StringResource? = null,

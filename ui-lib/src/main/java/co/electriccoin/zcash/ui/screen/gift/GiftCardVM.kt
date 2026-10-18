@@ -5,12 +5,14 @@ package co.electriccoin.zcash.ui.screen.gift
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.compose.AddFundsPanelState
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
+import co.electriccoin.zcash.ui.common.datasource.InsufficientFundsException
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
@@ -20,6 +22,7 @@ import co.electriccoin.zcash.ui.common.security.SecretAuthPolicy
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.FundGiftCardUseCase
 import co.electriccoin.zcash.ui.common.usecase.Funding
+import co.electriccoin.zcash.ui.common.usecase.GetWholeBalanceSendableUseCase
 import co.electriccoin.zcash.ui.common.usecase.GiftCardCreationError
 import co.electriccoin.zcash.ui.common.usecase.GiftCardCreationException
 import co.electriccoin.zcash.ui.common.usecase.GiftFundingError
@@ -27,12 +30,14 @@ import co.electriccoin.zcash.ui.common.usecase.GiftFundingException
 import co.electriccoin.zcash.ui.common.usecase.GiftFundingQuote
 import co.electriccoin.zcash.ui.common.usecase.ObserveFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
+import co.electriccoin.zcash.ui.common.usecase.toZecExact
 import co.electriccoin.zcash.ui.common.wallet.ZecFiatRate
 import co.electriccoin.zcash.ui.common.wallet.toFiatString
 import co.electriccoin.zcash.ui.common.wallet.zecFiatRate
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
-import co.electriccoin.zcash.ui.design.util.StringResource
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.gift.model.GiftAmount
 import co.electriccoin.zcash.ui.screen.gift.model.GiftCardStatus
@@ -72,12 +77,16 @@ class GiftCardVM(
     private val secretAuthGate: SecretAuthGate,
     accountDataSource: AccountDataSource,
     exchangeRateRepository: ExchangeRateRepository,
+    private val getWholeBalanceSendable: GetWholeBalanceSendableUseCase,
     swapRepository: SwapRepository,
     private val giftCardStorageProvider: GiftCardStorageProvider,
     private val navigationRouter: NavigationRouter,
     observeFunding: ObserveFundingUseCase,
 ) : ViewModel() {
     private val snapshot = MutableStateFlow(GiftCardSnapshot())
+
+    private val selectedAccount =
+        accountDataSource.selectedAccount.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private var prepareJob: Job? = null
     private var fundJob: Job? = null
@@ -101,13 +110,13 @@ class GiftCardVM(
             combine(
                 snapshot,
                 secretAuthGate.pinPrompt,
-                accountDataSource.selectedAccount,
+                selectedAccount,
                 giftCardStorageProvider.observe().catch { emit(emptyList()) },
                 fiatRate,
             ) { current, pin, account, storedCards, rate ->
                 current.toState(
                     pinVerify = pin,
-                    spendableBalance = account?.spendableShieldedBalance?.let { stringRes(it) },
+                    spendable = account?.spendableShieldedBalance,
                     storedCards = storedCards,
                     rate = rate,
                 )
@@ -129,7 +138,7 @@ class GiftCardVM(
             initialValue =
                 GiftCardSnapshot().toState(
                     pinVerify = null,
-                    spendableBalance = null,
+                    spendable = null,
                     storedCards = emptyList(),
                     rate = null,
                 ),
@@ -137,7 +146,7 @@ class GiftCardVM(
 
     private fun GiftCardSnapshot.toState(
         pinVerify: PinVerifyState?,
-        spendableBalance: StringResource?,
+        spendable: Zatoshi?,
         storedCards: List<StoredGiftCard>,
         rate: ZecFiatRate?,
     ): GiftCardState {
@@ -177,7 +186,8 @@ class GiftCardVM(
                     defaultNumberError = stringRes(R.string.gift_card_amount_error_invalid),
                     onValueChange = ::onAmountChange,
                 ),
-            spendableBalance = spendableBalance,
+            spendableBalance = spendable?.let { stringRes(it) },
+            presets = presetsFor(visibleStage, spendable),
             message = message,
             messageGraphemes = GiftMessage.graphemeCount(message),
             expiry = expiry,
@@ -203,8 +213,23 @@ class GiftCardVM(
         viewModelScope.launch { confirmGiftCardFunding.reconcileAndObserve() }
     }
 
+    private fun GiftCardSnapshot.presetsFor(
+        stage: GiftCardStage,
+        spendable: Zatoshi?,
+    ): AmountPresetsState? =
+        AmountPresetsState(selected = preset, onSelect = ::onAmountPreset)
+            .takeIf { stage == GiftCardStage.DETAILS && (spendable?.value ?: 0L) > 0L }
+
     private fun onAmountChange(amount: NumberTextFieldInnerState) =
-        snapshot.update { it.copy(amount = amount, error = null) }
+        snapshot.update { it.copy(amount = amount, preset = null, error = null) }
+
+    /** ALL fills the whole balance; the claim reserve and the network fee come out of it at review. */
+    private fun onAmountPreset(preset: AmountPreset) {
+        val spendable = selectedAccount.value?.spendableShieldedBalance ?: return
+        val zec = Zatoshi(preset.of(spendable.value)).toZecExact()
+        val amount = NumberTextFieldInnerState.fromAmount(zec)
+        snapshot.update { it.copy(amount = amount, preset = preset, error = null) }
+    }
 
     private fun onMessageChange(message: String) = snapshot.update { it.copy(message = message, error = null) }
 
@@ -223,7 +248,40 @@ class GiftCardVM(
         val inputs =
             GiftCardInputs(amount = amount, message = current.note(), expiry = current.expiry)
         snapshot.update { it.copy(stage = GiftCardStage.PREPARING, error = null) }
-        prepareJob = viewModelScope.launch { prepare(inputs) }
+        prepareJob =
+            viewModelScope.launch {
+                if (current.preset == AmountPreset.ALL) prepareWholeBalance(current) else prepare(inputs)
+            }
+    }
+
+    /** ALL's card is what the whole balance funds, found before minting so the link promises exactly that. */
+    private suspend fun prepareWholeBalance(current: GiftCardSnapshot) {
+        runCatching { wholeBalanceCard() }
+            .onSuccess { amount ->
+                if (amount == null) {
+                    snapshot.update { it.copy(stage = GiftCardStage.DETAILS, error = GiftCardError.INSUFFICIENT_FUNDS) }
+                } else {
+                    prepare(GiftCardInputs(amount = amount, message = current.note(), expiry = current.expiry))
+                }
+            }.onFailure { throwable ->
+                if (throwable is CancellationException) throw throwable
+                snapshot.update { it.copy(stage = GiftCardStage.DETAILS, error = throwable.toGiftCardError()) }
+            }
+    }
+
+    /**
+     * The card the whole balance funds: what it sends to one shielded address after the network fee, less the
+     * reserve that pays for the claim. Null when that leaves nothing.
+     */
+    private suspend fun wholeBalanceCard(): GiftAmount? {
+        val sendable =
+            try {
+                getWholeBalanceSendable()
+            } catch (_: InsufficientFundsException) {
+                return null
+            }
+        val card = sendable.value - FundGiftCardUseCase.CLAIM_FEE_RESERVE.value
+        return GiftAmount.fromZec(Zatoshi(card.coerceAtLeast(0)).toZecExact())
     }
 
     private suspend fun prepare(inputs: GiftCardInputs) {
@@ -367,6 +425,8 @@ private val StoredGiftCard.canBeHandedOff: Boolean
 private data class GiftCardSnapshot(
     val stage: GiftCardStage = GiftCardStage.DETAILS,
     val amount: NumberTextFieldInnerState = NumberTextFieldInnerState(),
+    /** The 20% / 50% / ALL fill behind [amount], until the sender types over it. */
+    val preset: AmountPreset? = null,
     val message: String = "",
     val expiry: GiftExpiry = GiftExpiry.NEVER,
     val quote: GiftFundingQuote? = null,

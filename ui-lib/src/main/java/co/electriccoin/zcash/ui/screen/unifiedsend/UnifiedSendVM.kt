@@ -6,6 +6,7 @@ import cash.z.ecc.android.sdk.ext.convertZecToZatoshi
 import cash.z.ecc.android.sdk.model.FiatCurrency
 import cash.z.ecc.android.sdk.model.Memo
 import cash.z.ecc.android.sdk.model.WalletAddress
+import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.android.sdk.model.ZecSend
 import cash.z.ecc.android.sdk.type.AddressType
 import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
@@ -13,6 +14,7 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.compose.AddFundsPanelState
+import co.electriccoin.zcash.ui.common.datasource.InsufficientFundsException
 import co.electriccoin.zcash.ui.common.model.SwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapMode
 import co.electriccoin.zcash.ui.common.model.WalletAccount
@@ -28,6 +30,7 @@ import co.electriccoin.zcash.ui.common.usecase.GetSelectedSwapAssetUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSelectedWalletAccountUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSlippageUseCase
 import co.electriccoin.zcash.ui.common.usecase.GetSwapAssetsUseCase
+import co.electriccoin.zcash.ui.common.usecase.GetWholeBalanceSendableUseCase
 import co.electriccoin.zcash.ui.common.usecase.IsABContactHintVisibleUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToScanGenericAddressUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateToSelectABSwapRecipientUseCase
@@ -41,20 +44,25 @@ import co.electriccoin.zcash.ui.common.usecase.PrefillSendUseCase
 import co.electriccoin.zcash.ui.common.usecase.PreselectSwapAssetUseCase
 import co.electriccoin.zcash.ui.common.usecase.RequestSwapQuoteUseCase
 import co.electriccoin.zcash.ui.common.usecase.ValidateAddressUseCase
+import co.electriccoin.zcash.ui.common.usecase.toZecExact
 import co.electriccoin.zcash.ui.common.wallet.ZecFiatRate
 import co.electriccoin.zcash.ui.common.wallet.zecFiatRate
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.util.combine
 import co.electriccoin.zcash.ui.design.util.imageRes
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stripFractionsDynamically
+import co.electriccoin.zcash.ui.screen.insufficientfunds.InsufficientFundsArgs
 import co.electriccoin.zcash.ui.screen.swap.CurrencyType
 import co.electriccoin.zcash.ui.screen.swap.SwapCancelState
 import co.electriccoin.zcash.ui.screen.swap.info.CrossPayInfoArgs
 import co.electriccoin.zcash.ui.screen.swap.picker.SwapAssetPickerArgs
 import co.electriccoin.zcash.ui.screen.swap.slippage.SwapSlippageArgs
 import co.electriccoin.zcash.ui.screen.topup.TopUpArgs
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -92,6 +100,7 @@ internal class UnifiedSendVM(
     private val navigateToSwapQuoteIfAvailable: NavigateToSwapQuoteIfAvailableUseCase,
     private val validateAddress: ValidateAddressUseCase,
     private val createProposal: CreateProposalUseCase,
+    private val getWholeBalanceSendable: GetWholeBalanceSendableUseCase,
     private val observeABContactPicked: ObserveABContactPickedUseCase,
     private val prefillSend: PrefillSendUseCase,
     private val observeClearSend: ObserveClearSendUseCase,
@@ -141,9 +150,15 @@ internal class UnifiedSendVM(
      * kept in step as the user types, so flipping this only changes which one is on screen. */
     private val destinationCurrency = MutableStateFlow(CurrencyType.TOKEN)
 
+    /** The 20% / 50% / ALL fill behind the pay amount, until the user types over it. */
+    private val amountPreset = MutableStateFlow<AmountPreset?>(null)
+
     // ── Derived flows ─────────────────────────────────────────────────────────
 
     private val selectedAsset = getSelectedSwapAsset.observe()
+
+    private val selectedAccount =
+        getSelectedWalletAccount.observe().stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** Combined zcash recipient — reduces two flows to one for the main combine */
     private val zcashRecipient = combine(zcashAddress, zcashAddressType) { addr, type -> addr to type }
@@ -219,7 +234,7 @@ internal class UnifiedSendVM(
             memoText,
             swapAssetsWithRate,
             getSlippage.observe(),
-            getSelectedWalletAccount.observe(),
+            selectedAccount,
             isABHintVisible,
             isRequestingQuote,
             displayPrefs,
@@ -257,7 +272,7 @@ internal class UnifiedSendVM(
         }
 
     val state =
-        combine(internalState, observeFunding.zec()) { internal, funding ->
+        combine(internalState, amountPreset, observeFunding.zec()) { internal, preset, funding ->
             mapper
                 .createState(
                     state = internal,
@@ -281,6 +296,7 @@ internal class UnifiedSendVM(
                     onTryAgainClick = ::onTryAgainClick,
                     onTopUpClick = ::onTopUpClick,
                 ).copy(
+                    presets = presetsState(internal, preset),
                     addFunds =
                         AddFundsPanelState(
                             body = stringRes(R.string.add_funds_panel_send),
@@ -376,6 +392,7 @@ internal class UnifiedSendVM(
                 zecAmountInner.update { NumberTextFieldInnerState() }
                 fiatAmountInner.update { NumberTextFieldInnerState() }
                 fiatWasLastEdited.update { false }
+                amountPreset.update { null }
                 memoText.update { "" }
                 swapAddress.update { "" }
                 swapContact.update { null }
@@ -392,6 +409,13 @@ internal class UnifiedSendVM(
                 .launchIn(viewModelScope)
         }
 
+        // A preset is a share of the balance, so it follows the balance while it stays selected.
+        selectedAccount
+            .map { it?.spendableShieldedBalance }
+            .distinctUntilChanged()
+            .onEach { amountPreset.value?.let(::onAmountPreset) }
+            .launchIn(viewModelScope)
+
         swapRepository.requestRefreshAssets()
     }
 
@@ -401,6 +425,22 @@ internal class UnifiedSendVM(
         zecFiatRate(exchangeRateRepository.state.value, zecUsdPrice = null)
 
     fun onZecAmountChange(inner: NumberTextFieldInnerState) {
+        amountPreset.update { null }
+        setZecAmount(inner)
+    }
+
+    /**
+     * Fills the pay side with a share of the spendable balance, in ZEC even while fiat is on screen so ALL is the
+     * balance to the zatoshi. ALL's fee comes out when the payment is built, so the field shows the whole balance.
+     */
+    fun onAmountPreset(preset: AmountPreset) {
+        val spendable = selectedAccount.value?.spendableShieldedBalance ?: return
+        val zec = Zatoshi(preset.of(spendable.value)).toZecExact()
+        setZecAmount(NumberTextFieldInnerState.fromAmount(zec))
+        amountPreset.update { preset }
+    }
+
+    private fun setZecAmount(inner: NumberTextFieldInnerState) {
         zecAmountInner.update { inner }
         fiatWasLastEdited.update { false }
         swapMode.update { SwapMode.EXACT_INPUT }
@@ -409,6 +449,7 @@ internal class UnifiedSendVM(
     }
 
     fun onFiatAmountChange(inner: NumberTextFieldInnerState) {
+        amountPreset.update { null }
         fiatAmountInner.update { inner }
         fiatWasLastEdited.update { true }
         swapMode.update { SwapMode.EXACT_INPUT }
@@ -429,6 +470,7 @@ internal class UnifiedSendVM(
         // sees mid-keystroke. NEAR truncates the same way when it builds the quote request, so a
         // finer amount could never reach the recipient anyway.
         if (decimals != null && inner.exceedsAssetDecimals(decimals)) return
+        amountPreset.update { null }
         tokenAmountInner.update { inner }
         tokenFiatAmountInner.update { estimateUsdFromToken(inner.amount, asset?.usdPrice).toAmountState() }
         swapMode.update { SwapMode.EXACT_OUTPUT }
@@ -441,6 +483,7 @@ internal class UnifiedSendVM(
      */
     fun onTokenFiatAmountChange(inner: NumberTextFieldInnerState) {
         val asset = selectedAsset.value
+        amountPreset.update { null }
         tokenFiatAmountInner.update { inner }
         val decimals = asset?.decimals
         val token =
@@ -570,6 +613,16 @@ internal class UnifiedSendVM(
         manualAmountSwap.update { current -> current?.not() ?: false }
     }
 
+    private fun presetsState(
+        internal: UnifiedSendInternalState,
+        preset: AmountPreset?,
+    ): AmountPresetsState? =
+        AmountPresetsState(
+            selected = preset,
+            isEnabled = !internal.isRequestingQuote,
+            onSelect = ::onAmountPreset,
+        ).takeIf { (internal.account?.spendableShieldedBalance?.value ?: 0L) > 0L }
+
     /** Flips the destination field between the token and USD. */
     fun onDestinationCurrencySwap() =
         destinationCurrency.update { current ->
@@ -601,9 +654,20 @@ internal class UnifiedSendVM(
         val addr = swapContact.value?.address ?: swapAddress.value
         if (addr.isBlank()) return
         val isExactOutput = swapMode.value == SwapMode.EXACT_OUTPUT
-        val amount = (if (isExactOutput) tokenAmountInner else zecAmountInner).value.amount ?: return
+        val typed = (if (isExactOutput) tokenAmountInner else zecAmountInner).value.amount ?: return
+        val sendsAll = !isExactOutput && amountPreset.value == AmountPreset.ALL
         viewModelScope.launch {
             isRequestingQuote.update { true }
+            // NEAR deposit addresses are transparent, so the fee is priced against one.
+            val amount =
+                if (sendsAll) {
+                    wholeBalanceOrNull(typed) { it.transparent.address }?.toZecExact() ?: run {
+                        isRequestingQuote.update { false }
+                        return@launch
+                    }
+                } else {
+                    typed
+                }
             if (isExactOutput) {
                 requestSwapQuote.requestExactOutput(
                     amount = amount,
@@ -631,9 +695,16 @@ internal class UnifiedSendVM(
             // Read before the first suspension: the field is disabled from here on, but a keystroke
             // already in flight must not land in the memo of a proposal that is being built.
             val memoStr = if (type == AddressType.Transparent) "" else memoText.value
+            val sendsAll = amountPreset.value == AmountPreset.ALL
             try {
                 val walletAddr = toWalletAddress(addr, type)
-                val zatoshi = zecAmt.convertZecToZatoshi()
+                // ALL sends the balance less this payment's fee, which review then shows taken out of it.
+                val zatoshi =
+                    if (sendsAll) {
+                        wholeBalanceOrNull(zecAmt) { walletAddr } ?: return@launch
+                    } else {
+                        zecAmt.convertZecToZatoshi()
+                    }
                 val zecSend =
                     ZecSend(
                         destination = walletAddr,
@@ -641,7 +712,7 @@ internal class UnifiedSendVM(
                         memo = Memo(memoStr),
                         proposal = null
                     )
-                createProposal(zecSend, fiatWasLastEdited.value)
+                createProposal(zecSend, floor = fiatWasLastEdited.value && !sendsAll)
             } catch (
                 @Suppress("TooGenericExceptionCaught") e: Exception
             ) {
@@ -653,6 +724,29 @@ internal class UnifiedSendVM(
             }
         }
     }
+
+    /**
+     * The whole balance less its fee to [destination], or null once the user is shown there isn't enough. Any other
+     * failure goes ahead with [shown], the whole balance, so the payment's own errors say what's wrong — a TEX
+     * address on Keystone, a wallet still syncing.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun wholeBalanceOrNull(
+        shown: BigDecimal,
+        destination: (WalletAccount) -> WalletAddress,
+    ): Zatoshi? =
+        try {
+            getWholeBalanceSendable(destination)
+        } catch (_: InsufficientFundsException) {
+            navigationRouter.forward(InsufficientFundsArgs)
+            null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // The class only, as createZecSendClick logs: SDK messages can embed the recipient address.
+            Twig.warn { "UnifiedSendVM: no whole-balance amount (${e::class.simpleName})" }
+            shown.convertZecToZatoshi()
+        }
 
     private suspend fun toWalletAddress(address: String, type: AddressType): WalletAddress =
         when (type) {

@@ -24,9 +24,11 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalances
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendStatus
 import co.electriccoin.zcash.ui.common.privateusd.privateUsdToken
+import co.electriccoin.zcash.ui.common.repository.RailgunWalletRepository
 import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
@@ -60,6 +62,7 @@ import xyz.justzappit.offramp.atomicswap.ReversePhase
 import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
 import xyz.justzappit.offramp.atomicswap.SwapAuthorization
 import xyz.justzappit.offramp.p2p.Usdc6
+import xyz.justzappit.railgun.RailgunFees
 import java.io.IOException
 import java.math.BigDecimal
 import java.math.BigInteger
@@ -90,6 +93,10 @@ class PrivateUsdReverseVMTest {
     private val swaps =
         mockk<AtomicSwapRepository>(relaxed = true) { every { deployment } returns AtomicSwapTestnet.deployment }
     private val navigation = mockk<NavigationRouter>(relaxed = true)
+    private val railgun =
+        mockk<RailgunWalletRepository>(relaxed = true) {
+            coEvery { fees() } returns RailgunFees(unshieldBasisPoints = 25)
+        }
     private lateinit var vm: PrivateUsdReverseVM
 
     @After
@@ -400,6 +407,39 @@ class PrivateUsdReverseVMTest {
             assertEquals(stringRes(Zatoshi(0)), amounts.args.last())
         }
 
+    @Test
+    fun `ALL shows the whole private balance and quotes what the unshield and relayer fees leave`() =
+        runTest {
+            coEvery { repository.fundingFee() } returns Usdc6.ofMicros(250_000)
+            start()
+
+            checkNotNull(vm.state.value.presets).onSelect(AmountPreset.ALL)
+            advanceTimeBy(TYPING)
+            runCurrent()
+
+            assertEquals(0, BigDecimal("50").compareTo(vm.state.value.amount.innerState.amount))
+            assertEquals(
+                AmountPreset.ALL,
+                vm.state.value.presets
+                    ?.selected
+            )
+            // 50 USDC less 0.25% to Railgun (0.125) and the relayer's 0.25.
+            coVerify(exactly = 1) { repository.quote(Usdc6.ofMicros(49_625_000)) }
+        }
+
+    @Test
+    fun `a share of the private balance is quoted with the fees on top`() =
+        runTest {
+            start()
+
+            checkNotNull(vm.state.value.presets).onSelect(AmountPreset.TWENTY)
+            advanceTimeBy(TYPING)
+            runCurrent()
+
+            coVerify(exactly = 1) { repository.quote(Usdc6.ofMicros(10_000_000)) }
+            coVerify(exactly = 0) { repository.fundingFee() }
+        }
+
     private fun TestScope.start() {
         Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
         val token = AtomicSwapTestnet.deployment.privateUsdToken
@@ -427,7 +467,7 @@ class PrivateUsdReverseVMTest {
                 navigationRouter = navigation,
                 navigateBackToPay = mockk(relaxed = true),
                 atomicSwapRepository = swaps,
-                railgunWalletRepository = mockk(relaxed = true),
+                railgunWalletRepository = railgun,
                 balanceRepository = balances,
                 observeLocalCurrency = localCurrency,
                 accountDataSource = accounts,

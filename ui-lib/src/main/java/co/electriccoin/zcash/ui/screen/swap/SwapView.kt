@@ -75,6 +75,7 @@ import co.electriccoin.zcash.ui.design.component.ZashiImageButton
 import co.electriccoin.zcash.ui.design.component.ZashiInfoText
 import co.electriccoin.zcash.ui.design.component.listitem.SimpleListItemState
 import co.electriccoin.zcash.ui.design.component.listitem.ZashiSimpleListItem
+import co.electriccoin.zcash.ui.design.component.zapp.ZappAmountPresetRow
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
@@ -212,6 +213,7 @@ internal fun SwapView(
         }
 
         // ── Bottom action bar ────────────────────────────────────────────────
+        state.presets?.let { ZappAmountPresetRow(it) }
         SwapBottomBar(state)
 
         SideEffect { onSideEffect(amountFocusRequester) }

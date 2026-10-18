@@ -9,6 +9,7 @@ import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.usecase.GiftFundingQuote
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.screen.gift.model.GiftAmount
 import co.electriccoin.zcash.ui.screen.gift.model.GiftMessage
@@ -85,6 +86,8 @@ internal data class GiftCardState(
     val stage: GiftCardStage,
     val amount: NumberTextFieldState,
     val spendableBalance: StringResource?,
+    /** 20% / 50% / ALL above the bottom bar while the amount is still being chosen. */
+    val presets: AmountPresetsState? = null,
     val message: String,
     val messageGraphemes: Int,
     val expiry: GiftExpiry,

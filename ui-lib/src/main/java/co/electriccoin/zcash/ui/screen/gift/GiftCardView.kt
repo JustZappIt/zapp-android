@@ -55,6 +55,8 @@ import co.electriccoin.zcash.ui.common.compose.AddFundsPanel
 import co.electriccoin.zcash.ui.common.compose.SecureScreen
 import co.electriccoin.zcash.ui.common.compose.shouldSecureScreen
 import co.electriccoin.zcash.ui.common.security.PinVerifyOverlay
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
+import co.electriccoin.zcash.ui.design.component.zapp.ZappAmountPresetRow
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
@@ -108,7 +110,12 @@ internal fun GiftCardView(
                 right = { HeaderActions(state) { showFundingInfo = true } },
             )
         },
-        bottomBar = { GiftCardBottomBar(state) },
+        bottomBar = {
+            Column {
+                state.presets?.let { ZappAmountPresetRow(it) }
+                GiftCardBottomBar(state)
+            }
+        },
     ) { contentPadding ->
         Column(
             modifier =
@@ -262,7 +269,15 @@ private fun DetailsSection(state: GiftCardState) {
             isError = state.amount.isError,
         )
         BasicText(
-            text = stringResource(R.string.gift_card_amount_hint),
+            // ALL can't promise the figure shown: the fees come out of the balance, so review has the card's worth.
+            text =
+                stringResource(
+                    if (state.presets?.selected == AmountPreset.ALL) {
+                        R.string.gift_card_amount_hint_all
+                    } else {
+                        R.string.gift_card_amount_hint
+                    }
+                ),
             style = ZappTheme.typography.caption.copy(color = c.textMuted),
         )
     }

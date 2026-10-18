@@ -236,7 +236,7 @@ val viewModelModule =
         viewModelOf(::SwapAssetPickerVM)
         viewModelOf(::SwapSlippageVM)
         viewModelOf(::SwapVM)
-        // One past viewModelOf's 22-parameter limit, so wired by hand.
+        // Past viewModelOf's 22-argument ceiling.
         viewModel { params ->
             UnifiedSendVM(
                 args = params.get(),
@@ -252,6 +252,7 @@ val viewModelModule =
                 navigateToSwapQuoteIfAvailable = get(),
                 validateAddress = get(),
                 createProposal = get(),
+                getWholeBalanceSendable = get(),
                 observeABContactPicked = get(),
                 prefillSend = get(),
                 observeClearSend = get(),

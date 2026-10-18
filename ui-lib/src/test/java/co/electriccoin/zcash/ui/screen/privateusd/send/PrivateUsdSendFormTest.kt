@@ -8,6 +8,7 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdAsset
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendCost
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdTokens
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.design.util.stringResByQuantity
@@ -114,6 +115,26 @@ class PrivateUsdSendFormTest {
         val amount = this as StringResource.ByCurrencyNumber
         assertEquals(asset.token.decimals, amount.maxDecimals)
         return amount.amount as BigDecimal
+    }
+
+    @Test
+    fun `ALL shows the whole balance and sends what the network fee leaves`() {
+        val fee = PrivateUsdNetworkFee(token = asset.token, minimum = BigInteger.valueOf(40_000))
+        val all =
+            form(PrivateUsdSendMode.PRIVATE, ZERO_K, BigDecimal("12.34"))
+                .copy(preset = AmountPreset.ALL, networkFee = fee)
+
+        assertNull(all.amountError(asset))
+        assertEquals(BigInteger.valueOf(12_300_000), checkNotNull(all.request(asset)).amount)
+    }
+
+    @Test
+    fun `the whole balance typed in still leaves room for the network fee`() {
+        val fee = PrivateUsdNetworkFee(token = asset.token, minimum = BigInteger.valueOf(40_000))
+        val typed = form(PrivateUsdSendMode.PRIVATE, ZERO_K, BigDecimal("12.34")).copy(networkFee = fee)
+
+        assertNotNull(typed.amountError(asset))
+        assertNull(typed.request(asset))
     }
 
     private fun form(

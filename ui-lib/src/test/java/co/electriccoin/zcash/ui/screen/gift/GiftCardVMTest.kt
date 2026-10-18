@@ -7,6 +7,7 @@ import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.datasource.RegularTransactionProposal
+import co.electriccoin.zcash.ui.common.model.WalletAccount
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
 import co.electriccoin.zcash.ui.common.repository.SwapAssetsData
@@ -16,11 +17,13 @@ import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.FundGiftCardUseCase
 import co.electriccoin.zcash.ui.common.usecase.Funding
+import co.electriccoin.zcash.ui.common.usecase.GetWholeBalanceSendableUseCase
 import co.electriccoin.zcash.ui.common.usecase.GiftFundingQuote
 import co.electriccoin.zcash.ui.common.usecase.ObserveFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
 import co.electriccoin.zcash.ui.screen.gift.model.GiftCardStatus
 import co.electriccoin.zcash.ui.screen.gift.model.GiftFundingFailure
 import co.electriccoin.zcash.ui.screen.gift.model.GiftFundingFailureReason
@@ -47,6 +50,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class GiftCardVMTest {
@@ -84,9 +88,51 @@ class GiftCardVMTest {
             }
         }
 
-    private fun TestScope.fixture(): Fixture {
+    @Test
+    fun `ALL shows the whole balance and funds the card it sends, less the claim reserve`() =
+        runTest {
+            val fixture = fixture(spendable = Zatoshi(100_030_000L))
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { fixture.vm.state.collect {} }
+            advanceUntilIdle()
+            coEvery { fixture.getWholeBalanceSendable(any()) } returns Zatoshi(100_020_000L)
+
+            checkNotNull(fixture.vm.state.value.presets).onSelect(AmountPreset.ALL)
+            advanceUntilIdle()
+            assertEquals(BigDecimal("1.00030000"), fixture.vm.state.value.amount.innerState.amount)
+
+            fixture.vm.state.value
+                .onContinue()
+            advanceUntilIdle()
+
+            coVerify { fixture.fundGiftCard.prepare(Zatoshi(100_010_000L), any(), any(), any()) }
+            assertEquals(GiftCardStage.REVIEW, fixture.vm.state.value.stage)
+        }
+
+    @Test
+    fun `typing over a preset funds the typed amount`() =
+        runTest {
+            val fixture = fixture(spendable = Zatoshi(100_030_000L))
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { fixture.vm.state.collect {} }
+            advanceUntilIdle()
+
+            checkNotNull(fixture.vm.state.value.presets).onSelect(AmountPreset.ALL)
+            fixture.vm.state.value
+                .onAmountChange(NumberTextFieldInnerState.fromAmount(BigDecimal("0.5")))
+            fixture.vm.state.value
+                .onContinue()
+            advanceUntilIdle()
+
+            assertNull(
+                fixture.vm.state.value.presets
+                    ?.selected
+            )
+            coVerify(exactly = 0) { fixture.getWholeBalanceSendable(any()) }
+            coVerify { fixture.fundGiftCard.prepare(Zatoshi(50_000_000L), any(), any(), any()) }
+        }
+
+    private fun TestScope.fixture(spendable: Zatoshi? = null): Fixture {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        return Fixture()
+        return Fixture(spendable)
     }
 
     private suspend fun TestScope.reachReady(fixture: Fixture) {
@@ -104,7 +150,11 @@ class GiftCardVMTest {
         assertEquals(GiftCardStage.READY, fixture.vm.state.value.stage)
     }
 
-    private class Fixture {
+    private class Fixture(
+        spendable: Zatoshi?,
+    ) {
+        val getWholeBalanceSendable = mockk<GetWholeBalanceSendableUseCase>()
+
         private val draft = card()
         private val storedCards = MutableStateFlow(listOf(draft))
         private var storedCard = draft
@@ -127,7 +177,7 @@ class GiftCardVMTest {
                 claimFeeReserve = Zatoshi(10_000L),
                 networkFee = Zatoshi(10_000L),
             )
-        private val fundGiftCard =
+        val fundGiftCard =
             mockk<FundGiftCardUseCase>().also {
                 coEvery { it.prepare(any(), any(), any(), any()) } returns fundingQuote
                 coEvery { it.submit(fundingQuote) } coAnswers {
@@ -149,8 +199,14 @@ class GiftCardVMTest {
                 secretAuthGate = secretAuthGate,
                 accountDataSource =
                     mockk<AccountDataSource>().also {
-                        every { it.selectedAccount } returns flowOf(null)
+                        every { it.selectedAccount } returns
+                            flowOf(
+                                spendable?.let { balance ->
+                                    mockk<WalletAccount> { every { spendableShieldedBalance } returns balance }
+                                }
+                            )
                     },
+                getWholeBalanceSendable = getWholeBalanceSendable,
                 exchangeRateRepository =
                     mockk<ExchangeRateRepository>().also {
                         every { it.state } returns MutableStateFlow(ExchangeRateState.OptedOut)

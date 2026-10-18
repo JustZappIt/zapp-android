@@ -351,7 +351,7 @@ class FundGiftCardUseCase(
             lastCheckedAt = other.lastCheckedAt,
         ) == other
 
-    private companion object {
+    companion object {
         /**
          * What the sender prepays so the recipient's claim costs them nothing.
          *
@@ -363,7 +363,7 @@ class FundGiftCardUseCase(
          * Unlike [GiftFundingQuote.networkFee] this cannot come from a real proposal — at funding
          * time the card holds no notes, so there is nothing to propose a claim over.
          */
-        const val CLAIM_FEE_RESERVE_ZATOSHI = 10_000L
+        private const val CLAIM_FEE_RESERVE_ZATOSHI = 10_000L
 
         val CLAIM_FEE_RESERVE = Zatoshi(CLAIM_FEE_RESERVE_ZATOSHI)
     }

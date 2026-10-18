@@ -31,6 +31,7 @@ import co.electriccoin.zcash.ui.common.security.PinVerifyState
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.TextSelection
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.privateusd.offer
 import co.electriccoin.zcash.ui.screen.privateusd.progress.PrivateUsdProgressArgs
@@ -150,7 +151,7 @@ class PrivateUsdConvertVMTest {
         }
 
     @Test
-    fun `the maximum can't change an amount once the review is up`() =
+    fun `ALL can't change an amount once the review is up`() =
         runTest {
             start()
             type("0.5")
@@ -161,7 +162,7 @@ class PrivateUsdConvertVMTest {
                 quoteFor(requested())
             }
 
-            checkNotNull(vm.state.value.onMax).invoke()
+            checkNotNull(vm.state.value.presets).onSelect(AmountPreset.ALL)
             assertFalse(vm.state.value.primaryButton.isEnabled)
             review()
             assertEquals(PrivateUsdConvertPhase.AMOUNT, vm.state.value.phase)
@@ -179,7 +180,7 @@ class PrivateUsdConvertVMTest {
         }
 
     @Test
-    fun `the maximum fills in the whole balance at once, then what its quote pays for`() =
+    fun `ALL keeps the whole balance in the field while its quote pays what the fee leaves`() =
         runTest {
             spendable.value = Zatoshi(ONE_ZEC + 2)
             start()
@@ -189,16 +190,51 @@ class PrivateUsdConvertVMTest {
                 quoteFor(requested())
             }
 
-            checkNotNull(vm.state.value.onMax).invoke()
+            checkNotNull(vm.state.value.presets).onSelect(AmountPreset.ALL)
 
             assertEquals(BigDecimal("1.00000002"), vm.state.value.amount.innerState.amount)
+            assertEquals(
+                AmountPreset.ALL,
+                vm.state.value.presets
+                    ?.selected
+            )
             assertTrue(vm.state.value.isQuoting)
             maximum.complete(Unit)
             runCurrent()
-            assertEquals(BigDecimal("1.00000000"), vm.state.value.amount.innerState.amount)
+            // The deduction is the review's to show: the field still says the whole balance.
+            assertEquals(BigDecimal("1.00000002"), vm.state.value.amount.innerState.amount)
             assertEquals(TextSelection.End, vm.state.value.amount.innerState.innerTextFieldState.selection)
+            assertEquals(
+                stringRes(Zatoshi(ONE_ZEC)),
+                vm.state.value.quote
+                    ?.pay
+            )
             assertFalse(vm.state.value.isQuoting)
             coVerify { swaps.quote(Usdc6.ofMicros(33_330_000)) }
+        }
+
+    @Test
+    fun `a share of the balance is filled and quoted at once, and typing over it lets the preset go`() =
+        runTest {
+            start()
+
+            checkNotNull(vm.state.value.presets).onSelect(AmountPreset.HALF)
+            runCurrent()
+
+            assertEquals(BigDecimal("0.50000000"), vm.state.value.amount.innerState.amount)
+            assertEquals(
+                AmountPreset.HALF,
+                vm.state.value.presets
+                    ?.selected
+            )
+            assertNotNull(vm.state.value.quote)
+
+            type("0.4")
+
+            assertNull(
+                vm.state.value.presets
+                    ?.selected
+            )
         }
 
     @Test
@@ -226,18 +262,18 @@ class PrivateUsdConvertVMTest {
         }
 
     @Test
-    fun `while the wallet syncs, the balance it hasn't caught up on is said, and the maximum waits for it`() =
+    fun `while the wallet syncs, the balance it hasn't caught up on is said, and the presets wait for it`() =
         runTest {
             shielded.value = Zatoshi(2 * ONE_ZEC)
             sync.value = walletAt(Synchronizer.Status.SYNCING, progress = 0.42f)
             start()
 
             assertEquals(stringRes(R.string.convert_zec_syncing_progress, 42), vm.state.value.zecSyncing)
-            assertNull(vm.state.value.onMax)
+            assertNull(vm.state.value.presets)
 
             sync.value = walletAt(Synchronizer.Status.SYNCED)
             assertNull(vm.state.value.zecSyncing)
-            assertNotNull(vm.state.value.onMax)
+            assertNotNull(vm.state.value.presets)
         }
 
     @Test
@@ -333,7 +369,7 @@ class PrivateUsdConvertVMTest {
         }
 
     @Test
-    fun `the maximum, whose every note costs a dearer fee than a smaller deposit's, can still be reviewed`() =
+    fun `ALL, whose every note costs a dearer fee than a smaller deposit's, can still be reviewed`() =
         runTest {
             coEvery { swaps.quote(any()) } answers {
                 val units = requested().micros.toLong()
@@ -348,7 +384,7 @@ class PrivateUsdConvertVMTest {
             }
             start()
 
-            checkNotNull(vm.state.value.onMax).invoke()
+            checkNotNull(vm.state.value.presets).onSelect(AmountPreset.ALL)
             runCurrent()
 
             assertNull(vm.state.value.message)

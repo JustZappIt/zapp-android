@@ -14,6 +14,7 @@ import co.electriccoin.zcash.ui.common.privateusd.basisPoints
 import co.electriccoin.zcash.ui.common.privateusd.exactTokenAmount
 import co.electriccoin.zcash.ui.common.privateusd.toBaseUnitsExact
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPreset
 import co.electriccoin.zcash.ui.design.component.zapp.ellipsizeAddress
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
@@ -43,6 +44,8 @@ internal data class PrivateUsdSendForm(
     /** Pinned from the first balance on, so a refresh can't change what's sent. */
     val token: PrivateUsdToken? = null,
     val amount: NumberTextFieldInnerState = NumberTextFieldInnerState(),
+    /** The 20% / 50% / ALL fill behind [amount], until it's typed over. ALL sends what the fee leaves. */
+    val preset: AmountPreset? = null,
     val recipient: String = "",
     val cost: PrivateUsdSendCost? = null,
     val reviewedRequest: PrivateUsdSendRequest? = null,
@@ -74,7 +77,9 @@ internal data class PrivateUsdSendForm(
     /** The send this form describes, once it's complete, valid and more than nothing. */
     fun request(asset: PrivateUsdAsset): PrivateUsdSendRequest? {
         val sendable = networkFee?.sendable(asset) ?: asset.available
-        val units = units(asset.token)?.takeIf { it.signum() > 0 && it <= sendable }
+        val units =
+            (if (preset == AmountPreset.ALL) sendable else units(asset.token))
+                ?.takeIf { it.signum() > 0 && it <= sendable }
         val to = destination(mode, recipient)
         return if (units != null && to != null) PrivateUsdSendRequest(asset.token, units, to) else null
     }
@@ -107,7 +112,8 @@ internal data class PrivateUsdSendForm(
                 stringRes(R.string.private_usd_send_too_much)
             }
 
-            fee != null && units > fee.sendable(asset) -> {
+            // ALL shows the whole balance and leaves the fee by itself.
+            fee != null && preset != AmountPreset.ALL && units > fee.sendable(asset) -> {
                 stringRes(R.string.private_usd_send_leave_network_fee, exactTokenAmount(fee.reserve, fee.token))
             }
 

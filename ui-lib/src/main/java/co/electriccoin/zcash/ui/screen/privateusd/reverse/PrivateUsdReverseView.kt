@@ -10,6 +10,7 @@ import co.electriccoin.zcash.ui.common.security.PinVerifyOverlay
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
+import co.electriccoin.zcash.ui.design.component.zapp.AmountPresetsState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSettlementLedger
@@ -53,6 +54,7 @@ internal fun PrivateUsdReverseView(
             isBackEnabled = state.isBackEnabled,
             primaryButton = if (state.review == null) state.primary?.copy(onClick = askThenReview) else state.primary,
             error = state.error,
+            presets = state.presets.takeIf { state.review == null },
         ) {
             val review = state.review
             if (review != null) {
@@ -86,7 +88,6 @@ private fun Amount(
         usdBalanceError = state.usdBalanceError,
         isUsdBalanceRefreshing = state.isUsdBalanceRefreshing,
         onRefreshBalance = state.onRefreshBalance,
-        onMax = state.onMax,
         onSwitchDirection = onSwitchDirection,
     )
 }
@@ -190,7 +191,7 @@ private fun previewState() =
         zecAvailable = stringRes("2.51 ZEC"),
         receiveEstimate = NumberTextFieldInnerState.fromAmount(BigDecimal("0.3176")),
         isQuoting = false,
-        onMax = {},
+        presets = AmountPresetsState(onSelect = {}),
         canSwitchDirection = true,
         review = null,
         progress = null,
