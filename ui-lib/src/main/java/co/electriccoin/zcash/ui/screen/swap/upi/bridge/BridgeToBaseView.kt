@@ -37,6 +37,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.compose.AddFundsPanel
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
@@ -107,7 +108,10 @@ internal fun BridgeToBaseView(state: BridgeToBaseState) {
 
             Spacer(modifier = Modifier.height(GAP_LG.dp))
 
-            if (state.isInputVisible) {
+            val addFunds = state.addFunds
+            if (addFunds != null) {
+                AddFundsPanel(addFunds)
+            } else if (state.isInputVisible) {
                 OfframpFieldLabel(stringResource(R.string.bridge_to_base_amount_label))
                 Spacer(modifier = Modifier.height(GAP_SM.dp))
                 ZappOfframpHeroAmountField(
@@ -194,23 +198,34 @@ internal fun BridgeToBaseView(state: BridgeToBaseState) {
             }
         }
 
-        ZappBottomActionBar(
-            onBack = state.onBack,
-            primaryAction = {
-                ZappButton(
-                    text = state.primaryButton.text.getValue(),
-                    enabled = state.primaryButton.isEnabled,
-                    variant = ZappButtonVariant.Primary,
-                    modifier = Modifier.weight(1f).padding(start = BOTTOM_BAR_GAP.dp),
-                    onClick = state.primaryButton.onClick,
-                )
-            },
-        )
+        BridgeToBaseBottomBar(state)
     }
 
     if (showInfo) {
         BridgeToBaseInfoSheet(onDismiss = { showInfo = false })
     }
+}
+
+@Composable
+private fun BridgeToBaseBottomBar(state: BridgeToBaseState) {
+    ZappBottomActionBar(
+        onBack = state.onBack,
+        primaryAction = {
+            val addFunds = state.addFunds
+            ZappButton(
+                text =
+                    if (addFunds != null) {
+                        stringResource(R.string.top_up_add_zec_button)
+                    } else {
+                        state.primaryButton.text.getValue()
+                    },
+                enabled = addFunds != null || state.primaryButton.isEnabled,
+                variant = ZappButtonVariant.Primary,
+                modifier = Modifier.weight(1f).padding(start = BOTTOM_BAR_GAP.dp),
+                onClick = addFunds?.onAddFunds ?: state.primaryButton.onClick,
+            )
+        },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

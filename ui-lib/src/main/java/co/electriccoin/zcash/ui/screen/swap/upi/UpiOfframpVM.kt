@@ -7,9 +7,12 @@ import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.bestEffort
+import co.electriccoin.zcash.ui.common.compose.AddFundsPanelState
 import co.electriccoin.zcash.ui.common.provider.OfframpCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.provider.StoreCorruptedException
 import co.electriccoin.zcash.ui.common.repository.BaseBalanceRepository
+import co.electriccoin.zcash.ui.common.usecase.Funding
+import co.electriccoin.zcash.ui.common.usecase.ObserveFundingUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
@@ -19,6 +22,7 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.settings.p2p.P2pTransactionsArgs
 import co.electriccoin.zcash.ui.screen.swap.upi.bridge.BridgeToBaseArgs
 import co.electriccoin.zcash.ui.screen.swap.upi.progress.UpiOfframpProgressArgs
+import co.electriccoin.zcash.ui.screen.topup.TopUpArgs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -63,6 +67,7 @@ internal class UpiOfframpVM(
     private val orchestrator: OfframpDriver,
     private val currency: CurrencyCode,
     private val prescanned: PrescannedMerchantQr = PrescannedMerchantQr.EMPTY,
+    observeFunding: ObserveFundingUseCase,
 ) : ViewModel() {
     // A fixed-amount merchant QR scanned on the home tab prefills the amount; an open QR leaves it blank.
     private val inrState =
@@ -132,19 +137,31 @@ internal class UpiOfframpVM(
 
     val state: StateFlow<UpiOfframpState> =
         combine(
-            inrState,
-            pricing,
+            combine(
+                inrState,
+                pricing,
+                inFlight,
+                baseBalance.balance,
+                commitFeedback,
+            ) { inr, currentPricing, checkpoint, balance, (probe, failed) ->
+                buildState(
+                    inr = inr,
+                    pricing = currentPricing,
+                    inFlightCheckpoint = checkpoint,
+                    balance = balance.loadedOrNull,
+                    probe = probe,
+                    quoteFailed = failed,
+                )
+            },
+            observeFunding.zecOrBaseUsdc(),
             inFlight,
-            baseBalance.balance,
-            commitFeedback,
-        ) { inr, currentPricing, checkpoint, balance, (probe, failed) ->
-            buildState(
-                inr = inr,
-                pricing = currentPricing,
-                inFlightCheckpoint = checkpoint,
-                balance = balance.loadedOrNull,
-                probe = probe,
-                quoteFailed = failed,
+        ) { state, funding, checkpoint ->
+            state.copy(
+                addFunds =
+                    AddFundsPanelState(
+                        body = stringRes(R.string.add_funds_panel_pay_merchant),
+                        onAddFunds = { navigationRouter.forward(TopUpArgs) },
+                    ).takeIf { funding == Funding.EMPTY && checkpoint == null },
             )
         }.onStart { activeSubscribers.update { it + 1 } }
             .onCompletion { activeSubscribers.update { (it - 1).coerceAtLeast(0) } }

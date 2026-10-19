@@ -129,6 +129,7 @@ import co.electriccoin.zcash.ui.common.usecase.ObserveChatPeerStatusUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveClearSendUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveContactByAddressUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveFastestServersUseCase
+import co.electriccoin.zcash.ui.common.usecase.ObserveFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObservePeerCommittedUsdcUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObservePeerOrderUseCase
 import co.electriccoin.zcash.ui.common.usecase.ObserveProposalUseCase
@@ -408,6 +409,7 @@ val useCaseModule =
         // Chat use cases.
         factoryOf(::ExportChatSeedPhraseUseCase)
         factoryOf(::ObserveChatIdentityUseCase)
+        factoryOf(::ObserveFundingUseCase)
         factoryOf(::UpdateChatDisplayNameUseCase)
         factoryOf(::DeleteChatIdentityUseCase)
         factoryOf(::ObserveChatMessageReceivedUseCase)

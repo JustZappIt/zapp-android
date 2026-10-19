@@ -9,6 +9,7 @@ import cash.z.ecc.sdk.ANDROID_STATE_FLOW_TIMEOUT
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.compose.AddFundsPanelState
 import co.electriccoin.zcash.ui.common.datasource.AccountDataSource
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
 import co.electriccoin.zcash.ui.common.repository.ExchangeRateRepository
@@ -18,11 +19,13 @@ import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.common.security.SecretAuthPolicy
 import co.electriccoin.zcash.ui.common.usecase.ConfirmGiftCardFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.FundGiftCardUseCase
+import co.electriccoin.zcash.ui.common.usecase.Funding
 import co.electriccoin.zcash.ui.common.usecase.GiftCardCreationError
 import co.electriccoin.zcash.ui.common.usecase.GiftCardCreationException
 import co.electriccoin.zcash.ui.common.usecase.GiftFundingError
 import co.electriccoin.zcash.ui.common.usecase.GiftFundingException
 import co.electriccoin.zcash.ui.common.usecase.GiftFundingQuote
+import co.electriccoin.zcash.ui.common.usecase.ObserveFundingUseCase
 import co.electriccoin.zcash.ui.common.usecase.ShareGiftLinkUseCase
 import co.electriccoin.zcash.ui.common.wallet.ZecFiatRate
 import co.electriccoin.zcash.ui.common.wallet.toFiatString
@@ -37,6 +40,7 @@ import co.electriccoin.zcash.ui.screen.gift.model.GiftLinkCodec
 import co.electriccoin.zcash.ui.screen.gift.model.GiftMessage
 import co.electriccoin.zcash.ui.screen.gift.model.StoredGiftCard
 import co.electriccoin.zcash.ui.screen.gift.model.toLinkPayload
+import co.electriccoin.zcash.ui.screen.topup.TopUpArgs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -71,6 +75,7 @@ class GiftCardVM(
     swapRepository: SwapRepository,
     private val giftCardStorageProvider: GiftCardStorageProvider,
     private val navigationRouter: NavigationRouter,
+    observeFunding: ObserveFundingUseCase,
 ) : ViewModel() {
     private val snapshot = MutableStateFlow(GiftCardSnapshot())
 
@@ -93,17 +98,28 @@ class GiftCardVM(
 
     internal val state: StateFlow<GiftCardState> =
         combine(
-            snapshot,
-            secretAuthGate.pinPrompt,
-            accountDataSource.selectedAccount,
-            giftCardStorageProvider.observe().catch { emit(emptyList()) },
-            fiatRate,
-        ) { current, pin, account, storedCards, rate ->
-            current.toState(
-                pinVerify = pin,
-                spendableBalance = account?.spendableShieldedBalance?.let { stringRes(it) },
-                storedCards = storedCards,
-                rate = rate,
+            combine(
+                snapshot,
+                secretAuthGate.pinPrompt,
+                accountDataSource.selectedAccount,
+                giftCardStorageProvider.observe().catch { emit(emptyList()) },
+                fiatRate,
+            ) { current, pin, account, storedCards, rate ->
+                current.toState(
+                    pinVerify = pin,
+                    spendableBalance = account?.spendableShieldedBalance?.let { stringRes(it) },
+                    storedCards = storedCards,
+                    rate = rate,
+                )
+            },
+            observeFunding.zec(),
+        ) { state, funding ->
+            state.copy(
+                addFunds =
+                    AddFundsPanelState(
+                        body = stringRes(R.string.add_funds_panel_gift),
+                        onAddFunds = { navigationRouter.forward(TopUpArgs) },
+                    ).takeIf { funding == Funding.EMPTY },
             )
         }.stateIn(
             scope = viewModelScope,
