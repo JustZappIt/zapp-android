@@ -9,14 +9,7 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
 
-/**
- * The buy's steps (UX plan §6): ZEC sent → payment received → buying → held privately. An incomplete deposit is a
- * warning on "Payment received", not a failure: 1Click either completes or refunds it. A refund or a FAILED status
- * replaces the last two steps.
- *
- * [BuyProgress.Expired] means no deposit reached 1Click before the quote's deadline: nothing was bought, and late
- * ZEC is refunded by 1Click.
- */
+/** ZEC sent → payment received → buying → held privately; a refund or a failure replaces the last two steps. */
 internal object BuyProgressToSteps {
     fun steps(
         progress: BuyProgress,

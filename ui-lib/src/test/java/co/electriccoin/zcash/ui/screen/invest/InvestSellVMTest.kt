@@ -105,7 +105,7 @@ internal class InvestSellVMTest : InvestSellVMTestBase() {
 
             val state = fixture.vm.state.value
             val ledger = assertNotNull(state.ledger)
-            assertEquals(stringRes(R.string.invest_buy_you_get_value_exact, "$98.99", "0.4410 NVDA"), ledger.youSell)
+            assertEquals(stringRes(R.string.invest_value_and_units, "$98.99", "0.4410 NVDA"), ledger.youSell)
             assertEquals(stringRes(R.string.invest_sell_zec_with_value, "0.0634 ZEC", "$97.87"), ledger.youGet)
             assertEquals(stringRes("$1.12"), ledger.fees)
             assertEquals(stringRes(R.string.invest_sell_fee_note, "0.00064 ZEC"), ledger.feeNote)
@@ -119,7 +119,7 @@ internal class InvestSellVMTest : InvestSellVMTestBase() {
             val cases =
                 listOf(
                     SellEstimate.BelowMinimum(BigDecimal(40)) to
-                        (stringRes(R.string.invest_buy_below_minimum, "$40") to false),
+                        (stringRes(R.string.invest_below_minimum, "$40") to false),
                     SellEstimate.ExceedsHolding(BigDecimal("0.4410")) to
                         (stringRes(R.string.invest_sell_exceeds, "0.4410 NVDA") to true),
                     SellEstimate.NothingHeld to (stringRes(R.string.invest_sell_nothing_held, "NVIDIA") to true),

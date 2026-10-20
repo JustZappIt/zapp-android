@@ -46,13 +46,7 @@ import java.math.BigDecimal
 import kotlin.time.Clock
 import kotlin.time.toJavaInstant
 
-/**
- * I3: the holdings summary, the curated stocks in their two groups, and the two banners (Tor off, US market
- * closed). Tapping a stock opens the buy amount screen; there is no search or stock detail in this version.
- *
- * Sell-only (the saved country no longer allows buying): a note names the country and links to Settings › Invest,
- * the stocks can't be tapped, and Sell works as usual.
- */
+/** Holdings, the curated stocks and their banners. In sell-only mode the stocks can't be tapped; Sell still works. */
 @Suppress("TooManyFunctions")
 internal class InvestHomeVM(
     private val investRepository: InvestRepository,
@@ -71,11 +65,10 @@ internal class InvestHomeVM(
 
     private val status = MutableStateFlow(Status())
 
-    // Money shows in the user's currency, like the PAY balance; USD without an exchange rate.
     private val currency =
         currencyProvider.observe().stateIn(viewModelScope, SharingStarted.Eagerly, InvestCurrency.USD)
 
-    // The last price seen per asset this session, so a stock whose quote has dried up can still say what it was.
+    // The last price seen per stock, shown once its quote has dried up.
     private val lastPrices = mutableMapOf<String, BigDecimal>()
 
     init {
@@ -95,7 +88,6 @@ internal class InvestHomeVM(
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
-            // Until the settings are read, nothing offers a buy.
             initialValue =
                 buildState(null, null, emptyList(), hideTorBanner = true, current = Status(), InvestSettings()),
         )
@@ -140,17 +132,13 @@ internal class InvestHomeVM(
         )
     }
 
-    /**
-     * Follows pending trades so they settle (and unlock their stocks) without their progress screen. Invest home
-     * calls this while it is STARTED, not merely on the back stack.
-     */
     suspend fun followPendingTrades(): Nothing = tradeFollower.followPendingTrades()
 
     private fun summaryOf(
         holdings: Holdings,
         isStale: Boolean,
         trading: Map<String, PendingTrade>,
-        /** False when the trade records can't be read: then no stock can be sold. */
+        /** False when the trade records can't be read. */
         canSell: Boolean,
     ) = InvestHomeSummary(
         total = holdings.totalUsd?.let { stringRes(currency.value.format(it)) },
@@ -164,7 +152,6 @@ internal class InvestHomeVM(
                     value = holding.usdValue?.let { stringRes(currency.value.format(it)) },
                     units = stringRes(InvestFormat.units(holding.units, holding.asset.ticker)),
                     onClick = { onStockClick(holding.asset) },
-                    // A stock can't be bought and sold at once: while a trade of it runs, the holding says so instead.
                     tradeInProgress =
                         trading[holding.asset.assetId]?.let { trade ->
                             HoldingTrade(trade.isSale) { navigationRouter.forward(trade.progressRoute()) }
@@ -182,7 +169,6 @@ internal class InvestHomeVM(
         weekdaysOpen: Boolean,
         canBuy: Boolean,
     ): List<InvestStockGroupState> {
-        // The repository already drops curated assets 1Click no longer lists; before the first load, show all.
         val prices = market?.assets?.associate { it.asset.assetId to it.usdPrice }
         val assets = market?.assets?.map { it.asset } ?: InvestAssets.curated
         val rows = assets.map { stockRow(it, prices?.get(it.assetId), isLoaded = market != null, canBuy = canBuy) }
@@ -255,7 +241,6 @@ internal class InvestHomeVM(
 
     private fun onSellClick(asset: InvestAsset) = navigationRouter.forward(InvestSellArgs(assetId = asset.assetId))
 
-    // Each row names its stock: the trades come with it.
     private fun pendingRow(trade: PendingTrade): InvestPendingTradeRow {
         val name = InvestAssets.find(trade.assetId)?.name
         val title =

@@ -27,10 +27,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * I7. Follows [InvestRepository.observeBuy] until the buy is final. The user may leave at any point: the buy goes
- * on without this screen, and Invest home offers a way back while it is pending.
- */
+/** Follows a buy until it is final; the buy goes on if the user leaves. */
 internal class InvestProgressVM(
     private val args: InvestProgressArgs,
     private val investRepository: InvestRepository,
@@ -40,7 +37,6 @@ internal class InvestProgressVM(
     private val asset = args.assetId?.let(InvestAssets::find)
     private val usdAmount = args.usdAmount?.toBigDecimalOrNull()
 
-    // Money shows in the user's currency, like the PAY balance; USD without an exchange rate.
     private val currency =
         currencyProvider.observe().stateIn(viewModelScope, SharingStarted.Eagerly, InvestCurrency.USD)
 
@@ -66,7 +62,6 @@ internal class InvestProgressVM(
         observeJob =
             viewModelScope.launch {
                 investCatching {
-                    // The repository refreshes the holdings itself when the buy settles.
                     investRepository.observeBuy(args.depositAddress).collect { next -> progress.update { next } }
                 }.onFailure { e ->
                     Twig.warn(e) { "InvestProgressVM: observing the buy failed" }
@@ -108,7 +103,7 @@ internal class InvestProgressVM(
 
     private fun onBackToPay() = navigationRouter.backToRoot()
 
-    // Only the list entry goes: 1Click still settles or refunds the buy, and support has the reference.
+    // Only the list entry goes; 1Click still settles or refunds the buy.
     private fun onRemove() {
         viewModelScope.launch {
             investCatching { investRepository.dismissBuy(args.depositAddress) }

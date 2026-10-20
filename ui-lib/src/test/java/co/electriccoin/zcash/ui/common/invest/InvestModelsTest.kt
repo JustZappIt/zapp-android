@@ -134,12 +134,11 @@ class InvestModelsTest {
     @Test
     fun `the server clock follows the Date header and ignores garbage`() {
         val clock = InvestServerClock(deviceNowMillis = { 1_790_604_000_000L })
-        assertFalse(clock.isSynchronised)
         assertEquals(1_790_604_000_000L, clock.nowMillis())
 
         clock.observe("not a date", fromOneClick = true)
         clock.observe(null, fromOneClick = true)
-        assertFalse(clock.isSynchronised)
+        assertEquals(1_790_604_000_000L, clock.nowMillis())
 
         // A NEAR RPC host's time stands in until 1Click has answered...
         clock.observe("Mon, 28 Sep 2026 14:10:00 GMT", fromOneClick = false)
@@ -147,7 +146,6 @@ class InvestModelsTest {
 
         // ...then 1Click's, the clock that judges a login, wins.
         clock.observe("Mon, 28 Sep 2026 13:58:00 GMT", fromOneClick = true)
-        assertTrue(clock.isSynchronised)
         assertEquals(1_790_603_880_000L, clock.nowMillis())
         clock.observe("Mon, 28 Sep 2026 14:10:00 GMT", fromOneClick = false)
         assertEquals(1_790_603_880_000L, clock.nowMillis())

@@ -6,23 +6,16 @@ import xyz.justzappit.evm.hd.EvmKey
 import xyz.justzappit.evm.intents.IntentsAccount
 import xyz.justzappit.offramp.account.SeedPhraseSource
 
-/**
- * The private-account key, derived from the wallet's recovery phrase for exactly as long as one signature
- * takes and wiped afterwards. Unlike the offramp key it is not cached: Invest signs a login about every
- * fifteen minutes at most, so the derivation cost is small next to keeping a second key in the heap.
- */
+/** The private-account key, derived from the recovery phrase for one use and wiped after it. */
 class PrivateAccountKeyProvider(
     private val seedPhraseSource: SeedPhraseSource,
 ) {
     @Volatile
     private var cachedAccountId: String? = null
 
-    // Bumped by clear(), so a derivation that started before it can't cache the old account ID after.
     @Volatile
     private var generation = 0
 
-    // PBKDF2 and the curve maths take a noticeable moment, so never on the caller's (often the main) thread. All of
-    // it runs there, phrase to wipe, so no hand-over between threads can skip a wipe.
     suspend fun <T> withKey(block: suspend (EvmKey) -> T): T =
         withContext(Dispatchers.Default) {
             val startedIn = generation
@@ -41,10 +34,8 @@ class PrivateAccountKeyProvider(
             }
         }
 
-    /** The Intents account ID (a lowercase 0x address). Public information, so it is kept once known. */
     suspend fun accountId(): String = cachedAccountId ?: withKey { IntentsAccount.accountId(it) }
 
-    /** Forgets the account ID; the next wallet may have a different recovery phrase. */
     fun clear() {
         generation++
         cachedAccountId = null

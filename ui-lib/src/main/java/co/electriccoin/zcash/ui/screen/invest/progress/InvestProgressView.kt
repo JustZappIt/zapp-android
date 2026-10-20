@@ -18,13 +18,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappDoneButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappNotice
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStep
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStepList
 import co.electriccoin.zcash.ui.design.component.zapp.ZappStepStatus
@@ -34,12 +34,7 @@ import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_LG
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_SM
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_HORIZONTAL_PADDING
-import co.electriccoin.zcash.ui.screen.invest.common.InvestNotice
 
-/** After UpiOfframpProgressView: header (the success header once held), the step list, then Back to Pay. */
 @Composable
 internal fun InvestProgressView(state: InvestProgressState) {
     val c = ZappTheme.colors
@@ -56,22 +51,22 @@ internal fun InvestProgressView(state: InvestProgressState) {
                     .weight(1f)
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = INVEST_HORIZONTAL_PADDING.dp, vertical = VERTICAL_PADDING.dp),
+                    .padding(horizontal = ZappTheme.spacing.gutter, vertical = ZappTheme.spacing.xl),
         ) {
             if (state.isSuccess) {
                 ZappSuccessHeader(title = state.title, subtitle = state.subtitle)
             } else {
                 BasicText(text = state.title.getValue(), style = ZappTheme.typography.display.copy(color = c.text))
                 state.subtitle?.let {
-                    Spacer(Modifier.height(INVEST_GAP_SM.dp))
+                    Spacer(Modifier.height(ZappTheme.spacing.md))
                     BasicText(text = it.getValue(), style = ZappTheme.typography.body.copy(color = c.textMuted))
                 }
             }
-            Spacer(Modifier.height(INVEST_GAP_LG.dp))
+            Spacer(Modifier.height(ZappTheme.spacing.xl2))
             ZappStepList(state.steps)
             state.attention?.let {
-                Spacer(Modifier.height(INVEST_GAP_LG.dp))
-                InvestNotice(body = it.getValue(), isDanger = true) {
+                Spacer(Modifier.height(ZappTheme.spacing.xl2))
+                ZappNotice(body = it.getValue(), isDanger = true) {
                     state.contactSupportButton?.let { contact ->
                         ZappButton(
                             text = contact.text.getValue(),
@@ -91,8 +86,8 @@ internal fun InvestProgressView(state: InvestProgressState) {
                 }
             }
             state.checkError?.let {
-                Spacer(Modifier.height(INVEST_GAP_LG.dp))
-                InvestNotice(body = it.getValue()) {
+                Spacer(Modifier.height(ZappTheme.spacing.xl2))
+                ZappNotice(body = it.getValue()) {
                     ZappButton(
                         text = stringResource(R.string.invest_progress_check_again),
                         variant = ZappButtonVariant.Ghost,
@@ -108,14 +103,14 @@ internal fun InvestProgressView(state: InvestProgressState) {
                 if (state.isSuccess) {
                     ZappDoneButton(
                         text = state.primaryButton.text.getValue(),
-                        modifier = Modifier.weight(1f).padding(start = BOTTOM_BAR_GAP.dp),
+                        modifier = Modifier.weight(1f).padding(start = ZappTheme.spacing.lg),
                         onClick = state.primaryButton.onClick,
                     )
                 } else {
                     ZappButton(
                         text = state.primaryButton.text.getValue(),
                         variant = ZappButtonVariant.Secondary,
-                        modifier = Modifier.weight(1f).padding(start = BOTTOM_BAR_GAP.dp),
+                        modifier = Modifier.weight(1f).padding(start = ZappTheme.spacing.lg),
                         onClick = state.primaryButton.onClick,
                     )
                 }
@@ -123,9 +118,6 @@ internal fun InvestProgressView(state: InvestProgressState) {
         )
     }
 }
-
-private const val VERTICAL_PADDING = 16
-private const val BOTTOM_BAR_GAP = 12
 
 @PreviewScreens
 @Composable

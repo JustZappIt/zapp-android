@@ -16,9 +16,8 @@ import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.minutes
 
 /**
- * Follows every pending buy and sale to its final state, so a trade settles (and its stock unlocks) without
- * its progress screen being open. Call [followPendingTrades] from whatever shows Invest positions, for as
- * long as it is shown; any number of callers share one follower, which stops when the last one leaves.
+ * Follows every pending trade to its final state without its progress screen open. Callers share one follower,
+ * which stops when the last one leaves.
  */
 interface InvestTradeFollower {
     suspend fun followPendingTrades(): Nothing
@@ -41,11 +40,7 @@ internal class InvestTradeFollowerImpl(
             buys.observeBuy(trade.depositAddress).collect()
         }
 
-    /**
-     * One poller per pending trade; a trade that leaves the list (final, or dismissed) stops its poller. When the
-     * trade records can't be read, the list ends on null and every poller stops; the records are read again after
-     * [RETRY_AFTER], so one failed read doesn't end following for as long as a screen stays open.
-     */
+    // One poller per pending trade. Unreadable records stop them all, and are read again after [RETRY_AFTER].
     private suspend fun follow(): Nothing {
         while (true) {
             coroutineScope {
@@ -56,7 +51,6 @@ internal class InvestTradeFollowerImpl(
                     pending.values.filter { it.depositAddress !in pollers }.forEach { trade ->
                         pollers[trade.depositAddress] =
                             launch {
-                                // Polling already rides out API errors; anything else (a store error) is retried later.
                                 while (!bestEffort("Following an Invest trade failed") { observe(trade) }) {
                                     delay(RETRY_AFTER)
                                 }

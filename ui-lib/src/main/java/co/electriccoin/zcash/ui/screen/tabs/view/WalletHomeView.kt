@@ -85,7 +85,7 @@ internal fun WalletHomeView() {
     val chartState by chartVM.state.collectAsStateWithLifecycle()
     val syncChip by syncVM.state.collectAsStateWithLifecycle()
     val investState by investVM.state.collectAsStateWithLifecycle()
-    // Pending Invest trades settle while PAY is on screen (STARTED), not for as long as the tabs exist.
+    // Pending Invest trades are followed only while PAY is on screen.
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(investVM, lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) { investVM.followPendingTrades() }

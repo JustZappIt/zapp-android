@@ -37,16 +37,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * The PAY tab's Invest block, kept out of HomeVM, and the Settings tab's Invest row. Holdings refresh once PAY is first
- * shown, not when the tabs are built (the app may open on another tab, and a refresh is a sign-in and a balance read,
- * mostly over Tor). The repository keeps the last figures, so a failure leaves them on screen marked stale.
- * [isInvestEnabled] is `BuildConfig.IS_INVEST_ENABLED` in the app and a plain flag in tests.
- *
- * In sell-only mode (set up, but the saved country no longer allows buying) the block shows only while something is
- * held or a trade is pending, and leads to Invest home, where selling stays open.
- *
- * Invest is only for the phone's own account (decided 2026-09-27): with a Keystone account selected, nothing
- * Invest-related shows. [InvestRepository.isAccountSupported] decides, asked again whenever the account changes.
+ * The PAY tab's Invest block and the Settings tab's Invest row, shown only for the phone's own account. Holdings
+ * refresh once PAY is first shown, since a refresh is a sign-in and a balance read.
  */
 internal class InvestmentsSectionVM(
     private val investRepository: InvestRepository,
@@ -70,11 +62,9 @@ internal class InvestmentsSectionVM(
 
     private val refresh = MutableStateFlow<Refresh>(Refresh.Idle)
 
-    // Money shows in the user's currency, like the PAY balance; USD without an exchange rate.
     private val currency =
         currencyProvider.observe().stateIn(viewModelScope, SharingStarted.Eagerly, InvestCurrency.USD)
 
-    // Shared by the block, the Settings row and the refresh, so each account change is checked once.
     private val isOwnAccount: StateFlow<Boolean> =
         accountDataSource.selectedAccount
             .map { investCatching { investRepository.isAccountSupported() }.getOrDefault(false) }
@@ -103,7 +93,6 @@ internal class InvestmentsSectionVM(
             )
         }
 
-    /** Settings › Invest is offered wherever Invest is: the build has it and the phone's own account is selected. */
     val isSettingsRowVisible: StateFlow<Boolean> = if (!isInvestEnabled) MutableStateFlow(false) else isOwnAccount
 
     fun onSettingsClick() = navigationRouter.forward(InvestSettingsArgs)
@@ -128,7 +117,7 @@ internal class InvestmentsSectionVM(
         )
     }
 
-    // No entry card: it invites a first buy. Nothing held and nothing pending hides Invest as before.
+    // No entry card, as it invites a first buy.
     private fun sellOnlySectionState(
         holdings: Holdings?,
         trades: List<PendingTrade>?,
@@ -204,19 +193,13 @@ internal class InvestmentsSectionVM(
         onRetry = ::onRetry,
     )
 
-    /**
-     * Follows pending trades so a buy or sale settles without its progress screen. The PAY screen calls this while
-     * it is STARTED only: this view model lives as long as the tabs do, and following polls (over Tor) all the time.
-     * The first call also starts the holdings refresh.
-     */
+    /** Called while PAY is on screen; the first call also starts the holdings refresh. */
     suspend fun followPendingTrades(): Nothing {
         if (!isInvestEnabled) awaitCancellation()
         startRefreshing()
         tradeFollower.followPendingTrades()
     }
 
-    // Once per view model, from the first time PAY is shown: for the phone's own account, once Invest is set up
-    // (sell-only users still need their holdings, so set up is enough), and again when either comes back.
     private fun startRefreshing() {
         if (isRefreshStarted) return
         isRefreshStarted = true

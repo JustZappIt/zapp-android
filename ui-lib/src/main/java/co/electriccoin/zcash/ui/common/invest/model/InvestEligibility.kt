@@ -1,26 +1,20 @@
 package co.electriccoin.zcash.ui.common.invest.model
 
 /**
- * Who may be offered Ondo stocks, by country of residence (ISO 3166-1 alpha-2), from Ondo's eligibility
- * page (docs.ondo.finance/ondo-stocks/eligibility, read 2026-10-11). Needs legal review before release: the
- * source can change, and this list is what the demo build gates on, not legal advice.
- *
- * Ondo also prohibits Crimea, Sevastopol, Donetsk, Luhansk, Kherson and Zaporizhzhia, which a country picker
- * can't tell apart from the rest of Ukraine (UA).
+ * Who may be offered Ondo stocks, by ISO 3166-1 alpha-2 country of residence, from
+ * docs.ondo.finance/ondo-stocks/eligibility. Ondo's prohibited regions of Ukraine can't be told apart from UA.
  */
 enum class InvestEligibility {
     ELIGIBLE,
 
-    /** Only for qualified or professional investors under local rules; the gate asks for that attestation. */
+    /** Only for qualified or professional investors, who attest to it on the gate. */
     RESTRICTED,
 
-    /** Never offered. */
     PROHIBITED,
     ;
 
     companion object {
-        // Switzerland is on Ondo's restricted list, but "not available to Individuals" there, and every Invest user
-        // is an individual, so no attestation can make it available.
+        // CH is on Ondo's restricted list but closed to individuals, so no attestation opens it.
         private val PROHIBITED_COUNTRIES =
             setOf(
                 "AF",
@@ -40,7 +34,6 @@ enum class InvestEligibility {
                 "US",
             )
 
-        // EEA = the 27 EU member states plus Iceland, Liechtenstein and Norway.
         private val EEA =
             setOf(
                 "AT",

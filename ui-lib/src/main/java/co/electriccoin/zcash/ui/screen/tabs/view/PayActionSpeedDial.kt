@@ -32,7 +32,6 @@ internal fun PayActionSpeedDial(
     onGift: () -> Unit,
     onPrivateUsd: (() -> Unit)?,
     modifier: Modifier = Modifier,
-    // Null hides the Invest action: the build doesn't offer it, or the user's country is prohibited.
     onInvest: (() -> Unit)? = null,
 ) {
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()

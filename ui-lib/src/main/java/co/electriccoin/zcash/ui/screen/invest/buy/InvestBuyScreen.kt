@@ -26,7 +26,6 @@ fun InvestBuyScreen(args: InvestBuyArgs) {
     BackHandler { state.onBack() }
 }
 
-/** I5: buy [assetId] (a curated 1Click asset ID), with its I6 review sheet. */
 @Serializable
 data class InvestBuyArgs(
     val assetId: String,

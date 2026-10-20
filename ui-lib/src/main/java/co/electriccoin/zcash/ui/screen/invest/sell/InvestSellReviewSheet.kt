@@ -30,21 +30,18 @@ import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
+import co.electriccoin.zcash.ui.design.component.zapp.ZappModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSummaryRow
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_LG
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_MD
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_SM
-import co.electriccoin.zcash.ui.screen.invest.common.InvestModalSheet
 
-/** I9: what the private-account key is about to sign, in words, with the raw message one tap away. */
+/** What the private-account key is about to sign, in words, with the raw message one tap away. */
 @Composable
 internal fun InvestSellReviewSheet(state: InvestSellReviewState?) {
-    InvestModalSheet(state = state, onDismiss = { it.onDismiss() }, isBusy = { it.isBusy }) { active ->
+    ZappModalBottomSheet(state = state, onDismiss = { it.onDismiss() }, isBusy = { it.isBusy }) { active ->
         InvestSellReviewContent(active, Modifier.weight(1f, false))
     }
 }
@@ -55,21 +52,22 @@ private fun InvestSellReviewContent(
     modifier: Modifier = Modifier,
 ) {
     val c = ZappTheme.colors
+    val spacing = ZappTheme.spacing
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = SHEET_PADDING.dp),
-        verticalArrangement = Arrangement.spacedBy(INVEST_GAP_MD.dp),
+                .padding(horizontal = spacing.xl3),
+        verticalArrangement = Arrangement.spacedBy(spacing.lg),
     ) {
-        Spacer(Modifier.height(INVEST_GAP_SM.dp))
+        Spacer(Modifier.height(spacing.md))
         BasicText(
             text = stringResource(R.string.invest_sell_review_title),
             style = ZappTheme.typography.sectionTitle.copy(color = c.text, fontWeight = FontWeight.SemiBold),
         )
         BasicText(text = state.authorisation.getValue(), style = ZappTheme.typography.body.copy(color = c.text))
-        ZappBorderedCard(verticalArrangement = Arrangement.spacedBy(INVEST_GAP_SM.dp)) {
+        ZappBorderedCard(verticalArrangement = Arrangement.spacedBy(spacing.md)) {
             ZappSummaryRow(stringResource(R.string.invest_review_at_least), state.atLeast.getValue())
             ZappSummaryRow(
                 stringResource(R.string.invest_review_expected),
@@ -102,11 +100,10 @@ private fun InvestSellReviewContent(
             modifier = Modifier.fillMaxWidth(),
             onClick = state.primaryButton.onClick,
         )
-        Spacer(Modifier.height(INVEST_GAP_LG.dp))
+        Spacer(Modifier.height(spacing.xl2))
     }
 }
 
-/** "View signed message": the exact payload, in mono, for the curious and for support. Collapsed by default. */
 @Composable
 private fun SignedMessage(state: InvestSellReviewState) {
     val c = ZappTheme.colors
@@ -116,7 +113,7 @@ private fun SignedMessage(state: InvestSellReviewState) {
                 .fillMaxWidth()
                 .clickable(onClick = state.onToggleSignedMessage)
                 .semantics { role = Role.Button }
-                .padding(vertical = INVEST_GAP_SM.dp),
+                .padding(vertical = ZappTheme.spacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicText(
@@ -129,7 +126,7 @@ private fun SignedMessage(state: InvestSellReviewState) {
                 if (state.isSignedMessageOpen) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
             contentDescription = null,
             tint = c.textMuted,
-            modifier = Modifier.size(CHEVRON_SIZE.dp),
+            modifier = Modifier.size(CHEVRON_SIZE),
         )
     }
     if (state.isSignedMessageOpen) {
@@ -139,8 +136,7 @@ private fun SignedMessage(state: InvestSellReviewState) {
     }
 }
 
-private const val SHEET_PADDING = 24
-private const val CHEVRON_SIZE = 20
+private val CHEVRON_SIZE = 20.dp
 
 @PreviewScreens
 @Composable

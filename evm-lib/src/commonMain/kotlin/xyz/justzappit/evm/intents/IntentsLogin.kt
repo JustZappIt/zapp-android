@@ -6,20 +6,12 @@ package xyz.justzappit.evm.intents
 import dev.whyoleg.cryptography.random.CryptographyRandom
 import xyz.justzappit.evm.hd.EvmKey
 
-/**
- * The signed message `POST /v0/auth/authenticate` exchanges for a User-Session token: an intents payload
- * with no intents, as `@defuse-protocol/intents-sdk` builds it. Nonce start time and deadline both come
- * from [serverNowMillis], one clock reading, so they can't drift apart.
- */
+/** The empty-intents message `/v0/auth/authenticate` exchanges for a session token, as the intents SDK builds it. */
 object IntentsLogin {
-    /**
-     * The SDK defaults to 60 s. Three minutes passed in the 2026-09-25/26 live tests and leaves room for a
-     * slow Tor circuit; the message only needs to outlive the one request that carries it.
-     */
+    // The SDK uses 60 s; three minutes leaves room for a slow Tor circuit.
     const val DEFAULT_TTL_MILLIS = 180_000L
     private const val MAX_TTL_MILLIS = 600_000L
 
-    /** What `signedData` carries: `{"standard": "erc191", "payload": ..., "signature": ...}`. */
     data class Signed(
         val payload: String,
         val signature: String,

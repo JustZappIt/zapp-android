@@ -7,15 +7,8 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
- * Builds the string an ERC-191 intents signer signs, with the key order and compact formatting of
- * `IntentSignerViem.signIntent` (`JSON.stringify` of signer_id, verifying_contract, deadline, nonce,
- * intents). For Zapp's inputs — an 0x account ID, ISO deadline, Base64 nonce and ASCII intents — the string
- * is identical to the SDK's. kotlinx and JS differ on lone surrogates, number spellings and integer-like
- * object keys, none of which these inputs contain. The server verifies whatever string it receives, so a
- * difference would change the bytes signed, never make a signature invalid.
- *
- * Only Zapp's own messages are built here (the empty-intents login). A sell signs the payload string
- * `generate-intent` returns, unchanged, after [IntentTransferSigner] has checked it.
+ * The string an `erc191` signer signs, in the key order and compact form of the intents SDK's `JSON.stringify`.
+ * Only Zapp's own login is built here; a sale signs the server's payload once [IntentTransferSigner] has checked it.
  */
 internal object IntentPayload {
     const val VERIFYING_CONTRACT = "intents.near"
@@ -41,7 +34,7 @@ internal object IntentPayload {
         }
     }
 
-    /** `Date.prototype.toISOString` for a UTC instant: `yyyy-MM-ddTHH:mm:ss.SSSZ`, always three fraction digits. */
+    /** `Date.prototype.toISOString`: UTC, always three fraction digits. */
     fun isoMillis(epochMillis: Long): String {
         require(epochMillis in 0..IntentNonce.MAX_EPOCH_MILLIS) { "epochMillis out of range" }
         val days = epochMillis.floorDiv(MILLIS_PER_DAY)
@@ -56,10 +49,7 @@ internal object IntentPayload {
             "${pad(milli, MILLI_DIGITS)}Z"
     }
 
-    /**
-     * The epoch milliseconds of a UTC ISO-8601 instant as intents payloads carry it
-     * (`yyyy-MM-ddTHH:mm:ss[.fraction]Z`), or null for anything else. Sub-millisecond digits are dropped.
-     */
+    /** The epoch milliseconds of a `yyyy-MM-ddTHH:mm:ss[.fraction]Z` instant, or null for anything else. */
     @Suppress("MagicNumber", "ReturnCount")
     fun parseIsoMillis(value: String): Long? {
         val groups = ISO_UTC.matchEntire(value)?.groupValues ?: return null
@@ -77,7 +67,7 @@ internal object IntentPayload {
             hour * MILLIS_PER_HOUR + minute * MILLIS_PER_MINUTE + second * MILLIS_PER_SECOND + millis
     }
 
-    // Howard Hinnant's days-to-civil algorithm (proleptic Gregorian, epoch 1970-01-01).
+    // Howard Hinnant's civil-from-days algorithm (proleptic Gregorian, epoch 1970-01-01).
     @Suppress("MagicNumber")
     private fun civilFromDays(daysSinceEpoch: Long): Triple<Long, Long, Long> {
         val z = daysSinceEpoch + 719_468
@@ -92,7 +82,6 @@ internal object IntentPayload {
         return Triple(year, month, day)
     }
 
-    // The inverse of civilFromDays, from the same source.
     @Suppress("MagicNumber")
     private fun daysFromCivil(year: Long, month: Long, day: Long): Long {
         val y = if (month <= 2) year - 1 else year

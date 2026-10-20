@@ -13,7 +13,6 @@ fun InvestUnavailableScreen(args: InvestUnavailableArgs) {
     BackHandler { vm.state.onDone() }
 }
 
-/** "Invest isn't available where you live", for a prohibited country or a restricted one without attestation. */
 @Serializable
 data class InvestUnavailableArgs(
     val countryCode: String,

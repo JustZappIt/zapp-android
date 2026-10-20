@@ -13,6 +13,7 @@ import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationState
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.NavigateToInvestUseCase
+import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -26,13 +27,8 @@ import java.text.Collator
 import java.util.Locale
 
 /**
- * I1: where the user lives, asked once and kept on this phone. A prohibited country goes straight to the
- * not-available screen; a restricted one also asks for the qualified-investor attestation, and without it the user
- * sees the same screen. Whatever is confirmed is saved, so Invest is hidden from PAY for a prohibited country.
- *
- * With [isChange] it is Settings › Invest's country change instead: saving goes back, and a country where the user
- * can't buy (prohibited, or restricted without the attestation) is confirmed first, since buying stops there. Backing
- * out at any point leaves the saved country as it was.
+ * Where the user lives, kept on this phone. With [isChange] it is Settings › Invest's country change, which
+ * confirms before saving a country where buying stops.
  */
 @Suppress("TooManyFunctions")
 internal class InvestGateVM(
@@ -50,25 +46,17 @@ internal class InvestGateVM(
         val query: String = "",
         val isSaving: Boolean = false,
         val failed: Boolean = false,
-        /** The "buying stops" confirmation is up (country change only). */
         val isConfirming: Boolean = false,
     )
 
     private val form = MutableStateFlow(Form())
 
     private val countries: List<Pair<String, String>> by lazy {
-        val locale = Locale.getDefault()
-        val collator = Collator.getInstance(locale)
+        val collator = Collator.getInstance(Locale.getDefault())
         Locale
             .getISOCountries()
-            .map { code ->
-                code to
-                    Locale
-                        .Builder()
-                        .setRegion(code)
-                        .build()
-                        .getDisplayCountry(locale)
-            }.sortedWith { a, b -> collator.compare(a.second, b.second) }
+            .map { code -> code to InvestFormat.countryName(code) }
+            .sortedWith { a, b -> collator.compare(a.second, b.second) }
     }
 
     init {
@@ -77,8 +65,7 @@ internal class InvestGateVM(
             val savedCountry = saved?.countryCode
             val initial =
                 if (savedCountry != null) {
-                    // A qualified investor keeps that attestation when they reopen their own country; dropping it
-                    // here would quietly turn a saved restricted country into sell-only.
+                    // Kept, or reopening their own country would quietly turn a qualified investor sell-only.
                     Form(countryCode = savedCountry, qualified = saved.qualifiedInvestor)
                 } else {
                     hintProvider.hint()?.let { Form(countryCode = it.countryCode, hintSource = it.source) } ?: Form()
@@ -98,7 +85,7 @@ internal class InvestGateVM(
 
     private fun buildState(form: Form): InvestGateState {
         val code = form.countryCode
-        val name = code?.let(::displayName)
+        val name = code?.let(InvestFormat::countryName)
         val eligibility = code?.let(InvestEligibility::of)
         return InvestGateState(
             body = stringRes(if (isChange) R.string.invest_change_body else R.string.invest_gate_body),
@@ -124,9 +111,9 @@ internal class InvestGateVM(
                 ButtonState(
                     text = stringRes(if (isChange) R.string.invest_change_save else R.string.invest_gate_continue),
                     isEnabled = canContinue(eligibility, form) && !form.isSaving,
+                    isLoading = form.isSaving,
                     onClick = ::onContinue,
                 ),
-            isSaving = form.isSaving,
             errorText = if (form.failed) stringRes(R.string.invest_error_generic) else null,
             onChangeCountry = ::onOpenPicker,
             picker = if (form.isPickerOpen) pickerState(form) else null,
@@ -182,14 +169,6 @@ internal class InvestGateVM(
         )
     }
 
-    private fun displayName(code: String): String =
-        countries.firstOrNull { it.first == code }?.second
-            ?: Locale
-                .Builder()
-                .setRegion(code)
-                .build()
-                .getDisplayCountry(Locale.getDefault())
-
     private fun onToggleAttested() = form.update { it.copy(attested = !it.attested) }
 
     private fun onToggleQualified() = form.update { it.copy(qualified = !it.qualified) }
@@ -198,7 +177,7 @@ internal class InvestGateVM(
 
     private fun onClosePicker() = form.update { it.copy(isPickerOpen = false) }
 
-    // A new country resets both attestations: they name the country, so an earlier tick doesn't carry over.
+    // The attestations name the country, so a new one clears them.
     private fun onPickCountry(code: String) =
         form.update {
             if (code == it.countryCode) {
@@ -264,8 +243,7 @@ internal class InvestGateVM(
         }
     }
 
-    // After the gate, a country that still isn't available (prohibited, or restricted without the attestation)
-    // shows the not-available screen rather than the gate again.
+    // A country that still isn't available shows the not-available screen, not the gate again.
     private fun unavailableFor(route: Any): Any {
         val code = form.value.countryCode
         return if (route == InvestGateArgs && code != null) InvestUnavailableArgs(code) else route

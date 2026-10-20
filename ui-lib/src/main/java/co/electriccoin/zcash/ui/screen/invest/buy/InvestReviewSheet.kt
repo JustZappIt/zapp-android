@@ -13,30 +13,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
+import co.electriccoin.zcash.ui.design.component.zapp.ZappModalBottomSheet
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSummaryRow
 import co.electriccoin.zcash.ui.design.newcomponent.PreviewScreens
 import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_LG
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_MD
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_SM
-import co.electriccoin.zcash.ui.screen.invest.common.InvestModalSheet
 
-/**
- * I6, in ZappConfirmationBottomSheet's frame (same surface, handle and back handling) with the swap review's rows.
- * A null [state] keeps it hidden.
- */
 @Composable
 internal fun InvestReviewSheet(state: InvestReviewState?) {
-    InvestModalSheet(state = state, onDismiss = { it.onDismiss() }, isBusy = { it.isBusy }) { active ->
+    ZappModalBottomSheet(state = state, onDismiss = { it.onDismiss() }, isBusy = { it.isBusy }) { active ->
         InvestReviewContent(active, Modifier.weight(1f, false))
     }
 }
@@ -47,20 +39,21 @@ private fun InvestReviewContent(
     modifier: Modifier = Modifier,
 ) {
     val c = ZappTheme.colors
+    val spacing = ZappTheme.spacing
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = SHEET_PADDING.dp),
-        verticalArrangement = Arrangement.spacedBy(INVEST_GAP_MD.dp),
+                .padding(horizontal = spacing.xl3),
+        verticalArrangement = Arrangement.spacedBy(spacing.lg),
     ) {
-        Spacer(Modifier.height(INVEST_GAP_SM.dp))
+        Spacer(Modifier.height(spacing.md))
         BasicText(
             text = stringResource(R.string.invest_review_title),
             style = ZappTheme.typography.sectionTitle.copy(color = c.text, fontWeight = FontWeight.SemiBold),
         )
-        ZappBorderedCard(verticalArrangement = Arrangement.spacedBy(INVEST_GAP_SM.dp)) {
+        ZappBorderedCard(verticalArrangement = Arrangement.spacedBy(spacing.md)) {
             ZappSummaryRow(
                 stringResource(R.string.invest_review_from),
                 stringResource(R.string.invest_review_from_value),
@@ -72,7 +65,7 @@ private fun InvestReviewContent(
                 state.expected.getValue(),
                 valueColor = c.textMuted,
             )
-            ZappSummaryRow(stringResource(R.string.invest_buy_ledger_fees), state.fees.getValue())
+            ZappSummaryRow(stringResource(R.string.invest_ledger_fees), state.fees.getValue())
             ZappSummaryRow(
                 stringResource(R.string.invest_review_held_in),
                 stringResource(R.string.invest_review_held_in_value),
@@ -98,11 +91,9 @@ private fun InvestReviewContent(
             modifier = Modifier.fillMaxWidth(),
             onClick = state.primaryButton.onClick,
         )
-        Spacer(Modifier.height(INVEST_GAP_LG.dp))
+        Spacer(Modifier.height(spacing.xl2))
     }
 }
-
-private const val SHEET_PADDING = 24
 
 @PreviewScreens
 @Composable

@@ -77,7 +77,6 @@ class ResetZashiUseCase internal constructor(
             // clear, and would keep driving the deleted wallet's smart account.
             peerCashOutRepository.reset()
             baseBalanceRepository.reset()
-            // The Invest session, account ID and cached holdings and addresses belong to this wallet.
             clearInvestData()
             // Conversions too: a loop still running would write the wiped wallet's swap back.
             atomicSwapRepository.reset()
@@ -89,8 +88,7 @@ class ResetZashiUseCase internal constructor(
             closeSynchronizer()
             clearSDK()
             clearSharedPrefs()
-            // Again once the recovery phrase is gone: an Invest call that landed in between still derived the old
-            // account from it, and would otherwise leave that account ID cached for the next wallet.
+            // Again: an Invest call made before the phrase was wiped may have cached the old account.
             clearInvestData()
             clearInMemoryData()
         } catch (_: BiometricsFailureException) {

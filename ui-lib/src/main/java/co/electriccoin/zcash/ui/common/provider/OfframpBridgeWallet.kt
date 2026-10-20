@@ -63,6 +63,7 @@ interface OfframpBridgeWallet {
      */
     suspend fun sendZecDeposit(
         quote: SwapQuote,
+        addToSwapHistory: Boolean = true,
         beforeSubmit: suspend () -> Unit = {},
     ): String
 
@@ -94,6 +95,7 @@ class RealOfframpBridgeWallet(
 
     override suspend fun sendZecDeposit(
         quote: SwapQuote,
+        addToSwapHistory: Boolean,
         beforeSubmit: suspend () -> Unit,
     ): String {
         val send =
@@ -127,7 +129,7 @@ class RealOfframpBridgeWallet(
         // and `submitState` resolves the same way.
         // A declined prompt submits nothing and never emits a Result, so the await below would
         // suspend for the life of the process. Turn it into a terminal failure the caller can clear.
-        if (!submitProposal(navigateAfter = false, beforeSubmit = beforeSubmit)) {
+        if (!submitProposal(navigateAfter = false, addToSwapHistory = addToSwapHistory, beforeSubmit = beforeSubmit)) {
             throw BridgeAuthorizationCancelledException()
         }
         val result =

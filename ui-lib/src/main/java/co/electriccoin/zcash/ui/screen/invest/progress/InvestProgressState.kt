@@ -7,19 +7,16 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 internal data class InvestProgressState(
     val title: StringResource,
     val subtitle: StringResource?,
-    /** Held privately: the title renders as the success header. */
+    /** The title renders as the success header. */
     val isSuccess: Boolean,
     val steps: List<ZappStep>,
-    /** The danger card for a buy 1Click marked FAILED, with the reference support needs. */
+    /** The reference support needs, for a trade that needs attention. */
     val attention: StringResource?,
-    /** Checking the status failed; the buy itself carries on regardless. */
+    /** Checking the status failed; the trade itself carries on. */
     val checkError: StringResource?,
     val onCheckAgain: () -> Unit,
-    /** "Back to Pay". */
     val primaryButton: ButtonState,
-    /** "Contact support", with the reference in the draft, once a buy needs attention. */
     val contactSupportButton: ButtonState?,
-    /** "Remove from list", once a buy needs attention and its reference is on screen. */
     val removeButton: ButtonState?,
     val onBack: () -> Unit,
 )

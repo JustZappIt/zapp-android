@@ -13,22 +13,18 @@ import co.electriccoin.zcash.ui.common.model.near.QuoteResponseDto
 import co.electriccoin.zcash.ui.common.model.near.RecipientType
 import co.electriccoin.zcash.ui.common.model.near.RefundType
 import co.electriccoin.zcash.ui.common.model.near.SwapType
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.RoundingMode
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
-/** The pure decisions behind a sale, kept apart from the network calls so each can be tested on its own. */
+/** The pure decisions behind a sale. */
 internal object InvestSellChecks {
     private val MAX_USD_DRIFT = BigDecimal("0.05")
     private val SLIPPAGE_FLOOR = BigDecimal("0.99")
 
-    // A partial sale must return at least this share of its value in ZEC; fees measured 3.7 % at $30 and
-    // 0.5 % at $500 on 2026-09-25, so this only catches a quote that is plainly wrong.
+    // A partial sale returning less than this share of its value in ZEC is a plainly wrong quote.
     private val MIN_PARTIAL_RETURN = BigDecimal("0.9")
 
     sealed interface Resolved {
@@ -44,10 +40,7 @@ internal object InvestSellChecks {
         ) : Resolved
     }
 
-    /**
-     * The amount to sell in base units, or why there is nothing to quote. A partial sale keeps the minimum,
-     * measured on what the user asked for; selling everything is always allowed.
-     */
+    /** The amount to sell in base units, or why there's nothing to quote. Selling everything is always allowed. */
     @Suppress("ReturnCount", "CyclomaticComplexMethod")
     fun resolve(
         amount: SellAmount,
@@ -117,8 +110,7 @@ internal object InvestSellChecks {
         require(echo.recipientType == RecipientType.DESTINATION_CHAIN) { "Sell quote echo: recipientType" }
         require(echo.confidentiality == Confidentiality.BASIC) { "Sell quote echo: confidentiality" }
         require(quote.amountIn.compareTo(BigDecimal(order.baseUnits)) == 0) { "Sell quote echo: amountIn" }
-        // The ZEC side: the floor the user is promised must really be within the 1 % slippage asked for.
-        // 1Click rounds its floor down to a whole zat (6342045 out, 6278624 floor on 2026-09-25).
+        // 1Click rounds the floor down to a whole zat.
         require(quote.minAmountOut >= quote.amountOut.multiply(SLIPPAGE_FLOOR).setScale(0, RoundingMode.DOWN)) {
             "Sell quote: minAmountOut"
         }
@@ -128,8 +120,6 @@ internal object InvestSellChecks {
             }
         }
         if (!order.isAll) {
-            // With a price the minimum was already held to what the user asked; rounding down to base units
-            // can leave the quote a fraction of a cent under it. Without one, the quote is all there is.
             require(!isBelowMinimum(order, quote.amountInUsd)) { "Sell quote is below the minimum" }
             require(quote.amountOutUsd >= quote.amountInUsd.multiply(MIN_PARTIAL_RETURN)) {
                 "Sell quote returns too little ZEC for the stock's value"
@@ -137,11 +127,7 @@ internal object InvestSellChecks {
         }
     }
 
-    /**
-     * A partial sale resolved without a price, whose quote turns out worth less than the minimum. With a price
-     * the minimum was already held to what the user asked, where rounding down to base units can leave the
-     * quote a fraction of a cent under it.
-     */
+    /** A partial sale resolved without a price whose quote is worth less than the minimum. */
     fun isBelowMinimum(
         order: Resolved.Order,
         quotedUsd: BigDecimal,
@@ -156,11 +142,7 @@ internal object InvestSellChecks {
         return status == HTTP_BAD_REQUEST && TOO_SMALL.any { it in text }
     }
 
-    /**
-     * Whether a submit-intent failure proves nothing was accepted. Only then may the checkpoint go: a replayed
-     * or half-seen submission can come back as almost anything, and a kept checkpoint costs at most a wait
-     * until the signed intent's deadline.
-     */
+    /** Whether a submit-intent failure proves nothing was accepted; a replay can come back as almost anything. */
     fun isDefiniteRefusal(
         status: Int?,
         message: String?,
@@ -170,7 +152,6 @@ internal object InvestSellChecks {
             (status == HTTP_BAD_REQUEST && DEFINITE_REFUSALS.any { it in text } && !REPLAYED.containsMatchIn(text))
     }
 
-    /** The quote for selling [baseUnits] of [asset] from the private account to [recipient]'s shielded address. */
     fun quoteRequest(
         dry: Boolean,
         asset: InvestAsset,
@@ -197,12 +178,6 @@ internal object InvestSellChecks {
         confidentiality = Confidentiality.BASIC,
     )
 
-    /** The `deadline` of a generated intent, which [xyz.justzappit.evm.intents.IntentTransferSigner] checked. */
-    fun payloadDeadline(payload: String): Instant {
-        val deadline = ((Json.parseToJsonElement(payload) as JsonObject)["deadline"] as JsonPrimitive).content
-        return Instant.parse(deadline)
-    }
-
     private fun BigDecimal.toBaseUnits(decimals: Int): BigInteger =
         movePointRight(decimals).setScale(0, RoundingMode.DOWN).toBigInteger()
 
@@ -210,14 +185,11 @@ internal object InvestSellChecks {
     private const val HTTP_BAD_REQUEST = 400
     private const val HTTP_TOO_MANY_REQUESTS = 429
 
-    // Not "balance" or "insufficient": that is exactly what a replay says after the first submission sold
-    // the stock. A replay of the same signed payload can't fail on its signature or, seconds later, its deadline.
+    // Not "balance" or "insufficient": a replay says that once the first submission sold the stock.
     private val DEFINITE_REFUSALS = listOf("signature", "deadline")
 
-    // What a replay of an accepted intent may say ("nonce already used", "duplicate signature"): not definite.
-    // Word stems, so "duplicated" and "reused" read as a replay but "refused" and "nonexistent" don't.
+    // What a replay of an accepted intent may say ("nonce already used", "duplicate signature").
     private val REPLAYED = Regex("\\b(nonce|already|duplicat\\w*|(re)?used|exist\\w*)\\b")
 
-    // "Quote error. INSUFFICIENT_AMOUNT" is what 1Click answered for an unsellable amount on 2026-09-25.
     private val TOO_SMALL = listOf("insufficient_amount", "too low")
 }

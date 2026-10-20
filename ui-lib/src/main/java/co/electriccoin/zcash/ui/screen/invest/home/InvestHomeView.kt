@@ -23,6 +23,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappChipVariant
+import co.electriccoin.zcash.ui.design.component.zapp.ZappNotice
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRow
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRowDivider
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
@@ -33,11 +34,7 @@ import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.orHiddenString
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_LG
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_MD
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_SM
 import co.electriccoin.zcash.ui.screen.invest.common.InvestAssetRow
-import co.electriccoin.zcash.ui.screen.invest.common.InvestNotice
 import co.electriccoin.zcash.ui.screen.invest.common.InvestScreenFrame
 import co.electriccoin.zcash.ui.screen.invest.common.InvestTradeInProgressNotice
 import co.electriccoin.zcash.ui.screen.invest.common.InvestUpdatedLine
@@ -48,15 +45,15 @@ internal fun InvestHomeView(state: InvestHomeState) {
     InvestScreenFrame(title = stringResource(R.string.invest_home_title), onBack = state.onBack) {
         state.summary?.let {
             SummaryCard(it)
-            Spacer(Modifier.height(INVEST_GAP_LG.dp))
+            Spacer(Modifier.height(ZappTheme.spacing.xl2))
         }
         state.sellOnly?.let {
             InvestTradeInProgressNotice(it)
-            Spacer(Modifier.height(INVEST_GAP_MD.dp))
+            Spacer(Modifier.height(ZappTheme.spacing.lg))
         }
         state.recordsUnreadable?.let {
             InvestTradeInProgressNotice(it)
-            Spacer(Modifier.height(INVEST_GAP_MD.dp))
+            Spacer(Modifier.height(ZappTheme.spacing.lg))
         }
         state.pendingTrades.forEach { pending ->
             ZappBorderedCard(padding = 0.dp) {
@@ -66,34 +63,34 @@ internal fun InvestHomeView(state: InvestHomeState) {
                     onClick = pending.onClick,
                 )
             }
-            Spacer(Modifier.height(INVEST_GAP_MD.dp))
+            Spacer(Modifier.height(ZappTheme.spacing.lg))
         }
         state.torBanner?.let {
             TorBanner(it)
-            Spacer(Modifier.height(INVEST_GAP_MD.dp))
+            Spacer(Modifier.height(ZappTheme.spacing.lg))
         }
         state.marketBanner?.let {
-            InvestNotice(body = it.getValue())
-            Spacer(Modifier.height(INVEST_GAP_MD.dp))
+            ZappNotice(body = it.getValue())
+            Spacer(Modifier.height(ZappTheme.spacing.lg))
         }
         state.marketError?.let {
-            InvestNotice(body = it.getValue(), isDanger = true) {
+            ZappNotice(body = it.getValue(), isDanger = true) {
                 ZappButton(
                     text = stringResource(R.string.invest_retry),
                     variant = ZappButtonVariant.Ghost,
                     onClick = state.onRetryMarket,
                 )
             }
-            Spacer(Modifier.height(INVEST_GAP_MD.dp))
+            Spacer(Modifier.height(ZappTheme.spacing.lg))
         }
         state.groups.forEach { group ->
-            Spacer(Modifier.height(INVEST_GAP_SM.dp))
+            Spacer(Modifier.height(ZappTheme.spacing.md))
             GroupHeader(group)
             group.rows.forEachIndexed { index, row ->
                 StockRow(row)
                 if (index != group.rows.lastIndex) ZappRowDivider(inset = true)
             }
-            Spacer(Modifier.height(INVEST_GAP_MD.dp))
+            Spacer(Modifier.height(ZappTheme.spacing.lg))
         }
     }
 }
@@ -107,7 +104,7 @@ private fun SummaryCard(summary: InvestHomeSummary) {
             text = stringResource(R.string.invest_home_your_investments),
             style = ZappTheme.typography.caption.copy(color = c.textMuted),
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(ZappTheme.spacing.xs))
         BasicText(
             text = summary.total?.let { it orHiddenString hidden } ?: stringResource(R.string.invest_no_price_short),
             style = ZappTheme.typography.display.copy(color = c.text),
@@ -118,13 +115,13 @@ private fun SummaryCard(summary: InvestHomeSummary) {
             onRetry = summary.onRetry,
         )
         if (summary.rows.isEmpty()) {
-            Spacer(Modifier.height(INVEST_GAP_SM.dp))
+            Spacer(Modifier.height(ZappTheme.spacing.md))
             BasicText(
                 text = stringResource(R.string.invest_home_no_holdings),
                 style = ZappTheme.typography.body.copy(color = c.textMuted),
             )
         } else {
-            Spacer(Modifier.height(INVEST_GAP_SM.dp))
+            Spacer(Modifier.height(ZappTheme.spacing.md))
             summary.rows.forEach { HoldingLine(it) }
         }
     }
@@ -135,7 +132,7 @@ private fun HoldingLine(row: InvestHoldingRowState) {
     val c = ZappTheme.colors
     val hidden = stringRes(co.electriccoin.zcash.ui.design.R.string.hide_balance_placeholder)
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = ZappTheme.spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicText(
@@ -157,7 +154,6 @@ private fun HoldingLine(row: InvestHoldingRowState) {
     }
 }
 
-/** "Sell" for a holding, or "Selling…"/"Buying…" while a trade of it runs (one at a time per stock). */
 @Composable
 private fun SellAction(row: InvestHoldingRowState) {
     val c = ZappTheme.colors
@@ -170,10 +166,10 @@ private fun SellAction(row: InvestHoldingRowState) {
                 style = ZappTheme.typography.caption.copy(color = c.accentText),
                 modifier =
                     Modifier
-                        .padding(start = INVEST_GAP_SM.dp)
+                        .padding(start = ZappTheme.spacing.md)
                         .clickable(onClick = trade.onOpen)
                         .semantics { role = Role.Button }
-                        .padding(INVEST_GAP_SM.dp),
+                        .padding(ZappTheme.spacing.md),
             )
         }
 
@@ -183,10 +179,10 @@ private fun SellAction(row: InvestHoldingRowState) {
                 style = ZappTheme.typography.caption.copy(color = c.accentText, fontWeight = FontWeight.SemiBold),
                 modifier =
                     Modifier
-                        .padding(start = INVEST_GAP_SM.dp)
+                        .padding(start = ZappTheme.spacing.md)
                         .clickable(onClick = onSell)
                         .semantics { role = Role.Button }
-                        .padding(INVEST_GAP_SM.dp),
+                        .padding(ZappTheme.spacing.md),
             )
         }
     }
@@ -194,7 +190,7 @@ private fun SellAction(row: InvestHoldingRowState) {
 
 @Composable
 private fun TorBanner(state: InvestTorBannerState) {
-    InvestNotice(
+    ZappNotice(
         title = stringResource(R.string.invest_home_tor_banner_title),
         body = stringResource(R.string.invest_home_tor_banner_body),
     ) {
@@ -216,9 +212,9 @@ private fun TorBanner(state: InvestTorBannerState) {
 @Composable
 private fun GroupHeader(group: InvestStockGroupState) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = ZappTheme.spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(INVEST_GAP_SM.dp),
+        horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.md),
     ) {
         ZappSectionLabel(text = group.title.getValue())
         group.status?.let { ZappStatusChip(text = it.getValue(), variant = ZappChipVariant.Muted) }

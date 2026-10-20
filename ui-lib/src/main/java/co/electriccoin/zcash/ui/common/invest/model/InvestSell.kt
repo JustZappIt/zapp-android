@@ -4,7 +4,6 @@ import xyz.justzappit.evm.intents.IntentTransferSigner
 import java.math.BigDecimal
 import kotlin.time.Instant
 
-/** How much of a holding to sell. */
 sealed interface SellAmount {
     /** Everything in the private account, to the last base unit. */
     data object All : SellAmount
@@ -18,16 +17,14 @@ sealed interface SellAmount {
     ) : SellAmount
 }
 
-/** What the sell screen shows while the user types (a dry quote; nothing signed, nothing sent). */
 sealed interface SellEstimate {
     data class Priced(
         val unitsIn: BigDecimal,
         val usdIn: BigDecimal,
         val zecOut: BigDecimal,
         val usdOut: BigDecimal,
-        /** 1Click's fee, price impact and the fixed ZEC withdrawal fee, in USD. */
         val feesUsd: BigDecimal,
-        /** Fixed ZEC fee for the payout (64,000 zats on 2026-09-25). */
+        /** Fixed ZEC fee for the payout. */
         val withdrawFeeZec: BigDecimal?,
         val etaSeconds: Int?,
     ) : SellEstimate
@@ -44,35 +41,29 @@ sealed interface SellEstimate {
 
     data object NothingHeld : SellEstimate
 
-    /** Selling everything, but the holding is worth less than 1Click's fixed fees. There's no minimum to show. */
+    /** Selling everything, but the holding is worth less than 1Click's fixed fees. */
     data object TooSmallToSell : SellEstimate
 }
 
-/**
- * A live sell quote and the intent `generate-intent` returned for it, already checked to move exactly [units]
- * of [asset] to the quote's deposit address and nothing else. Nothing is signed until `executeSell` runs.
- * Only the sell repository makes these, since `executeSell` trusts the fields it reads back.
- */
+/** A live sell quote and its generated intent, already checked to be exactly this sale. */
 @ConsistentCopyVisibility
 data class PreparedSell internal constructor(
     val asset: InvestAsset,
     val units: BigDecimal,
     val usdIn: BigDecimal,
     val zecOutExpected: BigDecimal,
-    /** The quote's `minAmountOut` in ZEC: the least the sale can pay within the 1 % slippage. */
     val zecOutMin: BigDecimal,
     val feesUsd: BigDecimal,
     val withdrawFeeZec: BigDecimal?,
     val etaSeconds: Int?,
     val expiresAt: Instant,
-    /** The exact message the key will sign, for "View signed message". */
+    /** The exact message the key will sign. */
     val signedMessage: String,
     internal val depositAddress: String,
     internal val baseUnits: String,
     internal val intentDeadline: Instant,
 )
 
-/** The generated intent wasn't what was reviewed, so nothing was shown or signed. */
 class SellIntentRefusedException(
     val rejection: IntentTransferSigner.Rejection,
     val correlationId: String?,
@@ -81,7 +72,7 @@ class SellIntentRefusedException(
 sealed interface SellProgress {
     val depositAddress: String
 
-    /** Signed and submitted; waiting for NEAR Intents to execute it. */
+    /** Signed and submitted. */
     data class Authorised(
         override val depositAddress: String,
     ) : SellProgress
@@ -95,12 +86,12 @@ sealed interface SellProgress {
         val zec: BigDecimal?,
     ) : SellProgress
 
-    /** 1Click refunded the stock to the private account; nothing was sold. */
+    /** 1Click refunded the stock to the private account. */
     data class ReturnedToAccount(
         override val depositAddress: String,
     ) : SellProgress
 
-    /** The signed intent's deadline passed without it running, so the stock never left the account. */
+    /** The signed intent's deadline passed without it running. */
     data class NotSold(
         override val depositAddress: String,
     ) : SellProgress

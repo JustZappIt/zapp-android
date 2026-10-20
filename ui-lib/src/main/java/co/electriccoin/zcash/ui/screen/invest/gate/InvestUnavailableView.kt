@@ -7,7 +7,6 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
@@ -17,7 +16,6 @@ import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_LG
 import co.electriccoin.zcash.ui.screen.invest.common.InvestScreenFrame
 
 @Composable
@@ -31,7 +29,7 @@ internal fun InvestUnavailableView(state: InvestUnavailableState) {
             text = state.body.getValue(),
             style = ZappTheme.typography.body.copy(color = ZappTheme.colors.textMuted),
         )
-        Spacer(Modifier.height(INVEST_GAP_LG.dp))
+        Spacer(Modifier.height(ZappTheme.spacing.xl2))
         ZappButton(
             text = stringResource(R.string.invest_unavailable_change),
             variant = ZappButtonVariant.Ghost,

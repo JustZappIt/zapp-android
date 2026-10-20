@@ -9,7 +9,6 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
 import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressArgs
 
-/** Where a pending trade is followed: I7 for a buy, I10 for a sale (each with support and Dismiss if stuck). */
 internal fun PendingTrade.progressRoute(): Any =
     if (isSale) {
         InvestSellProgressArgs(depositAddress = depositAddress, assetId = assetId)
@@ -17,14 +16,7 @@ internal fun PendingTrade.progressRoute(): Any =
         InvestProgressArgs(depositAddress = depositAddress, assetId = assetId)
     }
 
-/**
- * Why a stock can't be traded right now, from [co.electriccoin.zcash.ui.common.invest.repository.InvestRepository]
- * `pendingTrades`: a buy or sale of it is still pending (stuck ones until dismissed), or the trade records can't be
- * read at all, which stops every trade.
- *
- * A second buy of a stock while one is pending is blocked on purpose too, though the engine would allow it: the
- * user follows one trade per stock at a time, and a stuck buy is dealt with before another is sent.
- */
+/** Why a stock can't be traded right now: a trade of it is pending, or the records can't be read. */
 internal sealed interface TradeBlock {
     data class Pending(
         val trade: PendingTrade,
@@ -33,7 +25,6 @@ internal sealed interface TradeBlock {
     data object RecordsUnreadable : TradeBlock
 
     companion object {
-        /** What blocks [asset], given `pendingTrades` (null when the records can't be read). */
         fun of(
             trades: List<PendingTrade>?,
             asset: InvestAsset,
@@ -46,10 +37,6 @@ internal sealed interface TradeBlock {
     }
 }
 
-/**
- * The note shown where Buy or Sell is off, with the way forward: "A trade of NVIDIA is in progress" opens that
- * trade; "Invest can't read its trade records right now" opens support.
- */
 internal data class InvestTradeInProgressState(
     val text: StringResource,
     val actionLabel: StringResource,

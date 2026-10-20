@@ -116,7 +116,7 @@ class InvestIntroVMTest {
                 val state = fixture.vm.state.value
                 assertNotNull(state)
                 assertEquals(stringRes(message), state.errorText)
-                assertFalse(state.isSettingUp)
+                assertFalse(state.primaryButton.isLoading)
                 assertFalse(fixture.settings.settings.value.setupComplete)
             }
         }

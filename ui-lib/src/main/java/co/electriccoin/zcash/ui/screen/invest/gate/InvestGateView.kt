@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
@@ -39,7 +38,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.ButtonState
-import co.electriccoin.zcash.ui.design.component.zapp.ZappBackButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappBottomActionBar
+import co.electriccoin.zcash.ui.design.component.zapp.ZappCheckboxRow
 import co.electriccoin.zcash.ui.design.component.zapp.ZappConfirmationBottomSheet
 import co.electriccoin.zcash.ui.design.component.zapp.ZappInputField
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRowDivider
@@ -50,38 +50,33 @@ import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_LG
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_MD
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_SM
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_HORIZONTAL_PADDING
-import co.electriccoin.zcash.ui.screen.invest.common.InvestCheckboxRow
 import co.electriccoin.zcash.ui.screen.invest.common.InvestScreenFrame
 
 @Composable
 internal fun InvestGateView(state: InvestGateState) {
     val c = ZappTheme.colors
+    val spacing = ZappTheme.spacing
     Box(Modifier.fillMaxSize()) {
         InvestScreenFrame(
             title = stringResource(R.string.invest_gate_title),
             onBack = state.onBack,
             primaryButton = state.primaryButton,
-            isPrimaryLoading = state.isSaving,
         ) {
             BasicText(
                 text = state.body.getValue(),
                 style = ZappTheme.typography.body.copy(color = c.textMuted),
             )
-            Spacer(Modifier.height(INVEST_GAP_LG.dp))
+            Spacer(Modifier.height(spacing.xl2))
             CountryRow(state)
             state.suggestion?.let {
-                Spacer(Modifier.height(INVEST_GAP_SM.dp))
+                Spacer(Modifier.height(spacing.md))
                 BasicText(text = it.getValue(), style = ZappTheme.typography.caption.copy(color = c.textMuted))
             }
-            Spacer(Modifier.height(INVEST_GAP_MD.dp))
+            Spacer(Modifier.height(spacing.lg))
             state.attestation?.let { CheckboxLine(it) }
             state.qualifiedInvestor?.let { CheckboxLine(it) }
             state.errorText?.let {
-                Spacer(Modifier.height(INVEST_GAP_SM.dp))
+                Spacer(Modifier.height(spacing.md))
                 BasicText(
                     text = it.getValue(),
                     style = ZappTheme.typography.caption.copy(color = c.danger, fontWeight = FontWeight.Medium),
@@ -95,7 +90,7 @@ internal fun InvestGateView(state: InvestGateState) {
 
 @Composable
 private fun CheckboxLine(state: InvestCheckboxState) {
-    InvestCheckboxRow(text = state.text.getValue(), isChecked = state.isChecked, onClick = state.onClick)
+    ZappCheckboxRow(text = state.text.getValue(), isChecked = state.isChecked, onClick = state.onClick)
 }
 
 @Composable
@@ -109,7 +104,7 @@ private fun CountryRow(state: InvestGateState) {
                 .border(BorderStroke(1.dp, c.border), RectangleShape)
                 .clickable(onClick = state.onChangeCountry)
                 .semantics { role = Role.Button }
-                .padding(horizontal = ROW_PADDING.dp, vertical = ROW_PADDING.dp),
+                .padding(ZappTheme.spacing.lg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -117,7 +112,7 @@ private fun CountryRow(state: InvestGateState) {
                 text = stringResource(R.string.invest_gate_country_label),
                 style = ZappTheme.typography.caption.copy(color = c.textMuted),
             )
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(ZappTheme.spacing.xxs))
             BasicText(
                 text = state.countryName ?: stringResource(R.string.invest_gate_country_none),
                 style =
@@ -133,10 +128,11 @@ private fun CountryRow(state: InvestGateState) {
     }
 }
 
-/** The searchable country list, drawn over the gate in the Zapp list style. */
+/** The searchable country list, drawn over the gate. */
 @Composable
 private fun CountryPicker(state: CountryPickerState) {
     val c = ZappTheme.colors
+    val spacing = ZappTheme.spacing
     var field by remember { mutableStateOf(TextFieldValue(state.query, TextRange(state.query.length))) }
     Column(
         modifier =
@@ -145,14 +141,11 @@ private fun CountryPicker(state: CountryPickerState) {
                 .background(c.bg)
                 .windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.displayCutout)),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = PICKER_HEADER_PADDING.dp, vertical = INVEST_GAP_SM.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ZappBackButton(onClick = state.onBack)
-            ZappSectionLabel(text = stringResource(R.string.invest_gate_picker_title))
-        }
-        Box(Modifier.padding(horizontal = INVEST_HORIZONTAL_PADDING.dp)) {
+        ZappSectionLabel(
+            text = stringResource(R.string.invest_gate_picker_title),
+            modifier = Modifier.padding(horizontal = spacing.gutter, vertical = spacing.lg),
+        )
+        Box(Modifier.padding(horizontal = spacing.gutter)) {
             ZappInputField(
                 value = field,
                 onValueChange = {
@@ -162,15 +155,15 @@ private fun CountryPicker(state: CountryPickerState) {
                 placeholder = stringResource(R.string.invest_gate_picker_search),
             )
         }
-        Spacer(Modifier.height(INVEST_GAP_SM.dp))
+        Spacer(Modifier.height(spacing.md))
         if (state.items.isEmpty()) {
             BasicText(
                 text = stringResource(R.string.invest_gate_picker_empty),
                 style = ZappTheme.typography.body.copy(color = c.textMuted),
-                modifier = Modifier.padding(INVEST_HORIZONTAL_PADDING.dp),
+                modifier = Modifier.padding(spacing.gutter),
             )
         }
-        LazyColumn(modifier = Modifier.weight(1f).windowInsetsPadding(WindowInsets.navigationBars)) {
+        LazyColumn(modifier = Modifier.weight(1f)) {
             items(items = state.items, key = { it.code }) { item ->
                 ZappSelectionRow(
                     title = item.name,
@@ -181,11 +174,9 @@ private fun CountryPicker(state: CountryPickerState) {
                 ZappRowDivider()
             }
         }
+        ZappBottomActionBar(onBack = state.onBack)
     }
 }
-
-private const val ROW_PADDING = 14
-private const val PICKER_HEADER_PADDING = 6
 
 @PreviewScreens
 @Composable
@@ -207,7 +198,6 @@ private fun PreviewGateRestricted() {
                         isChecked = false,
                     ) {},
                 primaryButton = ButtonState(stringRes("Continue"), isEnabled = true),
-                isSaving = false,
                 errorText = null,
                 onChangeCountry = {},
                 picker = null,
@@ -229,7 +219,6 @@ private fun PreviewPicker() {
                 attestation = null,
                 qualifiedInvestor = null,
                 primaryButton = ButtonState(stringRes("Continue"), isEnabled = false),
-                isSaving = false,
                 errorText = null,
                 onChangeCountry = {},
                 picker =

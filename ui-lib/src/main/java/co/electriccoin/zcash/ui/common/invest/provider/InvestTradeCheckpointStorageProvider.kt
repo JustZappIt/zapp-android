@@ -8,22 +8,19 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 
-/**
- * A buy whose ZEC may have left the wallet. Written before the send, so a process death between sending
- * and polling still finds the 1Click deposit address and resumes; removed once the buy is final.
- */
+/** A trade written before its funds move, so a restart still follows it to the end. */
 @Serializable
-data class InvestBuyCheckpoint(
+data class InvestTradeCheckpoint(
     val depositAddress: String,
     val assetId: String,
     val createdAtMillis: Long,
-    /** For a sell: when the signed intent stops being executable. */
+    /** Sale only: when the signed intent stops being executable. */
     val intentDeadlineMillis: Long? = null,
-    /** For a sell: the base units being sold. */
+    /** Sale only: the base units being sold. */
     val baseUnits: String? = null,
-    /** For a sell: the private balance of this stock just before submitting, to tell whether the sale ran. */
+    /** Sale only: the private balance just before submitting, to tell whether the sale ran. */
     val heldBeforeBaseUnits: String? = null,
-    /** For a sell: 1Click's hash of the submitted intent, the best reference for support. */
+    /** Sale only: 1Click's hash of the submitted intent. */
     val intentHash: String? = null,
 ) {
     init {
@@ -31,24 +28,44 @@ data class InvestBuyCheckpoint(
     }
 }
 
-interface InvestBuyCheckpointStorageProvider {
-    fun observe(): Flow<List<InvestBuyCheckpoint>>
+interface InvestTradeCheckpointStorageProvider {
+    fun observe(): Flow<List<InvestTradeCheckpoint>>
 
-    suspend fun add(checkpoint: InvestBuyCheckpoint)
+    suspend fun add(checkpoint: InvestTradeCheckpoint)
 
     suspend fun remove(depositAddress: String)
 }
 
+interface InvestBuyCheckpointStorageProvider : InvestTradeCheckpointStorageProvider
+
+interface InvestSellCheckpointStorageProvider : InvestTradeCheckpointStorageProvider
+
 internal class InvestBuyCheckpointStorageProviderImpl(
     encryptedPreferenceProvider: EncryptedPreferenceProvider,
-    prefKey: String = BUY_PREF_KEY,
-) : InvestBuyCheckpointStorageProvider {
+) : InvestBuyCheckpointStorageProvider,
+    InvestTradeCheckpointStorageProvider by InvestTradeCheckpointStore(
+        encryptedPreferenceProvider,
+        prefKey = "invest_buy_checkpoints_v1",
+    )
+
+internal class InvestSellCheckpointStorageProviderImpl(
+    encryptedPreferenceProvider: EncryptedPreferenceProvider,
+) : InvestSellCheckpointStorageProvider,
+    InvestTradeCheckpointStorageProvider by InvestTradeCheckpointStore(
+        encryptedPreferenceProvider,
+        prefKey = "invest_sell_checkpoints_v1",
+    )
+
+private class InvestTradeCheckpointStore(
+    encryptedPreferenceProvider: EncryptedPreferenceProvider,
+    prefKey: String,
+) : InvestTradeCheckpointStorageProvider {
     private val store = EncryptedJsonStore(encryptedPreferenceProvider, prefKey, Checkpoints.serializer())
     private val mutex = Mutex()
 
-    override fun observe(): Flow<List<InvestBuyCheckpoint>> = store.observe().map { it?.items.orEmpty() }
+    override fun observe(): Flow<List<InvestTradeCheckpoint>> = store.observe().map { it?.items.orEmpty() }
 
-    override suspend fun add(checkpoint: InvestBuyCheckpoint) =
+    override suspend fun add(checkpoint: InvestTradeCheckpoint) =
         mutex.withLock {
             val items =
                 store
@@ -68,23 +85,7 @@ internal class InvestBuyCheckpointStorageProviderImpl(
         }
 
     @Serializable
-    internal data class Checkpoints(
-        val items: List<InvestBuyCheckpoint>,
+    private data class Checkpoints(
+        val items: List<InvestTradeCheckpoint>,
     )
-
-    internal companion object {
-        const val BUY_PREF_KEY = "invest_buy_checkpoints_v1"
-        const val SELL_PREF_KEY = "invest_sell_checkpoints_v1"
-    }
 }
-
-/** Sells in flight: the same record, kept apart from buys. */
-interface InvestSellCheckpointStorageProvider : InvestBuyCheckpointStorageProvider
-
-internal class InvestSellCheckpointStorageProviderImpl(
-    encryptedPreferenceProvider: EncryptedPreferenceProvider,
-) : InvestSellCheckpointStorageProvider,
-    InvestBuyCheckpointStorageProvider by InvestBuyCheckpointStorageProviderImpl(
-        encryptedPreferenceProvider,
-        InvestBuyCheckpointStorageProviderImpl.SELL_PREF_KEY,
-    )

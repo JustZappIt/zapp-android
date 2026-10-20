@@ -3,10 +3,7 @@ package co.electriccoin.zcash.ui.screen.invest.common
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.screen.chat.SupportChatArgs
 
-/**
- * Opens the in-app support chat with the reference support needs already in the message box. The draft is in
- * English on purpose: it is read by the support team, like the chat's category markers.
- */
+/** Opens support chat with the reference prefilled, in English for the support team. */
 internal object InvestSupport {
     fun contact(
         navigationRouter: NavigationRouter,

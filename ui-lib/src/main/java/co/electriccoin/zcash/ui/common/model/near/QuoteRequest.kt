@@ -53,8 +53,7 @@ data class QuoteRequest(
     val appFees: List<AppFee>,
     @SerialName("referral")
     val referral: String? = null,
-    // Only Invest sets this. Never encoded when null, so a swap or bridge request stays byte-for-byte what it
-    // was before the field existed.
+    // Never encoded when null, so other requests are unchanged.
     @SerialName("confidentiality")
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     @Serializable(NearConfidentialitySerializer::class)
@@ -94,11 +93,7 @@ enum class RecipientType(
     CONFIDENTIAL_INTENTS("CONFIDENTIAL_INTENTS"),
 }
 
-/**
- * How much of a swap into or out of NEAR Confidential Intents stays private. 1Click rewrites
- * [PUBLIC] to [BASIC] whenever a confidential side is involved (observed 2026-09-25). Every swap echoes
- * one of these, so an unknown value decodes to null rather than failing the quote.
- */
+/** How private a swap into or out of NEAR Confidential Intents is; an unknown value decodes to null. */
 enum class Confidentiality(
     val apiValue: String
 ) {

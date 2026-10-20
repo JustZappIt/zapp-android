@@ -12,13 +12,8 @@ import xyz.justzappit.evm.signer.toUnsignedFieldBytes
 import xyz.justzappit.evm.types.Address
 
 /**
- * The `erc191` intents standard: `personal_sign` over the UTF-8 payload, sent as `secp256k1:` +
- * Base58(r ‖ s ‖ v) with v as the raw recovery bit (0 or 1), which is what `transformERC191Signature` in
- * `@defuse-protocol/internal-utils` produces.
- *
- * Internal on purpose: outside this module a payload is signed only through [IntentsLogin] (a message
- * Zapp builds itself) or [IntentTransferSigner] (a server payload, checked before it is signed), so no
- * caller can sign an arbitrary string with the private-account key.
+ * The `erc191` intents standard: `personal_sign` over the payload, sent as `secp256k1:` + Base58(r ‖ s ‖ v).
+ * Internal so that only [IntentsLogin] and [IntentTransferSigner] sign with the private-account key.
  */
 internal object Erc191IntentSigner {
     const val STANDARD = "erc191"
@@ -28,8 +23,7 @@ internal object Erc191IntentSigner {
     private const val SIGNATURE_BYTES = 65
     private const val FIELD_BYTES = 32
 
-    // A 65-byte signature is at most 89 Base58 characters; anything longer is rejected before decoding,
-    // which is quadratic in the input length.
+    // 65 bytes are at most 89 Base58 characters; longer input is refused before the quadratic decode.
     private const val MAX_ENCODED_LENGTH = 90
     private val HALF_N = SECP256K1_N.shiftRight(1)
 
@@ -42,16 +36,12 @@ internal object Erc191IntentSigner {
         return PREFIX + Base58.encode(bytes)
     }
 
-    /** keccak256(0x19 ‖ "Ethereum Signed Message:\n" ‖ byteLength ‖ payload), the EIP-191 version 0x45 hash. */
     fun personalMessageHash(payload: String): ByteArray {
         val bytes = payload.encodeToByteArray()
         return keccak256(byteArrayOf(EIP191_BYTE) + "$EIP191_HEADER${bytes.size}".encodeToByteArray() + bytes)
     }
 
-    /**
-     * For tests and diagnostics: the address that produced [signature] over [payload], or null if the
-     * signature is malformed or would be refused on chain (high s, or v other than 0 or 1).
-     */
+    /** For tests: who signed [payload], or null for a malformed or high-s signature. */
     fun recoverSigner(payload: String, signature: String): Address? {
         val raw =
             signature

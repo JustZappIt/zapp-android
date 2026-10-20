@@ -17,9 +17,9 @@ import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentRequest
 import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentResponse
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
-import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpoint
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProvider
+import co.electriccoin.zcash.ui.common.invest.provider.InvestTradeCheckpoint
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepositoryImpl
@@ -81,7 +81,7 @@ internal abstract class InvestRepositoryImplTestBase {
     protected val wallet = FakeWallet()
     protected val checkpoints = FakeCheckpoints()
     protected var residence = InvestSettings(countryCode = "AE", setupComplete = true)
-    protected val sellCheckpoints = MutableStateFlow<List<InvestBuyCheckpoint>>(emptyList())
+    protected val sellCheckpoints = MutableStateFlow<List<InvestTradeCheckpoint>>(emptyList())
     protected val session = mockk<PrivateAccountSession>()
     protected val keys = PrivateAccountKeyProvider(SeedPhraseSource { TEST_MNEMONIC.toCharArray() })
     protected var currentAccount: WalletAccount = mockk<ZashiAccount>()
@@ -227,6 +227,7 @@ internal abstract class InvestRepositoryImplTestBase {
 
         override suspend fun sendZecDeposit(
             quote: SwapQuote,
+            addToSwapHistory: Boolean,
             beforeSubmit: suspend () -> Unit,
         ): String {
             duringPrompt()
@@ -241,11 +242,11 @@ internal abstract class InvestRepositoryImplTestBase {
     }
 
     protected class FakeCheckpoints : InvestBuyCheckpointStorageProvider {
-        val items = MutableStateFlow<List<InvestBuyCheckpoint>>(emptyList())
+        val items = MutableStateFlow<List<InvestTradeCheckpoint>>(emptyList())
 
-        override fun observe(): Flow<List<InvestBuyCheckpoint>> = items
+        override fun observe(): Flow<List<InvestTradeCheckpoint>> = items
 
-        override suspend fun add(checkpoint: InvestBuyCheckpoint) {
+        override suspend fun add(checkpoint: InvestTradeCheckpoint) {
             items.value = items.value + checkpoint
         }
 

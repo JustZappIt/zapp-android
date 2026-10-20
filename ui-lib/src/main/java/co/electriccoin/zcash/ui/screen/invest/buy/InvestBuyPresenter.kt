@@ -6,20 +6,15 @@ import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.invest.model.BuyEstimate
 import co.electriccoin.zcash.ui.common.invest.model.InvestAsset
 import co.electriccoin.zcash.ui.common.invest.model.PreparedBuy
-import co.electriccoin.zcash.ui.common.invest.model.TradingSchedule
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
-import co.electriccoin.zcash.ui.screen.invest.common.UsMarketHours
 import java.math.BigDecimal
 import java.math.MathContext
 import java.math.RoundingMode
-import java.time.Instant
 
-/** The dry quote's state on the amount screen. */
 internal sealed interface BuyQuote {
-    /** No amount entered. */
     data object Idle : BuyQuote
 
     /** Waiting for typing to stop, or for 1Click to answer. */
@@ -34,7 +29,6 @@ internal sealed interface BuyQuote {
     ) : BuyQuote
 }
 
-/** Turns quotes into the words and figures I5 and I6 show; no state of its own. */
 internal object InvestBuyPresenter {
     fun ledger(
         quote: BuyQuote,
@@ -60,7 +54,7 @@ internal object InvestBuyPresenter {
                 priced
                     ?.etaSeconds
                     ?.let(InvestFormat::etaMinutes)
-                    ?.let { stringRes(R.string.invest_buy_eta_value, it) },
+                    ?.let { stringRes(R.string.invest_eta_value, it) },
         )
     }
 
@@ -74,7 +68,7 @@ internal object InvestBuyPresenter {
             }
 
             BuyQuote.Loading -> {
-                stringRes(R.string.invest_buy_quote_loading) to false
+                stringRes(R.string.invest_quote_loading) to false
             }
 
             is BuyQuote.Failed -> {
@@ -85,7 +79,7 @@ internal object InvestBuyPresenter {
                 when (val estimate = quote.estimate) {
                     is BuyEstimate.BelowMinimum -> {
                         val minimum = money.formatPreset(money.presetFromUsd(estimate.minimumUsd))
-                        stringRes(R.string.invest_buy_below_minimum, minimum) to false
+                        stringRes(R.string.invest_below_minimum, minimum) to false
                     }
 
                     is BuyEstimate.InsufficientZec -> {
@@ -100,15 +94,6 @@ internal object InvestBuyPresenter {
         }
 
     fun noPriceBody(asset: InvestAsset): StringResource = stringRes(R.string.invest_buy_no_price_body, asset.name)
-
-    /** For a weekday stock outside Ondo's 24/5 window, when it reopens in the phone's time. */
-    fun reopen(asset: InvestAsset, now: Instant): StringResource? {
-        if (asset.schedule != TradingSchedule.WEEKDAYS || UsMarketHours.isWeekdayWindowOpen(now)) return null
-        return stringRes(
-            R.string.invest_buy_no_price_reopen,
-            InvestFormat.localDayTime(UsMarketHours.nextWeekdayWindowOpen(now)),
-        )
-    }
 
     fun review(
         prepared: PreparedBuy,
@@ -129,20 +114,20 @@ internal object InvestBuyPresenter {
             youSend = stringRes(InvestFormat.zec(prepared.zecIn)),
             atLeast =
                 stringRes(
-                    R.string.invest_buy_you_get_value_exact,
+                    R.string.invest_value_and_units,
                     money.formatAtLeast(atLeastUsd),
                     InvestFormat.units(prepared.unitsOutMin, ticker),
                 ),
             expected =
                 stringRes(
-                    R.string.invest_buy_you_get_value_exact,
+                    R.string.invest_value_and_units,
                     money.format(prepared.usdOut),
                     InvestFormat.units(prepared.unitsOutExpected, ticker),
                 ),
             fees = stringRes(money.format(prepared.feesUsd)),
             countdown =
                 if (remainingSeconds > 0) {
-                    stringRes(countdownText(remainingSeconds))
+                    stringRes(InvestFormat.countdown(remainingSeconds))
                 } else {
                     stringRes(R.string.invest_review_expired)
                 },
@@ -152,7 +137,7 @@ internal object InvestBuyPresenter {
         )
     }
 
-    /** The spendable shielded ZEC, with its value in the user's currency once the ZEC price is known. */
+    /** The spendable shielded ZEC, with its value once the ZEC price is known. */
     fun balanceText(
         spendable: Zatoshi,
         zecUsd: BigDecimal?,
@@ -167,7 +152,7 @@ internal object InvestBuyPresenter {
         }
     }
 
-    /** Max leaves room for the network fee and the quote's own slippage, so it doesn't land on "not enough ZEC". */
+    /** Leaves room for the network fee and slippage, so Max doesn't land on "not enough ZEC". */
     fun maxUsd(
         spendable: Zatoshi,
         price: BigDecimal?,
@@ -180,10 +165,6 @@ internal object InvestBuyPresenter {
             .setScale(2, RoundingMode.DOWN)
             .takeIf { it.signum() > 0 }
     }
-
-    /** "9:42": minutes and seconds left on the held price. */
-    fun countdownText(seconds: Long): String =
-        "%d:%02d".format(seconds / SECONDS_PER_MINUTE, seconds % SECONDS_PER_MINUTE)
 
     private fun feesText(
         feesUsd: BigDecimal,
@@ -204,7 +185,6 @@ internal object InvestBuyPresenter {
     private val HUNDRED = BigDecimal.TEN.pow(2)
     private val MAX_FEE_RESERVE_ZEC = BigDecimal("0.0005")
     private val MAX_HEADROOM = BigDecimal("0.98")
-    private const val SECONDS_PER_MINUTE = 60L
 }
 
 internal data class ReviewFigures(

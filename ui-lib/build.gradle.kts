@@ -229,18 +229,6 @@ androidComponents {
             )
         )
         variant.buildConfigFields?.put(
-            "IS_INVEST_DEMO",
-            BuildConfigField(
-                type = "boolean",
-                value =
-                    (
-                        project.property("ZAPP_INVEST_DEMO").toString().toBoolean() &&
-                            variant.buildType == "debug"
-                    ).toString(),
-                comment = "Debug-only: Invest runs on the scripted demo engine, with no network and no ZEC sent"
-            )
-        )
-        variant.buildConfigFields?.put(
             "IS_GROUP_LINKS_ENABLED",
             BuildConfigField(
                 type = "boolean",
@@ -456,9 +444,7 @@ dependencies {
     }
 }
 
-// A build without the partner JWT sends no 1Click partner header: its swaps, bridges and Invest trades still work
-// but aren't attributed to Zapp, which nothing on the phone shows. A release is built on a maintainer's machine (no
-// workflow publishes one), so a release task there refuses to run without it. CI only warns: fork PRs get no secrets.
+// Releases are built locally, so a local release without the partner JWT fails; CI only warns, as forks get no secrets.
 if (project.property("ZAPP_NEAR_PARTNER_JWT")?.toString().isNullOrBlank()) {
     val message =
         "ZAPP_NEAR_PARTNER_JWT is blank: this build sends no 1Click partner header, so its swaps, bridges " +

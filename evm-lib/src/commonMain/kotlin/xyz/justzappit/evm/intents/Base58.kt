@@ -3,10 +3,7 @@
 
 package xyz.justzappit.evm.intents
 
-/**
- * Bitcoin-alphabet Base58, the encoding NEAR Intents uses for `secp256k1:` and `ed25519:` signatures and
- * public keys. Leading zero bytes become leading '1's, as in every other Base58 implementation.
- */
+/** Bitcoin-alphabet Base58, which NEAR Intents uses for signatures and public keys. */
 internal object Base58 {
     private const val ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
     private const val BASE = 58
@@ -16,7 +13,6 @@ internal object Base58 {
     fun encode(input: ByteArray): String {
         if (input.isEmpty()) return ""
         val leadingZeros = input.takeWhile { it == 0.toByte() }.size
-        // Repeated division of the big-endian number by 58, one output digit per pass.
         val digits = IntArray(input.size * 2)
         var length = 0
         for (byte in input) {

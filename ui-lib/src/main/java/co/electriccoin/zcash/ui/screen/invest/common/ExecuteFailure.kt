@@ -5,40 +5,33 @@ import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
-/** What a failed buy or sale confirm means for the review sheet. */
+/** What a failed Confirm means for the review sheet. */
 internal sealed interface ExecuteFailure {
-    /** The prompt was cancelled: nothing was sent; the sheet stays as it was. */
+    /** The prompt was cancelled; nothing was sent. */
     data object Cancelled : ExecuteFailure
 
-    /** The engine lists this very trade: it may have gone out, so follow it rather than offer to pay again. */
+    /** The engine recorded this trade, so it may have gone out: follow it rather than offer to pay again. */
     data class OursPending(
         val trade: PendingTrade,
     ) : ExecuteFailure
 
-    /** The engine refused what it was asked to sign; nothing was sent. */
+    /** The engine refused to sign; nothing was sent. */
     data object Refused : ExecuteFailure
 
-    /** Not recorded, and the price lapsed meanwhile: nothing was sent, a fresh price is the way on. */
+    /** Not recorded and the price lapsed; nothing was sent. */
     data object Expired : ExecuteFailure
 
-    /** Not recorded, but another trade of the stock is pending: nothing was sent, and Confirm stays off. */
+    /** Not recorded, as another trade of the stock is pending; nothing was sent. */
     data object OtherTradePending : ExecuteFailure
 
-    /**
-     * The trade records can't be read, so whether this trade went out is unknown: it must not be read as "nothing
-     * sent". The sheet closes and the screen shows the unreadable-records note, which leads to support.
-     */
+    /** The records can't be read, so whether this trade went out is unknown. */
     data object RecordsUnreadable : ExecuteFailure
 
-    /** Not recorded and no known reason: close the sheet and say it didn't complete. */
+    /** Not recorded, for no known reason. */
     data object Failed : ExecuteFailure
 
     companion object {
-        /**
-         * Everything but a cancelled prompt first asks the engine whether it recorded this trade ([ourDeposit]),
-         * because a send can fail after broadcasting and still count. Only an unrecorded failure can be read as
-         * "nothing sent" (refused, expired, blocked by another trade), so a lapsed price never invites paying twice.
-         */
+        /** A send can fail after broadcasting, so only a failure the engine didn't record means nothing was sent. */
         suspend fun classify(
             isCancelled: Boolean,
             isRefused: Boolean,

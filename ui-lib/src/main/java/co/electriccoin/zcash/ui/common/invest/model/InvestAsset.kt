@@ -1,35 +1,27 @@
 package co.electriccoin.zcash.ui.common.invest.model
 
-/**
- * When Ondo mints and redeems an asset. It says when a price *should* exist; whether 1Click actually quotes
- * is only known by asking (on Saturday 2026-09-26 even [ALWAYS] names mostly returned "No liquidity").
- */
+import co.electriccoin.zcash.ui.common.repository.TransactionSwapMetadata
+
 enum class TradingSchedule {
-    /** Ondo's 24/7 names. */
     ALWAYS,
 
-    /** Ondo's 24/5 window: Sunday 20:00 to Friday 20:00 US Eastern. */
+    /** Sunday 20:00 to Friday 20:00 US Eastern. */
     WEEKDAYS,
 }
 
-/**
- * One of the curated stocks Invest offers. [assetId] is the 1Click asset ID; the list is matched on it, never
- * on [ticker], so a renamed symbol can't silently point at a different token.
- */
+/** A curated stock, matched on its 1Click [assetId], never on [ticker]. */
 data class InvestAsset(
     val assetId: String,
-    /** The underlying ticker shown to people, without Ondo's "on" suffix. */
+    /** Without Ondo's "on" suffix. */
     val ticker: String,
     val name: String,
     val schedule: TradingSchedule,
 ) {
-    /** 1Click's token symbol, e.g. `NVDAon`: what the wallet's swap record stores as the destination token. */
+    /** 1Click's token symbol, e.g. `NVDAon`, as a swap record stores it. */
     val symbol: String get() = ticker + ONDO_SUFFIX
 
-    /** 1Click's chain for every Ondo token today. */
     val chain: String get() = ONDO_CHAIN
 
-    /** The token's decimals, so a holding can be counted even when 1Click no longer lists the token. */
     val decimals: Int get() = ONDO_DECIMALS
 
     private companion object {
@@ -39,13 +31,6 @@ data class InvestAsset(
     }
 }
 
-/**
- * The launch list, decided 2026-09-27: six 24/7 names and four weekday names. All are Ondo tokens on BSC,
- * held inside NEAR Intents as `nep141:bnb-<contract>.omdep.near` (from `/v0/tokens?ondoTokens`, 2026-09-26).
- *
- * Only NVIDIA, Apple, Tesla and Microsoft have been quoted so far. The rest must be dry-quoted at $40 and
- * $100 on a weekday before release, and dropped if they don't quote.
- */
 object InvestAssets {
     val curated: List<InvestAsset> =
         listOf(
@@ -65,10 +50,7 @@ object InvestAssets {
 
     fun find(assetId: String): InvestAsset? = byAssetId[assetId]
 
-    /**
-     * The curated stock a swap record points at, by the token and chain tickers the record stores. Ordinary
-     * Swap never offers these tokens, so a match means the record is an Invest buy.
-     */
+    /** The curated stock with these swap-record tickers; ordinary Swap never offers one. */
     fun findBySwapTickers(
         tokenTicker: String,
         chainTicker: String,
@@ -89,3 +71,7 @@ object InvestAssets {
         schedule = schedule,
     )
 }
+
+/** The stock an Invest buy's swap record bought, or null for any other swap. */
+fun TransactionSwapMetadata.investAsset(): InvestAsset? =
+    InvestAssets.findBySwapTickers(destination.tokenTicker, destination.chainTicker)

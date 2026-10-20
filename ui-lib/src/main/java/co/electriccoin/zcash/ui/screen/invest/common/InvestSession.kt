@@ -4,10 +4,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/**
- * What Invest remembers for as long as the app runs, and no longer: a dismissed "Invest is more private over Tor"
- * banner stays away until the app is next started, however often Invest home is opened in between.
- */
+/** What Invest remembers until the app is closed: a dismissed Tor banner. */
 class InvestSession {
     private val torBannerDismissed = MutableStateFlow(false)
     val isTorBannerDismissed: StateFlow<Boolean> = torBannerDismissed.asStateFlow()

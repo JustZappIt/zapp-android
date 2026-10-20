@@ -9,10 +9,7 @@ import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
 
-/**
- * The sale's steps (UX plan I10): authorised → sold → ZEC sent to you. Stock refunded to the private account, or an
- * intent whose deadline passed unrun, both mean nothing was sold; a FAILED status needs support.
- */
+/** Authorised → selling → ZEC sent to you. */
 internal object SellProgressToSteps {
     fun steps(
         progress: SellProgress,

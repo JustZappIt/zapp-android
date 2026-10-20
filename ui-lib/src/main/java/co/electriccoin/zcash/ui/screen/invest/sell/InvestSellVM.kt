@@ -23,19 +23,18 @@ import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyPresenter
-import co.electriccoin.zcash.ui.screen.invest.buy.InvestNoPriceState
-import co.electriccoin.zcash.ui.screen.invest.buy.InvestPresetState
 import co.electriccoin.zcash.ui.screen.invest.common.ExecuteFailure
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
-import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
+import co.electriccoin.zcash.ui.screen.invest.common.InvestNoPriceState
+import co.electriccoin.zcash.ui.screen.invest.common.InvestPresetState
+import co.electriccoin.zcash.ui.screen.invest.common.InvestReviewCountdown
 import co.electriccoin.zcash.ui.screen.invest.common.TradeBlock
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
+import co.electriccoin.zcash.ui.screen.invest.common.reopenText
 import co.electriccoin.zcash.ui.screen.invest.common.toInvestMessage
 import co.electriccoin.zcash.ui.screen.invest.common.toState
 import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressArgs
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -49,16 +48,13 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
-import java.math.RoundingMode
 import kotlin.time.Clock
 import kotlin.time.toJavaInstant
 
 /**
- * I8 and its review sheet I9. The amount is typed in the user's currency or in shares; a dry quote runs once
- * typing stops. "Review" fetches a live quote plus the intent the private-account key would sign, already checked
- * by the engine; the sheet shows that intent in words and holds it until it expires. Confirming asks for biometrics
- * inside [InvestSellRepository.executeSell]; a cancelled prompt leaves the user on the sheet, and an intent that
- * isn't the reviewed transfer ends on "Something did not match".
+ * The sell amount screen and its review sheet, which shows the intent the key would sign. Biometrics are asked for
+ * inside [InvestSellRepository.executeSell]; an intent that isn't the reviewed transfer ends on "Something did not
+ * match".
  */
 @Suppress("TooManyFunctions")
 internal class InvestSellVM(
@@ -76,7 +72,7 @@ internal class InvestSellVM(
     private data class Form(
         val mode: SellAmountMode = SellAmountMode.MONEY,
         val amount: NumberTextFieldInnerState = NumberTextFieldInnerState(),
-        /** Sell everything held, to the last base unit, whatever the field shows. */
+        /** Everything held, to the last base unit, whatever the field shows. */
         val sellAll: Boolean = false,
         val isRetrying: Boolean = false,
         val isPreparing: Boolean = false,
@@ -87,7 +83,7 @@ internal class InvestSellVM(
         val prepared: PreparedSell,
         val remainingSeconds: Long,
         val isBusy: Boolean = false,
-        /** Refused because another trade of the stock is pending: nothing was signed, and Confirm stays off. */
+        /** Another trade of the stock is pending, so Confirm stays off. */
         val isBlocked: Boolean = false,
         val error: StringResource? = null,
         val isSignedMessageOpen: Boolean = false,
@@ -96,7 +92,7 @@ internal class InvestSellVM(
     private val form = MutableStateFlow(Form())
     private val quote = MutableStateFlow<SellQuote>(SellQuote.Idle)
     private val review = MutableStateFlow<Review?>(null)
-    private var countdownJob: Job? = null
+    private val countdown = InvestReviewCountdown(viewModelScope, clock)
 
     private val currency =
         currencyProvider.observe().stateIn(viewModelScope, SharingStarted.Eagerly, InvestCurrency.USD)
@@ -105,7 +101,6 @@ internal class InvestSellVM(
             .map { holdings -> holdings?.items?.firstOrNull { it.asset.assetId == asset.assetId } }
             .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    // 1Click's USD price of ZEC, to value the ZEC a sale pays out in the user's currency on the review sheet.
     private val zecUsd =
         swapRepository.assets
             .map { it.zecAsset?.usdPrice }
@@ -116,16 +111,14 @@ internal class InvestSellVM(
                     ?.usdPrice
             )
 
-    // The engine refuses a sale while a buy or sale of the same stock is still pending, or the records are unreadable.
     private val tradeBlock =
         investRepository.pendingTrades
             .map { TradeBlock.of(it, asset) }
             .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     init {
-        // collectLatest cancels the previous block, so the leading delay is the debounce: one quote per pause.
-        // Keyed on what was typed and the currency, not the exchange rate, which moves with every ZEC price tick;
-        // the review sheet fetches a live quote at the current rate anyway.
+        // collectLatest makes the leading delay a debounce. Keyed on what was typed and the currency, not the
+        // exchange rate, which moves with every ZEC price tick.
         viewModelScope.launch {
             combine(form, currency.map { it.code }, ::estimateKeyOf)
                 .distinctUntilChanged()
@@ -153,7 +146,6 @@ internal class InvestSellVM(
         combine(review, currency, zecUsd) { current, money, price -> current?.let { buildReview(it, money, price) } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT), null)
 
-    /** Follows pending trades while this screen is STARTED, so a held-back stock unblocks here; one shared poller. */
     suspend fun followPendingTrades(): Nothing = tradeFollower.followPendingTrades()
 
     private fun sellAmountOf(
@@ -169,7 +161,7 @@ internal class InvestSellVM(
         }
     }
 
-    /** What a sale estimate depends on, apart from the exchange rate; null when there is nothing to estimate. */
+    /** What an estimate depends on, apart from the exchange rate; null when there's nothing to estimate. */
     private data class EstimateKey(
         val sellAll: Boolean,
         val mode: SellAmountMode,
@@ -192,8 +184,7 @@ internal class InvestSellVM(
         val request = sellAmountOf(form.value)
         if (key == null || request == null) return
         val result = investCatching { sellRepository.estimateSell(asset, request) }
-        // A figure for an amount (or currency) the user has already changed is worth nothing; a rate that moved
-        // meanwhile is not a change.
+        // An estimate for an amount or currency that has since changed is worth nothing.
         if (estimateKeyOf(form.value, currency.value.code) != key) return
         quote.update {
             result.fold(
@@ -232,7 +223,7 @@ internal class InvestSellVM(
                 if (estimate is SellEstimate.NoPrice) {
                     InvestNoPriceState(
                         body = InvestSellPresenter.noPriceBody(asset),
-                        reopen = InvestBuyPresenter.reopen(asset, clock.now().toJavaInstant()),
+                        reopen = asset.reopenText(clock.now().toJavaInstant()),
                         isRetrying = current.isRetrying,
                         onTryAgain = ::onTryAgain,
                     )
@@ -251,11 +242,11 @@ internal class InvestSellVM(
                     ?.let { InvestSellAllSuggestion(it, ::onSellAll) },
             primaryButton =
                 ButtonState(
-                    text = stringRes(R.string.invest_buy_review),
+                    text = stringRes(R.string.invest_review),
                     isEnabled = estimate is SellEstimate.Priced && !current.isPreparing && block == null,
+                    isLoading = current.isPreparing,
                     onClick = ::onReview,
                 ),
-            isPreparing = current.isPreparing,
             isRefused = current.isRefused,
             tradeInProgress = block?.toState(asset, navigationRouter),
             onBack = navigationRouter::back,
@@ -292,8 +283,7 @@ internal class InvestSellVM(
             }
         }
 
-    // Reads the mode and holding when tapped, not when the button was drawn, so a tap right after switching
-    // between money and shares halves in the mode now showing.
+    // Reads the mode when tapped, so a tap right after switching halves in the mode now showing.
     private fun onHalf() =
         form.update { current ->
             InvestSellPresenter
@@ -342,23 +332,9 @@ internal class InvestSellVM(
     }
 
     private fun openReview(prepared: PreparedSell) {
-        review.update { Review(prepared, remainingSeconds(prepared)) }
-        countdownJob?.cancel()
-        countdownJob =
-            viewModelScope.launch {
-                var remaining = review.value?.let { remainingSeconds(it.prepared) } ?: 0
-                while (remaining > 0) {
-                    delay(COUNTDOWN_TICK_MS)
-                    remaining = review.value?.let { remainingSeconds(it.prepared) } ?: 0
-                    review.update { it?.copy(remainingSeconds = remaining) }
-                }
-            }
+        review.update { Review(prepared, countdown.remainingSeconds(prepared.expiresAt)) }
+        countdown.start(prepared.expiresAt) { remaining -> review.update { it?.copy(remainingSeconds = remaining) } }
     }
-
-    private fun remainingSeconds(prepared: PreparedSell): Long =
-        (prepared.expiresAt - clock.now()).inWholeSeconds.coerceAtLeast(0)
-
-    private fun isExpired(prepared: PreparedSell): Boolean = clock.now() >= prepared.expiresAt
 
     private fun buildReview(
         current: Review,
@@ -390,7 +366,7 @@ internal class InvestSellVM(
     }
 
     private fun onRefreshPrice() {
-        val current = review.value?.takeUnless { it.isBusy } ?: return
+        if (review.value?.isBusy != false) return
         val request = sellAmountOf(form.value)
         if (request == null || closeIfBlocked()) return
         review.update { it?.copy(isBusy = true, error = null) }
@@ -414,15 +390,14 @@ internal class InvestSellVM(
         when {
             closeIfBlocked() -> Unit
 
-            // The clock, not the last countdown tick: the price may have lapsed since the sheet last redrew.
-            isExpired(current.prepared) -> review.update { it?.copy(remainingSeconds = 0) }
+            // The clock, not the last tick: the price may have lapsed since the sheet last redrew.
+            countdown.isExpired(current.prepared.expiresAt) -> review.update { it?.copy(remainingSeconds = 0) }
 
             else -> execute(current)
         }
     }
 
     private fun execute(current: Review) {
-        // Busy until executeSell returns: a second tap does nothing, and the engine refuses a second sale anyway.
         review.update { it?.copy(isBusy = true, error = null) }
         viewModelScope.launch {
             investCatching { sellRepository.executeSell(current.prepared) }
@@ -442,7 +417,7 @@ internal class InvestSellVM(
             ExecuteFailure.classify(
                 isCancelled = e is BiometricsCancelledException,
                 isRefused = e is SellIntentRefusedException,
-                isExpired = isExpired(current.prepared),
+                isExpired = countdown.isExpired(current.prepared.expiresAt),
                 ourDeposit = current.prepared.depositAddress,
                 asset = asset,
                 pendingTrades = investRepository.pendingTrades,
@@ -452,7 +427,6 @@ internal class InvestSellVM(
                 review.update { it?.copy(isBusy = false) }
             }
 
-            // Unknown whether it went out: the screen's unreadable-records note (and its support link) takes over.
             ExecuteFailure.RecordsUnreadable -> {
                 closeReview()
             }
@@ -505,14 +479,12 @@ internal class InvestSellVM(
     }
 
     private fun closeReview() {
-        countdownJob?.cancel()
-        countdownJob = null
+        countdown.stop()
         review.update { null }
     }
 
     companion object {
-        /** How long the amount has to sit still before it is worth a (Tor) round trip. */
+        /** How long typing must pause before the amount is quoted. */
         const val AMOUNT_SETTLE_DELAY_MS = 500L
-        private const val COUNTDOWN_TICK_MS = 1_000L
     }
 }

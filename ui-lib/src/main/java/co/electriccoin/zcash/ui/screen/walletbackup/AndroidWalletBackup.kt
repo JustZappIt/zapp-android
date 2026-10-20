@@ -39,6 +39,5 @@ internal fun AndroidWalletBackup(args: WalletBackup) {
 @Serializable
 data class WalletBackup(
     val isOpenedFromSeedBackupInfo: Boolean,
-    /** Where to go once the phrase is saved (see [WalletBackupReturnTarget]). */
     val returnTarget: WalletBackupReturnTarget = WalletBackupReturnTarget.TABS,
 )

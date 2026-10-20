@@ -6,26 +6,22 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 
-/**
- * US market times, for the "prices can be patchy" banner and the Weekdays group's status. Holidays are not
- * modelled: on one the banner stays hidden while prices are thin, which only means one missing hint.
- */
+/** US market times for Invest's hints; holidays aren't modelled. */
 internal object UsMarketHours {
     private val NEW_YORK: ZoneId = ZoneId.of("America/New_York")
     private val REGULAR_OPEN: LocalTime = LocalTime.parse("09:30")
     private val REGULAR_CLOSE: LocalTime = LocalTime.parse("16:00")
 
-    /** Ondo's 24/5 window opens Sunday 20:00 and closes Friday 20:00, US Eastern. */
+    // Ondo's 24/5 window opens Sunday 20:00 and closes Friday 20:00, US Eastern.
     private val WEEKDAY_WINDOW_EDGE: LocalTime = LocalTime.parse("20:00")
 
-    /** Monday to Friday, 09:30 to 16:00 US Eastern. */
     fun isRegularSession(now: Instant): Boolean {
         val ny = now.atZone(NEW_YORK)
         return ny.dayOfWeek.isWeekday() && !ny.toLocalTime().isBefore(REGULAR_OPEN) &&
             ny.toLocalTime().isBefore(REGULAR_CLOSE)
     }
 
-    /** The next regular-session open at or after [now]; [now]'s own session if it is open. */
+    /** The next regular-session open, or [now] while one is open. */
     fun nextRegularOpen(now: Instant): Instant {
         var day = now.atZone(NEW_YORK).toLocalDate()
         repeat(DAYS_TO_SCAN) {
@@ -39,7 +35,6 @@ internal object UsMarketHours {
         error("no weekday within $DAYS_TO_SCAN days")
     }
 
-    /** Whether Ondo's weekday names are inside their 24/5 window (Sunday 20:00 to Friday 20:00 US Eastern). */
     fun isWeekdayWindowOpen(now: Instant): Boolean {
         val ny = now.atZone(NEW_YORK)
         val time = ny.toLocalTime()
@@ -51,7 +46,7 @@ internal object UsMarketHours {
         }
     }
 
-    /** When the 24/5 window next opens (Sunday 20:00 US Eastern); [now] itself while it is open. */
+    /** When the 24/5 window next opens, or [now] while it is open. */
     fun nextWeekdayWindowOpen(now: Instant): Instant {
         if (isWeekdayWindowOpen(now)) return now
         var day = now.atZone(NEW_YORK).toLocalDate()

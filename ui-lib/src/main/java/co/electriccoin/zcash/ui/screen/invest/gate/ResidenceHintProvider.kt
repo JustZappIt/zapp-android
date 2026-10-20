@@ -6,7 +6,7 @@ import java.util.Locale
 
 enum class ResidenceHintSource { SIM, LOCALE }
 
-/** A guess at the user's country for the gate to suggest; the user always confirms or changes it. */
+/** A guess at the user's country for the gate to suggest. */
 data class ResidenceHint(
     val countryCode: String,
     val source: ResidenceHintSource,
@@ -16,10 +16,7 @@ fun interface ResidenceHintProvider {
     fun hint(): ResidenceHint?
 }
 
-/**
- * The SIM's country first (it says where the phone's line is, which a travelling user can't change by accident),
- * then the phone's region setting. Reads nothing that needs a permission.
- */
+/** The SIM's country, else the phone's region setting; neither needs a permission. */
 class AndroidResidenceHintProvider(
     private val context: Context,
 ) : ResidenceHintProvider {

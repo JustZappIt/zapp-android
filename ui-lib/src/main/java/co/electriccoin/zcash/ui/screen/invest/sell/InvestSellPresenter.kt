@@ -8,14 +8,12 @@ import co.electriccoin.zcash.ui.common.invest.model.SellEstimate
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyPresenter
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
 import java.math.BigDecimal
 import java.math.MathContext
 import java.math.RoundingMode
 
-/** The dry sell quote's state on the amount screen. */
 internal sealed interface SellQuote {
     data object Idle : SellQuote
 
@@ -30,7 +28,6 @@ internal sealed interface SellQuote {
     ) : SellQuote
 }
 
-/** Turns sell quotes into what I8 and I9 show; no state of its own. */
 internal object InvestSellPresenter {
     fun ledger(
         quote: SellQuote,
@@ -44,7 +41,7 @@ internal object InvestSellPresenter {
             youSell =
                 priced?.let {
                     stringRes(
-                        R.string.invest_buy_you_get_value_exact,
+                        R.string.invest_value_and_units,
                         money.format(it.usdIn),
                         InvestFormat.units(it.unitsIn, asset.ticker),
                     )
@@ -59,14 +56,11 @@ internal object InvestSellPresenter {
                 priced
                     ?.etaSeconds
                     ?.let(InvestFormat::etaMinutes)
-                    ?.let { stringRes(R.string.invest_buy_eta_value, it) },
+                    ?.let { stringRes(R.string.invest_eta_value, it) },
         )
     }
 
-    /**
-     * The fixed ZEC withdrawal fee, named; above [HIGH_FEE_SHARE] of the sale it also suggests selling more at once,
-     * because the fee doesn't grow with the sale.
-     */
+    // The withdrawal fee doesn't grow with the sale, so above [HIGH_FEE_SHARE] the note suggests selling more at once.
     private fun feeNote(priced: SellEstimate.Priced): StringResource? {
         val feeZec = priced.withdrawFeeZec?.takeIf { it.signum() > 0 } ?: return null
         val zecUsd =
@@ -93,7 +87,7 @@ internal object InvestSellPresenter {
             }
 
             SellQuote.Loading -> {
-                stringRes(R.string.invest_buy_quote_loading) to false
+                stringRes(R.string.invest_quote_loading) to false
             }
 
             is SellQuote.Failed -> {
@@ -104,7 +98,7 @@ internal object InvestSellPresenter {
                 when (val estimate = quote.estimate) {
                     is SellEstimate.BelowMinimum -> {
                         val minimum = money.formatPreset(money.presetFromUsd(estimate.minimumUsd))
-                        stringRes(R.string.invest_buy_below_minimum, minimum) to false
+                        stringRes(R.string.invest_below_minimum, minimum) to false
                     }
 
                     is SellEstimate.ExceedsHolding -> {
@@ -127,7 +121,7 @@ internal object InvestSellPresenter {
             }
         }
 
-    /** "You hold": value first, then shares; shares alone without a price. */
+    /** Value first, then shares; shares alone without a price. */
     fun holdingText(
         held: Holding?,
         asset: InvestAsset,
@@ -135,13 +129,10 @@ internal object InvestSellPresenter {
     ): StringResource {
         val units = InvestFormat.units(held?.units ?: BigDecimal.ZERO, asset.ticker)
         val value = held?.usdValue ?: return stringRes(units)
-        return stringRes(R.string.invest_buy_you_get_value_exact, money.format(value), units)
+        return stringRes(R.string.invest_value_and_units, money.format(value), units)
     }
 
-    /**
-     * "This would leave less than $40. Sell all instead?", only for a partial sale that would leave less than the
-     * minimum behind: selling that remainder later would cost more in fixed fees than it is worth.
-     */
+    /** Only for a partial sale that would leave less than the minimum behind. */
     fun sellAllSuggestion(
         estimate: SellEstimate?,
         held: Holding?,
@@ -161,10 +152,7 @@ internal object InvestSellPresenter {
         }
     }
 
-    /**
-     * [fraction] of the holding as the field shows it: shares to four places, or money to the cent, rounded down
-     * so it never asks for more than is held. Null when there is nothing (or no price, in money) to take it from.
-     */
+    /** [fraction] of the holding in the field's unit, rounded down; null with nothing (or no price) to take it from. */
     fun share(
         held: Holding?,
         mode: SellAmountMode,
@@ -190,7 +178,7 @@ internal object InvestSellPresenter {
         prepared: PreparedSell,
         remainingSeconds: Long,
         money: InvestCurrency,
-        /** 1Click's USD price of ZEC, to value the payout in the user's currency; ZEC alone without it. */
+        /** 1Click's USD price of ZEC; ZEC alone without it. */
         zecPrice: BigDecimal?,
     ): SellReviewFigures =
         SellReviewFigures(
@@ -202,7 +190,6 @@ internal object InvestSellPresenter {
                 ),
             atLeast =
                 zecPrice?.let {
-                    // The ZEC is the guaranteed floor; its value in the user's currency moves with the price.
                     stringRes(
                         R.string.invest_sell_zec_at_least_with_value,
                         InvestFormat.zec(prepared.zecOutMin),
@@ -220,7 +207,7 @@ internal object InvestSellPresenter {
             fees = stringRes(money.format(prepared.feesUsd)),
             countdown =
                 if (remainingSeconds > 0) {
-                    stringRes(InvestBuyPresenter.countdownText(remainingSeconds))
+                    stringRes(InvestFormat.countdown(remainingSeconds))
                 } else {
                     stringRes(R.string.invest_review_expired)
                 },

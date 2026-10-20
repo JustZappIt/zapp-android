@@ -4,20 +4,9 @@ import androidx.lifecycle.ViewModel
 import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.invest.model.InvestEligibility
-import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.stringRes
-import java.util.Locale
+import co.electriccoin.zcash.ui.screen.invest.common.InvestFormat
 
-internal data class InvestUnavailableState(
-    val body: StringResource,
-    val onChangeCountry: () -> Unit,
-    val onDone: () -> Unit,
-)
-
-/**
- * The answer is saved, so Invest stays out of PAY; "Change country" re-opens the gate for a user who picked the
- * wrong one. Settings › Invest changes it later too.
- */
 internal class InvestUnavailableVM(
     args: InvestUnavailableArgs,
     private val navigationRouter: NavigationRouter,
@@ -25,7 +14,7 @@ internal class InvestUnavailableVM(
     val state: InvestUnavailableState =
         InvestUnavailableState(
             body =
-                Locale.Builder().setRegion(args.countryCode).build().displayCountry.let { name ->
+                InvestFormat.countryName(args.countryCode).let { name ->
                     if (InvestEligibility.of(args.countryCode) == InvestEligibility.RESTRICTED) {
                         stringRes(R.string.invest_unavailable_body_restricted, name)
                     } else {

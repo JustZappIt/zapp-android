@@ -16,7 +16,6 @@ fun InvestReceiptScreen(args: InvestReceiptArgs) {
     BackHandler { state.onBack() }
 }
 
-/** I11: the receipt for one Invest buy, opened from its Recent activity row. */
 @Serializable
 data class InvestReceiptArgs(
     val depositAddress: String,

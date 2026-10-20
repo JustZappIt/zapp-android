@@ -76,7 +76,7 @@ internal class InvestBuyVMTest : InvestBuyVMTestBase() {
             advanceTimeBy(InvestBuyVM.AMOUNT_SETTLE_DELAY_MS - 1)
             runCurrent()
             assertTrue(fixture.repo.estimateCalls.isEmpty())
-            assertEquals(stringRes(R.string.invest_buy_quote_loading), fixture.vm.state.value.notice)
+            assertEquals(stringRes(R.string.invest_quote_loading), fixture.vm.state.value.notice)
 
             advanceTimeBy(2)
             runCurrent()
@@ -97,7 +97,7 @@ internal class InvestBuyVMTest : InvestBuyVMTestBase() {
             assertEquals(stringRes("0.06478 ZEC"), ledger.youSend)
             assertEquals(stringRes(R.string.invest_buy_you_get_value, "$99.01", "0.4410 NVDA"), ledger.youGet)
             assertEquals(stringRes(R.string.invest_buy_fee_value, "$0.95", "0.95"), ledger.fees)
-            assertEquals(stringRes(R.string.invest_buy_eta_value, 8), ledger.eta)
+            assertEquals(stringRes(R.string.invest_eta_value, 8), ledger.eta)
             assertNull(state.notice)
             assertNull(state.noPrice)
             assertTrue(state.primaryButton.isEnabled)
@@ -180,7 +180,7 @@ internal class InvestBuyVMTest : InvestBuyVMTestBase() {
 
             val state = fixture.vm.state.value
             assertTrue(fixture.repo.estimateCalls.isEmpty())
-            assertEquals(stringRes(R.string.invest_buy_below_minimum, "$40"), state.notice)
+            assertEquals(stringRes(R.string.invest_below_minimum, "$40"), state.notice)
             assertFalse(state.isNoticeDanger)
             assertFalse(state.primaryButton.isEnabled)
         }

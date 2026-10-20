@@ -41,15 +41,10 @@ import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.orHiddenString
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_SM
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_HORIZONTAL_PADDING
 import co.electriccoin.zcash.ui.screen.invest.common.InvestAssetRow
 import co.electriccoin.zcash.ui.screen.invest.common.InvestUpdatedLine
 
-/**
- * The PAY tab's Investments block, between the balance card and Recent activity. Holdings show value first and
- * shares second, and follow the eye button like every other balance on the tab.
- */
+/** The PAY tab's Investments block; its figures follow the eye button like every other balance. */
 internal fun LazyListScope.investmentsSection(state: InvestmentsSectionState) {
     when (state) {
         InvestmentsSectionState.Hidden -> {
@@ -59,7 +54,7 @@ internal fun LazyListScope.investmentsSection(state: InvestmentsSectionState) {
         is InvestmentsSectionState.Entry -> {
             item(key = "invest_entry") {
                 InvestEntryCard(onClick = state.onClick)
-                Spacer(Modifier.height(SECTION_BOTTOM_GAP.dp))
+                Spacer(Modifier.height(ZappTheme.spacing.xl2))
             }
         }
 
@@ -67,7 +62,7 @@ internal fun LazyListScope.investmentsSection(state: InvestmentsSectionState) {
             item(key = "invest_loading") {
                 SectionHeader(onClick = state.onClick)
                 LoadingRow()
-                Spacer(Modifier.height(SECTION_BOTTOM_GAP.dp))
+                Spacer(Modifier.height(ZappTheme.spacing.xl2))
             }
         }
 
@@ -75,7 +70,7 @@ internal fun LazyListScope.investmentsSection(state: InvestmentsSectionState) {
             item(key = "invest_error") {
                 SectionHeader(onClick = null)
                 ErrorRow(state)
-                Spacer(Modifier.height(SECTION_BOTTOM_GAP.dp))
+                Spacer(Modifier.height(ZappTheme.spacing.xl2))
             }
         }
 
@@ -92,17 +87,16 @@ private fun LazyListScope.holdingsItems(state: InvestmentsSectionState.Holdings)
             updatedAtEpochMillis = state.updatedAtEpochMillis,
             isStale = state.isStale,
             onRetry = state.onRetry,
-            modifier = Modifier.padding(start = HEADER_START.dp, bottom = INVEST_GAP_SM.dp),
+            modifier = Modifier.padding(start = ZappTheme.spacing.xl2, bottom = ZappTheme.spacing.md),
         )
     }
     items(items = state.rows, key = { "invest_${it.key}" }) { row ->
         HoldingRow(row)
         ZappRowDivider(inset = true)
     }
-    // Sell-only with a sale pending and nothing left held: no rows, so no total either; the header leads to the trade.
     item(key = "invest_total") {
         if (state.rows.isNotEmpty()) TotalRow(state)
-        Spacer(Modifier.height(SECTION_BOTTOM_GAP.dp))
+        Spacer(Modifier.height(ZappTheme.spacing.xl2))
     }
 }
 
@@ -114,7 +108,7 @@ private fun SectionHeader(onClick: (() -> Unit)?) {
             Modifier
                 .fillMaxWidth()
                 .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-                .padding(start = HEADER_START.dp, end = INVEST_HORIZONTAL_PADDING.dp, bottom = 4.dp),
+                .padding(start = ZappTheme.spacing.xl2, end = ZappTheme.spacing.gutter, bottom = ZappTheme.spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ZappSectionLabel(text = stringResource(R.string.invest_section_title), modifier = Modifier.weight(1f))
@@ -151,7 +145,7 @@ private fun TotalRow(state: InvestmentsSectionState.Holdings) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = INVEST_HORIZONTAL_PADDING.dp, vertical = TOTAL_VERTICAL_PADDING.dp),
+                .padding(horizontal = ZappTheme.spacing.gutter, vertical = ZappTheme.spacing.lg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicText(
@@ -169,7 +163,7 @@ private fun TotalRow(state: InvestmentsSectionState.Holdings) {
 @Composable
 private fun LoadingRow() {
     Box(
-        modifier = Modifier.fillMaxWidth().padding(vertical = LOADING_PADDING.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = ZappTheme.spacing.xl),
         contentAlignment = Alignment.Center,
     ) {
         CircularProgressIndicator(color = ZappTheme.colors.accent, modifier = Modifier.size(LOADING_SIZE.dp))
@@ -183,7 +177,7 @@ private fun ErrorRow(state: InvestmentsSectionState.Error) {
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = INVEST_HORIZONTAL_PADDING.dp, vertical = TOTAL_VERTICAL_PADDING.dp),
+                .padding(horizontal = ZappTheme.spacing.gutter, vertical = ZappTheme.spacing.lg),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicText(
@@ -198,27 +192,27 @@ private fun ErrorRow(state: InvestmentsSectionState.Error) {
                 Modifier
                     .clickable(onClick = state.onRetry)
                     .semantics { role = Role.Button }
-                    .padding(start = INVEST_GAP_SM.dp),
+                    .padding(start = ZappTheme.spacing.md),
         )
     }
 }
 
-/** The one-line card that stands in for the block before the gate and setup, or before the first buy. */
+/** Stands in for the block before setup or the first buy. */
 @Composable
 private fun InvestEntryCard(onClick: () -> Unit) {
     val c = ZappTheme.colors
     Row(
         modifier =
             Modifier
-                .padding(horizontal = INVEST_HORIZONTAL_PADDING.dp)
+                .padding(horizontal = ZappTheme.spacing.gutter)
                 .fillMaxWidth()
                 .background(c.surface, RectangleShape)
                 .border(BorderStroke(1.dp, c.border), RectangleShape)
                 .clickable(onClick = onClick)
                 .semantics { role = Role.Button }
-                .padding(horizontal = ENTRY_PADDING.dp, vertical = ENTRY_PADDING.dp),
+                .padding(horizontal = ZappTheme.spacing.lg, vertical = ZappTheme.spacing.lg),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(ENTRY_GAP.dp),
+        horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.lg),
     ) {
         Box(
             modifier = Modifier.size(ENTRY_ICON_BOX.dp).background(c.accentSoft, RectangleShape),
@@ -245,14 +239,8 @@ private fun InvestEntryCard(onClick: () -> Unit) {
     }
 }
 
-private const val HEADER_START = 20
-private const val SECTION_BOTTOM_GAP = 20
 private const val CHEVRON_SIZE = 18
-private const val TOTAL_VERTICAL_PADDING = 12
-private const val LOADING_PADDING = 16
 private const val LOADING_SIZE = 24
-private const val ENTRY_PADDING = 14
-private const val ENTRY_GAP = 12
 private const val ENTRY_ICON_BOX = 32
 private const val ENTRY_ICON = 18
 

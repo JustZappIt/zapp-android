@@ -15,6 +15,5 @@ fun InvestSettingsScreen() {
     BackHandler { vm.onBack() }
 }
 
-/** S1: Settings › Invest. */
 @Serializable
 data object InvestSettingsArgs

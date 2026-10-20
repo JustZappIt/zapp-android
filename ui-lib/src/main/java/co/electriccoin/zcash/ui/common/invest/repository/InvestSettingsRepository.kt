@@ -10,19 +10,16 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.serialization.Serializable
 
-/** The answers Invest keeps on this phone only: where the user lives and whether setup has run. */
 @Serializable
 data class InvestSettings(
-    /** ISO 3166-1 alpha-2, as the user confirmed it on the gate; null until they have. */
+    /** ISO 3166-1 alpha-2; null until confirmed on the gate. */
     val countryCode: String? = null,
-    /** The user attested to being a qualified or professional investor (asked only where required). */
     val qualifiedInvestor: Boolean = false,
-    /** Setup (key derived, first sign-in) finished once; the intro isn't shown again. */
     val setupComplete: Boolean = false,
 ) {
     val eligibility: InvestEligibility? get() = countryCode?.let(InvestEligibility::of)
 
-    /** Whether Invest may be offered: a country is known, it isn't prohibited, and a restricted one is attested. */
+    /** Whether buying may be offered. */
     val isAvailable: Boolean
         get() =
             when (eligibility) {
@@ -46,19 +43,14 @@ interface InvestSettingsRepository {
 }
 
 /**
- * Kept in encrypted preferences, which [co.electriccoin.zcash.ui.screen.deletewallet.ResetZashiUseCase]
- * clears with the wallet, so a new wallet on the phone asks again.
- *
- * Settings that can't be read are cleared, and count as never given: Invest asks for the country again, and nothing
- * can be bought meanwhile. Throwing instead would crash the PAY tab, which reads them at every launch. Holdings are
- * untouched: they live in the private account, not here.
+ * Kept in encrypted preferences, which a wallet reset clears. Settings that can't be read are cleared once and
+ * asked for again, rather than crashing the PAY tab that reads them.
  */
 internal class InvestSettingsRepositoryImpl(
     encryptedPreferenceProvider: EncryptedPreferenceProvider,
 ) : InvestSettingsRepository {
     private val store = EncryptedJsonStore(encryptedPreferenceProvider, PREF_KEY, InvestSettings.serializer())
 
-    // Cleared once, then read again; settings that still can't be read after that are a real fault, and surface.
     override val settings: Flow<InvestSettings> =
         store
             .observe()

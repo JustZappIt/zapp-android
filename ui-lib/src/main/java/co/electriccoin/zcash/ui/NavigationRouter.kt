@@ -43,7 +43,7 @@ interface NavigationRouter {
      */
     fun backToRoot()
 
-    /** [backTo] when [route] is still on the back stack, [backToRoot] when it isn't. */
+    /** [backTo] when [route] is on the back stack, else [backToRoot]. */
     fun backToOrRoot(route: KClass<*>) = custom { NavigationCommand.BackToOrRoot(route) }
 
     fun observePipeline(): Flow<BaseNavigationCommand>
@@ -120,15 +120,7 @@ sealed interface NavigationCommand : BaseNavigationCommand {
 
     data object BackToRoot : NavigationCommand
 
-    /** Back to [route] when it is on the back stack, else to the root: for a screen that may have gone meanwhile. */
     data class BackToOrRoot(
         val route: KClass<*>
-    ) : NavigationCommand {
-        /**
-         * [BackTo] when [route] is on the back stack, else [BackToRoot]. Asked up front because popBackStack's
-         * "false" also means the target is already on top.
-         */
-        fun resolve(isOnStack: (KClass<*>) -> Boolean): NavigationCommand =
-            if (isOnStack(route)) BackTo(route) else BackToRoot
-    }
+    ) : NavigationCommand
 }

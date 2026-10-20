@@ -11,72 +11,45 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import java.math.BigDecimal
 
-/**
- * Everything the Invest screens need, in their terms. Network failures surface as
- * [co.electriccoin.zcash.ui.common.invest.provider.InvestApiException] subclasses from the suspend calls;
- * the flows keep their last value.
- */
+/** Invest's market, holdings and buys. Failed 1Click calls throw an `InvestApiException`. */
 interface InvestRepository {
-    /** The curated stocks with prices; null until the first load. */
+    /** Null until the first load. */
     val market: StateFlow<InvestMarket?>
 
-    /** The private account's positions; null until the first successful load. */
+    /** Null until the first successful load. */
     val holdings: StateFlow<Holdings?>
 
-    /** Buys that were sent but haven't finished, including ones from before the app was last closed. */
-    val pendingBuys: Flow<List<String>>
-
-    /**
-     * Every buy and sale not yet final, by stock, stuck ones included until dismissed. A stock with one can't
-     * be bought or sold. Null when the records can't be read: then nothing can be traded.
-     */
+    /** Every buy and sale not yet final; null when the records can't be read, which stops all trading. */
     val pendingTrades: Flow<List<PendingTrade>?>
 
     suspend fun refreshMarket()
 
     suspend fun refreshHoldings()
 
-    /** A dry quote for [usdAmount] of [asset]; the screen calls this after typing stops. */
     suspend fun estimateBuy(
         asset: InvestAsset,
         usdAmount: BigDecimal,
     ): BuyEstimate
 
-    /** A live quote for the review sheet, checked against the request before anything is shown. */
     suspend fun prepareBuy(
         asset: InvestAsset,
         usdAmount: BigDecimal,
     ): PreparedBuy
 
-    /**
-     * Records the buy, then sends the ZEC from the shielded balance (the existing biometric send flow).
-     * Returns the deposit address that identifies the buy. Throws if the user cancels authentication.
-     */
+    /** Records the buy and sends its ZEC after the biometric prompt; returns the deposit address. */
     suspend fun executeBuy(prepared: PreparedBuy): String
 
-    /**
-     * Whether Invest may be used from the selected account. Only the phone's own account: a Keystone user's
-     * stocks would be held by a key on this phone, not by the hardware wallet (decided 2026-09-27).
-     */
+    /** Only the phone's own account: a Keystone user's stocks would be held by a key on this phone. */
     suspend fun isAccountSupported(): Boolean
 
-    /** Live progress of one buy, until it is final. */
     fun observeBuy(depositAddress: String): Flow<BuyProgress>
 
-    /**
-     * Stops listing a buy in [pendingBuys], for one that needs attention and has been taken to support. The
-     * buy itself is untouched: 1Click still settles or refunds it.
-     */
+    /** Stops listing a buy that needs attention; 1Click still settles or refunds it. */
     suspend fun dismissBuy(depositAddress: String)
 
-    /**
-     * Forgets everything cached for the current wallet (holdings, the estimate's refund address); called when
-     * the wallet is reset, so none of it carries over to the next wallet.
-     */
     fun clearWalletData()
 
     companion object {
-        /** The in-app minimum (decided 2026-09-27): nothing below about $30 quoted on 2026-09-25/26. */
         val MINIMUM_USD: BigDecimal = BigDecimal(40)
     }
 }

@@ -28,10 +28,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/**
- * I10. Follows [InvestSellRepository.observeSell] until the sale is final. The user may leave at any point; Invest
- * home offers the way back while it is pending. It shares I7's layout.
- */
+/** Follows a sale until it is final, in the buy progress screen's layout. */
 internal class InvestSellProgressVM(
     private val args: InvestSellProgressArgs,
     private val sellRepository: InvestSellRepository,
@@ -65,7 +62,6 @@ internal class InvestSellProgressVM(
         observeJob =
             viewModelScope.launch {
                 investCatching {
-                    // The repository refreshes the holdings itself when the sale settles.
                     sellRepository.observeSell(args.depositAddress).collect { next -> progress.update { next } }
                 }.onFailure { e ->
                     Twig.warn(e) { "InvestSellProgressVM: observing the sale failed" }
@@ -100,7 +96,7 @@ internal class InvestSellProgressVM(
         )
     }
 
-    // Only the list entry goes: support has the reference, and 1Click still settles the sale.
+    // Only the list entry goes; 1Click still settles the sale.
     private fun onRemove() {
         viewModelScope.launch {
             investCatching { sellRepository.dismissSell(args.depositAddress) }

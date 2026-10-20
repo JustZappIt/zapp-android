@@ -18,8 +18,7 @@ object NearConfidentialitySerializer : KSerializer<Confidentiality?> {
         if (value == null) encoder.encodeNull() else encoder.encodeString(value.apiValue)
     }
 
-    // Every swap echoes this field, so anything unexpected, a JSON null included, is null rather than a
-    // failed quote.
+    // Anything unexpected, a JSON null included, is null rather than a failed quote.
     override fun deserialize(decoder: Decoder): Confidentiality? {
         val decoded =
             if (decoder is JsonDecoder) {

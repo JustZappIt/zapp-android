@@ -5,7 +5,7 @@ import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.android.sdk.model.Zip318Kind
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.invest.model.InvestAsset
-import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
+import co.electriccoin.zcash.ui.common.invest.model.investAsset
 import co.electriccoin.zcash.ui.common.model.SwapMode.EXACT_INPUT
 import co.electriccoin.zcash.ui.common.model.SwapMode.EXACT_OUTPUT
 import co.electriccoin.zcash.ui.common.model.SwapMode.FLEX_INPUT
@@ -21,7 +21,6 @@ import co.electriccoin.zcash.ui.common.repository.ReceiveTransaction
 import co.electriccoin.zcash.ui.common.repository.SendTransaction
 import co.electriccoin.zcash.ui.common.repository.ShieldTransaction
 import co.electriccoin.zcash.ui.common.repository.Transaction
-import co.electriccoin.zcash.ui.common.repository.TransactionSwapMetadata
 import co.electriccoin.zcash.ui.common.usecase.ActivityData
 import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.common.wallet.toFiatString
@@ -52,7 +51,6 @@ class ActivityMapper {
         onTransactionClick: (Transaction) -> Unit,
         onSwapClick: (depositAddress: String) -> Unit,
         onDisplayed: (ActivityData) -> Unit,
-        /** An Invest buy (a swap into a curated stock) opens its Invest receipt rather than the swap detail. */
         onInvestClick: (depositAddress: String) -> Unit,
     ): ActivityState =
         when (data) {
@@ -84,7 +82,7 @@ class ActivityMapper {
                     fiatValue = getFiatValue(data.transaction, exchangeRate, zecUsdPrice),
                     onClick = {
                         val swap = data.metadata.swapMetadata
-                        if (swap != null && swap.isInvestBuy()) {
+                        if (swap?.investAsset() != null) {
                             onInvestClick(swap.depositAddress)
                         } else {
                             onTransactionClick(data.transaction)
@@ -95,9 +93,6 @@ class ActivityMapper {
                 )
             }
         }
-
-    private fun TransactionSwapMetadata.isInvestBuy(): Boolean =
-        InvestAssets.findBySwapTickers(destination.tokenTicker, destination.chainTicker) != null
 
     private fun getSwapValue(data: ActivityData.BySwap): StyledStringResource =
         stringResByCurrencyNumber(data.swap.amountOutFormatted, CURRENCY_TICKER).withStyle(
@@ -272,11 +267,7 @@ class ActivityMapper {
                         }
                     }
                 } else {
-                    val investAsset =
-                        InvestAssets.findBySwapTickers(
-                            tokenTicker = data.metadata.swapMetadata.destination.tokenTicker,
-                            chainTicker = data.metadata.swapMetadata.destination.chainTicker,
-                        )
+                    val investAsset = data.metadata.swapMetadata.investAsset()
                     if (investAsset != null) {
                         getInvestBuyTitle(transaction, data.metadata.swapMetadata.status, investAsset)
                     } else if (transaction is SendTransaction.Failed) {
@@ -323,10 +314,6 @@ class ActivityMapper {
             }
         }
 
-    /**
-     * An Invest buy is a ZEC send whose swap record points at a curated stock. EXPIRED is terminal for the
-     * swap record (polling stops there), so it gets its own title rather than reading as in progress.
-     */
     private fun getInvestBuyTitle(
         transaction: SendTransaction,
         status: SwapStatus,

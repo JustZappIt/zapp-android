@@ -29,10 +29,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * I2: three facts, then "Set up Invest", which derives the private account's key and signs in (the repository's
- * first holdings refresh does both). The private account comes from the recovery phrase, so the phrase has to be
- * backed up first; until it is, the button opens the existing backup flow instead, which then comes back here and
- * setup carries on by itself.
+ * Setup derives the private account's key and signs in. The key comes from the recovery phrase, so until that is
+ * backed up the button opens the backup flow, which returns here and carries on with setup.
  */
 internal class InvestIntroVM(
     private val investRepository: InvestRepository,
@@ -49,8 +47,7 @@ internal class InvestIntroVM(
 
     private val setup = MutableStateFlow(Setup())
 
-    // Set when the user went to back up from here: once the phrase is saved, setup continues without a second tap.
-    // Kept in the saved state, so it survives the process being killed while the user writes the phrase down.
+    // Saved state, so it survives the process being killed while the user writes the phrase down.
     private var isAwaitingBackup: Boolean
         get() = savedStateHandle[AWAITING_BACKUP_KEY] ?: false
         set(value) {
@@ -78,9 +75,9 @@ internal class InvestIntroVM(
                                 if (backedUp) R.string.invest_intro_setup else R.string.invest_intro_backup_first,
                             ),
                         isEnabled = !current.isRunning,
+                        isLoading = current.isRunning,
                         onClick = { onPrimaryClick(backedUp) },
                     ),
-                isSettingUp = current.isRunning,
                 hint = stringRes(if (torOn) R.string.invest_intro_setup_hint_tor else R.string.invest_intro_setup_hint),
                 errorText = current.error,
                 onBack = ::onBack,
@@ -105,10 +102,6 @@ internal class InvestIntroVM(
         }
     }
 
-    private companion object {
-        const val AWAITING_BACKUP_KEY = "invest_intro_awaiting_backup"
-    }
-
     private fun onSetUp() {
         if (setup.value.isRunning) return
         setup.update { Setup(isRunning = true) }
@@ -127,4 +120,8 @@ internal class InvestIntroVM(
     }
 
     private fun onBack() = navigationRouter.back()
+
+    private companion object {
+        const val AWAITING_BACKUP_KEY = "invest_intro_awaiting_backup"
+    }
 }

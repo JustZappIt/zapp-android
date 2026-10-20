@@ -19,9 +19,9 @@ import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentRequest
 import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentResponse
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
-import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpoint
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProvider
+import co.electriccoin.zcash.ui.common.invest.provider.InvestTradeCheckpoint
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
@@ -74,7 +74,7 @@ internal abstract class InvestSellRepositoryTestBase {
     protected var now = Instant.parse("2026-09-28T14:00:00Z")
     protected val api = FakeApi()
     protected val checkpoints = FakeCheckpoints()
-    protected val buyCheckpoints = MutableStateFlow<List<InvestBuyCheckpoint>>(emptyList())
+    protected val buyCheckpoints = MutableStateFlow<List<InvestTradeCheckpoint>>(emptyList())
     protected val trades =
         InvestTradeGuard(
             buys = mockk<InvestBuyCheckpointStorageProvider> { every { observe() } returns buyCheckpoints },
@@ -103,6 +103,7 @@ internal abstract class InvestSellRepositoryTestBase {
 
                     override suspend fun sendZecDeposit(
                         quote: SwapQuote,
+                        addToSwapHistory: Boolean,
                         beforeSubmit: suspend () -> Unit,
                     ): String = error("a sale sends no ZEC")
 
@@ -132,7 +133,7 @@ internal abstract class InvestSellRepositoryTestBase {
     }
 
     protected fun pastDeadline(start: Instant = now) =
-        InvestBuyCheckpoint(
+        InvestTradeCheckpoint(
             depositAddress = DEPOSIT,
             assetId = nvda.assetId,
             createdAtMillis = 0,
@@ -245,13 +246,13 @@ internal abstract class InvestSellRepositoryTestBase {
     }
 
     protected class FakeCheckpoints : InvestSellCheckpointStorageProvider {
-        val items = MutableStateFlow<List<InvestBuyCheckpoint>>(emptyList())
+        val items = MutableStateFlow<List<InvestTradeCheckpoint>>(emptyList())
 
-        override fun observe(): Flow<List<InvestBuyCheckpoint>> = items
+        override fun observe(): Flow<List<InvestTradeCheckpoint>> = items
 
         var failOnHash = false
 
-        override suspend fun add(checkpoint: InvestBuyCheckpoint) {
+        override suspend fun add(checkpoint: InvestTradeCheckpoint) {
             if (failOnHash && checkpoint.intentHash != null) error("disk full")
             // Like the real store: one checkpoint per deposit address, replaced when added again.
             items.value = items.value.filterNot { it.depositAddress == checkpoint.depositAddress } + checkpoint

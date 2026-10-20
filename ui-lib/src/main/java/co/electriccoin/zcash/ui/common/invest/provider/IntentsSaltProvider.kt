@@ -31,11 +31,8 @@ import xyz.justzappit.evm.intents.IntentNonce
 import java.util.concurrent.TimeoutException
 
 /**
- * The 4-byte salt every intents nonce carries: `intents.near`'s `current_salt` view. Read from the same
- * public NEAR RPC list, in the same order, that `@defuse-protocol/internal-utils` uses, over whichever
- * connection the user's Tor setting picks, falling over to the next endpoint on any failure, and cached for
- * five minutes like the SDK's SaltManager. The salt rarely changes
- * (252812b3 on both 2026-09-25 and 2026-09-26), but a stale one fails every login until it is refreshed.
+ * `intents.near`'s `current_salt`, read from the intents SDK's public NEAR RPC hosts in order, failing over to the
+ * next on any error, and cached for five minutes like the SDK does.
  */
 class IntentsSaltProvider(
     private val httpClientProvider: HttpClientProvider,
@@ -58,14 +55,11 @@ class IntentsSaltProvider(
                     }.copyOf()
         }
 
-    /** Forgets the cached salt, e.g. after a login the server refused. */
     suspend fun invalidate() {
         mutex.withLock { cached = null }
     }
 
-    // Cancellation and a Tor that can't start end the failover at once; anything else tries the next host. Each
-    // host gets [perHostTimeoutMillis]: the Tor client has no timeouts of its own, so a host that accepts the
-    // connection and never answers would otherwise hold this lock, and the session's login behind it, for good.
+    // Each host is bounded, as the Tor client has no timeouts and a stalled host would hold this lock.
     @Suppress("TooGenericExceptionCaught", "ThrowsCount")
     private suspend fun fetch(): ByteArray {
         val failures = mutableListOf<Throwable>()
@@ -77,7 +71,6 @@ class IntentsSaltProvider(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: TorUnavailableException) {
-                // Every endpoint would fail the same way; say so instead of trying the other four.
                 throw InvestApiException.TorUnavailable(e)
             } catch (e: TorInitializationErrorException) {
                 throw InvestApiException.TorUnavailable(e)
@@ -92,7 +85,7 @@ class IntentsSaltProvider(
         )
     }
 
-    /** The salt from [url], or null if it didn't answer within [perHostTimeoutMillis] (timed with the request). */
+    /** Null when [url] didn't answer in time. */
     private suspend fun fetchFrom(url: String): ByteArray? =
         withContext(Dispatchers.IO) {
             withTimeoutOrNull(perHostTimeoutMillis) { fetchSalt(url) }
@@ -104,8 +97,7 @@ class IntentsSaltProvider(
                 client.post(url) {
                     contentType(ContentType.Application.Json)
                     setBody(CURRENT_SALT_QUERY)
-                    // The failover across endpoints is the retry; a stalled host must not hold the
-                    // lock through the direct client's own retries first.
+                    // Failing over to the next host is the retry.
                     retry { noRetry() }
                 }
             serverClock.observe(response.headers[HttpHeaders.Date], fromOneClick = false)
@@ -129,7 +121,7 @@ class IntentsSaltProvider(
     )
 
     internal companion object {
-        /** `internal-utils` 0.41.0 `PUBLIC_NEAR_RPC_URLS`, in its order. */
+        /** The intents SDK's `PUBLIC_NEAR_RPC_URLS`, in its order. */
         val NEAR_RPC_URLS =
             listOf(
                 "https://near-rpc.defuse.org",
@@ -140,8 +132,6 @@ class IntentsSaltProvider(
             )
 
         private const val CACHE_MILLIS = 300_000L
-
-        // Several Tor round trips; the five hosts together stay within a couple of minutes.
         const val PER_HOST_TIMEOUT_MILLIS = 20_000L
         private const val BYTE_MASK = 0xff
 
@@ -162,7 +152,7 @@ class IntentsSaltProvider(
                 )
             }
 
-        /** The view returns the JSON-encoded string `"252812b3"` as a byte array. */
+        /** The view returns a JSON string such as `"252812b3"`, as bytes. */
         fun parseViewResult(response: RpcResponse): ByteArray {
             val bytes = response.result?.result
             require(response.error == null && bytes != null) { "current_salt returned no result" }

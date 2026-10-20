@@ -20,6 +20,5 @@ fun AndroidWalletBackupDetail(args: WalletBackupDetail) {
 @Serializable
 data class WalletBackupDetail(
     val isOpenedFromSeedBackupInfo: Boolean,
-    /** Where to go once the phrase is saved: the tabs, or back to the task that asked for the backup. */
     val returnTarget: WalletBackupReturnTarget = WalletBackupReturnTarget.TABS,
 )

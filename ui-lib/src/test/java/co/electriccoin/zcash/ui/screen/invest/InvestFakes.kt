@@ -38,8 +38,6 @@ internal class FakeInvestRepository : InvestRepository {
 
     /** Null stands for trade records that can't be read. */
     override val pendingTrades = MutableStateFlow<List<PendingTrade>?>(emptyList())
-    override val pendingBuys: Flow<List<String>> =
-        pendingTrades.map { trades -> trades.orEmpty().filterNot { it.isSale }.map { it.depositAddress } }
 
     var onRefreshMarket: suspend () -> Unit = {}
     var onRefreshHoldings: suspend () -> Unit = {}

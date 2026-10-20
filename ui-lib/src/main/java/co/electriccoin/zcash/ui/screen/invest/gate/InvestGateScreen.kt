@@ -16,10 +16,9 @@ fun InvestGateScreen(isChange: Boolean = false) {
     BackHandler { state.onBack() }
 }
 
-/** I1: the one-time country-of-residence gate. */
 @Serializable
 data object InvestGateArgs
 
-/** Settings › Invest › Country of residence: the gate, saving back to Settings. */
+/** The gate as Settings › Invest's country change. */
 @Serializable
 data object InvestChangeCountryArgs

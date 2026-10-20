@@ -14,10 +14,7 @@ import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.util.Locale
 
-/**
- * The currency Invest shows money in: the user's own, like the PAY balance (decided 2026-09-27). 1Click prices
- * stocks in USD, so every figure is converted with [perUsd]; with no rate to hand it stays in USD.
- */
+/** The currency Invest shows money in: the user's own, like the PAY balance, or USD without a rate. */
 data class InvestCurrency(
     val code: String,
     val symbol: String,
@@ -28,32 +25,30 @@ data class InvestCurrency(
 
     fun fromUsd(usd: BigDecimal): BigDecimal = if (isUsd) usd else usd.multiply(perUsd, MathContext.DECIMAL64)
 
-    /** A local amount in USD, to the cent and never above what was typed; USD passes through unchanged. */
+    /** A local amount in USD, rounded down to the cent. */
     fun toUsd(local: BigDecimal): BigDecimal = if (isUsd) local else local.divide(perUsd, 2, RoundingMode.DOWN)
 
-    /** A USD amount in this currency, e.g. "$1,204.87", "€1,112.40" or "IDR 19,654,321.00". */
+    /** A USD amount in this currency, e.g. "€1,112.40" or "IDR 19,654,321.00". */
     fun format(usd: BigDecimal): String = formatLocal(fromUsd(usd))
 
-    /** A guaranteed floor ("at least") in this currency: converted first, then rounded down, never up. */
+    /** A guaranteed floor in this currency, rounded down. */
     fun formatAtLeast(usd: BigDecimal): String = formatLocal(fromUsd(usd), RoundingMode.DOWN)
 
-    /** An amount already in this currency. */
     fun formatLocal(
         local: BigDecimal,
         rounding: RoundingMode = RoundingMode.HALF_UP,
     ): String {
         val number = DecimalFormat("#,##0.00", SYMBOLS).format(local.setScale(2, rounding))
-        // A letter code ("IDR") reads better with a space; a sign ("$", "€", "R$") sits against the number.
+        // A letter code ("IDR") takes a space; a sign ("$", "R$") doesn't.
         return if (symbol.lastOrNull()?.isLetter() == true) "$symbol $number" else "$symbol$number"
     }
 
-    /** A preset in this currency: [usd] converted and rounded up to two significant figures ("$40", "€37"). */
+    /** [usd] in this currency, rounded up to two significant figures. */
     fun presetFromUsd(usd: BigDecimal): BigDecimal {
         val local = fromUsd(usd)
         return if (isUsd) local else local.round(MathContext(PRESET_DIGITS, RoundingMode.CEILING)).stripTrailingZeros()
     }
 
-    /** A whole-number preset label, e.g. "$40" or "IDR 660,000". */
     fun formatPreset(local: BigDecimal): String = formatLocal(local).removeSuffix(".00")
 
     companion object {
@@ -68,10 +63,7 @@ fun interface InvestCurrencyProvider {
     fun observe(): Flow<InvestCurrency>
 }
 
-/**
- * The PAY balance's conversion: the exchange-rate opt-in's price of ZEC in the chosen currency, divided by 1Click's
- * USD price of ZEC, gives that currency per dollar. Without either, Invest stays in USD.
- */
+/** The chosen currency's ZEC price over 1Click's USD price of ZEC, as the PAY balance converts. */
 class InvestCurrencyProviderImpl(
     private val exchangeRateRepository: ExchangeRateRepository,
     private val swapRepository: SwapRepository,

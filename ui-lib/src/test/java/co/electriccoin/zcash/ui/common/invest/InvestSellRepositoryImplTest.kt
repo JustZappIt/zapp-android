@@ -19,8 +19,8 @@ import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentRequest
 import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentResponse
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
-import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpoint
 import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProvider
+import co.electriccoin.zcash.ui.common.invest.provider.InvestTradeCheckpoint
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
@@ -303,7 +303,7 @@ internal class InvestSellRepositoryImplTest : InvestSellRepositoryTestBase() {
         runTest {
             val prepared = repository.prepareSell(nvda, SellAmount.All)
             coEvery { biometrics.requestBiometrics(any()) } answers {
-                buyCheckpoints.value = listOf(InvestBuyCheckpoint("buy-deposit", nvda.assetId, 0))
+                buyCheckpoints.value = listOf(InvestTradeCheckpoint("buy-deposit", nvda.assetId, 0))
             }
 
             assertFailsWith<IllegalStateException> { repository.executeSell(prepared) }

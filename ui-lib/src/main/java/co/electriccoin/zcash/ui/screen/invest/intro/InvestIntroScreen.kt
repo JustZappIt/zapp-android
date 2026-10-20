@@ -17,6 +17,5 @@ fun InvestIntroScreen() {
     }
 }
 
-/** I2: the one-time intro and private-account setup. */
 @Serializable
 data object InvestIntroArgs

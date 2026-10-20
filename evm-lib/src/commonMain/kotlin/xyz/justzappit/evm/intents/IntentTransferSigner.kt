@@ -9,22 +9,18 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import xyz.justzappit.evm.hd.EvmKey
+import xyz.justzappit.evm.intents.IntentPayload.VERIFYING_CONTRACT
 import kotlin.io.encoding.Base64
 
 /**
- * Signs the `erc191` payload `POST /v0/generate-intent` returns for a sell, but only after checking that
- * it does exactly what the user reviewed: move [ExpectedTransfer.amount] of [ExpectedTransfer.tokenId] from
- * this account to the quote's deposit address, and nothing else. Anything unexpected is refused, not
- * signed, including shapes that might be harmless: widening this check is a deliberate code change. The
- * payload must also be compact JSON that re-encodes to exactly itself (as `JSON.stringify` output does), so
- * duplicate keys and escapes can't make another parser read a different transfer than the one checked.
- *
- * The expected shape (one `transfer` intent) follows the verifier contract's `Transfer` intent. It has not
- * yet been observed from `generate-intent` for a confidential deposit; the founder's pre-flight (runbook
- * step C0) captures a real payload, and this check is adjusted to it if it differs.
+ * Signs a `generate-intent` payload only if it moves exactly the reviewed amount of the reviewed token from this
+ * account to the quote's deposit address, and nothing else. The payload must re-encode to itself, so duplicate
+ * keys or escapes can't show another parser a different transfer than the one checked.
  */
 object IntentTransferSigner {
-    /** How far ahead a payload deadline may be. Bounds how long a signed, unsubmitted intent stays usable. */
+    const val STANDARD = Erc191IntentSigner.STANDARD
+
+    /** How far ahead a payload deadline may be. */
     const val DEFAULT_MAX_TTL_MILLIS = 3_600_000L
     private const val INTENT_TRANSFER = "transfer"
     private val PAYLOAD_KEYS = setOf("signer_id", "verifying_contract", "deadline", "nonce", "intents")
@@ -40,8 +36,6 @@ object IntentTransferSigner {
 
     enum class Rejection {
         NOT_A_JSON_OBJECT,
-
-        /** Not compact JSON that re-encodes to itself: duplicate keys, escapes, whitespace or odd literals. */
         NOT_CANONICAL,
         UNEXPECTED_FIELDS,
         WRONG_SIGNER,
@@ -53,13 +47,22 @@ object IntentTransferSigner {
         UNEXPECTED_INTENTS,
     }
 
+    sealed interface VerifyResult {
+        data class Verified(
+            val deadlineMillis: Long,
+        ) : VerifyResult
+
+        data class Refused(
+            val reason: Rejection,
+        ) : VerifyResult
+    }
+
     sealed interface SignResult {
-        /** Send as `signedData`: `{"standard": "erc191", "payload": [payload], "signature": [signature]}`. */
         data class Signed(
             val payload: String,
             val signature: String,
         ) : SignResult {
-            val standard: String get() = Erc191IntentSigner.STANDARD
+            val standard: String get() = STANDARD
         }
 
         data class Refused(
@@ -73,53 +76,38 @@ object IntentTransferSigner {
         expected: ExpectedTransfer,
         nowMillis: Long,
         maxTtlMillis: Long = DEFAULT_MAX_TTL_MILLIS,
-    ): SignResult {
-        val rejection = check(payload, IntentsAccount.accountId(key), expected, nowMillis, maxTtlMillis)
-        return if (rejection == null) {
-            SignResult.Signed(payload = payload, signature = Erc191IntentSigner.sign(key, payload))
-        } else {
-            SignResult.Refused(rejection)
+    ): SignResult =
+        when (val result = verify(payload, IntentsAccount.accountId(key), expected, nowMillis, maxTtlMillis)) {
+            is VerifyResult.Verified -> SignResult.Signed(payload, Erc191IntentSigner.sign(key, payload))
+            is VerifyResult.Refused -> SignResult.Refused(result.reason)
         }
-    }
 
-    /**
-     * The same check [sign] makes, without signing: lets the app show what a payload would authorise, and
-     * refuse to show one that fails, before asking the user to approve. [sign] checks again anyway.
-     */
+    /** The check [sign] makes, without signing, so a payload can be shown before the user approves it. */
     fun verify(
         payload: String,
         accountId: String,
         expected: ExpectedTransfer,
         nowMillis: Long,
         maxTtlMillis: Long = DEFAULT_MAX_TTL_MILLIS,
-    ): Rejection? = check(payload, accountId, expected, nowMillis, maxTtlMillis)
-
-    internal fun check(
-        payload: String,
-        accountId: String,
-        expected: ExpectedTransfer,
-        nowMillis: Long,
-        maxTtlMillis: Long,
-    ): Rejection? {
+    ): VerifyResult {
         val root = runCatching { json.parseToJsonElement(payload) }.getOrNull() as? JsonObject
         val deadline = root?.string("deadline")?.let(IntentPayload::parseIsoMillis)
-        // The parser keeps the last of two duplicate keys; a parser elsewhere that kept the first would act on
-        // a transfer this check never saw. Requiring the payload to re-encode to exactly itself rules that
-        // out, along with escapes and whitespace this check doesn't need to reason about.
         return when {
-            root == null -> Rejection.NOT_A_JSON_OBJECT
-            json.encodeToString(JsonElement.serializer(), root) != payload -> Rejection.NOT_CANONICAL
-            root.keys != PAYLOAD_KEYS -> Rejection.UNEXPECTED_FIELDS
-            root.string("signer_id") != accountId -> Rejection.WRONG_SIGNER
-            root.string("verifying_contract") != IntentPayload.VERIFYING_CONTRACT -> Rejection.WRONG_VERIFYING_CONTRACT
-            deadline == null -> Rejection.UNREADABLE_DEADLINE
-            deadline <= nowMillis -> Rejection.EXPIRED
-            deadline > nowMillis + maxTtlMillis -> Rejection.DEADLINE_TOO_FAR
-            !root.hasNonce() -> Rejection.UNREADABLE_NONCE
-            !root.hasOnlyTransfer(expected) -> Rejection.UNEXPECTED_INTENTS
-            else -> null
+            root == null -> refused(Rejection.NOT_A_JSON_OBJECT)
+            json.encodeToString(JsonElement.serializer(), root) != payload -> refused(Rejection.NOT_CANONICAL)
+            root.keys != PAYLOAD_KEYS -> refused(Rejection.UNEXPECTED_FIELDS)
+            root.string("signer_id") != accountId -> refused(Rejection.WRONG_SIGNER)
+            root.string("verifying_contract") != VERIFYING_CONTRACT -> refused(Rejection.WRONG_VERIFYING_CONTRACT)
+            deadline == null -> refused(Rejection.UNREADABLE_DEADLINE)
+            deadline <= nowMillis -> refused(Rejection.EXPIRED)
+            deadline > nowMillis + maxTtlMillis -> refused(Rejection.DEADLINE_TOO_FAR)
+            !root.hasNonce() -> refused(Rejection.UNREADABLE_NONCE)
+            !root.hasOnlyTransfer(expected) -> refused(Rejection.UNEXPECTED_INTENTS)
+            else -> VerifyResult.Verified(deadline)
         }
     }
+
+    private fun refused(reason: Rejection) = VerifyResult.Refused(reason)
 
     private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
 

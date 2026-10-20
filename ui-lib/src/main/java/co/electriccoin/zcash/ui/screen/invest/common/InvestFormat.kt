@@ -13,14 +13,11 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/**
- * The few number shapes Invest shows, formatted once so every screen agrees. Amounts use the app's fixed number
- * locale (period decimals, comma grouping), like every other money figure in Zapp.
- */
+/** The number shapes Invest shows, in the app's fixed number locale like every other money figure. */
 internal object InvestFormat {
     private val symbols = DecimalFormatSymbols(Locale.US)
 
-    /** "0.4410 NVDA": four places, rounded down so the app never shows more than is held. */
+    /** "0.4410 NVDA", rounded down so it never shows more than is held. */
     fun units(
         units: BigDecimal,
         ticker: String,
@@ -28,7 +25,7 @@ internal object InvestFormat {
         DecimalFormat("#,##0.0000", symbols).format(units.setScale(UNIT_SCALE, RoundingMode.DOWN)) +
             " $ticker"
 
-    /** "0.06478 ZEC": up to five places, trailing zeros dropped. */
+    /** "0.06478 ZEC": up to five places. */
     fun zec(zec: BigDecimal): String =
         zec
             .setScale(ZEC_SCALE, RoundingMode.HALF_UP)
@@ -36,27 +33,29 @@ internal object InvestFormat {
             .let { if (it.scale() < 0) it.setScale(0) else it }
             .toPlainString() + " ZEC"
 
-    /** "0.95" for 0.95 %: two places, no trailing zeros. */
+    /** "0.95" for 0.95 %. */
     fun percent(value: BigDecimal): String =
         value
             .setScale(2, RoundingMode.HALF_UP)
             .stripTrailingZeros()
             .toPlainString()
 
-    /** Rounds seconds up to whole minutes, never below one; null when the provider gave no estimate. */
+    /** Whole minutes, rounded up; null without an estimate. */
     fun etaMinutes(seconds: Int?): Int? {
         if (seconds == null || seconds <= 0) return null
         return ((seconds + SECONDS_PER_MINUTE - 1) / SECONDS_PER_MINUTE).coerceAtLeast(1)
     }
 
-    /** "Mon 21:30" in the phone's time zone and language, for market reopen times. */
+    /** "9:42". */
+    fun countdown(seconds: Long): String = "%d:%02d".format(seconds / SECONDS_PER_MINUTE, seconds % SECONDS_PER_MINUTE)
+
+    /** "Mon 21:30" in the phone's time zone and language. */
     fun localDayTime(instant: Instant): String =
         DateTimeFormatter
             .ofPattern(DAY_TIME_PATTERN, Locale.getDefault())
             .withZone(ZoneId.systemDefault())
             .format(instant)
 
-    /** Two letters for the monogram avatar: the ticker's first two ("NV", "AP"), never a logo. */
     fun monogram(ticker: String): String = ticker.take(2).uppercase()
 
     /** "Germany" for "DE", in the phone's language. */
@@ -73,7 +72,6 @@ internal object InvestFormat {
     private const val SECONDS_PER_MINUTE = 60
 }
 
-/** The user-facing sentence for a failed Invest call. Anything unrecognised gets the generic retry line. */
 internal fun Throwable.toInvestMessage(): StringResource =
     when (this) {
         is InvestApiException.ClockSkew -> stringRes(R.string.invest_error_clock)

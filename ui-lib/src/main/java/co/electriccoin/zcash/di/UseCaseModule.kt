@@ -205,6 +205,7 @@ import co.electriccoin.zcash.ui.common.usecase.Zip321ParseUriValidationUseCase
 import co.electriccoin.zcash.ui.screen.advancedsettings.debug.db.ExecuteDebugDBQueryUseCase
 import co.electriccoin.zcash.ui.screen.deletewallet.ResetZashiUseCase
 import co.electriccoin.zcash.ui.screen.error.NavigateToErrorUseCase
+import co.electriccoin.zcash.ui.screen.invest.NavigateToInvestUseCase
 import org.koin.core.module.dsl.factoryOf
 import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.bind
@@ -318,6 +319,7 @@ val useCaseModule =
         factoryOf(::RestoreWalletUseCase)
         factoryOf(::RestoreWalletAndNavigateUseCase)
         factoryOf(::NavigateToWalletBackupUseCase)
+        factoryOf(::NavigateToInvestUseCase)
         factoryOf(::GetKeystoneStatusUseCase)
         factoryOf(::GetFlexaStatusUseCase)
         factoryOf(::GetHomeMessageUseCase)

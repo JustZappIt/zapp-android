@@ -26,14 +26,17 @@ import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.invest.common.ExecuteFailure
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrency
 import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
+import co.electriccoin.zcash.ui.screen.invest.common.InvestNoPriceState
+import co.electriccoin.zcash.ui.screen.invest.common.InvestPresetState
+import co.electriccoin.zcash.ui.screen.invest.common.InvestReviewCountdown
 import co.electriccoin.zcash.ui.screen.invest.common.InvestTradeInProgressState
 import co.electriccoin.zcash.ui.screen.invest.common.TradeBlock
 import co.electriccoin.zcash.ui.screen.invest.common.investCatching
+import co.electriccoin.zcash.ui.screen.invest.common.reopenText
 import co.electriccoin.zcash.ui.screen.invest.common.sellOnlyNotice
 import co.electriccoin.zcash.ui.screen.invest.common.toInvestMessage
 import co.electriccoin.zcash.ui.screen.invest.common.toState
 import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressArgs
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -52,15 +55,8 @@ import kotlin.time.Clock
 import kotlin.time.toJavaInstant
 
 /**
- * I5 and its review sheet I6. The amount is typed in the user's currency and quoted in USD once typing has stopped
- * for [AMOUNT_SETTLE_DELAY_MS]. "Review" fetches a live quote the repository has checked against the request, and
- * the sheet holds it until [PreparedBuy.expiresAt]; after that the only way on is a fresh one.
- *
- * Confirming hands the quote to the repository, which runs the existing authenticated send. After a failure the
- * engine is asked first whether it recorded the buy: if so, ZEC may have gone out, so its progress screen opens and
- * nothing offers to pay again. Only an unrecorded failure is read as nothing sent (see [ExecuteFailure]).
- *
- * Where the saved country doesn't allow buying (sell-only), Review stays off and the sell-only note shows instead.
+ * The amount screen and its review sheet. A failed Confirm asks the engine first whether it recorded the buy: if
+ * so ZEC may have gone out, so the progress screen opens rather than an offer to pay again.
  */
 @Suppress("TooManyFunctions")
 internal class InvestBuyVM(
@@ -83,17 +79,17 @@ internal class InvestBuyVM(
 
     private data class Review(
         val prepared: PreparedBuy,
-        /** The USD asked for at review, which the progress screen shows (not a recomputation at a later rate). */
+        /** The USD asked for, which the progress screen shows. */
         val usd: BigDecimal,
         val remainingSeconds: Long,
         val isBusy: Boolean = false,
-        /** Refused because another trade of the stock is pending: nothing was sent, and Confirm stays off. */
+        /** Another trade of the stock is pending, so Confirm stays off. */
         val isBlocked: Boolean = false,
         val error: StringResource? = null,
     )
 
     private val review = MutableStateFlow<Review?>(null)
-    private var countdownJob: Job? = null
+    private val countdown = InvestReviewCountdown(viewModelScope, clock)
 
     private val spendableZec =
         accountDataSource.selectedAccount
@@ -109,7 +105,6 @@ internal class InvestBuyVM(
                     ?.usdPrice
             )
 
-    // Amounts are typed and shown in the user's currency; 1Click is asked in USD.
     private val currency =
         currencyProvider.observe().stateIn(viewModelScope, SharingStarted.Eagerly, InvestCurrency.USD)
 
@@ -130,10 +125,8 @@ internal class InvestBuyVM(
     )
 
     init {
-        // collectLatest cancels the previous block, so the leading delay is the debounce: one quote per pause.
-        // Keyed on what was typed and the currency, not the exchange rate: the rate moves with every ZEC price
-        // tick, and re-quoting on each one could keep the estimate loading forever. The review sheet fetches a
-        // live quote at the current rate anyway.
+        // collectLatest makes the leading delay a debounce. Keyed on what was typed and the currency, not the
+        // exchange rate, which moves with every ZEC price tick.
         viewModelScope.launch {
             combine(amount.map { it.amount }, currency.map { it.code }, ::Pair)
                 .distinctUntilChanged()
@@ -190,10 +183,6 @@ internal class InvestBuyVM(
         combine(review, currency) { current, money -> current?.let { buildReview(it, money) } }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT), null)
 
-    /**
-     * Follows pending trades while this screen is STARTED, so a stock held back by one unblocks while the user waits
-     * here. The follower is shared, so this adds no second poller.
-     */
     suspend fun followPendingTrades(): Nothing = tradeFollower.followPendingTrades()
 
     private fun usdOf(local: BigDecimal): BigDecimal = currency.value.toUsd(local)
@@ -206,8 +195,7 @@ internal class InvestBuyVM(
             return
         }
         val result = investCatching { investRepository.estimateBuy(asset, usd) }
-        // A figure for an amount (or currency) the user has already changed is worth nothing; a rate that moved
-        // meanwhile is not a change.
+        // An estimate for an amount or currency that has since changed is worth nothing.
         if (amount.value.amount != local || currency.value.code != code) return
         quote.update {
             result.fold(
@@ -244,7 +232,7 @@ internal class InvestBuyVM(
                 if (estimate is BuyEstimate.NoPrice) {
                     InvestNoPriceState(
                         body = InvestBuyPresenter.noPriceBody(asset),
-                        reopen = InvestBuyPresenter.reopen(asset, clock.now().toJavaInstant()),
+                        reopen = asset.reopenText(clock.now().toJavaInstant()),
                         isRetrying = flags.retrying,
                         onTryAgain = ::onTryAgain,
                     )
@@ -256,22 +244,22 @@ internal class InvestBuyVM(
             isAmountError = estimate is BuyEstimate.InsufficientZec,
             primaryButton =
                 ButtonState(
-                    text = stringRes(R.string.invest_buy_review),
+                    text = stringRes(R.string.invest_review),
                     isEnabled =
                         estimate is BuyEstimate.Priced &&
                             !flags.preparing &&
                             flags.block == null &&
                             flags.notOffered == null,
+                    isLoading = flags.preparing,
                     onClick = ::onReview,
                 ),
-            isPreparing = flags.preparing,
             tradeInProgress = flags.block?.toState(asset, navigationRouter),
             sellOnly = flags.notOffered?.notice,
             onBack = navigationRouter::back,
         )
     }
 
-    // $40, $100 and $250 in the user's currency, rounded up to a round figure so the smallest still clears $40.
+    // $40, $100 and $250 in the user's currency, rounded up so the smallest still clears the minimum.
     private fun presets(
         maxUsd: BigDecimal?,
         money: InvestCurrency,
@@ -324,23 +312,9 @@ internal class InvestBuyVM(
         prepared: PreparedBuy,
         usd: BigDecimal,
     ) {
-        review.update { Review(prepared, usd, remainingSeconds(prepared)) }
-        countdownJob?.cancel()
-        countdownJob =
-            viewModelScope.launch {
-                var remaining = review.value?.let { remainingSeconds(it.prepared) } ?: 0
-                while (remaining > 0) {
-                    delay(COUNTDOWN_TICK_MS)
-                    remaining = review.value?.let { remainingSeconds(it.prepared) } ?: 0
-                    review.update { it?.copy(remainingSeconds = remaining) }
-                }
-            }
+        review.update { Review(prepared, usd, countdown.remainingSeconds(prepared.expiresAt)) }
+        countdown.start(prepared.expiresAt) { remaining -> review.update { it?.copy(remainingSeconds = remaining) } }
     }
-
-    private fun remainingSeconds(prepared: PreparedBuy): Long =
-        (prepared.expiresAt - clock.now()).inWholeSeconds.coerceAtLeast(0)
-
-    private fun isExpired(prepared: PreparedBuy): Boolean = clock.now() >= prepared.expiresAt
 
     private fun buildReview(
         current: Review,
@@ -387,15 +361,14 @@ internal class InvestBuyVM(
         when {
             closeIfBlocked() -> Unit
 
-            // The clock, not the last countdown tick: the price may have lapsed since the sheet last redrew.
-            isExpired(current.prepared) -> review.update { it?.copy(remainingSeconds = 0) }
+            // The clock, not the last tick: the price may have lapsed since the sheet last redrew.
+            countdown.isExpired(current.prepared.expiresAt) -> review.update { it?.copy(remainingSeconds = 0) }
 
             else -> execute(current)
         }
     }
 
     private fun execute(current: Review) {
-        // Busy until executeBuy returns: a second tap does nothing, and the engine refuses a second payment anyway.
         review.update { it?.copy(isBusy = true, error = null) }
         viewModelScope.launch {
             investCatching { investRepository.executeBuy(current.prepared) }
@@ -415,8 +388,8 @@ internal class InvestBuyVM(
             ExecuteFailure.classify(
                 isCancelled = e is BridgeAuthorizationCancelledException || e is BiometricsCancelledException,
                 isRefused = false,
-                isExpired = isExpired(current.prepared),
-                ourDeposit = current.prepared.quote.depositAddress.address,
+                isExpired = countdown.isExpired(current.prepared.expiresAt),
+                ourDeposit = current.prepared.depositAddress,
                 asset = asset,
                 pendingTrades = investRepository.pendingTrades,
             )
@@ -425,7 +398,6 @@ internal class InvestBuyVM(
                 review.update { it?.copy(isBusy = false) }
             }
 
-            // Unknown whether it went out: the screen's unreadable-records note (and its support link) takes over.
             ExecuteFailure.RecordsUnreadable -> {
                 closeReview()
             }
@@ -461,8 +433,7 @@ internal class InvestBuyVM(
         usd: BigDecimal,
     ) = InvestProgressArgs(depositAddress = depositAddress, assetId = asset.assetId, usdAmount = usd.toPlainString())
 
-    // A pending trade of this stock (a buy that may already have been paid, say) rules out paying again: the sheet
-    // gives way to the screen, which names that trade and links to it.
+    // A pending trade of this stock rules out paying again: the sheet gives way to the screen, which links to it.
     private fun closeIfBlocked(): Boolean {
         val isBlocked = tradeBlock.value != null
         if (isBlocked) closeReview()
@@ -475,15 +446,13 @@ internal class InvestBuyVM(
     }
 
     private fun closeReview() {
-        countdownJob?.cancel()
-        countdownJob = null
+        countdown.stop()
         review.update { null }
     }
 
     companion object {
-        /** How long the amount has to sit still before it is worth a (Tor) round trip. */
+        /** How long typing must pause before the amount is quoted. */
         const val AMOUNT_SETTLE_DELAY_MS = 500L
-        private const val COUNTDOWN_TICK_MS = 1_000L
         private val PRESETS_USD = listOf(BigDecimal(40), BigDecimal(100), BigDecimal(250))
     }
 }

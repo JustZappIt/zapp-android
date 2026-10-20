@@ -35,8 +35,6 @@ import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.orHiddenString
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_LG
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_SM
 import co.electriccoin.zcash.ui.screen.invest.common.InvestScreenFrame
 
 @Composable
@@ -48,18 +46,18 @@ internal fun InvestReceiptView(state: InvestReceiptState) {
             BasicText(text = it orHiddenString hidden, style = ZappTheme.typography.display.copy(color = c.text))
         }
         state.units?.let {
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(ZappTheme.spacing.xs))
             BasicText(text = it orHiddenString hidden, style = ZappTheme.typography.body.copy(color = c.textMuted))
         }
-        Spacer(Modifier.height(INVEST_GAP_LG.dp))
-        ZappBorderedCard(verticalArrangement = Arrangement.spacedBy(INVEST_GAP_SM.dp)) {
+        Spacer(Modifier.height(ZappTheme.spacing.xl2))
+        ZappBorderedCard(verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.md)) {
             ZappSummaryRow(
                 label = stringResource(R.string.invest_receipt_status),
                 value = state.status.getValue(),
                 valueColor = if (state.isStatusDanger) c.danger else c.text,
             )
             state.fees?.let {
-                ZappSummaryRow(stringResource(R.string.invest_buy_ledger_fees), it.getValue())
+                ZappSummaryRow(stringResource(R.string.invest_ledger_fees), it.getValue())
             }
             state.date?.let {
                 ZappSummaryRow(stringResource(R.string.invest_receipt_date), it.getValue())
@@ -70,7 +68,7 @@ internal fun InvestReceiptView(state: InvestReceiptState) {
             )
         }
         state.contactSupportButton?.let { contact ->
-            Spacer(Modifier.height(INVEST_GAP_LG.dp))
+            Spacer(Modifier.height(ZappTheme.spacing.xl2))
             ZappButton(
                 text = contact.text.getValue(),
                 variant = ZappButtonVariant.Secondary,
@@ -78,12 +76,11 @@ internal fun InvestReceiptView(state: InvestReceiptState) {
                 onClick = contact.onClick,
             )
         }
-        Spacer(Modifier.height(INVEST_GAP_LG.dp))
+        Spacer(Modifier.height(ZappTheme.spacing.xl2))
         SupportSection(state)
     }
 }
 
-/** Collapsed by default: the reference support needs, with a copy button. */
 @Composable
 private fun SupportSection(state: InvestReceiptState) {
     val c = ZappTheme.colors
@@ -93,7 +90,7 @@ private fun SupportSection(state: InvestReceiptState) {
                 .fillMaxWidth()
                 .clickable(onClick = state.onToggleSupport)
                 .semantics { role = Role.Button }
-                .padding(vertical = INVEST_GAP_SM.dp),
+                .padding(vertical = ZappTheme.spacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ZappSectionLabel(text = stringResource(R.string.invest_receipt_for_support), modifier = Modifier.weight(1f))
@@ -105,7 +102,7 @@ private fun SupportSection(state: InvestReceiptState) {
         )
     }
     if (state.isSupportOpen) {
-        Spacer(Modifier.height(INVEST_GAP_SM.dp))
+        Spacer(Modifier.height(ZappTheme.spacing.md))
         ZappCopyableAddress(
             label = stringResource(R.string.invest_receipt_reference),
             address = state.reference,

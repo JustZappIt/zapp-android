@@ -19,8 +19,8 @@ import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentRequest
 import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentResponse
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
-import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpoint
 import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProvider
+import co.electriccoin.zcash.ui.common.invest.provider.InvestTradeCheckpoint
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
@@ -91,7 +91,7 @@ internal class InvestSellProgressTest : InvestSellRepositoryTestBase() {
             repository.observeSell(DEPOSIT).toList()
 
             // Needs attention: reached again every time following restarts, so no sign-in for it.
-            checkpoints.add(InvestBuyCheckpoint(DEPOSIT, nvda.assetId, 0))
+            checkpoints.add(InvestTradeCheckpoint(DEPOSIT, nvda.assetId, 0))
             api.statuses += status(SwapStatus.FAILED)
             repository.observeSell(DEPOSIT).toList()
 
@@ -173,7 +173,7 @@ internal class InvestSellProgressTest : InvestSellRepositoryTestBase() {
             api.statuses += status(SwapStatus.REFUNDED)
             assertEquals(listOf(SellProgress.ReturnedToAccount(DEPOSIT)), repository.observeSell(DEPOSIT).toList())
 
-            checkpoints.add(InvestBuyCheckpoint(DEPOSIT, nvda.assetId, 0))
+            checkpoints.add(InvestTradeCheckpoint(DEPOSIT, nvda.assetId, 0))
             api.statuses += status(SwapStatus.FAILED)
             assertEquals(listOf(SellProgress.NeedsAttention(DEPOSIT, DEPOSIT)), repository.observeSell(DEPOSIT).toList())
             assertEquals(1, checkpoints.items.value.size)

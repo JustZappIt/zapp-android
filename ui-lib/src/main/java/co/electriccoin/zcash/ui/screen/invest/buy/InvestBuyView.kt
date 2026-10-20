@@ -1,16 +1,8 @@
 package co.electriccoin.zcash.ui.screen.invest.buy
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,15 +10,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldInnerState
 import co.electriccoin.zcash.ui.design.component.NumberTextFieldState
-import co.electriccoin.zcash.ui.design.component.ZashiScreenModalBottomSheet
-import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
-import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappFieldBalance
+import co.electriccoin.zcash.ui.design.component.zapp.ZappInfoSheet
 import co.electriccoin.zcash.ui.design.component.zapp.ZappOfframpHeroAmountField
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSettlementLedger
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSettlementLedgerRow
@@ -35,10 +24,10 @@ import co.electriccoin.zcash.ui.design.theme.ZappTheme
 import co.electriccoin.zcash.ui.design.theme.ZcashTheme
 import co.electriccoin.zcash.ui.design.util.getValue
 import co.electriccoin.zcash.ui.design.util.stringRes
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_LG
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_MD
-import co.electriccoin.zcash.ui.screen.invest.common.INVEST_GAP_SM
-import co.electriccoin.zcash.ui.screen.invest.common.InvestNotice
+import co.electriccoin.zcash.ui.screen.invest.common.InvestNoPriceCard
+import co.electriccoin.zcash.ui.screen.invest.common.InvestNoPriceState
+import co.electriccoin.zcash.ui.screen.invest.common.InvestPresetRow
+import co.electriccoin.zcash.ui.screen.invest.common.InvestPresetState
 import co.electriccoin.zcash.ui.screen.invest.common.InvestScreenFrame
 import co.electriccoin.zcash.ui.screen.invest.common.InvestTradeInProgressNotice
 import java.math.BigDecimal
@@ -46,19 +35,19 @@ import java.math.BigDecimal
 @Composable
 internal fun InvestBuyView(state: InvestBuyState) {
     val c = ZappTheme.colors
+    val spacing = ZappTheme.spacing
     var showInfo by rememberSaveable { mutableStateOf(false) }
     InvestScreenFrame(
         title = state.title.getValue(),
         onBack = state.onBack,
         primaryButton = state.primaryButton,
-        isPrimaryLoading = state.isPreparing,
         onInfo = { showInfo = true },
     ) {
         BasicText(
             text = stringResource(R.string.invest_buy_amount_label),
             style = ZappTheme.typography.caption.copy(color = c.textMuted),
         )
-        Spacer(Modifier.height(INVEST_GAP_SM.dp))
+        Spacer(Modifier.height(spacing.md))
         ZappOfframpHeroAmountField(
             symbol = state.currencySymbol,
             state = state.amountInput,
@@ -70,35 +59,30 @@ internal fun InvestBuyView(state: InvestBuyState) {
                 ),
             secondaryText = null,
         )
-        Spacer(Modifier.height(INVEST_GAP_MD.dp))
-        Presets(state.presets)
-        Spacer(Modifier.height(INVEST_GAP_LG.dp))
+        Spacer(Modifier.height(spacing.lg))
+        InvestPresetRow(state.presets)
+        Spacer(Modifier.height(spacing.xl2))
         state.sellOnly?.let {
             InvestTradeInProgressNotice(it)
-            Spacer(Modifier.height(INVEST_GAP_MD.dp))
+            Spacer(Modifier.height(spacing.lg))
         }
         state.tradeInProgress?.let {
             InvestTradeInProgressNotice(it)
-            Spacer(Modifier.height(INVEST_GAP_MD.dp))
+            Spacer(Modifier.height(spacing.lg))
         }
         state.ledger?.let { ledger -> Ledger(ledger, state) }
-        state.noPrice?.let { NoPriceCard(it) }
+        state.noPrice?.let { InvestNoPriceCard(it) }
     }
     if (showInfo) {
-        InvestBuyInfoSheet(onDismiss = { showInfo = false })
-    }
-}
-
-@Composable
-private fun Presets(presets: List<InvestPresetState>) {
-    Row(horizontalArrangement = Arrangement.spacedBy(INVEST_GAP_SM.dp), modifier = Modifier.fillMaxWidth()) {
-        presets.forEach { preset ->
-            ZappButton(
-                text = preset.label.getValue(),
-                variant = ZappButtonVariant.Secondary,
-                enabled = preset.isEnabled,
-                modifier = Modifier.weight(1f),
-                onClick = preset.onClick,
+        ZappInfoSheet(
+            title = stringResource(R.string.invest_buy_info_title),
+            steps = emptyList(),
+            notes = emptyList(),
+            onDismiss = { showInfo = false },
+        ) {
+            BasicText(
+                text = stringResource(R.string.invest_buy_info_body),
+                style = ZappTheme.typography.body.copy(color = c.textMuted),
             )
         }
     }
@@ -119,11 +103,11 @@ private fun Ledger(
                     state.isAmountError,
                 ),
                 ZappSettlementLedgerRow(
-                    stringResource(R.string.invest_buy_ledger_you_get),
+                    stringResource(R.string.invest_ledger_you_get),
                     ledger.youGet?.getValue() ?: pending,
                 ),
                 ZappSettlementLedgerRow(
-                    stringResource(R.string.invest_buy_ledger_fees),
+                    stringResource(R.string.invest_ledger_fees),
                     ledger.fees?.getValue() ?: pending,
                 ),
                 ZappSettlementLedgerRow(
@@ -131,7 +115,7 @@ private fun Ledger(
                     stringResource(R.string.invest_buy_ledger_refund_value),
                 ),
                 ZappSettlementLedgerRow(
-                    stringResource(R.string.invest_buy_ledger_eta),
+                    stringResource(R.string.invest_ledger_eta),
                     ledger.eta?.getValue() ?: pending,
                 ),
             ),
@@ -139,59 +123,6 @@ private fun Ledger(
         noticeIsDanger = state.isNoticeDanger,
     )
 }
-
-@Composable
-private fun NoPriceCard(state: InvestNoPriceState) {
-    InvestNotice(
-        title = stringResource(R.string.invest_buy_no_price_title),
-        body = listOfNotNull(state.body.getValue(), state.reopen?.getValue()).joinToString("\n\n"),
-    ) {
-        ZappButton(
-            text = stringResource(R.string.invest_buy_try_again),
-            variant = ZappButtonVariant.Ghost,
-            loading = state.isRetrying,
-            enabled = !state.isRetrying,
-            modifier = Modifier.weight(1f),
-            onClick = state.onTryAgain,
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun InvestBuyInfoSheet(onDismiss: () -> Unit) {
-    val c = ZappTheme.colors
-    ZashiScreenModalBottomSheet(onDismissRequest = onDismiss) { contentPadding ->
-        Column(
-            modifier =
-                Modifier
-                    .verticalScroll(rememberScrollState())
-                    .padding(
-                        start = SHEET_PADDING.dp,
-                        end = SHEET_PADDING.dp,
-                        bottom = contentPadding.calculateBottomPadding(),
-                    ),
-            verticalArrangement = Arrangement.spacedBy(INVEST_GAP_LG.dp),
-        ) {
-            BasicText(
-                text = stringResource(R.string.invest_buy_info_title),
-                style = ZappTheme.typography.sectionTitle.copy(color = c.text),
-            )
-            BasicText(
-                text = stringResource(R.string.invest_buy_info_body),
-                style = ZappTheme.typography.body.copy(color = c.textMuted),
-            )
-            ZappButton(
-                text = stringResource(co.electriccoin.zcash.ui.design.R.string.general_ok),
-                variant = ZappButtonVariant.Primary,
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onDismiss,
-            )
-        }
-    }
-}
-
-private const val SHEET_PADDING = 24
 
 private fun previewState(
     ledger: InvestBuyLedger?,
@@ -209,7 +140,6 @@ private fun previewState(
     isNoticeDanger = false,
     isAmountError = false,
     primaryButton = ButtonState(stringRes("Review"), isEnabled = ledger != null),
-    isPreparing = false,
     tradeInProgress = null,
     onBack = {},
 )

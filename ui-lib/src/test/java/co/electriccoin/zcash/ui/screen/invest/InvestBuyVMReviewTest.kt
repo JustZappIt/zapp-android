@@ -76,7 +76,7 @@ internal class InvestBuyVMReviewTest : InvestBuyVMTestBase() {
             assertEquals(stringRes("10:00"), review.countdown)
             assertEquals(stringRes(R.string.invest_review_confirm), review.primaryButton.text)
             assertEquals(stringRes(R.string.invest_review_privacy, "0.00032 ZEC"), review.privacy)
-            assertEquals(stringRes(R.string.invest_buy_you_get_value_exact, "$98.02", "0.4366 NVDA"), review.atLeast)
+            assertEquals(stringRes(R.string.invest_value_and_units, "$98.02", "0.4366 NVDA"), review.atLeast)
 
             advanceTimeBy(18_000)
             runCurrent()

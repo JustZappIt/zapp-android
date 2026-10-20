@@ -23,6 +23,5 @@ fun InvestHomeScreen() {
     BackHandler { state.onBack() }
 }
 
-/** I3: Invest home. */
 @Serializable
 data object InvestHomeArgs

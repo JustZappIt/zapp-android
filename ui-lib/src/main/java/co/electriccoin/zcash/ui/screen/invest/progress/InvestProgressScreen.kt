@@ -16,14 +16,11 @@ fun InvestProgressScreen(args: InvestProgressArgs) {
     BackHandler { state.onBack() }
 }
 
-/**
- * I7: one buy's progress, identified by its deposit address. [assetId] and [usdAmount] are known when arriving from
- * the review sheet; a buy resumed from Invest home only has its deposit address, so the screen words it generically.
- */
+/** A buy resumed from Invest home has only its deposit address, so the screen words it generically. */
 @Serializable
 data class InvestProgressArgs(
     val depositAddress: String,
     val assetId: String? = null,
-    /** Plain decimal USD, as the user entered it. */
+    /** Plain decimal USD. */
     val usdAmount: String? = null,
 )

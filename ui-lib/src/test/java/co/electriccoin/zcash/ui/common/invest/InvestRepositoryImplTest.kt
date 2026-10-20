@@ -17,9 +17,9 @@ import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentRequest
 import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentResponse
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
-import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpoint
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProvider
+import co.electriccoin.zcash.ui.common.invest.provider.InvestTradeCheckpoint
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepositoryImpl
@@ -196,7 +196,7 @@ internal class InvestRepositoryImplTest : InvestRepositoryImplTestBase() {
         runTest {
             val prepared = repository.prepareBuy(nvda, BigDecimal(100))
             // A process killed while the prompt is up never gets past it: there must be nothing to resume.
-            var recordedDuringPrompt: List<InvestBuyCheckpoint>? = null
+            var recordedDuringPrompt: List<InvestTradeCheckpoint>? = null
             wallet.duringPrompt = { recordedDuringPrompt = checkpoints.items.value }
 
             repository.executeBuy(prepared)
@@ -221,7 +221,9 @@ internal class InvestRepositoryImplTest : InvestRepositoryImplTestBase() {
     fun `a trade of the stock started during the prompt holds the buy back`() =
         runTest {
             val prepared = repository.prepareBuy(nvda, BigDecimal(100))
-            wallet.duringPrompt = { sellCheckpoints.value = listOf(InvestBuyCheckpoint("sell-deposit", nvda.assetId, 0)) }
+            wallet.duringPrompt = {
+                sellCheckpoints.value = listOf(InvestTradeCheckpoint("sell-deposit", nvda.assetId, 0))
+            }
 
             assertFailsWith<IllegalStateException> { repository.executeBuy(prepared) }
 
@@ -265,7 +267,7 @@ internal class InvestRepositoryImplTest : InvestRepositoryImplTestBase() {
     fun `a stock being sold can't be bought until the sale is final`() =
         runTest {
             val prepared = repository.prepareBuy(nvda, BigDecimal(100))
-            sellCheckpoints.value = listOf(InvestBuyCheckpoint("sell-deposit", nvda.assetId, 0))
+            sellCheckpoints.value = listOf(InvestTradeCheckpoint("sell-deposit", nvda.assetId, 0))
 
             assertFailsWith<IllegalStateException> { repository.prepareBuy(nvda, BigDecimal(100)) }
             assertFailsWith<IllegalStateException> { repository.executeBuy(prepared) }
@@ -277,7 +279,7 @@ internal class InvestRepositoryImplTest : InvestRepositoryImplTestBase() {
     fun `pending trades list buys and sales by stock`() =
         runTest {
             repository.executeBuy(repository.prepareBuy(nvda, BigDecimal(100)))
-            sellCheckpoints.value = listOf(InvestBuyCheckpoint("sell-deposit", "nep141:other", 0))
+            sellCheckpoints.value = listOf(InvestTradeCheckpoint("sell-deposit", "nep141:other", 0))
 
             assertEquals(
                 listOf(PendingTrade(DEPOSIT, nvda.assetId, isSale = false), PendingTrade("sell-deposit", "nep141:other", isSale = true)),

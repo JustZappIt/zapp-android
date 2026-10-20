@@ -6,6 +6,7 @@ package xyz.justzappit.evm.intents
 import xyz.justzappit.evm.intents.IntentTransferSigner.ExpectedTransfer
 import xyz.justzappit.evm.intents.IntentTransferSigner.Rejection
 import xyz.justzappit.evm.intents.IntentTransferSigner.SignResult
+import xyz.justzappit.evm.intents.IntentTransferSigner.VerifyResult
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -29,10 +30,13 @@ class IntentTransferSignerTest {
     }
 
     @Test
-    fun `verify agrees with sign without producing a signature`() {
-        assertEquals(null, IntentTransferSigner.verify(payload(), account, expected, NOW))
+    fun `verify agrees with sign and returns the deadline it checked`() {
         assertEquals(
-            Rejection.UNEXPECTED_INTENTS,
+            VerifyResult.Verified(deadlineMillis = NOW + 30 * 60 * 1_000L),
+            IntentTransferSigner.verify(payload(), account, expected, NOW),
+        )
+        assertEquals(
+            VerifyResult.Refused(Rejection.UNEXPECTED_INTENTS),
             IntentTransferSigner.verify(payload(intents = "[]"), account, expected, NOW),
         )
     }

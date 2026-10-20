@@ -7,6 +7,17 @@ import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepositoryImpl
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepositoryImpl
 import co.electriccoin.zcash.ui.common.backgroundScope
+import co.electriccoin.zcash.ui.common.invest.provider.InvestServerClock
+import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
+import co.electriccoin.zcash.ui.common.invest.repository.InvestRepositoryImpl
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSellRepository
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSellRepositoryImpl
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepository
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSettingsRepositoryImpl
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSwapAssetSource
+import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollower
+import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollowerImpl
+import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeGuard
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepository
 import co.electriccoin.zcash.ui.common.pricing.repository.HistoricalPriceRepositoryImpl
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
@@ -55,6 +66,7 @@ import co.electriccoin.zcash.ui.common.repository.WalletSnapshotRepositoryImpl
 import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepository
 import co.electriccoin.zcash.ui.common.repository.ZashiProposalRepositoryImpl
 import co.electriccoin.zcash.ui.screen.chat.linkpreview.LinkPreviewRepository
+import co.electriccoin.zcash.ui.screen.invest.common.InvestSession
 import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnInbox
 import co.electriccoin.zcash.ui.screen.reputation.increase.IdentityReturnLink
 import co.electriccoin.zcash.ui.screen.reputation.increase.ReclaimReturnLink
@@ -326,4 +338,39 @@ val repositoryModule =
                 )
             }
         }
+
+        // Invest.
+        singleOf(::InvestSettingsRepositoryImpl) bind InvestSettingsRepository::class
+        singleOf(::InvestTradeGuard)
+        singleOf(::InvestSession)
+        single {
+            InvestRepositoryImpl(
+                api = get(),
+                session = get(),
+                keys = get(),
+                wallet = get(),
+                accountDataSource = get(),
+                swapAssetProvider = get(),
+                synchronizerProvider = get(),
+                checkpoints = get(),
+                trades = get(),
+                settings = get(),
+                now = get<InvestServerClock>()::now,
+            )
+        } binds arrayOf(InvestRepository::class, InvestSwapAssetSource::class)
+        single<InvestSellRepository> {
+            InvestSellRepositoryImpl(
+                api = get(),
+                session = get(),
+                keys = get(),
+                wallet = get(),
+                investRepository = get(),
+                swapAssets = get(),
+                biometricRepository = get(),
+                checkpoints = get(),
+                trades = get(),
+                now = get<InvestServerClock>()::now,
+            )
+        }
+        single<InvestTradeFollower> { InvestTradeFollowerImpl(buys = get(), sells = get()) }
     }

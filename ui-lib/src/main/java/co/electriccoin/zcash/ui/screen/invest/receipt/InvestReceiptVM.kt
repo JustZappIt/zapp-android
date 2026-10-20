@@ -8,8 +8,8 @@ import co.electriccoin.zcash.ui.NavigationRouter
 import co.electriccoin.zcash.ui.R
 import co.electriccoin.zcash.ui.common.invest.model.BuyProgress
 import co.electriccoin.zcash.ui.common.invest.model.InvestAsset
-import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
 import co.electriccoin.zcash.ui.common.invest.model.InvestMarket
+import co.electriccoin.zcash.ui.common.invest.model.investAsset
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
 import co.electriccoin.zcash.ui.common.model.SwapStatus
 import co.electriccoin.zcash.ui.common.repository.MetadataRepository
@@ -38,10 +38,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import java.time.ZoneId
 
-/**
- * I11 (lite): what a buy got, from the swap record the buy engine writes (shares, fees, time) and the buy's live
- * status. Value first, at today's price; no gain or loss. The deposit address is the support reference.
- */
+/** What a buy got, from its swap record and live status, valued at today's price. */
 internal class InvestReceiptVM(
     private val args: InvestReceiptArgs,
     investRepository: InvestRepository,
@@ -54,7 +51,6 @@ internal class InvestReceiptVM(
 
     private val isSupportOpen = MutableStateFlow(false)
 
-    // Money shows in the user's currency, like the PAY balance; USD without an exchange rate.
     private val currency =
         currencyProvider.observe().stateIn(viewModelScope, SharingStarted.Eagerly, InvestCurrency.USD)
 
@@ -88,7 +84,7 @@ internal class InvestReceiptVM(
         market: InvestMarket?,
         supportOpen: Boolean,
     ): InvestReceiptState {
-        val asset = record?.destination?.let { InvestAssets.findBySwapTickers(it.tokenTicker, it.chainTicker) }
+        val asset = record?.investAsset()
         val outcome = outcomeOf(progress, record?.status)
         val units =
             ((progress as? BuyProgress.Held)?.units ?: record?.amountOutFormatted)
@@ -133,8 +129,7 @@ internal class InvestReceiptVM(
         progress: BuyProgress?,
         recorded: SwapStatus?,
     ): Outcome {
-        // A buy the wallet already recorded as settled stays settled: status for an old deposit address may stop
-        // answering, and a few rejected polls are no reason to send the user to support.
+        // A buy recorded as settled stays settled, as status may stop answering for an old deposit address.
         val polled = progress.takeUnless { it is BuyProgress.NeedsAttention && recorded in SETTLED }
         return when {
             polled is BuyProgress.Held -> Outcome.HELD

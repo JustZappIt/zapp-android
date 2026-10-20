@@ -3,9 +3,9 @@ package co.electriccoin.zcash.ui.common.invest
 import co.electriccoin.zcash.ui.common.invest.model.BuyProgress
 import co.electriccoin.zcash.ui.common.invest.model.PendingTrade
 import co.electriccoin.zcash.ui.common.invest.model.SellProgress
-import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpoint
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProvider
+import co.electriccoin.zcash.ui.common.invest.provider.InvestTradeCheckpoint
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSellRepository
 import co.electriccoin.zcash.ui.common.invest.repository.InvestTradeFollowerImpl
@@ -128,7 +128,9 @@ class InvestTradeFollowerTest {
                     sells =
                         mockk<InvestSellCheckpointStorageProvider> {
                             every { observe() } returns
-                                flow<List<InvestBuyCheckpoint>> { throw StoreCorruptedException("k", IllegalStateException()) }
+                                flow<List<InvestTradeCheckpoint>> {
+                                    throw StoreCorruptedException("k", IllegalStateException())
+                                }
                         },
                 )
 

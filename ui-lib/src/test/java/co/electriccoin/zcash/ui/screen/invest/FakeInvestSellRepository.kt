@@ -14,8 +14,6 @@ import kotlin.time.Instant
 
 /** A scripted [InvestSellRepository]: each call is recorded and answered by the lambda the test sets. */
 internal class FakeInvestSellRepository : InvestSellRepository {
-    override val pendingSells: Flow<List<String>> = MutableStateFlow(emptyList())
-
     var onEstimate: suspend (InvestAsset, SellAmount) -> SellEstimate = { _, _ -> SellEstimate.NoPrice }
     var onPrepare: suspend (InvestAsset, SellAmount) -> PreparedSell = { _, _ -> error("no prepare scripted") }
     var onExecute: suspend (PreparedSell) -> String = { error("no execute scripted") }

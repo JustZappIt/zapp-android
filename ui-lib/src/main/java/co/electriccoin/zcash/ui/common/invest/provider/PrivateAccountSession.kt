@@ -7,20 +7,13 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import xyz.justzappit.evm.intents.IntentsLogin
 
-/**
- * A signed-in session with the user's private account. The access token lives in memory only; nothing is
- * stored, so there is no refresh token to protect (decided 2026-09-27). When the token is about to expire,
- * or the server refuses it, the key signs a fresh login.
- */
+/** A signed-in session with the private account. The token stays in memory; an expired one means a fresh login. */
 class PrivateAccountSession(
     private val api: InvestApiProvider,
     private val salts: IntentsSaltProvider,
     private val clock: InvestServerClock,
     private val keys: PrivateAccountKeyProvider,
-    /**
-     * Time since boot, deep sleep included (`SystemClock.elapsedRealtime` in the app), so token expiry
-     * neither moves with the wall clock nor stands still while the phone sleeps.
-     */
+    /** Time since boot, so token expiry ignores wall-clock changes. */
     private val elapsedMillis: () -> Long,
 ) {
     private val mutex = Mutex()
@@ -31,16 +24,12 @@ class PrivateAccountSession(
     @Volatile
     private var expiresAtMillis: Long = 0
 
-    // Bumped by reset(); a login that started before a reset doesn't store its token afterwards.
     @Volatile
     private var generation = 0
 
     suspend fun balances(): BalancesResponse = withAccessToken { api.getBalances(it) }
 
-    /**
-     * Forgets the session and the cached account ID; called when the wallet is reset. It doesn't wait for a
-     * login in flight: that login's token is dropped when it lands.
-     */
+    /** Forgets the session and account ID when the wallet is reset; a login in flight is then abandoned. */
     fun reset() {
         generation++
         accessToken = null
@@ -48,10 +37,7 @@ class PrivateAccountSession(
         keys.clear()
     }
 
-    /**
-     * Runs [block] with a valid token. If the server refuses it, [block] runs once more with a fresh one, so
-     * it must be safe to repeat (reads only).
-     */
+    /** Runs [block] with a valid token, once more with a fresh one if the server refuses it. */
     private suspend fun <T> withAccessToken(block: suspend (String) -> T): T {
         val token = currentToken(rejected = null)
         return try {
@@ -61,10 +47,7 @@ class PrivateAccountSession(
         }
     }
 
-    /**
-     * The token to use. [rejected] is one the server just refused: a new login happens only if it is still
-     * the current token, so several calls refused at once share one login instead of each signing their own.
-     */
+    // Logs in again only if [rejected] is still current, so calls refused together share one login.
     private suspend fun currentToken(rejected: String?): String =
         mutex.withLock {
             val current = accessToken
@@ -75,12 +58,9 @@ class PrivateAccountSession(
             if (usable) {
                 checkNotNull(current)
             } else {
-                // Never hand out a token known to be expired or refused, even if the login below fails.
                 accessToken = null
                 val startedIn = generation
                 val (token, expiresAt) = loginWithRecovery()
-                // The wallet was reset during the login: the token belongs to the deleted wallet, so the call
-                // that asked for it is abandoned rather than run with it.
                 if (startedIn != generation) throw InvestApiException.SessionReset()
                 accessToken = token
                 expiresAtMillis = expiresAt
@@ -88,12 +68,8 @@ class PrivateAccountSession(
             }
         }
 
-    /**
-     * One login, retried once for the two refusals a second attempt can fix: a timestamp refusal (whose
-     * response has already corrected [clock]) and a refused signature (which a rotated salt explains, so the
-     * salt is fetched again first). A 400 may also mean a stale salt, so it drops the salt too, but isn't
-     * retried: a permanent 400 would otherwise double every failed login.
-     */
+    // A timestamp refusal has already corrected the clock, and a refused signature may mean a rotated salt: both
+    // get one retry. A 400 may also mean a stale salt, but isn't retried.
     private suspend fun loginWithRecovery(): Pair<String, Long> =
         try {
             login()
@@ -107,7 +83,6 @@ class PrivateAccountSession(
             throw e
         }
 
-    /** The access token and when it expires, on [elapsedMillis]. */
     private suspend fun login(): Pair<String, Long> {
         val salt = salts.salt()
         val signed = keys.withKey { key -> IntentsLogin.sign(key, salt, clock.nowMillis()) }
@@ -128,8 +103,6 @@ class PrivateAccountSession(
     private companion object {
         const val MILLIS_PER_SECOND = 1_000L
         const val HTTP_BAD_REQUEST = 400
-
-        // Sign in again this long before the token's stated expiry, so a request never races it.
         const val RENEW_MARGIN_MILLIS = 60_000L
     }
 }

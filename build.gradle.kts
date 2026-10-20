@@ -118,7 +118,6 @@ tasks {
             "ZAPP_NEAR_PARTNER_JWT" to "",
             // Invest ships dark in store and foss releases until it is turned on deliberately.
             "ZAPP_INVEST_ENABLED" to "false",
-            "ZAPP_INVEST_DEMO" to "false",
 
             // Private USD's Ethereum endpoints, whose URLs carry an API key.
             "ETHEREUM_RPC_URL_MAINNET" to "",

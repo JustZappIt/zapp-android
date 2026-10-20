@@ -17,9 +17,9 @@ import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentRequest
 import co.electriccoin.zcash.ui.common.invest.model.SubmitIntentResponse
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiException
 import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
-import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpoint
 import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProvider
 import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProvider
+import co.electriccoin.zcash.ui.common.invest.provider.InvestTradeCheckpoint
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
 import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import co.electriccoin.zcash.ui.common.invest.repository.InvestRepositoryImpl
@@ -81,7 +81,7 @@ internal class InvestRepositoryProgressTest : InvestRepositoryImplTestBase() {
     @Test
     fun `a buy never funded by its deadline expires and stops polling`() =
         runTest {
-            checkpoints.add(InvestBuyCheckpoint(DEPOSIT, nvda.assetId, 0))
+            checkpoints.add(InvestTradeCheckpoint(DEPOSIT, nvda.assetId, 0))
             api.deadline = now + 30.minutes
             api.statuses += status(SwapStatus.PENDING_DEPOSIT)
             api.statuses += status(SwapStatus.PENDING_DEPOSIT)
@@ -97,7 +97,7 @@ internal class InvestRepositoryProgressTest : InvestRepositoryImplTestBase() {
     @Test
     fun `the checkpoint is cleared even if the collector stops at the final state`() =
         runTest {
-            checkpoints.add(InvestBuyCheckpoint(DEPOSIT, nvda.assetId, 0))
+            checkpoints.add(InvestTradeCheckpoint(DEPOSIT, nvda.assetId, 0))
             coEvery { session.balances() } returns BalancesResponse(emptyList())
             api.statuses += status(SwapStatus.SUCCESS, amountOut = BigDecimal("0.440974"))
 
@@ -122,7 +122,7 @@ internal class InvestRepositoryProgressTest : InvestRepositoryImplTestBase() {
     @Test
     fun `a buy that needs attention can be dismissed`() =
         runTest {
-            checkpoints.add(InvestBuyCheckpoint(DEPOSIT, nvda.assetId, 0))
+            checkpoints.add(InvestTradeCheckpoint(DEPOSIT, nvda.assetId, 0))
 
             repository.dismissBuy(DEPOSIT)
 
@@ -144,7 +144,7 @@ internal class InvestRepositoryProgressTest : InvestRepositoryImplTestBase() {
     @Test
     fun `a status 1Click keeps refusing ends as needs attention and stays listed`() =
         runTest {
-            checkpoints.add(InvestBuyCheckpoint(DEPOSIT, nvda.assetId, 0))
+            checkpoints.add(InvestTradeCheckpoint(DEPOSIT, nvda.assetId, 0))
             repeat(3) { api.statusFailures += InvestApiException.Api(404, "Not found", null) }
 
             assertEquals(listOf(BuyProgress.NeedsAttention(DEPOSIT, DEPOSIT)), repository.observeBuy(DEPOSIT).toList())
@@ -164,7 +164,7 @@ internal class InvestRepositoryProgressTest : InvestRepositoryImplTestBase() {
     @Test
     fun `progress follows 1Click through a failed poll to held, then clears the checkpoint`() =
         runTest {
-            checkpoints.add(InvestBuyCheckpoint(DEPOSIT, nvda.assetId, 0))
+            checkpoints.add(InvestTradeCheckpoint(DEPOSIT, nvda.assetId, 0))
             coEvery { session.balances() } returns BalancesResponse(emptyList())
             api.statuses +=
                 listOf(
@@ -354,7 +354,7 @@ internal class InvestRepositoryProgressTest : InvestRepositoryImplTestBase() {
             repository.observeBuy(DEPOSIT).toList()
             coVerify(exactly = 0) { session.balances() }
 
-            checkpoints.add(InvestBuyCheckpoint(DEPOSIT, nvda.assetId, 0))
+            checkpoints.add(InvestTradeCheckpoint(DEPOSIT, nvda.assetId, 0))
             api.statuses += status(SwapStatus.SUCCESS, amountOut = BigDecimal("0.440974"))
             repository.observeBuy(DEPOSIT).toList()
             coVerify(exactly = 1) { session.balances() }

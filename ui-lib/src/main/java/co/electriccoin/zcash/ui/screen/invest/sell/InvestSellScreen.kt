@@ -26,7 +26,6 @@ fun InvestSellScreen(args: InvestSellArgs) {
     BackHandler { state.onBack() }
 }
 
-/** I8: sell some or all of the holding in [assetId] (a curated 1Click asset ID), with its I9 review sheet. */
 @Serializable
 data class InvestSellArgs(
     val assetId: String,

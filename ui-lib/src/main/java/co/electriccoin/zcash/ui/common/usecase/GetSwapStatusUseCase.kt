@@ -2,7 +2,7 @@ package co.electriccoin.zcash.ui.common.usecase
 
 import co.electriccoin.zcash.ui.common.datasource.SwapDataSource
 import co.electriccoin.zcash.ui.common.datasource.TokenNotFoundException
-import co.electriccoin.zcash.ui.common.invest.model.InvestAssets
+import co.electriccoin.zcash.ui.common.invest.model.investAsset
 import co.electriccoin.zcash.ui.common.invest.repository.InvestSwapAssetSource
 import co.electriccoin.zcash.ui.common.model.SwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapQuoteStatus
@@ -130,18 +130,16 @@ class GetSwapStatusUseCase(
         }
     }
 
-    /**
-     * An Invest buy's destination is an Ondo stock, which the Swap catalog deliberately leaves out; those
-     * resolve from Invest's own list, for that record only.
-     */
+    // Swap's catalog leaves the Invest stocks out, so an Invest buy resolves them from Invest's own list.
     private suspend fun statusAssets(
         metadata: TransactionSwapMetadata,
         supportedAssets: List<SwapAsset>,
-    ): List<SwapAsset> {
-        val isInvestBuy =
-            InvestAssets.findBySwapTickers(metadata.destination.tokenTicker, metadata.destination.chainTicker) != null
-        return if (isInvestBuy) supportedAssets + investSwapAssetSource.investSwapAssets() else supportedAssets
-    }
+    ): List<SwapAsset> =
+        if (metadata.investAsset() != null) {
+            supportedAssets + investSwapAssetSource.investSwapAssets()
+        } else {
+            supportedAssets
+        }
 }
 
 data class SwapQuoteStatusData(

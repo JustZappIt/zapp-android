@@ -38,14 +38,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.SerializationException
 import java.util.concurrent.TimeoutException
 
-/**
- * Every 1Click call Invest makes. It follows the user's Tor setting through [HttpClientProvider.create]:
- * over Tor when it is on, and over the direct connection when the user has turned it off and chosen to
- * go on without it (decided 2026-09-27; Invest encourages turning Tor on, since the account ID, session
- * and refund address all tie a person to the IP that sends them).
- */
+/** Every 1Click call Invest makes, over Tor when the user's Tor setting is on. */
 interface InvestApiProvider {
-    /** `/v0/tokens?ondoTokens=true`: the default list plus the Ondo assets, with prices. */
+    /** The default token list plus the Ondo assets, with prices. */
     suspend fun getOndoTokens(): List<NearTokenDto>
 
     suspend fun requestQuote(request: QuoteRequest): QuoteResponseDto
@@ -58,13 +53,11 @@ interface InvestApiProvider {
 
     suspend fun submitIntent(request: SubmitIntentRequest): SubmitIntentResponse
 
-    /** No partner JWT: the signed message is the credential. */
     suspend fun authenticate(request: AuthenticateRequest): AuthenticateResponse
 
     suspend fun getBalances(accessToken: String): BalancesResponse
 }
 
-// One function per 1Click endpoint the interface names, plus the shared call and error mapping.
 @Suppress("TooManyFunctions")
 class KtorInvestApiProvider(
     private val httpClientProvider: HttpClientProvider,
@@ -114,8 +107,7 @@ class KtorInvestApiProvider(
         call {
             post("$BASE_URL/v0/submit-intent") {
                 partnerJson()
-                // A replayed submission is refused for its used nonce, which would read as a failure after
-                // the first attempt succeeded unseen. The caller polls status instead of retrying.
+                // A retry after an unseen success fails on the used nonce; the caller polls status instead.
                 retry { noRetry() }
                 setBody(request)
             }
@@ -125,7 +117,7 @@ class KtorInvestApiProvider(
         call(isLogin = true) {
             post("$BASE_URL/v0/auth/authenticate") {
                 contentType(ContentType.Application.Json)
-                // Each signed login carries a one-time nonce; the session signs a fresh one instead.
+                // The signed login's nonce is single-use.
                 retry { noRetry() }
                 setBody(request)
             }
@@ -143,9 +135,7 @@ class KtorInvestApiProvider(
         header(HttpHeaders.Authorization, NEAR_PARTNER_AUTHORIZATION)
     }
 
-    // Each call is bounded by [callTimeoutMillis], timed with the request: the Tor client has no timeouts of its own,
-    // so a circuit that never answers would otherwise hang the caller (a review sheet's Confirm, a sign-in holding
-    // the session lock). A timeout reads as Unreachable: for a submission, whether it arrived is unknown.
+    // The Tor client has no timeouts of its own, so every call is bounded here.
     @Suppress("TooGenericExceptionCaught")
     private suspend inline fun <reified T> call(
         isLogin: Boolean = false,
@@ -171,10 +161,9 @@ class KtorInvestApiProvider(
                 } catch (e: TorInitializationErrorException) {
                     throw InvestApiException.TorUnavailable(e)
                 } catch (_: SerializationException) {
-                    // A decoding message quotes the body it choked on, which can be a session token.
+                    // Not chained: the decoding message quotes the body, which can hold a session token.
                     throw InvestApiException.Unreachable(IllegalStateException("Unreadable ${T::class.simpleName}"))
                 } catch (_: ContentConvertException) {
-                    // Ktor's wrapper for the same failure, with the same quoted body.
                     throw InvestApiException.Unreachable(IllegalStateException("Unreadable ${T::class.simpleName}"))
                 } catch (e: Exception) {
                     throw InvestApiException.Unreachable(e)
@@ -220,8 +209,6 @@ class KtorInvestApiProvider(
     internal companion object {
         const val HOST = "1click.chaindefuser.com"
         const val BASE_URL = "https://$HOST"
-
-        // A slow Tor circuit takes a few seconds per round trip; this is well past that.
         const val CALL_TIMEOUT_MILLIS = 60_000L
         private const val NO_LIQUIDITY = "No liquidity available"
         private const val TIMESTAMP_REJECTED = "timestamp validation failed"

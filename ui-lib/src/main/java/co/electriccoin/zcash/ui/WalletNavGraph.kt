@@ -118,8 +118,6 @@ import co.electriccoin.zcash.ui.screen.integrations.IntegrationsArgs
 import co.electriccoin.zcash.ui.screen.integrations.IntegrationsScreen
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyArgs
 import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyScreen
-import co.electriccoin.zcash.ui.screen.invest.demo.InvestDemoControlsArgs
-import co.electriccoin.zcash.ui.screen.invest.demo.InvestDemoControlsScreen
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestChangeCountryArgs
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestGateArgs
 import co.electriccoin.zcash.ui.screen.invest.gate.InvestGateScreen
@@ -443,7 +441,6 @@ fun NavGraphBuilder.walletNavGraph(
         composable<InvestGateArgs> { InvestGateScreen() }
         composable<InvestChangeCountryArgs> { InvestGateScreen(isChange = true) }
         composable<InvestSettingsArgs> { InvestSettingsScreen() }
-        composable<InvestDemoControlsArgs> { InvestDemoControlsScreen() }
         composable<InvestUnavailableArgs> { InvestUnavailableScreen(it.toRoute()) }
         composable<InvestIntroArgs> { InvestIntroScreen() }
         composable<InvestHomeArgs> { InvestHomeScreen() }

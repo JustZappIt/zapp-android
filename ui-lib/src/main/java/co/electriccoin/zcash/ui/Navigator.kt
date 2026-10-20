@@ -24,7 +24,6 @@ interface Navigator {
     suspend fun executeCommand(command: CustomNavigationCommand)
 }
 
-@Suppress("TooManyFunctions")
 class NavigatorImpl(
     private val activity: Activity,
     private val navController: NavHostController,
@@ -56,13 +55,36 @@ class NavigatorImpl(
         }
 
         when (command) {
-            is NavigationCommand.Forward -> forward(command)
-            is NavigationCommand.Replace -> replace(command)
-            is NavigationCommand.ReplaceAll -> replaceAll(command)
-            NavigationCommand.Back -> navController.popBackStack()
-            is NavigationCommand.BackTo -> backTo(command)
-            NavigationCommand.BackToRoot -> backToRoot()
-            is NavigationCommand.BackToOrRoot -> backToOrRoot(command)
+            is NavigationCommand.Forward -> {
+                forward(command)
+            }
+
+            is NavigationCommand.Replace -> {
+                replace(command)
+            }
+
+            is NavigationCommand.ReplaceAll -> {
+                replaceAll(command)
+            }
+
+            NavigationCommand.Back -> {
+                navController.popBackStack()
+            }
+
+            is NavigationCommand.BackTo -> {
+                backTo(command)
+            }
+
+            NavigationCommand.BackToRoot -> {
+                backToRoot()
+            }
+
+            is NavigationCommand.BackToOrRoot -> {
+                // getBackStackEntry throws when the route isn't on the back stack.
+                @Suppress("UNCHECKED_CAST")
+                val isOnStack = runCatching { navController.getBackStackEntry(command.route as KClass<Any>) }.isSuccess
+                if (isOnStack) backTo(NavigationCommand.BackTo(command.route)) else backToRoot()
+            }
         }
     }
 
@@ -81,16 +103,6 @@ class NavigatorImpl(
             destinationId = command.route.serializer().generateHashCode(),
             inclusive = false
         )
-    }
-
-    // Public API only: getBackStackEntry throws when the route isn't on the back stack.
-    @Suppress("UNCHECKED_CAST")
-    private fun backToOrRoot(command: NavigationCommand.BackToOrRoot) {
-        val resolved =
-            command.resolve { route ->
-                runCatching { navController.getBackStackEntry(route as KClass<Any>) }.isSuccess
-            }
-        if (resolved is NavigationCommand.BackTo) backTo(resolved) else backToRoot()
     }
 
     private fun backToRoot() {

@@ -43,7 +43,6 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.util.Objects
 
-@Suppress("TooManyFunctions")
 class ActivityHistoryVM(
     getFilteredActivities: GetFilteredActivitiesUseCase,
     getTransactionFilters: GetTransactionFiltersUseCase,
@@ -189,7 +188,7 @@ class ActivityHistoryVM(
                                         onTransactionClick = ::onTransactionClick,
                                         onSwapClick = ::onSwapClick,
                                         onDisplayed = ::onActivityDisplayed,
-                                        onInvestClick = ::onInvestClick,
+                                        onInvestClick = { navigationRouter.forward(InvestReceiptArgs(it)) },
                                     )
                             )
                         }
@@ -262,8 +261,6 @@ class ActivityHistoryVM(
     }
 
     private fun onSwapClick(depositAddress: String) = navigationRouter.forward(SwapDetailArgs(depositAddress))
-
-    private fun onInvestClick(depositAddress: String) = navigationRouter.forward(InvestReceiptArgs(depositAddress))
 
     private fun onTransactionFiltersClicked() = navigationRouter.forward(TransactionFiltersArgs)
 }

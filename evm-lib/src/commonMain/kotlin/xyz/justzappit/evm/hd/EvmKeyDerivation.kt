@@ -49,12 +49,7 @@ object EvmKeyDerivation {
     fun derive(mnemonic: CharArray, accountIndex: Int = 0, passphrase: String = ""): EvmKey =
         deriveAccount(mnemonic, account = 0, accountIndex = accountIndex, passphrase = passphrase)
 
-    /**
-     * Derives the key at `m/44'/60'/[account]'/0/[accountIndex]`. [derive] is the `account = 0` case, the
-     * range every standard Ethereum wallet scans; a non-zero hardened account keeps a key out of their view.
-     * A separate name rather than a new parameter on [derive], so the Swift signature exported through
-     * ZappOfframp (`derive(mnemonic:accountIndex:passphrase:)`) stays as it is.
-     */
+    /** `m/44'/60'/[account]'/0/[accountIndex]`; separate from [derive] so its Swift signature stays as it is. */
     fun deriveAccount(
         mnemonic: CharArray,
         account: Int,

@@ -104,7 +104,7 @@ internal fun SettingsTabContent(
     onPortfolioChartClick: () -> Unit,
     onViewingKeyExportClick: () -> Unit,
     onHardwareWalletClick: () -> Unit,
-    // Null where Invest isn't offered (the build, or a Keystone account), which hides the row.
+    // Null hides the Invest row.
     onInvestClick: (() -> Unit)?,
     // Null while the coinholder-polling kill switch is off, which hides the group entirely.
     onVotingClick: (() -> Unit)?,

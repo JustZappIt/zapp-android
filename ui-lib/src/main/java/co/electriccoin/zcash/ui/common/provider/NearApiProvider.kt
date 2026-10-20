@@ -103,11 +103,6 @@ class KtorNearApiProvider(
         }
 }
 
-/**
- * The 1Click partner JWT (partner_id "zapp"), as an Authorization header value, or null when this build has
- * none. Set ZAPP_NEAR_PARTNER_JWT in local.properties (or ORG_GRADLE_PROJECT_ZAPP_NEAR_PARTNER_JWT); it is
- * never committed. Without it the requests go out with no partner header, so 1Click doesn't attribute them
- * to Zapp; release builds must set it.
- */
+/** The 1Click partner JWT as an Authorization header value; null when the build has none. */
 internal val NEAR_PARTNER_AUTHORIZATION: String? =
     BuildConfig.NEAR_PARTNER_JWT.takeIf { it.isNotBlank() }?.let { "Bearer $it" }
