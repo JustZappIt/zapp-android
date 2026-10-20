@@ -276,7 +276,9 @@ class PrivateUsdConvertVM(
                     )
                 form.update { it.withQuote(next, fillsAmount) }
                 // A sync completed while this request was loading, before its failure could wait for it.
-                if (completedSyncs != completedSyncsAtStart && walletSnapshot.value?.status == Synchronizer.Status.SYNCED) {
+                if (completedSyncs != completedSyncsAtStart &&
+                    walletSnapshot.value?.status == Synchronizer.Status.SYNCED
+                ) {
                     refreshIfExpired(now(), synced = true)
                 }
             }
