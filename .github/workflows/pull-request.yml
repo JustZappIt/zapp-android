@@ -362,6 +362,7 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
           ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
+          ORG_GRADLE_PROJECT_ZAPP_NEAR_PARTNER_JWT: ${{ secrets.ZAPP_NEAR_PARTNER_JWT }}
         run: |
           # The JVM unit tests of the Android modules, which nothing else here covers:
           # test_kotlin_modules deliberately skips them ("to avoid compiling the Android
@@ -502,6 +503,7 @@ jobs:
           ORG_GRADLE_PROJECT_IS_ANDROID_INSTRUMENTATION_TEST_COVERAGE_ENABLED: ${{ matrix.coverage }}
           ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
           ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
+          ORG_GRADLE_PROJECT_ZAPP_NEAR_PARTNER_JWT: ${{ secrets.ZAPP_NEAR_PARTNER_JWT }}
         run: |
           ./gradlew ${{ matrix.assemble-tasks }}
       - name: Enable KVM
@@ -539,6 +541,7 @@ jobs:
           ORG_GRADLE_PROJECT_IS_ANDROID_INSTRUMENTATION_TEST_COVERAGE_ENABLED: ${{ matrix.coverage }}
           ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
           ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
+          ORG_GRADLE_PROJECT_ZAPP_NEAR_PARTNER_JWT: ${{ secrets.ZAPP_NEAR_PARTNER_JWT }}
         with:
           api-level: 35
           arch: x86_64
@@ -629,6 +632,7 @@ jobs:
           ORG_GRADLE_PROJECT_IS_CRASH_ON_STRICT_MODE_VIOLATION: true
           ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
           ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
+          ORG_GRADLE_PROJECT_ZAPP_NEAR_PARTNER_JWT: ${{ secrets.ZAPP_NEAR_PARTNER_JWT }}
         run: |
           ./gradlew :app:assembleZcashmainnetStoreDebug :app:assembleZcashtestnetStoreDebug
       - name: Authenticate to Google Cloud for Firebase Test Lab
@@ -821,6 +825,7 @@ jobs:
           ORG_GRADLE_PROJECT_ZCASH_RELEASE_KEY_ALIAS_PASSWORD: android
           ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
           ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
+          ORG_GRADLE_PROJECT_ZAPP_NEAR_PARTNER_JWT: ${{ secrets.ZAPP_NEAR_PARTNER_JWT }}
         run: |
           ./gradlew ${{ matrix.gradle_tasks }} --stacktrace
 
@@ -1133,6 +1138,7 @@ jobs:
           ORG_GRADLE_PROJECT_ZCASH_FIREBASE_TEST_LAB_API_KEY_PATH: ${{ steps.auth_test_lab.outputs.credentials_file_path }}
           ORG_GRADLE_PROJECT_ZCASH_FLEXA_KEY: ${{ secrets.FLEXA_PUBLISHABLE_KEY }}
           ORG_GRADLE_PROJECT_ZCASH_CMC_KEY: ${{ secrets.CMC_PUBLISHABLE_KEY }}
+          ORG_GRADLE_PROJECT_ZAPP_NEAR_PARTNER_JWT: ${{ secrets.ZAPP_NEAR_PARTNER_JWT }}
         run: |
           unzip ${BINARIES_ZIP_PATH}
           ./gradlew :app:runFlankSanityConfigRelease

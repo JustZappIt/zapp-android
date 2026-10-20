@@ -2,10 +2,14 @@ package co.electriccoin.zcash.ui.common.usecase
 
 import co.electriccoin.zcash.ui.common.datasource.SwapDataSource
 import co.electriccoin.zcash.ui.common.datasource.TokenNotFoundException
+import co.electriccoin.zcash.ui.common.invest.model.investAsset
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSwapAssetSource
+import co.electriccoin.zcash.ui.common.model.SwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapQuoteStatus
 import co.electriccoin.zcash.ui.common.model.near.requireMatchingAsset
 import co.electriccoin.zcash.ui.common.repository.MetadataRepository
 import co.electriccoin.zcash.ui.common.repository.SwapRepository
+import co.electriccoin.zcash.ui.common.repository.TransactionSwapMetadata
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -21,6 +25,7 @@ class GetSwapStatusUseCase(
     private val swapDataSource: SwapDataSource,
     private val metadataRepository: MetadataRepository,
     private val swapRepository: SwapRepository,
+    private val investSwapAssetSource: InvestSwapAssetSource,
 ) {
     suspend operator fun invoke(depositAddress: String) = observe(depositAddress).first { !it.isLoading }
 
@@ -71,7 +76,8 @@ class GetSwapStatusUseCase(
 
                 while (true) {
                     try {
-                        val result = swapDataSource.checkSwapStatus(depositAddress, supportedAssets)
+                        val assets = statusAssets(expectedMetadata, supportedAssets)
+                        val result = swapDataSource.checkSwapStatus(depositAddress, assets)
                         requireMatchingAsset(
                             name = "origin",
                             expectedTokenTicker = expectedMetadata.origin.tokenTicker,
@@ -123,6 +129,17 @@ class GetSwapStatusUseCase(
             }
         }
     }
+
+    // Swap's catalog leaves the Invest stocks out, so an Invest buy resolves them from Invest's own list.
+    private suspend fun statusAssets(
+        metadata: TransactionSwapMetadata,
+        supportedAssets: List<SwapAsset>,
+    ): List<SwapAsset> =
+        if (metadata.investAsset() != null) {
+            supportedAssets + investSwapAssetSource.investSwapAssets()
+        } else {
+            supportedAssets
+        }
 }
 
 data class SwapQuoteStatusData(

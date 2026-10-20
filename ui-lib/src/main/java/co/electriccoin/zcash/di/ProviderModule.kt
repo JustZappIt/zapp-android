@@ -1,5 +1,6 @@
 package co.electriccoin.zcash.di
 
+import android.os.SystemClock
 import co.electriccoin.zcash.spackle.Twig
 import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapDeployments
@@ -20,6 +21,16 @@ import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapZcashImpl
 import co.electriccoin.zcash.ui.common.atomicswap.SwapKeyring
 import co.electriccoin.zcash.ui.common.atomicswap.SwapTokenStoreImpl
 import co.electriccoin.zcash.ui.common.atomicswap.SwapZcashTransactions
+import co.electriccoin.zcash.ui.common.invest.provider.IntentsSaltProvider
+import co.electriccoin.zcash.ui.common.invest.provider.InvestApiProvider
+import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProvider
+import co.electriccoin.zcash.ui.common.invest.provider.InvestBuyCheckpointStorageProviderImpl
+import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProvider
+import co.electriccoin.zcash.ui.common.invest.provider.InvestSellCheckpointStorageProviderImpl
+import co.electriccoin.zcash.ui.common.invest.provider.InvestServerClock
+import co.electriccoin.zcash.ui.common.invest.provider.KtorInvestApiProvider
+import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountKeyProvider
+import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
 import co.electriccoin.zcash.ui.common.pricing.provider.HistoricalPriceCacheProvider
 import co.electriccoin.zcash.ui.common.pricing.provider.HistoricalPriceCacheProviderImpl
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSendLog
@@ -139,6 +150,10 @@ import co.electriccoin.zcash.ui.common.push.ChatPushBackendImpl
 import co.electriccoin.zcash.ui.common.push.PushRegistrar
 import co.electriccoin.zcash.ui.common.security.SecretAuthGate
 import co.electriccoin.zcash.ui.screen.gift.model.PendingGiftLinkStore
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProvider
+import co.electriccoin.zcash.ui.screen.invest.common.InvestCurrencyProviderImpl
+import co.electriccoin.zcash.ui.screen.invest.gate.AndroidResidenceHintProvider
+import co.electriccoin.zcash.ui.screen.invest.gate.ResidenceHintProvider
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
@@ -570,6 +585,25 @@ val providerModule =
         singleOf(::AtomicSwapScheduler)
         single { PrivateUsdSenders(get(), get(), get(named(ATOMIC_SWAP_HTTP)), get(), get()) }
         singleOf(::PrivateUsdSendLog)
+
+        // Invest.
+        single { InvestServerClock() }
+        single<InvestApiProvider> { KtorInvestApiProvider(httpClientProvider = get(), serverClock = get()) }
+        single { IntentsSaltProvider(httpClientProvider = get(), serverClock = get()) }
+        singleOf(::PrivateAccountKeyProvider)
+        single {
+            PrivateAccountSession(
+                api = get(),
+                salts = get(),
+                clock = get(),
+                keys = get(),
+                elapsedMillis = SystemClock::elapsedRealtime,
+            )
+        }
+        singleOf(::InvestBuyCheckpointStorageProviderImpl) bind InvestBuyCheckpointStorageProvider::class
+        singleOf(::InvestSellCheckpointStorageProviderImpl) bind InvestSellCheckpointStorageProvider::class
+        factoryOf(::InvestCurrencyProviderImpl) bind InvestCurrencyProvider::class
+        factoryOf(::AndroidResidenceHintProvider) bind ResidenceHintProvider::class
     }
 
 internal const val ATOMIC_SWAP_HTTP = "atomicswap_http"

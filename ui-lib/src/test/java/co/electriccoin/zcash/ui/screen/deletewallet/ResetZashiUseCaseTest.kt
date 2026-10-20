@@ -10,6 +10,9 @@ import co.electriccoin.zcash.preference.StandardPreferenceProvider
 import co.electriccoin.zcash.preference.api.PreferenceProvider
 import co.electriccoin.zcash.ui.common.atomicswap.AtomicSwapRepository
 import co.electriccoin.zcash.ui.common.atomicswap.ReverseSwapRepository
+import co.electriccoin.zcash.ui.common.invest.provider.PrivateAccountSession
+import co.electriccoin.zcash.ui.common.invest.repository.InvestRepository
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSellRepository
 import co.electriccoin.zcash.ui.common.migration.MigrationAppHooks
 import co.electriccoin.zcash.ui.common.provider.ChatBlockedKeysStorageProvider
 import co.electriccoin.zcash.ui.common.provider.GiftCardStorageProvider
@@ -31,6 +34,7 @@ import io.mockk.coVerify
 import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -72,6 +76,27 @@ class ResetZashiUseCaseTest {
 
             coVerify(exactly = 1) { fixture.encryptedPreferences.clearPreferences() }
             coVerify(exactly = 1) { fixture.biometricRepository.requestBiometrics(any()) }
+            verify(exactly = 2) { fixture.privateAccountSession.reset() }
+            verify(exactly = 2) { fixture.investRepository.clearWalletData() }
+            verify(exactly = 2) { fixture.investSellRepository.clearWalletData() }
+        }
+
+    @Test
+    fun `clears Invest again after the recovery phrase is gone`() =
+        runTest {
+            val fixture = Fixture(hasUnsharedFunds = false)
+
+            fixture.useCase(keepFiles = true)
+
+            // An Invest call between the first clear and the wipe re-derives the old account from the phrase; the
+            // second clear, after the wipe, is what keeps that account ID from reaching the next wallet.
+            coVerifyOrder {
+                fixture.privateAccountSession.reset()
+                fixture.encryptedPreferences.clearPreferences()
+                fixture.privateAccountSession.reset()
+                fixture.investRepository.clearWalletData()
+                fixture.investSellRepository.clearWalletData()
+            }
         }
 
     @Test
@@ -119,6 +144,9 @@ class ResetZashiUseCaseTest {
         val walletCoordinator = mockk<WalletCoordinator>(relaxed = true)
         val addressBookRepository = mockk<AddressBookRepository>(relaxed = true)
         val metadataRepository = mockk<MetadataRepository>(relaxed = true)
+        val privateAccountSession = mockk<PrivateAccountSession>(relaxed = true)
+        val investRepository = mockk<InvestRepository>(relaxed = true)
+        val investSellRepository = mockk<InvestSellRepository>(relaxed = true)
         val atomicSwapRepository = mockk<AtomicSwapRepository>(relaxed = true)
         val reverseSwapRepository = mockk<ReverseSwapRepository>(relaxed = true)
         val railgunWalletRepository = mockk<RailgunWalletRepository>(relaxed = true)
@@ -162,6 +190,9 @@ class ResetZashiUseCaseTest {
                             giftCardStorageProvider,
                             mockk(relaxed = true),
                         ),
+                    privateAccountSession = privateAccountSession,
+                    investRepository = investRepository,
+                    investSellRepository = investSellRepository,
                     atomicSwapRepository = atomicSwapRepository,
                     reverseSwapRepository = reverseSwapRepository,
                     railgunWalletRepository = railgunWalletRepository,
@@ -178,6 +209,8 @@ class ResetZashiUseCaseTest {
             coVerify(exactly = 0) { biometricRepository.requestBiometrics(any()) }
             coVerify(exactly = 0) { addressBookRepository.delete() }
             coVerify(exactly = 0) { metadataRepository.delete() }
+            verify(exactly = 0) { privateAccountSession.reset() }
+            verify(exactly = 0) { investRepository.clearWalletData() }
             coVerify(exactly = 0) { atomicSwapRepository.reset() }
             coVerify(exactly = 0) { reverseSwapRepository.reset() }
             coVerify(exactly = 0) { railgunWalletRepository.reset() }

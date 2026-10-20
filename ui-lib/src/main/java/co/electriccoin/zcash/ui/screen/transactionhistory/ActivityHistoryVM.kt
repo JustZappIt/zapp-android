@@ -22,6 +22,7 @@ import co.electriccoin.zcash.ui.common.wallet.ExchangeRateState
 import co.electriccoin.zcash.ui.design.component.IconButtonState
 import co.electriccoin.zcash.ui.design.component.TextFieldState
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.invest.receipt.InvestReceiptArgs
 import co.electriccoin.zcash.ui.screen.swap.detail.SwapDetailArgs
 import co.electriccoin.zcash.ui.screen.transactiondetail.TransactionDetailArgs
 import co.electriccoin.zcash.ui.screen.transactionfilters.TransactionFiltersArgs
@@ -186,7 +187,8 @@ class ActivityHistoryVM(
                                         zecUsdPrice = zecUsdPrice,
                                         onTransactionClick = ::onTransactionClick,
                                         onSwapClick = ::onSwapClick,
-                                        onDisplayed = ::onActivityDisplayed
+                                        onDisplayed = ::onActivityDisplayed,
+                                        onInvestClick = { navigationRouter.forward(InvestReceiptArgs(it)) },
                                     )
                             )
                         }

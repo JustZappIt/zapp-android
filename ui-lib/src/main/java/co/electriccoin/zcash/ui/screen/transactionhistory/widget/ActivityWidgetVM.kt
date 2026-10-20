@@ -18,6 +18,7 @@ import co.electriccoin.zcash.ui.common.usecase.NavigateToRequestShieldedUseCase
 import co.electriccoin.zcash.ui.common.usecase.UpdateSwapActivityMetadataUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.util.stringRes
+import co.electriccoin.zcash.ui.screen.invest.receipt.InvestReceiptArgs
 import co.electriccoin.zcash.ui.screen.swap.detail.SwapDetailArgs
 import co.electriccoin.zcash.ui.screen.transactiondetail.TransactionDetailArgs
 import co.electriccoin.zcash.ui.screen.transactionhistory.ActivityHistoryArgs
@@ -91,7 +92,8 @@ class ActivityWidgetVM(
                                         zecUsdPrice = zecUsdPrice,
                                         onTransactionClick = ::onTransactionClick,
                                         onSwapClick = ::onSwapClick,
-                                        onDisplayed = ::onActivityDisplayed
+                                        onDisplayed = ::onActivityDisplayed,
+                                        onInvestClick = ::onInvestClick,
                                     )
                                 }
                     )
@@ -106,6 +108,8 @@ class ActivityWidgetVM(
     private fun onActivityDisplayed(activity: ActivityData) = updateSwapActivityMetadata(activity)
 
     private fun onSwapClick(depositAddress: String) = navigationRouter.forward(SwapDetailArgs(depositAddress))
+
+    private fun onInvestClick(depositAddress: String) = navigationRouter.forward(InvestReceiptArgs(depositAddress))
 
     private fun onTransactionClick(transaction: Transaction) {
         navigationRouter.forward(TransactionDetailArgs(transaction.id.txIdString()))

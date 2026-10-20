@@ -93,7 +93,7 @@ class MigrationReviewVMTest {
             // broadcast, and the Transaction Progress navigation).
             coVerifyOrder {
                 zashiProposalRepository.setMigrationSweepProposal(proposal, Zatoshi(500_000L))
-                submitProposal()
+                submitProposal(navigateAfter = true, beforeSubmit = any())
             }
         }
 

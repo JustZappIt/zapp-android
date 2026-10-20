@@ -43,6 +43,9 @@ interface NavigationRouter {
      */
     fun backToRoot()
 
+    /** [backTo] when [route] is on the back stack, else [backToRoot]. */
+    fun backToOrRoot(route: KClass<*>) = custom { NavigationCommand.BackToOrRoot(route) }
+
     fun observePipeline(): Flow<BaseNavigationCommand>
 }
 
@@ -72,6 +75,8 @@ class NavigationRouterImpl : NavigationRouter {
         navigateWithBackoff(CustomNavigationCommand(block))
 
     override fun backToRoot() = navigateWithBackoff(NavigationCommand.BackToRoot)
+
+    override fun backToOrRoot(route: KClass<*>) = navigateWithBackoff(NavigationCommand.BackToOrRoot(route))
 
     override fun observePipeline() = channel.receiveAsFlow()
 
@@ -114,4 +119,8 @@ sealed interface NavigationCommand : BaseNavigationCommand {
     ) : NavigationCommand
 
     data object BackToRoot : NavigationCommand
+
+    data class BackToOrRoot(
+        val route: KClass<*>
+    ) : NavigationCommand
 }

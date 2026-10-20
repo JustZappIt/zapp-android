@@ -52,12 +52,18 @@ class SubmitProposalUseCase(
      * @param navigateAfter When true (default), navigates to [TransactionProgressArgs] after a Zashi
      *   submit. When false the caller keeps the foreground, as the offramp bridge does. Keystone
      *   always goes to [SignKeystoneTransactionArgs] — nothing can be signed otherwise.
+     * @param addToSwapHistory Whether a swap's destination joins Swap's recent assets.
+     * @param beforeSubmit Runs after authorization and before anything is submitted; if it throws, nothing is.
      * @return true once the proposal is authorized and handed off, false if the user dismissed or
      *   failed the biometric prompt. A declined prompt submits nothing and emits no
      *   `SubmitProposalState.Result`, so a caller that awaits that state must check this first or it
      *   will suspend forever.
      */
-    suspend operator fun invoke(navigateAfter: Boolean = true): Boolean =
+    suspend operator fun invoke(
+        navigateAfter: Boolean = true,
+        addToSwapHistory: Boolean = true,
+        beforeSubmit: suspend () -> Unit = {},
+    ): Boolean =
         try {
             biometricRepository.requestBiometrics(
                 request =
@@ -69,13 +75,14 @@ class SubmitProposalUseCase(
                             )
                     )
             )
+            beforeSubmit()
             val account = accountDataSource.getSelectedAccount()
             val proposal =
                 when (account) {
                     is KeystoneAccount -> keystoneProposalRepository.getTransactionProposal()
                     is ZashiAccount -> zashiProposalRepository.getTransactionProposal()
                 }
-            if (proposal is SwapTransactionProposal) {
+            if (proposal is SwapTransactionProposal && addToSwapHistory) {
                 val selectedSwapAsset = proposal.quote.destinationAsset
                 metadataRepository.addSwapAssetToHistory(
                     tokenTicker = selectedSwapAsset.tokenTicker,

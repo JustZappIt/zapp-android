@@ -55,6 +55,8 @@ data object SupportTicketListArgs
 @Serializable
 data class SupportChatArgs(
     val conversationId: String = "",
+    /** A draft to start the message box with. */
+    val prefilledMessage: String = "",
 )
 
 // ── Entry point composables ─────────────────────────────────────────────

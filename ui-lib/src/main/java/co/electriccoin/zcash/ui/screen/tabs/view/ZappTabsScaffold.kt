@@ -32,6 +32,7 @@ import co.electriccoin.zcash.ui.screen.chat.identity.ChatIdentitySetupScreen
 import co.electriccoin.zcash.ui.screen.chat.identity.ChatIdentitySetupVM
 import co.electriccoin.zcash.ui.screen.chat.list.ChatListScreen
 import co.electriccoin.zcash.ui.screen.chat.repository.ChatConversationsRepository
+import co.electriccoin.zcash.ui.screen.invest.section.InvestmentsSectionVM
 import co.electriccoin.zcash.ui.screen.onboarding.ZappOnboardingFlow
 import co.electriccoin.zcash.ui.screen.onboarding.ZappRestoreFlow
 import co.electriccoin.zcash.ui.screen.tabs.SelectedTabRepository
@@ -114,6 +115,8 @@ internal fun ZappTabsScaffold(
 @Composable
 private fun ZappTabsScaffoldContent() {
     val tabsVM: TabsVM = koinViewModel()
+    val investVM: InvestmentsSectionVM = koinViewModel()
+    val isInvestSettingsVisible by investVM.isSettingsRowVisible.collectAsState()
     val selectedTabRepository: SelectedTabRepository = koinInject()
     var shownTab by rememberSaveable { mutableStateOf(ZappTab.DEFAULT) }
     val requestedTab by selectedTabRepository.requested.collectAsState()
@@ -185,6 +188,7 @@ private fun ZappTabsScaffoldContent() {
                         onPortfolioChartClick = tabsVM::onPortfolioChartClick,
                         onViewingKeyExportClick = tabsVM::onViewingKeyExportClick,
                         onHardwareWalletClick = tabsVM::onHardwareWalletClick,
+                        onInvestClick = investVM::onSettingsClick.takeIf { isInvestSettingsVisible },
                         onVotingClick =
                             if (navigateToVoting.isEnabled) {
                                 { scope.launch { navigateToVoting() } }

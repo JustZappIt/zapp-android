@@ -46,14 +46,24 @@ object EvmKeyDerivation {
     private const val FIELD_BYTES = 32
     private const val ADDRESS_BYTES = 20
 
-    fun derive(mnemonic: CharArray, accountIndex: Int = 0, passphrase: String = ""): EvmKey {
+    fun derive(mnemonic: CharArray, accountIndex: Int = 0, passphrase: String = ""): EvmKey =
+        deriveAccount(mnemonic, account = 0, accountIndex = accountIndex, passphrase = passphrase)
+
+    /** `m/44'/60'/[account]'/0/[accountIndex]`; separate from [derive] so its Swift signature stays as it is. */
+    fun deriveAccount(
+        mnemonic: CharArray,
+        account: Int,
+        accountIndex: Int = 0,
+        passphrase: String = "",
+    ): EvmKey {
+        require(account >= 0) { "account must be non-negative" }
         require(accountIndex >= 0) { "accountIndex must be non-negative" }
         val seed = mnemonicToSeed(mnemonic, passphrase)
         val key =
             try {
                 Bip32.derive(
                     Bip32.master(seed),
-                    listOf(44 or HARDENED, 60 or HARDENED, 0 or HARDENED, 0, accountIndex),
+                    listOf(44 or HARDENED, 60 or HARDENED, account or HARDENED, 0, accountIndex),
                 )
             } finally {
                 seed.fill(0)

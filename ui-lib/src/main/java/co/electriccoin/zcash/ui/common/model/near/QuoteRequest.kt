@@ -3,9 +3,11 @@
 package co.electriccoin.zcash.ui.common.model.near
 
 import co.electriccoin.zcash.ui.common.serialization.BigDecimalSerializer
+import co.electriccoin.zcash.ui.common.serialization.NearConfidentialitySerializer
 import co.electriccoin.zcash.ui.common.serialization.NearRecipientTypeSerializer
 import co.electriccoin.zcash.ui.common.serialization.NearRefundTypeSerializer
 import co.electriccoin.zcash.ui.common.serialization.NearSwapTypeSerializer
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -50,7 +52,12 @@ data class QuoteRequest(
     @SerialName("appFees")
     val appFees: List<AppFee>,
     @SerialName("referral")
-    val referral: String? = null
+    val referral: String? = null,
+    // Never encoded when null, so other requests are unchanged.
+    @SerialName("confidentiality")
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    @Serializable(NearConfidentialitySerializer::class)
+    val confidentiality: Confidentiality? = null,
 )
 
 @JsonIgnoreUnknownKeys
@@ -66,7 +73,8 @@ enum class RefundType(
     val apiValue: String
 ) {
     ORIGIN_CHAIN("ORIGIN_CHAIN"),
-    INTENTS("INTENTS")
+    INTENTS("INTENTS"),
+    CONFIDENTIAL_INTENTS("CONFIDENTIAL_INTENTS"),
 }
 
 enum class SwapType(
@@ -81,5 +89,15 @@ enum class RecipientType(
     val apiValue: String
 ) {
     DESTINATION_CHAIN("DESTINATION_CHAIN"),
-    INTENTS("INTENTS")
+    INTENTS("INTENTS"),
+    CONFIDENTIAL_INTENTS("CONFIDENTIAL_INTENTS"),
+}
+
+/** How private a swap into or out of NEAR Confidential Intents is; an unknown value decodes to null. */
+enum class Confidentiality(
+    val apiValue: String
+) {
+    PUBLIC("public"),
+    BASIC("basic"),
+    ADVANCED("advanced"),
 }

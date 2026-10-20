@@ -38,5 +38,6 @@ internal fun AndroidWalletBackup(args: WalletBackup) {
 
 @Serializable
 data class WalletBackup(
-    val isOpenedFromSeedBackupInfo: Boolean
+    val isOpenedFromSeedBackupInfo: Boolean,
+    val returnTarget: WalletBackupReturnTarget = WalletBackupReturnTarget.TABS,
 )

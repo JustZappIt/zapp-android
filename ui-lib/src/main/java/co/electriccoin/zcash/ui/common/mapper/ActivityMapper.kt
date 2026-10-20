@@ -4,9 +4,12 @@ import cash.z.ecc.android.sdk.model.TransactionPool
 import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.android.sdk.model.Zip318Kind
 import co.electriccoin.zcash.ui.R
+import co.electriccoin.zcash.ui.common.invest.model.InvestAsset
+import co.electriccoin.zcash.ui.common.invest.model.investAsset
 import co.electriccoin.zcash.ui.common.model.SwapMode.EXACT_INPUT
 import co.electriccoin.zcash.ui.common.model.SwapMode.EXACT_OUTPUT
 import co.electriccoin.zcash.ui.common.model.SwapMode.FLEX_INPUT
+import co.electriccoin.zcash.ui.common.model.SwapStatus
 import co.electriccoin.zcash.ui.common.model.SwapStatus.EXPIRED
 import co.electriccoin.zcash.ui.common.model.SwapStatus.FAILED
 import co.electriccoin.zcash.ui.common.model.SwapStatus.INCOMPLETE_DEPOSIT
@@ -47,7 +50,8 @@ class ActivityMapper {
         zecUsdPrice: BigDecimal?,
         onTransactionClick: (Transaction) -> Unit,
         onSwapClick: (depositAddress: String) -> Unit,
-        onDisplayed: (ActivityData) -> Unit
+        onDisplayed: (ActivityData) -> Unit,
+        onInvestClick: (depositAddress: String) -> Unit,
     ): ActivityState =
         when (data) {
             is ActivityData.BySwap -> {
@@ -76,7 +80,14 @@ class ActivityMapper {
                     isShielded = isTransactionShielded(data),
                     value = getTransactionValue(data),
                     fiatValue = getFiatValue(data.transaction, exchangeRate, zecUsdPrice),
-                    onClick = { onTransactionClick(data.transaction) },
+                    onClick = {
+                        val swap = data.metadata.swapMetadata
+                        if (swap?.investAsset() != null) {
+                            onInvestClick(swap.depositAddress)
+                        } else {
+                            onTransactionClick(data.transaction)
+                        }
+                    },
                     isUnread = isTransactionUnread(data, restoreTimestamp),
                     onDisplayed = { onDisplayed(data) }
                 )
@@ -256,7 +267,10 @@ class ActivityMapper {
                         }
                     }
                 } else {
-                    if (transaction is SendTransaction.Failed) {
+                    val investAsset = data.metadata.swapMetadata.investAsset()
+                    if (investAsset != null) {
+                        getInvestBuyTitle(transaction, data.metadata.swapMetadata.status, investAsset)
+                    } else if (transaction is SendTransaction.Failed) {
                         when (data.metadata.swapMetadata.mode) {
                             EXACT_INPUT, FLEX_INPUT -> stringRes(R.string.swapStatus_swapFailed)
                             EXACT_OUTPUT -> stringRes(R.string.swapStatus_paymentFailed)
@@ -298,6 +312,20 @@ class ActivityMapper {
                     }
                 }
             }
+        }
+
+    private fun getInvestBuyTitle(
+        transaction: SendTransaction,
+        status: SwapStatus,
+        asset: InvestAsset,
+    ): StringResource =
+        when {
+            transaction is SendTransaction.Failed -> stringRes(R.string.transaction_history_invest_failed)
+            status == SUCCESS -> stringRes(R.string.transaction_history_invest_bought, asset.name)
+            status == REFUNDED -> stringRes(R.string.transaction_history_invest_refunded)
+            status == FAILED -> stringRes(R.string.transaction_history_invest_needs_attention)
+            status == EXPIRED -> stringRes(R.string.transaction_history_invest_expired)
+            else -> stringRes(R.string.transaction_history_invest_buying, asset.name)
         }
 
     private fun getSubtitle(timestamp: Instant?): StringResource? {

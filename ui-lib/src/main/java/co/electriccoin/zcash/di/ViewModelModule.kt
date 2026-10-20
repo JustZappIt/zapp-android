@@ -1,6 +1,8 @@
 package co.electriccoin.zcash.di
 
+import co.electriccoin.zcash.ui.BuildConfig
 import co.electriccoin.zcash.ui.common.appbar.ZashiTopAppBarVM
+import co.electriccoin.zcash.ui.common.invest.provider.InvestServerClock
 import co.electriccoin.zcash.ui.common.viewmodel.AuthenticationViewModel
 import co.electriccoin.zcash.ui.common.viewmodel.OldHomeViewModel
 import co.electriccoin.zcash.ui.common.viewmodel.WalletViewModel
@@ -47,6 +49,19 @@ import co.electriccoin.zcash.ui.screen.hotfix.enhancement.EnhancementHotfixVM
 import co.electriccoin.zcash.ui.screen.hotfix.ephemeral.EphemeralHotfixVM
 import co.electriccoin.zcash.ui.screen.insufficientfunds.InsufficientFundsVM
 import co.electriccoin.zcash.ui.screen.integrations.IntegrationsVM
+import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyArgs
+import co.electriccoin.zcash.ui.screen.invest.buy.InvestBuyVM
+import co.electriccoin.zcash.ui.screen.invest.gate.InvestGateVM
+import co.electriccoin.zcash.ui.screen.invest.gate.InvestUnavailableVM
+import co.electriccoin.zcash.ui.screen.invest.home.InvestHomeVM
+import co.electriccoin.zcash.ui.screen.invest.intro.InvestIntroVM
+import co.electriccoin.zcash.ui.screen.invest.progress.InvestProgressVM
+import co.electriccoin.zcash.ui.screen.invest.receipt.InvestReceiptVM
+import co.electriccoin.zcash.ui.screen.invest.section.InvestmentsSectionVM
+import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellArgs
+import co.electriccoin.zcash.ui.screen.invest.sell.InvestSellVM
+import co.electriccoin.zcash.ui.screen.invest.sellprogress.InvestSellProgressVM
+import co.electriccoin.zcash.ui.screen.invest.settings.InvestSettingsVM
 import co.electriccoin.zcash.ui.screen.ironwood.IronwoodAnnouncementVM
 import co.electriccoin.zcash.ui.screen.keepopen.KeepOpenVM
 import co.electriccoin.zcash.ui.screen.more.MoreVM
@@ -296,4 +311,69 @@ val viewModelModule =
         viewModelOf(::TopUpVM)
         viewModelOf(::ResetZashiVM)
         viewModelOf(::DisconnectVM)
+
+        // Invest.
+        viewModel {
+            InvestmentsSectionVM(
+                investRepository = get(),
+                settingsRepository = get(),
+                accountDataSource = get(),
+                currencyProvider = get(),
+                tradeFollower = get(),
+                navigateToInvest = get(),
+                navigationRouter = get(),
+                isInvestEnabled = BuildConfig.IS_INVEST_ENABLED,
+            )
+        }
+        viewModel { (isChange: Boolean) ->
+            InvestGateVM(
+                settingsRepository = get(),
+                hintProvider = get(),
+                navigationRouter = get(),
+                isChange = isChange,
+            )
+        }
+        viewModelOf(::InvestUnavailableVM)
+        viewModelOf(::InvestIntroVM)
+        viewModel {
+            InvestHomeVM(
+                investRepository = get(),
+                settingsRepository = get(),
+                isTorEnabled = get(),
+                currencyProvider = get(),
+                tradeFollower = get(),
+                session = get(),
+                navigationRouter = get(),
+                clock = get<InvestServerClock>(),
+            )
+        }
+        viewModel { (args: InvestBuyArgs) ->
+            InvestBuyVM(
+                args = args,
+                investRepository = get(),
+                settingsRepository = get(),
+                accountDataSource = get(),
+                swapRepository = get(),
+                currencyProvider = get(),
+                tradeFollower = get(),
+                navigationRouter = get(),
+                clock = get<InvestServerClock>(),
+            )
+        }
+        viewModelOf(::InvestProgressVM)
+        viewModelOf(::InvestReceiptVM)
+        viewModel { (args: InvestSellArgs) ->
+            InvestSellVM(
+                args = args,
+                investRepository = get(),
+                sellRepository = get(),
+                swapRepository = get(),
+                currencyProvider = get(),
+                tradeFollower = get(),
+                navigationRouter = get(),
+                clock = get<InvestServerClock>(),
+            )
+        }
+        viewModelOf(::InvestSellProgressVM)
+        viewModelOf(::InvestSettingsVM)
     }

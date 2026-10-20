@@ -3,6 +3,7 @@ package co.electriccoin.zcash.ui.common.usecase
 import cash.z.ecc.android.sdk.model.Zatoshi
 import co.electriccoin.zcash.ui.common.datasource.SwapDataSource
 import co.electriccoin.zcash.ui.common.datasource.SwapQuoteEstimate
+import co.electriccoin.zcash.ui.common.invest.repository.InvestSwapAssetSource
 import co.electriccoin.zcash.ui.common.model.DynamicSwapAsset
 import co.electriccoin.zcash.ui.common.model.SimpleSwapAsset
 import co.electriccoin.zcash.ui.common.model.SwapAsset
@@ -20,6 +21,8 @@ import co.electriccoin.zcash.ui.common.repository.TransactionMetadata
 import co.electriccoin.zcash.ui.common.repository.TransactionSwapMetadata
 import co.electriccoin.zcash.ui.design.util.StringResource
 import co.electriccoin.zcash.ui.design.util.imageRes
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
@@ -47,7 +50,8 @@ class GetSwapStatusUseCaseTest {
                 GetSwapStatusUseCase(
                     swapDataSource = ThrowingSwapDataSource(),
                     metadataRepository = metadataRepository,
-                    swapRepository = FakeSwapRepository()
+                    swapRepository = FakeSwapRepository(),
+                    investSwapAssetSource = UnusedInvestAssets,
                 ).invoke(DEPOSIT_ADDRESS)
 
             assertFalse(result.isLoading)
@@ -73,7 +77,8 @@ class GetSwapStatusUseCaseTest {
                                 isLoading = false,
                                 error = null
                             )
-                        )
+                        ),
+                    investSwapAssetSource = UnusedInvestAssets,
                 ).invoke(DEPOSIT_ADDRESS)
 
             assertFalse(result.isLoading)
@@ -81,7 +86,88 @@ class GetSwapStatusUseCaseTest {
             assertNull(result.status)
             assertEquals(0, metadataRepository.updateSwapCallCount)
         }
+
+    @Test
+    fun resolvesAnInvestBuyAgainstTheCuratedStocks() =
+        runTest {
+            val given = mutableListOf<List<SwapAsset>>()
+
+            GetSwapStatusUseCase(
+                swapDataSource = CapturingSwapDataSource(given),
+                metadataRepository = FakeMetadataRepository(swapMetadata = swapMetadata(to = "NVDAon", chain = "bsc")),
+                swapRepository = FakeSwapRepository(),
+                investSwapAssetSource = FixedInvestAssets(listOf(NVDA)),
+            ).invoke(DEPOSIT_ADDRESS)
+
+            assertEquals(listOf(ASSET, ASSET, NVDA), given.single())
+        }
+
+    @Test
+    fun leavesAnOrdinarySwapToTheSwapCatalog() =
+        runTest {
+            val given = mutableListOf<List<SwapAsset>>()
+
+            GetSwapStatusUseCase(
+                swapDataSource = CapturingSwapDataSource(given),
+                metadataRepository = FakeMetadataRepository(swapMetadata = swapMetadata(to = "btc", chain = "btc")),
+                swapRepository = FakeSwapRepository(),
+                investSwapAssetSource = UnusedInvestAssets,
+            ).invoke(DEPOSIT_ADDRESS)
+
+            assertEquals(listOf(ASSET, ASSET), given.single())
+        }
 }
+
+private object UnusedInvestAssets : InvestSwapAssetSource {
+    override suspend fun investSwapAssets(): List<SwapAsset> = throw AssertionError("not an Invest buy")
+}
+
+private class FixedInvestAssets(
+    private val assets: List<SwapAsset>
+) : InvestSwapAssetSource {
+    override suspend fun investSwapAssets(): List<SwapAsset> = assets
+}
+
+private fun swapMetadata(
+    to: String,
+    chain: String
+): TransactionSwapMetadata {
+    val destination =
+        mockk<SimpleSwapAsset> {
+            every { tokenTicker } returns to
+            every { chainTicker } returns chain
+        }
+    return mockk(relaxed = true) { every { this@mockk.destination } returns destination }
+}
+
+/** Records the assets a status poll is given, then stops the poll. */
+private class CapturingSwapDataSource(
+    private val given: MutableList<List<SwapAsset>>
+) : SwapDataSource by ThrowingSwapDataSource() {
+    override suspend fun checkSwapStatus(
+        depositAddress: String,
+        supportedTokens: List<SwapAsset>
+    ): SwapQuoteStatus {
+        given += supportedTokens
+        error("stop polling")
+    }
+}
+
+private val NVDA: SwapAsset =
+    DynamicSwapAsset(
+        tokenTicker = "NVDAon",
+        tokenName = StringResource.ByString("NVDAon"),
+        tokenIcon = imageRes("NVDAon"),
+        usdPrice = null,
+        assetId = "nep141:bnb-0xa9ee28c80f960b889dfbd1902055218cba016f75.omdep.near",
+        decimals = 18,
+        blockchain =
+            SwapBlockchain(
+                chainTicker = "bsc",
+                chainName = StringResource.ByString("bsc"),
+                chainIcon = imageRes("bsc")
+            )
+    )
 
 private const val DEPOSIT_ADDRESS = "deposit-address"
 

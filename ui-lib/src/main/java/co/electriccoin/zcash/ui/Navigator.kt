@@ -16,6 +16,7 @@ import com.flexa.core.Flexa
 import com.flexa.spend.buildSpend
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.serializer
+import kotlin.reflect.KClass
 
 interface Navigator {
     suspend fun executeCommand(command: NavigationCommand)
@@ -37,6 +38,7 @@ class NavigatorImpl(
         when (command) {
             NavigationCommand.Back,
             NavigationCommand.BackToRoot,
+            is NavigationCommand.BackToOrRoot,
             is NavigationCommand.BackTo -> {
                 val currentRoute =
                     navController
@@ -53,12 +55,36 @@ class NavigatorImpl(
         }
 
         when (command) {
-            is NavigationCommand.Forward -> forward(command)
-            is NavigationCommand.Replace -> replace(command)
-            is NavigationCommand.ReplaceAll -> replaceAll(command)
-            NavigationCommand.Back -> navController.popBackStack()
-            is NavigationCommand.BackTo -> backTo(command)
-            NavigationCommand.BackToRoot -> backToRoot()
+            is NavigationCommand.Forward -> {
+                forward(command)
+            }
+
+            is NavigationCommand.Replace -> {
+                replace(command)
+            }
+
+            is NavigationCommand.ReplaceAll -> {
+                replaceAll(command)
+            }
+
+            NavigationCommand.Back -> {
+                navController.popBackStack()
+            }
+
+            is NavigationCommand.BackTo -> {
+                backTo(command)
+            }
+
+            NavigationCommand.BackToRoot -> {
+                backToRoot()
+            }
+
+            is NavigationCommand.BackToOrRoot -> {
+                // getBackStackEntry throws when the route isn't on the back stack.
+                @Suppress("UNCHECKED_CAST")
+                val isOnStack = runCatching { navController.getBackStackEntry(command.route as KClass<Any>) }.isSuccess
+                if (isOnStack) backTo(NavigationCommand.BackTo(command.route)) else backToRoot()
+            }
         }
     }
 

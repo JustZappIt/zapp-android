@@ -3,6 +3,7 @@
 package co.electriccoin.zcash.ui.common.model.near
 
 import co.electriccoin.zcash.ui.common.serialization.BigDecimalSerializer
+import co.electriccoin.zcash.ui.common.serialization.NullableBigDecimalSerializer
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -59,4 +60,12 @@ data class QuoteDetails(
     // case the UI falls back to a static "a few minutes" estimate.
     @SerialName("timeEstimate")
     val timeEstimate: Int? = null,
+    // Fixed fee 1Click keeps from a refund, in the origin asset's base units.
+    @SerialName("refundFee")
+    @Serializable(with = NullableBigDecimalSerializer::class)
+    val refundFee: BigDecimal? = null,
+    // Fixed fee for the payout, in the destination asset's base units.
+    @SerialName("withdrawFee")
+    @Serializable(with = NullableBigDecimalSerializer::class)
+    val withdrawFee: BigDecimal? = null,
 )

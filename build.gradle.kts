@@ -115,6 +115,9 @@ tasks {
             "P2P_SCREENING_KEY" to "",
             "RECLAIM_APP_ID" to "",
             "RECLAIM_APP_SECRET" to "",
+            "ZAPP_NEAR_PARTNER_JWT" to "",
+            // Invest ships dark in store and foss releases until it is turned on deliberately.
+            "ZAPP_INVEST_ENABLED" to "false",
 
             // Private USD's Ethereum endpoints, whose URLs carry an API key.
             "ETHEREUM_RPC_URL_MAINNET" to "",
