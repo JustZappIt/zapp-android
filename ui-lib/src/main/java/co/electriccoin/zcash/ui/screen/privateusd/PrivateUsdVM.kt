@@ -18,14 +18,13 @@ import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalanceState
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdBalances
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdConversion
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDeposits
+import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdDepositsRepository
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSenders
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendGuard
 import co.electriccoin.zcash.ui.common.privateusd.PrivateUsdSpendStatus
-import co.electriccoin.zcash.ui.common.privateusd.addressOrNull
 import co.electriccoin.zcash.ui.common.privateusd.dollars
 import co.electriccoin.zcash.ui.common.privateusd.toDecimal
-import co.electriccoin.zcash.ui.common.provider.RailgunMnemonicProvider
-import co.electriccoin.zcash.ui.common.usecase.CopyToClipboardUseCase
 import co.electriccoin.zcash.ui.common.usecase.NavigateBackToPayUseCase
 import co.electriccoin.zcash.ui.design.component.ButtonState
 import co.electriccoin.zcash.ui.design.util.StringResource
@@ -33,6 +32,7 @@ import co.electriccoin.zcash.ui.design.util.asPrivacySensitive
 import co.electriccoin.zcash.ui.design.util.stringRes
 import co.electriccoin.zcash.ui.screen.ExternalUrl
 import co.electriccoin.zcash.ui.screen.privateusd.convert.PrivateUsdConvertArgs
+import co.electriccoin.zcash.ui.screen.privateusd.receive.PrivateUsdReceiveArgs
 import co.electriccoin.zcash.ui.screen.privateusd.refunds.PrivateUsdRefundsArgs
 import co.electriccoin.zcash.ui.screen.privateusd.send.PrivateUsdSendArgs
 import co.electriccoin.zcash.ui.screen.privateusd.send.PrivateUsdSendMode
@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlin.time.Duration.Companion.seconds
@@ -55,31 +56,29 @@ class PrivateUsdVM(
     private val navigateBackToPay: NavigateBackToPayUseCase,
     private val navigationRouter: NavigationRouter,
     private val spendGuard: PrivateUsdSpendGuard,
-    private val railgunMnemonicProvider: RailgunMnemonicProvider,
-    private val copyToClipboard: CopyToClipboardUseCase,
+    depositsRepository: PrivateUsdDepositsRepository,
 ) : ViewModel() {
     private val deployment = atomicSwapRepository.requireDeployment()
 
-    // A 0zk address is shared to be paid: it says nothing of the balance.
-    private val receiveAddress =
-        railgunMnemonicProvider.walletChanges.map { railgunMnemonicProvider.addressOrNull()?.value }
+    // What deposits take, while public USDC can come in too: the "i" tells of both ways in.
+    private val depositSymbol = depositsRepository.state.map { it.symbol() }.distinctUntilChanged()
 
     internal val state: StateFlow<PrivateUsdState> =
         combine(
-            combine(balanceRepository.observe(), receiveAddress, ::Pair),
+            combine(balanceRepository.observe(), depositSymbol, ::Pair),
             observeConversion(),
             observeActivity(),
             observeLocalCurrency(),
             spendGuard.state,
-        ) { (balance, address), conversion, activity, currency, spending ->
-            createState(balance, address, conversion, activity, currency, spending)
+        ) { (balance, symbol), conversion, activity, currency, spending ->
+            createState(balance, symbol, conversion, activity, currency, spending)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(ANDROID_STATE_FLOW_TIMEOUT),
             initialValue =
                 createState(
                     balanceRepository.state.value,
-                    null,
+                    depositsRepository.state.value.symbol(),
                     null,
                     emptyList(),
                     LocalCurrency.DOLLAR,
@@ -94,7 +93,7 @@ class PrivateUsdVM(
 
     private fun createState(
         balance: PrivateUsdBalanceState,
-        address: String?,
+        depositSymbol: String?,
         conversion: PrivateUsdConversion?,
         activity: List<PrivateUsdActivityData>,
         currency: LocalCurrency,
@@ -133,7 +132,7 @@ class PrivateUsdVM(
                         onOpenRefunds = ::onOpenRefunds,
                     )
                 },
-            info = info(currency),
+            info = info(currency, depositSymbol),
             convertButton =
                 ButtonState(
                     stringRes(R.string.private_usd_action_convert),
@@ -143,8 +142,7 @@ class PrivateUsdVM(
                 },
             onRefresh = { balanceRepository.refresh() },
             onBack = navigateBackToPay::invoke,
-            receiveAddress = address,
-            onCopyAddress = { address?.let { copyToClipboard(it, isSensitive = false) } },
+            onReceive = { navigationRouter.forward(PrivateUsdReceiveArgs) },
             refundsButton = ButtonState(stringRes(R.string.refunds_title), onClick = ::onOpenRefunds),
             spendingNote = spending.message(),
         )
@@ -224,13 +222,17 @@ class PrivateUsdVM(
         }
     }
 
-    private fun info(currency: LocalCurrency) =
+    private fun info(
+        currency: LocalCurrency,
+        depositSymbol: String?,
+    ) =
         PrivateUsdInfo(
             title = stringRes(R.string.private_usd_info_title),
             steps =
                 listOf(
                     stringRes(R.string.private_usd_info_step_convert),
-                    stringRes(R.string.private_usd_info_receive),
+                    depositSymbol?.let { stringRes(R.string.private_usd_info_receive_deposits, it) }
+                        ?: stringRes(R.string.private_usd_info_receive),
                     stringRes(R.string.private_usd_info_send),
                     stringRes(R.string.private_usd_info_withdraw),
                     stringRes(R.string.private_usd_info_refunds),
@@ -248,3 +250,6 @@ class PrivateUsdVM(
         val REFRESH_AFTER = 30.seconds
     }
 }
+
+/** What deposits take, while there are deposits. */
+private fun PrivateUsdDeposits?.symbol(): String? = this?.token?.symbol
