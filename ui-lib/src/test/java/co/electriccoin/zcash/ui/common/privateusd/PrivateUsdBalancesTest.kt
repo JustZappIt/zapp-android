@@ -99,7 +99,7 @@ class PrivateUsdBalancesTest {
     ) = RailgunTokenAmount(Address.parse(token), BigInteger.valueOf(value))
 
     private companion object {
-        const val TEST_USD = "0x5764D0044bef5AA839E0dDafE2073421101B9Ed8"
+        const val TEST_USD = "0x64c4A5CB09FE0b706D4Cf24DC0A45fff275D727c"
         const val WETH = "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
     }
 }

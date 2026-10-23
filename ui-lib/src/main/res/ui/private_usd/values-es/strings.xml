@@ -163,6 +163,9 @@
     <string name="convert_problem_turn">El creador de mercado tiene prioridad para reclamar durante unos minutos. Zapp reclama en cuanto llega tu turno.</string>
     <string name="convert_problem_wallet">Tu billetera de Zcash aún no está lista. Zapp vuelve a intentarlo cuando se sincronice.</string>
     <string name="convert_problem_unexpected">Algo salió mal. Zapp sigue intentándolo automáticamente.</string>
+    <!-- Conversions on the windows contract -->
+    <string name="private_usd_token_retired_test_usd">Dólar de prueba retirado</string>
+
     <string name="convert_result_paid_title">Dólares en camino</string>
     <string name="convert_result_paid_body">%1$s está en tu saldo privado. Railgun revisa los fondos nuevos durante %2$s antes de que se puedan gastar.</string>
     <string name="convert_result_screened_body">%1$s está en tu saldo privado, listo para usar.</string>

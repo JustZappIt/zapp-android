@@ -27,7 +27,7 @@ data class SwapDeployment(
     val maker: Address,
     /** The only relayer payouts are signed for. */
     val relayer: Address,
-    /** Confirmations, including its own block, required for escrow, locks and payouts in either direction. */
+    /** Confirmations, including its own block, required for opens, escrows and payouts in either direction. */
     @SerialName("confirmations")
     val escrowConfirmations: Long = DEFAULT_ESCROW_CONFIRMATIONS,
     val zcashNetwork: SwapZcashNetwork = SwapZcashNetwork.TESTNET,
@@ -35,7 +35,15 @@ data class SwapDeployment(
     val zcashConfirmations: Int = DEFAULT_ZCASH_CONFIRMATIONS,
     /** Where the maker's accepts get their Privacy Pass tokens; none pinned refuses a maker that asks for one. */
     val tokenIssuer: SwapTokenIssuer? = null,
+    /**
+     * The windows [contract] must answer before any swap of it is read; none for a lock contract, whose swaps this
+     * build keeps as history and never drives. Records kept before the windows contract have none.
+     */
+    val windows: SwapWindows? = null,
 )
+
+/** A lock contract users swapped on before the windows contract: its swaps show as history, and nothing drives them. */
+val SwapDeployment.retired: Boolean get() = windows == null
 
 /** Railgun's own contracts on a chain, as its `NETWORK_CONFIG` names them (@railgun-community/shared-models 8.2.0). */
 data class RailgunContracts(
@@ -72,9 +80,18 @@ val SwapDeployment.railgun: RailgunContracts?
 
 /** How a forward swap's maker times its deposit. */
 data class ZcashDepositTerms(
-    /** The soonest `t0` a swap may have: time for the deposit to get its confirmations. */
+    /**
+     * The soonest `t0` a deposit may start with: time for it to get its confirmations before the maker gives up on a
+     * deposit not confirmed in full, which it does a while before `t0`.
+     */
     val minSecondsToT0: Long = MIN_SECONDS_TO_T0,
+    /**
+     * The longest after the accept a deposit may start: the maker cancels a swap with nothing mined into its deposit
+     * account soon after the open, and a deposit that lands after that only comes back, less two Zcash fees.
+     */
+    val depositWindowSeconds: Long = DEPOSIT_WINDOW_SECONDS,
 )
 
+private const val DEPOSIT_WINDOW_SECONDS = 10 * 60L
 private const val DEFAULT_ESCROW_CONFIRMATIONS = 3L
 private const val DEFAULT_ZCASH_CONFIRMATIONS = 3

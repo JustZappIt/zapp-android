@@ -182,6 +182,9 @@
     <string name="convert_problem_mismatch" tools:ignore="MissingTranslation">What\'s on the chain doesn\'t match this conversion, so Zapp only brings your funds back.</string>
     <string name="convert_problem_retry" tools:ignore="MissingTranslation">Try now</string>
 
+    <!-- Conversions on the windows contract -->
+    <string name="private_usd_token_retired_test_usd">Retired test dollar</string>
+
     <!-- Convert: results -->
     <string name="convert_result_paid_title">Dollars on their way</string>
     <string name="convert_result_paid_body">%1$s is in your private balance. Railgun screens new funds for %2$s before they can be spent.</string>
