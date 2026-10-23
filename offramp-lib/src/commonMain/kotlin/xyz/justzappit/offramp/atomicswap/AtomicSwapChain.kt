@@ -182,10 +182,8 @@ class AtomicSwapChain(
         var to = confirmed
         while (to >= earliest) {
             val from = (to - LOG_WINDOW_BLOCKS + 1).coerceAtLeast(earliest)
-            val log =
-                rpc
-                    .ethGetLogs(address = deployment.contract, topics = listOf(topic, id.hex), fromBlock = from, toBlock = to)
-                    .firstOrNull { it.isFor(topic, id, from..to) }
+            val logs = rpc.ethGetLogs(deployment.contract, listOf(topic, id.hex), fromBlock = from, toBlock = to)
+            val log = logs.firstOrNull { it.isFor(topic, id, from..to) }
             if (log != null) return log
             to = from - 1
         }
@@ -216,8 +214,8 @@ class AtomicSwapChain(
         private val LOCK_DURATION = AbiEncoder.encodeFunctionCall("LOCK_DURATION()", emptyList())
 
         /**
-         * `getSwap`'s answer, or null for no swap (stage 0): four words from a windows contract, six from a lock one with
-         * no [windows], as the deployment says and never as the answer's length does. A shorter answer is
+         * `getSwap`'s answer, or null for no swap (stage 0): four words from a windows contract, six from a lock one
+         * with no [windows], as the deployment says and never as the answer's length does. A shorter answer is
          * [AtomicSwapBlock.CHAIN_UNREADABLE]; a longer one, another contract's.
          */
         fun decodeState(

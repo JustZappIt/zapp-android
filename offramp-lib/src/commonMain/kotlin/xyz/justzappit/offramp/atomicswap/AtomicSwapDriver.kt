@@ -38,7 +38,7 @@ class AtomicSwapDriver(
 
     /** Quotes [requested] for a fresh index, which counts as spent from here on. */
     suspend fun quote(requested: Usdc6): AtomicSwapOffer {
-        requireNotRetired()
+        deployment.requireWindows()
         requireNoSwapUnderWay()
         if (!isMakerChecked) {
             maker.info().requireServing(deployment, reverse = false)
@@ -56,7 +56,7 @@ class AtomicSwapDriver(
 
     /** Accepts [offer], saving the record before the maker sees the share, so an accept cut short is still known. */
     suspend fun accept(offer: AtomicSwapOffer): AtomicSwapRecord {
-        requireNotRetired()
+        deployment.requireWindows()
         requireNoSwapUnderWay()
         val quote = offer.quote
         requirePaysOut(quote.amount, offer.relayerFee)
@@ -140,12 +140,6 @@ class AtomicSwapDriver(
         }
     }
 
-    private fun requireNotRetired() {
-        if (deployment.retired) {
-            throw AtomicSwapBlockedException(AtomicSwapBlock.RETIRED_CONTRACT, "nothing starts on a lock contract")
-        }
-    }
-
     private suspend fun step(
         record: AtomicSwapRecord,
         terms: SwapTerms,
@@ -194,8 +188,15 @@ class AtomicSwapDriver(
                 finishPaid(record)
             }
 
+            // A swap on a retired lock contract follows rules this build doesn't: nothing is paid into it, claimed, or
+            // asked of a relayer. One never paid into ends with nothing sent; one paid into waits for its maker's
+            // refund, whose sweep brings the deposit home.
+            deployment.retired && record.deposit == SwapDeposit.NotStarted -> {
+                ending.finish(record, AtomicSwapOutcome.NothingSent(NothingSentCause.MAKER_UNAVAILABLE))
+            }
+
             deployment.retired -> {
-                retired(record)
+                AtomicSwapStep.Waiting(AtomicSwapWait.RETIRED)
             }
 
             swap.stage == SwapStage.CLAIMED -> {
@@ -228,16 +229,6 @@ class AtomicSwapDriver(
             claim.claim(record, swap, onActivity, read) ?: finishPaid(record)
         }
     }
-
-    // A swap on a retired lock contract follows rules this build doesn't: nothing is paid into it, claimed, or asked of
-    // a relayer. One never paid into ends with nothing sent; one paid into waits for its maker's refund, whose sweep
-    // brings the deposit home.
-    private suspend fun retired(record: AtomicSwapRecord): AtomicSwapStep =
-        if (record.deposit == SwapDeposit.NotStarted) {
-            ending.finish(record, AtomicSwapOutcome.NothingSent(NothingSentCause.MAKER_UNAVAILABLE))
-        } else {
-            AtomicSwapStep.Waiting(AtomicSwapWait.RETIRED)
-        }
 
     // A relayer's response is not the payout receipt. Keep the confirmed contract event and the amount it paid.
     private suspend fun finishPaid(record: AtomicSwapRecord): AtomicSwapStep.Finished {
@@ -457,7 +448,7 @@ internal class AtomicSwapClaim(
         swap: OnChainSwap,
         read: SwapRead,
     ): AtomicSwapStep.Waiting? {
-        val windows = deployment.windows ?: throw AtomicSwapBlockedException(AtomicSwapBlock.RETIRED_CONTRACT, "locks")
+        val windows = deployment.requireWindows()
         val head = read.head
         freshHead(head.time, nowSeconds())
         val stage =

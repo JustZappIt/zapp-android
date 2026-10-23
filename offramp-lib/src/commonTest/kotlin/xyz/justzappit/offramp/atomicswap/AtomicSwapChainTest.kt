@@ -226,7 +226,8 @@ class AtomicSwapChainTest {
 
             assertEquals(NOW - 40 * 12, node.chain.refundedAt(id, NOW - 3_600))
             assertEquals(listOf("0x" + (LATEST - 40).toString(16)), node.blocksAsked)
-            assertEquals(REFUNDED_TOPIC, node.logFilters.single()["topics"]!!.jsonArray[0].jsonPrimitive.content)
+            val topics = node.logFilters.single().getValue("topics")
+            assertEquals(REFUNDED_TOPIC, topics.jsonArray[0].jsonPrimitive.content)
             node.logs = "[${eventLog(PAID_OUT_TOPIC, block = LATEST - 40)}]"
             assertNull(node.chain.refundedAt(id, NOW - 3_600), "a payout is no refund")
             node.close()
@@ -481,30 +482,48 @@ class AtomicSwapChainTest {
 
         // Null where the call reverts.
         private fun call(params: JsonArray): String? {
-            val to = Address.parse(params[0].jsonObject["to"]!!.jsonPrimitive.content)
-            val data = params[0].jsonObject["data"]!!.jsonPrimitive.content.hexToBytes()
+            val request = params[0].jsonObject
+            val to = Address.parse(request.getValue("to").jsonPrimitive.content)
+            val data = request.getValue("data").jsonPrimitive.content
+            val bytes = data.hexToBytes()
             val tag = params[1].jsonPrimitive.content
-            if (to != Multicall3.ADDRESS) {
-                calls += ("0x" + data.copyOf(4).toHex()) to tag
-                return answer(to, data)?.let { "\"0x${it.toHex()}\"" }
-            }
+            val answered = if (to == Multicall3.ADDRESS) aggregate(bytes, tag) else direct(to, bytes, tag)
+            return answered?.let { "\"0x${it.toHex()}\"" }
+        }
+
+        private fun direct(
+            to: Address,
+            data: ByteArray,
+            tag: String,
+        ): ByteArray? {
+            calls += ("0x" + data.copyOf(4).toHex()) to tag
+            return answer(to, data)
+        }
+
+        // As Multicall3 answers `aggregate3`: reverted, where a call that may not fail does.
+        private fun aggregate(
+            data: ByteArray,
+            tag: String,
+        ): ByteArray? {
             aggregateTags += tag
             val asked = aggregated(data)
             aggregated += asked.map { (_, allowFailure, call) -> allowFailure to named(call) }
-            val results = asked.map { (target, allowFailure, call) -> Triple(allowFailure, answer(target, call), call) }
-            if (results.any { (allowFailure, answer, _) -> !allowFailure && answer == null }) return null
-            val encoded =
-                AbiEncoder.encode(
-                    listOf(
-                        AbiArray(
-                            results.map { (_, answer, _) ->
-                                AbiTuple(listOf(AbiBool(answer != null), AbiBytes(answer ?: ByteArray(0))))
-                            },
-                        ),
-                    ),
-                )
-            return "\"0x${encoded.toHex()}\""
+            val results = asked.map { (target, allowFailure, call) -> allowFailure to answer(target, call) }
+            val reverts = results.any { (allowFailure, answer) -> !allowFailure && answer == null }
+            val tuples =
+                results.map { (_, answer) ->
+                    AbiTuple(listOf(AbiBool(answer != null), AbiBytes(answer ?: ByteArray(0))))
+                }
+            return if (reverts) null else AbiEncoder.encode(listOf(AbiArray(tuples)))
         }
+
+        // Multicall3's own reads: the block's time and number.
+        private fun clock(selector: String): ByteArray =
+            when (selector) {
+                selector("getCurrentBlockTimestamp()") -> word(blockTime)
+                selector("getBlockNumber()") -> word(blockNumber)
+                else -> error("unexpected Multicall3 call $selector")
+            }
 
         private fun answer(
             to: Address,
@@ -512,8 +531,7 @@ class AtomicSwapChainTest {
         ): ByteArray? {
             val selector = "0x" + data.copyOf(4).toHex()
             return when {
-                to == Multicall3.ADDRESS && selector == selector("getCurrentBlockTimestamp()") -> word(blockTime)
-                to == Multicall3.ADDRESS && selector == selector("getBlockNumber()") -> word(blockNumber)
+                to == Multicall3.ADDRESS -> clock(selector)
                 selector == selector("MIN_WINDOW()") -> contract.windows?.let { uint(it.min) }
                 selector == selector("LATE_WINDOW()") -> contract.windows?.let { uint(it.late) }
                 selector == selector("LOCK_DURATION()") -> contract.lockDuration?.let { uint(it) }

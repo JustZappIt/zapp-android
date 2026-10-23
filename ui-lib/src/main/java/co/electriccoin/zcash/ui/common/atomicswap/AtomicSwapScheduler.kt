@@ -92,7 +92,9 @@ class AtomicSwapScheduler(
         private const val MILLIS = 1000L
         private val CLAIMABLE_SLACK = 30.seconds
         private val LAST_CALL_AFTER_T0 = 3.minutes
-        private val LAST_CALL_BEFORE_T1 = 5.minutes
+
+        // A claim leaves with CLAIM_MARGIN_SECONDS to spare before t1: this gives the user ten minutes to open the app.
+        private val LAST_CALL_BEFORE_T1 = 15.minutes
         private val CONNECTED = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
         private fun expedited(): OneTimeWorkRequest =

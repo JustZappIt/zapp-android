@@ -46,7 +46,7 @@ class ReverseSwapDriver(
     /** A verified quote for [requested], kept as a preview under a fresh index. */
     suspend fun quote(requested: Usdc6): ReverseSwapRecord {
         require(requested.micros.signum() > 0) { "a conversion moves something" }
-        val windows = requireWindows()
+        val windows = deployment.requireWindows()
         records.requireNothingUnderWay()
         if (!isMakerChecked) {
             maker.info().requireServing(deployment, reverse = true)
@@ -95,7 +95,7 @@ class ReverseSwapDriver(
     /** The user went ahead with the preview: it's under way from here, though nothing is paid yet. */
     suspend fun goAhead(index: Int) =
         lock.withLock {
-            requireWindows()
+            deployment.requireWindows()
             val record = records.current(index)
             if (record.phase != ReversePhase.QUOTED) return@withLock
             if (forward.active()?.finished == false) {
@@ -107,43 +107,26 @@ class ReverseSwapDriver(
 
     suspend fun advance(): ReverseSwapRecord? {
         val snapshot = store.active()
-        when {
-            snapshot == null || !snapshot.underWay -> Unit
-            deployment.retired -> lock.withLock { store.active()?.takeIf { it.underWay }?.let { retired(it) } }
-            else -> step(snapshot)
-        }
-        return store.active()
-    }
-
-    private suspend fun step(snapshot: ReverseSwapRecord) {
-        val deposit = if (snapshot.phase in AWAITING_DEPOSIT) receiving.lookAtDeposit(snapshot) else null
+        if (snapshot == null || !snapshot.underWay) return snapshot
+        val deposit =
+            if (snapshot.phase in AWAITING_DEPOSIT && !deployment.retired) receiving.lookAtDeposit(snapshot) else null
         locked { outbox ->
-            store
-                .active()
-                ?.takeIf { it.underWay }
-                ?.let { stages.advance(it, deposit?.takeIf { _ -> it.index == snapshot.index }, outbox) }
+            val current = store.active()?.takeIf { it.underWay }
+            when {
+                current == null -> Unit
+                deployment.retired -> ending.retire(current)
+                else -> stages.advance(current, deposit?.takeIf { current.index == snapshot.index }, outbox)
+            }
         }
         store.active()?.takeIf { it.isAccepting }?.let { accepted(it.index) }
         // The maker hands the accept's token back once the escrow is funded.
         if (snapshot.funding != null) maker.collectReverseToken(snapshot.swapId)
+        return store.active()
     }
-
-    // A conversion on a retired lock contract follows rules this build doesn't: nothing is signed, paid, or asked of a
-    // maker or relayer for it. One that never paid ends, called off; one that did is refused, its escrow left as it is.
-    private suspend fun retired(record: ReverseSwapRecord) {
-        if (record.funding != null) {
-            throw AtomicSwapBlockedException(AtomicSwapBlock.RETIRED_CONTRACT, "the escrow is on a lock contract")
-        }
-        ending.finish(record, ReversePhase.CANCELLED)
-    }
-
-    private fun requireWindows(): SwapWindows =
-        deployment.windows
-            ?: throw AtomicSwapBlockedException(AtomicSwapBlock.RETIRED_CONTRACT, "nothing goes on a lock contract")
 
     /** Only the first foreground authorization calls this. The transaction is kept before it is first sent. */
     suspend fun fund(index: Int) {
-        requireWindows()
+        deployment.requireWindows()
         accepted(index)
         val record = lock.withLock { approvals.fundable(index) }
         if (record.funding != null) {
@@ -169,7 +152,7 @@ class ReverseSwapDriver(
 
     /** Only the second foreground authorization calls this; a restart never authorizes `ready`. */
     suspend fun ready(index: Int) {
-        requireWindows()
+        deployment.requireWindows()
         val snapshot = records.current(index)
         requireGoingAhead(snapshot)
         if (snapshot.ready != null) {
@@ -208,7 +191,7 @@ class ReverseSwapDriver(
 
     /** Recovers the refund of conversion [index], whichever conversion is active now. */
     suspend fun rescue(index: Int) {
-        requireWindows()
+        deployment.requireWindows()
         locked { outbox -> refunds.rescue(records.kept(index), outbox) }
     }
 
@@ -624,6 +607,15 @@ internal class ReverseSwapEnding(
     ) {
         store.save(record.copy(phase = phase))
         zcash.forget(record)
+    }
+
+    // A conversion on a retired lock contract follows rules this build doesn't: nothing is signed, paid, or asked of a
+    // maker or relayer for it. One that never paid ends, called off; one that did is refused, its escrow left as it is.
+    suspend fun retire(record: ReverseSwapRecord) {
+        if (record.funding != null) {
+            throw AtomicSwapBlockedException(AtomicSwapBlock.RETIRED_CONTRACT, "the escrow is on a lock contract")
+        }
+        finish(record, ReversePhase.CANCELLED)
     }
 }
 

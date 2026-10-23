@@ -48,43 +48,62 @@ class WindowsSpecTest {
 
     /** Whether the reveal goes now, as the app and the relayer judge it, or none for the maker's forward reveals. */
     private fun maySend(vector: Vector): Boolean? {
+        val stage = stage(vector.view.stage)
+        return when {
+            vector.reveal in MAKERS_FORWARD -> null
+
+            // No swap on the chain: nothing to reveal.
+            stage == null -> false
+
+            vector.reveal in CLAIMS -> mayClaim(vector, stage)
+
+            else -> mayRefundOrReady(vector, stage)
+        }
+    }
+
+    private fun mayClaim(
+        vector: Vector,
+        stage: SwapStage,
+    ): Boolean {
         val view = vector.view
         val windows = SwapWindows(view.minWindow, view.lateWindow)
         val head = ChainHead(view.headNumber, view.headTs)
-        val forward = view.direction == "forward"
-        // The swap, read as of `block`, is ready there.
-        val readyAt = { block: Long -> view.readyBlock?.let { it <= block } == true }
-        val goes = { judged: RevealJudgement ->
+        val margin = if (vector.reveal == "user_claim") vector.margins.claimApp else vector.margins.claimRelayer
+        val judged =
+            if (vector.reveal == "maker_claim") {
+                windows.reverseClaim(stage, view.t0, view.t1, head, view.wallNow, margin)
+            } else {
+                windows.forwardClaim(stage, view.t0, view.t1, head, view.wallNow, margin)
+            }
+        // A ready the swap shows as of `block`, where the judgement waits for one there.
+        val goes =
             when (judged) {
                 Go.Now -> true
-                is Go.OnceReadyAt -> readyAt(judged.block)
+                is Go.OnceReadyAt -> view.readyBlock?.let { it <= judged.block } == true
                 is Refusal -> false
             }
-        }
-        if (vector.reveal in MAKERS_FORWARD) return null
-        // No swap on the chain: nothing to reveal.
-        val stage = stage(view.stage) ?: return false
+        val isForward = view.direction == "forward"
+        val isTheirs = if (vector.reveal == "maker_claim") !isForward else isForward && view.railgunAccepts
+        return goes && isTheirs
+    }
+
+    private fun mayRefundOrReady(
+        vector: Vector,
+        stage: SwapStage,
+    ): Boolean {
+        val view = vector.view
+        val head = ChainHead(view.headNumber, view.headTs)
+        val isReverse = view.direction != "forward"
         return when (val reveal = vector.reveal) {
-            "user_claim", "relayer_claim" -> {
-                val margin = if (reveal == "user_claim") vector.margins.claimApp else vector.margins.claimRelayer
-                val judged = windows.forwardClaim(stage, view.t0, view.t1, head, view.wallNow, margin)
-                forward && view.railgunAccepts && goes(judged)
-            }
-
-            "maker_claim" -> {
-                val margin = vector.margins.claimRelayer
-                val judged = windows.reverseClaim(stage, view.t0, view.t1, head, view.wallNow, margin)
-                !forward && goes(judged)
-            }
-
             "user_refund", "relayer_refund" -> {
                 val pending = reveal == "relayer_refund" && vector.own.ownReadyPending
                 val signedUntil = vector.own.readySigDeadlines.maxOrNull()
-                !forward && windows.reverseRefund(stage, view.t0, view.t1, head, signedUntil, pending) == null
+                val windows = SwapWindows(view.minWindow, view.lateWindow)
+                isReverse && windows.reverseRefund(stage, view.t0, view.t1, head, signedUntil, pending) == null
             }
 
             "user_ready" -> {
-                !forward && !vector.own.refundSent && view.depositConfirmed &&
+                isReverse && !vector.own.refundSent && view.depositConfirmed &&
                     reverseReady(stage, view.t0, head, vector.margins.readySigTtl) == null
             }
 
@@ -171,6 +190,7 @@ class WindowsSpecTest {
         const val VECTORS = 97
         const val REPLAYED = 61
         val MAKERS_FORWARD = setOf("maker_ready", "maker_cancel", "maker_refund")
+        val CLAIMS = setOf("user_claim", "relayer_claim", "maker_claim")
 
         // Strict, so a field the spec adds or renames fails here rather than going unread.
         val json = Json { ignoreUnknownKeys = false }

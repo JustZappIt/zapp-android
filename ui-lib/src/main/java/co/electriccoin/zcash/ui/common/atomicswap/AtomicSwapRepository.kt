@@ -258,11 +258,10 @@ internal class AtomicSwapConversions(
             scheduler.wakeAt(t0, t1)
             wakesFor = t0 to t1
         }
-        // Unwinding, the swap is its maker's to refund for its late window, and from its end the user's to claim.
-        val late = AtomicSwapSessions.knownDeploymentOf(record)?.swap?.windows?.late
-        if (step.reason == AtomicSwapWait.UNWINDING && t1 != null && late != null && lateWakeFor != t1) {
-            scheduler.wakeLate(t1 + late)
-            lateWakeFor = t1
+        val lateEnd = lateEnd(record, step)
+        if (lateEnd != null && lateWakeFor != lateEnd) {
+            scheduler.wakeLate(lateEnd)
+            lateWakeFor = lateEnd
         }
     }
 
@@ -293,6 +292,17 @@ internal class AtomicSwapConversions(
 
 private suspend fun ReverseSwapRepository.requireNotUnderWay() {
     if (isUnderWay()) throw AtomicSwapBlockedException(AtomicSwapBlock.SWAP_UNDER_WAY, "a reverse swap is under way")
+}
+
+// Unwinding, the swap is its maker's to refund for its late window, and from its end the user's to claim.
+private fun lateEnd(
+    record: AtomicSwapRecord,
+    step: AtomicSwapStep.Waiting,
+): Long? {
+    val deployment = AtomicSwapSessions.knownDeploymentOf(record)
+    val late = deployment?.swap?.windows?.late
+    val t1 = step.t1
+    return if (step.reason == AtomicSwapWait.UNWINDING && t1 != null && late != null) t1 + late else null
 }
 
 private fun Flow<AtomicSwapRecord?>.unreadableAsNone(): Flow<AtomicSwapRecord?> =

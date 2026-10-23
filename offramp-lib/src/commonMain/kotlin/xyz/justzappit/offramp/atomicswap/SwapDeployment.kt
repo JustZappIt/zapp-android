@@ -45,6 +45,10 @@ data class SwapDeployment(
 /** A lock contract users swapped on before the windows contract: its swaps show as history, and nothing drives them. */
 val SwapDeployment.retired: Boolean get() = windows == null
 
+/** The deployment's windows; a retired one has none, and nothing goes on its lock contract. */
+internal fun SwapDeployment.requireWindows(): SwapWindows =
+    windows ?: throw AtomicSwapBlockedException(AtomicSwapBlock.RETIRED_CONTRACT, "nothing goes on a lock contract")
+
 /** Railgun's own contracts on a chain, as its `NETWORK_CONFIG` names them (@railgun-community/shared-models 8.2.0). */
 data class RailgunContracts(
     val proxy: Address,
