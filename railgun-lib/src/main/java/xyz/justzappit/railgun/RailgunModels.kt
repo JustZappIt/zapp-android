@@ -42,7 +42,9 @@ object RailgunEndpoints {
     val SEPOLIA_KEYED_RPC_URL: String? = BuildConfig.ETHEREUM_RPC_URL_SEPOLIA.ifBlank { null }
     val MAINNET_KEYED_RPC_URL: String? = BuildConfig.ETHEREUM_RPC_URL_MAINNET.ifBlank { null }
 
-    // The SDK's own: its quick sync, and the gateway it downloads proving artifacts from.
+    // The SDK's own: its quick sync, and the gateway it downloads proving artifacts from. On Sepolia the quick sync
+    // and the transaction list come from our copy of Railgun's list instead, its hash chain repaired
+    // (web/sepolia-list-plugin.mjs).
     internal val hosts =
         setOf(
             SEPOLIA_RPC_HOST,
@@ -53,6 +55,7 @@ object RailgunEndpoints {
             MAINNET_INFURA_HOST,
             POI_NODE_HOST,
             "rail-squid.squids.live",
+            "railgun-sepolia-list.pepeman931.workers.dev",
             "ipfs-lb.com",
         )
 }
