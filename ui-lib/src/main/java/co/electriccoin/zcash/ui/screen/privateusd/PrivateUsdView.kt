@@ -37,6 +37,7 @@ import co.electriccoin.zcash.ui.design.component.zapp.ZappBorderedCard
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappButtonVariant
 import co.electriccoin.zcash.ui.design.component.zapp.ZappCompactButton
+import co.electriccoin.zcash.ui.design.component.zapp.ZappInlineSpinner
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRefreshButton
 import co.electriccoin.zcash.ui.design.component.zapp.ZappRowDivider
 import co.electriccoin.zcash.ui.design.component.zapp.ZappSectionLabel
@@ -249,11 +250,18 @@ private fun ActivityRow(row: PrivateUsdActivityState) {
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(ZappTheme.spacing.xxs)) {
             BasicText(text = row.title.getValue(), style = ZappTheme.typography.rowTitle.copy(color = c.text))
-            BasicText(
-                text = row.detail.getValue(),
-                style = ZappTheme.typography.rowSubtitle.copy(color = c.textMuted),
-                maxLines = 1,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(ZappTheme.spacing.xs),
+            ) {
+                if (row.isPending) ZappInlineSpinner()
+                BasicText(
+                    text = row.detail.getValue(),
+                    style = ZappTheme.typography.rowSubtitle.copy(color = c.textMuted),
+                    modifier = Modifier.weight(1f, fill = false),
+                    maxLines = 1,
+                )
+            }
         }
         Column(
             modifier = Modifier.padding(start = ZappTheme.spacing.lg),
@@ -370,6 +378,16 @@ private fun PrivateUsdPreview() =
                                 local = stringRes("₹83.51"),
                                 tone = PrivateUsdActivityTone.OUT,
                                 onClick = {},
+                            ),
+                            PrivateUsdActivityState(
+                                key = "received",
+                                title = stringRes("Received privately"),
+                                detail = stringRes("Sep 26 5:20 PM · available once screened"),
+                                amount = stringRes("+$5.00"),
+                                local = stringRes("₹417.55"),
+                                tone = PrivateUsdActivityTone.NEUTRAL,
+                                onClick = {},
+                                isPending = true,
                             ),
                             PrivateUsdActivityState(
                                 key = "to-usd",

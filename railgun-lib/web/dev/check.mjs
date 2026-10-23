@@ -42,6 +42,12 @@ async function expectedAddress(mnemonic) {
   return encodeAddress({ masterPublicKey, viewingPublicKey: viewing.pubkey });
 }
 
+/** The refresh's received sends: a list, empty for a fresh wallet; null would mean the page can't read its history. */
+function receivedCheck({ received }) {
+  if (!Array.isArray(received)) throw new Error(`the page read no received sends: ${JSON.stringify(received)}`);
+  console.log(`  received sends: ${received.length}`);
+}
+
 async function localProperties() {
   const text = await readFile(LOCAL_PROPERTIES, 'utf8');
   return Object.fromEntries(
@@ -142,8 +148,9 @@ async function syncCheck(page, url, onEvent) {
     const { address } = await call('openNewWallet', { encryptionKey, mnemonic, creationBlock: fromBlock });
     if (address !== expected) throw new Error(`the browser opened ${address}, Node derives ${expected}`);
     console.log(`  address matches Node's derivation: ${address.slice(0, 16)}…`);
-    const balances = await call('refresh', {});
-    console.log(`  balances ${JSON.stringify(balances)}`);
+    const refreshed = await call('refresh', {});
+    console.log(`  balances ${JSON.stringify(refreshed.balances)}`);
+    receivedCheck(refreshed);
     // The engine skips a scan while another runs; each sync must still get one of its own.
     const before = onEvent.notesScans;
     await Promise.all([call('refresh', {}), call('refresh', {})]);
@@ -175,7 +182,7 @@ const etherscan = (hash) => `https://sepolia.etherscan.io/tx/${hash}`;
 async function waitForSpendable(call, token, amount) {
   const deadline = Date.now() + SPENDABLE_TIMEOUT_MS;
   for (;;) {
-    const balances = await call('refresh', {});
+    const { balances } = await call('refresh', {});
     const held = Object.entries(balances)
       .filter(([bucket]) => bucket !== 'Spent')
       .reduce((sum, [, tokens]) => sum + amountOf(tokens, token), 0n);

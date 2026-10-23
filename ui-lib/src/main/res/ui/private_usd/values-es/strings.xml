@@ -97,6 +97,10 @@
     <string name="private_usd_activity_to">a %1$s</string>
     <string name="private_usd_activity_in">+%1$s</string>
     <string name="private_usd_activity_out">−%1$s</string>
+    <string name="private_usd_activity_received">Recibido de forma privada</string>
+    <string name="private_usd_activity_from">de %1$s</string>
+    <string name="private_usd_activity_sender_hidden">remitente oculto</string>
+    <string name="private_usd_activity_received_screening">disponible tras la revisión</string>
     <string name="convert_you_pay">Pagas</string>
     <string name="convert_network_fee">Comisión de red</string>
     <string name="convert_you_receive">Recibes aproximadamente</string>

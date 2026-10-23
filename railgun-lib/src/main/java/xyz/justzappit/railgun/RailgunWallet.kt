@@ -9,9 +9,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.builtins.MapSerializer
-import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import xyz.justzappit.evm.util.toHex
@@ -90,16 +88,21 @@ class RailgunSession internal constructor(
 ) {
     val isOpen: Boolean get() = page.isOpen
 
-    /** Syncs to the chain's tip, asks the screening nodes about new notes, and returns balances. */
-    suspend fun refresh(): RailgunBalances =
-        page
-            .request(RailgunMethod.REFRESH, EMPTY, BALANCES)
-            .mapNotNull { (name, amounts) ->
-                RailgunBalanceBucket.entries.firstOrNull { it.wireName == name }?.let { bucket ->
-                    bucket to amounts.map { RailgunTokenAmount(it.token, it.amount) }
-                }
-            }.toMap()
-            .let(::RailgunBalances)
+    /**
+     * Syncs to the chain's tip, asks the screening nodes about new notes, and returns the balances and the private
+     * sends the wallet received.
+     */
+    suspend fun refresh(): RailgunRefresh {
+        val result = page.request(RailgunMethod.REFRESH, EMPTY, RefreshResult.serializer())
+        val balances =
+            result.balances
+                .mapNotNull { (name, amounts) ->
+                    RailgunBalanceBucket.entries.firstOrNull { it.wireName == name }?.let { bucket ->
+                        bucket to amounts.map { RailgunTokenAmount(it.token, it.amount) }
+                    }
+                }.toMap()
+        return RailgunRefresh(RailgunBalances(balances), result.received?.let(::receivedSends))
+    }
 
     /** What [broadcaster] charges to send [transfer], from the SDK's estimate of its gas; nothing is proved. */
     suspend fun broadcasterFee(
@@ -172,9 +175,18 @@ class RailgunSession internal constructor(
 
     internal companion object {
         val EMPTY = JsonObject(emptyMap())
-        val BALANCES = MapSerializer(String.serializer(), ListSerializer(WireTokenAmount.serializer()))
     }
 }
+
+// A history the page couldn't read is null; an entry this build can't read is left out, never failing the balances.
+private fun receivedSends(history: JsonElement): List<RailgunReceivedSend>? =
+    (history as? JsonArray)?.mapNotNull { entry ->
+        try {
+            RailgunProtocol.json.decodeFromJsonElement(WireReceivedSend.serializer(), entry).toReceivedSend()
+        } catch (ignored: IllegalArgumentException) {
+            null
+        }
+    }
 
 internal suspend fun <R> RailgunPage.request(
     method: RailgunMethod,

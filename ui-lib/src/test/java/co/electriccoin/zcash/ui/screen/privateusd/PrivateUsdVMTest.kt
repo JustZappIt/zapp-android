@@ -161,6 +161,25 @@ class PrivateUsdVMTest {
         }
 
     @Test
+    fun `a private send received shows in activity among what this device did, by its time`() =
+        runTest {
+            forwardHistory.value = listOf(toUsd(index = 0, at = 100, AtomicSwapOutcome.Paid))
+            reverseHistory.value = listOf(toZec(index = 1, ReversePhase.COMPLETE, acceptedAt = 300))
+            balance.value = PrivateUsdBalanceState(received = listOf(received(receivedSend(at = 200))))
+            start()
+
+            assertEquals(
+                listOf(
+                    R.string.private_usd_activity_converted_zec,
+                    R.string.private_usd_activity_received,
+                    R.string.private_usd_activity_converted,
+                ),
+                vm.state.value.activity
+                    .map { (it.title as StringResource.ByResource).resource },
+            )
+        }
+
+    @Test
     fun `a conversion into private USD under way shows as a banner that opens its progress`() =
         runTest {
             forward.value = AtomicSwapState(record = toUsd(index = 0, at = 10, outcome = null))

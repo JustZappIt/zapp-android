@@ -5,6 +5,7 @@ import {
   generatePOIsForWallet,
   getProver,
   getSerializedERC20Balances,
+  getWalletTransactionHistory,
   loadProvider,
   loadWalletByID,
   refreshBalances,
@@ -19,6 +20,7 @@ import LevelJS from 'level-js';
 import { groth16 } from 'snarkjs';
 import { artifactStore } from './artifacts.js';
 import { badRequest } from './errors.js';
+import { receivedSends } from './received.js';
 
 export const TXID_VERSION = TXIDVersion.V2_PoseidonMerkle;
 const NETWORKS = { sepolia: NetworkName.EthereumSepolia, mainnet: NetworkName.Ethereum };
@@ -111,7 +113,10 @@ async function open(encryptionKey, mnemonic, creationBlock) {
   return { address: info.railgunAddress };
 }
 
-/** Scans to the chain's tip, then has the screening nodes check the notes, and returns balances. */
+/**
+ * Scans to the chain's tip, then has the screening nodes check the notes. Returns the balances, and the private sends
+ * the wallet received (`received`).
+ */
 export async function refresh(_params, emit) {
   const { walletId } = session();
   await scanNotes(walletId);
@@ -122,7 +127,7 @@ export async function refresh(_params, emit) {
     // The balances stand; their screening statuses catch up on a later sync.
     emit('log', `screening not refreshed: ${error?.message ?? error}`);
   }
-  return balances();
+  return { balances: await balances(), received: await received(walletId, emit) };
 }
 
 /** One notes scan at a time, so each can tell whether the engine ran it. */
@@ -147,6 +152,19 @@ async function scanNotesNow(walletId) {
     await new Promise((resolve) => setTimeout(resolve, NOTES_SCAN_RETRY_MS));
   }
   throw new Error('no notes scan started for a minute: one may be stuck');
+}
+
+/**
+ * The private sends this wallet received (`receivedSends`), from the notes its scans already decrypted: nothing is
+ * fetched. `null` when the history can't be read: the balances stand without it.
+ */
+async function received(walletId, emit) {
+  try {
+    return receivedSends(await getWalletTransactionHistory(chain(), walletId, undefined));
+  } catch (error) {
+    emit('log', `received sends not read: ${error?.message ?? error}`);
+    return null;
+  }
 }
 
 /** Balances by screening status: `Spendable`, `ShieldPending`, `ShieldBlocked`, … */

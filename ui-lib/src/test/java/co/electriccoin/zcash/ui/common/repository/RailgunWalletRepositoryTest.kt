@@ -22,7 +22,9 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import xyz.justzappit.evm.types.Address
+import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.railgun.RailgunAddress
+import xyz.justzappit.railgun.RailgunBalanceBucket
 import xyz.justzappit.railgun.RailgunBalances
 import xyz.justzappit.railgun.RailgunBroadcaster
 import xyz.justzappit.railgun.RailgunDestination
@@ -30,6 +32,8 @@ import xyz.justzappit.railgun.RailgunException
 import xyz.justzappit.railgun.RailgunFees
 import xyz.justzappit.railgun.RailgunNetwork
 import xyz.justzappit.railgun.RailgunNullifiers
+import xyz.justzappit.railgun.RailgunReceivedSend
+import xyz.justzappit.railgun.RailgunRefresh
 import xyz.justzappit.railgun.RailgunRelayRequest
 import xyz.justzappit.railgun.RailgunRelayedProof
 import xyz.justzappit.railgun.RailgunSession
@@ -40,6 +44,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -52,7 +57,7 @@ class RailgunWalletRepositoryTest {
     init {
         every { session.address } returns ADDRESS
         every { session.fees } returns RailgunFees(25)
-        coEvery { session.refresh() } returns RailgunBalances(emptyMap())
+        coEvery { session.refresh() } returns REFRESHED
         coEvery { session.prove(any(), any(), any()) } returns PROOF
         every { wallet.events } returns MutableSharedFlow()
         every { wallet.session } answers { openSession }
@@ -67,7 +72,7 @@ class RailgunWalletRepositoryTest {
     fun `a caller that stops waiting leaves the engine to the page until it answers`() =
         runTest {
             val repository = repository()
-            val answer = CompletableDeferred<RailgunBalances>()
+            val answer = CompletableDeferred<RailgunRefresh>()
             coEvery { session.refresh() } coAnswers { answer.await() }
 
             val caller = launch { repository.sync() }
@@ -77,7 +82,7 @@ class RailgunWalletRepositoryTest {
             runCurrent()
             assertFalse(next.isCompleted)
 
-            answer.complete(RailgunBalances(emptyMap()))
+            answer.complete(REFRESHED)
             assertEquals(PROOF, next.await())
         }
 
@@ -157,6 +162,17 @@ class RailgunWalletRepositoryTest {
             assertTrue(sync.balances.byBucket.isEmpty())
         }
 
+    @Test
+    fun `a sync carries the private sends received, or none when the page couldn't read them`() =
+        runTest {
+            val repository = repository()
+            coEvery { session.refresh() } returns REFRESHED.copy(received = listOf(RECEIVED))
+            assertEquals(listOf(RECEIVED), repository.sync().received)
+
+            coEvery { session.refresh() } returns REFRESHED.copy(received = null)
+            assertNull(repository.sync().received)
+        }
+
     private fun TestScope.repository(
         deployment: AtomicSwapDeployment? = AtomicSwapTestnet.deployment
     ): RailgunWalletRepository {
@@ -195,6 +211,16 @@ class RailgunWalletRepositoryTest {
                 maxGasPrice = BigInteger.valueOf(20_000_000_000),
             )
         val FEE: BigInteger = BigInteger.valueOf(250_000)
+        val REFRESHED = RailgunRefresh(RailgunBalances(emptyMap()), emptyList())
+        val RECEIVED =
+            RailgunReceivedSend(
+                txid = TxHash.fromHex("0x" + "cd".repeat(32)),
+                token = Address.parse("0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"),
+                amount = BigInteger.valueOf(5_000_000),
+                bucket = RailgunBalanceBucket.SPENDABLE,
+                blockTime = null,
+                sender = null,
+            )
         val TRANSFER =
             RailgunTransfer(
                 RailgunDestination.Public(Address.parse("0x09ed1f966745be18c711c346242c0974dad7c3e5")),

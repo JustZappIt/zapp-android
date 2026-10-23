@@ -22,6 +22,7 @@ import xyz.justzappit.railgun.RailgunEvent
 import xyz.justzappit.railgun.RailgunFees
 import xyz.justzappit.railgun.RailgunMerkletree
 import xyz.justzappit.railgun.RailgunNetwork
+import xyz.justzappit.railgun.RailgunReceivedSend
 import xyz.justzappit.railgun.RailgunRelayedProof
 import xyz.justzappit.railgun.RailgunReverseCost
 import xyz.justzappit.railgun.RailgunReverseCostRequest
@@ -65,11 +66,13 @@ interface RailgunWalletRepository {
     suspend fun reset()
 }
 
-/** Balances as a sync of the wallet at [address] found them. */
+/** Balances as a sync of the wallet at [address] found them, with the private sends it received. */
 data class RailgunSync(
     val address: RailgunAddress,
     val balances: RailgunBalances,
     val at: Instant,
+    /** Null when the sync couldn't read the wallet's history. */
+    val received: List<RailgunReceivedSend>? = null,
 )
 
 data class RailgunWalletState(
@@ -164,7 +167,8 @@ class RailgunWalletRepositoryImpl(
 private suspend fun MutableStateFlow<RailgunWalletState>.syncWith(session: RailgunSession): RailgunSync {
     // The scan lines describe this sync only, not whatever scan finished last.
     update { it.copy(phase = RailgunWalletState.Phase.SYNCING, utxoScan = null, txidScan = null) }
-    val sync = RailgunSync(session.address, session.refresh(), Clock.System.now())
+    val refreshed = session.refresh()
+    val sync = RailgunSync(session.address, refreshed.balances, Clock.System.now(), refreshed.received)
     update { it.copy(phase = RailgunWalletState.Phase.READY, sync = sync) }
     return sync
 }
