@@ -55,6 +55,8 @@ import org.junit.Test
 import xyz.justzappit.evm.types.TxHash
 import xyz.justzappit.offramp.atomicswap.AtomicSwapOutcome
 import xyz.justzappit.offramp.atomicswap.AtomicSwapRecord
+import xyz.justzappit.offramp.atomicswap.AtomicSwapStep
+import xyz.justzappit.offramp.atomicswap.AtomicSwapWait
 import xyz.justzappit.offramp.atomicswap.ReversePhase
 import xyz.justzappit.offramp.atomicswap.ReverseSwapRecord
 import xyz.justzappit.railgun.RailgunAddress
@@ -196,6 +198,17 @@ class PrivateUsdVMTest {
             assertEquals(stringRes(R.string.private_usd_banner_title), banner.title)
             verify(exactly = 2) { navigation.forward(PrivateUsdProgressArgs) }
             assertFalse(vm.state.value.isEmpty)
+        }
+
+    @Test
+    fun `a conversion whose claim the relayer holds says on its banner that the user may leave`() =
+        runTest {
+            val held = AtomicSwapStep.Waiting(AtomicSwapWait.CLAIM_HELD, t0 = 100, t1 = 200)
+            forward.value = AtomicSwapState(record = toUsd(index = 0, at = 10, outcome = null), wait = held)
+            start()
+
+            val banner = checkNotNull(vm.state.value.conversion)
+            assertEquals(stringRes(R.string.convert_held_short), banner.detail)
         }
 
     @Test

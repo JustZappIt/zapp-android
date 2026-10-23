@@ -351,7 +351,7 @@ class PrivateUsdBalanceRepositoryTest {
 
     private companion object {
         const val START = 1_800_000_000_000L
-        const val TEST_USD = "0x5764D0044bef5AA839E0dDafE2073421101B9Ed8"
+        const val TEST_USD = "0x64c4A5CB09FE0b706D4Cf24DC0A45fff275D727c"
         val ONE_DOLLAR: BigInteger = BigInteger.valueOf(1_000_000)
         val CACHE_KEY = PreferenceKey("private_usd_balances_v1")
         val WALLET =

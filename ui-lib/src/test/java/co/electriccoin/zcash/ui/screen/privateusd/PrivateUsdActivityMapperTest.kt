@@ -251,7 +251,7 @@ class PrivateUsdActivityMapperTest {
         )
 
     private companion object {
-        val TOKEN = Address.parse("0x5764D0044bef5AA839E0dDafE2073421101B9Ed8")
+        val TOKEN = TEST_USD
         val RECIPIENT =
             RailgunDestination.Private(
                 RailgunAddress(

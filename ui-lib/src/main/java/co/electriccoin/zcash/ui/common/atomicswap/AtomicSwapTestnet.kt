@@ -9,6 +9,7 @@ import io.ktor.http.Url
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.atomicswap.SwapDeployment
 import xyz.justzappit.offramp.atomicswap.SwapTokenIssuer
+import xyz.justzappit.offramp.atomicswap.SwapWindows
 import xyz.justzappit.offramp.atomicswap.SwapZcashNetwork
 import xyz.justzappit.offramp.atomicswap.ZcashDepositTerms
 import xyz.justzappit.railgun.RailgunAddress
@@ -16,10 +17,13 @@ import xyz.justzappit.railgun.RailgunNetwork
 import kotlin.time.Duration.Companion.minutes
 
 object AtomicSwapTestnet {
-    // The testnet maker counts a deposit, and an escrow, after 2 confirmations: under 3 minutes on Zcash, with t0 13
-    // minutes out. Records kept with the defaults keep theirs.
+    // The testnet maker counts a deposit, and an escrow, after 2 confirmations: under 3 minutes on Zcash, with t0 45
+    // minutes out and t1 an hour after it. It cancels a deposit not confirmed in full 5 minutes before t0. Records kept
+    // with the defaults keep theirs.
     private const val CONFIRMATIONS = 2
-    private const val MIN_SECONDS_TO_T0 = 9 * 60L
+
+    // A deposit starts only with t0 at least 10 minutes away: the maker's 5 minutes before t0, and 5 to confirm.
+    private const val MIN_SECONDS_TO_T0 = 10 * 60L
 
     // The relayer's own 0zk address, which a private send's fee note pays.
     private const val RELAYER_RAILGUN_ADDRESS =
@@ -40,7 +44,7 @@ object AtomicSwapTestnet {
             "tH7M3pK9ikkUbSzV1ofXkyM6FnaNAGkHZ1kAMEF2pGe69tOJJqGq6wpTuZMtzaaxu9t1C4xoR7R7pbdkjPM_Wxd15LoXa1N26V" +
             "-PToIeD06VmwX51VjrO_2VHWFat4Rtu7eLPeiEX-5kKsyvCY7EhpkNK1DQIDAQAB"
 
-    /** The hosted testnet, which new conversions either way go to. */
+    /** The hosted testnet, on its windows contract since 2026-10-21, which new conversions either way go to. */
     val deployment =
         AtomicSwapDeployment(
             swap =
@@ -49,7 +53,7 @@ object AtomicSwapTestnet {
                     relayerUrl = Url("https://zecswap-testnet.pepeman931.workers.dev/relayer"),
                     rpcUrl = Sepolia.RPC_URL,
                     chainId = Sepolia.CHAIN_ID,
-                    contract = Address.parse("0xD75Efc6a157CC0A95f66962DA86DDf35d9F2617c"),
+                    contract = Address.parse("0x459b0a69e0f736666b66a3ffe0fc17c11f05980d"),
                     token = Sepolia.TEST_USD,
                     railgunProxy = Sepolia.RAILGUN_PROXY,
                     maker = Address.parse("0x2bac02b5032e9092493814c705f156b49e288922"),
@@ -64,6 +68,7 @@ object AtomicSwapTestnet {
                             tokenKey = ISSUER_KEY,
                             returnKey = RETURN_KEY,
                         ),
+                    windows = SwapWindows(min = 30 * 60, late = 60 * 60),
                 ),
             deposits = ZcashDepositTerms(MIN_SECONDS_TO_T0),
             railgunNetwork = RailgunNetwork.SEPOLIA,
@@ -76,6 +81,18 @@ object AtomicSwapTestnet {
                     railgunProxy = Sepolia.RAILGUN_PROXY,
                     railgunAddress = RailgunAddress(RELAYER_RAILGUN_ADDRESS),
                     feeToken = Sepolia.TEST_USD,
+                ),
+            makerDeadlines = MakerDeadlines(t0 = 45.minutes, t1 = 105.minutes),
+        )
+
+    /** The lock contract until 2026-10-21, and its test dollar: its conversions are history, never driven. */
+    val retired =
+        deployment.copy(
+            swap =
+                deployment.swap.copy(
+                    contract = Address.parse("0xD75Efc6a157CC0A95f66962DA86DDf35d9F2617c"),
+                    token = Sepolia.RETIRED_TEST_USD,
+                    windows = null,
                 ),
         )
 }

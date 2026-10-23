@@ -130,8 +130,10 @@ data class ReverseSwapRecord(
     val phase: ReversePhase = ReversePhase.ACCEPTING,
     val cost: ReverseFundingCost? = null,
     val funding: ReverseFundingTransaction? = null,
+    /** The ready signed, kept with its deadline before the signature left: a refund waits for the chain to pass it. */
     val ready: SwapAuthorization? = null,
     val cancelRequested: Boolean = false,
+    /** A lock contract's refund lock, from before the windows contract: still read, never set. */
     val refundLock: SwapAuthorization? = null,
     val payout: SwapPayout? = null,
     val rescue: SwapRescue? = null,
@@ -144,6 +146,11 @@ data class ReverseSwapRecord(
     val makerAccepted: Boolean = false,
     /** The maker's ticket for the swap, from its acceptance, which each relayer request carries; none from before. */
     val ticket: String? = null,
+    /**
+     * Unix seconds on this device's clock when a refund, and with it the user's share, was first to go to the relayer:
+     * kept before it went, and no ready is ever signed after it.
+     */
+    val refundPostedAt: Long? = null,
 ) {
     /** What `openReverse` stores of its escrow, as the quote and our share give it. */
     val terms: SwapTerms get() = SwapTerms.reverse(quote, userShare)
@@ -222,7 +229,6 @@ data class ReverseChainState(
     val fundingBlock: Long,
     val block: Long,
     val now: Long,
-    val lockDuration: Long,
 )
 
 internal fun ReverseQuote.requireWellFormed() {

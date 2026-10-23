@@ -9,16 +9,21 @@ import io.ktor.http.Url
 import xyz.justzappit.evm.types.Address
 import xyz.justzappit.offramp.atomicswap.SwapDeployment
 import xyz.justzappit.offramp.atomicswap.SwapTokenIssuer
+import xyz.justzappit.offramp.atomicswap.SwapWindows
 import xyz.justzappit.offramp.atomicswap.SwapZcashNetwork
 import xyz.justzappit.offramp.atomicswap.ZcashDepositTerms
 import xyz.justzappit.railgun.RailgunAddress
 import xyz.justzappit.railgun.RailgunNetwork
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 object AtomicSwapMainnet {
-    // The mainnet maker counts a deposit after 2 confirmations, with t0 an hour out. An escrow gets the default 3.
+    // The mainnet maker counts a deposit after 2 confirmations, with t0 90 minutes out and t1 an hour after it, and
+    // cancels a deposit not confirmed in full an hour before t0. An escrow gets the default 3.
     private const val ZCASH_CONFIRMATIONS = 2
-    private const val MIN_SECONDS_TO_T0 = 15 * 60L
+
+    // A deposit starts only with t0 at least 70 minutes away: the maker's hour before t0, and 10 minutes to confirm.
+    private const val MIN_SECONDS_TO_T0 = 70 * 60L
 
     // The relayer's own 0zk address, which a private send's fee note pays.
     private const val RELAYER_RAILGUN_ADDRESS =
@@ -39,7 +44,7 @@ object AtomicSwapMainnet {
             "mQcnqlWPwuCacmTYch93eMZ7CaTHHRMmsfqR7_kZdskZh_JM55_lw_puDvvdRtu4vYItvo5wMI5mkwmSEwi6UahZDx_OI8IAF2" +
             "JpeqRIKwbhT6FVGwahDeu6PRTww71C0i13EOwC3GQ85pxDRIAzF01W14wQIDAQAB"
 
-    /** The hosted mainnet beta, which new conversions either way go to. */
+    /** The hosted mainnet, on its windows contract since 2026-10-22, which new conversions either way go to. */
     val deployment =
         AtomicSwapDeployment(
             swap =
@@ -48,7 +53,7 @@ object AtomicSwapMainnet {
                     relayerUrl = Url("https://zecswap-mainnet.pepeman931.workers.dev/relayer"),
                     rpcUrl = Ethereum.RPC_URL,
                     chainId = Ethereum.CHAIN_ID,
-                    contract = Address.parse("0x4708D7d36992b7e33Ad97a1ab0A31c3ac6C4fe6D"),
+                    contract = Address.parse("0xeB3A00bcB6c9fF626fE57a5dBbDCf01730e7898f"),
                     token = Ethereum.USDC,
                     railgunProxy = Ethereum.RAILGUN_PROXY,
                     maker = Address.parse("0x4370eEaa6bEcf1dAeF21Deeb0379Eb7f6CaEf7eF"),
@@ -62,6 +67,7 @@ object AtomicSwapMainnet {
                             tokenKey = ISSUER_KEY,
                             returnKey = RETURN_KEY,
                         ),
+                    windows = SwapWindows(min = 60 * 60, late = 24 * 60 * 60),
                 ),
             deposits = ZcashDepositTerms(MIN_SECONDS_TO_T0),
             railgunNetwork = RailgunNetwork.MAINNET,
@@ -74,6 +80,17 @@ object AtomicSwapMainnet {
                     railgunProxy = Ethereum.RAILGUN_PROXY,
                     railgunAddress = RailgunAddress(RELAYER_RAILGUN_ADDRESS),
                     feeToken = Ethereum.USDC,
+                ),
+            makerDeadlines = MakerDeadlines(t0 = 90.minutes, t1 = 150.minutes),
+        )
+
+    /** The mainnet beta's lock contract until 2026-10-22: its conversions are history, and nothing drives them. */
+    val retired =
+        deployment.copy(
+            swap =
+                deployment.swap.copy(
+                    contract = Address.parse("0x4708D7d36992b7e33Ad97a1ab0A31c3ac6C4fe6D"),
+                    windows = null,
                 ),
         )
 }

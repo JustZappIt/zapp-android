@@ -95,14 +95,6 @@ class AtomicSwapKeysImpl(
 
     override suspend fun claimSecret(index: Int) = withKey(index) { AtomicSwap.claimSecret(it) }
 
-    override suspend fun signLockClaim(
-        index: Int,
-        chainId: ChainId,
-        contract: Address,
-        swapId: SwapId,
-        deadline: Long,
-    ) = withKey(index) { AtomicSwap.signLockClaim(it, domain(chainId, contract), swapId.bytes, deadline) }
-
     override suspend fun signPayout(
         index: Int,
         chainId: ChainId,

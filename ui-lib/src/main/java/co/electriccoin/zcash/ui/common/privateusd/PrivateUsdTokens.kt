@@ -32,8 +32,11 @@ object Sepolia {
     const val RAILSCAN_TX_URL = "https://railscan.io/sepolia/tx/"
     val RAILGUN_PROXY = RailgunContracts.SEPOLIA.proxy
 
-    // The testnet maker's token has no decimals() or symbol(); it stands in for USDC.
-    val TEST_USD = Address.parse("0x5764D0044bef5AA839E0dDafE2073421101B9Ed8")
+    // ZecSwap Test USD, the testnet maker's token since 2026-10-18 (6 decimals, EIP-3009); it stands in for USDC.
+    val TEST_USD = Address.parse("0x64c4a5cb09fe0b706d4cf24dc0a45fff275d727c")
+
+    // The test dollar before it, which the retired lock contract settled in: old notes show by name, never as dollars.
+    val RETIRED_TEST_USD = Address.parse("0x5764D0044bef5AA839E0dDafE2073421101B9Ed8")
 
     // Circle's test USDC, the one Railgun accepts.
     val USDC = Address.parse("0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238")
@@ -72,6 +75,13 @@ object PrivateUsdTokens {
     private val sepolia =
         listOf(
             PrivateUsdToken(Sepolia.TEST_USD, "tUSD", R.string.private_usd_token_test_usd, USD_DECIMALS, true),
+            PrivateUsdToken(
+                Sepolia.RETIRED_TEST_USD,
+                "tUSD",
+                R.string.private_usd_token_retired_test_usd,
+                USD_DECIMALS,
+                false,
+            ),
             PrivateUsdToken(Sepolia.USDC, "USDC", R.string.private_usd_token_usdc, USD_DECIMALS, true),
             PrivateUsdToken(Sepolia.WETH, "WETH", R.string.private_usd_token_weth, ETH_DECIMALS, false),
         )

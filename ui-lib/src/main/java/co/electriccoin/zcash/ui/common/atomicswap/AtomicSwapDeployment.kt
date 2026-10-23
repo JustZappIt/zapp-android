@@ -25,6 +25,8 @@ data class AtomicSwapDeployment(
     val screeningTime: Duration,
     /** The relayer's terms for private sends this app accepts; none sends nothing. */
     val railgunSends: RailgunSendsPin? = null,
+    /** When the maker sets a forward swap's deadlines, for the review to tell; none says nothing of them. */
+    val makerDeadlines: MakerDeadlines? = null,
 ) {
     /** Zcash confirmations the maker waits for before it marks a deposit ready. */
     val makerConfirmations: Int get() = swap.zcashConfirmations
@@ -32,6 +34,16 @@ data class AtomicSwapDeployment(
     /** Roughly from confirming to the payout landing: opening, the maker's confirmations, the claim. */
     val expectedDuration: Duration get() = ZCASH_BLOCK_TIME * makerConfirmations + OPEN_AND_CLAIM
 }
+
+/**
+ * How long after the open a forward swap's maker sets `t0`, from which a swap it never made ready is the user's to
+ * claim, and `t1`, from which an unclaimed one is its to refund (zecSwap's maker `[timing]`). The swap's own deadlines
+ * decide; these only say what to expect.
+ */
+data class MakerDeadlines(
+    val t0: Duration,
+    val t1: Duration,
+)
 
 // Before NU7, which cuts it to 25 s.
 private val ZCASH_BLOCK_TIME = 75.seconds

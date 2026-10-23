@@ -16,11 +16,6 @@ interface ReverseSwapKeys {
         deadline: Long
     ): ByteArray
 
-    suspend fun signLockRefund(
-        record: ReverseSwapRecord,
-        deadline: Long
-    ): ByteArray
-
     suspend fun signPayout(
         record: ReverseSwapRecord,
         terms: RelayerTerms
@@ -41,6 +36,15 @@ interface ReverseSwapChain {
         id: SwapId,
         terms: SwapTerms
     ): ReverseChainState
+
+    /**
+     * The one consistent read: the escrow [terms] describe and the newest block, the one as of the other. A ready is
+     * signed and a refund revealed only on it, judged again on a fresh one just before the refund goes.
+     */
+    suspend fun swapNow(
+        id: SwapId,
+        terms: SwapTerms
+    ): SwapRead
 
     /** The funding transaction as the node sees it, confirmed once its escrow would count. */
     suspend fun fundingStatus(transaction: TxHash): TransactionStatus

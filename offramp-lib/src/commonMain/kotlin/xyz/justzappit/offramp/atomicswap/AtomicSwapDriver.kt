@@ -31,13 +31,14 @@ class AtomicSwapDriver(
 ) {
     private val ending = AtomicSwapEnding(store, nowSeconds)
     private val claim = AtomicSwapClaim(deployment, relayer, chain, keys, store, nowSeconds)
-    private val deposits = AtomicSwapDeposits(deployment, depositTerms, chain, keys, zcash, store, ending)
+    private val deposits = AtomicSwapDeposits(deployment, depositTerms, chain, keys, zcash, store, ending, nowSeconds)
 
     // Checked once: every quote is checked against the deployment as well.
     private var isMakerChecked = false
 
     /** Quotes [requested] for a fresh index, which counts as spent from here on. */
     suspend fun quote(requested: Usdc6): AtomicSwapOffer {
+        deployment.requireWindows()
         requireNoSwapUnderWay()
         if (!isMakerChecked) {
             maker.info().requireServing(deployment, reverse = false)
@@ -55,6 +56,7 @@ class AtomicSwapDriver(
 
     /** Accepts [offer], saving the record before the maker sees the share, so an accept cut short is still known. */
     suspend fun accept(offer: AtomicSwapOffer): AtomicSwapRecord {
+        deployment.requireWindows()
         requireNoSwapUnderWay()
         val quote = offer.quote
         requirePaysOut(quote.amount, offer.relayerFee)
@@ -97,7 +99,9 @@ class AtomicSwapDriver(
             record
                 .copy(t0 = accepted.t0, t1 = accepted.t1, ticket = accepted.ticketFor(record.swapId))
                 .also { store.save(it) }
-        return if (accepted.swapId == record.swapId) {
+        // A late window other than the contract's, which the deployment pins, is another deployment's word.
+        val late = deployment.windows?.late
+        return if (accepted.swapId == record.swapId && (accepted.lateWindow ?: late) == late) {
             opened
         } else {
             ending.conclude(opened, AtomicSwapOutcome.NothingSent(NothingSentCause.MISMATCH))
@@ -175,51 +179,54 @@ class AtomicSwapDriver(
         swap: OnChainSwap,
         onActivity: (AtomicSwapActivity) -> Unit,
     ): AtomicSwapStep =
-        when (swap.stage) {
-            SwapStage.REFUNDED -> {
+        when {
+            swap.stage == SwapStage.REFUNDED -> {
                 deposits.refunded(record, swap, onActivity)
             }
 
-            SwapStage.CLAIMED -> {
-                if (!swap.paidOut) {
-                    onActivity(AtomicSwapActivity.PAYING_OUT)
-                    claim.payOut(record, swap)
-                }
+            swap.stage == SwapStage.CLAIMED && swap.paidOut -> {
                 finishPaid(record)
             }
 
-            SwapStage.READY -> {
-                onActivity(AtomicSwapActivity.CLAIMING)
-                claim.claim(record, swap)
+            // A swap on a retired lock contract follows rules this build doesn't: nothing is paid into it, claimed, or
+            // asked of a relayer. One never paid into ends with nothing sent; one paid into waits for its maker's
+            // refund, whose sweep brings the deposit home.
+            deployment.retired && record.deposit == SwapDeposit.NotStarted -> {
+                ending.finish(record, AtomicSwapOutcome.NothingSent(NothingSentCause.MAKER_UNAVAILABLE))
+            }
+
+            deployment.retired -> {
+                AtomicSwapStep.Waiting(AtomicSwapWait.RETIRED)
+            }
+
+            swap.stage == SwapStage.CLAIMED -> {
+                onActivity(AtomicSwapActivity.PAYING_OUT)
+                claim.payOut(record, swap)
                 finishPaid(record)
             }
 
-            SwapStage.OPEN -> {
+            swap.stage == SwapStage.READY -> {
+                claim.claim(record, swap, onActivity) ?: finishPaid(record)
+            }
+
+            else -> {
                 open(record, swap, onActivity)
             }
         }
 
+    // The deposit's window and the claim's go by the same read: until t0 the claim waits for the maker's ready, and
+    // from t0 a maker gone quiet holds the deposit no longer.
     private suspend fun open(
         record: AtomicSwapRecord,
         swap: OnChainSwap,
         onActivity: (AtomicSwapActivity) -> Unit,
     ): AtomicSwapStep {
-        val nothingSent = deposits.ensurePaid(record, swap, onActivity)
-        return when {
-            nothingSent != null -> {
-                ending.finish(record, AtomicSwapOutcome.NothingSent(nothingSent))
-            }
-
-            // Past t0 the claim needs no `ready`: a maker gone quiet holds the deposit no longer.
-            chain.now() >= swap.t0 -> {
-                onActivity(AtomicSwapActivity.CLAIMING)
-                claim.claim(record, swap)
-                finishPaid(record)
-            }
-
-            else -> {
-                AtomicSwapStep.Waiting(AtomicSwapWait.CONFIRMING, swap.t0, swap.t1)
-            }
+        val read = chain.swapNow(record.swapId, swap.terms)
+        val nothingSent = deposits.ensurePaid(record, swap, read, onActivity)
+        return if (nothingSent != null) {
+            ending.finish(record, AtomicSwapOutcome.NothingSent(nothingSent))
+        } else {
+            claim.claim(record, swap, onActivity, read) ?: finishPaid(record)
         }
     }
 
@@ -317,7 +324,7 @@ internal suspend fun AtomicSwapKeys.terms(
     )
 }
 
-/** Claiming into Railgun through a relayer: the lock, the reveal, and the payout. */
+/** Claiming into Railgun through a relayer: the hand-over, the claim's window, the reveal, and the payout. */
 internal class AtomicSwapClaim(
     private val deployment: SwapDeployment,
     private val relayer: SwapRelayer,
@@ -326,22 +333,38 @@ internal class AtomicSwapClaim(
     private val store: AtomicSwapStore,
     private val nowSeconds: () -> Long,
 ) {
-    /** Reveals `z` under a held claim lock once Railgun would take the payout, then pays out. */
+    private val handOver =
+        AtomicSwapHandOver(deployment, relayer, keys, store) { record, swap, fee -> payout(record, swap, fee) }
+
+    /**
+     * Hands the claim to the relayer once the deposit is out. Reveals `z` once the claim's window lets it go with the
+     * margin to spare, judged on one consistent read ([read], or a fresh one) and again on a fresh one right before the
+     * share leaves, then pays out. Null once the claim has landed; otherwise what it waits for, with nothing sent.
+     */
     suspend fun claim(
         record: AtomicSwapRecord,
-        swap: OnChainSwap
-    ) {
-        val payout = payout(record, swap)
+        swap: OnChainSwap,
+        onActivity: (AtomicSwapActivity) -> Unit,
+        read: SwapRead? = null,
+    ): AtomicSwapStep.Waiting? {
+        val current = handOver.handOver(record, swap)
+        waiting(current, swap, read ?: chain.swapNow(record.swapId, swap.terms))?.let { return it }
+        onActivity(AtomicSwapActivity.CLAIMING)
+        // A payout Railgun won't take would sit in the contract: better the swap unwinds, the ZEC left with the user.
         requireRailgunOpen(swap)
-        holdClaimLock(record, swap)
-        // Key derivation may suspend too. Read the lock and the clock again after every preparatory step.
+        val payout = payout(record, swap)
         val secret = keys.claimSecret(record.index).hex()
         sendPayout(record, swap, payout) {
-            requireFreshClaimLock(record, swap.terms)
+            // Deriving keys, signing and the relayer's terms all suspend: the window may have moved on meanwhile.
+            if (waiting(current, swap, chain.swapNow(record.swapId, swap.terms)) != null) {
+                throw AtomicSwapBlockedException(AtomicSwapBlock.CLAIM_WINDOW_SHUT, "the claim's window shut meanwhile")
+            }
+            keepPosted(record)
             relayer.claim(SwapReveal(record.swapId, secret, it), swap.terms, record.ticket)
         }
         val claimed = chain.caughtUp(record.swapId, swap.terms) { it.stage == SwapStage.CLAIMED }
         if (!claimed.paidOut) payOut(record, claimed)
+        return null
     }
 
     /** Retries a revealed claim's payout. */
@@ -418,44 +441,78 @@ internal class AtomicSwapClaim(
         }
     }
 
-    // A reveal must land before the lock lapses, or the maker's next turn knows both halves; and no lock is asked
-    // for that the contract won't give, such as in the maker's turn after ours lapsed.
-    private suspend fun holdClaimLock(
+    /**
+     * What the claim waits for on [read], or null when its window lets it go now: on a ready swap, or from `t0`, until
+     * `t1` less the margin, by the later of the block's time and this device's clock; before `t0` only on a ready
+     * [READY_DEPTH] blocks deep; and from `t1` only once the maker's late window is over. A claim the relayer may hold
+     * is its to send as the window opens: the app sends it only once the window was open a minute back too. A head
+     * minutes behind this device's clock is refused: its windows have moved on.
+     */
+    private suspend fun waiting(
         record: AtomicSwapRecord,
-        swap: OnChainSwap
-    ) {
-        val now = freshHead(chain.now(), nowSeconds())
-        if (swap.claimLockUntil > now && swap.claimLockUntil - now > REVEAL_MARGIN_SECONDS) return
-        val lockDuration = chain.lockDuration()
-        if (!mayTakeLock(swap.claimLockUntil, swap.refundLockUntil, now, lockDuration)) {
-            throw AtomicSwapBlockedException(
-                AtomicSwapBlock.CLAIM_LOCK_LAPSING,
-                "no claim lock to reveal under; claim once the next turn is ours",
-            )
-        }
-        check(SIGNATURE_TTL_SECONDS < lockDuration) { "the lock is too short to sign for" }
-        check(now <= Long.MAX_VALUE - SIGNATURE_TTL_SECONDS) { "invalid chain time" }
-        val deadline = now + SIGNATURE_TTL_SECONDS
-        val signature =
-            keys.signLockClaim(record.index, record.quote.chainId, deployment.contract, record.swapId, deadline)
-        relayer.lockClaim(SwapAuthorization(record.swapId, deadline, signature.hex()), swap.terms, record.ticket)
-        chain.caughtUp(record.swapId, swap.terms) { it.claimLockUntil > now }
+        swap: OnChainSwap,
+        read: SwapRead,
+    ): AtomicSwapStep.Waiting? {
+        val windows = deployment.requireWindows()
+        val head = read.head
+        val wall = nowSeconds()
+        freshHead(head.time, wall)
+        val stage =
+            read.swap?.stage
+                ?: throw AtomicSwapBlockedException(AtomicSwapBlock.CHAIN_LAGGING, "the newest block shows no swap")
+
+        suspend fun waitsAt(
+            at: ChainHead,
+            clock: Long,
+        ): AtomicSwapWait? =
+            when (val judged = windows.forwardClaim(stage, swap.t0, swap.t1, at, clock, CLAIM_MARGIN_SECONDS)) {
+                Go.Now -> null
+                is Go.OnceReadyAt -> AtomicSwapWait.READY_DEEPENING.takeUnless { isReadyAt(record, swap, judged.block) }
+                is Refusal.MakersUntil, Refusal.TooSoon -> AtomicSwapWait.UNWINDING
+                Refusal.Shut, Refusal.ReadyMayLand -> AtomicSwapWait.CONFIRMING
+            }
+
+        // A minute back, the head is RELAYER_WAIT_BLOCKS lower, and a ready before t0 counts as deep below that.
+        val wait =
+            waitsAt(head, wall)
+                ?: if (record.isHandedOver) waitsAt(head.before(), wall - RELAYER_WAIT_SECONDS) else null
+        return wait?.let { AtomicSwapStep.Waiting(it.heldBy(record), swap.t0, swap.t1) }
     }
 
-    private suspend fun requireFreshClaimLock(
+    private suspend fun isReadyAt(
         record: AtomicSwapRecord,
-        terms: SwapTerms
-    ) {
-        val fresh =
-            chain.confirmedSwap(record.swapId, terms)
-                ?: throw AtomicSwapBlockedException(AtomicSwapBlock.CHAIN_LAGGING, "the claim lock isn't confirmed")
-        val now = freshHead(chain.now(), nowSeconds())
-        val unsafe =
-            (fresh.stage != SwapStage.OPEN && fresh.stage != SwapStage.READY) ||
-                fresh.claimLockUntil <= now || fresh.claimLockUntil - now <= REVEAL_MARGIN_SECONDS
-        if (unsafe) {
-            throw AtomicSwapBlockedException(AtomicSwapBlock.CLAIM_LOCK_LAPSING, "no safe claim lock to reveal under")
-        }
+        swap: OnChainSwap,
+        block: Long,
+    ): Boolean = chain.swapAt(record.swapId, swap.terms, block)?.stage == SwapStage.READY
+
+    // The share goes to the relayer from here on: kept before the first post, so a restart knows it went.
+    private suspend fun keepPosted(record: AtomicSwapRecord) {
+        val current = checkNotNull(store.active()?.takeIf { it.index == record.index && !it.finished })
+        if (current.claimPostedAt == null) store.save(current.copy(claimPostedAt = nowSeconds()))
+    }
+
+    private companion object {
+        /**
+         * How long a claim the relayer may hold is left to it once its window opens; then the app claims itself.
+         * Before `t0` the window opens on a ready [READY_DEPTH] blocks deep, so there the wait counts Ethereum's
+         * 12-second slots too.
+         */
+        const val RELAYER_WAIT_SECONDS = 60L
+        const val RELAYER_WAIT_BLOCKS = 5L
+
+        // Posted to the relayer and not turned down: it may hold the claim.
+        val AtomicSwapRecord.isHandedOver: Boolean
+            get() = claimHold == ClaimHold.POSTED || claimHold == ClaimHold.HELD
+
+        // The head and its time a minute back.
+        fun ChainHead.before() =
+            ChainHead((number - RELAYER_WAIT_BLOCKS).coerceAtLeast(0), time - RELAYER_WAIT_SECONDS)
+
+        // Waiting for the window to open, the claim the relayer holds is its to send: the user may leave.
+        fun AtomicSwapWait.heldBy(record: AtomicSwapRecord): AtomicSwapWait =
+            if (record.claimHold == ClaimHold.HELD && this in WINDOW_WAITS) AtomicSwapWait.CLAIM_HELD else this
+
+        val WINDOW_WAITS = setOf(AtomicSwapWait.CONFIRMING, AtomicSwapWait.READY_DEEPENING)
     }
 }
 
@@ -503,7 +560,7 @@ internal suspend fun AtomicSwapChainReader.caughtUp(
     throw AtomicSwapBlockedException(AtomicSwapBlock.CHAIN_LAGGING, "our RPC node never showed the swap as expected")
 }
 
-/** [head], the latest block time, unless it trails this device's clock by minutes: a lapsed lock would look held. */
+/** [head], the latest block time, unless it trails this device's clock by minutes: a window shut would look open. */
 internal fun freshHead(
     head: Long,
     deviceNow: Long

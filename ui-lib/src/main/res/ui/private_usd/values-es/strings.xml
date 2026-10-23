@@ -206,9 +206,20 @@
     <string name="convert_problem_relayer_fee">La comisión del relayer supera ahora lo que paga esta conversión, así que Zapp espera a que baje. Sigue comprobándolo automáticamente.</string>
     <string name="convert_problem_ethereum">Zapp no puede contactar con Ethereum en este momento. Sigue intentándolo automáticamente.</string>
     <string name="convert_problem_railgun">Railgun no acepta depósitos en este momento, por lo que Zapp espera para reclamar. Si no vuelve a aceptarlos a tiempo, se cancela el intercambio y tus ZEC regresan.</string>
-    <string name="convert_problem_turn">El creador de mercado tiene prioridad para reclamar durante unos minutos. Zapp reclama en cuanto llega tu turno.</string>
+    <string name="convert_problem_turn">Zapp espera el momento adecuado para reclamar tus dólares, y los reclama en cuanto puede.</string>
     <string name="convert_problem_wallet">Tu billetera de Zcash aún no está lista. Zapp vuelve a intentarlo cuando se sincronice.</string>
     <string name="convert_problem_unexpected">Algo salió mal. Zapp sigue intentándolo automáticamente.</string>
+    <!-- Conversions on the windows contract -->
+    <string name="private_usd_token_retired_test_usd">Dólar de prueba retirado</string>
+    <string name="convert_problem_retired">Esta conversión está en el contrato de conversión que Zapp usaba antes, que ya no liquida. Tus fondos están a salvo allí: contacta con el soporte de Zapp para recuperarlos.</string>
+    <string name="convert_review_info_quiet">Si el creador de mercado nunca confirma tu depósito, Zapp reclama tus dólares a partir de %1$s después de convertir. Si no ha pasado nada %2$s después de convertir, tus ZEC regresan, o Zapp aún puede reclamar los dólares %3$s después.</string>
+    <string name="convert_unwinding">Ya es tarde para reclamar tus dólares antes de %1$s, así que el creador de mercado puede cancelar el intercambio ahora, y Zapp entonces devuelve tus ZEC a tu billetera. Si no lo ha hecho para %2$s, Zapp reclama tus dólares en su lugar.</string>
+    <string name="convert_retired">Esta conversión está en el contrato de conversión que Zapp usaba antes, que ya no liquida. Si el creador de mercado cancela el intercambio, Zapp devuelve tus ZEC a tu billetera.</string>
+    <string name="reverse_refund_note">Antes de autorizar la liquidación, puedes cancelar. Después, un reembolso espera hasta que la liquidación que autorizaste ya no pueda completarse: unos minutos si nunca empieza, o hasta el plazo de la conversión si empieza. Un reembolso paga la comisión del relayer por su gas, más la comisión de Railgun por protegerlo. Cerrar la aplicación nunca autoriza la liquidación.</string>
+    <string name="private_usd_about_hours_minutes">unas %1$d h %2$d min</string>
+    <string name="convert_claim_held">El relayer guarda tu reclamación y la envía en cuanto puede salir, así que ya puedes cerrar Zapp, o incluso apagar el teléfono. Si en cambio se cancela el intercambio, vuelve a abrir Zapp para recuperar tus ZEC.</string>
+    <string name="convert_held_short">El relayer tiene tu reclamación: puedes cerrar Zapp</string>
+
     <string name="convert_result_paid_title">Dólares en camino</string>
     <string name="convert_result_paid_body">%1$s está en tu saldo protegido. Railgun revisa los fondos nuevos durante %2$s antes de que se puedan gastar.</string>
     <string name="convert_result_screened_body">%1$s está en tu saldo protegido, listo para usar.</string>

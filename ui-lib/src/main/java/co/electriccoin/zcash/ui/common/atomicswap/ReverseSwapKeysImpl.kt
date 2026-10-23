@@ -39,14 +39,6 @@ class ReverseSwapKeysImpl(
             ReverseAtomicSwap.signReady(it, record.domain(), record.swapId.bytes, deadline)
         }
 
-    override suspend fun signLockRefund(
-        record: ReverseSwapRecord,
-        deadline: Long
-    ): ByteArray =
-        keys.withKey(record.index) {
-            ReverseAtomicSwap.signLockRefund(it, record.domain(), record.swapId.bytes, deadline)
-        }
-
     override suspend fun signPayout(
         record: ReverseSwapRecord,
         terms: RelayerTerms
